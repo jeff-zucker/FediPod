@@ -341,6 +341,101 @@ check(homeWithTag.json.some(s => s.uri === 'https://m.example/n/t1')
 const localAgain = await call('/api/v1/timelines/public?local=true');
 check(localAgain.json.every(s => s.account.acct === 'jeff'), 'public?local still own posts only');
 
+// --- 8b. streaming: health, handshake, live broadcast ---
+if (up) {
+  const health = await fetch(`http://127.0.0.1:${PORT}/api/v1/streaming/health`, { headers: { 'x-dk-token': TOKEN } });
+  check(health.status === 200 && (await health.text()) === 'OK', 'streaming health endpoint');
+}
+{
+  const { Streaming } = await import(path.join(root, 'lib/streaming.mjs'));
+  const httpMod = await import('node:http');
+  const netMod = await import('node:net');
+  const cryptoMod = await import('node:crypto');
+  const wsServer = httpMod.createServer(() => {});
+  const streaming = new Streaming({ masto: masto2, log: () => {} });
+  streaming.attach(wsServer);
+  await new Promise(r => wsServer.listen(18623, '127.0.0.1', r));
+  const wsKey = cryptoMod.randomBytes(16).toString('base64');
+  const sock = netMod.connect(18623, '127.0.0.1');
+  const frames = [];
+  let handshake = '';
+  await new Promise((resolve) => {
+    sock.on('connect', () => {
+      sock.write(`GET /api/v1/streaming?access_token=${bearer}&stream=user HTTP/1.1\r\n`
+        + 'Host: 127.0.0.1\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n'
+        + `Sec-WebSocket-Key: ${wsKey}\r\nSec-WebSocket-Version: 13\r\n\r\n`);
+    });
+    sock.on('data', (buf) => {
+      if (!handshake.includes('\r\n\r\n')) { handshake += buf.toString('latin1'); if (handshake.includes('\r\n\r\n')) resolve(); return; }
+      frames.push(buf);
+    });
+    setTimeout(resolve, 3000);
+  });
+  check(/101 Switching Protocols/.test(handshake) && /Sec-WebSocket-Accept:/i.test(handshake),
+    'streaming websocket handshake');
+  // A fresh status through the store should arrive as an update frame.
+  store2.onEvent = (type, obj) => {
+    if (type === 'status') streaming.broadcast('update', masto2.status(obj));
+  };
+  store2.addStatus({ noteId: 'https://m.example/n/live1', actor: ALICE, content: '<p>live</p>', published: '2026-07-28T07:00:00Z', kind: 'timeline' });
+  await new Promise(r => setTimeout(r, 300));
+  const raw = Buffer.concat(frames.length ? frames : [Buffer.alloc(0)]);
+  let text = '';
+  if (raw.length > 2) {
+    const len = raw[1] & 0x7f;
+    text = len === 126 ? raw.slice(4).toString() : raw.slice(2).toString();
+  }
+  check(text.includes('"event":"update"') && text.includes('live1'),
+    `streaming broadcasts new status (got ${text.slice(0, 60) || 'no frame'})`);
+  sock.destroy();
+  wsServer.close();
+}
+
+// --- 8c. real OAuth when a UI password is set ---
+{
+  const { hashPassword } = await import(path.join(root, 'lib/mastoapi.mjs'));
+  const cfg = store2.getConfig();
+  store2.setConfig({ ...cfg, uiPassword: hashPassword('sesame') });
+  const form = await call('/oauth/authorize?client_id=dk-ap-client&redirect_uri=http%3A%2F%2Fx%2Fcb&response_type=code&state=st1');
+  check(form.status === 200 && String(form.json) === 'null', 'authorize with password set → login form (html)');
+  const bad = await call('/oauth/authorize', { method: 'POST', body: 'password=wrong&redirect_uri=http%3A%2F%2Fx%2Fcb', contentType: 'application/x-www-form-urlencoded' });
+  check(bad.status === 401, `wrong password → 401 form (got ${bad.status})`);
+  const okRes = { status: 0, headers: null, writeHead(s, h) { this.status = s; this.headers = h; }, end() {} };
+  const okReq = Readable.from([Buffer.from('password=sesame&redirect_uri=http%3A%2F%2Fx%2Fcb&state=st1')]);
+  okReq.method = 'POST';
+  okReq.headers = { 'content-type': 'application/x-www-form-urlencoded' };
+  await masto2.handle(okReq, okRes, '/oauth/authorize', new URL('http://x/oauth/authorize'));
+  check(okRes.status === 302 && /code=/.test(okRes.headers?.location) && /state=st1/.test(okRes.headers?.location),
+    'right password → 302 with code + state');
+  store2.setConfig(cfg);   // clear the password for later sections
+}
+
+// --- 8d. drain lease: one active, second is viewer, expiry hands over ---
+{
+  const { Lease } = await import(path.join(root, 'lib/lease.mjs'));
+  let doc = null;
+  const memFetch = async (u, init = {}) => {
+    if (init.method === 'PUT') { doc = JSON.parse(init.body); return { status: 201, text: async () => '' }; }
+    return doc ? { status: 200, text: async () => JSON.stringify(doc) } : { status: 404, text: async () => '' };
+  };
+  const a = new Lease({ url: 'http://x/lease.json', fetchImpl: memFetch, log: () => {} });
+  const b = new Lease({ url: 'http://x/lease.json', fetchImpl: memFetch, log: () => {} });
+  const aGot = await a.acquire();
+  const bGot = await b.acquire();
+  check(aGot === true && bGot === false, 'lease: first agent active, second refused');
+  doc.expiresAt = Date.now() - 1;
+  check(await b.acquire() === true, 'lease: expiry hands over');
+}
+
+// --- 8e. viewer mode blocks mutations ---
+{
+  fakeAgent.viewer = true;
+  const blocked = await call('/api/v1/statuses', { method: 'POST', body: JSON.stringify({ status: 'nope' }) });
+  const allowed = await call('/api/v1/timelines/home');
+  check(blocked.status === 503 && allowed.status === 200, 'viewer mode: reads ok, writes 503');
+  fakeAgent.viewer = false;
+}
+
 // --- 9. --new-account flow vs a mock CSS v7 account API ---
 const { createAccountWithPod } = await import(path.join(root, 'lib/account.mjs'));
 const http = await import('node:http');

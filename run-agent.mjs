@@ -27,6 +27,7 @@ import { Deliverer } from './lib/deliver.mjs';
 import { Publisher } from './lib/publisher.mjs';
 import { Intake } from './lib/intake.mjs';
 import { TagFeed } from './lib/tagfeed.mjs';
+import { Lease } from './lib/lease.mjs';
 import { startAdmin } from './lib/admin.mjs';
 import { apUrls } from './lib/wire.mjs';
 
@@ -52,6 +53,7 @@ export class Agent {
     const contacts = this.store.getContacts();
     return {
       configured: this.configured(),
+      mode: !this.configured() ? 'unconfigured' : this.viewer ? 'viewer' : 'active',
       handle: cfg?.handle || null,
       actor: this.urls?.actor || null,
       followers: contacts.followers.length,
@@ -97,7 +99,7 @@ export class Agent {
       this.remote = new RemotePod(cred);
       await this.remote.warmup();
     }
-    const probeUrls = apUrls(cred.remotePod, this.store.getConfig()?.root);
+    const probeUrls = apUrls(cred.remotePod, cred.root);
     if (!this.store.fetchImpl) {
       this.store.attach(probeUrls.state, (u, i) => this.remote.fetch(u, i));
       await this.store.load();
@@ -105,15 +107,35 @@ export class Agent {
     const config = this.store.getConfig();
     if (!config) { this.log('credential present but pod state empty — run setup'); return false; }
     this.urls = apUrls(config.remotePod, config.root);
+
+    // Exactly one agent may act on a pod (inbox drains are destructive
+    // reads); later arrivals become read-only viewers of the same state.
+    this.lease = new Lease({
+      url: this.urls.state + 'lease.json',
+      fetchImpl: (u, i) => this.remote.fetch(u, i), log: this.log,
+    });
+    this.viewer = !(await this.lease.acquire());
+
     const keys = await ensureKeys(this.store);
     this.local = new PodRdf({ base: this.urls.fediverse, fetchImpl: (u, i) => this.remote.fetch(u, i) });
     this.deliverer = new Deliverer({
-      store: this.store, rsaPrivate: keys.rsaPrivate, keyId: this.urls.actor + '#main-key', log: this.log,
+      store: this.store, rsaPrivate: keys.rsaPrivate, keyId: this.urls.actor + '#main-key',
+      log: this.log, passive: this.viewer,
     });
     this.publisher = new Publisher({
       config, remote: this.remote, local: this.local, store: this.store,
       deliverer: this.deliverer, publicKeyPem: keys.rsaPublicPem, log: this.log,
     });
+    if (this.viewer) {
+      // Read-only: no intake, no tag feed, no deliveries — refresh the state
+      // cache periodically so timelines stay current-ish.
+      this.refreshTimer = setInterval(
+        () => this.store.load().catch(e => this.log(`state refresh: ${e.message}`)), 60_000);
+      this.refreshTimer.unref?.();
+      this.log(`another agent is active for this pod — viewing as @${config.handle} (read-only)`);
+      return true;
+    }
+    this.lease.startRenewal();
     this.intake = new Intake({
       config, urls: this.urls, remote: this.remote, local: this.local, store: this.store,
       deliverer: this.deliverer, publisher: this.publisher, log: this.log,
@@ -171,8 +193,14 @@ export async function startAgent({
   await agent.connect()
     .then(up => { if (!up) log('unconfigured — run `bin/activitypod.mjs setup` to begin'); })
     .catch(e => log(`connect failed: ${e.message}`));
-  process.on('SIGTERM', () => { agent.store.flush().finally(() => process.exit(0)); });
-  process.on('SIGINT', () => { agent.store.flush().finally(() => process.exit(0)); });
+  const shutdown = () => {
+    Promise.allSettled([
+      agent.store.flush(),
+      agent.viewer ? Promise.resolve() : agent.lease?.release(),
+    ]).finally(() => process.exit(0));
+  };
+  process.on('SIGTERM', shutdown);
+  process.on('SIGINT', shutdown);
   return agent;
 }
 

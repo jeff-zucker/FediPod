@@ -60,6 +60,51 @@ The agent federates for real: follow/unfollow, post, reply, favourite,
 boost, media, delete; incoming boosts from people you follow and a
 configurable public-hashtag feed (`POST /tagfeed`) fill the timeline.
 
+## Other clients
+
+- **Web clients**: drop any static Mastodon client dist into `ui/<name>/`
+  and it is served at `/<name>/`, same-origin — see `ui/README.md`.
+- **Desktop clients** (Tuba, Whalebird, …): add `http://127.0.0.1:8030` as a
+  custom instance.
+- **Streaming**: the agent serves the Mastodon streaming API
+  (`/api/v1/streaming`, WebSocket) so clients update live instead of polling.
+
+## Remote access (phones, https-only clients)
+
+Mobile clients need an https URL that reaches the agent. **First set a UI
+password** — without one, `/oauth/authorize` trusts whoever can reach it
+(fine on loopback, catastrophic anywhere else):
+
+```
+bin/activitypod.mjs passwd
+```
+
+Then the friction-free route is [Tailscale](https://tailscale.com):
+`tailscale serve --bg 8030` gives the agent an https URL visible only to
+your own devices, certificates handled for you. A public VPS + Caddy in
+front of `127.0.0.1:8030` works the same way for a world-reachable UI.
+
+## Android
+
+The agent is pure JS, so [Termux](https://termux.dev) runs it unmodified:
+
+```
+pkg install nodejs
+tar xzf activitypod-js-*.tar.gz && cd activitypod-js
+bin/activitypod.mjs run        # then open http://127.0.0.1:8030/ in Chrome
+```
+
+`termux-wake-lock` keeps it alive in the background; and because the pod
+buffers everything, an agent Android kills simply catches up on next start.
+
+## Multiple devices
+
+Only ONE agent may act on a pod at a time (inbox drains are destructive
+reads). Agents coordinate through a lease in `ap-state/`: the first to
+start is the active one; later starts run as **read-only viewers** — you
+can browse, but posting/following answers 503 until the active agent
+stops and the lease expires (~90 s).
+
 ## Trust notes
 
 - The pod host can read the signing key in `ap-state/` — but it already

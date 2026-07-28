@@ -20,7 +20,7 @@ const out = path.join(root, 'dist', `activitypod-js-${pkg.version}.tar.gz`);
 fs.rmSync(path.join(root, 'dist', 'stage'), { recursive: true, force: true });
 fs.mkdirSync(stage, { recursive: true });
 
-for (const item of ['bin', 'lib', 'vendor', 'phanpy', 'run-agent.mjs', 'package.json', 'package-lock.json', 'README.md']) {
+for (const item of ['bin', 'lib', 'vendor', 'phanpy', 'ui', 'run-agent.mjs', 'package.json', 'package-lock.json', 'README.md']) {
   fs.cpSync(path.join(root, item), path.join(stage, item), { recursive: true });
 }
 

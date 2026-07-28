@@ -16,6 +16,9 @@
 //
 //   activitypod run       start the agent (UI + API on http://127.0.0.1:8030/)
 //   activitypod status    show the running agent's status
+//   activitypod passwd    set/change the UI password (REQUIRED before any
+//                         non-loopback exposure — it turns the instant
+//                         OAuth redirect into a real login form)
 
 import fs from 'node:fs';
 import os from 'node:os';
@@ -71,7 +74,7 @@ if (cmd === 'setup') {
 
   const { mintCredential } = await import(new URL('../lib/remote.mjs', import.meta.url));
   const credential = await mintCredential({ origin: issuer, email, password, name: 'activitypod-js' });
-  const rec = { ...credential, remotePod: pod.endsWith('/') ? pod : pod + '/' };
+  const rec = { ...credential, remotePod: pod.endsWith('/') ? pod : pod + '/', ...(root ? { root } : {}) };
   fs.mkdirSync(HOME, { recursive: true, mode: 0o700 });
   fs.writeFileSync(path.join(HOME, 'credential.json'), JSON.stringify(rec, null, 2) + '\n', { mode: 0o600 });
   console.log(`credential minted and saved to ${path.join(HOME, 'credential.json')}`);
@@ -95,6 +98,26 @@ if (cmd === 'setup') {
 } else if (cmd === 'run') {
   const { startAgent } = await import(new URL('../run-agent.mjs', import.meta.url));
   await startAgent({ home: HOME, port: PORT });
+} else if (cmd === 'passwd') {
+  const { Agent } = await import(new URL('../run-agent.mjs', import.meta.url));
+  const { hashPassword } = await import(new URL('../lib/mastoapi.mjs', import.meta.url));
+  const { RemotePod } = await import(new URL('../lib/remote.mjs', import.meta.url));
+  const { apUrls } = await import(new URL('../lib/wire.mjs', import.meta.url));
+  const agent = new Agent({ home: HOME, log: () => {} });
+  const cred = agent.readCredential();
+  if (!cred) { console.error('no credential — run setup first'); process.exit(2); }
+  const pw = await askHidden('new UI password: ');
+  if (!pw) { console.error('empty password — aborted'); process.exit(2); }
+  agent.remote = new RemotePod(cred);
+  await agent.remote.warmup();
+  const urls = apUrls(cred.remotePod, cred.root);
+  agent.store.attach(urls.state, (u, i) => agent.remote.fetch(u, i));
+  await agent.store.load();
+  const config = agent.store.getConfig();
+  if (!config) { console.error('pod state empty — run setup first'); process.exit(2); }
+  agent.store.setConfig({ ...config, uiPassword: hashPassword(pw) });
+  await agent.store.flush();
+  console.log('UI password set — /oauth/authorize now shows a login form (restart a running agent to pick it up)');
 } else if (cmd === 'status') {
   try {
     const res = await fetch(`http://127.0.0.1:${PORT}/status`);
