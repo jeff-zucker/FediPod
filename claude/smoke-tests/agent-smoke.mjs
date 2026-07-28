@@ -466,7 +466,11 @@ const mockCss = http.createServer(async (req, res) => {
   }
   if (req.url === '/.account/password/') return send9({ ok: true });
   if (req.url === '/.account/pod/' && req.method === 'POST') {
+    if (body.includes('takenpod')) { res.writeHead(400, { 'content-type': 'application/json' }); res.end('{"message":"exists"}'); return; }
     return send9({ pod: 'http://127.0.0.1:18622/newpod/', webId: 'http://127.0.0.1:18622/newpod/profile/card#me' });
+  }
+  if (req.url === '/.account/pod/' && req.method === 'GET') {
+    return send9({ pods: { 'http://127.0.0.1:18622/takenpod/': 'http://127.0.0.1:18622/.account/pod/x' } });
   }
   res.writeHead(404); res.end();
 });
@@ -479,6 +483,11 @@ check(made9.pod === 'http://127.0.0.1:18622/newpod/' && /card#me$/.test(made9.we
 check(seen9.some(r => r.url === '/.account/password/' && r.body.includes('"pw"'))
   && seen9.some(r => r.url === '/.account/pod/' && r.body.includes('"newpod"')),
   'account API got password + pod name');
+const reused = await createAccountWithPod({
+  issuer: 'http://127.0.0.1:18622', email: 'x@example.org', password: 'pw', podName: 'takenpod',
+});
+check(reused.pod === 'http://127.0.0.1:18622/takenpod/' && /card#me$/.test(reused.webId),
+  'existing own pod is reused, not an error');
 mockCss.close();
 
 child.kill('SIGTERM');
