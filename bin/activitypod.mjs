@@ -90,8 +90,11 @@ if (cmd === 'setup') {
   // Straight into serving — setup ends with a working client in the browser.
   const { startAdmin } = await import(new URL('../lib/admin.mjs', import.meta.url));
   startAdmin({ port: PORT, gateToken: process.env.AP_GATE_TOKEN || '', agent, log: (...a) => console.log('[ap]', ...a) });
-  process.on('SIGINT', () => { agent.store.flush().finally(() => process.exit(0)); });
-  process.on('SIGTERM', () => { agent.store.flush().finally(() => process.exit(0)); });
+  const shutdown = () => {
+    Promise.allSettled([agent.store.flush(), agent.lease?.release()]).finally(() => process.exit(0));
+  };
+  process.on('SIGINT', shutdown);
+  process.on('SIGTERM', shutdown);
   const url = `http://127.0.0.1:${PORT}/`;
   console.log(`agent running — opening ${url} (log in with instance 127.0.0.1:${PORT})`);
   openBrowser(url);

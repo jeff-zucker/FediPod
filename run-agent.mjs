@@ -126,26 +126,45 @@ export class Agent {
       config, remote: this.remote, local: this.local, store: this.store,
       deliverer: this.deliverer, publicKeyPem: keys.rsaPublicPem, log: this.log,
     });
-    if (this.viewer) {
-      // Read-only: no intake, no tag feed, no deliveries — refresh the state
-      // cache periodically so timelines stay current-ish.
-      this.refreshTimer = setInterval(
-        () => this.store.load().catch(e => this.log(`state refresh: ${e.message}`)), 60_000);
-      this.refreshTimer.unref?.();
-      this.log(`another agent is active for this pod — viewing as @${config.handle} (read-only)`);
-      return true;
-    }
-    this.lease.startRenewal();
+    // Intake is constructed even for viewers — its signed fetchAP powers
+    // search/deref; start() (draining) is active-only.
     this.intake = new Intake({
       config, urls: this.urls, remote: this.remote, local: this.local, store: this.store,
       deliverer: this.deliverer, publisher: this.publisher, log: this.log,
     });
+    if (this.viewer) {
+      // Read-only: refresh the state cache periodically, and take over the
+      // moment the active agent's lease frees.
+      this.refreshTimer = setInterval(async () => {
+        try {
+          if (await this.lease.acquire()) {
+            this.log('lease freed — promoting to ACTIVE');
+            await this.startActive();
+            return;
+          }
+          await this.store.load();
+        } catch (e) { this.log(`viewer refresh: ${e.message}`); }
+      }, 60_000);
+      this.refreshTimer.unref?.();
+      this.log(`another agent is active for this pod — viewing as @${config.handle} (read-only)`);
+      return true;
+    }
+    await this.startActive();
+    return true;
+  }
+
+  // The acting half: lease renewal, inbox drain, tag feed, delivery queue.
+  // Called at connect when the lease is ours, or on viewer promotion.
+  async startActive() {
+    this.viewer = false;
+    clearInterval(this.refreshTimer);
+    this.lease.startRenewal();
+    this.deliverer.startQueue();
     await this.intake.start();
     this.tagfeed = new TagFeed({ store: this.store, intake: this.intake, log: this.log });
     this.tagfeed.start();
-    this.log(`federating as @${config.handle}@${new URL(this.urls.base).host}`);
+    this.log(`federating as @${this.store.getConfig()?.handle}@${new URL(this.urls.base).host}`);
     this.backfillStatuses().catch(e => this.log(`statuses backfill failed: ${e.message}`));
-    return true;
   }
 
   // The statuses index is an operational mirror of the pod's RDF — rebuild it
