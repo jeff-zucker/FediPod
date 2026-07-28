@@ -15,6 +15,7 @@
 //     account and/or mint a revocable CSS client-credential, never stored.
 //
 //   activitypod run       start the agent (UI + API on http://localhost:8030/)
+//   activitypod stop      stop the running agent (graceful: flush + lease release)
 //   activitypod status    show the running agent's status
 //   activitypod passwd    set/change the UI password (REQUIRED before any
 //                         non-loopback exposure — it turns the instant
@@ -94,6 +95,8 @@ if (cmd === 'setup') {
   const { startAdmin } = await import(new URL('../lib/admin.mjs', import.meta.url));
   startAdmin({ port: PORT, gateToken: process.env.AP_GATE_TOKEN || '', agent, log: (...a) => console.log('[ap]', ...a) });
   const shutdown = () => {
+    setTimeout(() => process.exit(0), 5000).unref();   // never hang a stop on a slow pod
+    try { fs.rmSync(path.join(HOME, 'agent.pid'), { force: true }); } catch {}
     Promise.allSettled([agent.store.flush(), agent.lease?.release()]).finally(() => process.exit(0));
   };
   process.on('SIGINT', shutdown);
@@ -104,6 +107,23 @@ if (cmd === 'setup') {
 } else if (cmd === 'run') {
   const { startAgent } = await import(new URL('../run-agent.mjs', import.meta.url));
   await startAgent({ home: HOME, port: PORT });
+} else if (cmd === 'stop') {
+  const pidFile = path.join(HOME, 'agent.pid');
+  let pid = null;
+  try { pid = Number(fs.readFileSync(pidFile, 'utf8').trim()); } catch {}
+  if (!pid) {
+    console.error(`no pidfile at ${pidFile} — if an agent is running anyway, stop it with:`);
+    console.error(`  pkill -f 'activitypod.mjs run'   (or: systemctl --user stop activitypod for a service install)`);
+    process.exit(1);
+  }
+  try { process.kill(pid, 'SIGTERM'); } catch { console.log('agent was not running (stale pidfile)'); fs.rmSync(pidFile, { force: true }); process.exit(0); }
+  const t0 = Date.now();
+  while (Date.now() - t0 < 10_000) {
+    await new Promise(r => setTimeout(r, 300));
+    try { process.kill(pid, 0); } catch { console.log('agent stopped'); process.exit(0); }
+  }
+  console.error('agent did not exit within 10s — kill it with: kill -9 ' + pid);
+  process.exit(1);
 } else if (cmd === 'passwd') {
   const { Agent } = await import(new URL('../run-agent.mjs', import.meta.url));
   const { hashPassword } = await import(new URL('../lib/mastoapi.mjs', import.meta.url));

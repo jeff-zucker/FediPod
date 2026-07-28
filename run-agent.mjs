@@ -213,6 +213,8 @@ export async function startAgent({
     .then(up => { if (!up) log('unconfigured — run `bin/activitypod.mjs setup` to begin'); })
     .catch(e => log(`connect failed: ${e.message}`));
   const shutdown = () => {
+    setTimeout(() => process.exit(0), 5000).unref();   // never hang a stop on a slow pod
+    try { fs.rmSync(path.join(home, 'agent.pid'), { force: true }); } catch {}
     Promise.allSettled([
       agent.store.flush(),
       agent.viewer ? Promise.resolve() : agent.lease?.release(),
