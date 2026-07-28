@@ -20,8 +20,9 @@ Everything the agent owns nests under one top-level pod container:
   contacts, settings) in ActivityStreams vocabulary, owner-only.
 - `/activitypods-js/ap-state/` — operational state as JSON (delivery queue,
   status mirror, notifications, keys…), owner-only, rebuildable from the RDF.
-- `/.well-known/webfinger` + `host-meta` at the pod root (fediverse
-  discovery requires the host root).
+- `/.well-known/webfinger`, `host-meta` + `nodeinfo` at the pod root
+  (fediverse discovery requires the host root; nodeinfo lets crawlers and
+  clients see a self-describing activitypod-js server).
 
 Locally: `~/.activitypod/credential.json` (a revocable CSS client
 credential) and a log file. Nothing else.
@@ -44,7 +45,15 @@ bin/activitypod.mjs setup --pod https://you.solidcommunity.net/ \
 ```
 
 Setup finishes by starting the agent and opening the browser; later starts
-are just `bin/activitypod.mjs run`.
+are just `bin/activitypod.mjs run` — or make it an appliance:
+
+```
+bin/activitypod.mjs install-service
+```
+
+registers the agent with systemd (Linux, user unit + linger) or launchd
+(macOS) so it starts at boot, restarts on crash, and needs no terminal.
+`uninstall-service` reverses it.
 
 For a no-install download, `node scripts/build-dist.mjs` produces
 `dist/activitypod-js-<version>.tar.gz` (~13 MB) — unpack anywhere with
@@ -54,7 +63,7 @@ The UI is the bundled [Phanpy](https://github.com/cheeaun/phanpy)
 client (MIT, by Chee Aun; patched to allow the loopback http origin — see
 data-kitchen `claude/backups/*.pre-http-patch` for provenance) is served
 same-origin over the agent's Mastodon client-API facade. Log in with one
-click, instance `127.0.0.1:8030`.
+click, instance `localhost:8030`.
 
 The agent federates for real: follow/unfollow, post, reply, favourite,
 boost, media, delete; incoming boosts from people you follow and a
@@ -64,7 +73,7 @@ configurable public-hashtag feed (`POST /tagfeed`) fill the timeline.
 
 - **Web clients**: drop any static Mastodon client dist into `ui/<name>/`
   and it is served at `/<name>/`, same-origin — see `ui/README.md`.
-- **Desktop clients** (Tuba, Whalebird, …): add `http://127.0.0.1:8030` as a
+- **Desktop clients** (Tuba, Whalebird, …): add `http://localhost:8030` as a
   custom instance.
 - **Streaming**: the agent serves the Mastodon streaming API
   (`/api/v1/streaming`, WebSocket) so clients update live instead of polling.
@@ -82,7 +91,7 @@ bin/activitypod.mjs passwd
 Then the friction-free route is [Tailscale](https://tailscale.com):
 `tailscale serve --bg 8030` gives the agent an https URL visible only to
 your own devices, certificates handled for you. A public VPS + Caddy in
-front of `127.0.0.1:8030` works the same way for a world-reachable UI.
+front of `localhost:8030` works the same way for a world-reachable UI.
 
 ## Android
 
@@ -91,7 +100,7 @@ The agent is pure JS, so [Termux](https://termux.dev) runs it unmodified:
 ```
 pkg install nodejs
 tar xzf activitypod-js-*.tar.gz && cd activitypod-js
-bin/activitypod.mjs run        # then open http://127.0.0.1:8030/ in Chrome
+bin/activitypod.mjs run        # then open http://localhost:8030/ in Chrome
 ```
 
 `termux-wake-lock` keeps it alive in the background; and because the pod

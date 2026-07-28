@@ -14,11 +14,14 @@
 //     The password is prompted (or AP_PASSWORD) — used once to create the
 //     account and/or mint a revocable CSS client-credential, never stored.
 //
-//   activitypod run       start the agent (UI + API on http://127.0.0.1:8030/)
+//   activitypod run       start the agent (UI + API on http://localhost:8030/)
 //   activitypod status    show the running agent's status
 //   activitypod passwd    set/change the UI password (REQUIRED before any
 //                         non-loopback exposure — it turns the instant
 //                         OAuth redirect into a real login form)
+//   activitypod install-service    start at boot + restart on crash
+//                                  (systemd --user on Linux, launchd on mac)
+//   activitypod uninstall-service  remove that registration
 
 import fs from 'node:fs';
 import os from 'node:os';
@@ -95,8 +98,8 @@ if (cmd === 'setup') {
   };
   process.on('SIGINT', shutdown);
   process.on('SIGTERM', shutdown);
-  const url = `http://127.0.0.1:${PORT}/`;
-  console.log(`agent running — opening ${url} (log in with instance 127.0.0.1:${PORT})`);
+  const url = `http://localhost:${PORT}/`;
+  console.log(`agent running — opening ${url} (log in with instance localhost:${PORT})`);
   openBrowser(url);
 } else if (cmd === 'run') {
   const { startAgent } = await import(new URL('../run-agent.mjs', import.meta.url));
@@ -121,9 +124,80 @@ if (cmd === 'setup') {
   agent.store.setConfig({ ...config, uiPassword: hashPassword(pw) });
   await agent.store.flush();
   console.log('UI password set — /oauth/authorize now shows a login form (restart a running agent to pick it up)');
+} else if (cmd === 'install-service' || cmd === 'uninstall-service') {
+  const { execFileSync } = await import('node:child_process');
+  const runAgentPath = new URL('../run-agent.mjs', import.meta.url).pathname;
+  const sh = (file, a) => { try { execFileSync(file, a, { stdio: 'pipe' }); return true; } catch { return false; } };
+  if (process.platform === 'linux') {
+    const unitDir = path.join(os.homedir(), '.config/systemd/user');
+    const unit = path.join(unitDir, 'activitypod.service');
+    if (cmd === 'uninstall-service') {
+      sh('systemctl', ['--user', 'disable', '--now', 'activitypod.service']);
+      fs.rmSync(unit, { force: true });
+      sh('systemctl', ['--user', 'daemon-reload']);
+      console.log('service removed');
+    } else {
+      fs.mkdirSync(unitDir, { recursive: true });
+      fs.writeFileSync(unit, `[Unit]
+Description=activitypod-js agent (pod-stored ActivityPub actor)
+After=network-online.target
+
+[Service]
+ExecStart=${process.execPath} ${runAgentPath}
+Environment=AP_HOME=${HOME}
+Environment=AP_PORT=${PORT}
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=default.target
+`);
+      sh('systemctl', ['--user', 'daemon-reload']);
+      sh('systemctl', ['--user', 'enable', 'activitypod.service']);
+      sh('loginctl', ['enable-linger', os.userInfo().username]);   // keep running while logged out
+      const portBusy = await fetch(`http://localhost:${PORT}/status`).then(() => true).catch(() => false);
+      if (portBusy) {
+        console.log(`installed + enabled (starts at next boot). Port ${PORT} is in use right now — stop that agent, then: systemctl --user start activitypod`);
+      } else {
+        sh('systemctl', ['--user', 'start', 'activitypod.service']);
+        console.log('installed, enabled and started');
+      }
+      console.log('logs: journalctl --user -u activitypod -f');
+    }
+  } else if (process.platform === 'darwin') {
+    const plist = path.join(os.homedir(), 'Library/LaunchAgents/net.activitypod.agent.plist');
+    if (cmd === 'uninstall-service') {
+      sh('launchctl', ['unload', plist]);
+      fs.rmSync(plist, { force: true });
+      console.log('service removed');
+    } else {
+      fs.mkdirSync(path.dirname(plist), { recursive: true });
+      fs.writeFileSync(plist, `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>net.activitypod.agent</string>
+  <key>ProgramArguments</key><array>
+    <string>${process.execPath}</string><string>${runAgentPath}</string>
+  </array>
+  <key>EnvironmentVariables</key><dict>
+    <key>AP_HOME</key><string>${HOME}</string>
+    <key>AP_PORT</key><string>${PORT}</string>
+  </dict>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><dict><key>SuccessfulExit</key><false/></dict>
+</dict></plist>
+`);
+      sh('launchctl', ['load', plist]);
+      console.log('installed and loaded (starts at login)');
+    }
+  } else {
+    console.log('Windows: create a Scheduled Task running:');
+    console.log(`  ${process.execPath} ${runAgentPath}`);
+    console.log(`with AP_HOME=${HOME} AP_PORT=${PORT}, trigger "At log on".`);
+  }
 } else if (cmd === 'status') {
   try {
-    const res = await fetch(`http://127.0.0.1:${PORT}/status`);
+    const res = await fetch(`http://localhost:${PORT}/status`);
     console.log(JSON.stringify(await res.json(), null, 2));
   } catch (e) {
     console.error(`agent not reachable on :${PORT} (${e.message})`);

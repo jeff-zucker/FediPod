@@ -1,7 +1,7 @@
 # ui/ — additional web clients
 
 Drop any static Mastodon web client dist here as `ui/<name>/` and the agent
-serves it at `http://127.0.0.1:8030/<name>/`, same-origin with the API —
+serves it at `http://localhost:8030/<name>/`, same-origin with the API —
 no CORS, no mixed content. Phanpy stays at `/`.
 
 Known-good candidates: Enafore (Pinafore successor), Soapbox — anything

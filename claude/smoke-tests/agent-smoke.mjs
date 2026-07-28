@@ -62,6 +62,15 @@ if (up) {
   });
   check(post.status === 409, `/post while unconfigured → 409 (got ${post.status})`);
 
+  const niPtr = await fetch(`http://127.0.0.1:${PORT}/.well-known/nodeinfo`, { headers: gh });
+  const niPtrBody = await niPtr.json();
+  const niDoc = await fetch(`http://127.0.0.1:${PORT}/nodeinfo/2.0`, { headers: gh });
+  const niDocBody = await niDoc.json();
+  check(niPtr.status === 200 && /\/nodeinfo\/2\.0$/.test(niPtrBody.links?.[0]?.href)
+    && niDoc.status === 200 && niDocBody.software?.name === 'activitypod-js'
+    && niDocBody.protocols?.includes('activitypub'),
+    'nodeinfo pointer + document served');
+
   const ui = await fetch(`http://127.0.0.1:${PORT}/`, { headers: gh });
   const uiBody = await ui.text();
   check(ui.status === 200 && /text\/html/.test(ui.headers.get('content-type')) && /phanpy/i.test(uiBody),
