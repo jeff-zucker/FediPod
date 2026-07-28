@@ -164,6 +164,19 @@ check(rdfPuts[0].body.includes('\\"hi\\"') && rdfPuts[0].body.includes('\\n'), '
 check(rdfPuts[0].url === 'https://pod.example/activitypods-js/fediverse/timeline/s1',
   `timeline path (got ${rdfPuts[0].url})`);
 
+await rdf.writeNote('timeline', 's2', {
+  noteId: 'https://m.example/n/2', actor: 'https://m.example/u/a', published: '2026-07-28T00:00:00Z',
+  content: 'with pic', attachments: [{ url: 'https://m.example/media/p.png', mediaType: 'image/png', description: 'a "pic"' }],
+});
+check(rdfPuts[1].body.includes('as:attachment <https://m.example/media/p.png>')
+  && rdfPuts[1].body.includes('as:mediaType "image/png"'),
+  'attachments written as as:attachment + as:mediaType');
+rdf.get = async () => rdfPuts[1].body;
+const back = await rdf.readNote('https://x/n');
+check(back.attachments?.length === 1 && back.attachments[0].mediaType === 'image/png'
+  && back.attachments[0].description === 'a "pic"',
+  'attachment round-trips through readNote');
+
 // --- 7. facade M1–M3 on a seeded in-memory PodStore, faked delivery ---
 const { MastoApi } = await import(path.join(root, 'lib/mastoapi.mjs'));
 
