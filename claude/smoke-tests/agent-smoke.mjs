@@ -295,7 +295,7 @@ check(q.status === 200 && q.json.statuses.length === 1 && q.json.statuses[0].uri
   'text search finds mirror content');
 
 const accSelf = await call('/api/v1/accounts/search?q=jeff');
-check(accSelf.status === 200 && accSelf.json.some(a => a.acct === 'jeff'),
+check(accSelf.status === 200 && accSelf.json.some(a => a.acct.startsWith('jeff@')),
   'accounts/search finds self by handle');
 const accContact = await call('/api/v2/search?type=accounts&q=alice');
 check(accContact.status === 200 && accContact.json.accounts.some(a => a.url === ALICE),
@@ -304,7 +304,7 @@ check(accContact.status === 200 && accContact.json.accounts.some(a => a.url === 
 const local = await call('/api/v1/timelines/public?local=true');
 const fed = await call('/api/v1/timelines/public');
 const trend = await call('/api/v1/trends/statuses');
-check(local.json.every(s => s.account.acct === 'jeff') && local.json.length >= 1,
+check(local.json.every(s => s.account.acct.startsWith('jeff@')) && local.json.length >= 1,
   `public?local → own posts only (got ${local.json.length})`);
 check(fed.json.length >= local.json.length && trend.json.length === fed.json.length,
   'public + trends serve known statuses');
@@ -352,7 +352,7 @@ check(homeWithTag.json.some(s => s.uri === 'https://m.example/n/t1')
   && homeWithTag.json.some(s => s.uri === 'https://m.example/n/boost1'),
   'home timeline includes tag-feed + boosted content');
 const localAgain = await call('/api/v1/timelines/public?local=true');
-check(localAgain.json.every(s => s.account.acct === 'jeff'), 'public?local still own posts only');
+check(localAgain.json.every(s => s.account.acct.startsWith('jeff@')), 'public?local still own posts only');
 
 // --- 8b. streaming: health, handshake, live broadcast ---
 if (up) {
