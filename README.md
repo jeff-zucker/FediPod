@@ -110,9 +110,12 @@ buffers everything, an agent Android kills simply catches up on next start.
 
 Only ONE agent may act on a pod at a time (inbox drains are destructive
 reads). Agents coordinate through a lease in `ap-state/`: the first to
-start is the active one; later starts run as **read-only viewers** — you
-can browse, but posting/following answers 503 until the active agent
-stops and the lease expires (~90 s).
+start is the active one; later starts run as **read-only viewers**.
+Browsing works everywhere, and **acting follows you**: posting or
+following on a viewer device claims the lease on the spot — the other
+agent demotes itself at its next renewal (~30 s) and this one resumes
+inbox draining shortly after. If the active agent stops entirely, a
+viewer promotes itself within a couple of minutes anyway.
 
 ## Trust notes
 

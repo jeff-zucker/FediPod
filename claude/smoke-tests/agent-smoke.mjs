@@ -447,6 +447,26 @@ if (up) {
   check(aGot === true && bGot === false, 'lease: first agent active, second refused');
   doc.expiresAt = Date.now() - 1;
   check(await b.acquire() === true, 'lease: expiry hands over');
+
+  // Takeover: a claims back while b is live; b's next renewal detects the
+  // loss, fires onLost, and stops renewing.
+  check(await a.takeover() === true, 'lease: takeover claims from live holder');
+  let bLost = false;
+  b.onLost = () => { bLost = true; };
+  const bRenewed = await b.renewOnce();
+  check(bRenewed === false && bLost === true && doc.holder === a.id,
+    'lease: loser detects takeover at renewal and demotes');
+}
+
+// --- 8f. viewer write attempt claims the lease and proceeds ---
+{
+  fakeAgent.viewer = true;
+  let claimed = false;
+  fakeAgent.requestTakeover = async () => { claimed = true; fakeAgent.viewer = false; return true; };
+  const posted = await call('/api/v1/markers', { method: 'POST', body: JSON.stringify({ home: { last_read_id: 'tk1' } }) });
+  check(claimed === true && posted.status === 200, 'viewer write triggers takeover and succeeds');
+  delete fakeAgent.requestTakeover;
+  fakeAgent.viewer = false;
 }
 
 // --- 8e. viewer mode blocks mutations ---

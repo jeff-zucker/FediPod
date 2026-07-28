@@ -133,19 +133,7 @@ export class Agent {
       deliverer: this.deliverer, publisher: this.publisher, log: this.log,
     });
     if (this.viewer) {
-      // Read-only: refresh the state cache periodically, and take over the
-      // moment the active agent's lease frees.
-      this.refreshTimer = setInterval(async () => {
-        try {
-          if (await this.lease.acquire()) {
-            this.log('lease freed — promoting to ACTIVE');
-            await this.startActive();
-            return;
-          }
-          await this.store.load();
-        } catch (e) { this.log(`viewer refresh: ${e.message}`); }
-      }, 60_000);
-      this.refreshTimer.unref?.();
+      this.startViewer();
       this.log(`another agent is active for this pod — viewing as @${config.handle} (read-only)`);
       return true;
     }
@@ -153,11 +141,29 @@ export class Agent {
     return true;
   }
 
+  // Read-only mode: refresh the state cache periodically, and take over the
+  // moment the active agent's lease frees.
+  startViewer() {
+    this.viewer = true;
+    this.refreshTimer = setInterval(async () => {
+      try {
+        if (this.viewer && await this.lease.acquire()) {
+          this.log('lease freed — promoting to ACTIVE');
+          await this.startActive();
+          return;
+        }
+        if (this.viewer) await this.store.load();
+      } catch (e) { this.log(`viewer refresh: ${e.message}`); }
+    }, 60_000);
+    this.refreshTimer.unref?.();
+  }
+
   // The acting half: lease renewal, inbox drain, tag feed, delivery queue.
   // Called at connect when the lease is ours, or on viewer promotion.
   async startActive() {
     this.viewer = false;
     clearInterval(this.refreshTimer);
+    this.lease.onLost = () => this.demote();
     this.lease.startRenewal();
     this.deliverer.startQueue();
     await this.intake.start();
@@ -165,6 +171,42 @@ export class Agent {
     this.tagfeed.start();
     this.log(`federating as @${this.store.getConfig()?.handle}@${new URL(this.urls.base).host}`);
     this.backfillStatuses().catch(e => this.log(`statuses backfill failed: ${e.message}`));
+  }
+
+  // Another device claimed the lease (its user acted there) — stand down to
+  // viewer so exactly one agent keeps draining.
+  demote() {
+    if (this.viewer) return;
+    this.log('another device took over — demoting to viewer');
+    this.intake?.stop();
+    this.tagfeed?.stop();
+    this.deliverer?.stop();
+    this.startViewer();
+  }
+
+  // A user acting on this viewer outranks the idle active agent elsewhere:
+  // claim the lease now (writes are safe immediately — publishing never
+  // touches the inbox), but hold the destructive inbox drain until the old
+  // active has seen the loss at its next renewal and demoted.
+  async requestTakeover() {
+    if (!this.viewer) return true;
+    if (!(await this.lease.takeover())) return false;
+    this.log('taking over from the other device (user action here)');
+    this.viewer = false;
+    clearInterval(this.refreshTimer);
+    this.lease.onLost = () => this.demote();
+    this.lease.startRenewal();
+    this.deliverer.startQueue();
+    setTimeout(async () => {
+      if (this.viewer) return;                 // lost it again in the meantime
+      try {
+        await this.intake.start();
+        this.tagfeed = new TagFeed({ store: this.store, intake: this.intake, log: this.log });
+        this.tagfeed.start();
+        this.log('takeover complete — draining resumed on this device');
+      } catch (e) { this.log(`takeover drain start: ${e.message}`); }
+    }, 35_000).unref?.();                      // > one renewal interval: old agent has demoted
+    return true;
   }
 
   // The statuses index is an operational mirror of the pod's RDF — rebuild it
