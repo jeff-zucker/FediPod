@@ -1,8 +1,12 @@
 # activitypod-js
 
-`activitypod-js` is a standalone, single-actor ActivityPub agent that stores your data on a Solid Pod and runs on any device that supports node. The agent can be moved from one device to another without any change to your account.  
+- access the fediverse from a Solid pod
+
+`activitypod-js` is a standalone, single-actor ActivityPub agent that stores your data on a Solid Pod and runs on any device that supports node. The agent can be moved from one device to another without any change to your account. 
 
 ## Installation
+
+In a terminal :
 
 ```
 git clone https://github.com/jeff-zucker/activitypod-js;
@@ -12,7 +16,7 @@ npm install
 
 ## Setup
 
-You do setup once per device.
+You only have to do setup once per device.
 
 
 ### Setup if you don't have a pod yet
@@ -20,24 +24,30 @@ You do setup once per device.
 From nothing — no fediverse account, no pod — one command asks for your credentials, creates the account, the pod, the actor, and leaves you in the client looking at your fediverse home with a pre-stocked home feed :
 
 ```
-npm install
 bin/activitypod.mjs setup --new-account --email you@example.org --handle you
 ```
+
+Note: handle is the label that will appear on your account address, you can also set the account display name as described in [running the agent](#running-the-agent). So fediverse users will see something like this
+```
+  NAME
+  @HANDLE@you.example.org
+```
+Your name can be changed, but your handle is permanent for that account.
 
 ### Setup if you already have a pod
 
 From the install folder on your local machine :
 ```
 bin/activitypod.mjs setup --pod https://you.solidcommunity.net/ \
-  --issuer https://solidcommunity.net --email you@example.org --handle yourname
+  --issuer https://solidcommunity.net --email you@example.org --handle you
 ```
 
 ### Running the agent
 
 From the install folder, run `bin/activitypod.mjs start`.
-You may optionally add `--port PORTNUM` to change your local agent's port, or `--name "Your Name"` to change the display name other people see (your handle is fixed at setup). Either one is remembered, so later starts need no flags. See also [running the agent as a service](#running-the-agent-as-a-service) and [starting and stopping the agent](#starting-and-stopping-the-agent) below.
+You may optionally add `--port PORTNUM` to change your local agent's port (default is 8030), or `--name "Your Name"` to change the display name other people see.
 
-Now point your browser (any) at http://localhost:8030/ — or your own `--port` — and there you go!
+Now point your browser (any) at http://localhost:8030 — or your own `--port` — and there you go!
 
 
 ### Running the agent as a service
