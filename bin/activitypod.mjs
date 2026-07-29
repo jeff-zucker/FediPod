@@ -103,6 +103,15 @@ function openBrowser(url) {
   } catch { /* best-effort — the URL is printed anyway */ }
 }
 
+// A one-shot command holds the lease only for its own duration: exiting without
+// releasing it leaves the next `start` as a read-only viewer until the lease
+// expires, which is 5 minutes of doing nothing.
+async function finish(agent, code = 0) {
+  await agent.lease?.release().catch(() => {});
+  await agent.store?.flush?.().catch(() => {});
+  process.exit(code);
+}
+
 if (cmd === 'setup') {
   // Refuse before anything is asked, let alone typed: setup used to overwrite
   // credential.json in place, and a minted credential is only shown once — so
@@ -244,6 +253,12 @@ if (cmd === 'setup') {
   console.log(`agent running — opening ${url} (log in with instance localhost:${PORT})`);
   openBrowser(url);
 } else if (cmd === 'start' || cmd === 'run') {   // 'run' kept as an alias
+  // This flag is read only by setup; it silently did nothing here, while the
+  // key guard's own error message told people to use it.
+  if (has('rotate-key')) {
+    console.error('start does not rotate keys — use:  bin/activitypod.mjs rotate-key');
+    process.exit(2);
+  }
   if (flag('port')) recordPort(PORT);      // `start --port N` once moves it for good
 
   // Something already on the port? Offer to take it over rather than dying
@@ -286,7 +301,28 @@ if (cmd === 'setup') {
   }
 
   const { startAgent } = await import(new URL('../run-agent.mjs', import.meta.url));
-  await startAgent({ home: HOME, port: PORT, name: flag('name') || null });
+  await startAgent({
+    home: HOME, port: PORT, name: flag('name') || null,
+    takeover: has('takeover'),      // claim a lease whose holder is gone
+  });
+} else if (cmd === 'rotate-key') {
+  const { Agent } = await import(new URL('../run-agent.mjs', import.meta.url));
+  const agent = new Agent({ home: HOME, log: (...a) => console.log('[rotate-key]', ...a) });
+  if (!await agent.connect()) {
+    console.error('nothing to rotate — no configured agent in this AP_HOME');
+    process.exit(2);
+  }
+  const cfg = agent.store.getConfig();
+  console.log(`\nRotating the signing key for @${cfg.handle}@${new URL(cfg.remotePod).host}\n`);
+  console.log('  · a new keypair replaces the one in this home');
+  console.log('  · the actor document is republished so other servers learn it');
+  console.log('  · ANY OTHER DEVICE holding the old key stops being able to sign\n');
+  const ans = has('yes') ? 'y' : await ask('rotate now? (y/n)', 'n');
+  endAsking();
+  if (!/^y/i.test(ans)) { console.log('key unchanged'); process.exit(0); }
+  const r = await agent.rotateKey();
+  console.log(r.changed ? 'rotated and republished' : 'no change — the key was already fresh');
+  await finish(agent);
 } else if (cmd === 'profiles') {
   // Local files only, plus a quick liveness probe: nothing here needs the pod.
   const homes = [{ name: '(default)', dir: path.join(os.homedir(), '.activitypod') }];
@@ -361,7 +397,7 @@ if (cmd === 'setup') {
     const r = await agent.revive();
     console.log(`revived: inbox open, ${r.refollowed}/${r.of} follow(s) re-sent`);
   }
-  process.exit(0);
+  await finish(agent);
 } else if (cmd === 'retire') {
   // Without this an abandoned pod accepts fediverse deliveries forever into a
   // container nobody will ever drain, and no remote server can tell.
@@ -417,7 +453,7 @@ if (cmd === 'setup') {
     const r = await agent.publisher.retireActor();
     console.log(`retired ${r.deletedAt}: Delete delivered to ${r.inboxes} inbox(es)`);
   }
-  process.exit(0);
+  await finish(agent);
 } else if (cmd === 'revoke-credential') {
   // The credential file cannot be protected from anything running as you —
   // so the answer to a suspected leak is to kill it server-side, fast.

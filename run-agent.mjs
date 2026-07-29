@@ -191,6 +191,38 @@ export class Agent {
     return true;
   }
 
+  // Claim the lease from whoever holds it and start acting. For the case where
+  // the holder is gone but its lease has not expired — a crash, or a one-shot
+  // command that exited without releasing — the only alternative is waiting out
+  // the TTL, which is five minutes.
+  async takeOver() {
+    if (!this.viewer) return false;
+    if (!await this.lease.takeover()) return false;
+    this.log('took the lease over');
+    await this.startActive();
+    return true;
+  }
+
+  // Mint a replacement signing key and republish the actor that advertises it.
+  // These are one operation: a rotation without the republish leaves remote
+  // servers verifying against a key we no longer hold, which fails every
+  // delivery silently. The live deliverer and publisher are updated too, so the
+  // running agent signs with the new key from here on.
+  async rotateKey() {
+    const cred = this.readCredential();
+    const before = this.publisher.publicKeyPem;
+    const keys = await resolveKeys(this.store, {
+      localDir: cred.keysMode === 'pod' ? null : this.home,
+      rotate: true,
+      actorId: this.urls.actor,
+      log: this.log,
+    });
+    this.publisher.publicKeyPem = keys.rsaPublicPem;
+    this.deliverer.rsaPrivate = keys.rsaPrivate;
+    await this.publisher.publishProfile();
+    return { changed: before !== keys.rsaPublicPem, publicKeyPem: keys.rsaPublicPem };
+  }
+
   // Park: as quiet as a pod can be while keeping its name, and revivable.
   // The following list is snapshotted FIRST — unfollowing is what stops the
   // traffic at source, but it also destroys the only record of who was being
@@ -384,6 +416,7 @@ export async function startAgent({
   port = Number(process.env.AP_PORT) || 8030,
   gateToken = process.env.AP_GATE_TOKEN || '',
   name = null,
+  takeover = false,
 } = {}) {
   fs.mkdirSync(home, { recursive: true, mode: 0o700 });
   const logFile = path.join(home, 'agent.log');
@@ -407,7 +440,12 @@ export async function startAgent({
     for (let attempt = 1; ; attempt++) {
       try {
         const up = await agent.connect({ name });
-        if (up) return;
+        if (up) {
+          // A lease whose holder is gone but not expired would otherwise leave
+          // us read-only for the whole TTL.
+          if (takeover && agent.viewer) await agent.takeOver();
+          return;
+        }
         log('unconfigured — run `bin/activitypod.mjs setup` to begin');
         return;                                    // no credential: retrying won't help
       } catch (e) {

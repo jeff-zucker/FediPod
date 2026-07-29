@@ -1004,6 +1004,71 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   fs.rmSync(fake, { recursive: true, force: true });
 }
 
+// --- 5w. rotating a key republishes the actor that advertises it ---
+{
+  const { Agent } = await import(path.join(root, 'run-agent.mjs'));
+  const { Publisher } = await import(path.join(root, 'lib/publisher.mjs'));
+  const home = fs.mkdtempSync('/tmp/dk-ap-rot-');
+  fs.writeFileSync(path.join(home, 'credential.json'), JSON.stringify({
+    remotePod: 'https://pod.example/', webId: 'https://pod.example/profile/card#me',
+  }));
+  const config = { remotePod: 'https://pod.example/', handle: 'you', name: 'You' };
+  const written = new Map();
+  let saved = { ...config };
+  const store = {
+    getStatuses: () => [], getConfig: () => saved, setConfig: (c) => { saved = c; },
+    flush: async () => {}, read: (_n, d) => d, write: () => {},
+    getContacts: () => ({ followers: [], following: [] }),
+  };
+  const publisher = new Publisher({
+    config, store, local: { writeSettings: async () => {}, writeContacts: async () => {} },
+    remote: {
+      putJson: async (u, o) => { written.set(u, o); }, put: async () => {},
+      setAcl: async () => {},
+    },
+    deliverer: { deliverToAll: async () => {} }, publicKeyPem: 'ORIGINAL-KEY', log: () => {},
+    probeFetch: async () => ({ status: 200 }),
+  });
+  const agent = new Agent({ home, log: () => {} });
+  agent.store = store; agent.publisher = publisher; agent.urls = publisher.urls;
+  agent.remote = publisher.remote;
+  agent.deliverer = { rsaPrivate: 'OLD' };
+
+  const r = await agent.rotateKey();
+  const actor = written.get(publisher.urls.actor);
+  const onDisk = JSON.parse(fs.readFileSync(path.join(home, 'keys.json'), 'utf8'));
+
+  check(r.changed && /BEGIN PUBLIC KEY/.test(r.publicKeyPem)
+    && actor?.publicKey?.publicKeyPem === r.publicKeyPem
+    && publisher.publicKeyPem === r.publicKeyPem && agent.deliverer.rsaPrivate !== 'OLD'
+    && onDisk.mintedFor === publisher.urls.actor,
+    'rotate mints a key, republishes the actor with it, and re-arms the live signer');
+  fs.rmSync(home, { recursive: true, force: true });
+}
+
+// --- 5x. a stranded lease can be claimed instead of waited out ---
+{
+  const { Agent } = await import(path.join(root, 'run-agent.mjs'));
+  const agent = new Agent({ home: '/tmp', log: () => {} });
+  let started = 0, claimed = 0;
+  agent.viewer = true;
+  agent.lease = { takeover: async () => { claimed++; return true; } };
+  agent.startActive = async () => { started++; agent.viewer = false; };
+
+  const took = await agent.takeOver();
+  const again = await agent.takeOver();          // already active: nothing to claim
+  check(took === true && claimed === 1 && started === 1 && again === false,
+    'takeOver claims the lease once and promotes, and is a no-op when already active');
+
+  // A refused takeover must leave the agent read-only rather than half-promoted.
+  const stubborn = new Agent({ home: '/tmp', log: () => {} });
+  stubborn.viewer = true;
+  stubborn.lease = { takeover: async () => false };
+  stubborn.startActive = async () => { throw new Error('must not start'); };
+  check((await stubborn.takeOver()) === false && stubborn.viewer === true,
+    'a refused takeover leaves the agent a viewer');
+}
+
 // --- 5v. a signing key belongs to one actor ---
 {
   const { resolveKeys } = await import(path.join(root, 'lib/keys.mjs'));
