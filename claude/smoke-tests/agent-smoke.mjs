@@ -550,6 +550,12 @@ if (up) {
   check(!/onload|evil/.test(smuggle) && !/script|alert/.test(commented)
     && /<p>after<\/p>/.test(commented) && !/javascript/.test(spacedJs),
     'sanitizer resists attribute smuggling, comment tricks, spaced javascript:');
+  // Mutation-XSS: payloads that survive naive sanitizers because the
+  // browser re-parses them differently. A real parser drops them entirely.
+  const mx1 = sanitizeHtml('<svg><animate onbegin=alert(1)>');
+  const mx2 = sanitizeHtml('<math><mtext><table><mglyph><style><img src=x onerror=alert(1)>');
+  check(!/onbegin|onerror|svg|mglyph|alert/i.test(mx1 + mx2),
+    `sanitizer drops mutation-XSS payloads (${JSON.stringify(mx1 + mx2)})`);
 }
 
 // --- 8h. token expiry ---
