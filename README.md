@@ -33,7 +33,9 @@ bin/activitypod.mjs setup --new-account --email you@example.org --handle you
 
 ## Setup options
 
-You may use other pod locations and may optionally also put --port PORTNUM at the end of the command; 
+You may use other pod locations and may optionally also put --port PORTNUM at the end of the command; the port you choose at setup is remembered, so `run`, `stop`, `status` and `install-service` need no flag afterwards. `--port` on a later `run` moves it for good.
+
+Other setup options: `--keys local` keeps the signing key on this machine instead of in pod state (the pod host then cannot read it, but the key file must travel with the credential if you move devices); `--home DIR` uses a different state directory; `--name "Your Name"` sets the display name.
 
 
 ## Running as a service
@@ -45,6 +47,32 @@ bin/activitypod.mjs install-service
 This registers the agent with systemd (Linux, user unit + linger) or launchd
 (macOS) so it starts at boot, restarts on crash, and needs no terminal.
 `uninstall-service` reverses it. When the service is running 
+
+On **Windows** it creates a Scheduled Task that starts the agent at log on (this path is untested — it prints the equivalent `schtasks` command either way). On **Android/Termux** there is no service manager, so it prints a boot-script recipe using the Termux:Boot app and `termux-wake-lock` instead; whatever Android kills is buffered on the pod and catches up at the next start.
+
+## Everyday commands
+
+```
+bin/activitypod.mjs run      # start (setup already did this the first time)
+bin/activitypod.mjs stop     # graceful: flushes state, releases the lease
+bin/activitypod.mjs status   # handle, active/viewer mode, followers, tag feed
+```
+
+These work however the agent was started — terminal, background or service — because `stop` uses a pidfile and `status` asks the agent itself. (For a service install, prefer `systemctl --user stop activitypod` so systemd's bookkeeping matches.)
+
+Two more when you need them:
+
+```
+bin/activitypod.mjs tokens                  # list client logins; --revoke <prefix> / --revoke-all
+bin/activitypod.mjs revoke-credential --email you@example.org   # kill this machine's pod credential
+```
+
+## Multiple devices
+
+Install on as many devices as you like: run `setup --pod <your pod>` on each (it mints that device its own credential and reuses the pod), or copy `~/.activitypod/credential.json` across and skip setup.
+
+Only one agent acts at a time — they coordinate through a lease on the pod, because draining the inbox is a destructive read. Reading works everywhere; **acting follows you**: posting or following on a device that is currently the read-only one claims the lease immediately, and the other steps down within about half a minute.
+
 
 
 ## Fediverse Clients
