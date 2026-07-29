@@ -39,3 +39,8 @@ Thumbs.db
 .idea/
 .vscode/
 drafts/
+
+# local dev pod (claude/dev/pivot-4000.sh)
+claude/dev/pod-root/
+claude/dev/*.log
+claude/dev/dist/
