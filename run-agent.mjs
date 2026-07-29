@@ -178,6 +178,17 @@ export class Agent {
     return true;
   }
 
+  // True when it had to republish. Authenticated read: the question here is
+  // whether the document EXISTS, not whether the world can see it —
+  // verifyPublicSurface answers that one.
+  async ensureActorPublished() {
+    const doc = await this.remote.getJson(this.urls.actor);
+    if (doc?.id) return false;
+    this.log('actor document missing from the pod — republishing');
+    await this.publisher.publishProfile();
+    return true;
+  }
+
   // Read-only mode: refresh the state cache periodically, and take over the
   // moment the active agent's lease frees.
   startViewer() {
@@ -220,6 +231,11 @@ export class Agent {
     // really are private, and repair them if not. Off the critical path.
     this.publisher.ensurePrivateAcls()
       .catch(e => this.log(`private-ACL check failed: ${e.message}`));
+    // A publish that died half-way leaves an actor nobody can fetch while
+    // everything here looks healthy — one GET to find out, and republishing
+    // is idempotent.
+    this.ensureActorPublished()
+      .catch(e => this.log(`actor check failed: ${e.message}`));
     this.backfillStatuses().catch(e => this.log(`statuses backfill failed: ${e.message}`));
   }
 

@@ -270,6 +270,45 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   check(tight.acls.length === 0, 'ensurePrivateAcls writes nothing when the trees are already private');
 }
 
+// --- 5c2. the public surface is verified, not assumed ---
+{
+  const { Publisher } = await import(path.join(root, 'lib/publisher.mjs'));
+  const config = { remotePod: 'https://pod.example/', handle: 'you', name: 'You' };
+  const mkPub = (probeStatus) => new Publisher({
+    config, remote: { setAcl: async () => {} }, local: {}, store: { getStatuses: () => [] },
+    deliverer: {}, publicKeyPem: 'x', log: () => {},
+    probeFetch: async () => ({ status: probeStatus }),
+  });
+
+  const blind = await mkPub(401).verifyPublicSurface();
+  check(blind.length === 7 && blind.includes('actor') && blind.includes('webfinger'),
+    'verifyPublicSurface names every document the fediverse cannot read');
+
+  const open = await mkPub(200).verifyPublicSurface();
+  check(open.length === 0, 'verifyPublicSurface is silent when the actor is reachable');
+}
+
+// --- 5c3. a missing actor is republished at start ---
+{
+  const { Agent } = await import(path.join(root, 'run-agent.mjs'));
+  const mk = (actorDoc) => {
+    const agent = new Agent({ home: '/tmp', log: () => {} });
+    let published = 0;
+    agent.urls = { actor: 'https://pod.example/activitypods-js/ap/actor' };
+    agent.remote = { getJson: async () => actorDoc };
+    agent.publisher = { publishProfile: async () => { published++; return { unreachable: [] }; } };
+    return { agent, published: () => published };
+  };
+
+  const gone = mk(null);
+  const republished = await gone.agent.ensureActorPublished();
+  check(republished === true && gone.published() === 1, 'a missing actor is republished at start');
+
+  const there = mk({ id: 'https://pod.example/activitypods-js/ap/actor', type: 'Person' });
+  const again = await there.agent.ensureActorPublished();
+  check(again === false && there.published() === 0, 'an actor that exists is left alone');
+}
+
 // --- 5d. a pod that says 429/503 is left alone until Retry-After passes ---
 {
   const { RemotePod } = await import(path.join(root, 'lib/remote.mjs'));
