@@ -280,6 +280,17 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     probeFetch: async () => ({ status: probeStatus }),
   });
 
+  // The probe must not ask for turtle: a JSON document answers 501 to that,
+  // which would report a perfectly public actor as invisible.
+  let sentAccept = null;
+  const sniffer = new Publisher({
+    config, remote: { setAcl: async () => {} }, local: {}, store: { getStatuses: () => [] },
+    deliverer: {}, publicKeyPem: 'x', log: () => {},
+    probeFetch: async (_u, init) => { sentAccept = init?.headers?.accept; return { status: 200 }; },
+  });
+  await sniffer.publiclyReadable('https://pod.example/whatever');
+  check(sentAccept === '*/*', 'the public probe asks for */*, not turtle');
+
   const blind = await mkPub(401).verifyPublicSurface();
   check(blind.length === 7 && blind.includes('actor') && blind.includes('webfinger'),
     'verifyPublicSurface names every document the fediverse cannot read');
