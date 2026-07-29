@@ -98,25 +98,39 @@ function openBrowser(url) {
 }
 
 if (cmd === 'setup') {
-  const email = flag('email');
-  const handle = flag('handle');
   const root = flag('root');
   let pod = flag('pod');
-  if (!email || !handle || (!pod && !has('new-account'))) {
-    console.error('need --email and --handle, plus either --pod <url> or --new-account');
-    process.exit(2);
-  }
+  const interactive = process.stdin.isTTY;
 
   // Everything that shapes your identity is asked for here, with defaults,
   // because these are decisions — the pod name becomes half of your
   // permanent address, and nobody should discover that after the fact.
+  // Flags skip the matching question, so scripted setup is unchanged.
+  let newAccount = has('new-account');
+  if (!newAccount && !pod) {
+    if (!interactive) {
+      console.error('need --email and --handle, plus either --pod <url> or --new-account');
+      process.exit(2);
+    }
+    const have = await ask('do you already have a Solid pod? (y/n)', 'n');
+    if (/^y/i.test(have)) pod = await ask('your pod address (e.g. https://you.solidcommunity.net/)');
+    else newAccount = true;
+  }
+  if (!newAccount && !pod) { console.error('no pod given'); process.exit(2); }
+
   const issuer = flag('issuer') || await ask('Solid identity provider', 'https://solidcommunity.net');
-  const podName = has('new-account')
+  const email = flag('email') || await ask(`account email at ${new URL(issuer).host}`);
+  const handle = flag('handle') || await ask('handle (the name in your address; permanent)');
+  if (!email || !handle) {
+    console.error('an email and a handle are required');
+    process.exit(2);
+  }
+  const podName = newAccount
     ? (flag('pod-name') || await ask('pod name (this becomes the domain of your address)', handle))
     : null;
   const name = flag('name') || await ask('display name (shown above your address)', handle);
 
-  const host = has('new-account') ? `${podName}.${new URL(issuer).host}` : new URL(pod).host;
+  const host = newAccount ? `${podName}.${new URL(issuer).host}` : new URL(pod).host;
   console.log('\nYou will be:\n');
   console.log(`  ${name}`);
   console.log(`  @${handle}@${host}\n`);
@@ -127,7 +141,7 @@ if (cmd === 'setup') {
 
   const password = process.env.AP_PASSWORD || await askHidden(`password for ${email} at ${issuer}: `);
 
-  if (has('new-account')) {
+  if (newAccount) {
     const { createAccountWithPod } = await import(new URL('../lib/account.mjs', import.meta.url));
     const made = await createAccountWithPod({ issuer, email, password, podName });
     pod = made.pod;
