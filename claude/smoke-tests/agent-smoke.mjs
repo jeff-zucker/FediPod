@@ -62,6 +62,38 @@ if (up) {
   });
   check(post.status === 409, `/post while unconfigured → 409 (got ${post.status})`);
 
+  // --- security: Host/Origin firewall, headers, cross-site authorize ---
+  // fetch() refuses to set Host (forbidden header), so speak HTTP directly.
+  const { default: netMod } = await import('node:net');
+  const rawGet = (headerLines) => new Promise((resolve) => {
+    const s = netMod.connect(PORT, '127.0.0.1', () => {
+      s.write(`GET /status HTTP/1.1\r\n${headerLines}\r\nConnection: close\r\n\r\n`);
+    });
+    let buf = '';
+    s.on('data', d => { buf += d; });
+    s.on('end', () => resolve(buf));
+    s.on('error', () => resolve(''));
+  });
+  const rebind = await rawGet(`Host: evil.example\r\nx-dk-token: ${TOKEN}`);
+  check(/^HTTP\/1\.1 403/.test(rebind), `rebound Host refused (got ${rebind.slice(9, 12) || 'nothing'})`);
+  const goodHost = await rawGet(`Host: localhost:${PORT}\r\nx-dk-token: ${TOKEN}`);
+  check(/^HTTP\/1\.1 200/.test(goodHost), 'expected Host still served');
+  const xorigin = await fetch(`http://127.0.0.1:${PORT}/status`, { headers: { ...gh, origin: 'https://evil.example' } });
+  check(xorigin.status === 403, `cross-origin request refused (got ${xorigin.status})`);
+  const xsite = await fetch(`http://127.0.0.1:${PORT}/oauth/authorize?redirect_uri=https%3A%2F%2Fevil.example%2Fcb`, {
+    headers: { ...gh, 'sec-fetch-site': 'cross-site' },
+  });
+  check(xsite.status === 403, `cross-site authorize refused (got ${xsite.status})`);
+  const badRedirect = await fetch(`http://127.0.0.1:${PORT}/oauth/authorize?redirect_uri=https%3A%2F%2Fevil.example%2Fcb`, {
+    headers: gh, redirect: 'manual',
+  });
+  check(badRedirect.status === 400, `off-origin redirect_uri refused (got ${badRedirect.status})`);
+  const hdrs = await fetch(`http://127.0.0.1:${PORT}/`, { headers: gh });
+  check(hdrs.headers.get('x-content-type-options') === 'nosniff'
+    && /frame-ancestors 'none'/.test(hdrs.headers.get('content-security-policy') || '')
+    && hdrs.headers.get('x-frame-options') === 'DENY',
+    'security headers present on HTML');
+
   const niPtr = await fetch(`http://127.0.0.1:${PORT}/.well-known/nodeinfo`, { headers: gh });
   const niPtrBody = await niPtr.json();
   const niDoc = await fetch(`http://127.0.0.1:${PORT}/nodeinfo/2.0`, { headers: gh });
@@ -476,6 +508,40 @@ if (up) {
   const allowed = await call('/api/v1/timelines/home');
   check(blocked.status === 503 && allowed.status === 200, 'viewer mode: reads ok, writes 503');
   fakeAgent.viewer = false;
+}
+
+// --- 8g. SSRF guard + sanitizer ---
+{
+  const { assertPublicUrl, isPrivateAddress } = await import(path.join(root, 'lib/safefetch.mjs'));
+  const blocked = [];
+  for (const u of ['http://127.0.0.1:8030/status', 'http://169.254.169.254/latest/meta-data/',
+    'http://10.0.0.1/', 'http://192.168.1.1/', 'file:///etc/passwd', 'http://[::1]:8030/']) {
+    blocked.push(await assertPublicUrl(u).then(() => false).catch(() => true));
+  }
+  check(blocked.every(Boolean), `SSRF guard blocks loopback/private/metadata/file (${blocked.filter(Boolean).length}/6)`);
+  check(isPrivateAddress('127.0.0.1') && isPrivateAddress('169.254.169.254')
+    && isPrivateAddress('::1') && !isPrivateAddress('93.184.216.34'),
+    'address classifier: private vs public');
+  const publicOk = await assertPublicUrl('https://mastodon.social/api/v1/instance').then(() => true).catch(() => false);
+  check(publicOk, 'SSRF guard allows a public host');
+
+  const { sanitizeHtml } = await import(path.join(root, 'lib/wire.mjs'));
+  const dirty = '<p>hi <a href="https://ok/x">link</a></p><script>alert(1)</script>'
+    + '<img src=x onerror=alert(1)><a href="javascript:evil()">j</a><p onclick="evil()">t</p>';
+  const clean = sanitizeHtml(dirty);
+  check(!/script|onerror|onclick|javascript:/i.test(clean) && /<p>hi <a href="https:\/\/ok\/x"/.test(clean)
+    && /<p>t<\/p>/.test(clean),
+    `sanitizer strips scripts/handlers, keeps links (${clean.slice(0, 40)}…)`);
+}
+
+// --- 8h. token expiry ---
+{
+  const fresh = masto2.mintToken();
+  const recs = store2.read('masto-tokens.json', []);
+  recs.unshift({ token: 'stale0000', createdAt: Date.now() - 200 * 24 * 3600 * 1000 });
+  store2.write('masto-tokens.json', recs);
+  const live = masto2.tokens();
+  check(live.includes(fresh) && !live.includes('stale0000'), 'tokens: fresh kept, 200-day-old expired');
 }
 
 // --- 9. --new-account flow vs a mock CSS v7 account API ---

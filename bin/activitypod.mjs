@@ -20,6 +20,7 @@
 //   activitypod passwd    set/change the UI password (REQUIRED before any
 //                         non-loopback exposure — it turns the instant
 //                         OAuth redirect into a real login form)
+//   activitypod tokens    list client tokens; --revoke <prefix> / --revoke-all
 //   activitypod install-service    start at boot + restart on crash
 //                                  (systemd --user on Linux, launchd on mac)
 //   activitypod uninstall-service  remove that registration
@@ -107,6 +108,37 @@ if (cmd === 'setup') {
 } else if (cmd === 'run') {
   const { startAgent } = await import(new URL('../run-agent.mjs', import.meta.url));
   await startAgent({ home: HOME, port: PORT });
+} else if (cmd === 'tokens') {
+  const { Agent } = await import(new URL('../run-agent.mjs', import.meta.url));
+  const { RemotePod } = await import(new URL('../lib/remote.mjs', import.meta.url));
+  const { apUrls } = await import(new URL('../lib/wire.mjs', import.meta.url));
+  const agent = new Agent({ home: HOME, log: () => {} });
+  const cred = agent.readCredential();
+  if (!cred) { console.error('no credential — run setup first'); process.exit(2); }
+  agent.remote = new RemotePod(cred);
+  await agent.remote.warmup();
+  agent.store.attach(apUrls(cred.remotePod, cred.root).state, (u, i) => agent.remote.fetch(u, i));
+  await agent.store.load();
+  const recs = agent.store.read('masto-tokens.json', [])
+    .map(r => (typeof r === 'string' ? { token: r, createdAt: null } : r));
+  if (has('revoke-all')) {
+    agent.store.write('masto-tokens.json', []);
+    await agent.store.flush();
+    console.log(`revoked ${recs.length} token(s) — every logged-in client must log in again`);
+  } else if (flag('revoke')) {
+    const prefix = flag('revoke');
+    const kept = recs.filter(r => !r.token.startsWith(prefix));
+    agent.store.write('masto-tokens.json', kept);
+    await agent.store.flush();
+    console.log(`revoked ${recs.length - kept.length} token(s) matching "${prefix}"`);
+  } else {
+    if (!recs.length) console.log('no client tokens issued');
+    for (const r of recs) {
+      const age = r.createdAt ? `${Math.round((Date.now() - r.createdAt) / 86400000)}d old` : 'undated';
+      console.log(`${r.token.slice(0, 8)}…  ${age}`);
+    }
+    console.log('\nrevoke with: activitypod tokens --revoke <prefix>   (or --revoke-all)');
+  }
 } else if (cmd === 'stop') {
   const pidFile = path.join(HOME, 'agent.pid');
   let pid = null;

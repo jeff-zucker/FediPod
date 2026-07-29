@@ -103,8 +103,41 @@ bin/activitypod.mjs run        # then open http://localhost:8030/ in Chrome
 `termux-wake-lock` keeps it alive in the background; and because the pod
 buffers everything, an agent Android kills simply catches up on next start.
 
+## Security model
+
+The agent listens on loopback, but loopback is not an access control: any
+web page you visit can try to talk to it, and DNS rebinding lets such a page
+keep its own origin while doing so. The defences:
+
+- **Host/Origin firewall** — requests must name `localhost`/`127.0.0.1`/`::1`
+  (plus anything in `AP_ALLOWED_HOSTS`), and any cross-origin `Origin` is
+  refused. Applies to the WebSocket upgrade too, which CORS does not cover.
+- **Authorization is same-site only** — `/oauth/authorize` refuses cross-site
+  navigations and only redirects to an address of this agent, so a visited
+  page cannot have a token mailed to itself. Client tokens expire after 90
+  days; `activitypod tokens` lists and revokes them.
+- **Outbound requests are address-filtered** — anyone on the fediverse can
+  put URLs in your inbox, so every fetch and delivery resolves the host first
+  and refuses loopback, private, link-local (cloud metadata) and CGNAT
+  addresses, re-checking each redirect hop. `AP_ALLOW_PRIVATE_TARGETS=1`
+  lifts this for local testing.
+- **Federated HTML is sanitized on ingest** — allowlisted tags and
+  attributes only, no scripts, no event handlers, no `javascript:` URLs — so
+  neither the pod copy nor any client holds hostile markup. A strict CSP
+  backs this up.
+- **Exposure beyond loopback** (tailnet, reverse proxy) requires
+  `activitypod passwd` *and* listing the hostname in `AP_ALLOWED_HOSTS`. The
+  agent will refuse requests for hostnames it was not told about.
+
+Not defended: anything running as your user on your machine (loopback is
+open to every local process — set `AP_GATE_TOKEN` to a shared secret if that
+matters to you), and the pod host, which can read what it stores (below).
+
 ## Trust notes
 
 - The CSS credential never leaves your machine and is revocable from the
   account dashboard.
+- The pod stores your signing key and client tokens; the pod host can read
+  them. It already serves your actor document, so it could impersonate you
+  regardless — but if that trade doesn't suit you, host the pod yourself.
 
