@@ -673,6 +673,78 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     'a live saved channel is reconnected without POSTing a new one');
 }
 
+// --- 5s. standing an actor down keeps the handle and stops the mail ---
+{
+  const { Agent } = await import(path.join(root, 'run-agent.mjs'));
+  const { Publisher } = await import(path.join(root, 'lib/publisher.mjs'));
+  const config = { remotePod: 'https://pod.example/', handle: 'you', name: 'You' };
+
+  const build = () => {
+    const acls = [];
+    const written = new Map();
+    const delivered = [];
+    let saved = { ...config };
+    const store = {
+      getStatuses: () => [],
+      getConfig: () => saved,
+      setConfig: (c) => { saved = c; },
+      flush: async () => {},
+      getContacts: () => ({
+        followers: [{ actor: 'https://m.example/users/a', inbox: 'https://m.example/inbox' }],
+        following: [{ actor: 'https://m.example/users/b' }, { actor: 'https://other.example/users/c' }],
+      }),
+    };
+    const publisher = new Publisher({
+      config, store, local: {},
+      remote: {
+        setAcl: async (u, m) => { acls.push([u, m]); },
+        putJson: async (u, o) => { written.set(u, o); },
+        put: async (u, body) => { written.set(u, body); },
+      },
+      deliverer: { deliverToAll: async (inboxes, activity) => { delivered.push({ inboxes, activity }); } },
+      publicKeyPem: 'x', log: () => {},
+      probeFetch: async () => ({ status: 200 }),       // no live pod in a unit test
+    });
+    const agent = new Agent({ home: '/tmp', log: () => {} });
+    agent.store = store; agent.publisher = publisher; agent.urls = publisher.urls;
+    agent.remote = publisher.remote;
+    return { agent, publisher, acls, written, delivered, saved: () => saved };
+  };
+
+  // --keep-handle: unfollow everyone, close the inbox, publish nothing away.
+  const q = build();
+  const unfollowed = [];
+  const qr = await q.agent.quiesce({ unfollow: async (_a, actor) => { unfollowed.push(actor); } });
+  check(qr.unfollowed === 2 && unfollowed.length === 2
+    && q.acls.some(([u, m]) => u === q.publisher.urls.inbox && m.length === 0)
+    && !!q.saved().quiescedAt,
+    'quiesce unfollows everyone, closes the inbox, and records it');
+
+  // A later republish must not re-open the inbox it just closed.
+  const reopened = [];
+  q.publisher.remote.setAcl = async (u, m) => { reopened.push([u, m]); };
+  q.publisher.config = { ...config, quiescedAt: q.saved().quiescedAt };
+  q.publisher.local = { writeSettings: async () => {}, writeContacts: async () => {} };
+  q.publisher.store.read = (_n, d) => d;
+  await q.publisher.publishProfile();
+  const inboxAcl = reopened.filter(([u]) => u === q.publisher.urls.inbox).pop();
+  check(inboxAcl && inboxAcl[1].length === 0,
+    'a republish leaves a quiesced inbox closed rather than re-opening it');
+
+  // --move-to: Move to the followers, movedTo on the actor, handle still resolves.
+  const m = build();
+  const target = 'https://jeff-zucker.teamid.live/activitypods-js/ap/actor';
+  const mr = await m.agent.moveTo(target, { unfollow: async () => {} });
+  const move = m.delivered[0];
+  const actor = m.written.get(m.publisher.urls.actor);
+  check(move?.activity.type === 'Move' && move.activity.target === target
+    && move.activity.object === m.publisher.urls.actor && mr.inboxes === 1,
+    'move delivers a Move naming the target to each follower inbox');
+  check(actor?.movedTo === target && actor.type === 'Person' && actor.id === m.publisher.urls.actor
+    && m.saved().movedTo === target,
+    'the actor stays a Person and advertises movedTo, so the old handle still resolves');
+}
+
 // --- 5f. the token endpoint is asked once, and backed off when it refuses ---
 {
   const { createRequire } = await import('node:module');

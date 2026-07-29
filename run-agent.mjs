@@ -30,6 +30,7 @@ import { TagFeed } from './lib/tagfeed.mjs';
 import { Lease } from './lib/lease.mjs';
 import { startAdmin } from './lib/admin.mjs';
 import { apUrls } from './lib/wire.mjs';
+import { unfollowActor, resolveHandle } from './lib/social.mjs';
 
 export class Agent {
   constructor({ home, log }) {
@@ -187,6 +188,31 @@ export class Agent {
     }
     await this.startActive();
     return true;
+  }
+
+  // Keep the handle, take no more mail. Unfollowing is what actually stops the
+  // volume — every account you follow pushes its posts into your inbox — and
+  // closing the inbox handles the rest, which no follow graph can gate:
+  // stranger mentions, new follow requests, outright spam.
+  // `unfollow` is injectable so this is testable without a live pod.
+  async quiesce({ unfollow = unfollowActor } = {}) {
+    const following = this.store.getContacts().following.map(f => f.actor);
+    let unfollowed = 0;
+    for (const actor of following) {
+      try { await unfollow(this, actor); unfollowed++; }
+      catch (e) { this.log(`unfollow ${actor} failed: ${e.message}`); }
+    }
+    const quiescedAt = await this.publisher.closeInbox();
+    this.log(`quiesced: unfollowed ${unfollowed}/${following.length}, inbox closed`);
+    return { unfollowed, following: following.length, quiescedAt };
+  }
+
+  // Same, plus the fediverse-native redirect: followers are migrated to the
+  // target by their own servers, and the old handle keeps resolving.
+  async moveTo(target, { unfollow = unfollowActor } = {}) {
+    const moved = await this.publisher.publishMove(target);
+    const quiesced = await this.quiesce({ unfollow });
+    return { ...moved, ...quiesced };
   }
 
   // True when it had to republish. Authenticated read: the question here is

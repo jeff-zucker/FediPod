@@ -272,6 +272,7 @@ if (cmd === 'setup') {
   // Without this an abandoned pod accepts fediverse deliveries forever into a
   // container nobody will ever drain, and no remote server can tell.
   const { Agent } = await import(new URL('../run-agent.mjs', import.meta.url));
+  const { resolveHandle } = await import(new URL('../lib/social.mjs', import.meta.url));
   const agent = new Agent({ home: HOME, log: (...a) => console.log('[retire]', ...a) });
   if (!await agent.connect()) {
     console.error('nothing to retire — no configured, un-retired agent in this AP_HOME');
@@ -279,17 +280,48 @@ if (cmd === 'setup') {
   }
   const cfg = agent.store.getConfig();
   const host = new URL(cfg.remotePod).host;
-  const followers = agent.store.getContacts().followers.length;
-  console.log(`\nRetiring @${cfg.handle}@${host}\n`);
-  console.log(`  · a Delete goes to ${followers} follower inbox(es), telling those servers to drop the account`);
-  console.log('  · the actor document is replaced with a Tombstone');
-  console.log('  · this agent will refuse to start again for this pod\n');
-  console.log('Your posts and RDF stay on the pod; the identity does not come back.\n');
-  const ans = has('yes') ? 'y' : await ask('retire this actor? this cannot be undone (y/n)', 'n');
+  const contacts = agent.store.getContacts();
+  const followers = contacts.followers.length;
+  const following = contacts.following.length;
+  const moveTo = flag('move-to');
+  const keep = has('keep-handle') || !!moveTo;
+
+  console.log(`\n${keep ? 'Standing down' : 'Retiring'} @${cfg.handle}@${host}\n`);
+  if (moveTo) {
+    console.log(`  · a Move goes to ${followers} follower inbox(es); their servers migrate them to ${moveTo}`);
+    console.log(`  · the actor advertises movedTo, so the old handle resolves as a redirect`);
+  } else if (keep) {
+    console.log('  · the handle keeps resolving — webfinger, host-meta and the actor stay published');
+  } else {
+    console.log(`  · a Delete goes to ${followers} follower inbox(es), telling those servers to drop the account`);
+    console.log('  · the actor document is replaced with a Tombstone');
+    console.log('  · this agent will refuse to start again for this pod');
+  }
+  if (keep) {
+    console.log(`  · ${following} account(s) get unfollowed — that is what stops posts arriving`);
+    console.log('  · the inbox is closed, so anything else is refused rather than stored forever');
+  }
+  console.log(keep
+    ? '\nReversible: follow people again and re-open the inbox with publish-profile.\n'
+    : '\nYour posts and RDF stay on the pod; the identity does not come back.\n');
+
+  const ans = has('yes') ? 'y' : await ask(
+    keep ? 'stand this actor down? (y/n)' : 'retire this actor? this cannot be undone (y/n)', 'n');
   endAsking();
-  if (!/^y/i.test(ans)) { console.log('nothing was retired'); process.exit(0); }
-  const r = await agent.publisher.retireActor();
-  console.log(`retired ${r.deletedAt}: Delete delivered to ${r.inboxes} inbox(es)`);
+  if (!/^y/i.test(ans)) { console.log('nothing changed'); process.exit(0); }
+
+  if (moveTo) {
+    // Accept either a full actor URL or @user@host.
+    const target = /^https?:\/\//.test(moveTo) ? moveTo : await resolveHandle(agent, moveTo);
+    const r = await agent.moveTo(target);
+    console.log(`moved to ${r.target}: Move delivered to ${r.inboxes} inbox(es), unfollowed ${r.unfollowed}/${r.following}`);
+  } else if (keep) {
+    const r = await agent.quiesce();
+    console.log(`stood down ${r.quiescedAt}: unfollowed ${r.unfollowed}/${r.following}, inbox closed`);
+  } else {
+    const r = await agent.publisher.retireActor();
+    console.log(`retired ${r.deletedAt}: Delete delivered to ${r.inboxes} inbox(es)`);
+  }
   process.exit(0);
 } else if (cmd === 'revoke-credential') {
   // The credential file cannot be protected from anything running as you —
