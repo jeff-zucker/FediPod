@@ -125,6 +125,17 @@ keep its own origin while doing so. The defences:
   attributes only, no scripts, no event handlers, no `javascript:` URLs — so
   neither the pod copy nor any client holds hostile markup. A strict CSP
   backs this up.
+- **The inbox is public, the timeline is not** — anyone may deliver to your
+  pod, so arriving does not mean belonging. Posts from people you follow
+  (and their boosts) are your home timeline; anyone else who addresses you
+  becomes a **mention** — notified and readable, but out of the timeline and
+  not written into your pod. Anything that names neither you nor a post of
+  yours is refused before it is even fetched.
+- **A leaked credential is revoked, not re-encrypted** — nothing can hide a
+  secret from code running as you, so
+  `activitypod revoke-credential --email you@…` kills this machine's
+  credential server-side and deletes it locally. (Full-disk encryption
+  covers the stolen-laptop case; the file itself is 0600 in a 0700 dir.)
 - **Exposure beyond loopback** (tailnet, reverse proxy) requires
   `activitypod passwd` *and* listing the hostname in `AP_ALLOWED_HOSTS`. The
   agent will refuse requests for hostnames it was not told about.

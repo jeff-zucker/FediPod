@@ -24,6 +24,9 @@
 //                         non-loopback exposure — it turns the instant
 //                         OAuth redirect into a real login form)
 //   activitypod tokens    list client tokens; --revoke <prefix> / --revoke-all
+//   activitypod revoke-credential --email you@example.org
+//                         kill this machine's pod credential server-side and
+//                         delete it locally (the answer to a suspected leak)
 //   activitypod install-service    start at boot + restart on crash
 //                                  (systemd --user on Linux, launchd on mac)
 //   activitypod uninstall-service  remove that registration
@@ -116,6 +119,28 @@ if (cmd === 'setup') {
 } else if (cmd === 'run') {
   const { startAgent } = await import(new URL('../run-agent.mjs', import.meta.url));
   await startAgent({ home: HOME, port: PORT });
+} else if (cmd === 'revoke-credential') {
+  // The credential file cannot be protected from anything running as you —
+  // so the answer to a suspected leak is to kill it server-side, fast.
+  const { Agent } = await import(new URL('../run-agent.mjs', import.meta.url));
+  const { revokeCredentialViaAccount } = await import(new URL('../lib/remote.mjs', import.meta.url));
+  const agent = new Agent({ home: HOME, log: () => {} });
+  const cred = agent.readCredential();
+  if (!cred) { console.error('no credential to revoke'); process.exit(2); }
+  const email = flag('email');
+  if (!email) { console.error('need --email <account email> (the account password is prompted)'); process.exit(2); }
+  const password = process.env.AP_PASSWORD || await askHidden(`password for ${email} at ${cred.issuerOrigin}: `);
+  const ok = await revokeCredentialViaAccount({
+    origin: cred.issuerOrigin, email, password, resource: cred.resource,
+  }).catch(e => { console.error(`revoke failed: ${e.message}`); return false; });
+  if (ok) {
+    fs.rmSync(path.join(HOME, 'credential.json'), { force: true });
+    console.log('credential revoked server-side and deleted locally — run setup again to reconnect');
+  } else {
+    console.error('server did not confirm revocation — revoke it from the account dashboard');
+    console.error(`(credential resource: ${cred.resource || 'unknown — dashboard only'})`);
+    process.exit(1);
+  }
 } else if (cmd === 'tokens') {
   const { Agent } = await import(new URL('../run-agent.mjs', import.meta.url));
   const { RemotePod } = await import(new URL('../lib/remote.mjs', import.meta.url));

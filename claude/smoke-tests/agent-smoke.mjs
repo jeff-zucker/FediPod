@@ -558,6 +558,47 @@ if (up) {
     `sanitizer drops mutation-XSS payloads (${JSON.stringify(mx1 + mx2)})`);
 }
 
+// --- 8g2. inbox spam policy: strangers are mentions, not timeline ---
+{
+  const { Intake } = await import(path.join(root, 'lib/intake.mjs'));
+  const written2 = [];
+  const spamIntake = new Intake({
+    config: {}, urls: urls2, remote: {}, store: store2, deliverer: {}, publisher: {},
+    local: { writeNote: async (kind, slug, n) => written2.push({ kind, slug, n }) },
+    log: () => {},
+  });
+  const STRANGER = 'https://m.example/u/stranger';
+  spamIntake.fetchAP = async (u) => ({
+    id: u, type: 'Note', attributedTo: STRANGER, content: '<p>hello</p>',
+    published: '2026-07-28T08:00:00Z', to: [urls2.actor],
+  });
+  // Addressed to us but from a stranger → mention, notified, NOT in home.
+  await spamIntake.handle({ type: 'Create', actor: STRANGER, object: { id: 'https://m.example/n/s1', to: [urls2.actor] } });
+  const s1 = store2.getStatuses().find(s => s.noteId === 'https://m.example/n/s1');
+  const homeAfter = await call('/api/v1/timelines/home?limit=40');
+  const notifs = await call('/api/v1/notifications');
+  check(s1?.kind === 'mention' && !written2.length
+    && !homeAfter.json.some(s => s.uri === 'https://m.example/n/s1')
+    && notifs.json.some(n => n.status?.uri === 'https://m.example/n/s1'),
+    'stranger addressed to us → mention (notified, out of home, not written to pod)');
+  // Not addressed to us at all → refused before any dereference.
+  const reason = await spamIntake.handle({
+    type: 'Create', actor: STRANGER, object: { id: 'https://m.example/n/s2', to: ['https://www.w3.org/ns/activitystreams#Public'] },
+  });
+  check(/not addressed to us/.test(String(reason))
+    && !store2.getStatuses().some(s => s.noteId === 'https://m.example/n/s2'),
+    `blast-to-inboxes refused (${String(reason).slice(0, 32)})`);
+  // A followed actor still lands in the timeline and the pod.
+  spamIntake.fetchAP = async (u) => ({
+    id: u, type: 'Note', attributedTo: 'https://m.example/u/bob', content: '<p>from bob</p>',
+    published: '2026-07-28T09:00:00Z', to: ['https://www.w3.org/ns/activitystreams#Public'],
+  });
+  await spamIntake.handle({ type: 'Create', actor: 'https://m.example/u/bob', object: { id: 'https://m.example/n/b1' } });
+  const b1 = store2.getStatuses().find(s => s.noteId === 'https://m.example/n/b1');
+  check(b1?.kind === 'timeline' && written2.some(w => w.kind === 'timeline'),
+    'followed actor still reaches the timeline and pod RDF');
+}
+
 // --- 8h. token expiry ---
 {
   const fresh = masto2.mintToken();
