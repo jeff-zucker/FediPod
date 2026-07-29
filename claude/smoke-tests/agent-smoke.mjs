@@ -657,6 +657,44 @@ if (up) {
   fs.rmSync(home, { recursive: true, force: true });
 }
 
+// --- 8i1. an agent with no pidfile can still be stopped ---
+{
+  const { execFileSync } = await import('node:child_process');
+  const home = fs.mkdtempSync('/tmp/dk-ap-kill-');
+  const cli = path.join(root, 'bin/activitypod.mjs');
+  const child3 = spawn(process.execPath, [cli, 'start', '--port', '18791'], {
+    cwd: root, env: { ...process.env, AP_HOME: home }, stdio: 'ignore',
+  });
+  const listening = await new Promise(resolve => {
+    const t0 = Date.now();
+    const tick = async () => {
+      try { await fetch('http://127.0.0.1:18791/status'); return resolve(true); } catch {}
+      if (Date.now() - t0 > 10_000) return resolve(false);
+      setTimeout(tick, 300);
+    };
+    tick();
+  });
+  fs.rmSync(path.join(home, 'agent.pid'), { force: true });     // orphan it
+  let out = '';
+  try {
+    out = execFileSync(process.execPath, [cli, 'stop', '--port', '18791'],
+      { env: { ...process.env, AP_HOME: home } }).toString();
+  } catch (e) { out = String(e.stdout || '') + String(e.stderr || ''); }
+  const stopped = await new Promise(resolve => {
+    const t0 = Date.now();
+    const tick = async () => {
+      try { await fetch('http://127.0.0.1:18791/status'); } catch { return resolve(true); }
+      if (Date.now() - t0 > 8000) return resolve(false);
+      setTimeout(tick, 300);
+    };
+    tick();
+  });
+  check(listening && stopped && /asked to stop/.test(out),
+    'an agent with no pidfile is still stoppable (POST /shutdown)');
+  child3.kill('SIGKILL');
+  fs.rmSync(home, { recursive: true, force: true });
+}
+
 // --- 8i. the port chosen at setup is remembered by later commands ---
 {
   const { execFileSync } = await import('node:child_process');

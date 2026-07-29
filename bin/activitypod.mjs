@@ -196,11 +196,25 @@ if (cmd === 'setup') {
   let pid = null;
   try { pid = Number(fs.readFileSync(pidFile, 'utf8').trim()); } catch {}
   if (!pid) {
-    console.error(`no pidfile at ${pidFile} — if an agent is running anyway, stop it with:`);
-    console.error(`  pkill -f activitypod.mjs   (or: systemctl --user stop activitypod for a service install)`);
+    // The agent may still be listening even with no pidfile — an older
+    // build, a deleted file, or one started detached from any terminal
+    // (where Ctrl-C can never reach it). Ask it to stop over the API.
+    const asked = await fetch(`http://localhost:${PORT}/shutdown`, { method: 'POST' })
+      .then(r => r.ok).catch(() => false);
+    if (asked) { console.log(`agent on port ${PORT} asked to stop`); process.exit(0); }
+    console.error(`no agent found: no pidfile at ${pidFile}, nothing answering on port ${PORT}.`);
+    console.error('If it is on another port, add --port N; a service install stops with:');
+    console.error('  systemctl --user stop activitypod');
     process.exit(1);
   }
-  try { process.kill(pid, 'SIGTERM'); } catch { console.log('agent was not running (stale pidfile)'); fs.rmSync(pidFile, { force: true }); process.exit(0); }
+  try { process.kill(pid, 'SIGTERM'); } catch {
+    // Stale pidfile, but something may still hold the port.
+    const asked = await fetch(`http://localhost:${PORT}/shutdown`, { method: 'POST' })
+      .then(r => r.ok).catch(() => false);
+    fs.rmSync(pidFile, { force: true });
+    console.log(asked ? `agent on port ${PORT} asked to stop (pidfile was stale)` : 'agent was not running (stale pidfile)');
+    process.exit(0);
+  }
   const t0 = Date.now();
   while (Date.now() - t0 < 10_000) {
     await new Promise(r => setTimeout(r, 300));
