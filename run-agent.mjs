@@ -107,9 +107,13 @@ export class Agent {
       await this.remote.warmup();
     }
     const probeUrls = apUrls(cred.remotePod, cred.root);
-    if (!this.store.fetchImpl) {
-      this.store.attach(probeUrls.state, (u, i) => this.remote.fetch(u, i));
+    // Load until it actually succeeds: attaching is not the same as having
+    // read the state, and a retry that skipped the load would see an empty
+    // cache and wrongly conclude the agent was never set up.
+    if (!this.store.fetchImpl) this.store.attach(probeUrls.state, (u, i) => this.remote.fetch(u, i));
+    if (!this.stateLoaded) {
       await this.store.load();
+      this.stateLoaded = true;
     }
     let config = this.store.getConfig();
     if (!config) { this.log('credential present but pod state empty — run setup'); return false; }

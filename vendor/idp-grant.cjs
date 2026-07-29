@@ -135,11 +135,12 @@ function createGrantSession(rec, { gateToken, gatedOrigin } = {}) {
       dpop: proof,
     };
     const gate = gateFor(tokenEndpoint); if (gate) headers['x-dk-token'] = gate;
-    // Bounded: a stalled issuer (a proxy holding the connection open behind
-    // a 504) would otherwise hang startup indefinitely.
+    // Bounded, but generously: a busy CSS can take ~45s to answer a
+    // client_credentials grant, and a timeout shorter than that turns
+    // "slow pod" into "cannot start". AP_HTTP_TIMEOUT_MS tunes it.
     const res = await fetch(tokenEndpoint, {
       method: 'POST', headers, body: 'grant_type=client_credentials&scope=webid',
-      signal: AbortSignal.timeout(20_000),
+      signal: AbortSignal.timeout(Number(process.env.AP_HTTP_TIMEOUT_MS) || 60_000),
     });
     if ((res.status === 400 || res.status === 401) && !nonce) {
       const n = res.headers.get('dpop-nonce');
@@ -169,7 +170,7 @@ function createGrantSession(rec, { gateToken, gatedOrigin } = {}) {
     const proof = await dpopProof({ keyPair, htm: method, htu: htuOf(url), accessToken, nonce: rsNonce });
     const headers = { ...(init.headers || {}), authorization: `DPoP ${accessToken}`, dpop: proof };
     const gate = gateFor(url); if (gate) headers['x-dk-token'] = gate;
-    const res = await fetch(url, { signal: AbortSignal.timeout(45_000), ...init, headers });
+    const res = await fetch(url, { signal: AbortSignal.timeout(Number(process.env.AP_HTTP_TIMEOUT_MS) * 2 || 45_000), ...init, headers });
     if (res.status === 401 && !retried) {
       const n = res.headers.get('dpop-nonce');
       if (n) { rsNonce = n; return doFetch(url, init, true); }   // server wants a nonce
