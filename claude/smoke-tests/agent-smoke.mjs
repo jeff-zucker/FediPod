@@ -110,6 +110,16 @@ if (up) {
   const jail = await fetch(`http://127.0.0.1:${PORT}/..%2f..%2fpackage.json`, { headers: gh });
   check(jail.status === 403 || jail.status === 404, `path traversal blocked (got ${jail.status})`);
 
+  // The vendored client must not install a service worker. One that outlives
+  // the page answers navigations from its precache with the headers it stored,
+  // so a header fix (the CSP script-src hash) never reaches a browser that has
+  // it. sw.js stays as a kill-switch so old installs clean themselves up.
+  const noRegister = ['phanpy/dist/index.html', 'phanpy/dist/compose/index.html']
+    .every(f => !/inline-sw/.test(fs.readFileSync(path.join(root, f), 'utf8')));
+  const swSrc = fs.readFileSync(path.join(root, 'phanpy/dist/sw.js'), 'utf8');
+  check(noRegister && /registration\.unregister\(\)/.test(swSrc),
+    'UI registers no service worker; sw.js is the kill-switch');
+
   // --- 3. facade basics ---
   const inst = await fetch(`http://127.0.0.1:${PORT}/api/v1/instance`, { headers: gh });
   const instBody = await inst.json();
