@@ -1,8 +1,12 @@
 #!/usr/bin/env node
 // activitypod.mjs — CLI for the standalone pod-stored ActivityPub actor.
 //
-//   activitypod setup --new-account --email you@example.org --handle you \
-//       [--issuer https://solidcommunity.net] [--name "You"] [--home DIR]
+//   activitypod setup --new-account --email you@example.org --handle you
+//     Asks for the identity provider, the pod name (which becomes the
+//     domain half of your address) and your display name, showing the
+//     address you are about to create before creating it. Any of them can
+//     be given as flags instead: --issuer, --pod-name, --name (and --home,
+//     --keys pod, --root).
 //     Creates a brand-new account + pod on the CSS server, mints the
 //     credential, provisions the pod, publishes the actor, STARTS the agent
 //     and opens the browser. One command from nothing to federating.
@@ -72,6 +76,20 @@ function askHidden(prompt) {
   });
 }
 
+// Plain prompt with a default: Enter accepts it. Non-interactive runs
+// (scripts, CI) take the default silently, so flags remain sufficient.
+let sharedRl = null;                     // one interface: a new one per
+function ask(prompt, dflt = '') {        // question would drop buffered input
+  if (!process.stdin.isTTY) return Promise.resolve(dflt);
+  sharedRl ||= readline.createInterface({ input: process.stdin, output: process.stdout });
+  return new Promise((resolve) => {
+    sharedRl.question(dflt ? `${prompt} [${dflt}]: ` : `${prompt}: `, (answer) => {
+      resolve(String(answer).trim() || dflt);
+    });
+  });
+}
+function endAsking() { sharedRl?.close(); sharedRl = null; }
+
 function openBrowser(url) {
   try {
     if (process.platform === 'win32') spawn('cmd', ['/c', 'start', '', url], { detached: true, stdio: 'ignore' }).unref();
@@ -80,21 +98,38 @@ function openBrowser(url) {
 }
 
 if (cmd === 'setup') {
-  const issuer = flag('issuer', 'https://solidcommunity.net');
   const email = flag('email');
   const handle = flag('handle');
-  const name = flag('name');
   const root = flag('root');
   let pod = flag('pod');
   if (!email || !handle || (!pod && !has('new-account'))) {
     console.error('need --email and --handle, plus either --pod <url> or --new-account');
     process.exit(2);
   }
+
+  // Everything that shapes your identity is asked for here, with defaults,
+  // because these are decisions — the pod name becomes half of your
+  // permanent address, and nobody should discover that after the fact.
+  const issuer = flag('issuer') || await ask('Solid identity provider', 'https://solidcommunity.net');
+  const podName = has('new-account')
+    ? (flag('pod-name') || await ask('pod name (this becomes the domain of your address)', handle))
+    : null;
+  const name = flag('name') || await ask('display name (shown above your address)', handle);
+
+  const host = has('new-account') ? `${podName}.${new URL(issuer).host}` : new URL(pod).host;
+  console.log('\nYou will be:\n');
+  console.log(`  ${name}`);
+  console.log(`  @${handle}@${host}\n`);
+  console.log('The display name can be changed later; the handle and pod cannot.');
+  const go = await ask('continue? (y/n)', 'y');
+  if (!/^y/i.test(go)) { console.log('nothing was created'); process.exit(0); }
+  endAsking();                           // hand the tty to the password prompt
+
   const password = process.env.AP_PASSWORD || await askHidden(`password for ${email} at ${issuer}: `);
 
   if (has('new-account')) {
     const { createAccountWithPod } = await import(new URL('../lib/account.mjs', import.meta.url));
-    const made = await createAccountWithPod({ issuer, email, password, podName: flag('pod-name', handle) });
+    const made = await createAccountWithPod({ issuer, email, password, podName });
     pod = made.pod;
     console.log(`account + pod created: ${pod}`);
   }
