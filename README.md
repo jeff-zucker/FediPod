@@ -14,69 +14,51 @@ npm install
 
 You do setup once per device.
 
-# Setup if you already have a pod
 
-From the install folder on your local machine :
-```
-bin/activitypod.mjs setup --pod https://you.solidcommunity.net/ \
-  --issuer https://solidcommunity.net --email you@example.org --yourHandle
-```
+### Setup if you don't have a pod yet
 
-## Setup if you don't have a pod yet
-
-From nothing — no account, no pod — one command asks for your credentials, creates the account, the pod, the actor, and leaves you in the client:
+From nothing — no fediverse account, no pod — one command asks for your credentials, creates the account, the pod, the actor, and leaves you in the client looking at your fediverse home with a pre-stocked home feed :
 
 ```
 npm install
 bin/activitypod.mjs setup --new-account --email you@example.org --handle you
 ```
 
-## Setup options
+### Setup if you already have a pod
 
-You may use other pod locations and may optionally also put --port PORTNUM at the end of the command; the port you choose at setup is remembered, so `start`, `stop`, `status` and `install-service` need no flag afterwards. `--port` on a later `start` moves it for good.
-
-Other setup options: `--home DIR` uses a different state directory; `--name "Your Name"` sets the display name.
-
-### Changing your display name
-
-The display name is what other servers show in bold above `@you@yourpod` (the handle itself is fixed). Change it any time without re-running setup:
-
+From the install folder on your local machine :
 ```
-bin/activitypod.mjs start --name "Your Name"
+bin/activitypod.mjs setup --pod https://you.solidcommunity.net/ \
+  --issuer https://solidcommunity.net --email you@example.org --handle yourname
 ```
 
-It merges into your settings and republishes the actor document, so remote servers pick it up. Later starts need no flag — the name is stored on the pod.
+### Running the agent
 
-### Where the signing key lives
+From the install folder, run `bin/activitypod.mjs start`.
+You may optionally add `--port PORTNUM` to change your local agent's port, or `--name "Your Name"` to change the display name other people see (your handle is fixed at setup). Either one is remembered, so later starts need no flags. See also [running the agent as a service](#running-the-agent-as-a-service) and [starting and stopping the agent](#starting-and-stopping-the-agent) below.
 
-By default the key stays on **this machine** (`~/.activitypod/keys.json`, mode 0600) — the pod host never sees it. An existing install whose key is in pod state moves it locally on the next start and deletes the pod's copy; the identity is unchanged.
-
-`setup --keys pod` opts into the other trade: the key lives in pod state, so **any** device that can read the pod signs as you with no file copying. That is the easier multi-device story, at the cost of the pod host being able to read the key.
-
-Either way, a second device needs the *same* key: copy `keys.json` across, or use `--keys pod`. If a device finds no key but your actor already publishes one, it refuses to mint a replacement and says so — minting would invalidate every signature other servers have cached. `--rotate-key` does it deliberately when you actually want a new key.
+Now point your browser (any) at http://localhost:8030/ — or your own `--port` — and there you go!
 
 
-## Running as a service
+### Running the agent as a service
 
-If you don't want to
+If you don't want to run the agent each time, you can install it as a system sevice :
 ```
 bin/activitypod.mjs install-service
 ```
-This registers the agent with systemd (Linux, user unit + linger) or launchd
+This registers the agent with systemd (Linux) or launchd
 (macOS) so it starts at boot, restarts on crash, and needs no terminal.
-`uninstall-service` reverses it. When the service is running 
+`uninstall-service` reverses it. 
 
 On **Windows** it creates a Scheduled Task that starts the agent at log on (this path is untested — it prints the equivalent `schtasks` command either way). On **Android/Termux** there is no service manager, so it prints a boot-script recipe using the Termux:Boot app and `termux-wake-lock` instead; whatever Android kills is buffered on the pod and catches up at the next start.
 
-## Everyday commands
+### Starting and Stopping the agent
 
 ```
-bin/activitypod.mjs start      # start (setup already did this the first time)
+bin/activitypod.mjs start    # start (setup already did this the first time)
 bin/activitypod.mjs stop     # graceful: flushes state, releases the lease
 bin/activitypod.mjs status   # handle, active/viewer mode, followers, tag feed
 ```
-
-These work however the agent was started — terminal, background or service — because `stop` uses a pidfile and `status` asks the agent itself. (For a service install, prefer `systemctl --user stop activitypod` so systemd's bookkeeping matches.)
 
 Two more when you need them:
 
@@ -85,19 +67,11 @@ bin/activitypod.mjs tokens                  # list client logins; --revoke <pref
 bin/activitypod.mjs revoke-credential --email you@example.org   # kill this machine's pod credential
 ```
 
-## Multiple devices
-
-Install on as many devices as you like: run `setup --pod <your pod>` on each (it mints that device its own credential and reuses the pod), or copy `~/.activitypod/credential.json` across and skip setup.
-
-Only one agent acts at a time — they coordinate through a lease on the pod, because draining the inbox is a destructive read. Reading works everywhere; **acting follows you**: posting or following on a device that is currently the read-only one claims the lease immediately, and the other steps down within about half a minute.
-
-
-
 ## Fediverse Clients
 The UI is the bundled [Phanpy](https://github.com/cheeaun/phanpy)
 client (MIT, by Chee Aun; patched to allow the loopback http origin; is served
 same-origin over the agent's Mastodon client-API facade. Log in with one
-click, instance `localhost:8030`.
+click, using `localhost:8030` (or your own `--port`) as the instance.
 
 The agent federates for real: follow/unfollow, post, reply, favourite,
 boost, media, delete; incoming boosts from people you follow and a
@@ -114,18 +88,15 @@ configurable public-hashtag feed (`POST /tagfeed`) fill the timeline.
 
 ## Remote access (phones, https-only clients)
 
-Mobile clients need an https URL that reaches the agent. **First set a UI
-password** — without one, `/oauth/authorize` trusts whoever can reach it
-(fine on loopback, catastrophic anywhere else):
+The agent listens on your own machine, so a phone can't see it, and mobile clients insist on https. Reaching it from another device needs two things: a password and an https address.
+
+**Set the password first** — without one, anyone who can reach the agent is treated as you. That is fine on your own machine and dangerous anywhere else:
 
 ```
 bin/activitypod.mjs passwd
 ```
 
-Then the friction-free route is [Tailscale](https://tailscale.com):
-`tailscale serve --bg 8030` gives the agent an https URL visible only to
-your own devices, certificates handled for you. A public VPS + Caddy in
-front of `localhost:8030` works the same way for a world-reachable UI.
+Then give it an address. [Tailscale](https://tailscale.com) is the easy route: install it on both devices and run `tailscale serve --bg 8030`, which gives the agent an https URL only your own devices can reach, certificates included. A small server with a reverse proxy in front of `localhost:8030` does the same job if you want it publicly reachable. Add whichever hostname you use to `AP_ALLOWED_HOSTS`, or the agent will refuse requests for a name it was not told about.
 
 ## Android
 
@@ -134,58 +105,8 @@ The agent is pure JS, so [Termux](https://termux.dev) runs it unmodified:
 ```
 pkg install nodejs
 tar xzf activitypod-js-*.tar.gz && cd activitypod-js
-bin/activitypod.mjs start        # then open http://localhost:8030/ in Chrome
+bin/activitypod.mjs start      # then open http://localhost:8030/ in Chrome
 ```
 
 `termux-wake-lock` keeps it alive in the background; and because the pod
 buffers everything, an agent Android kills simply catches up on next start.
-
-## Security model
-
-The agent listens on loopback, but loopback is not an access control: any
-web page you visit can try to talk to it, and DNS rebinding lets such a page
-keep its own origin while doing so. The defences:
-
-- **Host/Origin firewall** — requests must name `localhost`/`127.0.0.1`/`::1`
-  (plus anything in `AP_ALLOWED_HOSTS`), and any cross-origin `Origin` is
-  refused. Applies to the WebSocket upgrade too, which CORS does not cover.
-- **Authorization is same-site only** — `/oauth/authorize` refuses cross-site
-  navigations and only redirects to an address of this agent, so a visited
-  page cannot have a token mailed to itself. Client tokens expire after 90
-  days; `activitypod tokens` lists and revokes them.
-- **Outbound requests are address-filtered** — anyone on the fediverse can
-  put URLs in your inbox, so every fetch and delivery resolves the host first
-  and refuses loopback, private, link-local (cloud metadata) and CGNAT
-  addresses, re-checking each redirect hop. `AP_ALLOW_PRIVATE_TARGETS=1`
-  lifts this for local testing.
-- **Federated HTML is sanitized on ingest** — allowlisted tags and
-  attributes only, no scripts, no event handlers, no `javascript:` URLs — so
-  neither the pod copy nor any client holds hostile markup. A strict CSP
-  backs this up.
-- **The inbox is public, the timeline is not** — anyone may deliver to your
-  pod, so arriving does not mean belonging. Posts from people you follow
-  (and their boosts) are your home timeline; anyone else who addresses you
-  becomes a **mention** — notified and readable, but out of the timeline and
-  not written into your pod. Anything that names neither you nor a post of
-  yours is refused before it is even fetched.
-- **A leaked credential is revoked, not re-encrypted** — nothing can hide a
-  secret from code running as you, so
-  `activitypod revoke-credential --email you@…` kills this machine's
-  credential server-side and deletes it locally. (Full-disk encryption
-  covers the stolen-laptop case; the file itself is 0600 in a 0700 dir.)
-- **Exposure beyond loopback** (tailnet, reverse proxy) requires
-  `activitypod passwd` *and* listing the hostname in `AP_ALLOWED_HOSTS`. The
-  agent will refuse requests for hostnames it was not told about.
-
-Not defended: anything running as your user on your machine (loopback is
-open to every local process — set `AP_GATE_TOKEN` to a shared secret if that
-matters to you), and the pod host, which can read what it stores (below).
-
-## Trust notes
-
-- The CSS credential never leaves your machine and is revocable from the
-  account dashboard.
-- The pod stores your signing key and client tokens; the pod host can read
-  them. It already serves your actor document, so it could impersonate you
-  regardless — but if that trade doesn't suit you, host the pod yourself.
-
