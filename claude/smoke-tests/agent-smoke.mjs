@@ -545,7 +545,8 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   const intake = new Intake({
     config: {}, urls: { inbox: 'https://p.example/in/', base: 'https://p.example/' },
     remote: { listContainer: async () => { throw new Error('fetch failed'); } },
-    local: {}, store: {}, deliverer: {}, publisher: {}, log: (m) => logs.push(m),
+    local: {}, store: { read: (_n, d) => d, write: () => {} },
+    deliverer: {}, publisher: {}, log: (m) => logs.push(m),
   });
 
   await intake.drain();
@@ -624,6 +625,107 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   const reset = intake._reconnectDelay();
   check(delays[0] >= 1600 && delays[0] <= 2400 && grows && ceiling <= 5 * 60_000 * 1.2
     && reset < 2500, 'reconnect delay grows, is capped at ~5min, and resets on open');
+}
+
+// --- 5l. one unreadable state doc does not restart the whole load ---
+{
+  const res = (status, headers = {}, body = '') => ({
+    status, headers: { get: (h) => headers[h.toLowerCase()] ?? null }, text: async () => body,
+  });
+  const listing = '<https://p.example/st/> a <http://www.w3.org/ns/ldp#Container>. '
+    + '<https://p.example/st/config.json> a <http://www.w3.org/ns/ldp#Resource>. '
+    + '<https://p.example/st/statuses.json> a <http://www.w3.org/ns/ldp#Resource>.';
+  const mk = (docStatus) => {
+    const store = new PodStore({ log: () => {} });
+    const seen = [];
+    store.attach('https://p.example/st/', async (url) => {
+      if (url.endsWith('/')) return res(200, { etag: '"c"' }, listing);
+      seen.push(url);
+      if (url.includes('statuses')) return res(docStatus(url));
+      return res(200, { etag: '"cfg"' }, JSON.stringify({ handle: 'jeff' }));
+    });
+    return { store, seen };
+  };
+
+  // A broken statuses.json is skipped; config.json still lands.
+  const partial = mk(() => 500);
+  await partial.store.load();
+  check(partial.store.getConfig()?.handle === 'jeff' && !partial.store.has('statuses.json'),
+    'a 500 on one doc is skipped and the rest of the load completes');
+
+  // Nothing recorded for it, so the next load retries unconditionally.
+  partial.seen.length = 0;
+  await partial.store.load().catch(() => {});
+  check(partial.seen.some(u => u.includes('statuses')),
+    'the skipped doc is retried on the next load, not written off');
+
+  // config.json is the exception: unreadable and uncached must throw, or the
+  // caller would report a working pod as "never set up".
+  const noConfig = new PodStore({ log: () => {} });
+  noConfig.attach('https://p.example/st/', async (url) =>
+    url.endsWith('/') ? res(200, { etag: '"c"' }, listing) : res(503));
+  let threw = null;
+  await noConfig.load().catch(e => { threw = e.message; });
+  check(/config\.json unreadable/.test(threw || ''),
+    'an unreadable config.json still fails loudly');
+}
+
+// --- 5m. inbox attempt counts survive a restart ---
+{
+  const { Intake } = await import(path.join(root, 'lib/intake.mjs'));
+  const docs = new Map();
+  const store = {
+    read: (n, d) => (docs.has(n) ? docs.get(n) : d),
+    write: (n, v) => docs.set(n, v),
+    addDeadLetter: () => {},
+  };
+  const item = 'https://p.example/in/one';
+  const mkIntake = () => new Intake({
+    config: {}, urls: { inbox: 'https://p.example/in/', base: 'https://p.example/' },
+    remote: {
+      listContainer: async () => [item],
+      fetch: async () => { throw new Error('remote down'); },
+      delete: async () => true,
+    },
+    local: {}, store, deliverer: {}, publisher: {}, log: () => {},
+  });
+
+  await mkIntake().drain();
+  const afterFirst = docs.get('intake-attempts.json')?.[item]?.n;
+  await mkIntake().drain();                     // a "restart": brand new Intake, same pod state
+  const afterRestart = docs.get('intake-attempts.json')?.[item]?.n;
+  check(afterFirst === 1 && afterRestart === 2,
+    `a restart continues the count instead of resetting it (${afterFirst} then ${afterRestart})`);
+
+  // Stale records are pruned rather than accumulating forever.
+  docs.set('intake-attempts.json', {
+    'https://p.example/in/ancient': { n: 3, at: new Date(Date.now() - 30 * 24 * 3600_000).toISOString() },
+    [item]: { n: 2, at: new Date().toISOString() },
+  });
+  const pruner = mkIntake();
+  pruner._pruneAttempts();
+  const left = Object.keys(docs.get('intake-attempts.json'));
+  check(left.length === 1 && left[0] === item, 'records older than a week are pruned');
+}
+
+// --- 5n. a failed subscribe schedules another, it does not end push ---
+{
+  const { Intake } = await import(path.join(root, 'lib/intake.mjs'));
+  const logs = [];
+  const intake = new Intake({
+    config: {}, urls: { inbox: 'https://p.example/in/', base: 'https://p.example/' },
+    remote: {}, local: {}, store: { read: (_n, d) => d, write: () => {} },
+    deliverer: {}, publisher: {}, log: (m) => logs.push(m),
+  });
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async () => { throw new Error('fetch failed'); };
+  await intake.subscribe();
+  globalThis.fetch = realFetch;
+  const scheduled = !!intake.resubTimer;
+  clearTimeout(intake.resubTimer);
+  check(scheduled && intake.wsState === 'subscribe-error'
+    && logs.some(m => /subscribe failed \(fetch failed\) — retrying in/.test(m)),
+    'a network error during subscribe schedules a retry instead of ending push');
 }
 
 // --- 6. pod-RDF builders via injected fetch ---
