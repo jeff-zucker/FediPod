@@ -117,6 +117,12 @@ export class Agent {
     }
     let config = this.store.getConfig();
     if (!config) { this.log('credential present but pod state empty — run setup'); return false; }
+    // Resurrecting a tombstoned actor would contradict the Delete every server
+    // has already acted on, so a retired identity stays retired.
+    if (config.retiredAt) {
+      this.log(`this actor was retired on ${config.retiredAt} — run setup for a new identity`);
+      return false;
+    }
     // A rename is a merge into the existing config, never a rewrite — the
     // UI password and anything else set later must survive it.
     if (name && name !== config.name) {

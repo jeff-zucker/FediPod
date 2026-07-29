@@ -121,10 +121,24 @@ async function revokeCredentialViaAccount({ origin, email, password, gateToken, 
  * @param {string} [o.gatedOrigin] the origin x-dk-token applies to (local pod only)
  * @returns {{webId, issuer, fetch}}
  */
+// Every token request costs the issuer an OIDC replay-detection write, and that
+// write takes a lock — so retrying one without backoff compounds the contention
+// that slowed it down. solidcommunity.net's operators measured ~30 of our token
+// requests in 5 seconds during their 2026-07-29 outage: one forced grant per 401
+// across a sweep, with nothing coalescing them. Hence one grant in flight at a
+// time, a breaker shut for a jittered exponential interval after each failure
+// (or for Retry-After when offered), and a floor on how often a 401 may force a
+// fresh grant.
+const TOKEN_BACKOFF_MIN_MS = 1_000;
+const TOKEN_BACKOFF_MAX_MS = 60_000;
+const FORCE_COOLDOWN_MS = 10_000;
+
 function createGrantSession(rec, { gateToken, gatedOrigin } = {}) {
   const { clientId, secret, webId, tokenEndpoint, issuerOrigin } = rec;
   const keyPairP = generateKeyPair('ES256');     // one DPoP key for this session
   let accessToken = null, expiresAt = 0, rsNonce = null;
+  let inFlight = null;                           // single-flight: N callers, one grant
+  let failures = 0, breakerUntil = 0, lastForced = 0;
   const gateFor = (url) => (gatedOrigin && new URL(url).origin === gatedOrigin) ? gateToken : undefined;
 
   async function requestToken(keyPair, nonce) {
@@ -150,7 +164,10 @@ function createGrantSession(rec, { gateToken, gatedOrigin } = {}) {
     // Cloudflare 504, say) and this message goes into the log.
     if (!res.ok) {
       const body = (await res.text().catch(() => '')).replace(/\s+/g, ' ').slice(0, 200);
-      throw new Error(`token request failed (HTTP ${res.status}): ${body}`);
+      const err = new Error(`token request failed (HTTP ${res.status}): ${body}`);
+      const ra = Number(res.headers.get('retry-after'));
+      if (Number.isFinite(ra) && ra > 0) err.retryAfterMs = Math.min(ra * 1000, TOKEN_BACKOFF_MAX_MS);
+      throw err;
     }
     return res.json();
   }
@@ -158,9 +175,23 @@ function createGrantSession(rec, { gateToken, gatedOrigin } = {}) {
   async function ensureToken(force) {
     const keyPair = await keyPairP;
     if (!force && accessToken && Date.now() < expiresAt - 30_000) return keyPair;
-    const tok = await requestToken(keyPair, null);
-    accessToken = tok.access_token;
-    expiresAt = Date.now() + (Number(tok.expires_in) || 300) * 1000;
+    if (inFlight) { await inFlight; return keyPair; }   // someone else is already asking
+    const shut = breakerUntil - Date.now();
+    if (shut > 0) throw new Error(`token endpoint backing off — ${Math.ceil(shut / 1000)}s left`);
+    inFlight = (async () => {
+      try {
+        const tok = await requestToken(keyPair, null);
+        accessToken = tok.access_token;
+        expiresAt = Date.now() + (Number(tok.expires_in) || 300) * 1000;
+        failures = 0;
+      } catch (e) {
+        failures++;
+        const capped = Math.min(TOKEN_BACKOFF_MIN_MS * 2 ** (failures - 1), TOKEN_BACKOFF_MAX_MS);
+        breakerUntil = Date.now() + (e.retryAfterMs ?? Math.round(capped * (0.8 + Math.random() * 0.4)));
+        throw e;
+      } finally { inFlight = null; }
+    })();
+    await inFlight;
     return keyPair;
   }
 
@@ -174,7 +205,13 @@ function createGrantSession(rec, { gateToken, gatedOrigin } = {}) {
     if (res.status === 401 && !retried) {
       const n = res.headers.get('dpop-nonce');
       if (n) { rsNonce = n; return doFetch(url, init, true); }   // server wants a nonce
-      await ensureToken(true);                                    // or the token expired
+      // Or the token expired — but a sweep whose every request 401s must not
+      // mint a token per request, so force at most one grant per window and
+      // otherwise retry with what we already hold.
+      if (Date.now() - lastForced > FORCE_COOLDOWN_MS) {
+        lastForced = Date.now();
+        await ensureToken(true);
+      }
       return doFetch(url, init, true);
     }
     return res;

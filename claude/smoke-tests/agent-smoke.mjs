@@ -393,6 +393,118 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     'store.load revalidates: quiet minute = 1 request, and a 304 doc keeps its cache');
 }
 
+// --- 5e2. retiring an actor tells the fediverse and leaves a Tombstone ---
+{
+  const { Publisher } = await import(path.join(root, 'lib/publisher.mjs'));
+  const config = { remotePod: 'https://pod.example/', handle: 'you', name: 'You' };
+  const delivered = [];
+  const written = new Map();
+  const acls = [];
+  let flushed = false, savedConfig = { ...config };
+  const pub = new Publisher({
+    config,
+    remote: {
+      putJson: async (url, obj) => { written.set(url, obj); },
+      setAcl: async (url, modes) => { acls.push([url, modes]); },
+    },
+    local: {},
+    store: {
+      getStatuses: () => [],
+      getContacts: () => ({
+        followers: [
+          { actor: 'https://m.example/users/a', inbox: 'https://m.example/users/a/inbox', sharedInbox: 'https://m.example/inbox' },
+          { actor: 'https://m.example/users/b', inbox: 'https://m.example/users/b/inbox', sharedInbox: 'https://m.example/inbox' },
+          { actor: 'https://other.example/users/c', inbox: 'https://other.example/users/c/inbox' },
+        ],
+        following: [],
+      }),
+      getConfig: () => savedConfig,
+      setConfig: (c) => { savedConfig = c; },
+      flush: async () => { flushed = true; },
+    },
+    deliverer: { deliverToAll: async (inboxes, activity) => { delivered.push({ inboxes, activity }); } },
+    publicKeyPem: 'x', log: () => {},
+  });
+
+  const r = await pub.retireActor();
+  const sent = delivered[0];
+  const tomb = written.get(pub.urls.actor);
+  check(sent.inboxes.length === 2 && sent.inboxes.includes('https://m.example/inbox')
+    && sent.activity.type === 'Delete' && sent.activity.object === pub.urls.actor
+    && sent.activity.to.includes('https://www.w3.org/ns/activitystreams#Public'),
+    'retire delivers one Delete per distinct inbox, sharedInbox deduped');
+  check(tomb?.type === 'Tombstone' && tomb.formerType === 'Person' && tomb.id === pub.urls.actor
+    && !!tomb.deleted, 'the actor is replaced with a Tombstone that keeps its id');
+  check(acls.some(([u, m]) => u === pub.urls.actor && m.includes('Read')),
+    'the Tombstone stays publicly readable');
+  check(savedConfig.retiredAt === r.deletedAt && flushed && r.inboxes === 2,
+    'retirement is recorded in pod state so the agent will not restart the identity');
+}
+
+// --- 5f. the token endpoint is asked once, and backed off when it refuses ---
+{
+  const { createRequire } = await import('node:module');
+  const req = createRequire(path.join(root, 'vendor/idp-grant.cjs'));
+  const { createGrantSession } = req(path.join(root, 'vendor/idp-grant.cjs'));
+  const rec = { clientId: 'c', secret: 's', webId: 'https://p.example/profile/card#me',
+    tokenEndpoint: 'https://p.example/.oidc/token', issuerOrigin: 'https://p.example' };
+  const realFetch = globalThis.fetch;
+  const tokenRes = (status, body, headers = {}) => ({
+    ok: status < 400, status,
+    headers: { get: (h) => headers[h.toLowerCase()] ?? null },
+    json: async () => body, text: async () => JSON.stringify(body),
+  });
+
+  // Concurrent callers must produce ONE grant, not one each.
+  let grants = 0;
+  globalThis.fetch = async () => { grants++; await new Promise(r => setTimeout(r, 20));
+    return tokenRes(200, { access_token: 't', expires_in: 300 }); };
+  const s1 = createGrantSession(rec);
+  globalThis.fetch = globalThis.fetch;           // keep the stub for the session
+  await Promise.all([s1.warmup(), s1.warmup(), s1.warmup(), s1.warmup(), s1.warmup()]);
+  check(grants === 1, `five concurrent grants coalesce into one (saw ${grants})`);
+
+  // A failing endpoint opens the breaker: the next attempt does not hit it.
+  let hits = 0;
+  globalThis.fetch = async () => { hits++; return tokenRes(500, { error: 'boom' }); };
+  const s2 = createGrantSession(rec);
+  let first = null, second = null;
+  try { await s2.warmup(); } catch (e) { first = e.message; }
+  try { await s2.warmup(); } catch (e) { second = e.message; }
+  check(hits === 1 && /HTTP 500/.test(first || '') && /backing off/.test(second || ''),
+    'a 500 opens the breaker, so the second attempt never reaches the endpoint');
+
+  // Retry-After outranks the computed backoff.
+  globalThis.fetch = async () => tokenRes(429, { error: 'slow down' }, { 'retry-after': '45' });
+  const s3 = createGrantSession(rec);
+  const t0 = Date.now();
+  try { await s3.warmup(); } catch {}
+  let msg = '';
+  try { await s3.warmup(); } catch (e) { msg = e.message; }
+  const left = Number((msg.match(/(\d+)s left/) || [])[1] || 0);
+  check(left >= 40 && left <= 45, `Retry-After sets the pause (${left}s from a 45s header)`);
+
+  globalThis.fetch = realFetch;
+}
+
+// --- 5g. a flapping socket backs off instead of re-subscribing every 2s ---
+{
+  const { Intake } = await import(path.join(root, 'lib/intake.mjs'));
+  const intake = new Intake({
+    config: {}, urls: { inbox: 'https://p.example/in/', base: 'https://p.example/' },
+    remote: {}, local: {}, store: {}, deliverer: {}, publisher: {}, log: () => {},
+  });
+  const delays = [intake._reconnectDelay(), intake._reconnectDelay(), intake._reconnectDelay(),
+    intake._reconnectDelay(), intake._reconnectDelay()];
+  const grows = delays.every((d, i) => i === 0 || d > delays[i - 1]);
+  for (let i = 0; i < 20; i++) intake._reconnectDelay();
+  const ceiling = intake._reconnectDelay();
+  intake.reconnectTries = 0;
+  const reset = intake._reconnectDelay();
+  check(delays[0] >= 1600 && delays[0] <= 2400 && grows && ceiling <= 5 * 60_000 * 1.2
+    && reset < 2500, 'reconnect delay grows, is capped at ~5min, and resets on open');
+}
+
 // --- 6. pod-RDF builders via injected fetch ---
 const { PodRdf } = await import(path.join(root, 'lib/podrdf.mjs'));
 const rdfPuts = [];
