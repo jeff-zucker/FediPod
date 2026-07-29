@@ -1,63 +1,53 @@
 # activitypod-js
 
-A standalone, single-actor ActivityPub agent whose entire existence is
-**stored on a Solid pod** (Community Solid Server). The pod serves the public
-wire face; the agent is a small outbound-only Node process that can run on
-any machine — laptop, Raspberry Pi, VPS — with no public IP, no TLS, no
-database. Move the one credential file and the actor moves with you.
+`activitypod-js` is a standalone, single-actor ActivityPub agent that stores your data on a Solid Pod and runs on any device that supports node. The agent can be moved from one device to another without any change to your account.  
 
-## What lives where
+## Installation
 
-Everything the agent owns nests under one top-level pod container:
+```
+git clone https://github.com/jeff-zucker/activitypod-js;
+cd activitypod-js;
+npm install
+```
 
-- `/activitypods-js/ap/` — the public ActivityPub wire face (actor document,
-  inbox, outbox, followers/following, notes, media), served verbatim by the
-  pod. Followers' servers talk to the POD, not to your machine.
-- `/activitypods-js/fediverse/` — the RDF source of truth (timeline, posts,
-  contacts, settings) in ActivityStreams vocabulary, owner-only.
-- `/activitypods-js/ap-state/` — operational state as JSON (delivery queue,
-  status mirror, notifications, keys…), owner-only, rebuildable from the RDF.
-- `/.well-known/webfinger`, `host-meta` + `nodeinfo` at the pod root
-  (fediverse discovery requires the host root; nodeinfo lets crawlers and
-  clients see a self-describing activitypod-js server).
+## Setup
 
-Locally: `~/.activitypod/credential.json` (a revocable CSS client
-credential) and a log file. Nothing else.
+You do setup once per device.
 
-## Use
+# Setup if you already have a pod
 
-From nothing — no account, no pod — one command creates the account, the
-pod, the actor, and leaves you in the client:
+From the install folder on your local machine :
+```
+bin/activitypod.mjs setup --pod https://you.solidcommunity.net/ \
+  --issuer https://solidcommunity.net --email you@example.org --yourHandle
+```
+
+## Setup if you don't have a pod yet
+
+From nothing — no account, no pod — one command asks for your credentials, creates the account, the pod, the actor, and leaves you in the client:
 
 ```
 npm install
 bin/activitypod.mjs setup --new-account --email you@example.org --handle you
 ```
 
-Already have a pod? Point at it instead:
+## Setup options
 
-```
-bin/activitypod.mjs setup --pod https://you.solidcommunity.net/ \
-  --issuer https://solidcommunity.net --email you@example.org --handle you
-```
+You may use other pod locations and may optionally also put --port PORTNUM at the end of the command; 
 
-Setup finishes by starting the agent and opening the browser; later starts
-are just `bin/activitypod.mjs run`. The default port is 8030; pass
-`--port <n>` (or set `AP_PORT`) at setup and it is remembered — later
-commands need no flag. Or make it an appliance:
 
+## Running as a service
+
+If you don't want to
 ```
 bin/activitypod.mjs install-service
 ```
-
-registers the agent with systemd (Linux, user unit + linger) or launchd
+This registers the agent with systemd (Linux, user unit + linger) or launchd
 (macOS) so it starts at boot, restarts on crash, and needs no terminal.
-`uninstall-service` reverses it.
+`uninstall-service` reverses it. When the service is running 
 
-For a no-install download, `node scripts/build-dist.mjs` produces
-`dist/activitypod-js-<version>.tar.gz` (~13 MB) — unpack anywhere with
-Node ≥ 20 and run the same commands, no `npm install` needed.
 
+## Fediverse Clients
 The UI is the bundled [Phanpy](https://github.com/cheeaun/phanpy)
 client (MIT, by Chee Aun; patched to allow the loopback http origin; is served
 same-origin over the agent's Mastodon client-API facade. Log in with one

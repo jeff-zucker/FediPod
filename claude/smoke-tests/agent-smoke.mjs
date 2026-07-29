@@ -636,6 +636,22 @@ if (up) {
   fs.rmSync(home, { recursive: true, force: true });
 }
 
+// --- 8j. install-service speaks each platform's own language ---
+{
+  const { execFileSync } = await import('node:child_process');
+  const say = (plat) => execFileSync(process.execPath, ['-e', `
+    Object.defineProperty(process, 'platform', { value: '${plat}' });
+    process.argv = [process.argv[0], 'bin/activitypod.mjs', 'install-service'];
+    await import('${path.join(root, 'bin/activitypod.mjs')}');
+  `, '--input-type=module'], { cwd: root }).toString();
+  const android = say('android');
+  const other = say('freebsd');
+  check(/Termux:Boot/.test(android) && /termux-wake-lock/.test(android) && !/Windows|Scheduled Task/.test(android),
+    'install-service gives Termux the boot/wake-lock recipe, not Windows advice');
+  check(/no service integration for platform "freebsd"/.test(other) && /run-agent\.mjs/.test(other),
+    'unknown platforms get a runnable command, not wrong instructions');
+}
+
 // --- 9. --new-account flow vs a mock CSS v7 account API ---
 const { createAccountWithPod } = await import(path.join(root, 'lib/account.mjs'));
 const http = await import('node:http');

@@ -290,10 +290,50 @@ WantedBy=default.target
       sh('launchctl', ['load', plist]);
       console.log('installed and loaded (starts at login)');
     }
+  } else if (process.platform === 'win32') {
+    // schtasks is scriptable, but this path is UNTESTED here (no Windows
+    // machine); the equivalent command is printed either way so a failure
+    // is actionable rather than mysterious.
+    const task = 'activitypod';
+    const tr = `"${process.execPath}" "${runAgentPath}"`;
+    if (cmd === 'uninstall-service') {
+      const gone = sh('schtasks', ['/delete', '/tn', task, '/f']);
+      console.log(gone ? 'scheduled task removed' : `could not remove it — run: schtasks /delete /tn ${task} /f`);
+    } else {
+      const made = sh('schtasks', ['/create', '/tn', task, '/tr', tr, '/sc', 'onlogon', '/rl', 'limited', '/f']);
+      if (made) {
+        console.log('scheduled task created — starts at log on (untested on Windows; please report)');
+        console.log(`set AP_HOME=${HOME} and AP_PORT=${PORT} in the task's environment if they are not your defaults`);
+      } else {
+        console.log('could not create the task automatically. Run this in an elevated prompt:');
+        console.log(`  schtasks /create /tn ${task} /tr ${tr} /sc onlogon /rl limited /f`);
+        console.log(`with AP_HOME=${HOME} AP_PORT=${PORT}.`);
+      }
+    }
+  } else if (process.platform === 'android' || process.env.PREFIX?.includes('com.termux')) {
+    // Android has no user service manager: running at boot needs the
+    // separate termux-boot app, supervision needs the termux-services
+    // package. Neither can be installed from here, so print the recipe.
+    // The agent is designed for this: whatever Android kills, the pod
+    // buffered, and the next start catches up.
+    if (cmd === 'uninstall-service') {
+      console.log('Termux: remove ~/.termux/boot/activitypod.sh (and `sv-disable activitypod` if you used termux-services).');
+    } else {
+      const boot = path.join(os.homedir(), '.termux/boot');
+      console.log('Android/Termux has no service manager. To start at boot:');
+      console.log('  1. install the Termux:Boot app (F-Droid), open it once');
+      console.log(`  2. mkdir -p ${boot} && cat > ${boot}/activitypod.sh <<'EOF'`);
+      console.log('#!/data/data/com.termux/files/usr/bin/sh');
+      console.log('termux-wake-lock');
+      console.log(`AP_HOME=${HOME} AP_PORT=${PORT} ${process.execPath} ${runAgentPath} &`);
+      console.log('EOF');
+      console.log(`  3. chmod +x ${boot}/activitypod.sh`);
+      console.log('\nWithout Termux:Boot, run `termux-wake-lock` then `activitypod run` —');
+      console.log('anything Android kills is buffered on the pod and catches up next start.');
+    }
   } else {
-    console.log('Windows: create a Scheduled Task running:');
-    console.log(`  ${process.execPath} ${runAgentPath}`);
-    console.log(`with AP_HOME=${HOME} AP_PORT=${PORT}, trigger "At log on".`);
+    console.log(`no service integration for platform "${process.platform}". Run it yourself with:`);
+    console.log(`  AP_HOME=${HOME} AP_PORT=${PORT} ${process.execPath} ${runAgentPath}`);
   }
 } else if (cmd === 'status') {
   try {
