@@ -522,8 +522,18 @@ if (up) {
   check(isPrivateAddress('127.0.0.1') && isPrivateAddress('169.254.169.254')
     && isPrivateAddress('::1') && !isPrivateAddress('93.184.216.34'),
     'address classifier: private vs public');
-  const publicOk = await assertPublicUrl('https://mastodon.social/api/v1/instance').then(() => true).catch(() => false);
-  check(publicOk, 'SSRF guard allows a public host');
+  const pinned = await assertPublicUrl('https://mastodon.social/api/v1/instance').catch(() => null);
+  check(!!pinned?.address && !isPrivateAddress(pinned.address),
+    `SSRF guard allows a public host and returns its address to pin (${pinned?.address || 'none'})`);
+  const { safeFetch, readCapped, pinnedFor } = await import(path.join(root, 'lib/safefetch.mjs'));
+  check(typeof (await pinnedFor('https://mastodon.social/')) === 'object',
+    'connection is pinned to the validated address (undici dispatcher)');
+  const live = await safeFetch('https://mastodon.social/api/v1/instance').catch(() => null);
+  const liveBody = live ? await readCapped(live).catch(() => '') : '';
+  check(live?.status === 200 && /"uri"|"domain"/.test(liveBody), 'safeFetch reaches a real public host');
+  const capped = await safeFetch('https://mastodon.social/api/v1/instance')
+    .then(r => readCapped(r, 10)).then(() => false).catch(e => /exceeded|too large/.test(e.message));
+  check(capped, 'response size cap enforced');
 
   const { sanitizeHtml } = await import(path.join(root, 'lib/wire.mjs'));
   const dirty = '<p>hi <a href="https://ok/x">link</a></p><script>alert(1)</script>'

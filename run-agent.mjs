@@ -116,7 +116,9 @@ export class Agent {
     });
     this.viewer = !(await this.lease.acquire());
 
-    const keys = await ensureKeys(this.store);
+    // keysLocal (setup --keys local) is a per-machine choice, so it rides in
+    // the credential file rather than pod state.
+    const keys = await ensureKeys(this.store, { localDir: cred.keysLocal ? this.home : null });
     this.local = new PodRdf({ base: this.urls.fediverse, fetchImpl: (u, i) => this.remote.fetch(u, i) });
     this.deliverer = new Deliverer({
       store: this.store, rsaPrivate: keys.rsaPrivate, keyId: this.urls.actor + '#main-key',

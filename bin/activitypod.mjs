@@ -13,6 +13,9 @@
 //
 //     The password is prompted (or AP_PASSWORD) — used once to create the
 //     account and/or mint a revocable CSS client-credential, never stored.
+//     --keys local keeps the signing key in AP_HOME instead of pod state
+//     (the pod host cannot read it; the key file must then travel with the
+//     credential if you move machines).
 //
 //   activitypod run       start the agent (UI + API on http://localhost:8030/)
 //   activitypod stop      stop the running agent (graceful: flush + lease release)
@@ -79,7 +82,12 @@ if (cmd === 'setup') {
 
   const { mintCredential } = await import(new URL('../lib/remote.mjs', import.meta.url));
   const credential = await mintCredential({ origin: issuer, email, password, name: 'activitypod-js' });
-  const rec = { ...credential, remotePod: pod.endsWith('/') ? pod : pod + '/', ...(root ? { root } : {}) };
+  const rec = {
+    ...credential,
+    remotePod: pod.endsWith('/') ? pod : pod + '/',
+    ...(root ? { root } : {}),
+    ...(flag('keys') === 'local' ? { keysLocal: true } : {}),
+  };
   fs.mkdirSync(HOME, { recursive: true, mode: 0o700 });
   fs.writeFileSync(path.join(HOME, 'credential.json'), JSON.stringify(rec, null, 2) + '\n', { mode: 0o600 });
   console.log(`credential minted and saved to ${path.join(HOME, 'credential.json')}`);
