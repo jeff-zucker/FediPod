@@ -745,6 +745,56 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     'the actor stays a Person and advertises movedTo, so the old handle still resolves');
 }
 
+// --- 5t. parking is quiet AND revivable ---
+{
+  const { Agent } = await import(path.join(root, 'run-agent.mjs'));
+  const { Publisher } = await import(path.join(root, 'lib/publisher.mjs'));
+  const config = { remotePod: 'https://pod.example/', handle: 'you', name: 'You' };
+  const following = [
+    { actor: 'https://m.example/users/b', handle: 'b@m.example' },
+    { actor: 'https://other.example/users/c' },
+  ];
+
+  const acls = [];
+  const docs = new Map();
+  let saved = { ...config };
+  const store = {
+    getStatuses: () => [],
+    getConfig: () => saved,
+    setConfig: (c) => { saved = c; },
+    flush: async () => {},
+    read: (n, d) => (docs.has(n) ? docs.get(n) : d),
+    write: (n, v) => docs.set(n, v),
+    remove: async (n) => { docs.delete(n); },
+    getContacts: () => ({ followers: [], following }),
+  };
+  const publisher = new Publisher({
+    config, store, local: {},
+    remote: { setAcl: async (u, m) => { acls.push([u, m]); }, putJson: async () => {}, put: async () => {} },
+    deliverer: { deliverToAll: async () => {} }, publicKeyPem: 'x', log: () => {},
+    probeFetch: async () => ({ status: 200 }),
+  });
+  const agent = new Agent({ home: '/tmp', log: () => {} });
+  agent.store = store; agent.publisher = publisher; agent.urls = publisher.urls; agent.remote = publisher.remote;
+
+  const unfollowed = [];
+  const parked = await agent.park({ unfollow: async (_a, actor) => { unfollowed.push(actor); } });
+  const snap = docs.get('parked.json');
+  check(unfollowed.length === 2 && snap?.following?.length === 2
+    && snap.following[0].handle === 'b@m.example' && !!snap.parkedAt
+    && acls.some(([u, m]) => u === publisher.urls.inbox && m.length === 0)
+    && !!saved.quiescedAt,
+    'park unfollows, remembers who, and closes the inbox');
+
+  // Revive: inbox re-opened, quiesced flag gone, every remembered follow re-sent.
+  const refollowed = [];
+  const revived = await agent.revive({ follow: async (_a, actor) => { refollowed.push(actor); } });
+  const lastInboxAcl = acls.filter(([u]) => u === publisher.urls.inbox).pop();
+  check(revived.refollowed === 2 && refollowed.length === 2
+    && lastInboxAcl[1].includes('Append') && !saved.quiescedAt && !docs.has('parked.json'),
+    'revive re-opens the inbox, re-sends every remembered Follow, and clears the snapshot');
+}
+
 // --- 5f. the token endpoint is asked once, and backed off when it refuses ---
 {
   const { createRequire } = await import('node:module');

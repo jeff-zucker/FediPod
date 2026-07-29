@@ -30,7 +30,7 @@ import { TagFeed } from './lib/tagfeed.mjs';
 import { Lease } from './lib/lease.mjs';
 import { startAdmin } from './lib/admin.mjs';
 import { apUrls } from './lib/wire.mjs';
-import { unfollowActor, resolveHandle } from './lib/social.mjs';
+import { followActor, unfollowActor, resolveHandle } from './lib/social.mjs';
 
 export class Agent {
   constructor({ home, log }) {
@@ -190,6 +190,39 @@ export class Agent {
     return true;
   }
 
+  // Park: as quiet as a pod can be while keeping its name, and revivable.
+  // The following list is snapshotted FIRST — unfollowing is what stops the
+  // traffic at source, but it also destroys the only record of who was being
+  // followed, and "until I want to revive it" needs that record.
+  async park({ unfollow = unfollowActor } = {}) {
+    const following = this.store.getContacts().following;
+    this.store.write('parked.json', {
+      parkedAt: new Date().toISOString(),
+      following: following.map(f => ({ actor: f.actor, handle: f.handle || null })),
+    });
+    await this.store.flush();
+    const r = await this.quiesce({ unfollow });
+    this.log(`parked: ${r.unfollowed} unfollow(s) recorded for revival, inbox closed`);
+    return { ...r, snapshot: following.length };
+  }
+
+  // Undo a park: re-open the inbox, then re-follow everyone from the snapshot.
+  // Each Follow needs the far end to Accept, so this is a request, not a
+  // restoration — some will not come back, which is the nature of the thing.
+  async revive({ follow = followActor } = {}) {
+    const parked = this.store.read('parked.json', null);
+    await this.publisher.openInbox();
+    let refollowed = 0;
+    for (const f of parked?.following || []) {
+      try { await follow(this, f.actor); refollowed++; }
+      catch (e) { this.log(`re-follow ${f.actor} failed: ${e.message}`); }
+    }
+    if (parked) this.store.remove('parked.json').catch(() => {});
+    await this.store.flush();
+    this.log(`revived: inbox open, ${refollowed}/${parked?.following?.length || 0} follow(s) re-sent`);
+    return { refollowed, of: parked?.following?.length || 0, parkedAt: parked?.parkedAt || null };
+  }
+
   // Keep the handle, take no more mail. Unfollowing is what actually stops the
   // volume — every account you follow pushes its posts into your inbox — and
   // closing the inbox handles the rest, which no follow graph can gate:
@@ -253,6 +286,13 @@ export class Agent {
     this.lease.onLost = () => this.demote();
     this.lease.startRenewal();
     this.deliverer.startQueue();
+    // Parked: no draining (the inbox is closed anyway) and no tag feed, so
+    // starting the agent by accident does not undo the quiet.
+    if (this.store.getConfig()?.quiescedAt) {
+      this.log('parked — not draining or polling; run `activitypod revive` to resume');
+      this.lease.startRenewal();
+      return;
+    }
     await this.intake.start();
     this.tagfeed = new TagFeed({ store: this.store, intake: this.intake, log: this.log });
     this.tagfeed.start();

@@ -268,6 +268,44 @@ if (cmd === 'setup') {
 
   const { startAgent } = await import(new URL('../run-agent.mjs', import.meta.url));
   await startAgent({ home: HOME, port: PORT, name: flag('name') || null });
+} else if (cmd === 'park' || cmd === 'revive') {
+  // Park is quiesce plus a snapshot of the follow graph, because unfollowing is
+  // what stops the traffic and also what destroys the record needed to come back.
+  const { Agent } = await import(new URL('../run-agent.mjs', import.meta.url));
+  const agent = new Agent({ home: HOME, log: (...a) => console.log(`[${cmd}]`, ...a) });
+  if (!await agent.connect()) {
+    console.error(`nothing to ${cmd} — no configured, un-retired agent in this AP_HOME`);
+    process.exit(2);
+  }
+  const cfg = agent.store.getConfig();
+  const host = new URL(cfg.remotePod).host;
+
+  if (cmd === 'park') {
+    const contacts = agent.store.getContacts();
+    console.log(`\nParking @${cfg.handle}@${host}\n`);
+    console.log(`  · ${contacts.following.length} account(s) unfollowed, and remembered so revive can undo it`);
+    console.log('  · the inbox is closed: deliveries are refused outright, not stored');
+    console.log(`  · ${contacts.followers.length} follower(s) keep following you — nothing is told you left`);
+    console.log('  · the handle keeps resolving; posts and RDF stay where they are');
+    console.log('  · a parked agent that gets started will not drain or poll\n');
+    console.log('Quietest state short of retiring. Undo with:  activitypod revive\n');
+    const ans = has('yes') ? 'y' : await ask('park this actor? (y/n)', 'n');
+    endAsking();
+    if (!/^y/i.test(ans)) { console.log('nothing changed'); process.exit(0); }
+    const r = await agent.park();
+    console.log(`parked: unfollowed ${r.unfollowed}/${r.following}, ${r.snapshot} remembered, inbox closed`);
+  } else {
+    const parked = agent.store.read('parked.json', null);
+    console.log(`\nReviving @${cfg.handle}@${host}${parked ? ` (parked ${parked.parkedAt})` : ''}\n`);
+    console.log(`  · the inbox re-opens`);
+    console.log(`  · ${parked?.following?.length || 0} Follow(s) are re-sent — each needs the far side to accept\n`);
+    const ans = has('yes') ? 'y' : await ask('revive this actor? (y/n)', 'y');
+    endAsking();
+    if (!/^y/i.test(ans)) { console.log('nothing changed'); process.exit(0); }
+    const r = await agent.revive();
+    console.log(`revived: inbox open, ${r.refollowed}/${r.of} follow(s) re-sent`);
+  }
+  process.exit(0);
 } else if (cmd === 'retire') {
   // Without this an abandoned pod accepts fediverse deliveries forever into a
   // container nobody will ever drain, and no remote server can tell.
@@ -316,8 +354,9 @@ if (cmd === 'setup') {
     const r = await agent.moveTo(target);
     console.log(`moved to ${r.target}: Move delivered to ${r.inboxes} inbox(es), unfollowed ${r.unfollowed}/${r.following}`);
   } else if (keep) {
-    const r = await agent.quiesce();
+    const r = await agent.park();                 // same thing, and revivable
     console.log(`stood down ${r.quiescedAt}: unfollowed ${r.unfollowed}/${r.following}, inbox closed`);
+    console.log('undo with:  activitypod revive');
   } else {
     const r = await agent.publisher.retireActor();
     console.log(`retired ${r.deletedAt}: Delete delivered to ${r.inboxes} inbox(es)`);
