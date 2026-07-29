@@ -143,11 +143,43 @@ if (up) {
 
 // --- 4. keys + signing round-trip on PodStore (in-memory) ---
 const { PodStore } = await import(path.join(root, 'lib/store.mjs'));
-const { ensureKeys } = await import(path.join(root, 'lib/keys.mjs'));
+const { resolveKeys } = await import(path.join(root, 'lib/keys.mjs'));
 const store = new PodStore({ log: () => {} });
-const keys = await ensureKeys(store);
+const keys = await resolveKeys(store);                       // no localDir → pod mode
 check(/^-----BEGIN PUBLIC KEY-----/.test(keys.rsaPublicPem), 'RSA public PEM present');
-check(store.has('keys.json'), 'keys persisted through PodStore');
+check(store.has('keys.json'), 'keys persisted through PodStore (--keys pod)');
+
+// Local-by-default: fresh install writes the key to AP_HOME, 0600, never the pod.
+{
+  const home = fs.mkdtempSync('/tmp/dk-ap-keys-');
+  const s = new PodStore({ log: () => {} });
+  const k = await resolveKeys(s, { localDir: home });
+  const mode = fs.statSync(path.join(home, 'keys.json')).mode & 0o777;
+  check(/BEGIN PUBLIC KEY/.test(k.rsaPublicPem) && mode === 0o600 && !s.has('keys.json'),
+    `local keys are the default (mode ${mode.toString(8)}, pod untouched)`);
+
+  // Migration: an actor whose key sits in pod state adopts it locally and
+  // the pod copy is removed — same identity, key no longer on the pod.
+  const home2 = fs.mkdtempSync('/tmp/dk-ap-keys2-');
+  const s2 = new PodStore({ log: () => {} });
+  const podKeys = await resolveKeys(s2);                     // seed a pod-held key
+  const migrated = await resolveKeys(s2, { localDir: home2 });
+  check(migrated.rsaPublicPem === podKeys.rsaPublicPem && !s2.has('keys.json')
+    && fs.existsSync(path.join(home2, 'keys.json')),
+    'pod-held key migrates to local and is deleted from the pod');
+
+  // The guard: no key material anywhere but the actor already publishes one
+  // → refuse to mint (that would invalidate every cached signature).
+  const s3 = new PodStore({ log: () => {} });
+  const home3 = fs.mkdtempSync('/tmp/dk-ap-keys3-');
+  const refused = await resolveKeys(s3, { localDir: home3, actorHasKey: async () => true })
+    .then(() => null).catch(e => e.message);
+  check(/already publishes a signing key/.test(refused || ''),
+    'refuses to mint when the actor already publishes a key');
+  const rotated = await resolveKeys(s3, { localDir: home3, actorHasKey: async () => true, rotate: true });
+  check(/BEGIN PUBLIC KEY/.test(rotated.rsaPublicPem), '--rotate-key mints deliberately');
+  for (const d of [home, home2, home3]) fs.rmSync(d, { recursive: true, force: true });
+}
 
 const { createRequire } = await import('node:module');
 const req = createRequire(path.join(root, 'package.json'));

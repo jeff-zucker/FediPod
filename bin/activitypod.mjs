@@ -102,7 +102,8 @@ if (cmd === 'setup') {
     ...credential,
     remotePod: pod.endsWith('/') ? pod : pod + '/',
     ...(root ? { root } : {}),
-    ...(flag('keys') === 'local' ? { keysLocal: true } : {}),
+    ...(flag('keys') === 'pod' ? { keysMode: 'pod' } : {}),
+    ...(has('rotate-key') ? { rotateKeyOnce: true } : {}),
   };
   fs.mkdirSync(HOME, { recursive: true, mode: 0o700 });
   fs.writeFileSync(path.join(HOME, 'credential.json'), JSON.stringify(rec, null, 2) + '\n', { mode: 0o600 });

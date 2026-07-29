@@ -35,7 +35,15 @@ bin/activitypod.mjs setup --new-account --email you@example.org --handle you
 
 You may use other pod locations and may optionally also put --port PORTNUM at the end of the command; the port you choose at setup is remembered, so `run`, `stop`, `status` and `install-service` need no flag afterwards. `--port` on a later `run` moves it for good.
 
-Other setup options: `--keys local` keeps the signing key on this machine instead of in pod state (the pod host then cannot read it, but the key file must travel with the credential if you move devices); `--home DIR` uses a different state directory; `--name "Your Name"` sets the display name.
+Other setup options: `--home DIR` uses a different state directory; `--name "Your Name"` sets the display name.
+
+### Where the signing key lives
+
+By default the key stays on **this machine** (`~/.activitypod/keys.json`, mode 0600) — the pod host never sees it. An existing install whose key is in pod state moves it locally on the next start and deletes the pod's copy; the identity is unchanged.
+
+`setup --keys pod` opts into the other trade: the key lives in pod state, so **any** device that can read the pod signs as you with no file copying. That is the easier multi-device story, at the cost of the pod host being able to read the key.
+
+Either way, a second device needs the *same* key: copy `keys.json` across, or use `--keys pod`. If a device finds no key but your actor already publishes one, it refuses to mint a replacement and says so — minting would invalidate every signature other servers have cached. `--rotate-key` does it deliberately when you actually want a new key.
 
 
 ## Running as a service

@@ -135,12 +135,22 @@ function createGrantSession(rec, { gateToken, gatedOrigin } = {}) {
       dpop: proof,
     };
     const gate = gateFor(tokenEndpoint); if (gate) headers['x-dk-token'] = gate;
-    const res = await fetch(tokenEndpoint, { method: 'POST', headers, body: 'grant_type=client_credentials&scope=webid' });
+    // Bounded: a stalled issuer (a proxy holding the connection open behind
+    // a 504) would otherwise hang startup indefinitely.
+    const res = await fetch(tokenEndpoint, {
+      method: 'POST', headers, body: 'grant_type=client_credentials&scope=webid',
+      signal: AbortSignal.timeout(20_000),
+    });
     if ((res.status === 400 || res.status === 401) && !nonce) {
       const n = res.headers.get('dpop-nonce');
       if (n) return requestToken(keyPair, n);
     }
-    if (!res.ok) throw new Error(`token request failed (HTTP ${res.status}): ${await res.text().catch(() => '')}`);
+    // Truncated: an ailing issuer answers with a whole HTML page (a
+    // Cloudflare 504, say) and this message goes into the log.
+    if (!res.ok) {
+      const body = (await res.text().catch(() => '')).replace(/\s+/g, ' ').slice(0, 200);
+      throw new Error(`token request failed (HTTP ${res.status}): ${body}`);
+    }
     return res.json();
   }
 
@@ -159,7 +169,7 @@ function createGrantSession(rec, { gateToken, gatedOrigin } = {}) {
     const proof = await dpopProof({ keyPair, htm: method, htu: htuOf(url), accessToken, nonce: rsNonce });
     const headers = { ...(init.headers || {}), authorization: `DPoP ${accessToken}`, dpop: proof };
     const gate = gateFor(url); if (gate) headers['x-dk-token'] = gate;
-    const res = await fetch(url, { ...init, headers });
+    const res = await fetch(url, { signal: AbortSignal.timeout(45_000), ...init, headers });
     if (res.status === 401 && !retried) {
       const n = res.headers.get('dpop-nonce');
       if (n) { rsNonce = n; return doFetch(url, init, true); }   // server wants a nonce

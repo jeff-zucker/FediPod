@@ -20,7 +20,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { PodStore } from './lib/store.mjs';
-import { ensureKeys } from './lib/keys.mjs';
+import { resolveKeys } from './lib/keys.mjs';
 import { RemotePod } from './lib/remote.mjs';
 import { PodRdf } from './lib/podrdf.mjs';
 import { Deliverer } from './lib/deliver.mjs';
@@ -116,9 +116,25 @@ export class Agent {
     });
     this.viewer = !(await this.lease.acquire());
 
-    // keysLocal (setup --keys local) is a per-machine choice, so it rides in
-    // the credential file rather than pod state.
-    const keys = await ensureKeys(this.store, { localDir: cred.keysLocal ? this.home : null });
+    // Keys are LOCAL by default (the pod host never holds them); `setup
+    // --keys pod` opts into sharing them through the pod so several devices
+    // can sign as the same actor. Per-machine choice, so it rides in the
+    // credential file rather than pod state.
+    const keys = await resolveKeys(this.store, {
+      localDir: cred.keysMode === 'pod' ? null : this.home,
+      rotate: !!cred.rotateKeyOnce,
+      log: this.log,
+      // Consulted only when no key material exists anywhere: if the actor
+      // already publishes a key, minting a new one would break federation.
+      actorHasKey: async () => {
+        const doc = await this.remote.getJson(this.urls.actor).catch(() => null);
+        return !!doc?.publicKey?.publicKeyPem;
+      },
+    });
+    if (cred.rotateKeyOnce) {                       // one-shot flag
+      const { rotateKeyOnce, ...rest } = cred;
+      fs.writeFileSync(path.join(this.home, 'credential.json'), JSON.stringify(rest, null, 2) + '\n', { mode: 0o600 });
+    }
     this.local = new PodRdf({ base: this.urls.fediverse, fetchImpl: (u, i) => this.remote.fetch(u, i) });
     this.deliverer = new Deliverer({
       store: this.store, rsaPrivate: keys.rsaPrivate, keyId: this.urls.actor + '#main-key',
@@ -253,9 +269,26 @@ export async function startAgent({
   agent.log = log;
   agent.store.log = log;
   startAdmin({ port, gateToken, agent, log });
-  await agent.connect()
-    .then(up => { if (!up) log('unconfigured — run `bin/activitypod.mjs setup` to begin'); })
-    .catch(e => log(`connect failed: ${e.message}`));
+
+  // The pod (or its issuer) can be briefly unreachable — a 504 from the
+  // token endpoint, or no network yet at boot under install-service. Keep
+  // retrying with backoff instead of sitting unconfigured until someone
+  // notices; the UI stays up throughout.
+  const connectWithRetry = async () => {
+    for (let attempt = 1; ; attempt++) {
+      try {
+        const up = await agent.connect();
+        if (up) return;
+        log('unconfigured — run `bin/activitypod.mjs setup` to begin');
+        return;                                    // no credential: retrying won't help
+      } catch (e) {
+        const wait = Math.min(30 * 2 ** (attempt - 1), 600);   // 30s → 10min
+        log(`connect failed (attempt ${attempt}): ${e.message} — retrying in ${wait}s`);
+        await new Promise(r => setTimeout(r, wait * 1000));
+      }
+    }
+  };
+  connectWithRetry();
   const shutdown = () => {
     setTimeout(() => process.exit(0), 5000).unref();   // never hang a stop on a slow pod
     try { fs.rmSync(path.join(home, 'agent.pid'), { force: true }); } catch {}
