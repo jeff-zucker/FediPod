@@ -72,5 +72,11 @@ cannot protect them at that scale.
 
 - **dk's `ap-agent` has none of this** and is named in their logs. Porting it is
   the remaining item with outside impact.
-- Offer to `retire` the abandoned `activitypods-js.solidcommunity.net` actor so
-  Mastodon stops re-delivering into a pod nobody drains.
+- The abandoned `activitypods-js.solidcommunity.net` actor was left as it is.
+  Its collections read `followers: 0, following: 0`, so there is nothing to
+  unfollow and nothing arriving except stragglers; `park` would only convert
+  those from 201s into 401s, and Jeff judged the difference too small to spend
+  his account password on. `park` exists if that changes — see `identities.md`.
+- The credential for that pod is gone (overwritten by a later setup before the
+  guard existed), so parking it now needs a fresh `setup --profile scn` first.
+  `~/.activitypod-scn` is already prepared with the key that actor advertises.
