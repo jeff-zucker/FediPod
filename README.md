@@ -33,7 +33,7 @@ bin/activitypod.mjs setup --new-account --email you@example.org --handle you
 
 ## Setup options
 
-You may use other pod locations and may optionally also put --port PORTNUM at the end of the command; the port you choose at setup is remembered, so `run`, `stop`, `status` and `install-service` need no flag afterwards. `--port` on a later `run` moves it for good.
+You may use other pod locations and may optionally also put --port PORTNUM at the end of the command; the port you choose at setup is remembered, so `start`, `stop`, `status` and `install-service` need no flag afterwards. `--port` on a later `start` moves it for good.
 
 Other setup options: `--home DIR` uses a different state directory; `--name "Your Name"` sets the display name.
 
@@ -42,10 +42,10 @@ Other setup options: `--home DIR` uses a different state directory; `--name "You
 The display name is what other servers show in bold above `@you@yourpod` (the handle itself is fixed). Change it any time without re-running setup:
 
 ```
-bin/activitypod.mjs run --name "Your Name"
+bin/activitypod.mjs start --name "Your Name"
 ```
 
-It merges into your settings and republishes the actor document, so remote servers pick it up. Later `run`s need no flag — the name is stored on the pod.
+It merges into your settings and republishes the actor document, so remote servers pick it up. Later starts need no flag — the name is stored on the pod.
 
 ### Where the signing key lives
 
@@ -71,7 +71,7 @@ On **Windows** it creates a Scheduled Task that starts the agent at log on (this
 ## Everyday commands
 
 ```
-bin/activitypod.mjs run      # start (setup already did this the first time)
+bin/activitypod.mjs start      # start (setup already did this the first time)
 bin/activitypod.mjs stop     # graceful: flushes state, releases the lease
 bin/activitypod.mjs status   # handle, active/viewer mode, followers, tag feed
 ```
@@ -134,7 +134,7 @@ The agent is pure JS, so [Termux](https://termux.dev) runs it unmodified:
 ```
 pkg install nodejs
 tar xzf activitypod-js-*.tar.gz && cd activitypod-js
-bin/activitypod.mjs run        # then open http://localhost:8030/ in Chrome
+bin/activitypod.mjs start        # then open http://localhost:8030/ in Chrome
 ```
 
 `termux-wake-lock` keeps it alive in the background; and because the pod

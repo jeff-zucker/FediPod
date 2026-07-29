@@ -13,13 +13,14 @@
 //
 //     The password is prompted (or AP_PASSWORD) — used once to create the
 //     account and/or mint a revocable CSS client-credential, never stored.
-//     --keys local keeps the signing key in AP_HOME instead of pod state
-//     (the pod host cannot read it; the key file must then travel with the
-//     credential if you move machines).
+//     Keys live in AP_HOME by default (the pod host cannot read them);
+//     --keys pod stores them in pod state instead, so several devices can
+//     sign as the same actor without copying files.
 //
-//   activitypod run       start the agent (UI + API on http://localhost:8030/)
+//   activitypod start     start the agent (UI + API on http://localhost:8030/)
 //                         --name "Your Name" sets the display name other
 //                         servers show, and republishes the actor
+//                         ('run' is kept as an alias)
 //   activitypod stop      stop the running agent (graceful: flush + lease release)
 //   activitypod status    show the running agent's status
 //   activitypod passwd    set/change the UI password (REQUIRED before any
@@ -48,7 +49,7 @@ const flag = (name, dflt) => {
 const has = (name) => args.includes('--' + name);
 const HOME = flag('home', process.env.AP_HOME || path.join(os.homedir(), '.activitypod'));
 
-// The port chosen at setup is remembered, so `run`/`stop`/`status` need no
+// The port chosen at setup is remembered, so `start`/`stop`/`status` need no
 // flags afterwards. Precedence: --port > AP_PORT > the recorded choice > 8030.
 function recordedPort() {
   try { return Number(JSON.parse(fs.readFileSync(path.join(HOME, 'agent.json'), 'utf8')).port) || null; }
@@ -133,8 +134,8 @@ if (cmd === 'setup') {
   const url = `http://localhost:${PORT}/`;
   console.log(`agent running — opening ${url} (log in with instance localhost:${PORT})`);
   openBrowser(url);
-} else if (cmd === 'run') {
-  if (flag('port')) recordPort(PORT);      // `run --port N` once moves it for good
+} else if (cmd === 'start' || cmd === 'run') {   // 'run' kept as an alias
+  if (flag('port')) recordPort(PORT);      // `start --port N` once moves it for good
   const { startAgent } = await import(new URL('../run-agent.mjs', import.meta.url));
   await startAgent({ home: HOME, port: PORT, name: flag('name') || null });
 } else if (cmd === 'revoke-credential') {
@@ -196,7 +197,7 @@ if (cmd === 'setup') {
   try { pid = Number(fs.readFileSync(pidFile, 'utf8').trim()); } catch {}
   if (!pid) {
     console.error(`no pidfile at ${pidFile} — if an agent is running anyway, stop it with:`);
-    console.error(`  pkill -f 'activitypod.mjs run'   (or: systemctl --user stop activitypod for a service install)`);
+    console.error(`  pkill -f activitypod.mjs   (or: systemctl --user stop activitypod for a service install)`);
     process.exit(1);
   }
   try { process.kill(pid, 'SIGTERM'); } catch { console.log('agent was not running (stale pidfile)'); fs.rmSync(pidFile, { force: true }); process.exit(0); }
@@ -347,6 +348,6 @@ WantedBy=default.target
     process.exit(1);
   }
 } else {
-  console.log('usage: activitypod <setup|run|status> [--flags]  (see file header)');
+  console.log('usage: activitypod <setup|start|stop|status|passwd|tokens|revoke-credential|install-service> [--flags]');
   process.exit(cmd ? 2 : 0);
 }

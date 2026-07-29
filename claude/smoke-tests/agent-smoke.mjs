@@ -662,7 +662,7 @@ if (up) {
   const { execFileSync } = await import('node:child_process');
   const home = fs.mkdtempSync('/tmp/dk-ap-port-');
   const cli = path.join(root, 'bin/activitypod.mjs');
-  const child2 = spawn(process.execPath, [cli, 'run', '--port', '18778'], {
+  const child2 = spawn(process.execPath, [cli, 'start', '--port', '18778'], {
     cwd: root, env: { ...process.env, AP_HOME: home }, stdio: 'ignore', detached: false,
   });
   const upPort = await new Promise(resolve => {
