@@ -135,7 +135,9 @@ if (cmd === 'setup') {
   console.log(`  ${name}`);
   console.log(`  @${handle}@${host}\n`);
   console.log('The display name can be changed later; the handle and pod cannot.');
-  const go = await ask('continue? (y/n)', 'y');
+  const go = await ask(newAccount
+    ? 'create pod and fediverse account? (y/n)'
+    : 'create fediverse account on this pod? (y/n)', 'y');
   if (!/^y/i.test(go)) { console.log('nothing was created'); process.exit(0); }
   endAsking();                           // hand the tty to the password prompt
 
