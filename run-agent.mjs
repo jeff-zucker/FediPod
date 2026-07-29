@@ -154,6 +154,7 @@ export class Agent {
     const keys = await resolveKeys(this.store, {
       localDir: cred.keysMode === 'pod' ? null : this.home,
       rotate: !!cred.rotateKeyOnce,
+      actorId: this.urls.actor,
       log: this.log,
       // Consulted only when no key material exists anywhere: if the actor
       // already publishes a key, minting a new one would break federation.

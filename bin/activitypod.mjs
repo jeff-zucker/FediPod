@@ -51,7 +51,13 @@ const flag = (name, dflt) => {
   return i >= 0 ? args[i + 1] : dflt;
 };
 const has = (name) => args.includes('--' + name);
-const HOME = flag('home', process.env.AP_HOME || path.join(os.homedir(), '.activitypod'));
+// One identity per home. --profile <name> is the ergonomic form of picking one:
+// ~/.activitypod for the first, ~/.activitypod/profiles/<name>/ for the rest.
+// An explicit --home / AP_HOME still wins, so existing installs are untouched.
+const PROFILE = flag('profile', process.env.AP_PROFILE || null);
+const PROFILES_DIR = path.join(os.homedir(), '.activitypod', 'profiles');
+const HOME = flag('home', process.env.AP_HOME
+  || (PROFILE ? path.join(PROFILES_DIR, PROFILE) : path.join(os.homedir(), '.activitypod')));
 
 // The port chosen at setup is remembered, so `start`/`stop`/`status` need no
 // flags afterwards. Precedence: --port > AP_PORT > the recorded choice > 8030.
@@ -98,6 +104,19 @@ function openBrowser(url) {
 }
 
 if (cmd === 'setup') {
+  // Refuse before anything is asked, let alone typed: setup used to overwrite
+  // credential.json in place, and a minted credential is only shown once — so
+  // the identity it belonged to could not be recovered afterwards.
+  const credPath = path.join(HOME, 'credential.json');
+  if (fs.existsSync(credPath) && !has('force')) {
+    let held = '(unreadable)';
+    try { held = JSON.parse(fs.readFileSync(credPath, 'utf8')).remotePod; } catch {}
+    console.error(`${HOME} already holds an identity: ${held}`);
+    console.error('For another identity:  bin/activitypod.mjs setup --profile <name>');
+    console.error('To list what exists:   bin/activitypod.mjs profiles');
+    console.error('To replace this one:   add --force (the old credential is lost)');
+    process.exit(2);
+  }
   const root = flag('root');
   let pod = flag('pod');
   const interactive = process.stdin.isTTY;
@@ -268,6 +287,43 @@ if (cmd === 'setup') {
 
   const { startAgent } = await import(new URL('../run-agent.mjs', import.meta.url));
   await startAgent({ home: HOME, port: PORT, name: flag('name') || null });
+} else if (cmd === 'profiles') {
+  // Local files only, plus a quick liveness probe: nothing here needs the pod.
+  const homes = [{ name: '(default)', dir: path.join(os.homedir(), '.activitypod') }];
+  try {
+    for (const name of fs.readdirSync(PROFILES_DIR).sort()) {
+      const dir = path.join(PROFILES_DIR, name);
+      if (fs.statSync(dir).isDirectory()) homes.push({ name, dir });
+    }
+  } catch { /* no profiles yet */ }
+
+  const rows = [];
+  for (const { name, dir } of homes) {
+    let pod = null, port = null;
+    try { pod = JSON.parse(fs.readFileSync(path.join(dir, 'credential.json'), 'utf8')).remotePod; } catch {}
+    try { port = JSON.parse(fs.readFileSync(path.join(dir, 'agent.json'), 'utf8')).port; } catch {}
+    if (!pod && !port) continue;                       // not an identity, just a directory
+    let live = null;
+    if (port) {
+      live = await fetch(`http://localhost:${port}/status`, { signal: AbortSignal.timeout(1500) })
+        .then(r => r.json()).catch(() => null);
+    }
+    rows.push({ name, pod: pod ? new URL(pod).host : '(no credential)', port: port || '—',
+      state: live ? `${live.mode}${live.podRequests ? ` · ${live.podRequests.perMinuteNow}/min` : ''}` : 'not running' });
+  }
+
+  if (!rows.length) console.log('no identities yet — bin/activitypod.mjs setup');
+  else {
+    const w = (k, min) => Math.max(min, ...rows.map(r => String(r[k]).length));
+    const [wn, wp, wo] = [w('name', 7), w('pod', 3), w('port', 4)];
+    console.log(`${'PROFILE'.padEnd(wn)}  ${'POD'.padEnd(wp)}  ${'PORT'.padEnd(wo)}  STATE`);
+    for (const r of rows) {
+      console.log(`${r.name.padEnd(wn)}  ${String(r.pod).padEnd(wp)}  ${String(r.port).padEnd(wo)}  ${r.state}`);
+    }
+  }
+  console.log('\nIdentities under a custom AP_HOME are not listed — only ~/.activitypod'
+    + ' and ~/.activitypod/profiles/*.');
+  process.exit(0);
 } else if (cmd === 'park' || cmd === 'revive') {
   // Park is quiesce plus a snapshot of the follow graph, because unfollowing is
   // what stops the traffic and also what destroys the record needed to come back.

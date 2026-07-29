@@ -960,6 +960,86 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     'a network error during subscribe schedules a retry instead of ending push');
 }
 
+// --- 5u. one identity per home: profiles, and no silent clobbering ---
+{
+  const { execFileSync } = await import('node:child_process');
+  const cli = path.join(root, 'bin/activitypod.mjs');
+  const fake = fs.mkdtempSync('/tmp/dk-ap-ids-');
+  const mk = (dir, pod, port) => {
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'credential.json'), JSON.stringify({ remotePod: pod }));
+    if (port) fs.writeFileSync(path.join(dir, 'agent.json'), JSON.stringify({ port }));
+  };
+  mk(path.join(fake, '.activitypod'), 'https://first.example/', 18991);
+  mk(path.join(fake, '.activitypod/profiles/work'), 'https://work.example/', 18992);
+  mk(path.join(fake, '.activitypod/profiles/play'), 'https://play.example/', null);
+  const run = (args) => {
+    try {
+      return { out: execFileSync(process.execPath, [cli, ...args],
+        { env: { ...process.env, HOME: fake, AP_HOME: '' }, stdio: 'pipe' }).toString(), code: 0 };
+    } catch (e) { return { out: (e.stdout || '') + (e.stderr || ''), code: e.status }; }
+  };
+
+  const listed = run(['profiles']);
+  check(/\(default\)\s+first\.example/.test(listed.out) && /work\s+work\.example\s+18992/.test(listed.out)
+    && /play\s+play\.example/.test(listed.out) && /not running/.test(listed.out),
+    'profiles lists the default home and every named profile');
+
+  // Setup must refuse before asking for anything, and say where to go instead.
+  const clobber = run(['setup', '--pod', 'https://x.example/']);
+  check(clobber.code === 2 && /already holds an identity: https:\/\/first\.example\//.test(clobber.out)
+    && /--profile <name>/.test(clobber.out),
+    'setup refuses to overwrite an existing credential, with exit 2');
+
+  // --profile selects its own home, and is refused there on its own merits.
+  const perProfile = run(['setup', '--profile', 'work', '--pod', 'https://x.example/']);
+  check(perProfile.code === 2 && /profiles\/work already holds/.test(perProfile.out),
+    '--profile resolves to ~/.activitypod/profiles/<name>');
+
+  // A free profile name gets past the guard (and then fails for want of input).
+  const fresh = run(['setup', '--profile', 'brand-new', '--pod', 'https://x.example/']);
+  check(fresh.code === 2 && !/already holds/.test(fresh.out) && /email/.test(fresh.out),
+    'an unused profile is not blocked by the guard');
+
+  fs.rmSync(fake, { recursive: true, force: true });
+}
+
+// --- 5v. a signing key belongs to one actor ---
+{
+  const { resolveKeys } = await import(path.join(root, 'lib/keys.mjs'));
+  const store = { read: () => null, write: () => {}, remove: async () => true };
+  const mine = 'https://a.example/activitypods-js/ap/actor';
+  const theirs = 'https://b.example/activitypods-js/ap/actor';
+
+  // Stamped for another actor → treated as absent, so a fresh key is minted.
+  const dir1 = fs.mkdtempSync('/tmp/dk-ap-keys-');
+  const first = await resolveKeys(store, { localDir: dir1, actorId: theirs, log: () => {} });
+  const reused = await resolveKeys(store, { localDir: dir1, actorId: theirs, log: () => {} });
+  const logs = [];
+  const foreign = await resolveKeys(store, {
+    localDir: dir1, actorId: mine, actorHasKey: async () => false, log: (m) => logs.push(m),
+  });
+  const stamped = JSON.parse(fs.readFileSync(path.join(dir1, 'keys.json'), 'utf8'));
+  check(reused.rsaPublicPem === first.rsaPublicPem
+    && foreign.rsaPublicPem !== first.rsaPublicPem
+    && stamped.mintedFor === mine
+    && logs.some(m => /belongs to https:\/\/b\.example/.test(m)),
+    'a key stamped for another actor is not reused, and the replacement is stamped');
+
+  // The dangerous case still refuses: no key here, but the actor publishes one.
+  const dir2 = fs.mkdtempSync('/tmp/dk-ap-keys-');
+  fs.writeFileSync(path.join(dir2, 'keys.json'), JSON.stringify({ ...stamped, mintedFor: theirs }));
+  let refused = null;
+  await resolveKeys(store, {
+    localDir: dir2, actorId: mine, actorHasKey: async () => true, log: () => {},
+  }).catch(e => { refused = e.message; });
+  check(/already publishes a signing key/.test(refused || ''),
+    'a foreign key plus a published key still refuses rather than breaking federation');
+
+  fs.rmSync(dir1, { recursive: true, force: true });
+  fs.rmSync(dir2, { recursive: true, force: true });
+}
+
 // --- 6. pod-RDF builders via injected fetch ---
 const { PodRdf } = await import(path.join(root, 'lib/podrdf.mjs'));
 const rdfPuts = [];
