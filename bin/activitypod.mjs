@@ -194,6 +194,46 @@ if (cmd === 'setup') {
   openBrowser(url);
 } else if (cmd === 'start' || cmd === 'run') {   // 'run' kept as an alias
   if (flag('port')) recordPort(PORT);      // `start --port N` once moves it for good
+
+  // Something already on the port? Offer to take it over rather than dying
+  // with "address in use" and leaving the user to hunt the process down.
+  const answering = await fetch(`http://localhost:${PORT}/status`)
+    .then(r => r.status).catch(() => null);
+  if (answering !== null) {
+    const pidFile = path.join(HOME, 'agent.pid');
+    let pid = null;
+    try { pid = Number(fs.readFileSync(pidFile, 'utf8').trim()) || null; } catch {}
+    const who = pid ? `pid ${pid}` : 'started elsewhere';
+    if (!has('replace') && !process.stdin.isTTY) {
+      console.error(`an agent is already running on port ${PORT} (${who}).`);
+      console.error('Stop it with `activitypod stop`, or start this one with --replace.');
+      process.exit(1);
+    }
+    const ans = has('replace')
+      ? 'y'
+      : await ask(`an agent is already running on port ${PORT} (${who}) — stop it and start this one? (y/n)`, 'y');
+    endAsking();
+    if (!/^y/i.test(ans)) { console.log('left the running agent alone'); process.exit(0); }
+
+    await fetch(`http://localhost:${PORT}/shutdown`, { method: 'POST' }).catch(() => {});
+    if (pid) { try { process.kill(pid, 'SIGTERM'); } catch {} }
+    const freed = await (async () => {                 // give it a few seconds
+      for (let i = 0; i < 30; i++) {
+        await new Promise(r => setTimeout(r, 300));
+        const still = await fetch(`http://localhost:${PORT}/status`).then(() => true).catch(() => false);
+        if (!still) return true;
+      }
+      return false;
+    })();
+    if (!freed && pid) { try { process.kill(pid, 'SIGKILL'); } catch {} await new Promise(r => setTimeout(r, 500)); }
+    const clear = await fetch(`http://localhost:${PORT}/status`).then(() => false).catch(() => true);
+    if (!clear) {
+      console.error(`could not stop whatever is on port ${PORT}. Find it with:  ss -tlnp | grep :${PORT}`);
+      process.exit(1);
+    }
+    console.log('previous agent stopped');
+  }
+
   const { startAgent } = await import(new URL('../run-agent.mjs', import.meta.url));
   await startAgent({ home: HOME, port: PORT, name: flag('name') || null });
 } else if (cmd === 'revoke-credential') {

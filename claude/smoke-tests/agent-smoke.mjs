@@ -695,6 +695,48 @@ if (up) {
   fs.rmSync(home, { recursive: true, force: true });
 }
 
+// --- 8i2. `start` takes over from an agent already on the port ---
+{
+  const { execFileSync } = await import('node:child_process');
+  const home = fs.mkdtempSync('/tmp/dk-ap-replace-');
+  const cli = path.join(root, 'bin/activitypod.mjs');
+  const first = spawn(process.execPath, [cli, 'start', '--port', '18796'], {
+    cwd: root, env: { ...process.env, AP_HOME: home }, stdio: 'ignore',
+  });
+  const up1 = await new Promise(resolve => {
+    const t0 = Date.now();
+    const tick = async () => {
+      try { await fetch('http://127.0.0.1:18796/status'); return resolve(true); } catch {}
+      if (Date.now() - t0 > 10_000) return resolve(false);
+      setTimeout(tick, 300);
+    };
+    tick();
+  });
+  // Without --replace and without a tty it must refuse rather than crash.
+  let refused = '';
+  try { execFileSync(process.execPath, [cli, 'start', '--port', '18796'], { env: { ...process.env, AP_HOME: home }, stdio: 'pipe' }); }
+  catch (e) { refused = String(e.stderr || ''); }
+  // With --replace it stops the incumbent and serves in its place.
+  const second = spawn(process.execPath, [cli, 'start', '--port', '18796', '--replace'], {
+    cwd: root, env: { ...process.env, AP_HOME: home }, stdio: 'ignore',
+  });
+  const served = await new Promise(resolve => {
+    const t0 = Date.now();
+    const tick = async () => {
+      const ok = await fetch('http://127.0.0.1:18796/status').then(r => r.ok).catch(() => false);
+      if (ok && Date.now() - t0 > 4000) return resolve(true);      // survived the handover
+      if (Date.now() - t0 > 15_000) return resolve(ok);
+      setTimeout(tick, 400);
+    };
+    tick();
+  });
+  check(up1 && /already running/.test(refused) && /--replace/.test(refused) && served,
+    'start refuses a busy port, and --replace takes it over');
+  try { execFileSync(process.execPath, [cli, 'stop', '--port', '18796'], { env: { ...process.env, AP_HOME: home } }); } catch {}
+  first.kill('SIGKILL'); second.kill('SIGKILL');
+  fs.rmSync(home, { recursive: true, force: true });
+}
+
 // --- 8i. the port chosen at setup is remembered by later commands ---
 {
   const { execFileSync } = await import('node:child_process');
