@@ -2,7 +2,7 @@
 
 - access the fediverse from a Solid pod
 
-`activitypod-js` is a standalone, single-actor ActivityPub agent that stores your data on a Solid Pod and runs on any device that supports node. The agent can be moved from one device to another without any change to your account. 
+`activitypod-js` is a standalone, single-actor ActivityPub agent that stores your data on a Solid Pod and runs on any device that supports node. The agent can be moved from one device to another without any change to your account. This project is inspired by the fantastic [Activitypods project](https://github.com/activitypods) and is meant to be a light weight alternative rather than a replacement.
 
 ## Installation
 
@@ -16,30 +16,10 @@ npm install
 
 ## Setup
 
-You only have to do setup once per device.
-
-
-### Setup if you don't have a pod yet
-
-From nothing — no fediverse account, no pod — one command asks for your credentials, creates the account, the pod, the actor, and leaves you in the client looking at your fediverse home with a pre-stocked home feed :
+You only have to do setup once per device. From nothing — no fediverse account, no pod — one command creates the account, the pod, the actor, and leaves you in the client looking at your fediverse home with a pre-stocked home feed. Setup will prompt you for needed information. If you already have a pod, you'll be offered the opportunity to either create a new pod for your Activitypod data or to store it on your existing pod.
 
 ```
-bin/activitypod.mjs setup --new-account --email you@example.org --handle 
-```
-
-Note: handle is the label that will appear on your account address, you can also set the account display name as described in [running the agent](#running-the-agent). So fediverse users will see something like this
-```
-  NAME
-  @HANDLE@you.example.org
-```
-Your name can be changed, but your handle is permanent for that account.
-
-### Setup if you already have a pod
-
-From the install folder on your local machine :
-```
-bin/activitypod.mjs setup --pod https://you.solidcommunity.net/ \
-  --issuer https://solidcommunity.net --email you@example.org --handle you
+bin/activitypod.mjs setup
 ```
 
 ### Running the agent
@@ -86,7 +66,7 @@ The agent federates for real: follow/unfollow, post, reply, favourite,
 boost, media, delete; incoming boosts from people you follow and a
 configurable public-hashtag feed (`POST /tagfeed`) fill the timeline.
 
-## Other clients
+### Other clients
 
 - **Web clients**: drop any static Mastodon client dist into `ui/<name>/`
   and it is served at `/<name>/`, same-origin — see `ui/README.md`.
@@ -94,18 +74,6 @@ configurable public-hashtag feed (`POST /tagfeed`) fill the timeline.
   custom instance.
 - **Streaming**: the agent serves the Mastodon streaming API
   (`/api/v1/streaming`, WebSocket) so clients update live instead of polling.
-
-## Remote access (phones, https-only clients)
-
-The agent listens on your own machine, so a phone can't see it, and mobile clients insist on https. Reaching it from another device needs two things: a password and an https address.
-
-**Set the password first** — without one, anyone who can reach the agent is treated as you. That is fine on your own machine and dangerous anywhere else:
-
-```
-bin/activitypod.mjs passwd
-```
-
-Then give it an address. [Tailscale](https://tailscale.com) is the easy route: install it on both devices and run `tailscale serve --bg 8030`, which gives the agent an https URL only your own devices can reach, certificates included. A small server with a reverse proxy in front of `localhost:8030` does the same job if you want it publicly reachable. Add whichever hostname you use to `AP_ALLOWED_HOSTS`, or the agent will refuse requests for a name it was not told about.
 
 ## Android
 
