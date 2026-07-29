@@ -8,10 +8,15 @@
   "bin": { "activitypod": "bin/activitypod.mjs" },
   "scripts": {
     "start": "node run-agent.mjs",
-    "test": "node claude/smoke-tests/agent-smoke.mjs"
+    "test": "node claude/smoke-tests/agent-smoke.mjs && node scripts/verify-ui.mjs",
+    "verify-ui": "node scripts/verify-ui.mjs",
+    "audit": "npm audit --omit=dev"
   },
   "dependencies": {
     "@fedify/fedify": "^1.9.0",
     "jose": "^5.10.0"
+  },
+  "overrides": {
+    "@opentelemetry/core": "^2.8.0"
   }
 }

@@ -542,6 +542,14 @@ if (up) {
   check(!/script|onerror|onclick|javascript:/i.test(clean) && /<p>hi <a href="https:\/\/ok\/x"/.test(clean)
     && /<p>t<\/p>/.test(clean),
     `sanitizer strips scripts/handlers, keeps links (${clean.slice(0, 40)}…)`);
+  // A '>' inside a quoted attribute must not end the tag, or markup can be
+  // smuggled past the allowlist; comments must be consumed whole.
+  const smuggle = sanitizeHtml('<a title="x>y" onload="evil()">s</a>');
+  const commented = sanitizeHtml('<!--<script>alert(1)</script>--><p>after</p>');
+  const spacedJs = sanitizeHtml('<a href="  javascript:alert(1)">j</a>');
+  check(!/onload|evil/.test(smuggle) && !/script|alert/.test(commented)
+    && /<p>after<\/p>/.test(commented) && !/javascript/.test(spacedJs),
+    'sanitizer resists attribute smuggling, comment tricks, spaced javascript:');
 }
 
 // --- 8h. token expiry ---
