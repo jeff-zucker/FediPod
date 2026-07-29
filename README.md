@@ -6,9 +6,6 @@ wire face; the agent is a small outbound-only Node process that can run on
 any machine — laptop, Raspberry Pi, VPS — with no public IP, no TLS, no
 database. Move the one credential file and the actor moves with you.
 
-Extracted from [data-kitchen](https://github.com/SolidOS/data-kitchen)'s
-ActivityPub agent (the "6c remote-pod-as-relay" design).
-
 ## What lives where
 
 Everything the agent owns nests under one top-level pod container:
@@ -45,7 +42,8 @@ bin/activitypod.mjs setup --pod https://you.solidcommunity.net/ \
 ```
 
 Setup finishes by starting the agent and opening the browser; later starts
-are just `bin/activitypod.mjs run` — or make it an appliance:
+are just `bin/activitypod.mjs run`. The default port is 8030; every command
+accepts `--port <n>` (or the `AP_PORT` env var). Or make it an appliance:
 
 ```
 bin/activitypod.mjs install-service
@@ -60,8 +58,7 @@ For a no-install download, `node scripts/build-dist.mjs` produces
 Node ≥ 20 and run the same commands, no `npm install` needed.
 
 The UI is the bundled [Phanpy](https://github.com/cheeaun/phanpy)
-client (MIT, by Chee Aun; patched to allow the loopback http origin — see
-data-kitchen `claude/backups/*.pre-http-patch` for provenance) is served
+client (MIT, by Chee Aun; patched to allow the loopback http origin; is served
 same-origin over the agent's Mastodon client-API facade. Log in with one
 click, instance `localhost:8030`.
 
@@ -106,23 +103,8 @@ bin/activitypod.mjs run        # then open http://localhost:8030/ in Chrome
 `termux-wake-lock` keeps it alive in the background; and because the pod
 buffers everything, an agent Android kills simply catches up on next start.
 
-## Multiple devices
-
-Only ONE agent may act on a pod at a time (inbox drains are destructive
-reads). Agents coordinate through a lease in `ap-state/`: the first to
-start is the active one; later starts run as **read-only viewers**.
-Browsing works everywhere, and **acting follows you**: posting or
-following on a viewer device claims the lease on the spot — the other
-agent demotes itself at its next renewal (~30 s) and this one resumes
-inbox draining shortly after. If the active agent stops entirely, a
-viewer promotes itself within a couple of minutes anyway.
-
 ## Trust notes
 
-- The pod host can read the signing key in `ap-state/` — but it already
-  serves your actor document, so it could impersonate you regardless; no new
-  trust is granted by storing state there.
 - The CSS credential never leaves your machine and is revocable from the
   account dashboard.
-- Never run two agents (e.g. this and data-kitchen's) against the same pod:
-  inbox drains are destructive reads and they would race.
+
