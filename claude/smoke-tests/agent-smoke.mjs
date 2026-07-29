@@ -232,6 +232,44 @@ check(actor.inbox === urls.inbox && actor.publicKey.id === urls.actor + '#main-k
 const note = wire.noteDoc({ urls, slug: 'x', content: 'a<b>&\n\nc', published: '2026-07-28T00:00:00Z' });
 check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping (got ${note.content})`);
 
+// --- 5b. a handle only resolves from a pod at a host root ---
+{
+  check(wire.webfingerHost('https://you.solidcommunity.net/') === 'you.solidcommunity.net'
+    && wire.webfingerHost('https://you.solidcommunity.net') === 'you.solidcommunity.net'
+    && wire.webfingerHost('https://server.example/you/') === null,
+    'webfingerHost: host-root pod yes, path pod no');
+}
+
+// --- 5c. the private trees are re-checked and repaired on every start ---
+{
+  const { Publisher } = await import(path.join(root, 'lib/publisher.mjs'));
+  const config = { remotePod: 'https://pod.example/', handle: 'you', name: 'You' };
+  const mkPub = (probeStatus) => {
+    const acls = [];
+    const pub = new Publisher({
+      config,
+      remote: { setAcl: async (url, modes) => { acls.push([url, modes]); } },
+      local: {}, store: { getStatuses: () => [] }, deliverer: {}, publicKeyPem: 'x',
+      log: () => {},
+      probeFetch: async () => ({ status: probeStatus }),
+    });
+    return { pub, acls };
+  };
+
+  // A stranger can read them → rewrite the ACL on all three private trees.
+  const leaky = mkPub(200);
+  await leaky.pub.ensurePrivateAcls();
+  const wanted = [leaky.pub.urls.home, leaky.pub.urls.state, leaky.pub.urls.fediverse];
+  check(leaky.acls.length === 3
+    && wanted.every((u, i) => leaky.acls[i][0] === u && leaky.acls[i][1].length === 0),
+    'ensurePrivateAcls repairs home + ap-state + fediverse when they read publicly');
+
+  // Already private → no writes at all.
+  const tight = mkPub(401);
+  await tight.pub.ensurePrivateAcls();
+  check(tight.acls.length === 0, 'ensurePrivateAcls writes nothing when the trees are already private');
+}
+
 // --- 6. pod-RDF builders via injected fetch ---
 const { PodRdf } = await import(path.join(root, 'lib/podrdf.mjs'));
 const rdfPuts = [];

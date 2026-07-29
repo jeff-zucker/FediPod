@@ -215,6 +215,11 @@ export class Agent {
         .then(() => this.log('actor document republished with the new display name'))
         .catch(e => this.log(`republish after rename failed: ${e.message}`));
     }
+    // bootstrap writes the owner-only ACLs once, at setup, and nothing else
+    // ever returns to them — so check on every start that the private trees
+    // really are private, and repair them if not. Off the critical path.
+    this.publisher.ensurePrivateAcls()
+      .catch(e => this.log(`private-ACL check failed: ${e.message}`));
     this.backfillStatuses().catch(e => this.log(`statuses backfill failed: ${e.message}`));
   }
 

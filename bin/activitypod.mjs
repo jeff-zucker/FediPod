@@ -137,10 +137,29 @@ if (cmd === 'setup') {
     : null;
   const name = flag('name') || await ask('display name (shown above your address)', handle);
 
-  const host = newAccount ? `${podName}.${new URL(issuer).host}` : new URL(pod).host;
+  // A handle resolves through <host>/.well-known/webfinger, so it only works
+  // when the pod owns the root of its host. Whether a NEW pod gets its own
+  // subdomain is the server's call, so promise nothing here we cannot keep.
+  const { webfingerHost } = await import(new URL('../lib/wire.mjs', import.meta.url));
+  const issuerHost = new URL(issuer).host;
+  const wfHost = newAccount ? null : webfingerHost(pod);
   console.log('\nYou will be:\n');
   console.log(`  ${name}`);
-  console.log(`  @${handle}@${host}\n`);
+  if (wfHost) {
+    console.log(`  @${handle}@${wfHost}\n`);
+  } else if (newAccount) {
+    console.log(`  @${handle}@${podName}.${issuerHost}\n`);
+    console.log(`— provided ${issuerHost} gives each pod its own subdomain. Some servers put`);
+    console.log(`pods at ${issuerHost}/${podName}/ instead, and a pod sharing a host cannot`);
+    console.log('answer WebFinger for an address. Setup checks which you got and says so');
+    console.log('before publishing anything.\n');
+  } else {
+    console.log(`  @${handle}@${new URL(pod).host}   —   WILL NOT RESOLVE\n`);
+    console.log(`This pod is ${pod} — a path on ${new URL(pod).host}, not the root of its own`);
+    console.log('host. WebFinger is answered only at a host root, which this pod cannot');
+    console.log('write to, so other servers will not find you. Posting and reading still');
+    console.log('work; being discovered does not.\n');
+  }
   console.log('The display name can be changed later; the handle and pod cannot.');
   const go = await ask(newAccount
     ? 'create pod and fediverse account? (y/n)'
@@ -155,6 +174,16 @@ if (cmd === 'setup') {
     const made = await createAccountWithPod({ issuer, email, password, podName });
     pod = made.pod;
     console.log(`account + pod created: ${pod}`);
+    if (!webfingerHost(pod)) {
+      console.log(`\n${issuerHost} created the pod at a path rather than on its own subdomain,`);
+      console.log(`so @${handle}@\u2026 cannot be discovered by other fediverse servers.`);
+      const cont = interactive ? await ask('continue anyway? (y/n)', 'n') : 'y';
+      endAsking();
+      if (!/^y/i.test(cont)) {
+        console.log('stopping \u2014 the pod exists, but no actor was published');
+        process.exit(0);
+      }
+    }
   }
 
   const { mintCredential } = await import(new URL('../lib/remote.mjs', import.meta.url));
@@ -177,7 +206,10 @@ if (cmd === 'setup') {
   await agent.connect();
   await agent.publisher.publishProfile();
   await agent.store.flush();
-  console.log(`actor published: @${handle}@${new URL(rec.remotePod).host}`);
+  const finalHost = webfingerHost(rec.remotePod);
+  console.log(finalHost
+    ? `actor published: @${handle}@${finalHost}`
+    : `actor published, but not reachable as a handle \u2014 ${rec.remotePod} is not a host root`);
 
   // Straight into serving — setup ends with a working client in the browser.
   const { startAdmin } = await import(new URL('../lib/admin.mjs', import.meta.url));
