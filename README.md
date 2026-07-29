@@ -57,6 +57,7 @@ bin/activitypod.mjs tokens                  # list client logins; --revoke <pref
 bin/activitypod.mjs revoke-credential --email you@example.org   # kill this machine's pod credential
 ```
 
+
 ## Fediverse Clients
 The UI is the bundled [Phanpy](https://github.com/cheeaun/phanpy)
 client (MIT, by Chee Aun); patched to allow the loopback http origin. It is served same-origin over the agent's Mastodon client-API facade. Log in with one
@@ -85,6 +86,16 @@ bin/activitypod.mjs start      # then open http://localhost:8030/
 
 `termux-wake-lock` keeps it alive in the background; and because the pod
 buffers everything, an agent Android kills simply catches up on next start.
+
+## Requirements
+
+* a web browser
+* node 20 or greater
+* a Solid pod provider that supports subdomains
+
+## Architecture
+
+![Activitypod-JS flow](architecture.png)
 
 ## Transparency
 
