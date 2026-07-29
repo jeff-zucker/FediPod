@@ -1,3 +1,40 @@
 node_modules/
+# build output (the tarball + its staging dir). Anchored: phanpy/dist and
+# ui/*/dist are VENDORED CLIENTS and must stay tracked.
 /dist/
 *.log
+
+# agent state, in case someone runs with AP_HOME pointing into the checkout —
+# these hold the pod credential, the signing key and client tokens.
+credential.json
+keys.json
+agent.json
+agent.pid
+masto-tokens.json
+statuses.json
+notifications.json
+contacts.json
+config.json
+queue.json
+deadletter.json
+blocklist.json
+actors.json
+media.json
+ids.json
+lease.json
+tagfeed.json
+masto-markers.json
+
+# secrets and local config
+.env
+.env.*
+.npmrc
+
+# editor / OS droppings
+*~
+\#*\#
+.#*
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
