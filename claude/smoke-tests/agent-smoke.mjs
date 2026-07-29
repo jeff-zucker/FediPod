@@ -514,6 +514,54 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     `a 503 retries to the cap, spaced by Retry-After (${puts503} attempts)`);
 }
 
+// --- 5j. periodic work is stretched and jittered, not a shared beat ---
+{
+  const { Lease } = await import(path.join(root, 'lib/lease.mjs'));
+  const src = fs.readFileSync(path.join(root, 'lib/lease.mjs'), 'utf8');
+  const ttl = Number((src.match(/const TTL_MS = ([\d_]+)/) || [])[1]?.replace(/_/g, ''));
+  const renew = Number((src.match(/const RENEW_MS = ([\d_]+)/) || [])[1]?.replace(/_/g, ''));
+  check(renew === 90_000 && ttl === 300_000 && ttl / renew >= 3,
+    `lease renews every ${renew / 1000}s against a ${ttl / 1000}s TTL (3+ misses of headroom)`);
+
+  // Renewal must be self-scheduling so agents drift apart rather than beating together.
+  const lease = new Lease({ url: 'https://p.example/st/lease.json', fetchImpl: async () => ({ status: 404 }), log: () => {} });
+  lease.startRenewal();
+  const isTimeout = typeof lease.timer === 'object' && lease.timer !== null;
+  clearTimeout(lease.timer);
+  check(isTimeout && /setTimeout\(/.test(src) && !/setInterval\(/.test(src),
+    'lease renewal is a jittered self-scheduling timer, not setInterval');
+
+  for (const f of ['lib/intake.mjs', 'lib/tagfeed.mjs']) {
+    const body = fs.readFileSync(path.join(root, f), 'utf8');
+    check(/0\.85 \+ Math\.random\(\) \* 0\.3/.test(body) && !/setInterval\(/.test(body),
+      `${f} schedules its own next run with jitter`);
+  }
+}
+
+// --- 5k. a failing inbox is left alone, and the agent says what it is doing ---
+{
+  const { Intake } = await import(path.join(root, 'lib/intake.mjs'));
+  const logs = [];
+  const intake = new Intake({
+    config: {}, urls: { inbox: 'https://p.example/in/', base: 'https://p.example/' },
+    remote: { listContainer: async () => { throw new Error('fetch failed'); } },
+    local: {}, store: {}, deliverer: {}, publisher: {}, log: (m) => logs.push(m),
+  });
+
+  await intake.drain();
+  const firstCooldown = intake.drainCooldownUntil - Date.now();
+  await intake.drain();                          // must not touch the pod again
+  check(firstCooldown > 100_000 && firstCooldown <= 2.5 * 60_000
+    && logs.some(m => /next sweep in/.test(m)) && logs.some(m => /skipped/.test(m)),
+    'an unreadable inbox sets a cooldown and the next sweep is skipped');
+
+  intake.drainCooldownUntil = 0;
+  intake.drainFailures = 3;
+  await intake.drain();
+  const grown = intake.drainCooldownUntil - Date.now();
+  check(grown > firstCooldown * 2, `the cooldown doubles with repeated failure (${Math.round(grown / 1000)}s)`);
+}
+
 // --- 5f. the token endpoint is asked once, and backed off when it refuses ---
 {
   const { createRequire } = await import('node:module');

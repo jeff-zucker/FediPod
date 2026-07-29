@@ -66,6 +66,11 @@ export class Agent {
       tagfeed: this.tagfeed
         ? { ...this.tagfeed.config(), lastSweep: this.tagfeed.lastSweep, lastAdded: this.tagfeed.lastAdded }
         : null,
+      // Anyone asking whether this agent is hammering their server can read the
+      // answer here instead of in their access log.
+      podRequests: this.remote?.stats?.() || null,
+      inboxCooldownFor: this.intake?.drainCooldownUntil
+        ? Math.max(0, Math.round((this.intake.drainCooldownUntil - Date.now()) / 1000)) : 0,
     };
   }
 
@@ -75,7 +80,7 @@ export class Agent {
   async bootstrap({ handle, name, root }) {
     const cred = this.readCredential();
     if (!cred) throw new Error('no credential — run setup first');
-    this.remote = new RemotePod(cred, { log: this.log });
+    this.remote = new RemotePod(cred, { log: this.log, home: this.home });
     await this.remote.warmup();
     this.urls = apUrls(cred.remotePod, root);
     await this.remote.putJson(this.urls.state + '.keep', { keep: true }, 'application/json');
@@ -103,7 +108,7 @@ export class Agent {
     const cred = this.readCredential();
     if (!cred) return false;
     if (!this.remote) {
-      this.remote = new RemotePod(cred, { log: this.log });
+      this.remote = new RemotePod(cred, { log: this.log, home: this.home });
       await this.remote.warmup();
     }
     const probeUrls = apUrls(cred.remotePod, cred.root);
@@ -199,6 +204,8 @@ export class Agent {
   // moment the active agent's lease frees.
   startViewer() {
     this.viewer = true;
+    // Five minutes, not one: with revalidation a quiet refresh is a single 304,
+    // but a viewer still has no reason to ask twelve times an hour.
     this.refreshTimer = setInterval(async () => {
       try {
         if (this.viewer && await this.lease.acquire()) {
@@ -208,7 +215,7 @@ export class Agent {
         }
         if (this.viewer) await this.store.load();
       } catch (e) { this.log(`viewer refresh: ${e.message}`); }
-    }, 60_000);
+    }, Math.round(5 * 60_000 * (0.85 + Math.random() * 0.3)));
     this.refreshTimer.unref?.();
   }
 

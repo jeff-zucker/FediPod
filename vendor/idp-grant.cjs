@@ -21,6 +21,7 @@
 'use strict';
 
 const crypto = require('node:crypto');
+const fs = require('node:fs');
 const { generateKeyPair, exportJWK, SignJWT } = require('jose');
 const { jfetch } = require('./jfetch.cjs');
 
@@ -145,24 +146,63 @@ const USER_AGENT = `activitypod-js/${AGENT_VERSION} (+https://github.com/jeff-zu
 // when something has gone wrong.
 const DEFAULT_MAX_PER_MIN = 60;
 
-function createGrantSession(rec, { gateToken, gatedOrigin } = {}) {
+// A crash loop would otherwise reset the breaker on every boot and force a
+// grant immediately — systemd restarts us on failure, so backoff has to outlive
+// the process. One small file, best-effort: an unreadable or unwritable one just
+// means we behave as before.
+function readBackoff(file) {
+  if (!file) return { breakerUntil: 0, failures: 0 };
+  try {
+    const d = JSON.parse(fs.readFileSync(file, 'utf8'));
+    return { breakerUntil: Number(d.breakerUntil) || 0, failures: Number(d.failures) || 0 };
+  } catch { return { breakerUntil: 0, failures: 0 }; }
+}
+
+function writeBackoff(file, breakerUntil, failures) {
+  if (!file) return;
+  try { fs.writeFileSync(file, JSON.stringify({ breakerUntil, failures }) + '\n', { mode: 0o600 }); }
+  catch { /* best-effort */ }
+}
+
+function createGrantSession(rec, { gateToken, gatedOrigin, backoffFile = null } = {}) {
   const { clientId, secret, webId, tokenEndpoint, issuerOrigin } = rec;
   const keyPairP = generateKeyPair('ES256');     // one DPoP key for this session
   let accessToken = null, expiresAt = 0, rsNonce = null;
   let inFlight = null;                           // single-flight: N callers, one grant
-  let failures = 0, breakerUntil = 0, lastForced = 0;
+  const carried = readBackoff(backoffFile);
+  let failures = carried.failures, breakerUntil = carried.breakerUntil, lastForced = 0;
   const maxPerMin = Number(process.env.AP_MAX_REQUESTS_PER_MIN) || DEFAULT_MAX_PER_MIN;
   let allowance = maxPerMin, lastRefill = Date.now();
   // Token bucket over every request this session makes — resource and token
   // endpoint alike, since both cost the issuer a lock.
+  // Accounting, so "are we the problem?" is a question the agent can answer
+  // rather than one that takes an evening of reading. Counts every request this
+  // session makes, by outcome, plus a rolling one-minute rate.
+  const counts = { requests: 0, tokenGrants: 0, ok: 0, client4xx: 0, server5xx: 0, refused: 0, failed: 0 };
+  const recent = [];                              // request timestamps, last 60s
+  const note = (bucket) => { counts[bucket]++; };
+  const rate = () => {
+    const cutoff = Date.now() - 60_000;
+    while (recent.length && recent[0] < cutoff) recent.shift();
+    return recent.length;
+  };
   const takeSlot = () => {
     const now = Date.now();
     allowance = Math.min(maxPerMin, allowance + ((now - lastRefill) * maxPerMin) / 60_000);
     lastRefill = now;
-    if (allowance < 1) return false;
+    if (allowance < 1) { note('refused'); return false; }
     allowance -= 1;
+    counts.requests++;
+    recent.push(now);
     return true;
   };
+
+  const stats = () => ({
+    ...counts,
+    perMinuteNow: rate(),
+    ceilingPerMinute: maxPerMin,
+    backingOffFor: Math.max(0, Math.round((breakerUntil - Date.now()) / 1000)),
+  });
   const gateFor = (url) => (gatedOrigin && new URL(url).origin === gatedOrigin) ? gateToken : undefined;
 
   async function requestToken(keyPair, nonce) {
@@ -191,11 +231,14 @@ function createGrantSession(rec, { gateToken, gatedOrigin } = {}) {
     // Cloudflare 504, say) and this message goes into the log.
     if (!res.ok) {
       const body = (await res.text().catch(() => '')).replace(/\s+/g, ' ').slice(0, 200);
+      note(res.status >= 500 ? 'server5xx' : 'client4xx');
       const err = new Error(`token request failed (HTTP ${res.status}): ${body}`);
       const ra = Number(res.headers.get('retry-after'));
       if (Number.isFinite(ra) && ra > 0) err.retryAfterMs = Math.min(ra * 1000, TOKEN_BACKOFF_MAX_MS);
       throw err;
     }
+    counts.tokenGrants++;
+    note('ok');
     return res.json();
   }
 
@@ -211,10 +254,12 @@ function createGrantSession(rec, { gateToken, gatedOrigin } = {}) {
         accessToken = tok.access_token;
         expiresAt = Date.now() + (Number(tok.expires_in) || 300) * 1000;
         failures = 0;
+        writeBackoff(backoffFile, 0, 0);
       } catch (e) {
         failures++;
         const capped = Math.min(TOKEN_BACKOFF_MIN_MS * 2 ** (failures - 1), TOKEN_BACKOFF_MAX_MS);
         breakerUntil = Date.now() + (e.retryAfterMs ?? Math.round(capped * (0.8 + Math.random() * 0.4)));
+        writeBackoff(backoffFile, breakerUntil, failures);
         throw e;
       } finally { inFlight = null; }
     })();
@@ -236,6 +281,9 @@ function createGrantSession(rec, { gateToken, gatedOrigin } = {}) {
     const res = await fetch(url, {
       signal: AbortSignal.timeout(Number(process.env.AP_HTTP_TIMEOUT_MS) || 20_000), ...init, headers,
     });
+    if (res.status >= 500) note('server5xx');
+    else if (res.status >= 400) note('client4xx');
+    else note('ok');
     if (res.status === 401 && !retried) {
       const n = res.headers.get('dpop-nonce');
       if (n) { rsNonce = n; return doFetch(url, init, true); }   // server wants a nonce
@@ -255,7 +303,7 @@ function createGrantSession(rec, { gateToken, gatedOrigin } = {}) {
   // before we register the session for use; returns the bound WebID.
   async function warmup() { await ensureToken(true); return webId; }
 
-  return { webId, issuer: issuerOrigin, fetch: doFetch, warmup };
+  return { webId, issuer: issuerOrigin, fetch: doFetch, warmup, stats };
 }
 
 module.exports = { mintCredential, discoverTokenEndpoint, revokeCredentialViaAccount, createGrantSession };

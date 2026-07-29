@@ -418,7 +418,10 @@ ExecStart=${process.execPath} ${runAgentPath}
 Environment=AP_HOME=${HOME}
 Environment=AP_PORT=${PORT}
 Restart=on-failure
-RestartSec=10
+RestartSec=30
+# A crash loop must not become a request loop against the pod.
+StartLimitIntervalSec=600
+StartLimitBurst=5
 
 [Install]
 WantedBy=default.target
@@ -456,6 +459,7 @@ WantedBy=default.target
   </dict>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><dict><key>SuccessfulExit</key><false/></dict>
+  <key>ThrottleInterval</key><integer>30</integer>
 </dict></plist>
 `);
       sh('launchctl', ['load', plist]);
