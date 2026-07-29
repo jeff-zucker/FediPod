@@ -133,12 +133,36 @@ const TOKEN_BACKOFF_MIN_MS = 1_000;
 const TOKEN_BACKOFF_MAX_MS = 60_000;
 const FORCE_COOLDOWN_MS = 10_000;
 
+// Identify ourselves. An operator reading their access log should be able to
+// tell who we are and where to complain: solidcommunity.net's incident report
+// had to infer us from client-credential names because every request said only
+// "node", which is undici's default.
+const { version: AGENT_VERSION } = require('../package.json');
+const USER_AGENT = `activitypod-js/${AGENT_VERSION} (+https://github.com/jeff-zucker/activitypod-js)`;
+
+// A ceiling no timer, retry or future bug can exceed. Steady state is ~3
+// requests/minute, so the default sits 20x above normal use and only engages
+// when something has gone wrong.
+const DEFAULT_MAX_PER_MIN = 60;
+
 function createGrantSession(rec, { gateToken, gatedOrigin } = {}) {
   const { clientId, secret, webId, tokenEndpoint, issuerOrigin } = rec;
   const keyPairP = generateKeyPair('ES256');     // one DPoP key for this session
   let accessToken = null, expiresAt = 0, rsNonce = null;
   let inFlight = null;                           // single-flight: N callers, one grant
   let failures = 0, breakerUntil = 0, lastForced = 0;
+  const maxPerMin = Number(process.env.AP_MAX_REQUESTS_PER_MIN) || DEFAULT_MAX_PER_MIN;
+  let allowance = maxPerMin, lastRefill = Date.now();
+  // Token bucket over every request this session makes — resource and token
+  // endpoint alike, since both cost the issuer a lock.
+  const takeSlot = () => {
+    const now = Date.now();
+    allowance = Math.min(maxPerMin, allowance + ((now - lastRefill) * maxPerMin) / 60_000);
+    lastRefill = now;
+    if (allowance < 1) return false;
+    allowance -= 1;
+    return true;
+  };
   const gateFor = (url) => (gatedOrigin && new URL(url).origin === gatedOrigin) ? gateToken : undefined;
 
   async function requestToken(keyPair, nonce) {
@@ -146,15 +170,18 @@ function createGrantSession(rec, { gateToken, gatedOrigin } = {}) {
     const headers = {
       authorization: 'Basic ' + Buffer.from(`${encodeURIComponent(clientId)}:${encodeURIComponent(secret)}`).toString('base64'),
       'content-type': 'application/x-www-form-urlencoded',
+      'user-agent': USER_AGENT,
       dpop: proof,
     };
     const gate = gateFor(tokenEndpoint); if (gate) headers['x-dk-token'] = gate;
-    // Bounded, but generously: a busy CSS can take ~45s to answer a
-    // client_credentials grant, and a timeout shorter than that turns
-    // "slow pod" into "cannot start". AP_HTTP_TIMEOUT_MS tunes it.
+    // Deliberately shorter than the 60s nginx in front of a typical CSS: if a
+    // grant has not landed in 30s the server is in trouble, and holding its
+    // worker to the wire makes that worse. We back off and try later instead.
+    // AP_HTTP_TIMEOUT_MS raises it for a knowingly slow issuer.
+    if (!takeSlot()) throw new Error(`local ceiling of ${maxPerMin} requests/min reached — token request refused`);
     const res = await fetch(tokenEndpoint, {
       method: 'POST', headers, body: 'grant_type=client_credentials&scope=webid',
-      signal: AbortSignal.timeout(Number(process.env.AP_HTTP_TIMEOUT_MS) || 60_000),
+      signal: AbortSignal.timeout(Number(process.env.AP_HTTP_TIMEOUT_MS) || 30_000),
     });
     if ((res.status === 400 || res.status === 401) && !nonce) {
       const n = res.headers.get('dpop-nonce');
@@ -199,9 +226,16 @@ function createGrantSession(rec, { gateToken, gatedOrigin } = {}) {
     const keyPair = await ensureToken(false);
     const method = (init.method || 'GET').toUpperCase();
     const proof = await dpopProof({ keyPair, htm: method, htu: htuOf(url), accessToken, nonce: rsNonce });
-    const headers = { ...(init.headers || {}), authorization: `DPoP ${accessToken}`, dpop: proof };
+    const headers = {
+      'user-agent': USER_AGENT,
+      ...(init.headers || {}),
+      authorization: `DPoP ${accessToken}`, dpop: proof,
+    };
     const gate = gateFor(url); if (gate) headers['x-dk-token'] = gate;
-    const res = await fetch(url, { signal: AbortSignal.timeout(Number(process.env.AP_HTTP_TIMEOUT_MS) * 2 || 45_000), ...init, headers });
+    if (!takeSlot()) throw new Error(`local ceiling of ${maxPerMin} requests/min reached — refusing ${(init.method || 'GET')} ${url}`);
+    const res = await fetch(url, {
+      signal: AbortSignal.timeout(Number(process.env.AP_HTTP_TIMEOUT_MS) || 20_000), ...init, headers,
+    });
     if (res.status === 401 && !retried) {
       const n = res.headers.get('dpop-nonce');
       if (n) { rsNonce = n; return doFetch(url, init, true); }   // server wants a nonce

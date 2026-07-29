@@ -441,6 +441,79 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     'retirement is recorded in pod state so the agent will not restart the identity');
 }
 
+// --- 5h. we identify ourselves, and never exceed a local request ceiling ---
+{
+  const { createRequire } = await import('node:module');
+  const req = createRequire(path.join(root, 'vendor/idp-grant.cjs'));
+  const { createGrantSession } = req(path.join(root, 'vendor/idp-grant.cjs'));
+  const { USER_AGENT } = await import(path.join(root, 'lib/ua.mjs'));
+  const rec = { clientId: 'c', secret: 's', webId: 'https://p.example/profile/card#me',
+    tokenEndpoint: 'https://p.example/.oidc/token', issuerOrigin: 'https://p.example' };
+  const realFetch = globalThis.fetch;
+  const ok = (body = { access_token: 't', expires_in: 300 }) => ({
+    ok: true, status: 200, headers: { get: () => null },
+    json: async () => body, text: async () => JSON.stringify(body),
+  });
+
+  check(/^activitypod-js\/\d+\.\d+\.\d+ \(\+https?:\/\/\S+\)$/.test(USER_AGENT),
+    `the User-Agent names the software and where to complain (${USER_AGENT})`);
+
+  // Both the token endpoint and resource requests must carry it.
+  const seen = [];
+  globalThis.fetch = async (u, init) => { seen.push(init?.headers?.['user-agent']); return ok(); };
+  const s1 = createGrantSession(rec);
+  await s1.warmup();
+  await s1.fetch('https://p.example/some/doc');
+  check(seen.length === 2 && seen.every(ua => ua === USER_AGENT),
+    'token requests and pod requests both send it');
+
+  // The ceiling holds regardless of what any caller does.
+  process.env.AP_MAX_REQUESTS_PER_MIN = '3';
+  let hits = 0;
+  globalThis.fetch = async () => { hits++; return ok(); };
+  const s2 = createGrantSession(rec);
+  let refusal = null;
+  try {
+    for (let i = 0; i < 10; i++) await s2.fetch(`https://p.example/doc${i}`);
+  } catch (e) { refusal = e.message; }
+  delete process.env.AP_MAX_REQUESTS_PER_MIN;
+  check(hits <= 3 && /ceiling of 3 requests\/min/.test(refusal || ''),
+    `a ceiling of 3/min stops at 3 sockets, not 10 (opened ${hits})`);
+
+  globalThis.fetch = realFetch;
+}
+
+// --- 5i. a refused write is not retried; a 503 is, politely ---
+{
+  const mkStore = () => new PodStore({ log: () => {} });
+  const res = (status, headers = {}) => ({ status, headers: { get: (h) => headers[h.toLowerCase()] ?? null } });
+
+  // 403 means "no": one attempt, then stop.
+  const s403 = mkStore();
+  let puts403 = 0;
+  s403.attach('https://p.example/st/', async (_u, init) => {
+    if (init?.method !== 'PUT') return { status: 404, headers: { get: () => null }, text: async () => '' };
+    puts403++; return res(403);
+  });
+  s403.write('config.json', { a: 1 });
+  await s403.flush();
+  check(puts403 === 1, `a 403 is final — one write attempt, not five (saw ${puts403})`);
+
+  // 503 with Retry-After is retried, and the header is what sets the delay.
+  const s503 = mkStore();
+  const gaps = [];
+  let last = Date.now(), puts503 = 0;
+  s503.attach('https://p.example/st/', async (_u, init) => {
+    if (init?.method !== 'PUT') return { status: 404, headers: { get: () => null }, text: async () => '' };
+    puts503++; gaps.push(Date.now() - last); last = Date.now();
+    return res(503, { 'retry-after': '1' });
+  });
+  s503.write('config.json', { a: 2 });
+  await s503.flush();
+  check(puts503 === 5 && gaps.slice(1).every(g => g >= 900 && g < 1600),
+    `a 503 retries to the cap, spaced by Retry-After (${puts503} attempts)`);
+}
+
 // --- 5f. the token endpoint is asked once, and backed off when it refuses ---
 {
   const { createRequire } = await import('node:module');
