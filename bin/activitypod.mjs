@@ -113,8 +113,15 @@ if (cmd === 'setup') {
       process.exit(2);
     }
     const have = await ask('do you already have a Solid pod? (y/n)', 'n');
-    if (/^y/i.test(have)) pod = await ask('your pod address (e.g. https://you.solidcommunity.net/)');
-    else newAccount = true;
+    if (/^y/i.test(have)) {
+      // Either tuck the fediverse account into the pod they already have,
+      // or make a fresh pod on the same Solid account for it.
+      const where = await ask('store your fediverse account in that pod, or in a new pod? (existing/new)', 'existing');
+      if (/^n/i.test(where)) newAccount = true;
+      else pod = await ask('your pod address (e.g. https://you.solidcommunity.net/)');
+    } else {
+      newAccount = true;
+    }
   }
   if (!newAccount && !pod) { console.error('no pod given'); process.exit(2); }
 
