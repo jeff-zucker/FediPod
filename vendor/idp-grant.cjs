@@ -150,6 +150,36 @@ const DEFAULT_MAX_PER_MIN = 60;
 // grant immediately — systemd restarts us on failure, so backoff has to outlive
 // the process. One small file, best-effort: an unreadable or unwritable one just
 // means we behave as before.
+// --- token reuse across restarts -------------------------------------------
+function readSavedToken(file) {
+  if (!file) return null;
+  try {
+    const d = JSON.parse(fs.readFileSync(file, 'utf8'));
+    if (!d.accessToken || !d.privateJwk) return null;
+    if (!(Number(d.expiresAt) > Date.now() + 60_000)) return null;   // too near expiry to bother
+    return d;
+  } catch { return null; }
+}
+
+async function importSavedKey(saved) {
+  const { importJWK } = require('jose');
+  const privateKey = await importJWK(saved.privateJwk, 'ES256');
+  const publicKey = await importJWK(saved.publicJwk, 'ES256');
+  return { privateKey, publicKey };
+}
+
+async function saveToken(file, keyPair, accessToken, expiresAt) {
+  if (!file) return;
+  try {
+    const { exportJWK } = require('jose');
+    fs.writeFileSync(file, JSON.stringify({
+      accessToken, expiresAt,
+      privateJwk: await exportJWK(keyPair.privateKey),
+      publicJwk: await exportJWK(keyPair.publicKey),
+    }) + '\n', { mode: 0o600 });
+  } catch { /* best-effort: a fresh grant next start is the only cost */ }
+}
+
 function readBackoff(file) {
   if (!file) return { breakerUntil: 0, failures: 0 };
   try {
@@ -164,10 +194,19 @@ function writeBackoff(file, breakerUntil, failures) {
   catch { /* best-effort */ }
 }
 
-function createGrantSession(rec, { gateToken, gatedOrigin, backoffFile = null } = {}) {
+function createGrantSession(rec, { gateToken, gatedOrigin, backoffFile = null, tokenFile = null } = {}) {
   const { clientId, secret, webId, tokenEndpoint, issuerOrigin } = rec;
-  const keyPairP = generateKeyPair('ES256');     // one DPoP key for this session
-  let accessToken = null, expiresAt = 0, rsNonce = null;
+  // A DPoP token is bound to the key that requested it, so reusing one across a
+  // restart means reusing the key too. Both go in one 0600 file beside the
+  // credential that could mint them anyway. Any problem reading it falls back
+  // to a fresh key and a fresh grant.
+  const saved = readSavedToken(tokenFile);
+  const keyPairP = saved
+    ? importSavedKey(saved).catch(() => generateKeyPair('ES256'))
+    : generateKeyPair('ES256');
+  let accessToken = saved?.accessToken || null;
+  let expiresAt = saved?.expiresAt || 0;
+  let rsNonce = null;
   let inFlight = null;                           // single-flight: N callers, one grant
   const carried = readBackoff(backoffFile);
   let failures = carried.failures, breakerUntil = carried.breakerUntil, lastForced = 0;
@@ -255,6 +294,7 @@ function createGrantSession(rec, { gateToken, gatedOrigin, backoffFile = null } 
         expiresAt = Date.now() + (Number(tok.expires_in) || 300) * 1000;
         failures = 0;
         writeBackoff(backoffFile, 0, 0);
+        await saveToken(tokenFile, keyPair, accessToken, expiresAt);
       } catch (e) {
         failures++;
         const capped = Math.min(TOKEN_BACKOFF_MIN_MS * 2 ** (failures - 1), TOKEN_BACKOFF_MAX_MS);
@@ -299,9 +339,12 @@ function createGrantSession(rec, { gateToken, gatedOrigin, backoffFile = null } 
     return res;
   }
 
-  // Force a fresh grant to confirm the credential still works (e.g. not revoked)
-  // before we register the session for use; returns the bound WebID.
-  async function warmup() { await ensureToken(true); return webId; }
+  // Confirms the credential works before the session is used — but a token we
+  // already hold IS that confirmation, and forcing a grant here was defeating
+  // the persisted one entirely: every restart paid the issuer for a token it
+  // already had. Cold start still mints (and so still fails loudly on a revoked
+  // credential); a warm one costs nothing.
+  async function warmup() { await ensureToken(false); return webId; }
 
   return { webId, issuer: issuerOrigin, fetch: doFetch, warmup, stats };
 }

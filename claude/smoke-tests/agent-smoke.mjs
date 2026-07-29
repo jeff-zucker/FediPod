@@ -563,6 +563,116 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   check(grown > firstCooldown * 2, `the cooldown doubles with repeated failure (${Math.round(grown / 1000)}s)`);
 }
 
+// --- 5r. a restart reuses its token instead of asking for another ---
+{
+  const { createRequire } = await import('node:module');
+  const req = createRequire(path.join(root, 'vendor/idp-grant.cjs'));
+  const { createGrantSession } = req(path.join(root, 'vendor/idp-grant.cjs'));
+  const home = fs.mkdtempSync('/tmp/dk-ap-token-');
+  const tokenFile = path.join(home, 'token.json');
+  const rec = { clientId: 'c', secret: 's', webId: 'https://p.example/profile/card#me',
+    tokenEndpoint: 'https://p.example/.oidc/token', issuerOrigin: 'https://p.example' };
+  const realFetch = globalThis.fetch;
+  let grants = 0;
+  globalThis.fetch = async (u) => {
+    if (String(u).includes('/.oidc/token')) {
+      grants++;
+      return { ok: true, status: 200, headers: { get: () => null },
+        json: async () => ({ access_token: 'tok-1', expires_in: 3600 }), text: async () => '' };
+    }
+    return { status: 200, headers: { get: () => null }, text: async () => 'ok' };
+  };
+
+  const first = createGrantSession(rec, { tokenFile });
+  await first.fetch('https://p.example/doc');
+  const savedRaw = JSON.parse(fs.readFileSync(tokenFile, 'utf8'));
+  const mode = (fs.statSync(tokenFile).mode & 0o777).toString(8);
+
+  // A brand-new session, as a restart would build: no second grant.
+  const afterRestart = createGrantSession(rec, { tokenFile });
+  await afterRestart.fetch('https://p.example/doc');
+  globalThis.fetch = realFetch;
+
+  check(grants === 1 && !!savedRaw.privateJwk && savedRaw.accessToken === 'tok-1' && mode === '600',
+    `the token and its DPoP key are stored 0600 and reused (grants: ${grants})`);
+  fs.rmSync(home, { recursive: true, force: true });
+}
+
+// --- 5o. an idle agent asks for as little as the design allows ---
+{
+  const { Lease } = await import(path.join(root, 'lib/lease.mjs'));
+  const res = (status, headers = {}, body = '') => ({
+    status, headers: { get: (h) => headers[h.toLowerCase()] ?? null }, text: async () => body,
+  });
+
+  // Steady renewal is ONE conditional PUT — no preceding GET.
+  const calls = [];
+  const lease = new Lease({
+    url: 'https://p.example/st/lease.json',
+    fetchImpl: async (_u, init) => {
+      calls.push(init?.method || 'GET');
+      return init?.method === 'PUT' ? res(205, { etag: '"v2"' }) : res(404);
+    },
+    log: () => {},
+  });
+  lease.etag = '"v1"';
+  await lease.renewOnce();
+  await lease.renewOnce();
+  check(calls.length === 2 && calls.every(m => m === 'PUT'),
+    `two renewals cost two PUTs and no reads (saw ${calls.join(',')})`);
+
+  // A 412 is the takeover signal, and only then do we pay for a read.
+  const seen = [];
+  let lost = false;
+  const contested = new Lease({
+    url: 'https://p.example/st/lease.json',
+    fetchImpl: async (_u, init) => {
+      seen.push(init?.method || 'GET');
+      if (init?.method === 'PUT') return res(412);
+      return res(200, { etag: '"other"' },
+        JSON.stringify({ holder: 'someone-else', expiresAt: Date.now() + 60_000 }));
+    },
+    log: () => {},
+  });
+  contested.etag = '"v1"';
+  contested.onLost = () => { lost = true; };
+  const kept = await contested.renewOnce();
+  check(kept === false && lost && seen[0] === 'PUT' && seen[1] === 'GET',
+    'a 412 costs one extra read and reports the lease lost');
+}
+
+// --- 5p. the poll stands down while push is up ---
+{
+  const body = fs.readFileSync(path.join(root, 'lib/intake.mjs'), 'utf8');
+  const fallback = Number((body.match(/const POLL_MS = (\d+) \* 60_000/) || [])[1]);
+  const pushOk = Number((body.match(/const POLL_PUSH_OK_MS = (\d+) \* 60_000/) || [])[1]);
+  check(fallback === 2 && pushOk === 10
+    && /wsState === 'open' \? POLL_PUSH_OK_MS : POLL_MS/.test(body),
+    `poll is ${fallback}min without push and ${pushOk}min with it`);
+}
+
+// --- 5q. a dropped socket reuses its channel instead of making another ---
+{
+  const { Intake } = await import(path.join(root, 'lib/intake.mjs'));
+  const docs = new Map([['inbox-channel.json',
+    { receiveFrom: 'wss://p.example/ch/abc', endAt: new Date(Date.now() + 3600_000).toISOString() }]]);
+  let posted = 0, openedWith = null;
+  class FakeWS { constructor(u) { openedWith = u; } close() {} }
+  const realWS = globalThis.WebSocket;
+  globalThis.WebSocket = FakeWS;
+  const intake = new Intake({
+    config: {}, urls: { inbox: 'https://p.example/in/', base: 'https://p.example/' },
+    remote: { fetch: async () => { posted++; return { status: 200, json: async () => ({}) }; } },
+    local: {},
+    store: { read: (n, d) => (docs.has(n) ? docs.get(n) : d), write: (n, v) => docs.set(n, v) },
+    deliverer: {}, publisher: {}, log: () => {},
+  });
+  await intake._subscribeOnce();
+  globalThis.WebSocket = realWS;
+  check(posted === 0 && openedWith === 'wss://p.example/ch/abc',
+    'a live saved channel is reconnected without POSTing a new one');
+}
+
 // --- 5f. the token endpoint is asked once, and backed off when it refuses ---
 {
   const { createRequire } = await import('node:module');
