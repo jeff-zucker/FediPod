@@ -42,8 +42,9 @@ bin/activitypod.mjs setup --pod https://you.solidcommunity.net/ \
 ```
 
 Setup finishes by starting the agent and opening the browser; later starts
-are just `bin/activitypod.mjs run`. The default port is 8030; every command
-accepts `--port <n>` (or the `AP_PORT` env var). Or make it an appliance:
+are just `bin/activitypod.mjs run`. The default port is 8030; pass
+`--port <n>` (or set `AP_PORT`) at setup and it is remembered — later
+commands need no flag. Or make it an appliance:
 
 ```
 bin/activitypod.mjs install-service

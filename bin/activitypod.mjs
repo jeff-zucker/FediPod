@@ -45,7 +45,20 @@ const flag = (name, dflt) => {
 };
 const has = (name) => args.includes('--' + name);
 const HOME = flag('home', process.env.AP_HOME || path.join(os.homedir(), '.activitypod'));
-const PORT = Number(flag('port', process.env.AP_PORT || 8030));
+
+// The port chosen at setup is remembered, so `run`/`stop`/`status` need no
+// flags afterwards. Precedence: --port > AP_PORT > the recorded choice > 8030.
+function recordedPort() {
+  try { return Number(JSON.parse(fs.readFileSync(path.join(HOME, 'agent.json'), 'utf8')).port) || null; }
+  catch { return null; }
+}
+function recordPort(port) {
+  try {
+    fs.mkdirSync(HOME, { recursive: true, mode: 0o700 });
+    fs.writeFileSync(path.join(HOME, 'agent.json'), JSON.stringify({ port }, null, 2) + '\n');
+  } catch { /* the flag still works, it just isn't remembered */ }
+}
+const PORT = Number(flag('port', process.env.AP_PORT || recordedPort() || 8030));
 
 function askHidden(prompt) {
   return new Promise((resolve) => {
@@ -93,6 +106,7 @@ if (cmd === 'setup') {
   };
   fs.mkdirSync(HOME, { recursive: true, mode: 0o700 });
   fs.writeFileSync(path.join(HOME, 'credential.json'), JSON.stringify(rec, null, 2) + '\n', { mode: 0o600 });
+  recordPort(PORT);                      // later commands need no --port
   console.log(`credential minted and saved to ${path.join(HOME, 'credential.json')}`);
 
   const { Agent } = await import(new URL('../run-agent.mjs', import.meta.url));
@@ -117,6 +131,7 @@ if (cmd === 'setup') {
   console.log(`agent running — opening ${url} (log in with instance localhost:${PORT})`);
   openBrowser(url);
 } else if (cmd === 'run') {
+  if (flag('port')) recordPort(PORT);      // `run --port N` once moves it for good
   const { startAgent } = await import(new URL('../run-agent.mjs', import.meta.url));
   await startAgent({ home: HOME, port: PORT });
 } else if (cmd === 'revoke-credential') {

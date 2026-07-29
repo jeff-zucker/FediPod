@@ -609,6 +609,33 @@ if (up) {
   check(live.includes(fresh) && !live.includes('stale0000'), 'tokens: fresh kept, 200-day-old expired');
 }
 
+// --- 8i. the port chosen at setup is remembered by later commands ---
+{
+  const { execFileSync } = await import('node:child_process');
+  const home = fs.mkdtempSync('/tmp/dk-ap-port-');
+  const cli = path.join(root, 'bin/activitypod.mjs');
+  const child2 = spawn(process.execPath, [cli, 'run', '--port', '18778'], {
+    cwd: root, env: { ...process.env, AP_HOME: home }, stdio: 'ignore', detached: false,
+  });
+  const upPort = await new Promise(resolve => {
+    const t0 = Date.now();
+    const tick = async () => {
+      try { await fetch('http://127.0.0.1:18778/status'); return resolve(true); } catch {}
+      if (Date.now() - t0 > 10_000) return resolve(false);
+      setTimeout(tick, 300);
+    };
+    tick();
+  });
+  const recorded = JSON.parse(fs.readFileSync(path.join(home, 'agent.json'), 'utf8')).port;
+  // status with NO --port must still find it, proving the record is used.
+  const out = execFileSync(process.execPath, [cli, 'status'], { env: { ...process.env, AP_HOME: home } }).toString();
+  check(upPort && recorded === 18778 && /"configured"/.test(out),
+    `port persisted at first run and reused without a flag (recorded ${recorded})`);
+  try { execFileSync(process.execPath, [cli, 'stop'], { env: { ...process.env, AP_HOME: home } }); } catch {}
+  child2.kill('SIGTERM');
+  fs.rmSync(home, { recursive: true, force: true });
+}
+
 // --- 9. --new-account flow vs a mock CSS v7 account API ---
 const { createAccountWithPod } = await import(path.join(root, 'lib/account.mjs'));
 const http = await import('node:http');
