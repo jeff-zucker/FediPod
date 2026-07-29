@@ -270,6 +270,79 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   check(tight.acls.length === 0, 'ensurePrivateAcls writes nothing when the trees are already private');
 }
 
+// --- 5d. a pod that says 429/503 is left alone until Retry-After passes ---
+{
+  const { RemotePod } = await import(path.join(root, 'lib/remote.mjs'));
+  const mkRes = (status, headers = {}, body = '') => ({
+    status, headers: { get: (h) => headers[h.toLowerCase()] ?? null },
+    text: async () => body,
+  });
+  const pod = new RemotePod({ clientId: 'x', secret: 'y', webId: 'https://p.example/profile/card#me',
+    tokenEndpoint: 'https://p.example/.oidc/token', issuerOrigin: 'https://p.example' });
+
+  let calls = 0;
+  pod.session = { fetch: async () => { calls++; return mkRes(429, { 'retry-after': '120' }); } };
+  await pod.fetch('https://p.example/a');                   // learns the cooldown
+  const paused = pod.pausedUntil - Date.now();
+  let threw = null;
+  try { await pod.fetch('https://p.example/b'); } catch (e) { threw = e.message; }
+  check(calls === 1 && paused > 100_000 && paused <= 120_000 && /back off/.test(threw || ''),
+    'Retry-After pauses every request to that pod, opening no further sockets');
+
+  pod.pausedUntil = 0;                                       // window elapsed
+  pod.session = { fetch: async () => mkRes(503, {}) };
+  await pod.fetch('https://p.example/c');
+  check(pod.pausedUntil - Date.now() > 50_000, '503 without Retry-After falls back to a 60s pause');
+
+  // Container listings revalidate: unchanged inbox costs a 304, not a body.
+  pod.pausedUntil = 0;
+  const ttl = '<https://p.example/in/> a <http://www.w3.org/ns/ldp#Container>. '
+    + '<https://p.example/in/one> a <http://www.w3.org/ns/ldp#Resource>.';
+  const seen = [];
+  pod.session = { fetch: async (u, init) => {
+    seen.push(init?.headers?.['if-none-match'] || null);
+    return seen.length === 1 ? mkRes(200, { etag: '"v1"' }, ttl) : mkRes(304, { etag: '"v1"' });
+  } };
+  const first = await pod.listContainer('https://p.example/in/');
+  const second = await pod.listContainer('https://p.example/in/');
+  check(first.length === 1 && second.length === 1 && seen[0] === null && seen[1] === '"v1"',
+    'listContainer sends If-None-Match and serves the 304 from cache');
+}
+
+// --- 5e. state reads revalidate instead of re-downloading ---
+{
+  const store = new PodStore({ log: () => {} });
+  const mkRes = (status, headers = {}, body = '') => ({
+    status, headers: { get: (h) => headers[h.toLowerCase()] ?? null },
+    text: async () => body,
+  });
+  const listing = '<https://p.example/st/> a <http://www.w3.org/ns/ldp#Container>. '
+    + '<https://p.example/st/config.json> a <x>.';
+  let containerEtag = '"c1"', docEtag = '"d1"', reqs = [];
+  store.attach('https://p.example/st/', async (url, init) => {
+    const inm = init?.headers?.['if-none-match'] || null;
+    reqs.push([url.endsWith('/') ? 'container' : 'doc', inm]);
+    if (url.endsWith('/')) {
+      return inm === containerEtag ? mkRes(304) : mkRes(200, { etag: containerEtag }, listing);
+    }
+    return inm === docEtag ? mkRes(304) : mkRes(200, { etag: docEtag }, JSON.stringify({ handle: 'jeff' }));
+  });
+
+  await store.load();
+  const afterFirst = reqs.length;                    // container + doc
+  reqs = [];
+  await store.load();                                // nothing changed at all
+  const quiet = reqs.length;
+  reqs = [];
+  containerEtag = '"c2"';                            // container moved, doc did not
+  await store.load();
+  const docRevalidated = reqs.filter(([kind]) => kind === 'doc').length;
+
+  check(afterFirst === 2 && quiet === 1 && reqs.length === 2 && docRevalidated === 1
+    && store.getConfig()?.handle === 'jeff',
+    'store.load revalidates: quiet minute = 1 request, and a 304 doc keeps its cache');
+}
+
 // --- 6. pod-RDF builders via injected fetch ---
 const { PodRdf } = await import(path.join(root, 'lib/podrdf.mjs'));
 const rdfPuts = [];

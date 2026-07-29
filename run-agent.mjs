@@ -75,7 +75,7 @@ export class Agent {
   async bootstrap({ handle, name, root }) {
     const cred = this.readCredential();
     if (!cred) throw new Error('no credential — run setup first');
-    this.remote = new RemotePod(cred);
+    this.remote = new RemotePod(cred, { log: this.log });
     await this.remote.warmup();
     this.urls = apUrls(cred.remotePod, root);
     await this.remote.putJson(this.urls.state + '.keep', { keep: true }, 'application/json');
@@ -103,7 +103,7 @@ export class Agent {
     const cred = this.readCredential();
     if (!cred) return false;
     if (!this.remote) {
-      this.remote = new RemotePod(cred);
+      this.remote = new RemotePod(cred, { log: this.log });
       await this.remote.warmup();
     }
     const probeUrls = apUrls(cred.remotePod, cred.root);
@@ -315,7 +315,12 @@ export async function startAgent({
         log('unconfigured — run `bin/activitypod.mjs setup` to begin');
         return;                                    // no credential: retrying won't help
       } catch (e) {
-        const wait = Math.min(30 * 2 ** (attempt - 1), 600);   // 30s → 10min
+        // Caps at an hour, not ten minutes: a pod that has refused for an hour
+        // is not going to be helped by asking six times more per hour, and an
+        // agent left running for days should not be a fixture in its logs.
+        // Jittered so restarts of several agents do not line up.
+        const base = Math.min(30 * 2 ** (attempt - 1), 3600);
+        const wait = Math.round(base * (0.8 + Math.random() * 0.4));
         log(`connect failed (attempt ${attempt}): ${e.message} — retrying in ${wait}s`);
         await new Promise(r => setTimeout(r, wait * 1000));
       }
