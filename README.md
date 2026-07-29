@@ -37,6 +37,16 @@ You may use other pod locations and may optionally also put --port PORTNUM at th
 
 Other setup options: `--home DIR` uses a different state directory; `--name "Your Name"` sets the display name.
 
+### Changing your display name
+
+The display name is what other servers show in bold above `@you@yourpod` (the handle itself is fixed). Change it any time without re-running setup:
+
+```
+bin/activitypod.mjs run --name "Your Name"
+```
+
+It merges into your settings and republishes the actor document, so remote servers pick it up. Later `run`s need no flag — the name is stored on the pod.
+
 ### Where the signing key lives
 
 By default the key stays on **this machine** (`~/.activitypod/keys.json`, mode 0600) — the pod host never sees it. An existing install whose key is in pod state moves it locally on the next start and deletes the pod's copy; the identity is unchanged.

@@ -18,6 +18,8 @@
 //     credential if you move machines).
 //
 //   activitypod run       start the agent (UI + API on http://localhost:8030/)
+//                         --name "Your Name" sets the display name other
+//                         servers show, and republishes the actor
 //   activitypod stop      stop the running agent (graceful: flush + lease release)
 //   activitypod status    show the running agent's status
 //   activitypod passwd    set/change the UI password (REQUIRED before any
@@ -134,7 +136,7 @@ if (cmd === 'setup') {
 } else if (cmd === 'run') {
   if (flag('port')) recordPort(PORT);      // `run --port N` once moves it for good
   const { startAgent } = await import(new URL('../run-agent.mjs', import.meta.url));
-  await startAgent({ home: HOME, port: PORT });
+  await startAgent({ home: HOME, port: PORT, name: flag('name') || null });
 } else if (cmd === 'revoke-credential') {
   // The credential file cannot be protected from anything running as you —
   // so the answer to a suspected leak is to kill it server-side, fast.

@@ -641,6 +641,22 @@ if (up) {
   check(live.includes(fresh) && !live.includes('stale0000'), 'tokens: fresh kept, 200-day-old expired');
 }
 
+// --- 8i0. renaming merges into config; setup re-run keeps the password ---
+{
+  const { Agent } = await import(path.join(root, 'run-agent.mjs'));
+  const home = fs.mkdtempSync('/tmp/dk-ap-name-');
+  const agent = new Agent({ home, log: () => {} });
+  agent.store.setConfig({ remotePod: 'https://pod.example/', handle: 'jeff', name: 'jeff',
+    issuer: 'https://idp.example', uiPassword: { saltHex: 'aa', hashHex: 'bb' } });
+  // The rename path (run --name) must preserve every other config field.
+  const cfg = agent.store.getConfig();
+  agent.store.setConfig({ ...cfg, name: 'Jeff Zucker' });
+  const after = agent.store.getConfig();
+  check(after.name === 'Jeff Zucker' && after.uiPassword?.hashHex === 'bb' && after.handle === 'jeff',
+    'rename merges: display name changes, password and handle survive');
+  fs.rmSync(home, { recursive: true, force: true });
+}
+
 // --- 8i. the port chosen at setup is remembered by later commands ---
 {
   const { execFileSync } = await import('node:child_process');

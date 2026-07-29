@@ -84,15 +84,22 @@ export class Agent {
     await this.remote.setAcl(this.urls.state, []);
     await this.remote.setAcl(this.urls.fediverse, []);
     this.store.attach(this.urls.state, (u, i) => this.remote.fetch(u, i));
+    // Re-running setup must not destroy state set afterwards (the UI
+    // password, above all), so load what is there and merge into it.
+    await this.store.load().catch(() => {});
+    const existing = this.store.getConfig() || {};
     this.store.setConfig({
-      remotePod: cred.remotePod, handle, name: name || handle,
+      ...existing,
+      remotePod: cred.remotePod, handle, name: name || existing.name || handle,
       issuer: cred.issuerOrigin, ...(root ? { root } : {}),
     });
     await this.store.flush();
   }
 
-  // Bring federation up from the credential file + pod state.
-  async connect() {
+  // Bring federation up from the credential file + pod state. `name` (from
+  // `run --name "…"`) updates the display name other servers show, without
+  // the collateral of re-running setup.
+  async connect({ name = null } = {}) {
     const cred = this.readCredential();
     if (!cred) return false;
     if (!this.remote) {
@@ -104,8 +111,16 @@ export class Agent {
       this.store.attach(probeUrls.state, (u, i) => this.remote.fetch(u, i));
       await this.store.load();
     }
-    const config = this.store.getConfig();
+    let config = this.store.getConfig();
     if (!config) { this.log('credential present but pod state empty — run setup'); return false; }
+    // A rename is a merge into the existing config, never a rewrite — the
+    // UI password and anything else set later must survive it.
+    if (name && name !== config.name) {
+      this.store.setConfig({ ...config, name });
+      config = this.store.getConfig();
+      this.renamed = true;                   // republish the actor once connected
+      this.log(`display name set to "${name}"`);
+    }
     this.urls = apUrls(config.remotePod, config.root);
 
     // Exactly one agent may act on a pod (inbox drains are destructive
@@ -188,6 +203,14 @@ export class Agent {
     this.tagfeed = new TagFeed({ store: this.store, intake: this.intake, log: this.log });
     this.tagfeed.start();
     this.log(`federating as @${this.store.getConfig()?.handle}@${new URL(this.urls.base).host}`);
+    if (this.renamed) {
+      // The display name lives in the actor document, so a rename only
+      // reaches other servers once that is republished.
+      this.renamed = false;
+      this.publisher.publishProfile()
+        .then(() => this.log('actor document republished with the new display name'))
+        .catch(e => this.log(`republish after rename failed: ${e.message}`));
+    }
     this.backfillStatuses().catch(e => this.log(`statuses backfill failed: ${e.message}`));
   }
 
@@ -255,6 +278,7 @@ export async function startAgent({
   home = process.env.AP_HOME || path.join(os.homedir(), '.activitypod'),
   port = Number(process.env.AP_PORT) || 8030,
   gateToken = process.env.AP_GATE_TOKEN || '',
+  name = null,
 } = {}) {
   fs.mkdirSync(home, { recursive: true, mode: 0o700 });
   const logFile = path.join(home, 'agent.log');
@@ -277,7 +301,7 @@ export async function startAgent({
   const connectWithRetry = async () => {
     for (let attempt = 1; ; attempt++) {
       try {
-        const up = await agent.connect();
+        const up = await agent.connect({ name });
         if (up) return;
         log('unconfigured — run `bin/activitypod.mjs setup` to begin');
         return;                                    // no credential: retrying won't help
