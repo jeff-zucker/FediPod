@@ -1898,11 +1898,18 @@ const mockCss = http.createServer(async (req, res) => {
   }
   if (req.url === '/.account/password/') return send9({ ok: true });
   if (req.url === '/.account/pod/' && req.method === 'POST') {
-    if (body.includes('takenpod')) { res.writeHead(400, { 'content-type': 'application/json' }); res.end('{"message":"exists"}'); return; }
+    if (body.includes('takenpod') || body.includes('subpod')) {
+      // What a real CSS says on a re-run after a crashed setup.
+      res.writeHead(400, { 'content-type': 'application/json' });
+      res.end('{"message":"…/profile/card#me is already registered to this account."}'); return;
+    }
     return send9({ pod: 'http://127.0.0.1:18622/newpod/', webId: 'http://127.0.0.1:18622/newpod/profile/card#me' });
   }
   if (req.url === '/.account/pod/' && req.method === 'GET') {
-    return send9({ pods: { 'http://127.0.0.1:18622/takenpod/': 'http://127.0.0.1:18622/.account/pod/x' } });
+    return send9({ pods: {
+      'http://127.0.0.1:18622/takenpod/': 'http://127.0.0.1:18622/.account/pod/x',
+      'http://subpod.127.0.0.1.nip.io:18622/': 'http://127.0.0.1:18622/.account/pod/y',
+    } });
   }
   res.writeHead(404); res.end();
 });
@@ -1920,6 +1927,13 @@ const reused = await createAccountWithPod({
 });
 check(reused.pod === 'http://127.0.0.1:18622/takenpod/' && /card#me$/.test(reused.webId),
   'existing own pod is reused, not an error');
+// Found live: the subdomain branch matched `https://name.` only, so on an http
+// server a re-run after a crashed setup always tried to create again and 400'd.
+const reusedSub = await createAccountWithPod({
+  issuer: 'http://127.0.0.1:18622', email: 'x@example.org', password: 'pw', podName: 'subpod',
+});
+check(reusedSub.pod === 'http://subpod.127.0.0.1.nip.io:18622/',
+  `an existing SUBDOMAIN pod is reused whatever the scheme (${reusedSub.pod})`);
 mockCss.close();
 
 // --- 9. group actor: the Group type, and members-only amplification ---
@@ -2317,6 +2331,10 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   check(open.manuallyApprovesFollowers === undefined
     && !JSON.stringify(open['@context']).includes('manuallyApprovesFollowers'),
     'an open group advertises nothing about approving followers');
+  const tPerson = wire.tombstoneDoc(gUrls, 'x');
+  const tGroup = wire.tombstoneDoc(gUrls, 'x', 'group');
+  check(tPerson.formerType === 'Person' && tGroup.formerType === 'Group',
+    `a retired group leaves a Group tombstone, not a Person one (${tGroup.formerType})`);
   check(gated.manuallyApprovesFollowers === true
     && gated['@context'][2]?.manuallyApprovesFollowers === 'as:manuallyApprovesFollowers',
     'a gated group advertises manuallyApprovesFollowers, declared inline as Mastodon does');

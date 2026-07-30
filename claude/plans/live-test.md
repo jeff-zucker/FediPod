@@ -142,6 +142,29 @@ our side cannot force their cache.
 
 ## Tear-down
 
-Local pods are disposable — stop the agents, drop the CSS data. Public throwaways deserve
-better: `retire` them so their followers are told, rather than leaving actors that answer
-nothing. `identities.md` has the park/retire/move matrix.
+**Retire BEFORE deleting anything local. This order is not a preference.** `retire` needs
+the credential and the signing key; delete the profile directory first and the actor can
+never be retired, parked or moved again — it is stranded as a live-looking document nobody
+can speak for. Four local throwaways were orphaned that way on 2026-07-30. Locally that is
+free; on a public host it means the only way out is deleting the pod through the provider's
+dashboard.
+
+So:
+
+1. `bin/activitypod.mjs retire --profile <name>` — Delete to every follower, Tombstone left
+   in place of the actor. Irreversible, and it asks.
+2. Only then remove `~/.activitypod/profiles/<name>/`.
+3. Then delete the pod or account with the provider.
+
+Two things worth knowing before you rely on step 1:
+
+- **The follow graph outlives the agent.** Stopping an agent stops nothing inbound: anyone
+  who follows the actor keeps delivering into its inbox, and while the pod is unreachable
+  those turn into a week of retries. If the follower is an account you control, removing
+  the actor from *your* followers list stops it at source immediately and needs nothing
+  from the pod — which is faster than waiting for the pod to come back so you can retire.
+- **Retiring is only worth it if someone is following.** With zero followers the Delete
+  reaches nobody and the Tombstone is the whole benefit; deleting the pod achieves the same
+  thing a beat later.
+
+`identities.md` has the park/retire/move matrix.
