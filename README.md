@@ -1,13 +1,11 @@
-# activitypod-js
+# Solid ActivityPub
 
 - access the fediverse from a Solid pod
 
-`activitypod-js` is a standalone, single-actor ActivityPub agent that stores your data on a Solid Pod and runs on any device that supports node. The agent can be moved from one device to another without any change to your account. This project is inspired by the fantastic [Activitypods project](https://github.com/activitypods) and is meant to be a light weight alternative rather than a replacement.
+`Solid ActivityPub` is a standalone, single-actor ActivityPub agent that stores your data on any subdomained Solid Pod and runs on any device that supports node >20. The agent can be moved from one device to another without any change to your account. There is support for fediverse group formation and management, see [below](#groups).
 
-<!-- CLAUDE 2026-07-30 — added; drop it if the Groups section below is enough -->
-That actor can be a person or a [group](#groups) — a group lives on its own pod
-and carries its members' posts to everyone following it.
-<!-- /CLAUDE -->
+This project is inspired by the fantastic [ActivityPods project](https://github.com/activitypods) and is meant to be a light weight alternative rather than a replacement.
+
 
 ## Installation
 
@@ -62,8 +60,19 @@ bin/activitypod.mjs tokens                  # list client logins; --revoke <pref
 bin/activitypod.mjs revoke-credential --email you@example.org   # kill this machine's pod credential
 ```
 
+<!-- CLAUDE 2026-07-30 — added: describe, and the mention note -->
+Your bio and avatar live in the actor document other servers fetch, so setting
+them republishes it:
 
-<!-- CLAUDE 2026-07-30 — new section; reword freely, delete these two comment lines when done -->
+```
+bin/activitypod.mjs describe --summary "birds, mostly" --icon https://example/me.png
+```
+
+Writing `@someone@their.host` in a post resolves them, tags the post as a
+mention and delivers it to them, so they are actually notified. A handle that
+cannot be resolved is left as plain text rather than failing the post.
+<!-- /CLAUDE -->
+
 ## Groups
 
 A group is an actor other people follow, rather than one that follows people.
@@ -87,6 +96,13 @@ Only members are amplified. Anyone can post into a public inbox, so a post is
 carried only when its author already follows the group. That is both the
 anti-spam rule and what makes joining mean something.
 
+By default anyone who follows is admitted at once. A group can instead ask people
+to request entry, which is opt-in in the same way post review is:
+
+```
+bin/activitypod.mjs joins approve           # or: setup --group --approve-joins
+```
+
 ```
 bin/activitypod.mjs members                 # who has joined
 bin/activitypod.mjs announced               # what the group has carried
@@ -95,11 +111,14 @@ bin/activitypod.mjs eject <actor-url>       # remove them, and tell their server
 bin/activitypod.mjs retract <note-url>      # unsay something already carried
 bin/activitypod.mjs review on               # hold every post until you approve it
 bin/activitypod.mjs pending                 # what is waiting; approve / decline
+bin/activitypod.mjs joins <open|approve>    # is entry free, or by request?
+bin/activitypod.mjs requests                # who is waiting to join
+bin/activitypod.mjs admit <actor-url>       # let them in (undo: eject)
+bin/activitypod.mjs refuse <actor-url>      # decline this request
 ```
 
 A group can be handed on rather than abandoned: `retire --move-to <actor>` tells
 every follower to migrate, so the membership survives a change of host.
-<!-- /CLAUDE -->
 
 ## Fediverse Clients
 The UI is the bundled [Phanpy](https://github.com/cheeaun/phanpy)
@@ -138,7 +157,7 @@ buffers everything, an agent Android kills simply catches up on next start.
 
 ## Architecture
 
-![Activitypod-JS flow](architecture.png)
+![Solid ActivityPub flow](architecture.png)
 
 ## Transparency
 

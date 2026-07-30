@@ -19,6 +19,7 @@ into a member's pod or a remote server's state is not a lever at all.
 | close the group | `activitypod park` / `revive` | inbox ACL emptied, deliveries 401 immediately, nobody can post at all |
 | see who is here | `activitypod members` | followers with their muted flags |
 | see what was carried | `activitypod announced` | every amplified post: author, note, timestamp |
+| require a request to join | `activitypod joins approve` \| `open`, then `requests` / `admit <actor>` / `refuse <actor>` | opt-in. The actor advertises `manuallyApprovesFollowers`, so clients show "Request to follow"; a `Follow` is answered with neither `Accept` nor `Reject` until the operator says. Also settable at `setup --group --approve-joins` |
 | remove a member | `activitypod eject <actor-url>` | drops them from `followers`, **sends `Reject`** so their server ends the relationship, and mutes them — an ejection anyone can undo by re-following is not one. A re-follow is still auto-accepted, but nothing of theirs is carried |
 | unsay an announcement | `activitypod retract <note-url>` | `Undo` of the original `Announce`, to exactly the set the `Announce` reached |
 | review before carrying | `activitypod review on` \| `off`, then `pending` / `approve <note>` / `decline <note>` | a reviewed group holds every member post in `pending.json` and carries nothing until the operator says so |
@@ -55,16 +56,32 @@ different social thing from an open one. It queues *members* only — a non-memb
 never going to be carried, so queueing them would just fill the list with things the
 operator cannot say yes to.
 
+**Request-to-join** (added the same day). `manuallyApprovesFollowers` was approved for
+the wire face for this. It is **not** in the base AS2 context — verified against
+`www.w3.org/ns/activitystreams`, and against Mastodon's own
+`CONTEXT_EXTENSION_MAP`, which declares it inline as
+`{ 'manuallyApprovesFollowers' => 'as:manuallyApprovesFollowers' }`. We emit that same
+inline declaration, and only when the flag is on, so an open group's document is
+unchanged.
+
+Two things follow from it being on the wire rather than local, unlike post review:
+toggling it **republishes the actor** (otherwise nothing changes for anyone), and a
+gated group answers a `Follow` with *neither* `Accept` nor `Reject` — silence is the
+standard locked-account state, which is exactly what the advertised flag told the
+client to expect. A withdrawn request (`Undo{Follow}` before an answer) is dropped from
+the queue, or it would ask forever about someone who left.
+
+Refusing is not a ban: they may request again, and the queue is where you would see
+that. `eject` is the sticky one, because it mutes.
+
 ## Still missing
 
-**A closed group.** `Intake.onFollow` auto-`Accept`s unconditionally, so **anyone can
-join.** `Reject` now exists, so the missing piece is only the policy and the queue:
-`Reject` (or hold) at join time rather than `Accept`, plus approve/decline for
-membership as distinct from posts. Until then, eject-plus-mute is the closest thing —
-they can rejoin, but nothing of theirs is carried.
-
 **Per-actor entry blocking.** `block` is domain-granular by construction. There is no
-way to refuse one actor at the door while accepting others on their host.
+way to refuse one actor at the door while accepting others on their host — though with
+`joins approve` on, a request from them can simply be refused each time.
+
+**A refused requester is not remembered.** Nothing records that you already said no, so
+a persistent requester reappears in the queue. `eject` after admitting is the workaround.
 
 ## The blunt instrument, and its trap
 

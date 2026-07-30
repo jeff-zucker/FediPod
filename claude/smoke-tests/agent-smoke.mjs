@@ -295,6 +295,144 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   check(tight.acls.length === 0, 'ensurePrivateAcls writes nothing when the trees are already private');
 }
 
+// --- 5c1. a Create is a document of its own, so a group's Announce resolves ---
+{
+  const { Publisher } = await import(path.join(root, 'lib/publisher.mjs'));
+  const put = [];
+  const pub = new Publisher({
+    config: { remotePod: 'https://pod.example/', handle: 'you', name: 'You' },
+    remote: { putJson: async (u, b) => put.push({ u, b }), setAcl: async () => {}, delete: async () => true },
+    local: { writeNote: async () => {} },
+    store: {
+      getStatuses: () => [], read: () => [], write: () => {}, addStatus: () => {},
+      getContacts: () => ({ followers: [], following: [] }),
+    },
+    deliverer: { deliverToAll: async () => {} }, publicKeyPem: 'x', log: () => {},
+  });
+  const made = await pub.publishNote('hello');
+  const createId = wire.createActivityId(made.id);
+  check(!createId.includes('#') && createId === made.id + '-create',
+    `the Create id is a document, not a fragment (${createId})`);
+  const doc = put.find(x => x.u === createId);
+  check(doc && doc.b.type === 'Create' && doc.b.object?.id === made.id,
+    'publishNote publishes the Create too, so a wrapped Announce can be dereferenced');
+
+  // A mentioned actor has to be delivered to as well as tagged, or they never
+  // hear about it.
+  const sent = [];
+  const asked = [];
+  const pub2 = new Publisher({
+    config: { remotePod: 'https://pod.example/', handle: 'you', name: 'You' },
+    remote: { putJson: async () => {}, setAcl: async () => {}, delete: async () => true },
+    local: { writeNote: async () => {} },
+    store: {
+      getStatuses: () => [], read: () => [], write: () => {}, addStatus: () => {},
+      getContacts: () => ({ followers: [{ actor: 'f', inbox: 'https://f.example/inbox' }], following: [] }),
+    },
+    deliverer: { deliverToAll: async (i, a) => sent.push({ i, a }) },
+    publicKeyPem: 'x', log: () => {},
+    resolveMention: async (h) => {
+      asked.push(h);
+      return h === 'kofi@b.example'
+        ? { id: 'https://b.example/u/kofi', inbox: 'https://b.example/u/kofi/inbox' } : null;
+    },
+  });
+  const n2 = await pub2.publishNote('hi @kofi@b.example and @ghost@z.example');
+  check(JSON.stringify(asked) === JSON.stringify(['kofi@b.example', 'ghost@z.example']),
+    'every handle in the text is looked up');
+  check(n2.tag?.length === 1 && n2.tag[0].href === 'https://b.example/u/kofi',
+    'only the resolved mention becomes a tag');
+  check(sent[0]?.i.includes('https://b.example/u/kofi/inbox') && sent[0].i.includes('https://f.example/inbox'),
+    `the Create goes to followers and to the mentioned actor (${JSON.stringify(sent[0]?.i)})`);
+
+  // Replying without retyping the handles must still reach the group, or a
+  // thread breaks the first time somebody trims their reply.
+  const PARENT = 'https://grp.example/activitypods-js/ap/notes/p9';
+  const pub3 = new Publisher({
+    config: { remotePod: 'https://pod.example/', handle: 'you', name: 'You' },
+    remote: { putJson: async () => {}, setAcl: async () => {}, delete: async () => true },
+    local: { writeNote: async () => {} },
+    store: {
+      getStatuses: () => [{ noteId: PARENT, mentions: [{ href: 'https://grp.example/a/actor', name: '@grp@grp.example' }] }],
+      read: () => [], write: () => {}, addStatus: () => {},
+      getContacts: () => ({ followers: [], following: [] }),
+    },
+    deliverer: { deliverToAll: async () => {} }, publicKeyPem: 'x', log: () => {},
+    resolveMention: async (h) => (h === 'grp@grp.example'
+      ? { id: 'https://grp.example/a/actor', inbox: 'https://grp.example/a/inbox' } : null),
+  });
+  const n3 = await pub3.publishNote('just replying', { inReplyTo: PARENT });
+  check(n3.tag?.some(t => t.href === 'https://grp.example/a/actor')
+    && n3.cc.includes('https://grp.example/a/actor'),
+    'a reply carries the parent thread\'s mentions even when the text drops them');
+}
+
+// --- 5c1b. bio, avatar and mentions ---
+{
+  const u = wire.apUrls('https://pod.example/');
+  const bare = wire.actorDoc({ urls: u, handle: 'you', publicKeyPem: 'K' });
+  check(bare.summary === undefined && bare.icon === undefined,
+    'an actor with no bio or avatar advertises neither');
+  const full = wire.actorDoc({
+    urls: u, handle: 'you', publicKeyPem: 'K',
+    summary: 'a group for <script>birds', icon: 'https://cdn.example/logo.png',
+  });
+  check(full.summary === '<p>a group for &lt;script&gt;birds</p>'
+    && full.icon?.type === 'Image' && full.icon.url === 'https://cdn.example/logo.png',
+    `summary is escaped HTML and icon is an Image (${full.summary})`);
+
+  check(JSON.stringify(wire.mentionsIn('hi @mei@a.example and @kofi@b.example and @mei@a.example'))
+    === JSON.stringify(['mei@a.example', 'kofi@b.example']),
+    'mentions are parsed once each, in order');
+  check(wire.mentionsIn('mail me at nobody@example').length === 0,
+    'a bare email-looking string is not a mention');
+
+  const mentions = [{ handle: 'mei@a.example', actor: 'https://a.example/u/mei' }];
+  const note = wire.noteDoc({
+    urls: u, slug: 'x', content: 'hey @mei@a.example', published: '2026-07-30T00:00:00Z', mentions,
+  });
+  check(note.tag?.[0]?.type === 'Mention' && note.tag[0].href === 'https://a.example/u/mei'
+    && note.tag[0].name === '@mei@a.example',
+    'a Mention tag names the actor and the full handle');
+  check(note.cc.includes('https://a.example/u/mei'),
+    'the mentioned actor is addressed in cc, or Mastodon will not notify them');
+  check(note.content === '<p>hey <a href="https://a.example/u/mei" class="u-url mention">@mei</a></p>',
+    `the handle is linkified in the content (${note.content})`);
+  const unresolved = wire.noteDoc({ urls: u, slug: 'y', content: 'hey @nobody@x.example', published: 'p' });
+  check(unresolved.content === '<p>hey @nobody@x.example</p>' && !unresolved.tag,
+    'a mention nobody could resolve stays plain text');
+
+  check(bare.endpoints?.sharedInbox === u.inbox,
+    'the actor advertises a sharedInbox, as every Mastodon actor does');
+  check(note.replies === wire.repliesId(note.id) && note.replies === note.id + '-replies',
+    `a note points at its own replies collection (${note.replies})`);
+  const coll = wire.collection('https://x/c', ['a', 'b']);
+  check(coll.type === 'Collection' && coll.totalItems === 2 && coll.items.length === 2,
+    'the replies collection is an AS2 Collection with its items');
+}
+
+// --- 5c1c. replies are collected so a server can discover what it was not sent ---
+{
+  const { Intake: IntakeCls } = await import(path.join(root, 'lib/intake.mjs'));
+  const rUrls = wire.apUrls('https://pod.example/');
+  const OURS = rUrls.notes + 'n1';
+  const put = {};
+  const ri = new IntakeCls({
+    config: {}, urls: rUrls, store: new PodStore({ log: () => {} }), log: () => {},
+    remote: { getJson: async (u) => put[u] || null, putJson: async (u, b) => { put[u] = b; } },
+    local: {}, deliverer: {}, publisher: { urls: rUrls },
+  });
+  await ri.addReply(OURS, 'https://a.example/u/mei/n/9');
+  await ri.addReply(OURS, 'https://b.example/u/kofi/n/3');
+  await ri.addReply(OURS, 'https://a.example/u/mei/n/9');     // re-delivered
+  const coll = put[OURS + '-replies'];
+  check(coll?.type === 'Collection' && coll.items.length === 2
+    && coll.items[0] === 'https://a.example/u/mei/n/9',
+    `replies accumulate without duplicates (${coll?.items?.length})`);
+  check(coll.totalItems === 2 && coll.id === OURS + '-replies',
+    'the collection carries its own id and count');
+}
+
 // --- 5c2. the public surface is verified, not assumed ---
 {
   const { Publisher } = await import(path.join(root, 'lib/publisher.mjs'));
@@ -1827,8 +1965,11 @@ const announces = (sent) => sent.filter(x => x.a.type === 'Announce');
   notes[n.id] = n;
   const r = await intake.onCreate(gCreate(n), MEM_A);
   const ann = announces(sent)[0];
-  check(!r && ann && ann.a.object === n.id && ann.a.actor === gUrls.actor,
-    `a member's post is announced by the group (rejected: ${r || 'no'})`);
+  check(!r && ann && ann.a.actor === gUrls.actor && ann.a.object?.type === 'Create'
+  && ann.a.object.object?.id === n.id,
+    `a member's post is carried as a wrapped Create, per FEP-1b12 (rejected: ${r || 'no'})`);
+  check(JSON.stringify(ann.a.object) === JSON.stringify(gCreate(n)),
+    'the wrapped activity is preserved exactly as delivered');
   check(ann && ann.inboxes.length === 1 && ann.inboxes[0] === B_SHARED,
     `the author's own solo inbox is dropped (${JSON.stringify(ann?.inboxes)})`);
   check(!!st.getStatuses().find(s => s.noteId === n.id)?.announcedAt,
@@ -1925,7 +2066,8 @@ const groupAgent = ({ st, intake, sent }) => ({
   const announced = announces(g.sent)[0];
   const r = await retractAnnouncement(groupAgent(g), n.id);
   const undo = g.sent.find(x => x.a.type === 'Undo');
-  check(r.ok && undo && undo.a.object.type === 'Announce' && undo.a.object.object === n.id,
+  check(r.ok && undo && undo.a.object.type === 'Announce'
+  && undo.a.object.object?.object?.id === n.id,
     'retract sends an Undo of the original Announce');
   check(JSON.stringify(undo.inboxes) === JSON.stringify(announced.inboxes),
     `the Undo reaches exactly who the Announce did (${JSON.stringify(undo.inboxes)})`);
@@ -1962,6 +2104,238 @@ const groupAgent = ({ st, intake, sent }) => ({
     'review does not queue non-members — they were never going to be carried');
 }
 
+// --- 9b2. upstream Delete and Update, verified at the origin ---
+function personIntake({ statuses = [], followers = [], origin = {} } = {}) {
+  const st = new PodStore({ log: () => {} });
+  st.setConfig({ remotePod: 'https://grp.example/', handle: 'me', name: 'me' });
+  st.setContacts({ followers, following: [] });
+  st.write('statuses.json', statuses);
+  const sent = [];
+  const wrote = [];
+  const intake = new Intake({
+    config: st.getConfig(), urls: gUrls, store: st, log: () => {},
+    remote: { getJson: async () => null },
+    local: {
+      fedi: gUrls.fediverse,
+      writeNote: async (k, slug, rec) => wrote.push({ k, slug, rec }),
+      delete: async (u) => wrote.push({ deleted: u }),
+    },
+    deliverer: {
+      deliver: async (i, a) => sent.push({ inboxes: [i], a }),
+      deliverToAll: async (i, a) => sent.push({ inboxes: i, a }),
+      // `origin` maps url → {status, body}; anything unlisted is unreachable.
+      signedFetch: async (u) => {
+        const r = origin[u];
+        if (!r) throw new Error('unreachable');
+        return { status: r.status, text: async () => JSON.stringify(r.body || {}),
+          headers: new Map(), body: null, json: async () => r.body };
+      },
+    },
+    publisher: { urls: gUrls, publishCollections: async () => {} },
+  });
+  return { st, intake, sent, wrote };
+}
+const NOTE = 'https://a.example/u/ann/n/1';
+{
+  const p = personIntake({
+    statuses: [{ noteId: NOTE, actor: MEM_A, kind: 'timeline', slug: 'd1' }],
+    origin: { [NOTE]: { status: 410 } },
+  });
+  const r = await p.intake.onDelete({ type: 'Delete', object: NOTE }, MEM_A);
+  check(!r && !p.st.getStatuses().length && p.wrote.some(w => w.deleted?.endsWith('timeline/d1')),
+    'a confirmed upstream Delete drops the post and its pod-RDF copy');
+}
+{
+  const p = personIntake({
+    statuses: [{ noteId: NOTE, actor: MEM_A, kind: 'timeline' }],
+    origin: { [NOTE]: { status: 200, body: { id: NOTE, type: 'Note', content: 'still here' } } },
+  });
+  const r = await p.intake.onDelete({ type: 'Delete', object: NOTE }, MEM_A);
+  check(/still published/.test(r || '') && p.st.getStatuses().length === 1,
+    `a Delete for something still live is refused (${r})`);
+}
+{
+  const p = personIntake({ statuses: [{ noteId: NOTE, actor: MEM_A, kind: 'timeline' }] });
+  let threw = null;
+  await p.intake.onDelete({ type: 'Delete', object: NOTE }, MEM_A).catch(e => { threw = e.message; });
+  check(/will retry/.test(threw || '') && p.st.getStatuses().length === 1,
+    'an origin we cannot reach is a retry, never a deletion');
+}
+{
+  const p = personIntake({
+    statuses: [{ noteId: NOTE, actor: MEM_A, kind: 'timeline' }],
+    origin: { [NOTE]: { status: 410 } },
+  });
+  const r = await p.intake.onDelete({ type: 'Delete', object: NOTE }, STRANGER);
+  check(/crosses origins/.test(r || '') && p.st.getStatuses().length === 1,
+    `a forged Delete from another origin is refused (${r})`);
+}
+{
+  // A group that carried the post unsays its own Announce rather than
+  // forwarding a Delete it cannot sign for.
+  const p = personIntake({
+    statuses: [{ noteId: NOTE, actor: MEM_A, kind: 'timeline',
+      announcedAt: 'x', announceActivity: { type: 'Announce', object: { id: NOTE } } }],
+    followers: [{ actor: MEM_B, inbox: MEM_B + '/inbox' }],
+    origin: { [NOTE]: { status: 404 } },
+  });
+  await p.intake.onDelete({ type: 'Delete', object: NOTE }, MEM_A);
+  check(p.sent.some(x => x.a.type === 'Undo' && x.a.object.type === 'Announce'),
+    'a group retracts its Announce when the author deletes the post');
+}
+{
+  const p = personIntake({
+    followers: [{ actor: MEM_A, inbox: MEM_A + '/inbox' }],
+    statuses: [{ noteId: NOTE, actor: MEM_A, kind: 'timeline' }],
+    origin: { [MEM_A]: { status: 410 } },
+  });
+  await p.intake.onDelete({ type: 'Delete', object: MEM_A }, MEM_A);
+  check(!p.st.getContacts().followers.length && !p.st.getStatuses().length,
+    'a deleted account is dropped from followers along with its posts');
+}
+{
+  const edited = { id: NOTE, type: 'Note', content: '<p>edited</p>', published: '2026-07-30T00:00:00Z' };
+  const p = personIntake({
+    statuses: [{ noteId: NOTE, actor: MEM_A, kind: 'timeline', slug: 'e1', content: '<p>old</p>' }],
+    origin: { [NOTE]: { status: 200, body: edited } },
+  });
+  await p.intake.onUpdate({ type: 'Update', object: { id: NOTE } }, MEM_A);
+  const s = p.st.getStatuses()[0];
+  check(s.content === '<p>edited</p>' && !!s.editedAt
+    && p.wrote.some(w => w.slug === 'e1' && w.rec?.content === '<p>edited</p>'),
+    'an upstream edit is refetched at the origin and rewritten locally');
+}
+{
+  const p = personIntake({
+    origin: { [MEM_A]: { status: 200, body: { id: MEM_A, type: 'Person', preferredUsername: 'ann', name: 'Ann Renamed' } } },
+  });
+  await p.intake.onUpdate({ type: 'Update', object: { id: MEM_A } }, MEM_A);
+  check(p.st.getActors()[MEM_A]?.name === 'Ann Renamed',
+    'Update{Person} refreshes the cached profile instead of going stale forever');
+}
+{
+  const parent = gUrls.notes + 'p1';
+  const reply = {
+    id: 'https://a.example/u/mei/n/5', type: 'Note', attributedTo: MEM_A,
+    content: 'nice one', published: '2026-07-30T00:00:00Z', inReplyTo: parent,
+  };
+  const p = personIntake({ origin: { [reply.id]: { status: 200, body: reply } } });
+  const puts = {};
+  p.intake.remote = { getJson: async (u) => puts[u] || null, putJson: async (u, b) => { puts[u] = b; } };
+  await p.intake.ingestNote(reply.id, MEM_A);
+  check(puts[parent + '-replies']?.items?.includes(reply.id),
+    "a reply to one of our notes lands in that note's replies collection end to end");
+}
+
+// --- 9b3. group threads: replies reach the group and keep reaching it ---
+const GTAG = { type: 'Mention', href: gUrls.actor, name: '@grp@grp.example' };
+{
+  // A reply that kept the group's mention is carried, as Mastodon's own
+  // reply-prefill behaviour makes the common case.
+  const g = groupIntake();
+  const parent = gPost(MEM_A + '/n/20', MEM_A);
+  const reply = {
+    ...gPost(MEM_B + '/n/21', MEM_B), inReplyTo: parent.id, tag: [GTAG],
+    cc: [gUrls.actor],
+  };
+  g.notes[parent.id] = parent; g.notes[reply.id] = reply;
+  await g.intake.onCreate(gCreate(parent), MEM_A);
+  await g.intake.onCreate(gCreate(reply), MEM_B);
+  check(announces(g.sent).length === 2, 'a reply that keeps the group mention is carried like any post');
+  check(g.st.getStatuses().find(s => s.noteId === reply.id)?.mentions?.[0]?.href === gUrls.actor,
+    "the thread's mentions are remembered on the status");
+}
+{
+  // And one that lost it: addressed to nobody the group can see, but replying
+  // to something the group carried.
+  const g = groupIntake();
+  const parent = gPost(MEM_A + '/n/22', MEM_A);
+  const stripped = {
+    id: MEM_B + '/n/23', type: 'Note', attributedTo: MEM_B, content: '<p>hm</p>',
+    published: 'p', inReplyTo: parent.id, to: [wire.PUBLIC], cc: [],
+  };
+  g.notes[parent.id] = parent; g.notes[stripped.id] = stripped;
+  await g.intake.onCreate(gCreate(parent), MEM_A);
+  const r = await g.intake.onCreate(gCreate(stripped), MEM_B);
+  check(!r && announces(g.sent).length === 2,
+    `a reply that lost the mention is still carried, because the group owns the thread (${r || 'ok'})`);
+}
+{
+  // A person must NOT inherit that: replying to anything in my timeline would
+  // otherwise be a way into my inbox.
+  const g = groupIntake({ kind: 'person' });
+  g.st.write('statuses.json', [{ noteId: 'https://x.example/n/1', actor: MEM_A, kind: 'timeline' }]);
+  const stray = {
+    id: STRANGER + '/n/1', type: 'Note', attributedTo: STRANGER, content: '<p>hi</p>',
+    published: 'p', inReplyTo: 'https://x.example/n/1', to: [wire.PUBLIC], cc: [],
+  };
+  g.notes[stray.id] = stray;
+  const r = await g.intake.onCreate(gCreate(stray), STRANGER);
+  check(/not addressed to us/.test(r || ''),
+    `a person still refuses a reply to someone else's post (${r})`);
+}
+
+// --- 9c. request-to-join, optional like post review ---
+const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social.mjs'));
+{
+  const open = wire.actorDoc({ urls: gUrls, handle: 'g', publicKeyPem: 'K', kind: 'group' });
+  const gated = wire.actorDoc({ urls: gUrls, handle: 'g', publicKeyPem: 'K', kind: 'group', approveJoins: true });
+  check(open.manuallyApprovesFollowers === undefined
+    && !JSON.stringify(open['@context']).includes('manuallyApprovesFollowers'),
+    'an open group advertises nothing about approving followers');
+  check(gated.manuallyApprovesFollowers === true
+    && gated['@context'][2]?.manuallyApprovesFollowers === 'as:manuallyApprovesFollowers',
+    'a gated group advertises manuallyApprovesFollowers, declared inline as Mastodon does');
+}
+{
+  const g = groupIntake();
+  g.st.setConfig({ ...g.st.getConfig(), approveJoins: true });
+  g.intake.config = g.st.getConfig();
+  const NEWBIE = 'https://c.example/u/cass';
+  g.intake.fetchAP = async (u) => (u === NEWBIE
+    ? { id: NEWBIE, type: 'Person', inbox: NEWBIE + '/inbox' } : g.notes[u] || null);
+  const follow = { id: NEWBIE + '#follow-1', type: 'Follow', actor: NEWBIE, object: gUrls.actor };
+  await g.intake.onFollow(follow, NEWBIE);
+  check(!g.sent.some(x => x.a.type === 'Accept') && !g.sent.some(x => x.a.type === 'Reject'),
+    'a gated group answers a Follow with neither Accept nor Reject');
+  check(g.st.getRequests().some(r => r.actor === NEWBIE)
+    && !g.st.getContacts().followers.some(f => f.actor === NEWBIE),
+    'the Follow is queued and they are not a member yet');
+  await g.intake.onFollow(follow, NEWBIE);
+  check(g.st.getRequests().filter(r => r.actor === NEWBIE).length === 1,
+    'a re-delivered Follow queues once');
+
+  await admitRequest(groupAgent(g), NEWBIE);
+  const acc = g.sent.find(x => x.a.type === 'Accept');
+  check(acc && acc.a.object.id === follow.id && acc.inboxes[0] === NEWBIE + '/inbox'
+    && g.st.getContacts().followers.some(f => f.actor === NEWBIE) && !g.st.getRequests().length,
+    'admit accepts the original Follow and makes them a member');
+
+  const OTHER = 'https://d.example/u/dee';
+  g.intake.fetchAP = async (u) => (u === OTHER
+    ? { id: OTHER, type: 'Person', inbox: OTHER + '/inbox' } : null);
+  await g.intake.onFollow({ id: OTHER + '#f', type: 'Follow', actor: OTHER, object: gUrls.actor }, OTHER);
+  await refuseRequest(groupAgent(g), OTHER);
+  check(g.sent.some(x => x.a.type === 'Reject' && x.a.object.id === OTHER + '#f')
+    && !g.st.getRequests().length && !g.st.getContacts().followers.some(f => f.actor === OTHER),
+    'refuse sends a Reject and leaves them out');
+
+  // Withdrawing before an answer must clear the queue, or it asks forever
+  // about someone who left.
+  await g.intake.onFollow({ id: OTHER + '#f2', type: 'Follow', actor: OTHER, object: gUrls.actor }, OTHER);
+  await g.intake.onUndo({ type: 'Undo', object: { id: OTHER + '#f2', type: 'Follow' } }, OTHER);
+  check(!g.st.getRequests().length, 'a withdrawn request drops out of the queue');
+}
+{
+  const g = groupIntake();                       // approveJoins off
+  const NEWBIE = 'https://c.example/u/cass';
+  g.intake.fetchAP = async () => ({ id: NEWBIE, type: 'Person', inbox: NEWBIE + '/inbox' });
+  await g.intake.onFollow({ id: NEWBIE + '#f', type: 'Follow', actor: NEWBIE, object: gUrls.actor }, NEWBIE);
+  check(g.sent.some(x => x.a.type === 'Accept') && !g.st.getRequests().length
+    && g.st.getContacts().followers.some(f => f.actor === NEWBIE),
+    'an open group still admits anyone at once — the gate is opt-in');
+}
+
 // --- 10. a group agent serves the group admin API and no client ---
 {
   const { startAdmin } = await import(path.join(root, 'lib/admin.mjs'));
@@ -1979,7 +2353,10 @@ const groupAgent = ({ st, intake, sent }) => ({
   const gagent = {
     home: GHOME, store: gstore, configured: () => true, logLines: () => [],
     status: () => ({ configured: true, mode: 'active', kind: 'group', handle: 'grp' }),
-    publisher: { urls: gUrls, publishCollections: async () => {} },
+    publisher: {
+      urls: gUrls, config: {}, publishCollections: async () => {},
+      publishProfile: async () => { gsent.push({ published: true }); return {}; },
+    },
     deliverer: {
       deliver: async (inbox, a) => gsent.push({ inboxes: [inbox], a }),
       deliverToAll: async (inboxes, a) => gsent.push({ inboxes, a }),
@@ -2048,14 +2425,33 @@ const groupAgent = ({ st, intake, sent }) => ({
   await gpost('/review', { on: false });
 
   const ret = await gpost('/retract', { noteId: MEM_A + '/n/1' });
-  check(ret.status === 200 && gsent.some(x => x.a.type === 'Undo'),
+  check(ret.status === 200 && gsent.some(x => x.a?.type === 'Undo'),
     `POST /retract undoes a carried announcement (${ret.status})`);
   const retTwice = await gpost('/retract', { noteId: MEM_A + '/n/1' });
   check(retTwice.status === 500 || retTwice.status === 400,
     `retracting it again errors rather than sending a second Undo (${retTwice.status})`);
 
+  const joinsOn = await gpost('/joins', { approve: true });
+  check(joinsOn.status === 200 && joinsOn.json.approveJoins === true
+    && gsent.some(x => x.published),
+    'POST /joins republishes the actor — the flag is on the wire, not just local');
+  gstore.setRequests([{ actor: MEM_C, inbox: MEM_C + '/inbox', at: '2026-07-30T09:00:00Z',
+    activity: { id: MEM_C + '#f', type: 'Follow', actor: MEM_C, object: gUrls.actor } }]);
+  const reqs = await gjson('/requests');
+  check(reqs.status === 200 && reqs.json.approveJoins === true
+    && reqs.json.requests[0].actor === MEM_C,
+    'GET /requests lists who is waiting');
+  const admitted = await gpost('/admit', { actor: MEM_C });
+  check(admitted.status === 200 && admitted.json.requests === 0
+    && gsent.some(x => x.a?.type === 'Accept'),
+    `POST /admit accepts and clears the queue (${admitted.status})`);
+  const noReq = await gpost('/refuse', { actor: 'https://nobody.example/u/x' });
+  check(noReq.status === 500 || noReq.status === 400,
+    `refusing a request that does not exist errors (${noReq.status})`);
+  await gpost('/joins', { approve: false });
+
   const ej = await gpost('/eject', { actor: MEM_A });
-  check(ej.status === 200 && gsent.some(x => x.a.type === 'Reject')
+  check(ej.status === 200 && gsent.some(x => x.a?.type === 'Reject')
     && !gstore.getContacts().followers.some(f => f.actor === MEM_A),
     `POST /eject removes the member and tells their server (${ej.status})`);
 
@@ -2064,9 +2460,12 @@ const groupAgent = ({ st, intake, sent }) => ({
   const asPerson = await gjson('/members');
   const ejPerson = await gpost('/eject', { actor: MEM_B });
   const pendPerson = await gjson('/pending');
+  const reqPerson = await gjson('/requests');
+  const joinsPerson = await gpost('/joins', { approve: true });
   check(asPerson.status === 404 && asPerson.json.error === 'not a group'
-    && ejPerson.status === 404 && pendPerson.status === 404,
-    'a person has no /members, /eject or /pending');
+    && ejPerson.status === 404 && pendPerson.status === 404
+    && reqPerson.status === 404 && joinsPerson.status === 404,
+    'a person has no /members, /eject, /pending, /requests or /joins');
   fs.rmSync(GHOME, { recursive: true, force: true });
 }
 

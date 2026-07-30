@@ -49,10 +49,17 @@ An inbound `Announce` is never re-announced, a re-delivered `Create` is carried 
 and the author's own inbox is dropped from the fan-out — unless it is a shared inbox,
 which carries co-tenants who would otherwise be deprived.
 
-`activitypod members | eject | mute | unmute | announced | retract | review | pending |
-approve | decline` are the group's operator commands. `eject` sends a `Reject` so the
+`activitypod members | eject | mute | unmute | joins | requests | admit | refuse |
+announced | retract | review | pending | approve | decline` are the group's operator
+commands. Entry is open by default; `joins approve` (or `setup --group
+--approve-joins`) makes people request it, publishes `manuallyApprovesFollowers` on the
+actor so clients show "Request to follow", and republishes — that flag is on the wire,
+not just local, unlike post review. `eject` sends a `Reject` so the
 member's server ends the relationship, and mutes them, since `onFollow` still
 auto-accepts and a bare removal would be undone by one re-follow.
+`activitypod describe --summary "…" --icon <url>` sets the bio and avatar for any
+identity, person or group; both live in the actor document, so it republishes. For a
+group, `summary` is the only place to say what the group is for.
 `profiles` shows the kind only for a *running* identity: it lives in pod state, and a
 stopped identity is shown as `—` rather than guessed at.
 

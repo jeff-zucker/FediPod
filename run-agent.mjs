@@ -79,7 +79,7 @@ export class Agent {
   // First-run provisioning, called by the setup CLI after the credential file
   // is written: containers, owner-only ACLs on the private trees, config into
   // pod state. publishProfile (via connect) handles the public wire ACLs.
-  async bootstrap({ handle, name, root, kind }) {
+  async bootstrap({ handle, name, root, kind, approveJoins = false, summary, icon }) {
     const cred = this.readCredential();
     if (!cred) throw new Error('no credential — run setup first');
     this.remote = new RemotePod(cred, { log: this.log, home: this.home });
@@ -100,6 +100,8 @@ export class Agent {
       remotePod: cred.remotePod, handle, name: name || existing.name || handle,
       issuer: cred.issuerOrigin, ...(root ? { root } : {}),
       ...(kind ? { kind } : {}),
+      ...(approveJoins ? { approveJoins: true } : {}),
+      ...(summary ? { summary } : {}), ...(icon ? { icon } : {}),
     });
     await this.store.flush();
   }
@@ -188,6 +190,7 @@ export class Agent {
     this.publisher = new Publisher({
       config, remote: this.remote, local: this.local, store: this.store,
       deliverer: this.deliverer, publicKeyPem: keys.rsaPublicPem, log: this.log,
+      resolveMention: (h) => resolveHandle(this, h),
     });
     // Intake is constructed even for viewers — its signed fetchAP powers
     // search/deref; start() (draining) is active-only.

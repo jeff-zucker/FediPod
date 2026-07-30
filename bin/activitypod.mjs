@@ -128,6 +128,9 @@ if (cmd === 'setup') {
   }
   const root = flag('root');
   const kind = has('group') ? 'group' : 'person';
+  const approveJoins = has('group') && has('approve-joins');
+  const summary = flag('summary');
+  const icon = flag('icon');
   let pod = flag('pod');
   const interactive = process.stdin.isTTY;
 
@@ -240,7 +243,7 @@ if (cmd === 'setup') {
 
   const { Agent } = await import(new URL('../run-agent.mjs', import.meta.url));
   const agent = new Agent({ home: HOME, log: (...a) => console.log('[setup]', ...a) });
-  await agent.bootstrap({ handle, name, root, kind });
+  await agent.bootstrap({ handle, name, root, kind, approveJoins, summary, icon });
   await agent.connect();
   await agent.publisher.publishProfile();
   await agent.store.flush();
@@ -693,6 +696,26 @@ WantedBy=default.target
     console.log(`no service integration for platform "${process.platform}". Run it yourself with:`);
     console.log(`  AP_HOME=${HOME} AP_PORT=${PORT} ${process.execPath} ${runAgentPath}`);
   }
+} else if (cmd === 'describe') {
+  // The bio and the avatar. Both live in the actor document, so this republishes.
+  if (!flag('summary') && !flag('icon')) {
+    console.error('usage: activitypod describe --summary "what this is" --icon <url>');
+    process.exit(2);
+  }
+  const payload = {};
+  if (flag('summary') !== undefined) payload.summary = flag('summary');
+  if (flag('icon') !== undefined) payload.icon = flag('icon');
+  try {
+    const res = await fetch(`http://localhost:${PORT}/describe`, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload),
+    });
+    const body = await res.json();
+    if (res.status >= 400) { console.error(body.error || `HTTP ${res.status}`); process.exit(1); }
+    console.log(`described and republished — summary: ${body.summary ? '"' + body.summary + '"' : '(none)'}, icon: ${body.icon || '(none)'}`);
+  } catch (e) {
+    console.error(`agent not reachable on :${PORT} (${e.message})`);
+    process.exit(1);
+  }
 } else if (cmd === 'status') {
   try {
     const res = await fetch(`http://localhost:${PORT}/status`);
@@ -701,23 +724,24 @@ WantedBy=default.target
     console.error(`agent not reachable on :${PORT} (${e.message})`);
     process.exit(1);
   }
-} else if (['members', 'announced', 'pending', 'mute', 'unmute', 'eject', 'retract',
-  'approve', 'decline', 'review'].includes(cmd)) {
+} else if (['members', 'announced', 'pending', 'requests', 'mute', 'unmute', 'eject',
+  'retract', 'approve', 'decline', 'review', 'joins', 'admit', 'refuse'].includes(cmd)) {
   // Group operator commands, served by the running agent's admin API.
-  const GETS = ['members', 'announced', 'pending'];
-  const BY_ACTOR = ['mute', 'unmute', 'eject'];
-  const BY_NOTE = ['retract', 'approve', 'decline'];
+  const GETS = ['members', 'announced', 'pending', 'requests'];
+  const BY_ACTOR = ['mute', 'unmute', 'eject', 'admit', 'refuse'];
+  const TOGGLES = { review: ['on', 'off'], joins: ['open', 'approve'] };
   const post = !GETS.includes(cmd);
   const arg = post ? (flag('actor') || flag('note') || args[1]) : null;
-  if (post && cmd !== 'review' && !arg) {
+  if (post && !TOGGLES[cmd] && !arg) {
     console.error(`usage: activitypod ${cmd} <${BY_ACTOR.includes(cmd) ? 'actor' : 'note'}-url>`);
     process.exit(2);
   }
-  if (cmd === 'review' && !['on', 'off'].includes(arg)) {
-    console.error('usage: activitypod review <on|off>');
+  if (TOGGLES[cmd] && !TOGGLES[cmd].includes(arg)) {
+    console.error(`usage: activitypod ${cmd} <${TOGGLES[cmd].join('|')}>`);
     process.exit(2);
   }
   const payload = cmd === 'review' ? { on: arg === 'on' }
+    : cmd === 'joins' ? { approve: arg === 'approve' }
     : BY_ACTOR.includes(cmd) ? { actor: arg } : { noteId: arg };
   let body;
   try {
@@ -748,6 +772,17 @@ WantedBy=default.target
     if (!body.pending.length) console.log('nothing held');
     for (const q of body.pending) console.log(`${q.at}  ${q.actor}  ${q.noteId}`);
     if (body.pending.length) console.log('\nactivitypod approve <note-url>   (or decline)');
+  } else if (cmd === 'requests') {
+    console.log(`joins ${body.approveJoins ? 'need approval' : 'are open — anyone can join'}`);
+    if (!body.requests.length) console.log('nobody waiting');
+    for (const q of body.requests) console.log(`${q.at}  ${q.actor}`);
+    if (body.requests.length) console.log('\nactivitypod admit <actor-url>   (or refuse)');
+  } else if (cmd === 'joins') {
+    console.log(body.approveJoins
+      ? 'joins now need approval — the actor advertises manuallyApprovesFollowers and was republished'
+      : 'joins are now open — anyone who follows is admitted at once');
+  } else if (cmd === 'admit' || cmd === 'refuse') {
+    console.log(`${cmd === 'admit' ? 'admitted' : 'refused'} ${arg} — ${body.requests} still waiting`);
   } else if (cmd === 'mute' || cmd === 'unmute') {
     console.log(`${cmd}d ${arg} — ${body.actors.length} muted member(s)`);
   } else if (cmd === 'eject') {
@@ -764,6 +799,7 @@ WantedBy=default.target
   console.log('usage: activitypod <setup|start|stop|status|passwd|tokens|revoke-credential|install-service'
     + '> [--flags]');
   console.log('  group: members | eject <actor> | mute <actor> | unmute <actor>');
+  console.log('         joins <open|approve> | requests | admit <actor> | refuse <actor>');
   console.log('         announced | retract <note> | review <on|off> | pending | approve <note> | decline <note>');
   process.exit(cmd ? 2 : 0);
 }

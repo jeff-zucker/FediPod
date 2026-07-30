@@ -78,6 +78,77 @@ A group serves no client — no facade, no tokens, no oauth, no UI password — 
 removes its whole authentication surface rather than securing it. The kind is checked
 per request, not at mount time, because `startAdmin` runs before `connect`.
 
+## The wire shape: FEP-1b12, and why it needed a second change
+
+Added 2026-07-30. FEP-1b12 — what Lemmy implements — says a group **"MUST wrap it in an
+`Announce` activity, with the original activity as object"** and that **"the wrapped
+activity MUST be preserved exactly as it was received."** We were emitting
+`Announce{ object: "<note url>" }`, the Guppe/Mastodon-boost shape.
+
+Switching to the wrap on its own would have **broken Mastodon**, which is the integration
+that actually works. Mastodon's `ActivityPub::Activity::Announce` resolves the object by
+dereferencing its `id` (`status_from_object` → `status_from_uri(object_uri)`, then a
+remote fetch); `Create` is not in its `SUPPORTED_TYPES`, so the embedded-object shortcut
+is skipped. Lemmy survives that because it serves every activity at its own URL. Our
+`createActivity` minted `note.id + '#create'` — a fragment, so a fetch just returns the
+Note under a different id, which Mastodon rejects.
+
+So two changes, not one: the group now wraps the member's `Create` untouched, **and**
+`publishNote` publishes that `Create` as its own document at `<note>-create`, inheriting
+the notes container's public-Read `acl:default`. `announceActivity` takes `object`, which
+is a note URL for a personal boost (correct Mastodon boost semantics — unchanged) or the
+whole activity for a group carry.
+
+A member post held for review keeps its activity in `pending.json`, because approving
+later still has to wrap the activity the member actually sent. A bare note URL remains
+the fallback when no activity is available.
+
+**Not verified against live Mastodon or Lemmy.** The reasoning is from their source; the
+shape is asserted in the suite. That is the one thing a live run would still prove.
+
+## Still unlike a standard fediverse group
+
+- ~~Replies fragment~~ **largely fixed 2026-07-30**, once it was clear how Guppe-style
+  groups actually thread. A reply reaches a group because **the group is a `Mention` in
+  the post and Mastodon carries a thread's mentions into every reply** — so the reply is
+  addressed to the group too, lands in its inbox, and is carried. Three things now hold
+  that up:
+  1. Posting to a group *is* mentioning it, which only became possible when mentions
+     landed the same day — before that an activitypod member had no way to address a
+     group at all.
+  2. `concernsUs` accepts, **for a group only**, a reply to anything the group has
+     carried. A reply that lost the mention somewhere still threads. A person does not
+     inherit this: replying to anything in someone's timeline would be a way into their
+     inbox.
+  3. Our composer carries the parent's mentions into a reply even when the text drops
+     them, so a trimmed reply does not silently leave the group.
+
+  What is still not fixed: a reply we are **never delivered** cannot be carried — if a
+  remote client strips the mention *and* the replier's server never tells us, the group
+  never learns of it. The `replies` collection exposes what we do hold; it cannot conjure
+  what we do not. Lemmy avoids the whole problem by making comments first-class objects
+  federated through the community, which is a different data model.
+- **No members or moderators collection**, and no `Add`/`Remove` on one. Lemmy and
+  Mobilizon both publish those so other software can see who runs a community; we expose
+  only `followers`.
+- **No post/comment/vote model** — no `Page`, no pinning, locking, or mod log.
+- ~~No `replies` collection~~ **added 2026-07-30.** Each note points at
+  `<note>-replies`, published empty alongside it (a `replies` that 404s is worse than
+  none) and appended to whenever a reply to that note is ingested. It does not repair the
+  fragmentation above — a reply we were never sent still never arrives — but a server that
+  fetches one of our notes can now discover the replies we *do* hold.
+- ~~No `endpoints.sharedInbox`~~ **added 2026-07-30**, pointing at the inbox. With one
+  actor per pod it is the same endpoint; its absence was the non-standard part.
+- ~~`Delete` is ignored~~ **handled 2026-07-30.** Two guards, because a delivered body
+  carries no signature and a forged Delete would otherwise erase anyone's content: it
+  must come from the object's own origin, and the object must really be gone there
+  (404/410, or a Tombstone at 200). An origin we cannot reach throws, so the item stays
+  in the inbox and retries rather than deleting anything. A group that carried the post
+  **retracts its own Announce** rather than forwarding the author's Delete — a forward
+  would be signed by us and not by them, which receivers are right to refuse.
+  `Update` is handled the same way: refetch at the origin and believe that, for both an
+  edited note and a changed profile.
+
 ## Open, and known
 
 - ~~A member's post is `kind: 'mention'`, and each one raises a notification.~~ **Fixed
