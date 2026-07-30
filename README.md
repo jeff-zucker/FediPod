@@ -157,7 +157,9 @@ buffers everything, an agent Android kills simply catches up on next start.
 
 ## Architecture
 
-![Solid ActivityPub flow](architecture.png)
+<!-- CLAUDE 2026-07-30 — repointed png → svg; the old png moved to drafts/ -->
+![Solid ActivityPub flow](architecture.svg)
+<!-- /CLAUDE -->
 
 ## Transparency
 
