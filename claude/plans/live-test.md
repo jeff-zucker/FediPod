@@ -4,36 +4,37 @@ The suite is 240-odd offline checks and it has been green through every bug foun
 including one that made a member unable to read its own group's posts. **Offline green
 means nothing here.** This is the list of things only a real run can settle.
 
+Two sections: everything that needs no group, then everything that does. Shared material —
+the traps already paid for, where to look when something fails, and the tear-down order —
+is at the end.
+
 Updated 2026-07-30, after the first live run.
 
 ---
 
-## Already verified — do not redo
+# 1. Without groups
 
-Locally, against `~/css` on :4000, with a group and two throwaway member pods:
+A single person actor. This is the whole agent minus one behaviour, and most of what
+changed on 2026-07-30 lives here rather than in the group work.
 
-- `setup` completes; the request ceiling defers instead of dying; the wire face is
-  published once, not twice.
-- The group publishes `type: Group`, `endpoints.sharedInbox`, and a resolving WebFinger.
-- Members follow and are auto-accepted; `members` lists them.
-- The `Create` is dereferenceable at `<note>-create` — **the FEP-1b12 fix, confirmed**.
-- The group carries a member's post: filed as `timeline`, not a stranger's mention, and
-  amplified to exactly the right inboxes with the author's own solo inbox dropped.
-- A member ingests the wrapped `Announce` and files it under `via: <group>`.
-- **The property the whole design exists for: a member sees another member's post while
-  following nothing but the group.**
+## Already verified
+
+On `solo.teamid.live`, live and public:
+
+- `setup` completes: the request ceiling defers instead of dying, and the wire face is
+  published once rather than twice.
+- The actor publishes with `endpoints.sharedInbox`.
+- Phanpy logs in — so the `/oauth/token` change did not break client login, which was the
+  most likely regression of the day.
+- A post appears in both the home timeline and the profile view.
 - The lease refuses a second agent; `--takeover` reclaims one whose holder crashed;
   `ensureActorPublished` repairs a half-finished publish.
+- The instance now names itself `@handle@pod-host`, and an agent browsed at its own name
+  (`solo.localhost:8041`) serves its UI.
 
-Publicly, on `solo.teamid.live`: the actor publishes with `endpoints.sharedInbox`, Phanpy
-logs in (so the `/oauth/token` change did not break client login), and a post appears in
-both the home timeline and the profile view.
+## What is left
 
----
-
-## A. With the agent you already have
-
-`solo` on :8041, plus your Mastodon account. Nothing to set up.
+Nothing to set up — `solo` is on :8041.
 
 - [ ] **Mentions resolve.** Post `hello @jeff_zucker@mastodon.social` — note the
       **underscore**; `jeff-zucker` does not exist and the first attempt failed on that.
@@ -55,23 +56,42 @@ both the home timeline and the profile view.
 - [ ] **Live updates from the named host.** Browsing `http://solo.localhost:8041`, a new
       status should arrive without a refresh. This is what the CSP fix was for — before
       it, the page loaded and the socket was silently blocked.
+- [ ] **`park` then `revive`.**
+- [ ] **`rotate-key`** — the actor republishes with the new key and delivery keeps working.
+- [ ] **`retire`** → Tombstone with `formerType: Person`. Destructive; do it last.
 
-### One judgement call, not a pass/fail
+## One judgement call, not a pass/fail
 
 - [ ] Reply to a thread and **delete one of the prefilled `@handles`** before sending.
       Check whether that person is still notified.
 
       They probably will be: replies now carry the parent's mentions forward so a trimmed
       reply cannot fall out of a group thread. Right for a group. **Possibly wrong for a
-      person** — Mastodon treats removing a mention as "do not notify". If it bothers you,
-      the fix is to carry forward only mentions of `Group` actors.
+      person** — Mastodon treats removing a mention as "do not notify", and we would be
+      overriding that. If it bothers you, the fix is to carry forward only mentions of
+      `Group` actors.
 
 ---
 
-## B. Needs a group and two members on public pods
+# 2. With groups
 
-**Nothing in this section has ever run against Mastodon.** Two items are riskier than
-everything else in this document.
+## Already verified
+
+Locally only, against `~/css` on :4000, with a group and two throwaway member pods:
+
+- The group publishes `type: Group`, `endpoints.sharedInbox`, and a resolving WebFinger.
+- Members follow and are auto-accepted; `members` lists them.
+- The `Create` is dereferenceable at `<note>-create` — **the FEP-1b12 fix, confirmed**.
+- The group carries a member's post: filed as `timeline`, not a stranger's mention, and
+  amplified to exactly the right inboxes with the author's own solo inbox dropped.
+- A member ingests the wrapped `Announce` and files it under `via: <group>`.
+- **The property the whole design exists for: a member sees another member's post while
+  following nothing but the group.**
+
+## What is left
+
+**None of this has ever run against Mastodon.** Two items are riskier than everything else
+in this document.
 
 Set up three identities on a subdomain-capable host — teamid.live works, scn is down.
 Replace `YOUR-EMAIL`; everything else is literal.
@@ -104,23 +124,18 @@ the clients are hard to tell apart.
 - [ ] `retract <note-url>` → the boost disappears from Mastodon.
 - [ ] `eject <actor>` → Mastodon shows you no longer follow the group.
 - [ ] A member deletes a carried post → the group retracts it.
-
----
-
-## C. Lifecycle — destructive, do last
-
-- [ ] `park` then `revive`.
-- [ ] `rotate-key` — the actor republishes with the new key and delivery keeps working.
-- [ ] `retire` on the person → Tombstone with `formerType: Person`.
 - [ ] `retire` on the group → Tombstone with `formerType: Group`. *Fixed today, unverified.*
+      Destructive; do it last.
 
 ---
+
+# Shared
 
 ## Traps already paid for
 
 - **WebFinger needs https.** Over plain-http localhost a handle never resolves, so
-  mentions do not — and mentions are how a member addresses a group. Sections A and B are
-  therefore public-only. To exercise carry locally, POST the `Create` into the group's
+  mentions do not — and mentions are how a member addresses a group. Both sections above
+  are therefore public-only. To exercise carry locally, POST the `Create` into the group's
   inbox yourself (it is public-Append) and `POST /drain`.
 - **`--new-account` after a crash.** Fixed today, but if it recurs: the pod exists and the
   retry says "already registered to this account". Use `--pod <url>` or a fresh
