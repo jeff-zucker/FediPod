@@ -1,0 +1,35 @@
+%% How a group works: one pod holds it, many pods follow.
+%%
+%% The group is another single-actor agent -- same AP_HOME, credential, key and pod
+%% layout -- with one behavioural difference: a post addressed to it is announced to
+%% its followers. Members need no code changes at all; a group announcing is
+%% structurally identical to someone you follow boosting.
+%%
+%% Note the absence of member-to-member links. N links, not N squared.
+
+flowchart LR
+    alice["Alice<br/>own pod, own handle"]
+    bob["Bob<br/>own pod, own handle"]
+    carol["Carol<br/>own pod, own handle"]
+    anyone["Anyone else<br/>joins the same way"]
+    masto["Mastodon user<br/>no pod needed"]
+
+    group["The group<br/>own pod, own handle<br/>accepts every follow<br/>announces every post"]
+
+    alice <--> group
+    bob <--> group
+    carol <--> group
+    anyone <--> group
+    masto <--> group
+
+    legend["in: a Follow to join, or a post addressed to the group<br/>out: an Accept, then an Announce to every follower<br/>only members are amplified"]
+
+    classDef pod fill:#EEEDFE,stroke:#534AB7,color:#3C3489
+    classDef hub fill:#E1F5EE,stroke:#0F6E56,color:#085041
+    classDef nopod fill:#F1EFE8,stroke:#5F5E5A,color:#444441
+    classDef note fill:#F1EFE8,stroke:#B4B2A9,color:#444441
+
+    class alice,bob,carol,anyone pod
+    class group hub
+    class masto nopod
+    class legend note

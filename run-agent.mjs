@@ -55,6 +55,7 @@ export class Agent {
     return {
       configured: this.configured(),
       mode: !this.configured() ? 'unconfigured' : this.viewer ? 'viewer' : 'active',
+      kind: cfg?.kind || 'person',
       handle: cfg?.handle || null,
       actor: this.urls?.actor || null,
       followers: contacts.followers.length,
@@ -78,7 +79,7 @@ export class Agent {
   // First-run provisioning, called by the setup CLI after the credential file
   // is written: containers, owner-only ACLs on the private trees, config into
   // pod state. publishProfile (via connect) handles the public wire ACLs.
-  async bootstrap({ handle, name, root }) {
+  async bootstrap({ handle, name, root, kind }) {
     const cred = this.readCredential();
     if (!cred) throw new Error('no credential — run setup first');
     this.remote = new RemotePod(cred, { log: this.log, home: this.home });
@@ -98,6 +99,7 @@ export class Agent {
       ...existing,
       remotePod: cred.remotePod, handle, name: name || existing.name || handle,
       issuer: cred.issuerOrigin, ...(root ? { root } : {}),
+      ...(kind ? { kind } : {}),
     });
     await this.store.flush();
   }

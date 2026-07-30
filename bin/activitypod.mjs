@@ -127,6 +127,7 @@ if (cmd === 'setup') {
     process.exit(2);
   }
   const root = flag('root');
+  const kind = has('group') ? 'group' : 'person';
   let pod = flag('pod');
   const interactive = process.stdin.isTTY;
 
@@ -171,7 +172,16 @@ if (cmd === 'setup') {
   const { webfingerHost } = await import(new URL('../lib/wire.mjs', import.meta.url));
   const issuerHost = new URL(issuer).host;
   const wfHost = newAccount ? null : webfingerHost(pod);
-  console.log('\nYou will be:\n');
+  // A person warned about an unresolvable handle is the one who suffers, so a
+  // warning is their call to accept. Nobody could ever find this group, and the
+  // people it would fail are not the operator reading the warning.
+  if (kind === 'group' && !newAccount && !wfHost) {
+    console.error(`${pod} is a path on ${new URL(pod).host}, not the root of its own host.`);
+    console.error('WebFinger is answered only at a host root, so nobody could find this group.');
+    console.error('Give the group a pod of its own:  bin/activitypod.mjs setup --group --new-account');
+    process.exit(2);
+  }
+  console.log(kind === 'group' ? '\nThe group will be:\n' : '\nYou will be:\n');
   console.log(`  ${name}`);
   if (wfHost) {
     console.log(`  @${handle}@${wfHost}\n`);
@@ -190,8 +200,8 @@ if (cmd === 'setup') {
   }
   console.log('The display name can be changed later; the handle and pod cannot.');
   const go = await ask(newAccount
-    ? 'create pod and fediverse account? (y/n)'
-    : 'create fediverse account on this pod? (y/n)', 'y');
+    ? (kind === 'group' ? 'create pod and group? (y/n)' : 'create pod and fediverse account? (y/n)')
+    : (kind === 'group' ? 'create group on this pod? (y/n)' : 'create fediverse account on this pod? (y/n)'), 'y');
   if (!/^y/i.test(go)) { console.log('nothing was created'); process.exit(0); }
   endAsking();                           // hand the tty to the password prompt
 
@@ -205,7 +215,7 @@ if (cmd === 'setup') {
     if (!webfingerHost(pod)) {
       console.log(`\n${issuerHost} created the pod at a path rather than on its own subdomain,`);
       console.log(`so @${handle}@\u2026 cannot be discovered by other fediverse servers.`);
-      const cont = interactive ? await ask('continue anyway? (y/n)', 'n') : 'y';
+      const cont = kind === 'group' ? 'n' : (interactive ? await ask('continue anyway? (y/n)', 'n') : 'y');
       endAsking();
       if (!/^y/i.test(cont)) {
         console.log('stopping \u2014 the pod exists, but no actor was published');
@@ -230,14 +240,15 @@ if (cmd === 'setup') {
 
   const { Agent } = await import(new URL('../run-agent.mjs', import.meta.url));
   const agent = new Agent({ home: HOME, log: (...a) => console.log('[setup]', ...a) });
-  await agent.bootstrap({ handle, name, root });
+  await agent.bootstrap({ handle, name, root, kind });
   await agent.connect();
   await agent.publisher.publishProfile();
   await agent.store.flush();
   const finalHost = webfingerHost(rec.remotePod);
+  const what = kind === 'group' ? 'group' : 'actor';
   console.log(finalHost
-    ? `actor published: @${handle}@${finalHost}`
-    : `actor published, but not reachable as a handle \u2014 ${rec.remotePod} is not a host root`);
+    ? `${what} published: @${handle}@${finalHost}`
+    : `${what} published, but not reachable as a handle \u2014 ${rec.remotePod} is not a host root`);
 
   // Straight into serving — setup ends with a working client in the browser.
   const { startAdmin } = await import(new URL('../lib/admin.mjs', import.meta.url));
@@ -250,8 +261,13 @@ if (cmd === 'setup') {
   process.on('SIGINT', shutdown);
   process.on('SIGTERM', shutdown);
   const url = `http://localhost:${PORT}/`;
-  console.log(`agent running — opening ${url} (log in with instance localhost:${PORT})`);
-  openBrowser(url);
+  if (kind === 'group') {
+    // A group has no human reading a timeline, so it serves no client.
+    console.log(`group running on ${url} — no client UI; see \`activitypod members\``);
+  } else {
+    console.log(`agent running — opening ${url} (log in with instance localhost:${PORT})`);
+    openBrowser(url);
+  }
 } else if (cmd === 'start' || cmd === 'run') {   // 'run' kept as an alias
   // This flag is read only by setup; it silently did nothing here, while the
   // key guard's own error message told people to use it.
@@ -344,17 +360,21 @@ if (cmd === 'setup') {
       live = await fetch(`http://localhost:${port}/status`, { signal: AbortSignal.timeout(1500) })
         .then(r => r.json()).catch(() => null);
     }
+    // The kind lives in pod state, so it is only knowable from the live probe —
+    // a stopped identity honestly shows nothing rather than a guess.
     rows.push({ name, pod: pod ? new URL(pod).host : '(no credential)', port: port || '—',
+      kind: live?.kind === 'group' ? 'group' : live ? 'person' : '—',
       state: live ? `${live.mode}${live.podRequests ? ` · ${live.podRequests.perMinuteNow}/min` : ''}` : 'not running' });
   }
 
   if (!rows.length) console.log('no identities yet — bin/activitypod.mjs setup');
   else {
     const w = (k, min) => Math.max(min, ...rows.map(r => String(r[k]).length));
-    const [wn, wp, wo] = [w('name', 7), w('pod', 3), w('port', 4)];
-    console.log(`${'PROFILE'.padEnd(wn)}  ${'POD'.padEnd(wp)}  ${'PORT'.padEnd(wo)}  STATE`);
+    const [wn, wp, wo, wk] = [w('name', 7), w('pod', 3), w('port', 4), w('kind', 4)];
+    console.log(`${'PROFILE'.padEnd(wn)}  ${'POD'.padEnd(wp)}  ${'PORT'.padEnd(wo)}  ${'KIND'.padEnd(wk)}  STATE`);
     for (const r of rows) {
-      console.log(`${r.name.padEnd(wn)}  ${String(r.pod).padEnd(wp)}  ${String(r.port).padEnd(wo)}  ${r.state}`);
+      console.log(`${r.name.padEnd(wn)}  ${String(r.pod).padEnd(wp)}  ${String(r.port).padEnd(wo)}`
+        + `  ${String(r.kind).padEnd(wk)}  ${r.state}`);
     }
   }
   console.log('\nIdentities under a custom AP_HOME are not listed — only ~/.activitypod'
@@ -681,7 +701,41 @@ WantedBy=default.target
     console.error(`agent not reachable on :${PORT} (${e.message})`);
     process.exit(1);
   }
+} else if (cmd === 'members' || cmd === 'announced' || cmd === 'mute' || cmd === 'unmute') {
+  // Group operator commands, served by the running agent's admin API.
+  const post = cmd === 'mute' || cmd === 'unmute';
+  const actor = post ? (flag('actor') || args[1]) : null;
+  if (post && !actor) {
+    console.error(`usage: activitypod ${cmd} <actor-url>`);
+    process.exit(2);
+  }
+  let body;
+  try {
+    const res = await fetch(`http://localhost:${PORT}/${cmd}`, post
+      ? { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ actor }) }
+      : undefined);
+    body = await res.json();
+    if (res.status === 404 && body.error === 'not a group') {
+      console.error(`the agent on :${PORT} is not a group — these commands only apply to one`);
+      process.exit(2);
+    }
+    if (res.status >= 400) { console.error(body.error || `HTTP ${res.status}`); process.exit(1); }
+  } catch (e) {
+    console.error(`agent not reachable on :${PORT} (${e.message})`);
+    process.exit(1);
+  }
+  if (cmd === 'members') {
+    if (!body.members.length) console.log('no members yet — nobody has followed this group');
+    for (const m of body.members) console.log(`${m.muted ? 'muted ' : '      '}${m.actor}`);
+    console.log('\nstop carrying someone: activitypod mute <actor-url>   (undo: unmute)');
+  } else if (cmd === 'announced') {
+    if (!body.announced.length) console.log('nothing carried yet');
+    for (const a of body.announced) console.log(`${a.announcedAt}  ${a.actor}  ${a.noteId}`);
+  } else {
+    console.log(`${cmd}d ${actor} — ${body.actors.length} muted member(s)`);
+  }
 } else {
-  console.log('usage: activitypod <setup|start|stop|status|passwd|tokens|revoke-credential|install-service> [--flags]');
+  console.log('usage: activitypod <setup|start|stop|status|passwd|tokens|revoke-credential|install-service'
+    + '|members|announced|mute|unmute> [--flags]');
   process.exit(cmd ? 2 : 0);
 }

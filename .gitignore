@@ -18,6 +18,7 @@ config.json
 queue.json
 deadletter.json
 blocklist.json
+muted.json
 actors.json
 media.json
 ids.json

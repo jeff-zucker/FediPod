@@ -20,6 +20,39 @@ it would have destroyed. This is not politeness: a minted credential is shown
 once, so overwriting it lost the scn identity on 2026-07-29 with no way back.
 `--force` is the deliberate escape.
 
+## A group is an identity too
+
+`setup --group` writes `kind: 'group'` into pod state, and the actor publishes as a
+`Group` rather than a `Person` — which is what makes Mastodon and Lemmy treat it as
+a community you join. Everything else is identical: credential, signing key,
+remembered port, park/revive/retire. A group is one more home.
+
+| | person | group |
+|---|---|---|
+| connects by | following whoever it likes | others following it |
+| carries | its own posts | its members' posts, by `Announce` |
+| client surface | Phanpy + the Mastodon facade | none |
+
+**A group needs a pod of its own.** WebFinger is one document at the pod root, so a
+person and a group sharing a host would fight over the same handle. `setup --group`
+*refuses* a pod that is a path rather than a host root rather than warning: a person
+accepting that warning is the one who suffers for it, and here they are not.
+
+**Only members are amplified.** Anyone can Append to a public inbox, so arriving is
+not the same as being carried to every follower — a post is announced only when its
+author already follows the group. That is the anti-spam rule and the moderation lever
+at once, and it is what makes joining mean something. `activitypod mute <actor>`
+declines to carry a member; a group cannot force an unfollow, so this is the whole of
+what it can enforce.
+
+An inbound `Announce` is never re-announced, a re-delivered `Create` is carried once,
+and the author's own inbox is dropped from the fan-out — unless it is a shared inbox,
+which carries co-tenants who would otherwise be deprived.
+
+`activitypod members | announced | mute | unmute` are the group's operator commands.
+`profiles` shows the kind only for a *running* identity: it lives in pod state, and a
+stopped identity is shown as `—` rather than guessed at.
+
 ## Keys belong to one actor
 
 `keys.json` carries `mintedFor: <actor URL>`. A key stamped for a different actor

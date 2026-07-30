@@ -2,9 +2,11 @@
 
 | path | what |
 |---|---|
-| `smoke-tests/agent-smoke.mjs` | the whole test suite (133 checks): boots an unconfigured agent on a scratch `AP_HOME`, then exercises the gate, the Mastodon facade, keys and signing, the wire and pod-RDF builders, intake, the security guards, and every politeness behaviour added on 2026-07-29. `npm test` runs it. |
+| `smoke-tests/agent-smoke.mjs` | the whole test suite (167 checks): boots an unconfigured agent on a scratch `AP_HOME`, then exercises the gate, the Mastodon facade, keys and signing, the wire and pod-RDF builders, intake, the security guards, and every politeness behaviour added on 2026-07-29. `npm test` runs it. |
 | `backups/` | originals of vendored files patched by hand, e.g. `phanpy-sw-2026-07-29/` (the service worker replaced by a kill-switch). |
-| `identities.md` | one identity per home, profiles, per-actor keys, and the park/move/retire lifecycle with the reasoning behind each choice. |
+| `diagrams/group-actor.mmd` | mermaid: a group actor as a hub that many pods follow, and what travels each link. |
+| `plans/group-actor.md` | why groups are actors rather than tenants, the four hub designs that were dropped (and the CSS component that is **parked, not rejected**), and what is still open. |
+| `identities.md` | one identity per home, profiles, per-actor keys, groups (`setup --group`), and the park/move/retire lifecycle with the reasoning behind each choice. |
 | `scn-incident-2026-07-29.md` | solidcommunity.net's retry-storm report, what was ours, what was not, and every change made in response. Read this before replying to their operators. |
 
 ## Not here

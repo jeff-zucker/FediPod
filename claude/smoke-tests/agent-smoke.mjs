@@ -1704,6 +1704,186 @@ check(reused.pod === 'http://127.0.0.1:18622/takenpod/' && /card#me$/.test(reuse
   'existing own pod is reused, not an error');
 mockCss.close();
 
+// --- 9. group actor: the Group type, and members-only amplification ---
+// (Intake is already imported for section 8.)
+
+const gUrls = wire.apUrls('https://grp.example/');
+check(wire.actorDoc({ urls: gUrls, handle: 'g', publicKeyPem: 'K' }).type === 'Person'
+  && wire.actorDoc({ urls: gUrls, handle: 'g', publicKeyPem: 'K', kind: 'person' }).type === 'Person'
+  && wire.actorDoc({ urls: gUrls, handle: 'g', publicKeyPem: 'K', kind: 'group' }).type === 'Group',
+  'actorDoc publishes Group only when the kind says so');
+
+const MEM_A = 'https://a.example/u/ann';
+const MEM_B = 'https://b.example/u/bo';
+const MEM_C = 'https://b.example/u/cy';        // shares b.example's shared inbox with bo
+const STRANGER = 'https://s.example/u/sam';
+const B_SHARED = 'https://b.example/inbox';
+
+function groupIntake({ kind = 'group', following = [] } = {}) {
+  const st = new PodStore({ log: () => {} });
+  st.setConfig({ remotePod: 'https://grp.example/', handle: 'grp', name: 'grp', kind });
+  st.setContacts({
+    followers: [
+      { actor: MEM_A, inbox: MEM_A + '/inbox' },
+      { actor: MEM_B, inbox: MEM_B + '/inbox', sharedInbox: B_SHARED },
+      { actor: MEM_C, inbox: MEM_C + '/inbox', sharedInbox: B_SHARED },
+    ],
+    following,
+  });
+  const sent = [];
+  const notes = {};
+  const intake = new Intake({
+    config: st.getConfig(), urls: gUrls, store: st, log: () => {},
+    remote: { getJson: async () => null },
+    local: { writeNote: async () => {} },
+    deliverer: {
+      deliver: async (inbox, a) => sent.push({ inboxes: [inbox], a }),
+      deliverToAll: async (inboxes, a) => sent.push({ inboxes, a }),
+    },
+    publisher: { urls: gUrls, publishCollections: async () => {} },
+  });
+  intake.fetchAP = async (u) => notes[u] || null;
+  return { st, intake, sent, notes };
+}
+const gPost = (id, author) => ({
+  id, type: 'Note', attributedTo: author, content: '<p>hi</p>',
+  published: '2026-07-29T10:00:00Z', to: [wire.PUBLIC], cc: [gUrls.actor],
+});
+const gCreate = (note) => ({ id: note.id + '#create', type: 'Create', actor: note.attributedTo, object: note });
+const announces = (sent) => sent.filter(x => x.a.type === 'Announce');
+
+{
+  const { st, intake, sent, notes } = groupIntake();
+  const n = gPost(MEM_A + '/n/1', MEM_A);
+  notes[n.id] = n;
+  const r = await intake.onCreate(gCreate(n), MEM_A);
+  const ann = announces(sent)[0];
+  check(!r && ann && ann.a.object === n.id && ann.a.actor === gUrls.actor,
+    `a member's post is announced by the group (rejected: ${r || 'no'})`);
+  check(ann && ann.inboxes.length === 1 && ann.inboxes[0] === B_SHARED,
+    `the author's own solo inbox is dropped (${JSON.stringify(ann?.inboxes)})`);
+  check(!!st.getStatuses().find(s => s.noteId === n.id)?.announcedAt,
+    'the announcement is recorded on the status');
+  await intake.amplify(n.id);
+  check(announces(sent).length === 1, 're-delivery of the same Create announces once');
+}
+{
+  // The author shares b.example's inbox with another member, so that target must
+  // survive — dropping it would deprive the co-tenant.
+  const { intake, sent, notes } = groupIntake();
+  const n = gPost(MEM_B + '/n/1', MEM_B);
+  notes[n.id] = n;
+  await intake.onCreate(gCreate(n), MEM_B);
+  const ann = announces(sent)[0];
+  check(ann && ann.inboxes.length === 2 && ann.inboxes.includes(B_SHARED)
+    && ann.inboxes.includes(MEM_A + '/inbox'),
+    `a shared inbox is kept even when the author is on it (${JSON.stringify(ann?.inboxes)})`);
+}
+{
+  const { st, intake, sent, notes } = groupIntake();
+  const n = gPost(STRANGER + '/n/1', STRANGER);
+  notes[n.id] = n;
+  const r = await intake.onCreate(gCreate(n), STRANGER);
+  check(!r && !announces(sent).length && !!st.getStatuses().find(s => s.noteId === n.id),
+    'a non-member post is ingested but never announced');
+}
+{
+  const { st, intake, sent, notes } = groupIntake();
+  st.setMuted({ actors: [MEM_A] });
+  const n = gPost(MEM_A + '/n/2', MEM_A);
+  notes[n.id] = n;
+  await intake.onCreate(gCreate(n), MEM_A);
+  check(!announces(sent).length, 'a muted member is ingested but not amplified');
+}
+{
+  // An inbound Announce must not re-enter the fan-out. The group follows MEM_A
+  // here only so onAnnounce gets past its own followed-actor gate.
+  const { intake, sent, notes } = groupIntake({
+    following: [{ actor: MEM_A, inbox: MEM_A + '/inbox', accepted: true }],
+  });
+  const n = gPost(STRANGER + '/n/9', STRANGER);
+  notes[n.id] = n;
+  await intake.onAnnounce({ id: MEM_A + '#a1', type: 'Announce', object: n.id }, MEM_A, n.id);
+  check(!announces(sent).length, 'an inbound Announce is not re-announced');
+}
+{
+  const { intake, sent, notes } = groupIntake({ kind: 'person' });
+  const n = gPost(MEM_A + '/n/3', MEM_A);
+  notes[n.id] = n;
+  await intake.onCreate(gCreate(n), MEM_A);
+  check(!announces(sent).length, 'a person never amplifies, only a group does');
+}
+
+// --- 10. a group agent serves the group admin API and no client ---
+{
+  const { startAdmin } = await import(path.join(root, 'lib/admin.mjs'));
+  const GPORT = 18624;
+  const GHOME = fs.mkdtempSync('/tmp/activitypod-group-');
+  const gstore = new PodStore({ log: () => {} });
+  gstore.setConfig({ remotePod: 'https://grp.example/', handle: 'grp', name: 'grp', kind: 'group' });
+  gstore.setContacts({ followers: [{ actor: MEM_A, inbox: MEM_A + '/inbox' }], following: [] });
+  gstore.write('statuses.json', [
+    { noteId: MEM_A + '/n/1', actor: MEM_A, kind: 'mention', announcedAt: '2026-07-29T10:00:00Z' },
+    { noteId: STRANGER + '/n/1', actor: STRANGER, kind: 'mention' },
+  ]);
+  const gagent = {
+    home: GHOME, store: gstore, configured: () => true, logLines: () => [],
+    status: () => ({ configured: true, mode: 'active', kind: 'group', handle: 'grp' }),
+    publisher: { urls: gUrls },
+  };
+  startAdmin({ port: GPORT, gateToken: '', agent: gagent, log: () => {} });
+  await new Promise(r => setTimeout(r, 150));
+  const g = (p, init) => fetch(`http://localhost:${GPORT}${p}`, init);
+  const gjson = (p, init) => g(p, init).then(async r => ({ status: r.status, json: await r.json().catch(() => null) }));
+
+  const st = await gjson('/status');
+  check(st.status === 200 && st.json.kind === 'group',
+    `a group agent still answers /status with its kind (${st.status})`);
+
+  const inst = await g('/api/v1/instance');
+  const oauth = await g('/oauth/token', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
+  check(inst.status === 404 && oauth.status === 404,
+    `a group serves no /api/* or /oauth/* (instance ${inst.status}, token ${oauth.status})`);
+
+  const ui = await g('/');
+  check(ui.status === 404, `a group mounts no client UI (${ui.status})`);
+
+  const mem = await gjson('/members');
+  check(mem.status === 200 && mem.json.members.length === 1
+    && mem.json.members[0].actor === MEM_A && mem.json.members[0].muted === false,
+    'GET /members lists the followers with their muted flag');
+
+  const muted = await gjson('/mute', {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ actor: MEM_A }),
+  });
+  const mem2 = await gjson('/members');
+  check(muted.status === 200 && mem2.json.members[0].muted === true
+    && gstore.getMuted().actors.includes(MEM_A),
+    'POST /mute records the member and /members reflects it');
+
+  const un = await gjson('/unmute', {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ actor: MEM_A }),
+  });
+  check(un.status === 200 && !gstore.getMuted().actors.length, 'POST /unmute undoes it');
+
+  const ann = await gjson('/announced');
+  check(ann.status === 200 && ann.json.announced.length === 1
+    && ann.json.announced[0].noteId === MEM_A + '/n/1',
+    'GET /announced lists only what was carried');
+
+  const bad = await gjson('/mute', {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}',
+  });
+  check(bad.status === 400, `POST /mute without an actor is refused (${bad.status})`);
+
+  // The same routes must not exist on a person.
+  gstore.setConfig({ ...gstore.getConfig(), kind: 'person' });
+  const asPerson = await gjson('/members');
+  check(asPerson.status === 404 && asPerson.json.error === 'not a group',
+    'a person has no /members');
+  fs.rmSync(GHOME, { recursive: true, force: true });
+}
+
 child.kill('SIGTERM');
 fs.rmSync(HOME, { recursive: true, force: true });
 console.log(failures ? `\n${failures} FAILURE(S)` : '\nall green');
