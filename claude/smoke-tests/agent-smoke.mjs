@@ -367,6 +367,24 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     'a reply carries the parent thread\'s mentions even when the text drops them');
 }
 
+// --- 5c0. the websocket origins the CSP allows ---
+{
+  const { wsOrigins } = await import(path.join(root, 'lib/admin.mjs'));
+  const plain = wsOrigins(8041);
+  check(plain.includes('ws://localhost:8041') && plain.includes('ws://127.0.0.1:8041')
+    && plain.includes('ws://[::1]:8041'),
+    'the loopback websocket origins are allowed');
+  check(new Set(plain).size === plain.length && !plain.some(o => /ws:\/\/::/.test(o)),
+    `no duplicates and no unbracketed IPv6 (${plain.join(' ')})`);
+  process.env.AP_ALLOWED_HOSTS = 'solo.localhost:8041';
+  const named = wsOrigins(8041);
+  delete process.env.AP_ALLOWED_HOSTS;
+  // Pinning connect-src to localhost silently killed streaming for anyone
+  // browsing an agent at its own name.
+  check(named.includes('ws://solo.localhost:8041'),
+    'a declared extra host may open the streaming socket too');
+}
+
 // --- 5c1b. bio, avatar and mentions ---
 {
   const u = wire.apUrls('https://pod.example/');
@@ -2217,6 +2235,19 @@ const NOTE = 'https://a.example/u/ann/n/1';
   await p.intake.onDelete({ type: 'Delete', object: MEM_A }, MEM_A);
   check(!p.st.getContacts().followers.length && !p.st.getStatuses().length,
     'a deleted account is dropped from followers along with its posts');
+}
+{
+  // Seen live: Mastodon broadcasts account deletions constantly. Treating
+  // `object === actor` as "known" meant a signed dereference to a stranger's
+  // server for every one of them.
+  const STRANGER_ACCT = 'https://mastodon.social/ap/users/116689105238854754';
+  let asked = 0;
+  const p = personIntake({ origin: { [STRANGER_ACCT]: { status: 410 } } });
+  const realFetch = p.intake.deliverer.signedFetch;
+  p.intake.deliverer.signedFetch = async (u) => { asked++; return realFetch(u); };
+  const r = await p.intake.onDelete({ type: 'Delete', object: STRANGER_ACCT }, STRANGER_ACCT);
+  check(!r && asked === 0,
+    `an account-delete for someone we never knew costs no request (asked ${asked})`);
 }
 {
   const edited = { id: NOTE, type: 'Note', content: '<p>edited</p>', published: '2026-07-30T00:00:00Z' };
