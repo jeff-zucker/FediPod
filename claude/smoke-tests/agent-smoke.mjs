@@ -386,6 +386,11 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     'mentions are parsed once each, in order');
   check(wire.mentionsIn('mail me at nobody@example').length === 0,
     'a bare email-looking string is not a mention');
+  // Found live: the port was being dropped, so every handle on a host with one
+  // resolved to the wrong host and silently became plain text.
+  check(JSON.stringify(wire.mentionsIn('@finches@finches.localhost:4000 hi'))
+    === JSON.stringify(['finches@finches.localhost:4000']),
+    'a handle on a host with a port keeps the port');
 
   const mentions = [{ handle: 'mei@a.example', actor: 'https://a.example/u/mei' }];
   const note = wire.noteDoc({
@@ -630,18 +635,24 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   check(seen.length === 2 && seen.every(ua => ua === USER_AGENT),
     'token requests and pod requests both send it');
 
-  // The ceiling holds regardless of what any caller does.
+  // The ceiling holds regardless of what any caller does — by DEFERRING, not by
+  // failing. It is our own politeness, not the server's refusal, and a first-run
+  // setup legitimately needs more writes than one minute allows. Both caps are
+  // set before the session is built, because it reads them once.
   process.env.AP_MAX_REQUESTS_PER_MIN = '3';
+  process.env.AP_SLOT_WAIT_MAX_MS = '400';        // so the deferred ones give up fast here
   let hits = 0;
   globalThis.fetch = async () => { hits++; return ok(); };
   const s2 = createGrantSession(rec);
-  let refusal = null;
-  try {
-    for (let i = 0; i < 10; i++) await s2.fetch(`https://p.example/doc${i}`);
-  } catch (e) { refusal = e.message; }
+  const settled = await Promise.allSettled(
+    Array.from({ length: 10 }, (_, i) => s2.fetch(`https://p.example/doc${i}`)));
+  delete process.env.AP_SLOT_WAIT_MAX_MS;
   delete process.env.AP_MAX_REQUESTS_PER_MIN;
-  check(hits <= 3 && /ceiling of 3 requests\/min/.test(refusal || ''),
-    `a ceiling of 3/min stops at 3 sockets, not 10 (opened ${hits})`);
+  const gaveUp = settled.filter(r => r.status === 'rejected').map(r => r.reason.message);
+  check(hits <= 4,                                // 3 resource slots + the token grant
+    `a ceiling of 3/min opens at most 3 sockets, not 10 (opened ${hits})`);
+  check(gaveUp.length === 10 - (hits - 1) && gaveUp.every(m => /no slot after/.test(m)),
+    `over the ceiling it waits and then says so, rather than failing instantly (${gaveUp[0]})`);
 
   globalThis.fetch = realFetch;
 }
@@ -2273,6 +2284,29 @@ const GTAG = { type: 'Mention', href: gUrls.actor, name: '@grp@grp.example' };
   const r = await g.intake.onCreate(gCreate(stray), STRANGER);
   check(/not addressed to us/.test(r || ''),
     `a person still refuses a reply to someone else's post (${r})`);
+}
+
+// --- 9b4. the round trip: what a group sends, a member must be able to read ---
+// Found live: amplify's shape and onAnnounce's guard were each tested alone, so
+// nobody noticed a member dead-letters every post its own group carries.
+{
+  const g = groupIntake();
+  const n = gPost(MEM_A + '/n/30', MEM_A);
+  g.notes[n.id] = n;
+  await g.intake.onCreate(gCreate(n), MEM_A);
+  const carried = announces(g.sent)[0].a;          // exactly what goes on the wire
+
+  // Now a member receiving it, with the group followed.
+  const m = groupIntake({
+    kind: 'person',
+    following: [{ actor: gUrls.actor, inbox: gUrls.inbox, accepted: true }],
+  });
+  m.notes[n.id] = n;
+  const r = await m.intake.handle({ ...carried, actor: gUrls.actor });
+  check(!r && m.st.getStatuses().some(s => s.noteId === n.id),
+    `a member ingests the note out of a wrapped Announce (rejected: ${r || 'no'})`);
+  check(m.st.getStatuses().find(s => s.noteId === n.id)?.kind === 'timeline',
+    'and it lands in their timeline, not as a mention');
 }
 
 // --- 9c. request-to-join, optional like post review ---

@@ -229,11 +229,32 @@ function createGrantSession(rec, { gateToken, gatedOrigin, backoffFile = null, t
     const now = Date.now();
     allowance = Math.min(maxPerMin, allowance + ((now - lastRefill) * maxPerMin) / 60_000);
     lastRefill = now;
-    if (allowance < 1) { note('refused'); return false; }
+    if (allowance < 1) return false;
     allowance -= 1;
     counts.requests++;
     recent.push(now);
     return true;
+  };
+  // The ceiling is OUR politeness, not the server's refusal, so hitting it must
+  // WAIT rather than fail: a first-run setup legitimately needs ~60 writes, and
+  // throwing there left an account, a pod and a half-published actor behind.
+  // Refusing outright is also not the polite option — it just moves the retry
+  // somewhere with less information. The cap is a backstop so a genuinely
+  // wedged bucket still surfaces instead of hanging for ever.
+  const SLOT_WAIT_MAX_MS = Number(process.env.AP_SLOT_WAIT_MAX_MS) || 120_000;
+  const waitForSlot = async (what) => {
+    if (takeSlot()) return;
+    const deadline = Date.now() + SLOT_WAIT_MAX_MS;
+    const step = Math.max(50, Math.ceil(60_000 / maxPerMin));
+    for (;;) {
+      await new Promise(r => setTimeout(r, step));
+      if (takeSlot()) return;
+      if (Date.now() >= deadline) {
+        note('refused');
+        throw new Error(`local ceiling of ${maxPerMin} requests/min: no slot after `
+          + `${Math.round(SLOT_WAIT_MAX_MS / 1000)}s — ${what}`);
+      }
+    }
   };
 
   const stats = () => ({
@@ -257,7 +278,7 @@ function createGrantSession(rec, { gateToken, gatedOrigin, backoffFile = null, t
     // grant has not landed in 30s the server is in trouble, and holding its
     // worker to the wire makes that worse. We back off and try later instead.
     // AP_HTTP_TIMEOUT_MS raises it for a knowingly slow issuer.
-    if (!takeSlot()) throw new Error(`local ceiling of ${maxPerMin} requests/min reached — token request refused`);
+    await waitForSlot('token request');
     const res = await fetch(tokenEndpoint, {
       method: 'POST', headers, body: 'grant_type=client_credentials&scope=webid',
       signal: AbortSignal.timeout(Number(process.env.AP_HTTP_TIMEOUT_MS) || 30_000),
@@ -317,7 +338,7 @@ function createGrantSession(rec, { gateToken, gatedOrigin, backoffFile = null, t
       authorization: `DPoP ${accessToken}`, dpop: proof,
     };
     const gate = gateFor(url); if (gate) headers['x-dk-token'] = gate;
-    if (!takeSlot()) throw new Error(`local ceiling of ${maxPerMin} requests/min reached — refusing ${(init.method || 'GET')} ${url}`);
+    await waitForSlot(`${method} ${url}`);
     const res = await fetch(url, {
       signal: AbortSignal.timeout(Number(process.env.AP_HTTP_TIMEOUT_MS) || 20_000), ...init, headers,
     });

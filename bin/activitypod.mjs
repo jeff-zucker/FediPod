@@ -244,7 +244,7 @@ if (cmd === 'setup') {
   const { Agent } = await import(new URL('../run-agent.mjs', import.meta.url));
   const agent = new Agent({ home: HOME, log: (...a) => console.log('[setup]', ...a) });
   await agent.bootstrap({ handle, name, root, kind, approveJoins, summary, icon });
-  await agent.connect();
+  await agent.connect({ repair: false });   // publishProfile below is the publish
   await agent.publisher.publishProfile();
   await agent.store.flush();
   const finalHost = webfingerHost(rec.remotePod);

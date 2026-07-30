@@ -109,7 +109,7 @@ export class Agent {
   // Bring federation up from the credential file + pod state. `name` (from
   // `run --name "…"`) updates the display name other servers show, without
   // the collateral of re-running setup.
-  async connect({ name = null } = {}) {
+  async connect({ name = null, repair = true } = {}) {
     const cred = this.readCredential();
     if (!cred) return false;
     if (!this.remote) {
@@ -203,7 +203,7 @@ export class Agent {
       this.log(`another agent is active for this pod — viewing as @${config.handle} (read-only)`);
       return true;
     }
-    await this.startActive();
+    await this.startActive({ repair });
     return true;
   }
 
@@ -329,7 +329,7 @@ export class Agent {
 
   // The acting half: lease renewal, inbox drain, tag feed, delivery queue.
   // Called at connect when the lease is ours, or on viewer promotion.
-  async startActive() {
+  async startActive({ repair = true } = {}) {
     this.viewer = false;
     clearInterval(this.refreshTimer);
     this.lease.onLost = () => this.demote();
@@ -362,8 +362,12 @@ export class Agent {
     // A publish that died half-way leaves an actor nobody can fetch while
     // everything here looks healthy — one GET to find out, and republishing
     // is idempotent.
-    this.ensureActorPublished()
-      .catch(e => this.log(`actor check failed: ${e.message}`));
+    // Skipped during setup, which publishes the profile itself a moment later:
+    // running both meant every first run wrote the whole wire face twice.
+    if (repair) {
+      this.ensureActorPublished()
+        .catch(e => this.log(`actor check failed: ${e.message}`));
+    }
     this.backfillStatuses().catch(e => this.log(`statuses backfill failed: ${e.message}`));
   }
 

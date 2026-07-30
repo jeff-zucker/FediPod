@@ -36,6 +36,31 @@ AP_ALLOW_PRIVATE_TARGETS=1 AP_PASSWORD=<pw> bin/activitypod.mjs setup \
 
 `setup` ends by *starting* the agent, so each of those keeps running on its port.
 
+### What stage 1 cannot test, and the way round it
+
+**WebFinger requires https**, and fedify's `lookupWebFinger` honours that — so over
+plain-http localhost a handle never resolves. Mentions are how a member addresses a
+group, so **the deliver-to-the-group step cannot be exercised locally at all**. The log
+line is `mention @… did not resolve — left as text`.
+
+Everything downstream of delivery still can be, by putting the activity into the group's
+inbox yourself — which is exactly what a real delivery does, the inbox being public-Append:
+
+```
+curl -X POST -H 'content-type: application/ld+json' --data-binary @create.json \
+  http://finches.localhost:4000/activitypods-js/ap/inbox/
+```
+
+with `create.json` a `Create` naming the member as `actor`, the note URL as `object`, and
+the group's actor in `cc`. Then `POST /drain` on the group. Two other things that bit:
+
+- `--new-account` is **not idempotent after a crash** — the pod exists, and the retry
+  fails `pod create failed (HTTP 400): … already registered to this account`. Use
+  `--pod <url>` on the second attempt, or a fresh `--pod-name`.
+- Deleting the profile directory after the actor was published trips the key guard
+  (`this actor already publishes a signing key`). That is the guard working; use
+  `--rotate-key` or a fresh pod name.
+
 What to prove, in order:
 
 1. **The group publishes as a Group.** `bin/activitypod.mjs status --port 8031` → `kind:
