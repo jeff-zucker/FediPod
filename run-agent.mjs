@@ -125,6 +125,17 @@ export class Agent {
     }
     let config = this.store.getConfig();
     if (!config) { this.log('credential present but pod state empty — run setup'); return false; }
+    // The store had to be attached from the credential, because only the config
+    // it holds says where the state really lives. If the two disagree,
+    // everything past here reads one tree and writes another.
+    if (apUrls(config.remotePod, config.root).state !== probeUrls.state) {
+      const moved = apUrls(config.remotePod, config.root).state;
+      this.log(`state tree moved (${probeUrls.state} → ${moved}) — reattaching`);
+      this.store.attach(moved, (u, i) => this.remote.fetch(u, i));
+      await this.store.load();
+      config = this.store.getConfig();
+      if (!config) { this.log('no state at the pod its own config names — run setup'); return false; }
+    }
     // Resurrecting a tombstoned actor would contradict the Delete every server
     // has already acted on, so a retired identity stays retired.
     if (config.retiredAt) {

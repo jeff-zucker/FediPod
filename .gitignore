@@ -19,6 +19,7 @@ queue.json
 deadletter.json
 blocklist.json
 muted.json
+pending.json
 actors.json
 media.json
 ids.json

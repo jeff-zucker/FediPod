@@ -140,6 +140,26 @@ if (up) {
   const tokBody = await tok.json();
   check(!!tokBody.access_token, 'oauth authorize → token round-trip');
 
+  // Minting for an unknown code handed a bearer to anyone who could reach the
+  // port; a non-browser client sends no Origin, so the firewall never saw it.
+  const forged = await fetch(`http://127.0.0.1:${PORT}/oauth/token`, {
+    method: 'POST', headers: { ...gh, 'content-type': 'application/x-www-form-urlencoded' },
+    body: 'grant_type=authorization_code&code=not-a-real-code&client_id=dk-ap-client',
+  });
+  const forgedBody = await forged.json();
+  check(forged.status === 400 && !forgedBody.access_token,
+    `/oauth/token refuses an unknown code (got ${forged.status})`);
+  const empty = await fetch(`http://127.0.0.1:${PORT}/oauth/token`, {
+    method: 'POST', headers: { ...gh, 'content-type': 'application/json' }, body: '{}',
+  });
+  check(empty.status === 400, `/oauth/token refuses a missing code (got ${empty.status})`);
+  const reuse = await fetch(`http://127.0.0.1:${PORT}/oauth/token`, {
+    method: 'POST', headers: { ...gh, 'content-type': 'application/x-www-form-urlencoded' },
+    body: `grant_type=authorization_code&code=${tokBody.access_token}&client_id=dk-ap-client`,
+  });
+  check((await reuse.json()).access_token === tokBody.access_token,
+    'a live token still exchanges for itself');
+
   const stubs = await fetch(`http://127.0.0.1:${PORT}/api/v1/filters`, { headers: gh });
   check(stubs.status === 200 && Array.isArray(await stubs.json()), 'stub endpoint returns []');
 
@@ -225,6 +245,11 @@ check(urls.webfinger === 'https://pod.example/.well-known/webfinger'
   'apUrls nests under /activitypods-js/, webfinger at root');
 const urlsCustom = wire.apUrls('https://pod.example/', 'other-root/');
 check(urlsCustom.actor === 'https://pod.example/other-root/ap/actor', 'apUrls root is configurable');
+// base was normalized and root was not, so `--root foo` produced .../fooap/actor
+const urlsNoSlash = wire.apUrls('https://pod.example/', 'other-root');
+check(urlsNoSlash.actor === 'https://pod.example/other-root/ap/actor'
+  && urlsNoSlash.state === 'https://pod.example/other-root/ap-state/',
+  `a root without a trailing slash is normalized (${urlsNoSlash.actor})`);
 const jrd = wire.jrd({ handle: 'jeff', host: 'pod.example', actor: urls.actor });
 check(jrd.subject === 'acct:jeff@pod.example' && jrd.links[0].href === urls.actor, 'webfinger JRD shape');
 const actor = wire.actorDoc({ urls, handle: 'jeff', name: 'Jeff', publicKeyPem: 'PEM' });
@@ -1360,6 +1385,50 @@ if (up) {
   wsServer.close();
 }
 
+// --- 8b2. AP_GATE_TOKEN must cover websocket upgrades too ---
+{
+  const { Streaming } = await import(path.join(root, 'lib/streaming.mjs'));
+  const gateMod = await import(path.join(root, 'vendor/gate.cjs'));
+  const makeGate = gateMod.makeGate || gateMod.default.makeGate;
+  const httpMod = await import('node:http');
+  const netMod = await import('node:net');
+  const cryptoMod = await import('node:crypto');
+  const gsrv = httpMod.createServer(() => {});
+  new Streaming({ masto: masto2, log: () => {}, gate: makeGate('gate-secret') }).attach(gsrv);
+  await new Promise(r => gsrv.listen(18625, '127.0.0.1', r));
+  const tryUpgrade = (extra) => new Promise((resolve) => {
+    const s = netMod.connect(18625, '127.0.0.1');
+    let out = '';
+    const done = () => { try { s.destroy(); } catch {} resolve(out); };
+    s.on('connect', () => s.write(
+      `GET /api/v1/streaming?access_token=${bearer}&stream=user HTTP/1.1\r\n`
+      + 'Host: 127.0.0.1\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n'
+      + `Sec-WebSocket-Key: ${cryptoMod.randomBytes(16).toString('base64')}\r\n`
+      + 'Sec-WebSocket-Version: 13\r\n' + extra + '\r\n'));
+    s.on('data', (b) => { out += b.toString('latin1'); if (out.includes('\r\n\r\n')) done(); });
+    s.on('close', () => resolve(out));
+    setTimeout(done, 2000);
+  });
+  const noTok = await tryUpgrade('');
+  check(/ 401 /.test(noTok), `a gated agent refuses an upgrade with no token (${noTok.split('\r\n')[0] || 'nothing'})`);
+  const withTok = await tryUpgrade('x-dk-token: gate-secret\r\n');
+  check(/101 Switching Protocols/.test(withTok), 'the same upgrade succeeds with the gate token');
+  gsrv.close();
+}
+
+// --- 8b3. reattaching the store to a different tree drops the old cache ---
+{
+  const st = new PodStore({ log: () => {} });
+  st.attach('https://a.example/one/ap-state/', async () => new Response('', { status: 404 }));
+  st.setConfig({ remotePod: 'https://a.example/', handle: 'a' });
+  check(st.getConfig()?.handle === 'a', 'store holds config for the tree it is attached to');
+  st.attach('https://b.example/two/ap-state/', async () => new Response('', { status: 404 }));
+  check(st.getConfig() === null, "a different tree does not inherit the previous tree's cache");
+  st.attach('https://b.example/two/ap-state/', async () => new Response('', { status: 404 }));
+  st.setConfig({ remotePod: 'https://b.example/', handle: 'b' });
+  check(st.getConfig()?.handle === 'b', 're-attaching the same tree keeps its cache');
+}
+
 // --- 8c. real OAuth when a UI password is set ---
 {
   const { hashPassword } = await import(path.join(root, 'lib/mastoapi.mjs'));
@@ -1764,6 +1833,9 @@ const announces = (sent) => sent.filter(x => x.a.type === 'Announce');
     `the author's own solo inbox is dropped (${JSON.stringify(ann?.inboxes)})`);
   check(!!st.getStatuses().find(s => s.noteId === n.id)?.announcedAt,
     'the announcement is recorded on the status');
+  check(st.getStatuses().find(s => s.noteId === n.id)?.kind === 'timeline'
+    && !st.getNotifications().length,
+    "a member's post is the group's timeline, not a stranger's mention");
   await intake.amplify(n.id);
   check(announces(sent).length === 1, 're-delivery of the same Create announces once');
 }
@@ -1786,6 +1858,9 @@ const announces = (sent) => sent.filter(x => x.a.type === 'Announce');
   const r = await intake.onCreate(gCreate(n), STRANGER);
   check(!r && !announces(sent).length && !!st.getStatuses().find(s => s.noteId === n.id),
     'a non-member post is ingested but never announced');
+  check(st.getStatuses().find(s => s.noteId === n.id)?.kind === 'mention'
+    && st.getNotifications().some(x => x.type === 'mention' && x.actor === STRANGER),
+    'a stranger posting at the group is still a mention the operator sees');
 }
 {
   const { st, intake, sent, notes } = groupIntake();
@@ -1814,6 +1889,79 @@ const announces = (sent) => sent.filter(x => x.a.type === 'Announce');
   check(!announces(sent).length, 'a person never amplifies, only a group does');
 }
 
+// --- 9b. eject, retract, hold for review ---
+const { ejectFollower, retractAnnouncement } = await import(path.join(root, 'lib/social.mjs'));
+const groupAgent = ({ st, intake, sent }) => ({
+  store: st, intake, publisher: { urls: gUrls, publishCollections: async () => {} },
+  deliverer: {
+    deliver: async (inbox, a) => sent.push({ inboxes: [inbox], a }),
+    deliverToAll: async (inboxes, a) => sent.push({ inboxes, a }),
+  },
+});
+{
+  const g = groupIntake();
+  g.st.setContacts({
+    followers: g.st.getContacts().followers.map(f =>
+      (f.actor === MEM_A ? { ...f, followId: MEM_A + '#follow-1' } : f)),
+    following: [],
+  });
+  const r = await ejectFollower(groupAgent(g), MEM_A);
+  const rej = g.sent.find(x => x.a.type === 'Reject');
+  check(r.ok && rej && rej.a.object.id === MEM_A + '#follow-1' && rej.a.object.type === 'Follow'
+    && rej.inboxes[0] === MEM_A + '/inbox',
+    'eject sends a Reject naming their Follow, to their own inbox');
+  check(!g.st.getContacts().followers.some(f => f.actor === MEM_A)
+    && g.st.getMuted().actors.includes(MEM_A),
+    'eject drops them from followers and mutes them so a re-follow carries nothing');
+  let threw = null;
+  await ejectFollower(groupAgent(g), MEM_A).catch(e => { threw = e.message; });
+  check(threw === 'not a member', `ejecting a non-member is refused (${threw})`);
+}
+{
+  const g = groupIntake();
+  const n = gPost(MEM_B + '/n/7', MEM_B);
+  g.notes[n.id] = n;
+  await g.intake.onCreate(gCreate(n), MEM_B);
+  const announced = announces(g.sent)[0];
+  const r = await retractAnnouncement(groupAgent(g), n.id);
+  const undo = g.sent.find(x => x.a.type === 'Undo');
+  check(r.ok && undo && undo.a.object.type === 'Announce' && undo.a.object.object === n.id,
+    'retract sends an Undo of the original Announce');
+  check(JSON.stringify(undo.inboxes) === JSON.stringify(announced.inboxes),
+    `the Undo reaches exactly who the Announce did (${JSON.stringify(undo.inboxes)})`);
+  const after = g.st.getStatuses().find(s => s.noteId === n.id);
+  check(!after.announcedAt && !!after.retractedAt, 'the status records the retraction');
+  let threw = null;
+  await retractAnnouncement(groupAgent(g), n.id).catch(e => { threw = e.message; });
+  check(threw === 'that post was never carried', `retracting twice is refused (${threw})`);
+}
+{
+  const g = groupIntake();
+  g.st.setConfig({ ...g.st.getConfig(), review: true });
+  g.intake.config = g.st.getConfig();
+  const n = gPost(MEM_A + '/n/8', MEM_A);
+  g.notes[n.id] = n;
+  await g.intake.onCreate(gCreate(n), MEM_A);
+  check(!announces(g.sent).length && g.st.getPending().some(p => p.noteId === n.id),
+    'a reviewed group holds a member post instead of carrying it');
+  await g.intake.onCreate(gCreate(n), MEM_A);
+  check(g.st.getPending().filter(p => p.noteId === n.id).length === 1,
+    'a re-delivered Create is held once, not twice');
+  await g.intake.amplify(n.id, { approved: true });
+  check(announces(g.sent).length === 1 && !g.st.getPending().length,
+    'approving carries it and clears the queue');
+}
+{
+  const g = groupIntake();
+  g.st.setConfig({ ...g.st.getConfig(), review: true });
+  g.intake.config = g.st.getConfig();
+  const n = gPost(STRANGER + '/n/8', STRANGER);
+  g.notes[n.id] = n;
+  await g.intake.onCreate(gCreate(n), STRANGER);
+  check(!g.st.getPending().length,
+    'review does not queue non-members — they were never going to be carried');
+}
+
 // --- 10. a group agent serves the group admin API and no client ---
 {
   const { startAdmin } = await import(path.join(root, 'lib/admin.mjs'));
@@ -1823,14 +1971,25 @@ const announces = (sent) => sent.filter(x => x.a.type === 'Announce');
   gstore.setConfig({ remotePod: 'https://grp.example/', handle: 'grp', name: 'grp', kind: 'group' });
   gstore.setContacts({ followers: [{ actor: MEM_A, inbox: MEM_A + '/inbox' }], following: [] });
   gstore.write('statuses.json', [
-    { noteId: MEM_A + '/n/1', actor: MEM_A, kind: 'mention', announcedAt: '2026-07-29T10:00:00Z' },
+    { noteId: MEM_A + '/n/1', actor: MEM_A, kind: 'timeline', announcedAt: '2026-07-29T10:00:00Z',
+      announceActivity: { type: 'Announce', id: gUrls.actor + '#announce-1', object: MEM_A + '/n/1' } },
     { noteId: STRANGER + '/n/1', actor: STRANGER, kind: 'mention' },
   ]);
+  const gsent = [];
   const gagent = {
     home: GHOME, store: gstore, configured: () => true, logLines: () => [],
     status: () => ({ configured: true, mode: 'active', kind: 'group', handle: 'grp' }),
-    publisher: { urls: gUrls },
+    publisher: { urls: gUrls, publishCollections: async () => {} },
+    deliverer: {
+      deliver: async (inbox, a) => gsent.push({ inboxes: [inbox], a }),
+      deliverToAll: async (inboxes, a) => gsent.push({ inboxes, a }),
+    },
   };
+  gagent.intake = new Intake({
+    config: gstore.getConfig(), urls: gUrls, store: gstore, log: () => {},
+    remote: { getJson: async () => null }, local: { writeNote: async () => {} },
+    deliverer: gagent.deliverer, publisher: gagent.publisher,
+  });
   startAdmin({ port: GPORT, gateToken: '', agent: gagent, log: () => {} });
   await new Promise(r => setTimeout(r, 150));
   const g = (p, init) => fetch(`http://localhost:${GPORT}${p}`, init);
@@ -1876,11 +2035,38 @@ const announces = (sent) => sent.filter(x => x.a.type === 'Announce');
   });
   check(bad.status === 400, `POST /mute without an actor is refused (${bad.status})`);
 
+  const gpost = (p, obj) => gjson(p, {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(obj),
+  });
+
+  const rev = await gpost('/review', { on: true });
+  const pend = await gjson('/pending');
+  check(rev.status === 200 && rev.json.review === true && pend.json.review === true,
+    'POST /review turns the hold-for-review queue on, and /pending reports it');
+  const noHold = await gpost('/approve', { noteId: 'https://nope.example/n/1' });
+  check(noHold.status === 404, `approving something not held is refused (${noHold.status})`);
+  await gpost('/review', { on: false });
+
+  const ret = await gpost('/retract', { noteId: MEM_A + '/n/1' });
+  check(ret.status === 200 && gsent.some(x => x.a.type === 'Undo'),
+    `POST /retract undoes a carried announcement (${ret.status})`);
+  const retTwice = await gpost('/retract', { noteId: MEM_A + '/n/1' });
+  check(retTwice.status === 500 || retTwice.status === 400,
+    `retracting it again errors rather than sending a second Undo (${retTwice.status})`);
+
+  const ej = await gpost('/eject', { actor: MEM_A });
+  check(ej.status === 200 && gsent.some(x => x.a.type === 'Reject')
+    && !gstore.getContacts().followers.some(f => f.actor === MEM_A),
+    `POST /eject removes the member and tells their server (${ej.status})`);
+
   // The same routes must not exist on a person.
   gstore.setConfig({ ...gstore.getConfig(), kind: 'person' });
   const asPerson = await gjson('/members');
-  check(asPerson.status === 404 && asPerson.json.error === 'not a group',
-    'a person has no /members');
+  const ejPerson = await gpost('/eject', { actor: MEM_B });
+  const pendPerson = await gjson('/pending');
+  check(asPerson.status === 404 && asPerson.json.error === 'not a group'
+    && ejPerson.status === 404 && pendPerson.status === 404,
+    'a person has no /members, /eject or /pending');
   fs.rmSync(GHOME, { recursive: true, force: true });
 }
 

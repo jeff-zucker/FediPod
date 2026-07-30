@@ -701,18 +701,28 @@ WantedBy=default.target
     console.error(`agent not reachable on :${PORT} (${e.message})`);
     process.exit(1);
   }
-} else if (cmd === 'members' || cmd === 'announced' || cmd === 'mute' || cmd === 'unmute') {
+} else if (['members', 'announced', 'pending', 'mute', 'unmute', 'eject', 'retract',
+  'approve', 'decline', 'review'].includes(cmd)) {
   // Group operator commands, served by the running agent's admin API.
-  const post = cmd === 'mute' || cmd === 'unmute';
-  const actor = post ? (flag('actor') || args[1]) : null;
-  if (post && !actor) {
-    console.error(`usage: activitypod ${cmd} <actor-url>`);
+  const GETS = ['members', 'announced', 'pending'];
+  const BY_ACTOR = ['mute', 'unmute', 'eject'];
+  const BY_NOTE = ['retract', 'approve', 'decline'];
+  const post = !GETS.includes(cmd);
+  const arg = post ? (flag('actor') || flag('note') || args[1]) : null;
+  if (post && cmd !== 'review' && !arg) {
+    console.error(`usage: activitypod ${cmd} <${BY_ACTOR.includes(cmd) ? 'actor' : 'note'}-url>`);
     process.exit(2);
   }
+  if (cmd === 'review' && !['on', 'off'].includes(arg)) {
+    console.error('usage: activitypod review <on|off>');
+    process.exit(2);
+  }
+  const payload = cmd === 'review' ? { on: arg === 'on' }
+    : BY_ACTOR.includes(cmd) ? { actor: arg } : { noteId: arg };
   let body;
   try {
     const res = await fetch(`http://localhost:${PORT}/${cmd}`, post
-      ? { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ actor }) }
+      ? { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) }
       : undefined);
     body = await res.json();
     if (res.status === 404 && body.error === 'not a group') {
@@ -728,14 +738,32 @@ WantedBy=default.target
     if (!body.members.length) console.log('no members yet — nobody has followed this group');
     for (const m of body.members) console.log(`${m.muted ? 'muted ' : '      '}${m.actor}`);
     console.log('\nstop carrying someone: activitypod mute <actor-url>   (undo: unmute)');
+    console.log('remove them entirely:  activitypod eject <actor-url>');
   } else if (cmd === 'announced') {
     if (!body.announced.length) console.log('nothing carried yet');
     for (const a of body.announced) console.log(`${a.announcedAt}  ${a.actor}  ${a.noteId}`);
+    console.log('\nunsay one: activitypod retract <note-url>');
+  } else if (cmd === 'pending') {
+    console.log(`review is ${body.review ? 'ON' : 'off'}`);
+    if (!body.pending.length) console.log('nothing held');
+    for (const q of body.pending) console.log(`${q.at}  ${q.actor}  ${q.noteId}`);
+    if (body.pending.length) console.log('\nactivitypod approve <note-url>   (or decline)');
+  } else if (cmd === 'mute' || cmd === 'unmute') {
+    console.log(`${cmd}d ${arg} — ${body.actors.length} muted member(s)`);
+  } else if (cmd === 'eject') {
+    console.log(`ejected ${arg}${body.told ? ' — their server was told' : ' (no inbox on record; not told)'}`);
+    console.log('they are muted too, so a re-follow rejoins but nothing of theirs is carried');
+  } else if (cmd === 'retract') {
+    console.log(`retracted ${arg} — Undo sent to ${body.inboxes} inbox(es)`);
+  } else if (cmd === 'review') {
+    console.log(`review is now ${body.review ? 'ON — nothing is carried until approved' : 'off'}`);
   } else {
-    console.log(`${cmd}d ${actor} — ${body.actors.length} muted member(s)`);
+    console.log(`${cmd}d ${arg} — ${body.pending} still held`);
   }
 } else {
   console.log('usage: activitypod <setup|start|stop|status|passwd|tokens|revoke-credential|install-service'
-    + '|members|announced|mute|unmute> [--flags]');
+    + '> [--flags]');
+  console.log('  group: members | eject <actor> | mute <actor> | unmute <actor>');
+  console.log('         announced | retract <note> | review <on|off> | pending | approve <note> | decline <note>');
   process.exit(cmd ? 2 : 0);
 }

@@ -49,7 +49,10 @@ An inbound `Announce` is never re-announced, a re-delivered `Create` is carried 
 and the author's own inbox is dropped from the fan-out — unless it is a shared inbox,
 which carries co-tenants who would otherwise be deprived.
 
-`activitypod members | announced | mute | unmute` are the group's operator commands.
+`activitypod members | eject | mute | unmute | announced | retract | review | pending |
+approve | decline` are the group's operator commands. `eject` sends a `Reject` so the
+member's server ends the relationship, and mutes them, since `onFollow` still
+auto-accepts and a bare removal would be undone by one re-follow.
 `profiles` shows the kind only for a *running* identity: it lives in pod state, and a
 stopped identity is shown as `—` rather than guessed at.
 

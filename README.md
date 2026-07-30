@@ -4,6 +4,11 @@
 
 `activitypod-js` is a standalone, single-actor ActivityPub agent that stores your data on a Solid Pod and runs on any device that supports node. The agent can be moved from one device to another without any change to your account. This project is inspired by the fantastic [Activitypods project](https://github.com/activitypods) and is meant to be a light weight alternative rather than a replacement.
 
+<!-- CLAUDE 2026-07-30 — added; drop it if the Groups section below is enough -->
+That actor can be a person or a [group](#groups) — a group lives on its own pod
+and carries its members' posts to everyone following it.
+<!-- /CLAUDE -->
+
 ## Installation
 
 In a terminal :
@@ -57,6 +62,44 @@ bin/activitypod.mjs tokens                  # list client logins; --revoke <pref
 bin/activitypod.mjs revoke-credential --email you@example.org   # kill this machine's pod credential
 ```
 
+
+<!-- CLAUDE 2026-07-30 — new section; reword freely, delete these two comment lines when done -->
+## Groups
+
+A group is an actor other people follow, rather than one that follows people.
+Post to it and it re-announces to everyone following it, so members see each
+other without having to follow each other. Joining is following, leaving is
+unfollowing, and remote Mastodon users can join exactly as pod owners do — they
+need no pod of their own.
+
+A group needs a pod of its own. A handle is answered at the root of its host, so
+a person and a group cannot share one pod without fighting over the same address:
+
+```
+bin/activitypod.mjs setup --group --profile mygroup --new-account
+```
+
+Run it like any other identity — `start`, `stop`, `status`, `park`, `retire` —
+on its own port. It serves no client UI, because there is no timeline for a
+human to read, which also means it has no login and no client tokens.
+
+Only members are amplified. Anyone can post into a public inbox, so a post is
+carried only when its author already follows the group. That is both the
+anti-spam rule and what makes joining mean something.
+
+```
+bin/activitypod.mjs members                 # who has joined
+bin/activitypod.mjs announced               # what the group has carried
+bin/activitypod.mjs mute <actor-url>        # stop carrying someone (undo: unmute)
+bin/activitypod.mjs eject <actor-url>       # remove them, and tell their server
+bin/activitypod.mjs retract <note-url>      # unsay something already carried
+bin/activitypod.mjs review on               # hold every post until you approve it
+bin/activitypod.mjs pending                 # what is waiting; approve / decline
+```
+
+A group can be handed on rather than abandoned: `retire --move-to <actor>` tells
+every follower to migrate, so the membership survives a change of host.
+<!-- /CLAUDE -->
 
 ## Fediverse Clients
 The UI is the bundled [Phanpy](https://github.com/cheeaun/phanpy)

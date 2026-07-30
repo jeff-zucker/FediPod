@@ -80,14 +80,11 @@ per request, not at mount time, because `startAdmin` runs before `connect`.
 
 ## Open, and known
 
-- **A member's post is `kind: 'mention'`, not `'timeline'`.** `ingestNote` decides
-  `followed` from the *following* list and a group follows nobody, so nothing is written
-  to `fediverse/timeline/` — there is no RDF community archive. The statuses index does
-  hold them, which is what amplification and dedupe use, so nothing is broken.
-- **Same cause: every member post fires a `mention` notification** on the group. Nothing
-  reads them, but `notifications.json` fills.
-- Both are fixed by teaching `ingestNote` that a group's members are its `followers` —
-  which changes shared ingest behaviour for persons too, so it was left alone.
+- ~~A member's post is `kind: 'mention'`, and each one raises a notification.~~ **Fixed
+  2026-07-30**: `ingestNote` now reads `followers` for a group and `following` for a
+  person, so member posts file as `timeline` and reach `fediverse/timeline/` (owner-only
+  — the operator's record, not a public archive). A stranger posting at the group is
+  still a mention, which is right: that is something the operator should see.
 - **Announces are not added to the group's outbox.** `outbox.json` holds note ids, not
   activities; boosts have never been recorded there either.
 - **Nothing has crossed the network.** The suite exercises real `startAdmin` and real
