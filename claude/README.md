@@ -7,7 +7,7 @@
 | `diagrams/group-actor.mmd` | mermaid: a group actor as a hub that many pods follow, and what travels each link. |
 | `plans/group-actor.md` | why groups are actors rather than tenants, the four hub designs that were dropped (and the CSS component that is **parked, not rejected**), and what is still open. |
 | `plans/group-moderation.md` | every lever a group host has — mute, eject, retract, post review, request-to-join — what is structurally impossible, and what is still missing. |
-| `plans/live-test.md` | the two-stage live test nothing has yet been through: local two-pod first, then public + Mastodon, with the two riskiest items called out. |
+| `plans/live-test.md` | **the standing to-do for live testing** — what is already verified (do not redo), then a checklist of what is not, with the two riskiest items marked. Also the traps already paid for, and the tear-down order. |
 | `identities.md` | one identity per home, profiles, per-actor keys, groups (`setup --group`), and the park/move/retire lifecycle with the reasoning behind each choice. |
 | `scn-incident-2026-07-29.md` | solidcommunity.net's retry-storm report, what was ours, what was not, and every change made in response. Read this before replying to their operators. |
 

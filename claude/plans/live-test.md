@@ -1,170 +1,168 @@
-# Live test: groups, end to end
+# Live test — what is left to prove
 
-Nothing in the group work has crossed a network. The suite is 240 offline checks;
-this is the list of things only a real run can tell you.
+The suite is 240-odd offline checks and it has been green through every bug found so far,
+including one that made a member unable to read its own group's posts. **Offline green
+means nothing here.** This is the list of things only a real run can settle.
 
-Two stages. Stage 1 needs no public host and no Mastodon, and catches our own bugs.
-Stage 2 is the only thing that can catch an interop bug, and two items in it are
-riskier than the rest — they are marked.
-
----
-
-## Stage 1 — local, two pods, no Mastodon
-
-Start the local CSS (subdomain-capable, on :4000):
-
-```
-~/css/pivot-4000.sh
-```
-
-Both agents need `AP_ALLOW_PRIVATE_TARGETS=1` or `lib/safefetch.mjs` refuses loopback
-targets — that guard is doing its job, this is the documented way past it for local work.
-
-```
-AP_ALLOW_PRIVATE_TARGETS=1 AP_PASSWORD=<pw> bin/activitypod.mjs setup \
-  --group --profile birds --new-account --issuer http://localhost:4000 \
-  --email birds@example.org --handle birds --pod-name birds --name "Birds" --port 8031
-
-AP_ALLOW_PRIVATE_TARGETS=1 AP_PASSWORD=<pw> bin/activitypod.mjs setup \
-  --profile mei --new-account --issuer http://localhost:4000 \
-  --email mei@example.org --handle mei --pod-name mei --name "Mei" --port 8032
-
-AP_ALLOW_PRIVATE_TARGETS=1 AP_PASSWORD=<pw> bin/activitypod.mjs setup \
-  --profile kofi --new-account --issuer http://localhost:4000 \
-  --email kofi@example.org --handle kofi --pod-name kofi --name "Kofi" --port 8033
-```
-
-`setup` ends by *starting* the agent, so each of those keeps running on its port.
-
-### What stage 1 cannot test, and the way round it
-
-**WebFinger requires https**, and fedify's `lookupWebFinger` honours that — so over
-plain-http localhost a handle never resolves. Mentions are how a member addresses a
-group, so **the deliver-to-the-group step cannot be exercised locally at all**. The log
-line is `mention @… did not resolve — left as text`.
-
-Everything downstream of delivery still can be, by putting the activity into the group's
-inbox yourself — which is exactly what a real delivery does, the inbox being public-Append:
-
-```
-curl -X POST -H 'content-type: application/ld+json' --data-binary @create.json \
-  http://finches.localhost:4000/activitypods-js/ap/inbox/
-```
-
-with `create.json` a `Create` naming the member as `actor`, the note URL as `object`, and
-the group's actor in `cc`. Then `POST /drain` on the group. Two other things that bit:
-
-- `--new-account` is **not idempotent after a crash** — the pod exists, and the retry
-  fails `pod create failed (HTTP 400): … already registered to this account`. Use
-  `--pod <url>` on the second attempt, or a fresh `--pod-name`.
-- Deleting the profile directory after the actor was published trips the key guard
-  (`this actor already publishes a signing key`). That is the guard working; use
-  `--rotate-key` or a fresh pod name.
-
-What to prove, in order:
-
-1. **The group publishes as a Group.** `bin/activitypod.mjs status --port 8031` → `kind:
-   group`, and `curl -H 'accept: application/activity+json' http://birds.localhost:4000/activitypods-js/ap/actor`
-   → `"type": "Group"`.
-2. **Joining works.** From mei (`localhost:8032`) and kofi (`localhost:8033`), follow
-   `@birds@birds.localhost:4000`. `bin/activitypod.mjs members --port 8031` lists both.
-3. **Carry.** From mei's client, post `@birds@birds.localhost:4000 hello`. The group's log
-   shows `amplified … → N inbox(es)`.
-4. **The property the whole design exists for:** kofi sees mei's post **without following
-   mei**. If only this one works, the thing works.
-5. **Threading.** kofi replies. mei should see the reply — again without following kofi.
-6. **Moderation.** `mute` mei → her next post is not carried. `unmute`. `retract` a
-   carried post → it leaves kofi's timeline. `review on` → next post is held, `pending`
-   lists it, `approve` releases it. `joins approve` → a fresh follow from a fourth
-   identity waits in `requests` until `admit`.
-7. **Delete and update.** Delete one of mei's posts from her client → the group retracts
-   and kofi drops it. Edit one → kofi's copy changes.
+Updated 2026-07-30, after the first live run.
 
 ---
 
-## Stage 2 — public, with Mastodon
+## Already verified — do not redo
 
-Needs a subdomain-capable public pod host (teamid.live has worked) and a Mastodon account.
-**Never dk's pod** — two agents draining one inbox is a race.
+Locally, against `~/css` on :4000, with a group and two throwaway member pods:
 
-Same `setup` lines without the localhost issuer and without `AP_ALLOW_PRIVATE_TARGETS`.
+- `setup` completes; the request ceiling defers instead of dying; the wire face is
+  published once, not twice.
+- The group publishes `type: Group`, `endpoints.sharedInbox`, and a resolving WebFinger.
+- Members follow and are auto-accepted; `members` lists them.
+- The `Create` is dereferenceable at `<note>-create` — **the FEP-1b12 fix, confirmed**.
+- The group carries a member's post: filed as `timeline`, not a stranger's mention, and
+  amplified to exactly the right inboxes with the author's own solo inbox dropped.
+- A member ingests the wrapped `Announce` and files it under `via: <group>`.
+- **The property the whole design exists for: a member sees another member's post while
+  following nothing but the group.**
+- The lease refuses a second agent; `--takeover` reclaims one whose holder crashed;
+  `ensureActorPublished` repairs a half-finished publish.
 
-### The two that are riskiest — do these first
-
-**Does the wrapped Announce render in Mastodon?** The group now emits
-`Announce{Create{Note}}` per FEP-1b12 rather than `Announce{note-url}`. Mastodon resolves
-an Announce's object by *dereferencing its id*, which is why the `Create` is published as
-its own document — see `group-actor.md`, "The wire shape". If the group logs `amplified`
-and nothing appears in Mastodon, this is what failed. Check:
-
-```
-curl -H 'accept: application/activity+json' <note-url>-create
-```
-
-It must return a `Create` whose `id` is exactly the URL you asked for.
-
-**Does a reply thread back?** Reply from Mastodon to a carried post. This rests on
-Mastodon copying the group's `Mention` into your reply — reasoned from how Mastodon
-composes replies, never observed. The group's log should show the reply ingested and
-amplified, and the other member should see it.
-
-Then send one more reply with the `@birds@…` **deleted from the text**. That one *should*
-fail to thread: it is the known residue, and seeing the boundary is worth the thirty
-seconds.
-
-### Then
-
-- Mastodon renders the group as a **Group**, not a person.
-- `describe --summary "…" --icon <url>` → bio and avatar on the profile.
-- `joins approve` → Mastodon offers "Request to follow".
-- `eject <actor>` → Mastodon shows you no longer follow it.
-- Delete a post from Mastodon → the group retracts; members drop it.
-- Edit a post in Mastodon → members' copies update. Change your Mastodon display name →
-  the cached profile refreshes.
-- `curl localhost:8031/api/v1/instance` → 404, while `/status` still answers.
-
-**Mastodon caches actor documents hard.** `manuallyApprovesFollowers`, the icon and the
-summary may not show until it refetches. That is Mastodon, not us; `publish-profile` on
-our side cannot force their cache.
+Publicly, on `solo.teamid.live`: the actor publishes with `endpoints.sharedInbox`, Phanpy
+logs in (so the `/oauth/token` change did not break client login), and a post appears in
+both the home timeline and the profile view.
 
 ---
 
-## Where to look when something does not work
+## A. With the agent you already have
+
+`solo` on :8041, plus your Mastodon account. Nothing to set up.
+
+- [ ] **Mentions resolve.** Post `hello @jeff_zucker@mastodon.social` — note the
+      **underscore**; `jeff-zucker` does not exist and the first attempt failed on that.
+      Three things must all hold: it renders as a link rather than plain text, the note
+      carries a `tag` and the actor in `cc`, and Mastodon notifies you.
+- [ ] **The replies collection fills.** Reply from Mastodon, then fetch
+      `<note-url>-replies` — your reply should be in `items`.
+- [ ] **Inbound `Delete`.** Follow a Mastodon account, get a post of theirs into your
+      timeline, have them delete it. It should vanish from yours. *Never worked before
+      today.*
+- [ ] **Inbound `Update`.** The same account edits a post → your copy changes. Then they
+      change display name or avatar → your cached copy refreshes.
+- [ ] **A plain boost still ingests.** Have a Mastodon account boost one of your posts.
+      A regression check: the receiver was taught to unwrap *wrapped* Announces and must
+      still accept ordinary ones.
+- [ ] **Boosting out still works.** Boost something from Phanpy.
+- [ ] **`describe`.** `describe --summary "…" --icon <url>` → both appear on the actor,
+      then on your Mastodon view of it. Mastodon caches hard; give it time.
+- [ ] **Live updates from the named host.** Browsing `http://solo.localhost:8041`, a new
+      status should arrive without a refresh. This is what the CSP fix was for — before
+      it, the page loaded and the socket was silently blocked.
+
+### One judgement call, not a pass/fail
+
+- [ ] Reply to a thread and **delete one of the prefilled `@handles`** before sending.
+      Check whether that person is still notified.
+
+      They probably will be: replies now carry the parent's mentions forward so a trimmed
+      reply cannot fall out of a group thread. Right for a group. **Possibly wrong for a
+      person** — Mastodon treats removing a mention as "do not notify". If it bothers you,
+      the fix is to carry forward only mentions of `Group` actors.
+
+---
+
+## B. Needs a group and two members on public pods
+
+**Nothing in this section has ever run against Mastodon.** Two items are riskier than
+everything else in this document.
+
+Set up three identities on a subdomain-capable host — teamid.live works, scn is down.
+Replace `YOUR-EMAIL`; everything else is literal.
+
+```
+bin/activitypod.mjs setup --group --profile finches --new-account --issuer https://teamid.live --email YOUR-EMAIL --handle finches --pod-name finches --name "Finches" --port 8031
+```
+
+Then the same twice without `--group`, for two members on 8032 and 8033. Add
+`AP_ALLOWED_HOSTS=<name>.localhost:<port>` on `start` and browse each at its own name, or
+the clients are hard to tell apart.
+
+- [ ] **⚠ Does the wrapped `Announce` render in Mastodon?** Follow the group, have a
+      member post `@finches@finches.teamid.live hello`, and see whether it appears in your
+      Mastodon timeline as a boost by the group. If the group logs `amplified` and Mastodon
+      shows nothing, the FEP-1b12 change is the cause. Check that
+      `curl -H 'accept: application/activity+json' <note-url>-create` returns a `Create`
+      whose `id` is exactly that URL.
+- [ ] **⚠ Does a reply thread back?** Reply from Mastodon; the other member should see it
+      while following only the group. This rests on Mastodon copying the group's mention
+      into your reply — reasoned from its source, never observed. **The single least
+      certain claim in the design.**
+- [ ] **A reply that lost the mention still threads.** Reply again with `@finches@…`
+      deleted from the text. It should *still* be carried, because a group accepts replies
+      to anything it holds.
+- [ ] Mastodon renders the group as a **Group**, not a person.
+- [ ] `joins approve` → Mastodon offers "Request to follow"; `requests`, then `admit`.
+- [ ] `mute <actor>` → their next post is not carried. `unmute`.
+- [ ] `review on` → the next post is held; `pending` lists it; `approve` releases it.
+- [ ] `retract <note-url>` → the boost disappears from Mastodon.
+- [ ] `eject <actor>` → Mastodon shows you no longer follow the group.
+- [ ] A member deletes a carried post → the group retracts it.
+
+---
+
+## C. Lifecycle — destructive, do last
+
+- [ ] `park` then `revive`.
+- [ ] `rotate-key` — the actor republishes with the new key and delivery keeps working.
+- [ ] `retire` on the person → Tombstone with `formerType: Person`.
+- [ ] `retire` on the group → Tombstone with `formerType: Group`. *Fixed today, unverified.*
+
+---
+
+## Traps already paid for
+
+- **WebFinger needs https.** Over plain-http localhost a handle never resolves, so
+  mentions do not — and mentions are how a member addresses a group. Sections A and B are
+  therefore public-only. To exercise carry locally, POST the `Create` into the group's
+  inbox yourself (it is public-Append) and `POST /drain`.
+- **`--new-account` after a crash.** Fixed today, but if it recurs: the pod exists and the
+  retry says "already registered to this account". Use `--pod <url>` or a fresh
+  `--pod-name`.
+- **Deleting a profile directory after the actor was published** trips the key guard. That
+  is the guard working — `--rotate-key`, or a fresh pod name.
+- **A crashed `setup` leaves the lease held.** The next `start` is a read-only viewer for
+  the full 300 s TTL unless you pass `--takeover`.
+- **The instance title reads `activitypod-js` until the agent finishes connecting.** Not a
+  bug; wait rather than believing it.
+- **Mastodon caches actor documents hard** — `manuallyApprovesFollowers`, `icon` and
+  `summary` may lag. Nothing on our side can force a refetch.
+
+## Where to look
 
 - `~/.activitypod/profiles/<name>/agent.log` — the instrument for everything. `unhandled`
   lines are the Mastodon-facade punch list.
 - `bin/activitypod.mjs deadletter --port <p>` — rejected inbound items **with the reason**.
-  Usually the fastest answer to "why did that not arrive". A reply that reached us and was
-  refused shows here; a reply that never reached us shows nothing, and that distinction is
-  the whole diagnosis.
-- `bin/activitypod.mjs status --port <p>` — `podRequests` is what a pod operator would see
-  in their access log.
+  The distinction that matters most: a reply that arrived and was refused appears here; a
+  reply that never arrived shows nothing, and that is the whole diagnosis.
+- `bin/activitypod.mjs status --port <p>` — `podRequests` is what a pod operator sees in
+  their access log.
 
 ## Tear-down
 
 **Retire BEFORE deleting anything local. This order is not a preference.** `retire` needs
 the credential and the signing key; delete the profile directory first and the actor can
 never be retired, parked or moved again — it is stranded as a live-looking document nobody
-can speak for. Four local throwaways were orphaned that way on 2026-07-30. Locally that is
-free; on a public host it means the only way out is deleting the pod through the provider's
-dashboard.
+can speak for. Four local throwaways were orphaned that way on 2026-07-30.
 
-So:
-
-1. `bin/activitypod.mjs retire --profile <name>` — Delete to every follower, Tombstone left
-   in place of the actor. Irreversible, and it asks.
+1. `bin/activitypod.mjs retire --profile <name>` — Delete to every follower, Tombstone in
+   place of the actor. Irreversible, and it asks.
 2. Only then remove `~/.activitypod/profiles/<name>/`.
 3. Then delete the pod or account with the provider.
 
-Two things worth knowing before you rely on step 1:
+Two things worth knowing before relying on step 1:
 
-- **The follow graph outlives the agent.** Stopping an agent stops nothing inbound: anyone
-  who follows the actor keeps delivering into its inbox, and while the pod is unreachable
-  those turn into a week of retries. If the follower is an account you control, removing
-  the actor from *your* followers list stops it at source immediately and needs nothing
-  from the pod — which is faster than waiting for the pod to come back so you can retire.
-- **Retiring is only worth it if someone is following.** With zero followers the Delete
-  reaches nobody and the Tombstone is the whole benefit; deleting the pod achieves the same
-  thing a beat later.
+- **The follow graph outlives the agent.** Stopping an agent stops nothing inbound. If the
+  follower is an account you control, removing the actor from *your* followers stops
+  delivery immediately and needs nothing from the pod — faster than waiting for the pod to
+  come back so you can retire.
+- **Retiring is only worth it if someone is following.** With no followers the Delete
+  reaches nobody and the Tombstone is the whole benefit.
 
 `identities.md` has the park/retire/move matrix.
