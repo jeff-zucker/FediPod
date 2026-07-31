@@ -39,7 +39,7 @@ async function load() {
     $('fatal').hidden = false;
     $('fatal').textContent = 'This agent has no identity yet.';
     const a = document.createElement('a');
-    a.href = '/setup/';
+    a.href = '/admin/setup/';
     a.textContent = ' Set it up.';
     $('fatal').appendChild(a);
     return;

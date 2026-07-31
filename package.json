@@ -9,10 +9,11 @@
     "activitypod": "bin/activitypod.mjs"
   },
   "scripts": {
-    "start": "node run-agent.mjs",
+    "start": "node bin/activitypod.mjs up",
     "test": "node claude/smoke-tests/agent-smoke.mjs && node scripts/verify-ui.mjs",
     "verify-ui": "node scripts/verify-ui.mjs",
-    "audit": "npm audit --omit=dev"
+    "audit": "npm audit --omit=dev",
+    "agent": "node run-agent.mjs"
   },
   "dependencies": {
     "@fedify/fedify": "^1.9.0",

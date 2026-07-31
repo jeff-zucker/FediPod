@@ -76,10 +76,17 @@ silently, and republishes only when a wire key changed.
 
 ## The pages
 
-`web/setup/` and `web/admin/`, served at `/setup/` and `/admin/`. Not `ui/`:
-that is documented as the drop-in mount for third-party client dists, and
-`ui/setup/` would shadow the page — and the group relaxation needs a prefix
-nobody is invited to write into.
+`web/admin/`, served at `/admin/`: the record at `/admin/`, first-run setup at
+`/admin/setup/`, and room for the rest — group management next. Moved under one
+mount on 2026-07-31, because setup is one admin section rather than a peer of
+the whole admin surface. The JSON API stayed flat (`/setup/state`,
+`POST /setup`, beside `/status` and `/config`), which is how the rest of the
+admin API already reads; nesting it would put `POST /admin/setup` one slash
+from the page at `/admin/setup/`.
+
+Not `ui/`: that is documented as the drop-in mount for third-party client
+dists, so a dist named `ui/admin/` would shadow the page — and the group
+relaxation needs a prefix nobody is invited to write into.
 
 Inline `<style>`, external `<script src>`. The CSP is `script-src 'self'` plus
 hashes taken only from `phanpy/dist/index.html`, so an inline script on our own
@@ -102,6 +109,35 @@ wrong and Jeff said so within the hour: `start` is what supervisors run and
 what fires on every restart, so a browser window arrives unasked, repeatedly,
 over whatever you were doing. `--open` is the opt-in. `setup` opens one because
 that is the whole point of `setup`.
+
+## `npm start` — added 2026-07-31
+
+`activitypod up` is the one command, and `npm start` runs it. It is a launcher,
+not the agent: pick a port, spawn `run-agent.mjs` **detached**, wait for it to
+answer, open the browser, print the URL, exit. Logs already go to
+`AP_HOME/agent.log` and `startAdmin` writes the pidfile after listen, so `stop`
+works on it unchanged.
+
+Two decisions worth keeping:
+
+- **"Occupied" means "will not bind", not "does not answer HTTP."** The old
+  probe in `start` asks `GET /status`, which only sees things that speak HTTP
+  *and* reply — a squatter holding the port silently reads as free, and the
+  agent then dies on EADDRINUSE. `up` binds a `net` server to find out, and only
+  asks `/status` to answer the different question of whether what is there is
+  *ours*.
+- **Walking the range is a step, not a branch.** It always ends in a bind, so
+  there is no error path: an occupied preferred port simply means the next one,
+  recorded so `stop`/`status` and the next run agree. A configured agent's port
+  is a preference too — moving it costs a Phanpy login and nothing more, which
+  is far cheaper than refusing to start.
+
+Where it opens is a separate question from which port it got: no credential →
+`/admin/setup/`; otherwise the agent's own origin, where `/` already routes to
+the client (or to `/admin/` for a group). There is a TOCTOU gap between the bind
+probe and the child's own bind; the window is milliseconds and the child already
+exits with a clear message, so it is accepted rather than passing a pre-bound
+socket down.
 
 ## Known gaps
 

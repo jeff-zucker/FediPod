@@ -1,6 +1,14 @@
 #!/usr/bin/env node
 // activitypod.mjs — CLI for the standalone pod-stored ActivityPub actor.
 //
+//   npm start   (= activitypod up)
+//     The one command. Finds a port that BINDS — starting from the recorded
+//     one, or 8030 — puts the agent behind it detached (logging to
+//     AP_HOME/agent.log, stoppable by pidfile), and opens the browser where
+//     there is something to do: /admin/setup/ when there is no identity yet,
+//     the client when there is. Already running? It says so and opens that.
+//     --no-open leaves the browser alone; --port names a starting port.
+//
 //   activitypod setup
 //     Asks two things at the terminal — the handle, which is permanent and
 //     names the agent's own origin, and the port — then starts serving and
@@ -51,6 +59,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import net from 'node:net';
 import readline from 'node:readline';
 import { spawn } from 'node:child_process';
 
@@ -111,6 +120,34 @@ function ask(prompt, dflt = '') {        // question would drop buffered input
 }
 function endAsking() { sharedRl?.close(); sharedRl = null; }
 
+// "Occupied" means "cannot be bound", not "does not answer HTTP": something
+// holding a port without speaking HTTP reads as free to a GET, and then the
+// agent dies on EADDRINUSE.
+function portFree(port) {
+  return new Promise((resolve) => {
+    const probe = net.createServer();
+    probe.once('error', () => resolve(false));
+    probe.once('listening', () => probe.close(() => resolve(true)));
+    probe.listen(port, '127.0.0.1');
+  });
+}
+
+// The first port from `first` upward that binds. Walking always ends in one,
+// so this is a step rather than a condition.
+async function freePortFrom(first, span = 50) {
+  for (let p = first; p < first + span; p++) if (await portFree(p)) return p;
+  throw new Error(`no free port between ${first} and ${first + span}`);
+}
+
+// Whatever is on the port — is it one of ours?
+async function agentOn(port) {
+  try {
+    const res = await fetch(`http://localhost:${port}/status`, { signal: AbortSignal.timeout(2000) });
+    const body = await res.json();
+    return typeof body?.configured === 'boolean' ? body : null;
+  } catch { return null; }
+}
+
 function openBrowser(url) {
   try {
     const win = process.platform === 'win32';
@@ -155,12 +192,12 @@ function refuseExistingIdentity() {
   console.error('');
   console.error('If a setup died half-way, do NOT re-run it — the credential it already');
   console.error('minted cannot be minted twice. Run `bin/activitypod.mjs start` and');
-  console.error('finish at /setup/ in the browser.');
+  console.error('finish at /admin/setup/ in the browser.');
   process.exit(2);
 }
 
 // Ask the handle (permanent, and it names the origin) and the port, start
-// serving, and hand over to the page at /setup/. Nothing is created here: the
+// serving, and hand over to the page at /admin/setup/. Nothing is created here: the
 // agent's own POST /setup does all of it, so a closed tab cannot lose a
 // credential that only exists in an HTTP response.
 async function runBrowserSetup() {
@@ -205,7 +242,60 @@ async function runBrowserSetup() {
   openBrowser(named || plain);
 }
 
-if (cmd === 'setup' && process.stdin.isTTY && !has('cli')
+// `npm start`. One command that does the obvious thing: find a port that
+// binds, put the agent behind it, and open the browser where there is
+// something to do — the setup form when there is no identity yet, the client
+// when there is. Detached, because you asked for an agent, not a terminal
+// that is now busy: it logs to AP_HOME/agent.log and `stop` finds it by pidfile.
+if (cmd === 'up') {
+  const preferred = Number(flag('port', process.env.AP_PORT || recordedPort() || 8030));
+  const configured = fs.existsSync(path.join(HOME, 'credential.json'));
+  const { hostLabel } = await import(new URL('../lib/guard.mjs', import.meta.url));
+
+  let port = preferred;
+  let already = null;
+  if (!await portFree(preferred)) {
+    already = await agentOn(preferred);
+    // Ours already — nothing to start. Anything else is simply not this port;
+    // walking on is what "occupied" has always meant here.
+    if (!already) port = await freePortFrom(preferred + 1);
+  }
+
+  const label = hostLabel(recordedAgent().handle);
+  const url = configured
+    ? (label ? `http://${label}.localhost:${port}/` : `http://localhost:${port}/`)
+    : `http://localhost:${port}/admin/setup/`;
+
+  if (already) {
+    console.log(`already running on port ${port} — ${url}`);
+  } else {
+    recordAgent({ port });
+    const child = spawn(process.execPath, [new URL('../run-agent.mjs', import.meta.url).pathname], {
+      detached: true, stdio: 'ignore',
+      env: { ...process.env, AP_HOME: HOME, AP_PORT: String(port) },
+    });
+    child.on('error', (e) => { console.error(`could not start the agent: ${e.message}`); process.exit(1); });
+    child.unref();
+    // Wait for it to answer before pointing a browser at it, or the first
+    // load races the listen and shows a connection error.
+    let up = false;
+    for (let i = 0; i < 60 && !up; i++) {
+      await new Promise(r => setTimeout(r, 250));
+      up = !!await agentOn(port);
+    }
+    if (!up) {
+      console.error(`the agent did not come up on port ${port} — see ${path.join(HOME, 'agent.log')}`);
+      process.exit(1);
+    }
+    console.log(`agent running on port ${port} (pid in ${path.join(HOME, 'agent.pid')})`);
+    if (port !== preferred) console.log(`port ${preferred} was taken, so it moved to ${port}`);
+  }
+  console.log(`\n  ${url}\n`);
+  console.log(configured ? 'stop it with:  bin/activitypod.mjs stop'
+    : 'setup continues in the browser. Stop it with:  bin/activitypod.mjs stop');
+  if (!has('no-open')) openBrowser(url);
+  process.exit(0);
+} else if (cmd === 'setup' && process.stdin.isTTY && !has('cli')
     && !IDENTITY_FLAGS.some(f => args.includes('--' + f))) {
   refuseExistingIdentity();
   await runBrowserSetup();

@@ -25,7 +25,26 @@ You only have to do setup once per device. From nothing — no fediverse account
 bin/activitypod.mjs setup
 ```
 
+<!-- CLAUDE 2026-07-31 — added: npm start is now the one command -->
+### Or just: `npm start`
+
+```
+npm start
+```
+
+That is the whole thing. It finds a port that is actually free — starting at
+8030, walking up past whatever else is on your machine — starts the agent in
+the background, and opens your browser at the page you need: the setup form the
+first time, your client every time after. It logs to `~/.activitypod/agent.log`
+and `bin/activitypod.mjs stop` stops it. Run it twice and it just tells you it
+is already running.
+
+`--no-open` if you would rather it left your browser alone.
+<!-- /CLAUDE -->
+
 <!-- CLAUDE 2026-07-30 — rewritten: setup now asks two things and finishes in the browser -->
+### Or from the terminal
+
 The terminal asks two things — your **handle**, which is the name in your
 address and is permanent, and the **port** — and then opens your browser:
 
@@ -62,7 +81,7 @@ bin/activitypod.mjs setup --pod https://you.solidcommunity.net/ --email you@exam
 
 **If a setup dies part-way through, do not re-run it.** The credential a Solid
 server mints is shown once and cannot be minted again, so a second run would
-orphan the first. Run `bin/activitypod.mjs start` and finish at `/setup/` in
+orphan the first. Run `bin/activitypod.mjs start` and finish at `/admin/setup/` in
 the browser: it picks up from the credential it already has, and does not ask
 for your password again.
 <!-- /CLAUDE -->
@@ -119,7 +138,8 @@ Stop the agent first. It copies both trees and checks they arrived before it
 repoints anything, and it leaves the old copy where it was for you to delete.
 
 Everything about the actor that can be changed is at
-`http://localhost:8030/admin/` — display name, bio, avatar (saving republishes
+`http://localhost:8030/admin/` — one surface, with first-run setup at
+`/admin/setup/` and room for the rest — display name, bio, avatar (saving republishes
 the actor document, so other servers learn them), the agent's own UI password,
 and republish / drain / log / dead letters. The handle, the pod, the identity
 provider and person-vs-group are not editable: they are what the actor *is*,
@@ -191,8 +211,8 @@ human to read, which also means it has no login and no client tokens.
 <!-- CLAUDE 2026-07-30 — added: a group serves its own two pages, and only those -->
 A group does serve its own two pages. `http://localhost:<port>/` is its console
 at `/admin/` — members, join requests, the review queue, what it has carried,
-and every moderation action below as a button — and `/setup/` is where it was
-created in the first place. That is all it serves: no Mastodon client, no
+and every moderation action below as a button — and `/admin/setup/` is where it
+was created in the first place. That is all it serves: no Mastodon client, no
 `/api/*`, no `/oauth/*`, no tokens, no UI password. The console reaches exactly
 the same loopback routes the commands below already reach, so it grants nobody
 any authority they did not have; it is a different client, not a wider door.

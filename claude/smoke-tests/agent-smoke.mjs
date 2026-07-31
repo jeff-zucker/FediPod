@@ -108,7 +108,7 @@ if (up) {
   // Unconfigured, `/` is the setup page, not a client with nothing to show.
   // (A CONFIGURED agent still gets Phanpy at `/` — asserted in §14.)
   const bare = await fetch(`http://127.0.0.1:${PORT}/`, { headers: gh, redirect: 'manual' });
-  check(bare.status === 302 && bare.headers.get('location') === '/setup/',
+  check(bare.status === 302 && bare.headers.get('location') === '/admin/setup/',
     `/ sends an unconfigured agent to setup (${bare.status} → ${bare.headers.get('location')})`);
   const ui = await fetch(`http://127.0.0.1:${PORT}/`, { headers: gh });
   const uiBody = await ui.text();
@@ -2586,7 +2586,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   check(groupRoot.status === 302 && groupRoot.headers.get('location') === '/admin/',
     `a group's bare URL is its console, not a timeline (${groupRoot.status})`);
   const groupAdmin = await g('/admin/');
-  const groupSetup = await g('/setup/');
+  const groupSetup = await g('/admin/setup/');
   check(groupAdmin.status === 200 && groupSetup.status === 200,
     `a group serves its own two pages (${groupAdmin.status}, ${groupSetup.status})`);
   const groupCfg = await gjson('/config');
@@ -2735,10 +2735,10 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
 // --- 12. the setup page: served, jailed, and inline-script free ---
 {
   const gh = { 'x-dk-token': TOKEN };
-  const page = await fetch(`http://127.0.0.1:${PORT}/setup/`, { headers: gh });
+  const page = await fetch(`http://127.0.0.1:${PORT}/admin/setup/`, { headers: gh });
   const html = await page.text();
   check(page.status === 200 && /text\/html/.test(page.headers.get('content-type') || ''),
-    `/setup/ is served (${page.status})`);
+    `/admin/setup/ is served (${page.status})`);
   const csp = page.headers.get('content-security-policy') || '';
   check(/script-src [^;]*'self'/.test(csp) && !/script-src [^;]*'unsafe-inline'/.test(csp),
     'its CSP allows no inline script');
@@ -2748,8 +2748,8 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   check(/<script src=/.test(html) && !/<script(?![^>]*\ssrc=)/.test(html),
     'and the page has none — every script it loads names its source');
 
-  const noSlash = await fetch(`http://127.0.0.1:${PORT}/setup`, { headers: gh, redirect: 'manual' });
-  check(noSlash.status === 302 && noSlash.headers.get('location') === '/setup/',
+  const noSlash = await fetch(`http://127.0.0.1:${PORT}/admin/setup`, { headers: gh, redirect: 'manual' });
+  check(noSlash.status === 302 && noSlash.headers.get('location') === '/admin/setup/',
     `a missing trailing slash is corrected, or relative asset URLs resolve one level up (${noSlash.status})`);
 
   const st = await fetch(`http://127.0.0.1:${PORT}/setup/state`, { headers: gh }).then(r => r.json());
@@ -2759,7 +2759,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   check(st.identity === null && !/secret|clientId/i.test(JSON.stringify(st)),
     'and reports no credential material');
 
-  const esc = await fetch(`http://127.0.0.1:${PORT}/setup/..%2f..%2fpackage.json`, { headers: gh });
+  const esc = await fetch(`http://127.0.0.1:${PORT}/admin/..%2f..%2fpackage.json`, { headers: gh });
   check(esc.status === 403 || esc.status === 404, `the page directory is jailed (${esc.status})`);
   const admin = await fetch(`http://127.0.0.1:${PORT}/admin/`, { headers: gh });
   check(admin.status === 200, `/admin/ is served from the same place (${admin.status})`);
@@ -3290,6 +3290,53 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
 
   fs.rmSync(SHOME15, { recursive: true, force: true });
   privatePod.close();
+}
+
+// --- 16. `npm start`: find a port that binds, detach, open the right page ---
+{
+  const { execFile } = await import('node:child_process');
+  const { default: net16 } = await import('node:net');
+  const homes = [];
+  const mkHome = (tag) => { const h = fs.mkdtempSync(`/tmp/activitypod-up-${tag}-`); homes.push(h); return h; };
+  const run = (home, args) => new Promise((resolve) => {
+    execFile(process.execPath, [path.join(root, 'bin/activitypod.mjs'), ...args],
+      { env: { ...process.env, AP_HOME: home } },
+      (err, stdout, stderr) => resolve({ ok: !err, out: String(stdout) + String(stderr) }));
+  });
+
+  try {
+    const UHOME = mkHome('fresh');
+    const up1 = await run(UHOME, ['up', '--no-open', '--port', '18801']);
+    check(up1.ok && /admin\/setup\//.test(up1.out) && /port 18801/.test(up1.out),
+      'with no identity yet, it opens the setup page');
+    check(JSON.parse(fs.readFileSync(path.join(UHOME, 'agent.json'), 'utf8')).port === 18801
+      && fs.existsSync(path.join(UHOME, 'agent.pid')),
+      'records the port it settled on, and is detached but findable by pidfile');
+
+    const up2 = await run(UHOME, ['up', '--no-open', '--port', '18801']);
+    check(up2.ok && /already running/.test(up2.out), 'running it again starts nothing second');
+
+    // A squatter that holds the port and speaks no HTTP — the case a
+    // GET /status probe reads as free, after which the agent dies on EADDRINUSE.
+    const squatter = net16.createServer(s => s.destroy());
+    await new Promise(r => squatter.listen(18803, '127.0.0.1', r));
+    const up3 = await run(mkHome('taken'), ['up', '--no-open', '--port', '18803']);
+    squatter.close();
+    check(up3.ok && /moved to 18804/.test(up3.out),
+      `an occupied port is walked past, whatever is holding it (${up3.out.split('\n').find(l => /moved|port/.test(l)) || up3.out.slice(0, 60)})`);
+
+    const CHOME = mkHome('configured');
+    fs.writeFileSync(path.join(CHOME, 'credential.json'), JSON.stringify({
+      remotePod: 'https://x.example/', clientId: 'c', secret: 's', issuerOrigin: 'https://x.example',
+    }));
+    fs.writeFileSync(path.join(CHOME, 'agent.json'), JSON.stringify({ port: 18805, handle: 'wren' }));
+    const up4 = await run(CHOME, ['up', '--no-open']);
+    check(up4.ok && /http:\/\/wren\.localhost:18805\//.test(up4.out) && !/admin\/setup/.test(up4.out),
+      'an agent that has an identity opens its own named origin, not the form');
+  } finally {
+    for (const h of homes) await run(h, ['stop']);
+    for (const h of homes) fs.rmSync(h, { recursive: true, force: true });
+  }
 }
 
 child.kill('SIGTERM');
