@@ -1,12 +1,13 @@
-# claude/ — Claude-authored artifacts for activitypod-js
+# claude/ — Claude-authored artifacts for solid-activitypub
 
 | path | what |
 |---|---|
-| `smoke-tests/agent-smoke.mjs` | the whole test suite (240 checks): boots an unconfigured agent on a scratch `AP_HOME`, then exercises the gate, the Mastodon facade, keys and signing, the wire and pod-RDF builders, intake, the security guards, and every politeness behaviour added on 2026-07-29. `npm test` runs it. |
+| `smoke-tests/agent-smoke.mjs` | the whole test suite (250 checks): boots an unconfigured agent on a scratch `AP_HOME`, then exercises the gate, the Mastodon facade, keys and signing, the wire and pod-RDF builders, intake, the security guards, and every politeness behavior added on 2026-07-29. `npm test` runs it. |
 | `backups/` | originals of vendored files patched by hand, e.g. `phanpy-sw-2026-07-29/` (the service worker replaced by a kill-switch). |
 | `diagrams/group-actor.mmd` | mermaid: a group actor as a hub that many pods follow, and what travels each link. |
 | `plans/group-actor.md` | why groups are actors rather than tenants, the four hub designs that were dropped (and the CSS component that is **parked, not rejected**), and what is still open. |
 | `plans/group-moderation.md` | every lever a group host has — mute, eject, retract, post review, request-to-join — what is structurally impossible, and what is still missing. |
+| `plans/parked-lemmy-group-actor.md` | **parked, kept on purpose** — what it would take to interoperate with Lemmy-style communities, and why it was not attempted. |
 | `plans/live-test.md` | **the standing to-do for live testing** — what is already verified (do not redo), then a checklist of what is not, with the two riskiest items marked. Also the traps already paid for, and the tear-down order. |
 | `identities.md` | one identity per home, profiles, per-actor keys, groups (`setup --group`), and the park/move/retire lifecycle with the reasoning behind each choice. |
 | `scn-incident-2026-07-29.md` | solidcommunity.net's retry-storm report, what was ours, what was not, and every change made in response. Read this before replying to their operators. |
@@ -22,4 +23,10 @@
   rework or drop them by hand. Add alongside his prose; never silently reword it.
   (Superseded the older "suggestions go in a reply" rule on 2026-07-30; the
   standing version lives in the global CLAUDE.md.)
-- **`drafts/`** is gitignored and holds the security notes; leave it alone.
+- **`drafts/`** is gitignored and holds the security notes plus the superseded
+  architecture diagrams (`architecture.png`, `architecture2.png` — the current one
+  is `architecture.svg` at repo root); leave it alone.
+- **The project was renamed `activitypod-js` → `solid-activitypub` on 2026-07-30.**
+  Four strings still say the old name on purpose, frozen until the
+  solidcommunity.net incident is resolved — the checklist is at the end of
+  `scn-incident-2026-07-29.md`.

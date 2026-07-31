@@ -1,4 +1,4 @@
-// agent-smoke.mjs — offline smoke for activitypod-js. No network; no pod.
+// agent-smoke.mjs — offline smoke for solid-activitypub. No network; no pod.
 // From project root:  node claude/smoke-tests/agent-smoke.mjs
 //
 // 1. boots run-agent.mjs unconfigured (no credential) on a scratch AP_HOME
@@ -99,7 +99,7 @@ if (up) {
   const niDoc = await fetch(`http://127.0.0.1:${PORT}/nodeinfo/2.0`, { headers: gh });
   const niDocBody = await niDoc.json();
   check(niPtr.status === 200 && /\/nodeinfo\/2\.0$/.test(niPtrBody.links?.[0]?.href)
-    && niDoc.status === 200 && niDocBody.software?.name === 'activitypod-js'
+    && niDoc.status === 200 && niDocBody.software?.name === 'solid-activitypub'
     && niDocBody.protocols?.includes('activitypub'),
     'nodeinfo pointer + document served');
 
@@ -123,7 +123,7 @@ if (up) {
   // --- 3. facade basics ---
   const inst = await fetch(`http://127.0.0.1:${PORT}/api/v1/instance`, { headers: gh });
   const instBody = await inst.json();
-  check(inst.status === 200 && /activitypod-js/.test(instBody.version), `/api/v1/instance → 200 (got ${inst.status})`);
+  check(inst.status === 200 && /solid-activitypub/.test(instBody.version), `/api/v1/instance → 200 (got ${inst.status})`);
 
   const apps = await fetch(`http://127.0.0.1:${PORT}/api/v1/apps`, {
     method: 'POST', headers: { ...gh, 'content-type': 'application/json' },
@@ -2287,7 +2287,7 @@ const NOTE = 'https://a.example/u/ann/n/1';
 const GTAG = { type: 'Mention', href: gUrls.actor, name: '@grp@grp.example' };
 {
   // A reply that kept the group's mention is carried, as Mastodon's own
-  // reply-prefill behaviour makes the common case.
+  // reply-prefill behavior makes the common case.
   const g = groupIntake();
   const parent = gPost(MEM_A + '/n/20', MEM_A);
   const reply = {

@@ -596,7 +596,7 @@ if (cmd === 'setup') {
     } else {
       fs.mkdirSync(unitDir, { recursive: true });
       fs.writeFileSync(unit, `[Unit]
-Description=activitypod-js agent (pod-stored ActivityPub actor)
+Description=solid-activitypub agent (pod-stored ActivityPub actor)
 After=network-online.target
 
 [Service]

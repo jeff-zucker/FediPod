@@ -14,7 +14,7 @@ Updated 2026-07-30, after the first live run.
 
 # 1. Without groups
 
-A single person actor. This is the whole agent minus one behaviour, and most of what
+A single person actor. This is the whole agent minus one behavior, and most of what
 changed on 2026-07-30 lives here rather than in the group work.
 
 ## Already verified
@@ -60,7 +60,7 @@ Nothing to set up — `solo` is on :8041.
 - [ ] **`rotate-key`** — the actor republishes with the new key and delivery keeps working.
 - [ ] **`retire`** → Tombstone with `formerType: Person`. Destructive; do it last.
 
-## One judgement call, not a pass/fail
+## One judgment call, not a pass/fail
 
 - [ ] Reply to a thread and **delete one of the prefilled `@handles`** before sending.
       Check whether that person is still notified.
@@ -144,7 +144,7 @@ the clients are hard to tell apart.
   is the guard working — `--rotate-key`, or a fresh pod name.
 - **A crashed `setup` leaves the lease held.** The next `start` is a read-only viewer for
   the full 300 s TTL unless you pass `--takeover`.
-- **The instance title reads `activitypod-js` until the agent finishes connecting.** Not a
+- **The instance title reads `solid-activitypub` until the agent finishes connecting.** Not a
   bug; wait rather than believing it.
 - **Mastodon caches actor documents hard** — `manuallyApprovesFollowers`, `icon` and
   `summary` may lag. Nothing on our side can force a refetch.

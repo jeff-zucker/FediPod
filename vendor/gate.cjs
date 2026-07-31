@@ -97,7 +97,7 @@ function makeGate(token, { allowOrigins = [] } = {}) {
     if (isPublicEndpoint(req)) return false;   // public WebID / OIDC endpoints
 
     res.writeHead(401, { 'content-type': 'text/plain' });
-    res.end('activitypod-js: missing or bad token\n');
+    res.end('solid-activitypub: missing or bad token\n');
     return true;
   }
 

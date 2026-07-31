@@ -12,8 +12,8 @@ This project is inspired by the fantastic [ActivityPods project](https://github.
 In a terminal :
 
 ```
-git clone https://github.com/jeff-zucker/activitypod-js;
-cd activitypod-js;
+git clone https://github.com/jeff-zucker/solid-activitypub;
+cd solid-activitypub;
 npm install
 ```
 

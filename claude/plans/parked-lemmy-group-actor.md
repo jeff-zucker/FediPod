@@ -60,7 +60,7 @@ Lemmy, PieFed, Mbin — is the "threadiverse".
    our posting rate. Idle cost for one `Person` was tuned 115 → ~50 req/h after
    the scn incident; a Group inverts that curve. Retry and backoff discipline is
    the thing a Group stresses hardest, and it is exactly the axis we already got
-   burned on (`activitypod-js/claude/scn-incident-2026-07-29.md`).
+   burned on (`solid-activitypub/claude/scn-incident-2026-07-29.md`).
 2. **Always-on becomes a correctness requirement.** An offline `Person` misses
    its own notifications. An offline `Group` silently drops everyone else's
    posts and wakes to a delivery backlog. This conflicts head-on with the
@@ -91,4 +91,4 @@ The Group-side requirements above are from ActivityPub/Lemmy knowledge as of
 mid-2026 and should be re-checked against current Lemmy before any build. The
 characterisation of our own agent here comes from design discussion and prior
 session notes, **not** from re-reading the source — verify against
-`activitypod-js/` if this is picked up.
+`solid-activitypub/` if this is picked up.

@@ -1,4 +1,4 @@
-// run-agent.mjs — activitypod-js: a standalone single-actor ActivityPub
+// run-agent.mjs — solid-activitypub: a standalone single-actor ActivityPub
 // agent whose entire existence lives on a remote Solid pod. The pod serves
 // the public wire face (/activitypods-js/ap/), holds the RDF truth
 // (/activitypods-js/fediverse/) and the operational state

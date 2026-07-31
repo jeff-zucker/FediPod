@@ -2,6 +2,12 @@
 
 Their report: https://gist.github.com/jeswr/cad0a639deb8be70418cc8a9bf37e785
 
+> The project was renamed to **solid-activitypub** on 2026-07-30. Every
+> `activitypod-js` in this file is the name as it stood during the incident and
+> as it appears in their logs — left verbatim on purpose. The strings still
+> carrying the old name in running code are deliberate too; see
+> *TODO once scn is resolved* at the end of this file.
+
 Two client-credential identities of ours were named: `activitypod-js_b507819f…`
 and `dk-ap-agent_c871cff2…` (data-kitchen's copy). Their server was also at
 fault by their own account — lock expiry left at 6 s by a config typo, a single
@@ -80,3 +86,31 @@ cannot protect them at that scale.
 - The credential for that pod is gone (overwritten by a later setup before the
   guard existed), so parking it now needs a fresh `setup --profile scn` first.
   `~/.activitypod-scn` is already prepared with the key that actor advertises.
+
+## TODO once scn is resolved — finish the rename
+
+The 2026-07-30 rename to `solid-activitypub` deliberately skipped everything
+that identifies us **to solidcommunity.net**, so the name in their logs keeps
+matching the name in our code while the incident is open. Four lines to change,
+together, in one commit:
+
+| where | what |
+|---|---|
+| `lib/ua.mjs:16` | `USER_AGENT` — outbound requests to pods |
+| `vendor/idp-grant.cjs:142` | a **second, independent** `USER_AGENT` with the same value — this is the one on the token grants, so it is the one scn actually logged. Easy to miss; changing only `ua.mjs` leaves the grants still announcing the old name |
+| `bin/activitypod.mjs:231` | `mintCredential({ name: 'activitypod-js' })` — the source of `activitypod-js_b507819f…` in their report. Affects newly minted credentials only; existing ones keep the name they were registered under, so old pods stay as they are unless re-setup |
+| `claude/smoke-tests/agent-smoke.mjs:644` | the regex pinning the UA format — must move in the same commit or the suite goes red |
+
+Also change the repo URL inside both UA strings to
+`https://github.com/jeff-zucker/solid-activitypub`; it was left pointing at the
+old repo only because it is part of the frozen UA. Everything else already
+says `solid-activitypub` — including `nodeinfo`'s `software.name`, which is a
+**published pod document**, so any actor that has not restarted since the
+rename is still advertising the old name and needs a restart or
+`publish-profile`.
+
+One judgment call to make deliberately rather than by accident: the same
+software appearing under a new User-Agent shortly after an unresolved incident
+looks evasive to anyone watching, even though the rename is real and would have
+happened anyway. Record the date here when you do it, so the record stays
+continuous.

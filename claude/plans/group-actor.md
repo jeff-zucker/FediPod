@@ -52,7 +52,7 @@ and people attach by following it.
 ## What shipped
 
 A group is another single-actor agent — same credential, key, pod layout, publisher,
-intake, deliverer — with one behavioural difference: a post addressed to it is
+intake, deliverer — with one behavioral difference: a post addressed to it is
 announced to its followers.
 
 **The member side needed no code at all.** A member follows the group; `onAnnounce`
