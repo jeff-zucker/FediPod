@@ -88,11 +88,43 @@ media goes to the pod as published copies, other people's stays on their
 servers); the backup's destination is a deployment choice, though worth choosing
 deliberately, since that blob holds your timeline, contacts, blocklist and key.
 
+## The storage interface
+
+Added 2026-07-31. `lib/storage.mjs` is what a container is, reduced to what the
+store and the RDF tree actually do to one: **list, read, write, remove**. Two
+implementations —
+
+- `HttpStorage` — a pod, local or remote. Its `fetchImpl` carries whatever
+  authentication it needs. Container listings are parsed by rdflib, querying
+  `ldp:contains`.
+- `FileStorage` — a directory. `readdir` *is* the listing, so nothing serialises
+  a container into RDF only to parse it straight back out. Writes go to a
+  neighbouring temp file and are renamed into place, which is atomic on POSIX,
+  so no reader — and no backup — ever sees half a document. Mode 0600, and a
+  write is never retried: an EACCES will still be an EACCES in two seconds.
+
+`storageFor(base, fetchImpl)` picks by scheme: `http(s):` is a pod, anything
+else is a directory.
+
+`@solid-rest/file` was the obvious candidate and was **not** used. It is a mini
+Solid server — LDP membership triples, POST-with-slug, auxiliaries, content
+negotiation, status semantics — and all of that exists to satisfy HTTP. Nothing
+speaks HTTP to a directory here, so it would have been a full LDP implementation
+carried to perform four operations, plus a serialise-then-parse round trip on
+every load.
+
 ## Using it
 
-`privateRoot` is a container URL in `credential.json`, per-machine like
-`keysMode`. Absent means on the pod, so existing installs are untouched. Under it
-the same two trees are laid out as on the pod: `ap-state/` and `fediverse/`.
+`privateRoot` in `credential.json` is per-machine, like `keysMode`. Absent means
+on the pod, so existing installs are untouched. Under it the same two trees are
+laid out as on the pod: `ap-state/` and `fediverse/`. It may be
+
+- a **pod URL** — `http://localhost:8000/dk-pod/activitypods-js/`. dk wants this,
+  because its CSS is live whenever dk is open and writing files underneath a
+  running server goes around its lock and its metadata.
+- a **directory** — `file:///home/you/.activitypod/private/` or a bare path.
+  Nothing to install, nothing to keep running, and the store cannot be
+  unreachable.
 
 Setup asks, offering whatever pod is already answering on this machine
 (`GET /setup/local-pods` probes dk's `:8000/dk-pod/` and a server on `:4000`) and
@@ -105,12 +137,53 @@ Afterwards it is `activitypod state` to see and `activitypod state --to <url>`
 only then rewrites the pointer; the old copy is left behind on purpose. It
 refuses while an agent is answering on the port.
 
+## Parked, kept on purpose: serving the private half
+
+Parked 2026-07-31. Two ideas that only make sense together:
+
+- the agent serving its own private store as a small LDP surface on the HTTP
+  server it already runs — nothing extra to install, no second process, no port
+  to choose, and the store could never be unreachable, because its server and
+  its client would be the same process;
+- other Solid apps reading the private half there, or by pointing a CSS at the
+  directory — dk's fediverse pane, SolidOS, podz.
+
+It was attractive because it makes "your data, your apps" true of the private
+half too, and because a directory of Turtle really is a pod the moment a server
+points at it — that is exactly how `~/solid/dk-pod/` works today.
+
+Two things stopped it:
+
+- **Scope.** For our own client the surface is tiny. But the moment it is
+  advertised as a pod, it owes content negotiation, correct types, `Link:
+  rel="type"` on containers, and eventually access control — a server to own and
+  maintain, growing by expectation rather than by need.
+- **Cross-origin.** The point of serving it is that *another* app reads it, and
+  `guard.checkRequest` refuses any request whose `Origin` is not in the allowed
+  set — which is what dk's pane at `localhost:8000` would send. Opening that is a
+  security decision about the firewall that keeps visited web pages out of the
+  agent, not a plumbing detail.
+
+What parking it settles: the private half is the agent's own storage, not a
+published surface. So the on-disk layout no longer has to match what CSS expects
+(`foo$.ttl` served as `foo`), which is one fewer thing to get quietly wrong — and
+a filesystem store becomes the straightforward answer rather than a compromise.
+
+What would revive it: a deliberate read-only allowlist for one path prefix,
+and a reason better than "it would be nice" — a second app that actually wants
+to read this data.
+
 ## Known limits
 
-- The private-pod fetch does plain HTTP plus an optional `AP_STATE_TOKEN` header
-  (dk's gate). A pod with real WAC needs credentials this agent does not offer
-  yet — it fails safe, because writes 401, `commit()` returns false and the drain
-  declines to delete anything.
+- A private **pod** is reached with plain HTTP plus an optional `AP_STATE_TOKEN`
+  header (dk's gate). One with real WAC needs credentials this agent does not
+  offer yet — it fails safe, because writes 401, `commit()` returns false and the
+  drain declines to delete anything. A private **directory** has no auth question
+  at all: mode 0600, like the credential beside it.
+- Setup still only offers a pod it can find answering; pointing `privateRoot` at
+  a directory is a `credential.json` edit or `activitypod state --to`. Making the
+  directory the offered default is the thing that would let relay be the default
+  on a fresh install everywhere, and it is not done.
 - dk's local pod enforces no ACLs at all (`pivot-config/no-auth.json` swaps in
   `allow-all.json`), so the gate token and loopback binding are the whole
   boundary. And it exists only while dk runs.

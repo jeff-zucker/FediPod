@@ -471,17 +471,16 @@ if (cmd === 'setup' && process.stdin.isTTY && !has('cli')
     agent.remote = new RemotePod(cred, { log: () => {}, home: HOME });
     await agent.remote.warmup();
   }
+  const destCred = { ...cred, privateRoot: target };
   const from = agent.privateUrls(cred);
-  const fromFetch = agent.privateFetch(cred);
-  const dest = agent.privateUrls({ ...cred, privateRoot: target });
-  const destFetch = agent.privateFetch({ ...cred, privateRoot: target });
+  const dest = agent.privateUrls(destCred);
   console.log(`moving the private half\n  from ${from.state.replace(/ap-state\/$/, '')}\n  to   ${dest.state.replace(/ap-state\/$/, '')}\n`);
 
   const src = new PodStore({ log: () => {} });
-  src.attach(from.state, fromFetch);
+  src.attach(agent.privateStorage(cred, 'state'));
   await src.load();
   const dst = new PodStore({ log: (...a) => console.log('[state]', ...a) });
-  dst.attach(dest.state, destFetch);
+  dst.attach(agent.privateStorage(destCred, 'state'));
   for (const [name, value] of src.cache) dst.write(name, value);
   if (!await dst.commit()) {
     console.error('some state documents did not land — nothing was repointed, nothing was deleted');
@@ -489,8 +488,8 @@ if (cmd === 'setup' && process.stdin.isTTY && !has('cli')
   }
   console.log(`copied ${src.cache.size} state document(s)`);
 
-  const rdfFrom = new PodRdf({ base: from.fediverse, fetchImpl: fromFetch });
-  const rdfTo = new PodRdf({ base: dest.fediverse, fetchImpl: destFetch });
+  const rdfFrom = new PodRdf({ storage: agent.privateStorage(cred, 'fediverse') });
+  const rdfTo = new PodRdf({ storage: agent.privateStorage(destCred, 'fediverse') });
   let notes = 0;
   for (const doc of ['settings', 'contacts']) {
     try { await rdfTo.put(rdfTo.fedi + doc, await rdfFrom.get(rdfFrom.fedi + doc)); }
@@ -693,7 +692,8 @@ if (cmd === 'setup' && process.stdin.isTTY && !has('cli')
   if (!cred) { console.error('no credential — run setup first'); process.exit(2); }
   agent.remote = new RemotePod(cred);
   await agent.remote.warmup();
-  agent.store.attach(apUrls(cred.remotePod, cred.root).state, (u, i) => agent.remote.fetch(u, i));
+  agent.urls = apUrls(cred.remotePod, cred.root);
+  agent.store.attach(agent.privateStorage(cred, 'state'));   // honours privateRoot
   await agent.store.load();
   const recs = agent.store.read('masto-tokens.json', [])
     .map(r => (typeof r === 'string' ? { token: r, createdAt: null } : r));
@@ -758,8 +758,8 @@ if (cmd === 'setup' && process.stdin.isTTY && !has('cli')
   if (!pw) { console.error('empty password — aborted'); process.exit(2); }
   agent.remote = new RemotePod(cred);
   await agent.remote.warmup();
-  const urls = apUrls(cred.remotePod, cred.root);
-  agent.store.attach(urls.state, (u, i) => agent.remote.fetch(u, i));
+  agent.urls = apUrls(cred.remotePod, cred.root);
+  agent.store.attach(agent.privateStorage(cred, 'state'));   // honours privateRoot
   await agent.store.load();
   const config = agent.store.getConfig();
   if (!config) { console.error('pod state empty — run setup first'); process.exit(2); }

@@ -180,6 +180,9 @@ if (up) {
 
 // --- 4. keys + signing round-trip on PodStore (in-memory) ---
 const { PodStore } = await import(path.join(root, 'lib/store.mjs'));
+const { HttpStorage, FileStorage } = await import(path.join(root, 'lib/storage.mjs'));
+// Production attaches a Storage; most of these tests think in (url, fetch).
+const attachHttp = (s, base, fetchImpl) => s.attach(new HttpStorage(base, fetchImpl));
 const { resolveKeys } = await import(path.join(root, 'lib/keys.mjs'));
 const store = new PodStore({ log: () => {} });
 const keys = await resolveKeys(store);                       // no localDir → pod mode
@@ -587,7 +590,8 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
   // Container listings revalidate: unchanged inbox costs a 304, not a body.
   pod.pausedUntil = 0;
-  const ttl = '<https://p.example/in/> a <http://www.w3.org/ns/ldp#Container>. '
+  const ttl = '<https://p.example/in/> a <http://www.w3.org/ns/ldp#Container> ;'
+    + ' <http://www.w3.org/ns/ldp#contains> <https://p.example/in/one>. '
     + '<https://p.example/in/one> a <http://www.w3.org/ns/ldp#Resource>.';
   const seen = [];
   pod.session = { fetch: async (u, init) => {
@@ -607,10 +611,10 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     status, headers: { get: (h) => headers[h.toLowerCase()] ?? null },
     text: async () => body,
   });
-  const listing = '<https://p.example/st/> a <http://www.w3.org/ns/ldp#Container>. '
-    + '<https://p.example/st/config.json> a <x>.';
+  const listing = '<https://p.example/st/> a <http://www.w3.org/ns/ldp#Container> ;'
+    + ' <http://www.w3.org/ns/ldp#contains> <https://p.example/st/config.json>.';
   let containerEtag = '"c1"', docEtag = '"d1"', reqs = [];
-  store.attach('https://p.example/st/', async (url, init) => {
+  attachHttp(store, 'https://p.example/st/', async (url, init) => {
     const inm = init?.headers?.['if-none-match'] || null;
     reqs.push([url.endsWith('/') ? 'container' : 'doc', inm]);
     if (url.endsWith('/')) {
@@ -738,7 +742,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   // 403 means "no": one attempt, then stop.
   const s403 = mkStore();
   let puts403 = 0;
-  s403.attach('https://p.example/st/', async (_u, init) => {
+  attachHttp(s403, 'https://p.example/st/', async (_u, init) => {
     if (init?.method !== 'PUT') return { status: 404, headers: { get: () => null }, text: async () => '' };
     puts403++; return res(403);
   });
@@ -750,7 +754,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   const s503 = mkStore();
   const gaps = [];
   let last = Date.now(), puts503 = 0;
-  s503.attach('https://p.example/st/', async (_u, init) => {
+  attachHttp(s503, 'https://p.example/st/', async (_u, init) => {
     if (init?.method !== 'PUT') return { status: 404, headers: { get: () => null }, text: async () => '' };
     puts503++; gaps.push(Date.now() - last); last = Date.now();
     return res(503, { 'retry-after': '1' });
@@ -1111,13 +1115,13 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   const res = (status, headers = {}, body = '') => ({
     status, headers: { get: (h) => headers[h.toLowerCase()] ?? null }, text: async () => body,
   });
-  const listing = '<https://p.example/st/> a <http://www.w3.org/ns/ldp#Container>. '
-    + '<https://p.example/st/config.json> a <http://www.w3.org/ns/ldp#Resource>. '
-    + '<https://p.example/st/statuses.json> a <http://www.w3.org/ns/ldp#Resource>.';
+  const listing = '<https://p.example/st/> a <http://www.w3.org/ns/ldp#Container> ;'
+    + ' <http://www.w3.org/ns/ldp#contains> <https://p.example/st/config.json>,'
+    + ' <https://p.example/st/statuses.json>.';
   const mk = (docStatus) => {
     const store = new PodStore({ log: () => {} });
     const seen = [];
-    store.attach('https://p.example/st/', async (url) => {
+    attachHttp(store, 'https://p.example/st/', async (url) => {
       if (url.endsWith('/')) return res(200, { etag: '"c"' }, listing);
       seen.push(url);
       if (url.includes('statuses')) return res(docStatus(url));
@@ -1141,7 +1145,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   // config.json is the exception: unreadable and uncached must throw, or the
   // caller would report a working pod as "never set up".
   const noConfig = new PodStore({ log: () => {} });
-  noConfig.attach('https://p.example/st/', async (url) =>
+  attachHttp(noConfig, 'https://p.example/st/', async (url) =>
     url.endsWith('/') ? res(200, { etag: '"c"' }, listing) : res(503));
   let threw = null;
   await noConfig.load().catch(e => { threw = e.message; });
@@ -1355,30 +1359,48 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 // --- 6. pod-RDF builders via injected fetch ---
 const { PodRdf } = await import(path.join(root, 'lib/podrdf.mjs'));
 const rdfPuts = [];
+// Remembers what it was given, so a note can be read back the way it was
+// written. Asserting on the serialised TEXT is what the hand-rolled version
+// invited; with rdflib the output is correctly prefixed and abbreviated
+// (`media:p.png`, not `<https://m.example/media/p.png>`), so the thing worth
+// testing is the round trip, not the spelling.
+const FEDI = 'https://pod.example/activitypods-js/fediverse/';
+const rdfDocs = new Map();
 const rdf = new PodRdf({
-  base: 'https://pod.example/activitypods-js/fediverse/',
-  fetchImpl: async (url, init = {}) => { rdfPuts.push({ url, body: init.body }); return { status: 200, text: async () => '' }; },
+  storage: new HttpStorage(FEDI, async (url, init = {}) => {
+    if (init.method === 'PUT') {
+      rdfPuts.push({ url, body: init.body });
+      rdfDocs.set(url, init.body);
+      return { status: 201, headers: { get: () => null }, text: async () => '' };
+    }
+    const body = rdfDocs.get(url);
+    return body === undefined
+      ? { status: 404, headers: { get: () => null }, text: async () => '' }
+      : { status: 200, headers: { get: () => null }, text: async () => body };
+  }),
 });
+// A tab is in here on purpose: the hand-rolled escaper handled \\, " and \n
+// and passed tabs through raw. See claude/plans/no-regex-rdf.md.
 await rdf.writeNote('timeline', 's1', {
   noteId: 'https://m.example/n/1', actor: 'https://m.example/u/a',
-  published: '2026-07-28T00:00:00Z', content: 'say "hi"\nnewline',
+  published: '2026-07-28T00:00:00Z', content: 'say "hi"\nnew\tline',
 });
-check(rdfPuts[0].body.includes('\\"hi\\"') && rdfPuts[0].body.includes('\\n'), 'turtle literal escaping');
-check(rdfPuts[0].url === 'https://pod.example/activitypods-js/fediverse/timeline/s1',
-  `timeline path (got ${rdfPuts[0].url})`);
+check(rdfPuts[0].url === FEDI + 'timeline/s1', `timeline path (got ${rdfPuts[0].url})`);
+const back1 = await rdf.readNote(FEDI + 'timeline/s1');
+check(back1.content === 'say "hi"\nnew\tline' && back1.noteId === 'https://m.example/n/1'
+  && back1.actor === 'https://m.example/u/a' && back1.published === '2026-07-28T00:00:00Z',
+  `a note round-trips whole — quotes, newline and tab (${JSON.stringify(back1.content)})`);
+check(/\^\^xsd:dateTime/.test(rdfPuts[0].body),
+  'published keeps its dateTime datatype (rdflib takes it as the SECOND argument)');
 
 await rdf.writeNote('timeline', 's2', {
   noteId: 'https://m.example/n/2', actor: 'https://m.example/u/a', published: '2026-07-28T00:00:00Z',
   content: 'with pic', attachments: [{ url: 'https://m.example/media/p.png', mediaType: 'image/png', description: 'a "pic"' }],
 });
-check(rdfPuts[1].body.includes('as:attachment <https://m.example/media/p.png>')
-  && rdfPuts[1].body.includes('as:mediaType "image/png"'),
-  'attachments written as as:attachment + as:mediaType');
-rdf.get = async () => rdfPuts[1].body;
-const back = await rdf.readNote('https://x/n');
-check(back.attachments?.length === 1 && back.attachments[0].mediaType === 'image/png'
-  && back.attachments[0].description === 'a "pic"',
-  'attachment round-trips through readNote');
+const back = await rdf.readNote(FEDI + 'timeline/s2');
+check(back.attachments?.length === 1 && back.attachments[0].url === 'https://m.example/media/p.png'
+  && back.attachments[0].mediaType === 'image/png' && back.attachments[0].description === 'a "pic"',
+  'an attachment round-trips with its type and description');
 
 // --- 7. facade M1–M3 on a seeded in-memory PodStore, faked delivery ---
 const { MastoApi } = await import(path.join(root, 'lib/mastoapi.mjs'));
@@ -1655,12 +1677,12 @@ if (up) {
 // --- 8b3. reattaching the store to a different tree drops the old cache ---
 {
   const st = new PodStore({ log: () => {} });
-  st.attach('https://a.example/one/ap-state/', async () => new Response('', { status: 404 }));
+  attachHttp(st, 'https://a.example/one/ap-state/', async () => new Response('', { status: 404 }));
   st.setConfig({ remotePod: 'https://a.example/', handle: 'a' });
   check(st.getConfig()?.handle === 'a', 'store holds config for the tree it is attached to');
-  st.attach('https://b.example/two/ap-state/', async () => new Response('', { status: 404 }));
+  attachHttp(st, 'https://b.example/two/ap-state/', async () => new Response('', { status: 404 }));
   check(st.getConfig() === null, "a different tree does not inherit the previous tree's cache");
-  st.attach('https://b.example/two/ap-state/', async () => new Response('', { status: 404 }));
+  attachHttp(st, 'https://b.example/two/ap-state/', async () => new Response('', { status: 404 }));
   st.setConfig({ remotePod: 'https://b.example/', handle: 'b' });
   check(st.getConfig()?.handle === 'b', 're-attaching the same tree keeps its cache');
 }
@@ -3086,7 +3108,9 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
       const names = [...docs.keys()].filter(k => k.startsWith(p) && k !== p);
       if (!names.length) { res.writeHead(404); res.end(); return; }   // not created yet
       res.writeHead(200, { 'content-type': 'text/turtle' });
-      res.end(names.map(n => `<${n.slice(p.length)}>`).join(' ') + ' .\n');
+      // What a real LDP container says, so the parser has something true to read.
+      res.end('<> <http://www.w3.org/ns/ldp#contains> '
+        + names.map(n => `<${n.slice(p.length)}>`).join(', ') + ' .\n');
       return;
     }
     if (!docs.has(p)) { res.writeHead(404); res.end(); return; }
@@ -3098,7 +3122,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   const plainFetch = (u, i) => fetch(u, i);
 
   const st = new PodStore({ log: () => {} });
-  st.attach(BASE, plainFetch);
+  attachHttp(st, BASE, plainFetch);
   st.setConfig({ handle: 'x' });
   check(await st.commit() === true && docs.has('/private/ap-state/config.json'),
     'commit() says the write landed, and it really is in the pod');
@@ -3110,7 +3134,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   refuse = false;
 
   const st2 = new PodStore({ log: () => {} });
-  st2.attach(BASE, plainFetch);
+  attachHttp(st2, BASE, plainFetch);
   await st2.load();
   check(st2.getConfig()?.handle === 'x', 'a second store reads it back out of the container');
 
@@ -3123,7 +3147,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   const item = INBOX + 'a1';
   const deleted = [];
   const iStore = new PodStore({ log: () => {} });
-  iStore.attach(BASE, plainFetch);
+  attachHttp(iStore, BASE, plainFetch);
   const intake15 = new Intake({
     config: { handle: 'x' },
     urls: { inbox: INBOX, actor: 'https://remote.example/ap/actor', notes: 'https://remote.example/ap/notes/' },
@@ -3174,6 +3198,51 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   const podFetch = a15.privateUrls.call({ urls: a15.urls }, { remotePod: 'https://pod.example/' });
   check(podFetch.elsewhere === false, 'the default configuration is unchanged');
 
+  // --- the same store over a directory: no server, no round-trip ---
+  const FDIR = fs.mkdtempSync('/tmp/activitypod-files-');
+  const fstore = new PodStore({ log: () => {} });
+  fstore.attach(new FileStorage(FDIR + '/ap-state/'));
+  fstore.setConfig({ handle: 'onfiles', name: 'On Files' });
+  fstore.setBlocklist({ domains: ['bad.example'], actors: [] });
+  check(await fstore.commit() === true && fs.existsSync(path.join(FDIR, 'ap-state/config.json')),
+    'a file-backed store writes real files');
+  check(!fs.readdirSync(path.join(FDIR, 'ap-state')).some(n => n.endsWith('.tmp')),
+    'and leaves no temp file behind — a write is rename-into-place, so nothing reads half of one');
+  check((fs.statSync(path.join(FDIR, 'ap-state/config.json')).mode & 0o777) === 0o600,
+    'owner-only, like the credential beside it');
+
+  const fstore2 = new PodStore({ log: () => {} });
+  fstore2.attach(new FileStorage(FDIR + '/ap-state/'));
+  await fstore2.load();
+  check(fstore2.getConfig()?.handle === 'onfiles' && fstore2.getBlocklist().domains[0] === 'bad.example',
+    'and reads them back with no container document anywhere in sight');
+
+  const missingDir = new PodStore({ log: () => {} });
+  missingDir.attach(new FileStorage(FDIR + '/never-made/'));
+  await missingDir.load();
+  check(missingDir.getConfig() === null, 'a directory that is not there yet is "nothing", not an error');
+
+  await fstore2.remove('blocklist.json');
+  check(!fs.existsSync(path.join(FDIR, 'ap-state/blocklist.json')), 'remove() removes it');
+
+  const frdf = new PodRdf({ storage: new FileStorage(FDIR + '/fediverse/') });
+  await frdf.writeNote('posts', 'p1', {
+    noteId: 'https://m.example/n/9', actor: 'https://m.example/u/a',
+    published: '2026-07-31T00:00:00Z', content: 'on\tdisk "quoted"',
+  });
+  const fnotes = await frdf.listNotes('posts');
+  const fback = await frdf.readNote(fnotes[0]);
+  check(fnotes.length === 1 && fback.content === 'on\tdisk "quoted"'
+    && fback.noteId === 'https://m.example/n/9',
+    `notes round-trip on files too (${fnotes.length} listed)`);
+
+  let escaped = null;
+  try { await new FileStorage(FDIR + '/ap-state/').read('../../etc/passwd'); }
+  catch (e) { escaped = e.message; }
+  check(/escapes the container/.test(escaped || ''),
+    `a path may not climb out of its container (${escaped})`);
+  fs.rmSync(FDIR, { recursive: true, force: true });
+
   // --- `activitypod state --to` copies and verifies before it repoints ---
   const SHOME15 = fs.mkdtempSync('/tmp/activitypod-move-');
   const SRC = `http://127.0.0.1:${PPORT}/moveA/`;
@@ -3184,7 +3253,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
     tokenEndpoint: 'https://pod.example/.oidc/token', issuerOrigin: 'https://pod.example',
   }, null, 2));
   const seed = new PodStore({ log: () => {} });
-  seed.attach(SRC + 'ap-state/', plainFetch);
+  attachHttp(seed, SRC + 'ap-state/', plainFetch);
   seed.setConfig({ remotePod: 'https://pod.example/', handle: 'mover', name: 'Mover' });
   seed.setBlocklist({ domains: ['bad.example'], actors: [] });
   await seed.commit();

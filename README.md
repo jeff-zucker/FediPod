@@ -100,12 +100,18 @@ copy:
 * **Recovery is only as good as your backups**, where today there is nothing to
   lose because your pod has it all.
 
+That second half can live either in a **pod** on this machine — data-kitchen's,
+or your own Solid server — or in a plain **directory**, which needs nothing
+running at all. A directory is Turtle and JSON on disk, so it is still your data
+in the ordinary sense; point a Solid server at it later if you want it served.
+
 Setup picks a pod on this machine when one is answering and falls back to your
 own pod when none is. To see or change it later:
 
 ```
 bin/activitypod.mjs state                    # where it lives now
 bin/activitypod.mjs state --to http://localhost:8000/dk-pod/activitypods-js/
+bin/activitypod.mjs state --to file:///home/you/.activitypod/private/
 bin/activitypod.mjs state --to pod           # move it back
 ```
 
