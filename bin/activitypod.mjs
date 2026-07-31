@@ -1,19 +1,21 @@
 #!/usr/bin/env node
 // activitypod.mjs — CLI for the standalone pod-stored ActivityPub actor.
 //
-//   activitypod setup --new-account --email you@example.org --handle you
-//     Asks for the identity provider, the pod name (which becomes the
-//     domain half of your address) and your display name, showing the
-//     address you are about to create before creating it. Any of them can
-//     be given as flags instead: --issuer, --pod-name, --name (and --home,
-//     --keys pod, --root).
-//     Creates a brand-new account + pod on the CSS server, mints the
-//     credential, provisions the pod, publishes the actor, STARTS the agent
-//     and opens the browser. One command from nothing to federating.
+//   activitypod setup
+//     Asks two things at the terminal — the handle, which is permanent and
+//     names the agent's own origin, and the port — then starts serving and
+//     opens http://<handle>.localhost:<port>/, where the rest is asked:
+//     new account or a pod you already have, identity provider, email, pod
+//     name, display name, person or group, bio, avatar, passwords. Nothing
+//     is created until you say so there, and the address you are about to
+//     take is shown before you do.
 //
+//   activitypod setup --new-account --email you@example.org --handle you
 //   activitypod setup --pod https://you.solidcommunity.net/ \
 //       --issuer https://solidcommunity.net --email you@example.org --handle you
-//     Same, against an account + pod you already have.
+//     Any identity flag (--new-account, --pod, --issuer, --email, --name,
+//     --pod-name, --group, --summary, --icon, --root, --keys) keeps setup
+//     entirely on the command line, as does a non-TTY stdin. --cli forces it.
 //
 //     The password is prompted (or AP_PASSWORD) — used once to create the
 //     account and/or mint a revocable CSS client-credential, never stored.
@@ -21,7 +23,10 @@
 //     --keys pod stores them in pod state instead, so several devices can
 //     sign as the same actor without copying files.
 //
-//   activitypod start     start the agent (UI + API on http://localhost:8030/)
+//   activitypod start     start the agent (UI + API on http://localhost:8030/
+//                         and http://<handle>.localhost:8030/ — one origin per
+//                         identity, so two agents stop sharing one login).
+//                         Prints both URLs; --open also opens a browser.
 //                         --name "Your Name" sets the display name other
 //                         servers show, and republishes the actor
 //                         ('run' is kept as an alias)
@@ -61,14 +66,19 @@ const HOME = flag('home', process.env.AP_HOME
 
 // The port chosen at setup is remembered, so `start`/`stop`/`status` need no
 // flags afterwards. Precedence: --port > AP_PORT > the recorded choice > 8030.
-function recordedPort() {
-  try { return Number(JSON.parse(fs.readFileSync(path.join(HOME, 'agent.json'), 'utf8')).port) || null; }
-  catch { return null; }
+// The handle is remembered alongside it, for the named origin: the agent also
+// answers at <handle>.localhost:<port>, and that has to work from the first
+// request, before pod state has been read.
+function recordedAgent() {
+  try { return JSON.parse(fs.readFileSync(path.join(HOME, 'agent.json'), 'utf8')) || {}; }
+  catch { return {}; }
 }
-function recordPort(port) {
+function recordedPort() { return Number(recordedAgent().port) || null; }
+function recordAgent(fields) {
   try {
     fs.mkdirSync(HOME, { recursive: true, mode: 0o700 });
-    fs.writeFileSync(path.join(HOME, 'agent.json'), JSON.stringify({ port }, null, 2) + '\n');
+    const rec = { ...recordedAgent(), ...fields };
+    fs.writeFileSync(path.join(HOME, 'agent.json'), JSON.stringify(rec, null, 2) + '\n');
   } catch { /* the flag still works, it just isn't remembered */ }
 }
 const PORT = Number(flag('port', process.env.AP_PORT || recordedPort() || 8030));
@@ -98,8 +108,14 @@ function endAsking() { sharedRl?.close(); sharedRl = null; }
 
 function openBrowser(url) {
   try {
-    if (process.platform === 'win32') spawn('cmd', ['/c', 'start', '', url], { detached: true, stdio: 'ignore' }).unref();
-    else spawn(process.platform === 'darwin' ? 'open' : 'xdg-open', [url], { detached: true, stdio: 'ignore' }).unref();
+    const win = process.platform === 'win32';
+    const cmd = win ? 'cmd' : process.platform === 'darwin' ? 'open' : 'xdg-open';
+    const child = spawn(cmd, win ? ['/c', 'start', '', url] : [url], { detached: true, stdio: 'ignore' });
+    // A box with no opener at all (a server, a bare container) emits this
+    // asynchronously, where the try/catch cannot reach it — and an unhandled
+    // 'error' event on a child process ends the agent.
+    child.on('error', () => {});
+    child.unref();
   } catch { /* best-effort — the URL is printed anyway */ }
 }
 
@@ -112,20 +128,84 @@ async function finish(agent, code = 0) {
   process.exit(code);
 }
 
-if (cmd === 'setup') {
-  // Refuse before anything is asked, let alone typed: setup used to overwrite
-  // credential.json in place, and a minted credential is only shown once — so
-  // the identity it belonged to could not be recovered afterwards.
+// Anything that decides the identity. Given even one of these, setup stays on
+// the command line exactly as it always did — scripts, CI and the tarball's
+// unpack-and-go line depend on that. At a terminal with none of them, setup
+// asks the two things it needs to open a browser and asks the rest there.
+const IDENTITY_FLAGS = ['new-account', 'pod', 'issuer', 'email', 'name', 'pod-name',
+  'group', 'approve-joins', 'summary', 'icon', 'root', 'keys', 'rotate-key'];
+
+// Refuse before anything is asked, let alone typed: setup used to overwrite
+// credential.json in place, and a minted credential is only shown once — so
+// the identity it belonged to could not be recovered afterwards.
+function refuseExistingIdentity() {
   const credPath = path.join(HOME, 'credential.json');
-  if (fs.existsSync(credPath) && !has('force')) {
-    let held = '(unreadable)';
-    try { held = JSON.parse(fs.readFileSync(credPath, 'utf8')).remotePod; } catch {}
-    console.error(`${HOME} already holds an identity: ${held}`);
-    console.error('For another identity:  bin/activitypod.mjs setup --profile <name>');
-    console.error('To list what exists:   bin/activitypod.mjs profiles');
-    console.error('To replace this one:   add --force (the old credential is lost)');
-    process.exit(2);
+  if (!fs.existsSync(credPath) || has('force')) return;
+  let held = '(unreadable)';
+  try { held = JSON.parse(fs.readFileSync(credPath, 'utf8')).remotePod; } catch {}
+  console.error(`${HOME} already holds an identity: ${held}`);
+  console.error('For another identity:  bin/activitypod.mjs setup --profile <name>');
+  console.error('To list what exists:   bin/activitypod.mjs profiles');
+  console.error('To replace this one:   add --force (the old credential is lost)');
+  console.error('');
+  console.error('If a setup died half-way, do NOT re-run it — the credential it already');
+  console.error('minted cannot be minted twice. Run `bin/activitypod.mjs start` and');
+  console.error('finish at /setup/ in the browser.');
+  process.exit(2);
+}
+
+// Ask the handle (permanent, and it names the origin) and the port, start
+// serving, and hand over to the page at /setup/. Nothing is created here: the
+// agent's own POST /setup does all of it, so a closed tab cannot lose a
+// credential that only exists in an HTTP response.
+async function runBrowserSetup() {
+  const handle = flag('handle') || await ask('handle (the name in your address; permanent)');
+  if (!handle) { console.error('a handle is required'); process.exit(2); }
+  const port = flag('port') ? PORT : (Number(await ask('port', String(PORT))) || PORT);
+  endAsking();
+
+  // Recorded before the server starts, so `stop`/`status` work while the
+  // browser flow is still open — it used to be written only after the mint.
+  recordAgent({ port, handle });
+
+  const { Agent } = await import(new URL('../run-agent.mjs', import.meta.url));
+  const { startAdmin } = await import(new URL('../lib/admin.mjs', import.meta.url));
+  const { hostLabel } = await import(new URL('../lib/guard.mjs', import.meta.url));
+  const agent = new Agent({ home: HOME, log: (...a) => console.log('[ap]', ...a) });
+  startAdmin({
+    port, handle, agent,
+    gateToken: process.env.AP_GATE_TOKEN || '',
+    log: (...a) => console.log('[ap]', ...a),
+  });
+  const shutdown = () => {
+    setTimeout(() => process.exit(0), 5000).unref();
+    try { fs.rmSync(path.join(HOME, 'agent.pid'), { force: true }); } catch {}
+    Promise.allSettled([agent.store.flush(), agent.lease?.release()]).finally(() => process.exit(0));
+  };
+  process.on('SIGINT', shutdown);
+  process.on('SIGTERM', shutdown);
+
+  const label = hostLabel(handle);
+  const named = label ? `http://${label}.localhost:${port}/` : null;
+  const plain = `http://localhost:${port}/`;
+  const pad = Math.max(named?.length || 0, plain.length);
+  console.log('');
+  if (named) {
+    console.log(`  ${named.padEnd(pad)}   <- opening this`);
+    console.log(`  ${plain.padEnd(pad)}   <- the same agent, if your browser cannot find that name`);
+  } else {
+    console.log(`  ${plain}`);
   }
+  console.log('\nsetup continues in the browser — Ctrl-C to stop\n');
+  openBrowser(named || plain);
+}
+
+if (cmd === 'setup' && process.stdin.isTTY && !has('cli')
+    && !IDENTITY_FLAGS.some(f => args.includes('--' + f))) {
+  refuseExistingIdentity();
+  await runBrowserSetup();
+} else if (cmd === 'setup') {
+  refuseExistingIdentity();
   const root = flag('root');
   const kind = has('group') ? 'group' : 'person';
   const approveJoins = has('group') && has('approve-joins');
@@ -238,7 +318,7 @@ if (cmd === 'setup') {
   };
   fs.mkdirSync(HOME, { recursive: true, mode: 0o700 });
   fs.writeFileSync(path.join(HOME, 'credential.json'), JSON.stringify(rec, null, 2) + '\n', { mode: 0o600 });
-  recordPort(PORT);                      // later commands need no --port
+  recordAgent({ port: PORT, handle });   // later commands need no --port
   console.log(`credential minted and saved to ${path.join(HOME, 'credential.json')}`);
 
   const { Agent } = await import(new URL('../run-agent.mjs', import.meta.url));
@@ -255,7 +335,7 @@ if (cmd === 'setup') {
 
   // Straight into serving — setup ends with a working client in the browser.
   const { startAdmin } = await import(new URL('../lib/admin.mjs', import.meta.url));
-  startAdmin({ port: PORT, gateToken: process.env.AP_GATE_TOKEN || '', agent, log: (...a) => console.log('[ap]', ...a) });
+  startAdmin({ port: PORT, handle, gateToken: process.env.AP_GATE_TOKEN || '', agent, log: (...a) => console.log('[ap]', ...a) });
   const shutdown = () => {
     setTimeout(() => process.exit(0), 5000).unref();   // never hang a stop on a slow pod
     try { fs.rmSync(path.join(HOME, 'agent.pid'), { force: true }); } catch {}
@@ -278,7 +358,7 @@ if (cmd === 'setup') {
     console.error('start does not rotate keys — use:  bin/activitypod.mjs rotate-key');
     process.exit(2);
   }
-  if (flag('port')) recordPort(PORT);      // `start --port N` once moves it for good
+  if (flag('port')) recordAgent({ port: PORT });   // `start --port N` moves it for good
 
   // Something already on the port? Offer to take it over rather than dying
   // with "address in use" and leaving the user to hunt the process down.
@@ -320,10 +400,31 @@ if (cmd === 'setup') {
   }
 
   const { startAgent } = await import(new URL('../run-agent.mjs', import.meta.url));
+  const startHandle = recordedAgent().handle || null;
   await startAgent({
     home: HOME, port: PORT, name: flag('name') || null,
     takeover: has('takeover'),      // claim a lease whose holder is gone
+    handle: startHandle,            // the named origin, before pod state is read
   });
+  {
+    const { hostLabel } = await import(new URL('../lib/guard.mjs', import.meta.url));
+    const label = hostLabel(startHandle);
+    const named = label ? `http://${label}.localhost:${PORT}/` : null;
+    const plain = `http://localhost:${PORT}/`;
+    // One origin per identity is the point of the named form: a browser keeps
+    // its storage per origin, so two agents stop sharing one Phanpy login.
+    if (named) {
+      const pad = Math.max(named.length, plain.length);
+      console.log(`\n  ${named.padEnd(pad)}   <- browse it here`);
+      console.log(`  ${plain.padEnd(pad)}   <- the same agent, if that name will not resolve\n`);
+    } else {
+      console.log(`\n  ${plain}\n`);
+    }
+    // Printed, not opened. `start` is run by supervisors and on every restart;
+    // a window arriving unasked over whatever you were doing is not a feature.
+    // `setup` opens one because that is the whole point of `setup`.
+    if (has('open')) openBrowser(named || plain);
+  }
 } else if (cmd === 'rotate-key') {
   const { Agent } = await import(new URL('../run-agent.mjs', import.meta.url));
   const agent = new Agent({ home: HOME, log: (...a) => console.log('[rotate-key]', ...a) });

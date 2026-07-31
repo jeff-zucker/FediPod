@@ -153,6 +153,10 @@ export class Agent {
       this.log(`display name set to "${name}"`);
     }
     this.urls = apUrls(config.remotePod, config.root);
+    // The agent answers at <handle>.localhost too, so each identity on a
+    // machine gets a browser origin of its own. Known only now: the admin
+    // server was listening before any of this was read.
+    this.authorities?.setHandle(config.handle);
 
     // Exactly one agent may act on a pod (inbox drains are destructive
     // reads); later arrivals become read-only viewers of the same state.
@@ -437,8 +441,16 @@ export async function startAgent({
   gateToken = process.env.AP_GATE_TOKEN || '',
   name = null,
   takeover = false,
+  handle = null,
 } = {}) {
   fs.mkdirSync(home, { recursive: true, mode: 0o700 });
+  // connect() sets this from pod state a moment later, but the browser may
+  // already be opening — seed it from what setup recorded so the named origin
+  // works from the first request.
+  if (!handle) {
+    try { handle = JSON.parse(fs.readFileSync(path.join(home, 'agent.json'), 'utf8')).handle || null; }
+    catch { handle = null; }
+  }
   const logFile = path.join(home, 'agent.log');
   const agent = new Agent({ home, log: () => {} });
   const log = (...a) => {
@@ -450,7 +462,7 @@ export async function startAgent({
   };
   agent.log = log;
   agent.store.log = log;
-  startAdmin({ port, gateToken, agent, log });
+  startAdmin({ port, gateToken, agent, log, handle });
 
   // The pod (or its issuer) can be briefly unreachable — a 504 from the
   // token endpoint, or no network yet at boot under install-service. Keep

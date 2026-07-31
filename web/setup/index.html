@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>solid-activitypub — setup</title>
+<style>
+:root { color-scheme: light dark; }
+body { font: 16px/1.5 system-ui, sans-serif; max-width: 40rem; margin: 0 auto; padding: 2rem 1rem 4rem; }
+h1 { font-size: 1.5rem; margin: 0 0 .25rem; }
+h2 { font-size: 1.1rem; margin: 2rem 0 .5rem; }
+p { margin: .5rem 0; }
+.sub { color: #666; margin-top: 0; }
+fieldset { border: 1px solid #bbb; border-radius: .4rem; margin: 1rem 0; padding: .75rem 1rem 1rem; }
+legend { padding: 0 .3rem; font-weight: 600; }
+label { display: block; margin: .75rem 0 .2rem; }
+.hint { color: #666; font-size: .9rem; margin: .15rem 0 0; }
+input[type=text], input[type=email], input[type=url], input[type=password], textarea {
+  font: inherit; width: 100%; padding: .5rem; box-sizing: border-box;
+  border: 1px solid #999; border-radius: .3rem; background: Field; color: FieldText;
+}
+.choice { display: block; margin: .35rem 0; font-weight: normal; }
+.choice input { margin-right: .4rem; }
+button { font: inherit; padding: .6rem 1.2rem; border-radius: .3rem; border: 1px solid #666;
+  background: ButtonFace; color: ButtonText; cursor: pointer; }
+button.primary { font-weight: 600; }
+button:disabled { opacity: .5; cursor: default; }
+.address { font-size: 1.2rem; font-weight: 600; word-break: break-all; }
+.warn { border-left: .25rem solid #c60; padding-left: .75rem; }
+.err { border-left: .25rem solid #b00020; padding-left: .75rem; color: #b00020; }
+.steps { list-style: none; padding: 0; }
+.steps li { padding: .3rem 0; }
+.steps .state { display: inline-block; width: 1.6rem; }
+.note { color: #666; font-size: .9rem; word-break: break-all; }
+.origins { font-family: ui-monospace, monospace; font-size: .95rem; word-break: break-all; }
+@media (prefers-color-scheme: dark) { .sub, .hint, .note { color: #aaa; } fieldset { border-color: #555; } }
+</style>
+</head>
+<body>
+
+<h1>solid-activitypub</h1>
+<p class="sub" id="strap">setting up…</p>
+
+<!-- Nothing here is wired up by hand: setup.js reads /setup/state and shows
+     exactly one of these. -->
+
+<section id="pane-loading">
+  <p>Reading this agent's state…</p>
+</section>
+
+<section id="pane-done" hidden>
+  <h2>Ready</h2>
+  <p class="address" id="done-address"></p>
+  <p id="done-note"></p>
+  <p id="done-links"></p>
+</section>
+
+<section id="pane-configured" hidden>
+  <h2>This agent is already set up</h2>
+  <p class="address" id="configured-address"></p>
+  <p>
+    <a href="/admin/">Edit the record</a>
+    &nbsp;·&nbsp;
+    <a href="/" id="configured-client">Open the client</a>
+  </p>
+  <p class="hint">To set up a second identity, run
+    <code>bin/activitypod.mjs setup --profile &lt;name&gt;</code> in a terminal.</p>
+</section>
+
+<section id="pane-run" hidden>
+  <h2 id="run-title">Setting up</h2>
+  <ul class="steps" id="run-steps"></ul>
+  <p class="err" id="run-error" hidden></p>
+  <p><button id="run-again" hidden>Try again</button></p>
+</section>
+
+<section id="pane-form" hidden>
+  <form id="form">
+
+    <fieldset>
+      <legend>What is this?</legend>
+      <label class="choice"><input type="radio" name="kind" value="person" checked>
+        A person — an account you read and post from</label>
+      <label class="choice"><input type="radio" name="kind" value="group">
+        A group — it carries its members' posts to each other and serves no client</label>
+    </fieldset>
+
+    <fieldset id="fs-pod">
+      <legend>Where it lives</legend>
+      <label class="choice"><input type="radio" name="mode" value="new" checked>
+        Create a Solid account and pod for it</label>
+      <label class="choice"><input type="radio" name="mode" value="existing">
+        Use a pod I already have</label>
+
+      <label for="issuer">Solid identity provider</label>
+      <input type="url" id="issuer" name="issuer" value="https://solidcommunity.net" autocomplete="url">
+
+      <label for="email">Account email</label>
+      <input type="email" id="email" name="email" autocomplete="email" placeholder="you@example.org">
+
+      <div id="row-podname">
+        <label for="podName">Pod name</label>
+        <input type="text" id="podName" name="podName" autocomplete="off">
+        <p class="hint">This becomes the domain half of the address.</p>
+      </div>
+
+      <div id="row-pod" hidden>
+        <label for="pod">Pod address</label>
+        <input type="url" id="pod" name="pod" autocomplete="url" placeholder="https://you.solidcommunity.net/">
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Who it is</legend>
+      <label for="handle">Handle</label>
+      <input type="text" id="handle" name="handle" autocomplete="off" autofocus>
+      <p class="hint">The name in the address. Permanent.</p>
+
+      <label for="name">Display name</label>
+      <input type="text" id="name" name="name" autocomplete="off">
+      <p class="hint">Shown above the address. Changeable later.</p>
+
+      <label for="summary">Bio <span class="hint">(optional)</span></label>
+      <textarea id="summary" name="summary" rows="2"></textarea>
+
+      <label for="icon">Avatar URL <span class="hint">(optional)</span></label>
+      <input type="url" id="icon" name="icon" autocomplete="off">
+    </fieldset>
+
+    <fieldset id="fs-secrets">
+      <legend>Passwords</legend>
+
+      <div id="row-password">
+        <label for="password">Password for the Solid account</label>
+        <input type="password" id="password" name="password" autocomplete="current-password">
+        <p class="hint">Used once, here on your own machine, to create the account and mint a
+          revocable credential. Never stored, never sent anywhere but your identity provider.</p>
+      </div>
+
+      <label for="uiPassword">Password for this agent's own web UI <span class="hint">(optional)</span></label>
+      <input type="password" id="uiPassword" name="uiPassword" autocomplete="new-password">
+      <p class="hint">Only needed if you ever expose this agent beyond your own machine. It turns
+        the instant client login into a real login form.</p>
+    </fieldset>
+
+    <h2>You will be</h2>
+    <p class="address" id="preview">…</p>
+    <div id="preview-notes"></div>
+    <p>The display name can be changed later; the handle and the pod cannot.</p>
+
+    <p class="err" id="form-error" hidden></p>
+    <p><button type="submit" class="primary" id="submit">Create it</button></p>
+  </form>
+</section>
+
+<script src="setup.js"></script>
+</body>
+</html>

@@ -4,6 +4,10 @@ Drop any static Mastodon web client dist here as `ui/<name>/` and the agent
 serves it at `http://localhost:8030/<name>/`, same-origin with the API —
 no CORS, no mixed content. Phanpy stays at `/`.
 
+`/setup/` and `/admin/` are taken: those are the agent's own pages, served
+from `web/` rather than from here, so a dist dropped in as `ui/setup/` or
+`ui/admin/` would never be reached.
+
 Known-good candidates: Enafore (Pinafore successor), Soapbox — anything
 that ships as a plain static `dist/` folder. (Elk does not fit: it is
 server-rendered, not static.)

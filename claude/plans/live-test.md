@@ -163,6 +163,16 @@ the clients are hard to tell apart.
   bug; wait rather than believing it.
 - **Mastodon caches actor documents hard** — `manuallyApprovesFollowers`, `icon` and
   `summary` may lag. Nothing on our side can force a refetch.
+- **A running agent does not survive renaming the project directory.** Found 2026-07-30,
+  a day after `activitypod-js` → `solid-activitypub`: two long-running agents kept
+  federating and kept answering `/status`, while every static path returned
+  `404 not found`. `admin.mjs` resolves its project root from `import.meta.url` **once, at
+  module load**, so the captured string still named a directory that no longer existed.
+  Nothing in `/status`, the log or the pod shows it, because none of them touch the
+  filesystem. Symptom to recognise: `/status` fine, `/` 404. Fix: restart.
+- **A restart is also how an agent learns its own name.** `<handle>.localhost:<port>`
+  arrived on 2026-07-30; a process started before that logs
+  `refused: unexpected Host "<handle>.localhost:<port>"` and cannot be talked round.
 
 ## Where to look
 

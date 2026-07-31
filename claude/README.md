@@ -2,9 +2,10 @@
 
 | path | what |
 |---|---|
-| `smoke-tests/agent-smoke.mjs` | the whole test suite (264 checks): boots an unconfigured agent on a scratch `AP_HOME`, then exercises the gate, the Mastodon facade, keys and signing, the wire and pod-RDF builders, intake, the security guards, and every politeness behavior added on 2026-07-29. `npm test` runs it. |
+| `smoke-tests/agent-smoke.mjs` | the whole test suite (316 checks): boots an unconfigured agent on a scratch `AP_HOME`, then exercises the gate, the Mastodon facade, keys and signing, the wire and pod-RDF builders, intake, the security guards, every politeness behavior added on 2026-07-29, and (§12–§14) the browser setup flow, the named origin and the editable record. `npm test` runs it. |
 | `backups/` | originals of vendored files patched by hand, e.g. `phanpy-sw-2026-07-29/` (the service worker replaced by a kill-switch). |
 | `diagrams/group-actor.mmd` | mermaid: a group actor as a hub that many pods follow, and what travels each link. |
+| `plans/browser-setup.md` | setup moved off the CLI and into a page the agent serves: why the terminal still asks two things, why the agent answers at `<handle>.localhost:<port>`, why `POST /setup` returns 202 rather than holding the response, and how a setup that died after the mint is resumed instead of re-run. |
 | `plans/group-actor.md` | why groups are actors rather than tenants, the four hub designs that were dropped (and the CSS component that is **parked, not rejected**), and what is still open. |
 | `plans/group-moderation.md` | every lever a group host has — mute, eject, retract, post review, request-to-join — what is structurally impossible, and what is still missing. |
 | `plans/parked-lemmy-group-actor.md` | **parked, kept on purpose** — what it would take to interoperate with Lemmy-style communities, and why it was not attempted. |

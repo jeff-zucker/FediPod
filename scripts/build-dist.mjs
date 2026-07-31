@@ -5,7 +5,8 @@
 //   node scripts/build-dist.mjs        → dist/solid-activitypub-<version>.tar.gz
 //
 // Unpack-and-go:  tar xzf solid-activitypub-*.tar.gz && cd solid-activitypub
-//                 bin/activitypod.mjs setup --new-account --email … --handle …
+//                 bin/activitypod.mjs setup      (asks two questions, then
+//                 finishes in the browser)
 
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -20,7 +21,7 @@ const out = path.join(root, 'dist', `solid-activitypub-${pkg.version}.tar.gz`);
 fs.rmSync(path.join(root, 'dist', 'stage'), { recursive: true, force: true });
 fs.mkdirSync(stage, { recursive: true });
 
-for (const item of ['bin', 'lib', 'vendor', 'phanpy', 'ui', 'run-agent.mjs', 'package.json', 'package-lock.json', 'README.md']) {
+for (const item of ['bin', 'lib', 'vendor', 'phanpy', 'ui', 'web', 'run-agent.mjs', 'package.json', 'package-lock.json', 'README.md']) {
   fs.cpSync(path.join(root, item), path.join(stage, item), { recursive: true });
 }
 

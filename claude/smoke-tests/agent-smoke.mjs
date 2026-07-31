@@ -9,6 +9,8 @@
 // 6. pod-RDF turtle builders (escaping, paths) via injected fetch
 // 7. facade M1–M3 surface on a seeded in-memory PodStore, faked delivery
 // 8. Announce ingestion + tag-feed sweep with faked fetches
+// 12. the setup page, the preflight, the setup run (real account API vs a
+//     mock CSS), and the editable record
 
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
@@ -103,10 +105,15 @@ if (up) {
     && niDocBody.protocols?.includes('activitypub'),
     'nodeinfo pointer + document served');
 
+  // Unconfigured, `/` is the setup page, not a client with nothing to show.
+  // (A CONFIGURED agent still gets Phanpy at `/` — asserted in §14.)
+  const bare = await fetch(`http://127.0.0.1:${PORT}/`, { headers: gh, redirect: 'manual' });
+  check(bare.status === 302 && bare.headers.get('location') === '/setup/',
+    `/ sends an unconfigured agent to setup (${bare.status} → ${bare.headers.get('location')})`);
   const ui = await fetch(`http://127.0.0.1:${PORT}/`, { headers: gh });
   const uiBody = await ui.text();
-  check(ui.status === 200 && /text\/html/.test(ui.headers.get('content-type')) && /phanpy/i.test(uiBody),
-    `/ serves the bundled Phanpy UI (got ${ui.status})`);
+  check(ui.status === 200 && /text\/html/.test(ui.headers.get('content-type')) && /setup\.js/.test(uiBody),
+    `and that page is served (got ${ui.status})`);
   const jail = await fetch(`http://127.0.0.1:${PORT}/..%2f..%2fpackage.json`, { headers: gh });
   check(jail.status === 403 || jail.status === 404, `path traversal blocked (got ${jail.status})`);
 
@@ -398,6 +405,39 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   // browsing an agent at its own name.
   check(named.includes('ws://solo.localhost:8041'),
     'a declared extra host may open the streaming socket too');
+
+  // --- the agent's own name, without AP_ALLOWED_HOSTS ---
+  const { hostLabel, allowedAuthorities, Authorities, checkRequest } =
+    await import(path.join(root, 'lib/guard.mjs'));
+  check(hostLabel('solo') === 'solo' && hostLabel('jeff-zucker') === 'jeff-zucker',
+    'a clean handle is a host label');
+  check([null, 'a_b', 'A B', 'x@y', '-lead', 'trail-', ''].every(h => hostLabel(h) === null),
+    'anything that is not already a DNS label gets no named origin, rather than being mangled');
+  const withLabel = allowedAuthorities(8041, ['solo']);
+  check(withLabel.has('solo.localhost:8041') && withLabel.has('solo.localhost')
+    && withLabel.has('localhost:8041'),
+    'the named origin joins the loopback set, it does not replace it');
+  const wsNamed = wsOrigins(8041, ['solo']);
+  check(wsNamed.includes('ws://solo.localhost:8041')
+    && new Set(wsNamed).size === wsNamed.length,
+    `the CSP lets it open the streaming socket, once (${wsNamed.length} origins)`);
+
+  const auth = new Authorities(8041);
+  check(!auth.has('solo.localhost:8041'), 'before the handle is known, its name is not allowed');
+  // startAdmin listens before connect reads pod state, so the set has to be
+  // live — a snapshot would refuse the named origin for the whole process.
+  check(auth.setHandle('solo') === true && auth.has('solo.localhost:8041')
+    && auth.setHandle('solo') === false,
+    'setHandle admits it, and says whether anything changed');
+  check(checkRequest({ headers: { host: 'solo.localhost:8041' } }, auth) === null
+    && checkRequest({ headers: { host: 'evil.example' } }, auth) !== null,
+    'the firewall takes the name and still refuses everything else');
+  process.env.AP_ALLOWED_HOSTS = 'box.tailnet.example:8041';
+  const exposed = new Authorities(8041, 'solo');
+  delete process.env.AP_ALLOWED_HOSTS;
+  check(exposed.has('box.tailnet.example:8041') && !exposed.isLocal('box.tailnet.example:8041')
+    && exposed.isLocal('solo.localhost:8041') && exposed.isLocal('localhost:8041'),
+    'a deliberately exposed host is allowed but is not "this machine"');
 }
 
 // --- 5c1b. bio, avatar and mentions ---
@@ -2514,8 +2554,24 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   check(inst.status === 404 && oauth.status === 404,
     `a group serves no /api/* or /oauth/* (instance ${inst.status}, token ${oauth.status})`);
 
-  const ui = await g('/');
+  const ui = await g('/manifest.webmanifest');
   check(ui.status === 404, `a group mounts no client UI (${ui.status})`);
+
+  // A group is set up in the browser like anything else, and it has a display
+  // name to change — so it serves web/ and only web/. What stays gone is the
+  // client and, with it, the whole token/oauth surface asserted just above.
+  const groupRoot = await g('/', { redirect: 'manual' });
+  check(groupRoot.status === 302 && groupRoot.headers.get('location') === '/admin/',
+    `a group's bare URL is its console, not a timeline (${groupRoot.status})`);
+  const groupAdmin = await g('/admin/');
+  const groupSetup = await g('/setup/');
+  check(groupAdmin.status === 200 && groupSetup.status === 200,
+    `a group serves its own two pages (${groupAdmin.status}, ${groupSetup.status})`);
+  const groupCfg = await gjson('/config');
+  check(groupCfg.status === 200 && groupCfg.json.kind === 'group' && groupCfg.json.handle === 'grp',
+    'and can read its own record back');
+  const groupElse = await g('/whatever');
+  check(groupElse.status === 404, `everything else is still refused (${groupElse.status})`);
 
   const mem = await gjson('/members');
   check(mem.status === 200 && mem.json.members.length === 1
@@ -2652,6 +2708,362 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   const clean = await bIntake.onAnnounce({ type: 'Announce', actor: OK }, OK, OK + '/n/1');
   check(clean === undefined && st.getStatuses().some(x => x.noteId === OK + '/n/1'),
     `while their instance-mate still comes through (${clean})`);
+}
+
+// --- 12. the setup page: served, jailed, and inline-script free ---
+{
+  const gh = { 'x-dk-token': TOKEN };
+  const page = await fetch(`http://127.0.0.1:${PORT}/setup/`, { headers: gh });
+  const html = await page.text();
+  check(page.status === 200 && /text\/html/.test(page.headers.get('content-type') || ''),
+    `/setup/ is served (${page.status})`);
+  const csp = page.headers.get('content-security-policy') || '';
+  check(/script-src [^;]*'self'/.test(csp) && !/script-src [^;]*'unsafe-inline'/.test(csp),
+    'its CSP allows no inline script');
+  // The trap this catches before a browser does: script-src is 'self' plus the
+  // hashes of Phanpy's own inline bootstrap and nothing else, so a page with
+  // an inline <script> is served, looks fine, and does nothing.
+  check(/<script src=/.test(html) && !/<script(?![^>]*\ssrc=)/.test(html),
+    'and the page has none — every script it loads names its source');
+
+  const noSlash = await fetch(`http://127.0.0.1:${PORT}/setup`, { headers: gh, redirect: 'manual' });
+  check(noSlash.status === 302 && noSlash.headers.get('location') === '/setup/',
+    `a missing trailing slash is corrected, or relative asset URLs resolve one level up (${noSlash.status})`);
+
+  const st = await fetch(`http://127.0.0.1:${PORT}/setup/state`, { headers: gh }).then(r => r.json());
+  check(st.hasCredential === false && st.configured === false && st.resumable === false
+    && st.phase === 'idle' && st.port === PORT,
+    `/setup/state describes an agent with nothing yet (${st.phase})`);
+  check(st.identity === null && !/secret|clientId/i.test(JSON.stringify(st)),
+    'and reports no credential material');
+
+  const esc = await fetch(`http://127.0.0.1:${PORT}/setup/..%2f..%2fpackage.json`, { headers: gh });
+  check(esc.status === 403 || esc.status === 404, `the page directory is jailed (${esc.status})`);
+  const admin = await fetch(`http://127.0.0.1:${PORT}/admin/`, { headers: gh });
+  check(admin.status === 200, `/admin/ is served from the same place (${admin.status})`);
+}
+
+// --- 12b. the preflight says what the CLI used to print ---
+{
+  const ask = (body) => fetch(`http://127.0.0.1:${PORT}/setup/check`, {
+    method: 'POST', headers: { 'x-dk-token': TOKEN, 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  }).then(r => r.json());
+
+  const rooted = await ask({ mode: 'existing', pod: 'https://you.example/', handle: 'you', kind: 'person' });
+  check(rooted.ok && rooted.address === '@you@you.example' && rooted.resolvable === true
+    && !rooted.warnings.length,
+    `a pod at its own host root resolves (${rooted.address})`);
+
+  const onPath = await ask({ mode: 'existing', pod: 'https://shared.example/me/', handle: 'you', kind: 'person' });
+  check(onPath.ok && onPath.resolvable === false && onPath.warnings.includes('pod-is-a-path'),
+    'a pod on a path is a warning a person may accept');
+
+  const grouped = await ask({ mode: 'existing', pod: 'https://shared.example/me/', handle: 'g', kind: 'group' });
+  check(grouped.ok === false && grouped.refusal === 'group-needs-host-root',
+    'but for a group it is a refusal — nobody could ever find it');
+
+  const fresh = await ask({ mode: 'new', issuer: 'https://solidcommunity.net', podName: 'me', handle: 'you' });
+  check(fresh.address === '@you@me.solidcommunity.net' && fresh.resolvable === null
+    && fresh.warnings.includes('subdomain-not-guaranteed'),
+    'a pod that does not exist yet promises nothing about its host');
+
+  const nonsense = await ask({ mode: 'existing', pod: 'not a url', handle: 'you' });
+  check(nonsense.ok === false && /not a pod address/.test(nonsense.error || ''),
+    'and junk is refused rather than previewed');
+}
+
+// --- 13. setup runs in the server, outlives the page, and leaks no password ---
+{
+  const { startAdmin } = await import(path.join(root, 'lib/admin.mjs'));
+  const { default: net13 } = await import('node:net');
+  const SPORT = 18626;
+  const RPORT = 18627;
+  const CSS = 18630;
+  const CSS_ORIGIN = `http://127.0.0.1:${CSS}`;
+  const NEW_POD = `http://wrenpod.127.0.0.1.nip.io:${CSS}/`;   // a string only: never fetched
+  const PASSWORD = 'hunter2-not-in-any-log';
+  let mintFails = true;
+  let mints = 0;
+
+  // A CSS v7 account API, enough of one for createAccountWithPod AND
+  // mintCredential — the §9 mock only covers the first.
+  const mockCss13 = http.createServer(async (req, res) => {
+    let body = '';
+    for await (const c of req) body += c;
+    const send = (o, code = 200) => {
+      res.writeHead(code, { 'content-type': 'application/json' });
+      res.end(JSON.stringify(o));
+    };
+    if (req.url === '/.well-known/openid-configuration') return send({ token_endpoint: `${CSS_ORIGIN}/.oidc/token` });
+    if (req.url === '/.account/') {
+      return send({ controls: {
+        password: { create: `${CSS_ORIGIN}/.account/password/`, login: `${CSS_ORIGIN}/.account/login/password/` },
+        account: {
+          pod: `${CSS_ORIGIN}/.account/pod/`,
+          clientCredentials: `${CSS_ORIGIN}/.account/cc/`,
+          webId: `${CSS_ORIGIN}/.account/webid/`,
+        },
+      } });
+    }
+    if (req.url === '/.account/login/password/') {
+      if (!body.includes(PASSWORD)) return send({ message: 'bad password' }, 403);
+      return send({ authorization: 'AUTH13' });
+    }
+    if (req.url === '/.account/pod/' && req.method === 'POST') {
+      await new Promise(r => setTimeout(r, 250));     // slow enough to catch a second run mid-flight
+      return send({ pod: NEW_POD, webId: `${NEW_POD}profile/card#me` });
+    }
+    if (req.url === '/.account/webid/') return send({ webIdLinks: { [`${NEW_POD}profile/card#me`]: 'x' } });
+    if (req.url === '/.account/cc/' && req.method === 'POST') {
+      if (mintFails) return send({ message: 'the issuer refused' }, 400);
+      mints++;
+      return send({ id: 'CID13', secret: 'CSECRET13', resource: `${CSS_ORIGIN}/.account/cc/CID13/` });
+    }
+    res.writeHead(404); res.end();
+  });
+  await new Promise(r => mockCss13.listen(CSS, '127.0.0.1', r));
+
+  // Everything past the mint needs a pod, so it is faked; the account API and
+  // the credential file are the real thing.
+  const makeAgent = (home) => {
+    const store = new PodStore({ log: () => {} });
+    let cfgd = false;
+    return {
+      home, store, logLines: (n) => slog13.slice(-n),
+      configured: () => cfgd,
+      status: () => ({ configured: cfgd, mode: cfgd ? 'active' : 'unconfigured' }),
+      readCredential() {
+        try { return JSON.parse(fs.readFileSync(path.join(home, 'credential.json'), 'utf8')); }
+        catch { return null; }
+      },
+      async bootstrap(o) {
+        const cred = this.readCredential();
+        store.setConfig({
+          ...(store.getConfig() || {}),
+          remotePod: cred.remotePod, handle: o.handle, name: o.name || o.handle,
+          issuer: cred.issuerOrigin, ...(o.kind ? { kind: o.kind } : {}),
+        });
+      },
+      async connect() { cfgd = true; this.urls = wire.apUrls(store.getConfig().remotePod); return true; },
+      publisher: { config: {}, publishProfile: async () => ({ unreachable: [] }) },
+    };
+  };
+  const slog13 = [];
+  const SHOME = fs.mkdtempSync('/tmp/activitypod-setup-');
+  const sagent = makeAgent(SHOME);
+  startAdmin({ port: SPORT, gateToken: '', agent: sagent, log: (...a) => slog13.push(a.join(' ')) });
+  await new Promise(r => setTimeout(r, 150));
+
+  const sjson = (p, init) => fetch(`http://localhost:${SPORT}${p}`, init)
+    .then(async r => ({ status: r.status, json: await r.json().catch(() => null) }));
+  const spost = (p, body) => sjson(p, {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
+  });
+  const settle = async () => {
+    for (let i = 0; i < 200; i++) {
+      const { json } = await sjson('/setup/progress');
+      if (json.phase !== 'running') return json;
+      await new Promise(r => setTimeout(r, 50));
+    }
+    return null;
+  };
+  const rawHost = (port, host) => new Promise((resolve) => {
+    const s = net13.connect(port, '127.0.0.1', () => {
+      s.write(`GET /status HTTP/1.1\r\nHost: ${host}\r\nConnection: close\r\n\r\n`);
+    });
+    let buf = '';
+    s.on('data', d => { buf += d; });
+    s.on('end', () => resolve(buf));
+    s.on('error', () => resolve(''));
+  });
+
+  const answers13 = {
+    mode: 'new', kind: 'person', issuer: CSS_ORIGIN, email: 'wren@example.org',
+    password: PASSWORD, handle: 'wren', name: 'Wren', podName: 'wrenpod',
+  };
+
+  const unnamed = await rawHost(SPORT, `wren.localhost:${SPORT}`);
+  check(/^HTTP\/1\.1 403/.test(unnamed), 'before setup, the agent does not answer to a handle it has not got');
+
+  // --- the mint fails: nothing is written, and it can be tried again ---
+  const failed = await spost('/setup', answers13);
+  check(failed.status === 202, `setup starts and answers at once (${failed.status})`);
+  const bad = await settle();
+  check(bad?.phase === 'error' && /refused/.test(bad.error || ''),
+    `a failed mint is reported, not swallowed (${bad?.error})`);
+  check(!fs.existsSync(path.join(SHOME, 'credential.json')),
+    'and writes no credential file');
+  check(bad.steps.find(s => s.key === 'credential').state === 'error'
+    && bad.steps.find(s => s.key === 'publish').state === 'waiting',
+    'the step that failed is the one marked failed');
+
+  // --- and again, working this time ---
+  mintFails = false;
+  const started = await spost('/setup', answers13);
+  check(started.status === 202, `a failed run does not leave setup wedged (${started.status})`);
+  const second = await spost('/setup', answers13);
+  check(second.status === 409 && second.json?.phase === 'running',
+    `only one setup at a time (${second.status})`);
+  const done = await settle();
+  check(done?.phase === 'done' && done.result?.address === `@wren@wrenpod.127.0.0.1.nip.io:${CSS}`,
+    `setup completes with the address it promised (${done?.result?.address})`);
+  check(done.steps.map(s => s.key).join() === 'account,credential,bootstrap,connect,publish,verify',
+    'the credential is written before anything is published, not after');
+
+  const credFile = path.join(SHOME, 'credential.json');
+  const mode = fs.statSync(credFile).mode & 0o777;
+  const cred = JSON.parse(fs.readFileSync(credFile, 'utf8'));
+  check(mode === 0o600 && cred.secret === 'CSECRET13' && cred.remotePod === NEW_POD,
+    `the credential is on disk, owner-only (mode ${mode.toString(8)})`);
+
+  // Polled over and over by a page that may be left open: a password echoed
+  // into a progress report is a password served forever.
+  const progressText = JSON.stringify(await sjson('/setup/progress'));
+  const logText = JSON.stringify(await sjson('/log'));
+  check(!progressText.includes(PASSWORD) && !logText.includes(PASSWORD)
+    && !fs.readFileSync(credFile, 'utf8').includes(PASSWORD),
+    'the account password reaches neither the progress report, the log, nor the disk');
+
+  const again = await spost('/setup', answers13);
+  check(again.status === 409 && /already holds an identity/.test(again.json?.error || ''),
+    `a configured home refuses a second setup (${again.status})`);
+
+  const named = await rawHost(SPORT, `wren.localhost:${SPORT}`);
+  check(/^HTTP\/1\.1 200/.test(named), 'and the agent now answers at its own name');
+
+  // --- resuming a setup that died after the mint ---
+  const RHOME = fs.mkdtempSync('/tmp/activitypod-resume-');
+  fs.copyFileSync(credFile, path.join(RHOME, 'credential.json'));
+  const mintsBefore = mints;
+  const ragent = makeAgent(RHOME);
+  startAdmin({ port: RPORT, gateToken: '', agent: ragent, log: () => {} });
+  await new Promise(r => setTimeout(r, 150));
+  const rstate = await fetch(`http://localhost:${RPORT}/setup/state`).then(r => r.json());
+  check(rstate.hasCredential === true && rstate.configured === false && rstate.resumable === true
+    && rstate.identity?.pod === NEW_POD,
+    'a credential with no actor behind it is reported as resumable');
+  const resumed = await fetch(`http://localhost:${RPORT}/setup`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ handle: 'wren', name: 'Wren', kind: 'person' }),   // no password, no pod
+  }).then(r => r.status);
+  let rdone = null;
+  for (let i = 0; i < 200 && !rdone; i++) {
+    const j = await fetch(`http://localhost:${RPORT}/setup/progress`).then(r => r.json());
+    if (j.phase !== 'running') rdone = j;
+    else await new Promise(r => setTimeout(r, 50));
+  }
+  check(resumed === 202 && rdone?.phase === 'done',
+    `it finishes without the password being asked for again (${rdone?.phase})`);
+  check(mints === mintsBefore
+    && rdone.steps.find(s => s.key === 'credential').state === 'skipped',
+    'and mints no second credential — the first one cannot be minted twice');
+
+  mockCss13.close();
+  fs.rmSync(SHOME, { recursive: true, force: true });
+  fs.rmSync(RHOME, { recursive: true, force: true });
+}
+
+// --- 14. the record can be read back and edited, and a merge stays a merge ---
+{
+  const { startAdmin } = await import(path.join(root, 'lib/admin.mjs'));
+  const CPORT = 18628;
+  const CHOME = fs.mkdtempSync('/tmp/activitypod-config-');
+  // A configured PERSON: the credential file is what `/` keys on.
+  fs.writeFileSync(path.join(CHOME, 'credential.json'),
+    JSON.stringify({ remotePod: 'https://solo.example/', webId: 'https://solo.example/profile/card#me',
+      issuerOrigin: 'https://example', clientId: 'CID', secret: 'SECRET-NOT-FOR-THE-PAGE' }));
+  const cstore = new PodStore({ log: () => {} });
+  cstore.setConfig({
+    remotePod: 'https://solo.example/', handle: 'solo', name: 'solo', issuer: 'https://example',
+    kind: 'person', summary: 'birds, mostly', uiPassword: { saltHex: 'aa', hashHex: 'bb' },
+  });
+  const curls = wire.apUrls('https://solo.example/');
+  const republished = [];
+  const cagent = {
+    home: CHOME, store: cstore, urls: curls, configured: () => true, logLines: () => [],
+    status: () => ({ configured: true, mode: 'active', kind: 'person', handle: 'solo' }),
+    readCredential() { return JSON.parse(fs.readFileSync(path.join(CHOME, 'credential.json'), 'utf8')); },
+    publisher: {
+      urls: curls, config: {},
+      publishProfile: async () => { republished.push(1); return { unreachable: [] }; },
+    },
+  };
+  startAdmin({ port: CPORT, gateToken: '', agent: cagent, handle: 'solo', log: () => {} });
+  await new Promise(r => setTimeout(r, 150));
+  const cjson = (p, init) => fetch(`http://localhost:${CPORT}${p}`, init)
+    .then(async r => ({ status: r.status, json: await r.json().catch(() => null) }));
+  const cpost = (body) => cjson('/config', {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
+  });
+
+  const got = await cjson('/config');
+  check(got.status === 200 && got.json.handle === 'solo' && got.json.address === '@solo@solo.example'
+    && got.json.hasUiPassword === true && got.json.uiPassword === undefined,
+    'GET /config reports that a UI password is set, never the record itself');
+  check(!/SECRET-NOT-FOR-THE-PAGE/.test(JSON.stringify(got.json)),
+    'and never the pod credential');
+
+  const partial = await cpost({ summary: 'finches, actually' });
+  check(partial.status === 200 && cstore.getConfig().uiPassword?.saltHex === 'aa'
+    && cstore.getConfig().handle === 'solo' && cstore.getConfig().summary === 'finches, actually',
+    'an edit that never mentions the password keeps it — a write is a merge');
+
+  const before = JSON.stringify(cstore.getConfig());
+  const fixed = await cpost({ handle: 'someone-else' });
+  check(fixed.status === 400 && /cannot be changed/.test(fixed.json?.error || '')
+    && JSON.stringify(cstore.getConfig()) === before,
+    `the identity itself is refused, and nothing is written (${fixed.status})`);
+
+  const beforeRename = republished.length;
+  const renamed = await cpost({ name: 'Solo' });
+  check(renamed.status === 200 && renamed.json.published === true
+    && republished.length === beforeRename + 1 && cagent.publisher.config.name === 'Solo',
+    'a display name is on the wire, so saving it republishes the actor');
+
+  const groupOnly = await cpost({ review: true });
+  check(groupOnly.status === 404 && /not a group/.test(groupOnly.json?.error || ''),
+    'a person has no review queue to switch on');
+
+  const beforePw = republished.length;
+  const pw = await cpost({ password: 'a new one' });
+  check(pw.status === 200 && pw.json.published === false && republished.length === beforePw
+    && cstore.getConfig().uiPassword.saltHex !== 'aa'
+    && !JSON.stringify(pw.json).includes('a new one'),
+    'a password change is local: hashed, not echoed, and not republished');
+
+  const cleared = await cpost({ password: '' });
+  check(cleared.status === 200 && !cstore.getConfig().uiPassword, 'and an empty one removes it');
+
+  const bare = await fetch(`http://localhost:${CPORT}/`, { redirect: 'manual' });
+  check(bare.status === 200, `a configured person still gets the client at / (${bare.status})`);
+
+  // A tailnet name or reverse-proxy domain may carry the fediverse side. It may
+  // not create accounts or edit the record.
+  const { default: net14 } = await import('node:net');
+  const XPORT = CPORT + 1;
+  process.env.AP_ALLOWED_HOSTS = `box.tailnet.example:${XPORT}`;
+  startAdmin({ port: XPORT, gateToken: '', agent: cagent, handle: 'solo', log: () => {} });
+  delete process.env.AP_ALLOWED_HOSTS;
+  await new Promise(r => setTimeout(r, 150));
+  const rawPost = (host, p, body) => new Promise((resolve) => {
+    const s = net14.connect(XPORT, '127.0.0.1', () => {
+      s.write(`POST ${p} HTTP/1.1\r\nHost: ${host}\r\ncontent-type: application/json\r\n`
+        + `content-length: ${Buffer.byteLength(body)}\r\nConnection: close\r\n\r\n${body}`);
+    });
+    let buf = '';
+    s.on('data', d => { buf += d; });
+    s.on('end', () => resolve(buf));
+    s.on('error', () => resolve(''));
+  });
+  const exposedEdit = await rawPost(`box.tailnet.example:${XPORT}`, '/config', '{}');
+  const exposedSetup = await rawPost(`box.tailnet.example:${XPORT}`, '/setup', '{"handle":"x"}');
+  const localEdit = await rawPost(`localhost:${XPORT}`, '/config', '{}');
+  check(/^HTTP\/1\.1 403/.test(exposedEdit) && /^HTTP\/1\.1 403/.test(exposedSetup)
+    && /^HTTP\/1\.1 200/.test(localEdit),
+    'an agent exposed under another name serves the fediverse there, not its own setup');
+
+  fs.rmSync(CHOME, { recursive: true, force: true });
 }
 
 child.kill('SIGTERM');

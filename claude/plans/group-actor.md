@@ -78,6 +78,18 @@ A group serves no client — no facade, no tokens, no oauth, no UI password — 
 removes its whole authentication surface rather than securing it. The kind is checked
 per request, not at mount time, because `startAdmin` runs before `connect`.
 
+Amended 2026-07-30, when setup moved into the browser. A group now serves exactly two
+pages, `/setup/` and `/admin/`, out of `web/`. It had to: person-vs-group is chosen on
+the setup page, so a blanket GET 404 for groups would have made a group impossible to
+create there — and a group has a display name and a bio like anything else. The
+sentence above still holds for everything it was about: `admin.mjs`'s `/api/*` and
+`/oauth/*` branch is untouched, so there is still no facade, no token, no oauth and no
+UI password, and neither Phanpy nor `ui/*` is reachable. The console calls the same
+loopback routes `activitypod members` and `activitypod eject` already call, so it
+changes the client, not the trust boundary. `POST /setup` and `POST /config` are
+additionally refused over any host `AP_ALLOWED_HOSTS` added: those are for whoever is
+at the machine.
+
 ## The wire shape: FEP-1b12, and why it needed a second change
 
 Added 2026-07-30. FEP-1b12 — what Lemmy implements — says a group **"MUST wrap it in an

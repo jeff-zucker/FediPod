@@ -25,12 +25,69 @@ You only have to do setup once per device. From nothing — no fediverse account
 bin/activitypod.mjs setup
 ```
 
+<!-- CLAUDE 2026-07-30 — rewritten: setup now asks two things and finishes in the browser -->
+The terminal asks two things — your **handle**, which is the name in your
+address and is permanent, and the **port** — and then opens your browser:
+
+```
+handle (the name in your address; permanent): jeff
+port [8030]:
+
+  http://jeff.localhost:8030/   <- opening this
+  http://localhost:8030/        <- the same agent, if your browser cannot find that name
+
+setup continues in the browser — Ctrl-C to stop
+```
+
+Everything else is asked on that page: person or group, a new account and pod
+or one you already have, your identity provider, email, pod name, display
+name, bio, avatar, and your passwords. It shows the address you are about to
+take — and the same warnings the terminal used to print — before anything is
+created. Nothing is written until you press the button.
+
+Each agent also answers at `http://<handle>.localhost:<port>/`, which is what
+setup opens. A browser keeps its storage per origin, so two identities on one
+machine stop sharing a login and stop being impossible to tell apart. If your
+browser cannot resolve that name, `http://localhost:<port>/` is the same
+agent and everything works there.
+
+Setup stays entirely on the command line — exactly as it always was — when
+stdin is not a terminal, when `--cli` is given, or when any identity flag is
+present:
+
+```
+bin/activitypod.mjs setup --new-account --email you@example.org --handle you
+bin/activitypod.mjs setup --pod https://you.solidcommunity.net/ --email you@example.org --handle you
+```
+
+**If a setup dies part-way through, do not re-run it.** The credential a Solid
+server mints is shown once and cannot be minted again, so a second run would
+orphan the first. Run `bin/activitypod.mjs start` and finish at `/setup/` in
+the browser: it picks up from the credential it already has, and does not ask
+for your password again.
+<!-- /CLAUDE -->
+
 ### Running the agent
 
 From the install folder, run `bin/activitypod.mjs start`.
 You may optionally add `--port PORTNUM` to change your local agent's port (default is 8030), or `--name "Your Name"` to change the display name other people see.
 
 Now point your browser (any) at http://localhost:8030 — or your own `--port` if you set it — and there you go!
+
+<!-- CLAUDE 2026-07-30 — added: the two origins, and the record page -->
+`start` prints both URLs and opens nothing — it is run by supervisors and on
+every restart, and a window arriving unasked is not a feature. `--open` opens
+one. `setup` does open a browser, because that is what `setup` is for.
+
+Everything about the actor that can be changed is at
+`http://localhost:8030/admin/` — display name, bio, avatar (saving republishes
+the actor document, so other servers learn them), the agent's own UI password,
+and republish / drain / log / dead letters. The handle, the pod, the identity
+provider and person-vs-group are not editable: they are what the actor *is*,
+and changing one would mean a different actor at a different address.
+Parking, reviving, retiring and rotating the signing key stay on the command
+line.
+<!-- /CLAUDE -->
 
 
 ### Running the agent as a service
@@ -92,6 +149,16 @@ Run it like any other identity — `start`, `stop`, `status`, `park`, `retire` �
 on its own port. It serves no client UI, because there is no timeline for a
 human to read, which also means it has no login and no client tokens.
 
+<!-- CLAUDE 2026-07-30 — added: a group serves its own two pages, and only those -->
+A group does serve its own two pages. `http://localhost:<port>/` is its console
+at `/admin/` — members, join requests, the review queue, what it has carried,
+and every moderation action below as a button — and `/setup/` is where it was
+created in the first place. That is all it serves: no Mastodon client, no
+`/api/*`, no `/oauth/*`, no tokens, no UI password. The console reaches exactly
+the same loopback routes the commands below already reach, so it grants nobody
+any authority they did not have; it is a different client, not a wider door.
+<!-- /CLAUDE -->
+
 Only members are amplified. Anyone can post into a public inbox, so a post is
 carried only when its author already follows the group. That is both the
 anti-spam rule and what makes joining mean something.
@@ -124,6 +191,13 @@ every follower to migrate, so the membership survives a change of host.
 The UI is the bundled [Phanpy](https://github.com/cheeaun/phanpy)
 client (MIT, by Chee Aun); patched to allow the loopback http origin. It is served same-origin over the agent's Mastodon client-API facade. Log in with one
 click, using `localhost:8030` (or your own `--port`) as the instance.
+
+<!-- CLAUDE 2026-07-30 — added: the instance name at the named origin -->
+Browsed at `http://<handle>.localhost:8030/` — which is what `setup` and
+`start` open — the instance to log in with is `<handle>.localhost:8030`
+instead. Either works; they are the same agent. Pick one and stay on it,
+because a browser keeps its login per origin.
+<!-- /CLAUDE -->
 
 The agent federates for real: follow/unfollow, post, reply, favourite,
 boost, media, delete; incoming boosts from people you follow and a

@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>solid-activitypub — record</title>
+<style>
+:root { color-scheme: light dark; }
+body { font: 16px/1.5 system-ui, sans-serif; max-width: 44rem; margin: 0 auto; padding: 2rem 1rem 4rem; }
+h1 { font-size: 1.5rem; margin: 0 0 .25rem; }
+h2 { font-size: 1.15rem; margin: 2rem 0 .5rem; }
+h3 { font-size: 1rem; margin: 1.25rem 0 .35rem; }
+p { margin: .5rem 0; }
+.sub { color: #666; margin-top: 0; }
+fieldset { border: 1px solid #bbb; border-radius: .4rem; margin: 1rem 0; padding: .75rem 1rem 1rem; }
+legend { padding: 0 .3rem; font-weight: 600; }
+label { display: block; margin: .75rem 0 .2rem; }
+.hint { color: #666; font-size: .9rem; margin: .15rem 0 0; }
+input[type=text], input[type=url], input[type=password], textarea {
+  font: inherit; width: 100%; padding: .5rem; box-sizing: border-box;
+  border: 1px solid #999; border-radius: .3rem; background: Field; color: FieldText;
+}
+button { font: inherit; padding: .45rem 1rem; border-radius: .3rem; border: 1px solid #666;
+  background: ButtonFace; color: ButtonText; cursor: pointer; }
+button.primary { font-weight: 600; }
+button:disabled { opacity: .5; cursor: default; }
+dl { display: grid; grid-template-columns: max-content 1fr; gap: .2rem .9rem; margin: .5rem 0; }
+dt { color: #666; }
+dd { margin: 0; word-break: break-all; }
+.address { font-size: 1.2rem; font-weight: 600; word-break: break-all; margin: .25rem 0; }
+.rows { list-style: none; padding: 0; margin: .3rem 0; }
+.rows li { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center;
+  padding: .4rem 0; border-top: 1px solid #ddd; }
+.rows li span { flex: 1 1 18rem; word-break: break-all; }
+.muted { color: #666; }
+.warn { border-left: .25rem solid #c60; padding-left: .75rem; }
+.err { border-left: .25rem solid #b00020; padding-left: .75rem; color: #b00020; }
+.ok { border-left: .25rem solid #2a7; padding-left: .75rem; }
+.origins { font-family: ui-monospace, monospace; font-size: .95rem; word-break: break-all; }
+pre { overflow-x: auto; background: #0001; padding: .6rem; border-radius: .3rem; font-size: .9rem; }
+@media (prefers-color-scheme: dark) {
+  .sub, .hint, dt, .muted { color: #aaa; } fieldset { border-color: #555; } .rows li { border-color: #444; }
+}
+</style>
+</head>
+<body>
+
+<h1>solid-activitypub</h1>
+<p class="sub" id="strap">reading the record…</p>
+<p class="err" id="fatal" hidden></p>
+<p aria-live="polite" id="say" hidden></p>
+
+<section id="pane-identity" hidden>
+  <h2>Identity</h2>
+  <p class="address" id="address"></p>
+  <dl id="facts"></dl>
+  <p class="hint">The handle, the pod, the identity provider and person-vs-group are what this
+    actor <em>is</em>. Changing any of them means a different actor at a different address —
+    that is a new setup, not an edit.</p>
+</section>
+
+<section id="pane-profile" hidden>
+  <h2>Profile</h2>
+  <p class="hint">These are on the wire: saving republishes the actor document so other servers
+    learn them.</p>
+  <form id="profile-form">
+    <label for="name">Display name</label>
+    <input type="text" id="name" name="name" autocomplete="off">
+
+    <label for="summary">Bio</label>
+    <textarea id="summary" name="summary" rows="3"></textarea>
+
+    <label for="icon">Avatar URL</label>
+    <input type="url" id="icon" name="icon" autocomplete="off">
+
+    <p><button type="submit" class="primary">Save and republish</button></p>
+  </form>
+</section>
+
+<section id="pane-group" hidden>
+  <h2>Group</h2>
+
+  <fieldset>
+    <legend>Who may join</legend>
+    <p id="joins-state" class="muted"></p>
+    <p>
+      <button id="joins-open">Let anyone join</button>
+      <button id="joins-approve">Approve each request</button>
+    </p>
+    <p class="hint">This one is on the wire — the actor document carries it, so changing it
+      republishes.</p>
+  </fieldset>
+
+  <fieldset>
+    <legend>What gets carried</legend>
+    <p id="review-state" class="muted"></p>
+    <p>
+      <button id="review-off">Carry members' posts at once</button>
+      <button id="review-on">Hold them for review</button>
+    </p>
+  </fieldset>
+
+  <h3>Join requests <span class="muted" id="requests-count"></span></h3>
+  <ul class="rows" id="requests"></ul>
+
+  <h3>Held for review <span class="muted" id="pending-count"></span></h3>
+  <ul class="rows" id="pending"></ul>
+
+  <h3>Members <span class="muted" id="members-count"></span></h3>
+  <p class="hint">A group cannot force an unfollow. Muting is declining to carry; ejecting also
+    tells their server it is no longer a member.</p>
+  <ul class="rows" id="members"></ul>
+
+  <h3>Carried <span class="muted" id="announced-count"></span></h3>
+  <ul class="rows" id="announced"></ul>
+</section>
+
+<section id="pane-access" hidden>
+  <h2>Access</h2>
+  <p class="origins" id="origins"></p>
+  <form id="access-form">
+    <label for="password">Password for this agent's web UI</label>
+    <input type="password" id="password" name="password" autocomplete="new-password">
+    <p class="hint" id="password-state"></p>
+    <p>
+      <button type="submit">Set it</button>
+      <button type="button" id="password-clear">Remove it</button>
+    </p>
+  </form>
+</section>
+
+<section id="pane-upkeep" hidden>
+  <h2>Upkeep</h2>
+  <p>
+    <button id="do-publish">Republish the actor</button>
+    <button id="do-drain">Drain the inbox</button>
+    <button id="do-log">Show the log</button>
+    <button id="do-deadletter">Show dead letters</button>
+  </p>
+  <pre id="output" hidden></pre>
+  <p class="hint">Parking, reviving, retiring and rotating the signing key stay on the command
+    line: <code>bin/activitypod.mjs park | revive | retire | rotate-key</code>.</p>
+</section>
+
+<script src="admin.js"></script>
+</body>
+</html>
