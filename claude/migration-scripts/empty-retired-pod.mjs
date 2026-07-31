@@ -88,6 +88,25 @@ const KEEP = new Set([urls.actor]);
 const podBase = urls.base;
 const store = storageFor(podBase, (u, i) => remote.fetch(u, i));
 
+// SCOPE: the agent's own container, and nothing above it. We have no idea what
+// else a pod is used for.
+//
+// The first version of this script walked `urls.home`, which for dk's flat
+// layout (--root '') IS the pod root — so it enumerated /profile/, /settings/
+// and everything else. Deleting /profile/card takes out the WebID the
+// credential authenticates as, and every request after that is a 401. That is
+// how it failed.
+//
+//   standalone (root 'activitypods-js/')  → <pod>/activitypods-js/
+//   dk         (root '')                  → <pod>/ap/
+const SCOPE = urls.home === podBase ? urls.home + 'ap/' : urls.home;
+if (SCOPE === podBase || !SCOPE.startsWith(podBase) || SCOPE.length <= podBase.length) {
+  console.error(`refusing: computed scope ${SCOPE} is the pod root. Nothing outside the agent's own container is this script's business.`);
+  process.exit(2);
+}
+const inScope = (u) => u.startsWith(SCOPE) && !KEEP.has(u);
+console.log(`scope: ${SCOPE}  (nothing outside this is touched)\n`);
+
 // Depth-first: a container cannot go until its children have.
 async function walk(container, depth = 0) {
   if (depth > 12) { console.log(`  ${container} — too deep, skipped`); return []; }
@@ -97,19 +116,22 @@ async function walk(container, depth = 0) {
   const out = [];
   for (const name of names) {
     const child = container + name;
-    if (child.startsWith(podBase + '.well-known')) continue;   // webfinger stays
-    if (KEEP.has(child)) continue;
+    // Checked per child, not just at the top: a container listing is remote
+    // input, and a `..` or an absolute URL in it must not carry us out.
+    if (!inScope(child)) { console.log(`  ${child} — outside ${SCOPE}, skipped`); continue; }
     if (name.endsWith('/')) out.push(...await walk(child, depth + 1));
     out.push(child);
   }
   return out;
 }
 
-const targets = await walk(urls.home);
-console.log(`${targets.length} resource(s) under ${urls.home}:`);
+const targets = await walk(SCOPE);
+console.log(`${targets.length} resource(s) under ${SCOPE}:`);
 for (const t of targets) console.log(`  ${t}`);
 console.log(`\nkeeping: ${urls.actor}`);
-console.log(`keeping: ${podBase}.well-known/* (webfinger still resolves to the Tombstone)`);
+console.log(`keeping: everything outside ${SCOPE} — the profile, the settings,`);
+console.log(`         .well-known/ (webfinger still resolves to the Tombstone),`);
+console.log('         and whatever else this pod is used for.');
 
 if (!GO) {
   console.log('\n--- DRY RUN, nothing deleted. Re-run with --go to do it. ---');
