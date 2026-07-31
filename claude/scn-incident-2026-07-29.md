@@ -105,14 +105,28 @@ deleting anything — is the rule.
 
 ### Left to do, in this order
 
-1. **Revoke the client credentials** at solidcommunity.net. Deleting a pod does
-   NOT revoke them; they belong to the account. `~/.activitypod-scn` has a
-   standalone `credential.json`, so `activitypod revoke-credential --email …`
-   works there. dk's does not — its credential is nested inside `config.json` —
-   so that one comes off the account dashboard by hand.
-2. **Delete both pods** in the dashboard.
-3. **Then** `rm -rf ~/.config/data-kitchen/ap ~/.activitypod-scn`. Last, because
-   step 1 needs those credential files to know what to revoke.
+**Recorded 2026-07-31 before the local state was deleted**, because the
+credential files were the only place these were written down:
+
+| identity | clientId | resource |
+|---|---|---|
+| `dk-ap` | `dk-ap-agent_c871cff2-1f9a-4393-a1b1-3bedb957fe13` | `https://solidcommunity.net/.account/account/da1ec536-09bc-4782-b986-bb121a37e080/client-credentials/019cf01e-d645-48a4-84e3-f1f6917254c8/` |
+| `activitypods-js` | already revoked — `credential.json` was gone while `keys.json`, `token.json` and `agent.json` remained, which is what `revoke-credential` leaves | — |
+
+Note the name: dk's credential is `dk-ap-agent_*`, **not** `activitypod-js_*`.
+The scn incident report named `activitypod-js_…` credentials, which are the
+standalone agent's — a different set, and at least one of those is the orphan
+from before the overwrite guard existed.
+
+1. **Revoke `dk-ap-agent_c871cff2…`** at `https://solidcommunity.net/.account/`,
+   along with any `activitypod-js_*` still listed. Deleting a pod does NOT
+   revoke a credential; they belong to the account. This needs the account
+   password, so it is the one step that cannot be automated from here.
+2. **The pods cannot be deleted** — CSS has no handler for it (see above). They
+   can be emptied with `claude/migration-scripts/empty-retired-pod.mjs`, which
+   keeps the Tombstone, or left as they are.
+3. `~/.config/data-kitchen/ap` and `~/.activitypod-scn` were removed on
+   2026-07-31 once the above was recorded.
 
 Do not restart data-kitchen until its pod is gone: `ensureAp` spawns the agent
 at app start, and it would republish the actor over the Tombstone.
