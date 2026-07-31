@@ -74,18 +74,54 @@ agents remains infeasible on a single worker however polite the client is: they
 need horizontal scale and per-credential limits. Our ceiling is per-agent and
 cannot protect them at that scale.
 
+## Retired, 2026-07-31 — scn came back up and both identities were withdrawn
+
+Both scn actors now answer with a `Tombstone`, publicly readable, so anything
+dereferencing them gets an answer rather than a 404 it would retry:
+
+| actor | followers | deleted |
+|---|---|---|
+| `https://dk-ap.solidcommunity.net/ap/actor` | 1 (`@jeff_zucker@mastodon.social`) — `Delete` delivered | `2026-07-31T16:57:46Z` |
+| `https://activitypods-js.solidcommunity.net/activitypods-js/ap/actor` | 0 — nothing to deliver | `2026-07-31T17:11:04Z` |
+
+Neither agent could retire itself: dk's `ap-agent` has no retire endpoint, and
+the standalone `retire` wants its state in `ap-state/` **on the pod**, which dk
+keeps in local files. `claude/migration-scripts/retire-scn-actor.mjs` does what
+`publisher.retireActor()` does — a Delete to every follower inbox, then a
+Tombstone over the actor document — against whichever home it is pointed at, and
+dry-runs unless given `--go`. Worth keeping: it is the only way to retire an
+identity whose own agent cannot.
+
+The `activitypods-js` credential had been overwritten, so it needed a fresh
+`setup --force` against that pod first. `~/.activitypod-scn` held the key that
+actor advertised, which is what makes its Tombstone verifiable.
+
+**A correction worth keeping.** The first reading of this was "just delete the
+pods, the actors go with them". That is wrong, and `retireActor()`'s own comment
+says why: a `Delete` is what makes a well-behaved server drop the account *and
+the posts it cached*, while a deleted pod leaves a 404 that servers retry rather
+than a Tombstone they act on. `live-test.md`'s tear-down order — retire BEFORE
+deleting anything — is the rule.
+
+### Left to do, in this order
+
+1. **Revoke the client credentials** at solidcommunity.net. Deleting a pod does
+   NOT revoke them; they belong to the account. `~/.activitypod-scn` has a
+   standalone `credential.json`, so `activitypod revoke-credential --email …`
+   works there. dk's does not — its credential is nested inside `config.json` —
+   so that one comes off the account dashboard by hand.
+2. **Delete both pods** in the dashboard.
+3. **Then** `rm -rf ~/.config/data-kitchen/ap ~/.activitypod-scn`. Last, because
+   step 1 needs those credential files to know what to revoke.
+
+Do not restart data-kitchen until its pod is gone: `ensureAp` spawns the agent
+at app start, and it would republish the actor over the Tombstone.
+
 ## Still outstanding
 
-- **dk's `ap-agent` has none of this** and is named in their logs. Porting it is
-  the remaining item with outside impact.
-- The abandoned `activitypods-js.solidcommunity.net` actor was left as it is.
-  Its collections read `followers: 0, following: 0`, so there is nothing to
-  unfollow and nothing arriving except stragglers; `park` would only convert
-  those from 201s into 401s, and Jeff judged the difference too small to spend
-  his account password on. `park` exists if that changes — see `identities.md`.
-- The credential for that pod is gone (overwritten by a later setup before the
-  guard existed), so parking it now needs a fresh `setup --profile scn` first.
-  `~/.activitypod-scn` is already prepared with the key that actor advertises.
+- **dk's `ap-agent` has none of this** and is named in their logs. With the
+  identity retired it is no longer federating, so the outside impact is closed;
+  porting the hardening only matters if dk is given an actor again.
 
 ## TODO once scn is resolved — finish the rename
 
