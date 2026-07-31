@@ -173,6 +173,50 @@ What would revive it: a deliberate read-only allowlist for one path prefix,
 and a reason better than "it would be nice" — a second app that actually wants
 to read this data.
 
+## The backlog, and who decides about it
+
+Added 2026-07-31. A pod accepts deliveries whether or not the agent is running,
+so a machine that has been off collects them — that is the design working, it is
+why the actor lives on a pod. What was not working was catching up.
+
+Three things, in the order they bite:
+
+- **The drain did not loop while behind.** 50 items, then sleep two minutes,
+  however many were left. On an agent that only runs while a laptop is open that
+  does not converge: a thousand items needs ~40 minutes of *uninterrupted*
+  running. A sweep that made progress and left work behind now goes straight
+  round again — gated on progress, so a sweep that achieved nothing (a cooldown,
+  an unwritable store, poison at the head) cannot spin.
+- **It was not oldest-first.** `listContainer()` returned bare URLs, so items
+  were processed in whatever order the graph parsed. CSS puts `dc:modified` and
+  `posix:size` on every child of the listing we already fetch, so ordering — and
+  measuring — costs nothing. It now returns `{url, size, modified}`, sorted.
+- **No bound on the worst case, and it is not the agent's call to fix that.**
+  Discarding someone's mail is theirs. `/status` carries
+  `inbox: {count, bytes, oldest, newest}` from the last sweep, `/admin/` shows a
+  panel when it is over 500, and the choice is *keep everything* or *discard
+  content older than N days*.
+
+### Why prune reads the small ones
+
+`POST /inbox/prune {before}` is not a blind sweep:
+
+  small (< 2 kB) → read it. Once read the type is known, so `Follow`, `Undo`,
+                   `Accept` and `Delete` are APPLIED and only a `Create` is
+                   dropped. Reading is what buys precision.
+  large          → deleted unread. One request instead of two, and at that
+                   size it is content, which is what was asked to go.
+
+The threshold errs high deliberately, because the errors are not symmetric.
+Mistaking content for control costs one extra GET. Mistaking control for content
+loses a follower who left, or keeps a post its author retracted — silently and
+permanently. Everything whose loss actually corrupts state is a handful of IRIs
+and sits far below 2 kB; the one control-ish activity that gets large is
+`Update{Person}`, and losing one of those means a stale avatar.
+
+So "discard content older than N days" means exactly that, and the follow graph
+survives it.
+
 ## Known limits
 
 - A private **pod** is reached with plain HTTP plus an optional `AP_STATE_TOKEN`

@@ -1166,7 +1166,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   const mkIntake = () => new Intake({
     config: {}, urls: { inbox: 'https://p.example/in/', base: 'https://p.example/' },
     remote: {
-      listContainer: async () => [item],
+      listContainer: async () => [{ url: item, size: 420, modified: "2026-07-30T00:00:00.000Z" }],
       fetch: async () => { throw new Error('remote down'); },
       delete: async () => true,
     },
@@ -3154,7 +3154,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
     store: iStore,
     log: () => {},
     remote: {
-      listContainer: async () => [item],
+      listContainer: async () => [{ url: item, size: 420, modified: "2026-07-30T00:00:00.000Z" }],
       // Unparsable on purpose: a guaranteed rejection, so the item's only
       // record is the dead letter the store is about to be asked to keep.
       fetch: async () => ({ status: 200, text: async () => 'not json' }),
@@ -3337,6 +3337,80 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
     for (const h of homes) await run(h, ['stop']);
     for (const h of homes) fs.rmSync(h, { recursive: true, force: true });
   }
+}
+
+// --- 17. the backlog: measured, drained oldest-first, pruned on request ---
+{
+  const INBOX = 'https://remote.example/ap/inbox/';
+  const old = (n) => `2026-07-01T00:00:0${n}.000Z`;
+  const recent = new Date().toISOString();
+  // A listing as CSS gives it: url, size and modified, deliberately out of order.
+  const listing = [
+    { url: INBOX + 'big-old', size: 4096, modified: old(2) },
+    { url: INBOX + 'small-old', size: 300, modified: old(1) },
+    { url: INBOX + 'recent', size: 4096, modified: recent },
+    { url: INBOX + '.keep', size: 13, modified: old(0) },
+  ];
+  const fetched = [];
+  const deleted = [];
+  const store17 = new PodStore({ log: () => {} });
+  const intake17 = new Intake({
+    config: { handle: 'x' },
+    urls: { inbox: INBOX, actor: 'https://remote.example/ap/actor' },
+    store: store17,
+    log: () => {},
+    remote: {
+      listContainer: async () => listing,
+      fetch: async (u) => { fetched.push(u); return { status: 200, json: async () => ({ type: 'Follow', actor: 'https://m.example/u/a' }) }; },
+      delete: async (u) => { deleted.push(u); return true; },
+      getJson: async () => null,
+    },
+    local: { writeNote: async () => {} },
+    deliverer: { deliver: async () => {}, deliverToAll: async () => {} },
+    publisher: { urls: {}, config: {} },
+  });
+  const applied = [];
+  intake17.handle = async (a) => { applied.push(a.type); return null; };   // routing is what is under test
+
+  const out = await intake17.prune({ before: '2026-07-02T00:00:00.000Z' });
+
+  check(out.considered === 2, `.keep and anything recent are not candidates (${out.considered})`);
+  check(deleted.includes(INBOX + 'big-old') && !fetched.includes(INBOX + 'big-old'),
+    'a large old item is deleted UNREAD — one request, and at that size it is content');
+  check(fetched.includes(INBOX + 'small-old') && applied.includes('Follow'),
+    'a small one is read and APPLIED — the follow graph survives a discard');
+  check(!deleted.includes(INBOX + 'recent') && !deleted.includes(INBOX + '.keep'),
+    'nothing newer than the cutoff is touched');
+  check(out.applied === 1 && out.discarded === 1 && out.dropped === 0,
+    `and it says what it did (applied ${out.applied}, discarded ${out.discarded})`);
+
+  // A Create inside the small set is content too: read, classified, dropped.
+  const dropped = [];
+  intake17.handle = async (a) => { dropped.push(a.type); return null; };
+  intake17.remote.fetch = async (u) => { fetched.push(u); return { status: 200, json: async () => ({ type: 'Create' }) }; };
+  const out2 = await intake17.prune({ before: '2026-07-02T00:00:00.000Z' });
+  check(out2.dropped === 1 && !dropped.includes('Create'),
+    'a small Create is read, recognised as content and dropped rather than applied');
+
+  // The listing itself: metadata carried, oldest first, auxiliaries excluded.
+  const ttl = `<${INBOX}> a <http://www.w3.org/ns/ldp#Container> ;`
+    + ` <http://www.w3.org/ns/ldp#contains> <${INBOX}b>, <${INBOX}a>.`
+    + ` <${INBOX}b> <http://purl.org/dc/terms/modified> "2026-07-09T00:00:00.000Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> ;`
+    + ` <http://www.w3.org/ns/posix/stat#size> 900.`
+    + ` <${INBOX}a> <http://purl.org/dc/terms/modified> "2026-07-02T00:00:00.000Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> ;`
+    + ` <http://www.w3.org/ns/posix/stat#size> 100.`;
+  const { RemotePod: RP17 } = await import(path.join(root, 'lib/remote.mjs'));
+  const pod17 = Object.create(RP17.prototype);
+  pod17.pausedUntil = 0;
+  pod17.log = () => {};
+  pod17.session = { fetch: async () => ({
+    status: 200, headers: { get: (h) => (h === 'etag' ? '"v"' : null) }, text: async () => ttl,
+  }) };
+  const listed = await pod17.listContainer(INBOX);
+  check(listed.length === 2 && listed[0].url.endsWith('a') && listed[1].url.endsWith('b'),
+    'listContainer sorts oldest-first — an LDP listing is a set, so nothing else would');
+  check(listed[0].size === 100 && listed[0].modified === '2026-07-02T00:00:00.000Z',
+    'and carries size and modified from the same response, at no extra cost');
 }
 
 child.kill('SIGTERM');

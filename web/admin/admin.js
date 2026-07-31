@@ -102,6 +102,7 @@ function render() {
       + 'while the agent is reachable only from this machine.';
 
   for (const id of ['pane-identity', 'pane-profile', 'pane-access', 'pane-upkeep']) $(id).hidden = false;
+  renderInbox();
   if (config.kind === 'group') {
     $('pane-group').hidden = false;
     renderGroupToggles();
@@ -245,6 +246,55 @@ $('do-log').addEventListener('click', async () => {
 $('do-deadletter').addEventListener('click', async () => {
   const { json } = await api('/deadletter');
   output(json?.items?.length ? json.items : 'no dead letters');
+});
+
+// ---- inbox ----
+// Only appears when there is enough waiting to be worth a decision. The agent
+// drains oldest-first regardless; this exists to let the owner say "do not
+// bother with that fortnight", which is not a call an agent should make on
+// someone's mail by itself.
+const INBOX_PROMPT_AT = 500;
+let dismissed = false;
+
+async function renderInbox() {
+  if (dismissed) return;
+  const { json: st } = await api('/status');
+  const box = st?.inbox;
+  const panel = $('pane-inbox');
+  if (!box || box.count < INBOX_PROMPT_AT) { panel.hidden = true; return; }
+  const mb = box.bytes >= 1048576
+    ? `${(box.bytes / 1048576).toFixed(1)} MB` : `${Math.round(box.bytes / 1024)} kB`;
+  const since = box.oldest ? new Date(box.oldest).toLocaleDateString() : 'unknown';
+  $('inbox-summary').textContent =
+    `${box.count.toLocaleString()} deliveries waiting (${mb}), the oldest from ${since}.`;
+  // One request each to read and delete, and the agent holds itself to 60 a
+  // minute, so the honest number is minutes not seconds.
+  $('inbox-warn').hidden = box.count < 2000;
+  $('inbox-warn').textContent = box.count >= 2000
+    ? `At 60 requests a minute this is roughly ${Math.ceil(box.count * 2 / 60)} minutes of `
+      + 'draining if you keep everything. Discarding the old content is much quicker.'
+    : '';
+  panel.hidden = false;
+}
+
+$('inbox-keep').addEventListener('click', () => {
+  dismissed = true;
+  $('pane-inbox').hidden = true;
+  say('leaving it to the agent — it drains oldest first');
+});
+
+$('inbox-prune').addEventListener('click', async () => {
+  const days = Number($('inbox-before').value);
+  const before = new Date(Date.now() - days * 86400_000).toISOString();
+  $('inbox-prune').disabled = true;
+  say(`discarding content older than ${days} days — this takes a while`);
+  const r = await write('/inbox/prune', { before }, 'done');
+  $('inbox-prune').disabled = false;
+  if (r) {
+    say(`applied ${r.applied} follow/unfollow/delete, discarded ${r.dropped + r.discarded} posts`
+      + (r.failed ? `, ${r.failed} failed` : ''));
+    renderInbox();
+  }
 });
 
 load();

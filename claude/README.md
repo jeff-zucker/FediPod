@@ -2,7 +2,7 @@
 
 | path | what |
 |---|---|
-| `smoke-tests/agent-smoke.mjs` | the whole test suite (346 checks): boots an unconfigured agent on a scratch `AP_HOME`, then exercises the gate, the Mastodon facade, keys and signing, the wire and pod-RDF builders, intake, the security guards, every politeness behavior added on 2026-07-29, and (§12–§14) the browser setup flow, the named origin and the editable record. `npm test` runs it. |
+| `smoke-tests/agent-smoke.mjs` | the whole test suite (354 checks): boots an unconfigured agent on a scratch `AP_HOME`, then exercises the gate, the Mastodon facade, keys and signing, the wire and pod-RDF builders, intake, the security guards, every politeness behavior added on 2026-07-29, and (§12–§14) the browser setup flow, the named origin and the editable record. `npm test` runs it. |
 | `backups/` | originals of vendored files patched by hand, e.g. `phanpy-sw-2026-07-29/` (the service worker replaced by a kill-switch). |
 | `diagrams/group-actor.mmd` | mermaid: a group actor as a hub that many pods follow, and what travels each link. |
 | `diagrams/architecture-relay.svg` | sibling of the root `architecture.svg`, same palette: the same two halves with the private trees moved to a pod on your machine. Read with `plans/pod-as-relay.md`. |

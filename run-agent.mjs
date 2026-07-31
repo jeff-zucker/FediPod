@@ -89,6 +89,9 @@ export class Agent {
       deadLetters: this.store.getDeadLetters().length,
       blockedDomains: this.store.getBlocklist().domains.length,
       push: this.intake?.wsState || 'n/a',
+      // Measured by the last sweep from the listing it already fetched, so
+      // asking costs nothing. What the admin page prompts on.
+      inbox: this.intake?.inboxStats || null,
       lastDrain: this.intake?.lastDrain || null,
       tagfeed: this.tagfeed
         ? { ...this.tagfeed.config(), lastSweep: this.tagfeed.lastSweep, lastAdded: this.tagfeed.lastAdded }

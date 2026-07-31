@@ -118,6 +118,29 @@ pre { overflow-x: auto; background: #0001; padding: .6rem; border-radius: .3rem;
   <ul class="rows" id="announced"></ul>
 </section>
 
+<section id="pane-inbox" hidden>
+  <h2>Inbox</h2>
+  <p id="inbox-summary"></p>
+  <p class="hint">Your pod accepts deliveries whether or not this agent is running, so a
+    machine that has been off collects them. The agent is working through them oldest first
+    and will get there on its own — this is only here if you would rather not wait.</p>
+  <p>
+    <button id="inbox-keep">Keep everything</button>
+    <label for="inbox-before">or discard content older than</label>
+    <select id="inbox-before">
+      <option value="7">7 days</option>
+      <option value="30" selected>30 days</option>
+      <option value="90">90 days</option>
+    </select>
+    <button id="inbox-prune" class="primary">Discard it</button>
+  </p>
+  <p class="hint">Discarding drops posts, not bookkeeping: follows, unfollows, acceptances
+    and deletions in that period are still applied, so your follower list stays right and
+    nothing stays up that its author took down. What goes is the timeline you would have
+    read that week.</p>
+  <p class="err" id="inbox-warn" hidden></p>
+</section>
+
 <section id="pane-access" hidden>
   <h2>Access</h2>
   <p class="origins" id="origins"></p>
