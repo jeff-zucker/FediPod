@@ -57,6 +57,9 @@ pre { overflow-x: auto; background: #0001; padding: .6rem; border-radius: .3rem;
   <p class="hint">The handle, the pod, the identity provider and person-vs-group are what this
     actor <em>is</em>. Changing any of them means a different actor at a different address —
     that is a new setup, not an edit.</p>
+  <p class="hint">Where the private data lives is a fact here rather than a setting, because
+    changing it means moving data: stop the agent and run
+    <code>bin/activitypod.mjs state --to &lt;url&gt;</code>.</p>
 </section>
 
 <section id="pane-profile" hidden>

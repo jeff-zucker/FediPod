@@ -47,6 +47,29 @@ export class Agent {
 
   configured() { return !!this.remote && !!this.store.getConfig(); }
 
+  // Where the private half lives. `privateRoot` in the credential file names a
+  // container — normally on a pod on this machine — under which the same two
+  // trees are laid out as on the pod. Absent means on the pod, exactly as
+  // before, so an existing install is untouched.
+  privateUrls(cred, urls = this.urls) {
+    if (!cred.privateRoot) {
+      return { state: urls.state, fediverse: urls.fediverse, elsewhere: false };
+    }
+    const base = cred.privateRoot.endsWith('/') ? cred.privateRoot : cred.privateRoot + '/';
+    return { state: base + 'ap-state/', fediverse: base + 'fediverse/', elsewhere: true };
+  }
+
+  // The pod's own fetch is authenticated with the credential; another pod is
+  // not ours to authenticate to. A local one is reached plainly, with a token
+  // header when it is gated (dk's is).
+  privateFetch(cred) {
+    if (!cred.privateRoot) return (u, i) => this.remote.fetch(u, i);
+    const token = process.env.AP_STATE_TOKEN || '';
+    return (u, i) => fetch(u, token
+      ? { ...i, headers: { ...(i?.headers || {}), 'x-dk-token': token } }
+      : i);
+  }
+
   logLines(n = 100) { return this.logRing.slice(-n); }
 
   status() {
@@ -85,12 +108,27 @@ export class Agent {
     this.remote = new RemotePod(cred, { log: this.log, home: this.home });
     await this.remote.warmup();
     this.urls = apUrls(cred.remotePod, root);
+    const priv = this.privateUrls(cred);
+    const pfetch = this.privateFetch(cred);
+    // The pod's own ap-state/ is provisioned either way: even when the rest of
+    // the private half lives elsewhere, lease.json stays here, because a lease
+    // in a pod only one machine can reach coordinates nothing.
     await this.remote.putJson(this.urls.state + '.keep', { keep: true }, 'application/json');
-    await this.remote.putJson(this.urls.fediverse + '.keep', { keep: true }, 'application/json');
     await this.remote.setAcl(this.urls.home, []);
     await this.remote.setAcl(this.urls.state, []);
-    await this.remote.setAcl(this.urls.fediverse, []);
-    this.store.attach(this.urls.state, (u, i) => this.remote.fetch(u, i));
+    if (priv.elsewhere) {
+      for (const c of [priv.state, priv.fediverse]) {
+        const res = await pfetch(c + '.keep', {
+          method: 'PUT', headers: { 'content-type': 'application/json' }, body: '{"keep":true}\n',
+        });
+        if (res.status >= 400) throw new Error(`private pod PUT ${c}.keep → ${res.status}`);
+      }
+      this.log(`private state lives at ${cred.privateRoot}`);
+    } else {
+      await this.remote.putJson(this.urls.fediverse + '.keep', { keep: true }, 'application/json');
+      await this.remote.setAcl(this.urls.fediverse, []);
+    }
+    this.store.attach(priv.state, pfetch);
     // Re-running setup must not destroy state set afterwards (the UI
     // password, above all), so load what is there and merge into it.
     await this.store.load().catch(() => {});
@@ -117,10 +155,11 @@ export class Agent {
       await this.remote.warmup();
     }
     const probeUrls = apUrls(cred.remotePod, cred.root);
+    const probePriv = this.privateUrls(cred, probeUrls);
     // Load until it actually succeeds: attaching is not the same as having
     // read the state, and a retry that skipped the load would see an empty
     // cache and wrongly conclude the agent was never set up.
-    if (!this.store.fetchImpl) this.store.attach(probeUrls.state, (u, i) => this.remote.fetch(u, i));
+    if (!this.store.fetchImpl) this.store.attach(probePriv.state, this.privateFetch(cred));
     if (!this.stateLoaded) {
       await this.store.load();
       this.stateLoaded = true;
@@ -130,7 +169,9 @@ export class Agent {
     // The store had to be attached from the credential, because only the config
     // it holds says where the state really lives. If the two disagree,
     // everything past here reads one tree and writes another.
-    if (apUrls(config.remotePod, config.root).state !== probeUrls.state) {
+    // Only meaningful when the state follows the pod. With privateRoot set it
+    // is pinned by configuration and a moved pod does not move it.
+    if (!cred.privateRoot && apUrls(config.remotePod, config.root).state !== probeUrls.state) {
       const moved = apUrls(config.remotePod, config.root).state;
       this.log(`state tree moved (${probeUrls.state} → ${moved}) — reattaching`);
       this.store.attach(moved, (u, i) => this.remote.fetch(u, i));
@@ -160,6 +201,8 @@ export class Agent {
 
     // Exactly one agent may act on a pod (inbox drains are destructive
     // reads); later arrivals become read-only viewers of the same state.
+    // Deliberately the REMOTE pod's ap-state/, never privateRoot's: a lease
+    // that only one machine can reach is not a lease.
     this.lease = new Lease({
       url: this.urls.state + 'lease.json',
       fetchImpl: (u, i) => this.remote.fetch(u, i), log: this.log,
@@ -186,7 +229,8 @@ export class Agent {
       const { rotateKeyOnce, ...rest } = cred;
       fs.writeFileSync(path.join(this.home, 'credential.json'), JSON.stringify(rest, null, 2) + '\n', { mode: 0o600 });
     }
-    this.local = new PodRdf({ base: this.urls.fediverse, fetchImpl: (u, i) => this.remote.fetch(u, i) });
+    const priv = this.privateUrls(cred);
+    this.local = new PodRdf({ base: priv.fediverse, fetchImpl: this.privateFetch(cred) });
     this.deliverer = new Deliverer({
       store: this.store, rsaPrivate: keys.rsaPrivate, keyId: this.urls.actor + '#main-key',
       log: this.log, passive: this.viewer,

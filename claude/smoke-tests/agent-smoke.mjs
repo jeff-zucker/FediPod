@@ -3066,6 +3066,163 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   fs.rmSync(CHOME, { recursive: true, force: true });
 }
 
+// --- 15. the private half in a pod of its own, and the drain that respects it ---
+{
+  const PPORT = 18631;
+  // Just enough LDP for PodStore: PUT stores, GET returns, GET on a container
+  // lists its children as Turtle. `refuse` turns the pod read-only.
+  const docs = new Map();
+  let refuse = false;
+  const privatePod = http.createServer(async (req, res) => {
+    let body = '';
+    for await (const c of req) body += c;
+    const p = decodeURIComponent(new URL(req.url, 'http://x').pathname);
+    if (req.method === 'PUT') {
+      if (refuse) { res.writeHead(403); res.end(); return; }
+      docs.set(p, body); res.writeHead(201); res.end(); return;
+    }
+    if (req.method === 'DELETE') { docs.delete(p); res.writeHead(205); res.end(); return; }
+    if (p.endsWith('/')) {
+      const names = [...docs.keys()].filter(k => k.startsWith(p) && k !== p);
+      if (!names.length) { res.writeHead(404); res.end(); return; }   // not created yet
+      res.writeHead(200, { 'content-type': 'text/turtle' });
+      res.end(names.map(n => `<${n.slice(p.length)}>`).join(' ') + ' .\n');
+      return;
+    }
+    if (!docs.has(p)) { res.writeHead(404); res.end(); return; }
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end(docs.get(p));
+  });
+  await new Promise(r => privatePod.listen(PPORT, '127.0.0.1', r));
+  const BASE = `http://127.0.0.1:${PPORT}/private/ap-state/`;
+  const plainFetch = (u, i) => fetch(u, i);
+
+  const st = new PodStore({ log: () => {} });
+  st.attach(BASE, plainFetch);
+  st.setConfig({ handle: 'x' });
+  check(await st.commit() === true && docs.has('/private/ap-state/config.json'),
+    'commit() says the write landed, and it really is in the pod');
+
+  refuse = true;
+  st.setConfig({ handle: 'y' });
+  check(await st.commit() === false,
+    'a refused write is reported as NOT landed — flush() used to swallow this');
+  refuse = false;
+
+  const st2 = new PodStore({ log: () => {} });
+  st2.attach(BASE, plainFetch);
+  await st2.load();
+  check(st2.getConfig()?.handle === 'x', 'a second store reads it back out of the container');
+
+  const mem = new PodStore({ log: () => {} });
+  mem.setConfig({ handle: 'z' });
+  check(await mem.commit() === true, 'a store with no pod behind it counts as written');
+
+  // --- the drain must not delete what it could not write down ---
+  const INBOX = 'https://remote.example/ap/inbox/';
+  const item = INBOX + 'a1';
+  const deleted = [];
+  const iStore = new PodStore({ log: () => {} });
+  iStore.attach(BASE, plainFetch);
+  const intake15 = new Intake({
+    config: { handle: 'x' },
+    urls: { inbox: INBOX, actor: 'https://remote.example/ap/actor', notes: 'https://remote.example/ap/notes/' },
+    store: iStore,
+    log: () => {},
+    remote: {
+      listContainer: async () => [item],
+      // Unparsable on purpose: a guaranteed rejection, so the item's only
+      // record is the dead letter the store is about to be asked to keep.
+      fetch: async () => ({ status: 200, text: async () => 'not json' }),
+      delete: async (u) => { deleted.push(u); },
+      getJson: async () => null,
+    },
+    local: { writeNote: async () => {} },
+    deliverer: { deliver: async () => {}, deliverToAll: async () => {} },
+    publisher: { urls: {}, config: {} },
+  });
+  check(intake15.strictCommit === true,
+    'state on another origin from the inbox means the drain must commit first');
+
+  refuse = true;
+  await intake15.drain();
+  check(deleted.length === 0,
+    `nothing is deleted while the state pod refuses writes (${deleted.length} deleted)`);
+  check(iStore.getDeadLetters().length === 1,
+    'the dead letter is held in memory, waiting for a pod that will take it');
+
+  refuse = false;
+  intake15.drainCooldownUntil = 0;
+  await intake15.drain();
+  check(deleted.includes(item) && docs.has('/private/ap-state/deadletter.json'),
+    'and the item is deleted only once the write has landed');
+
+  // --- privateRoot moves both private trees, and never the lease ---
+  const { Agent } = await import(path.join(root, 'run-agent.mjs'));
+  const a15 = new Agent({ home: '/tmp/activitypod-private-probe', log: () => {} });
+  a15.urls = wire.apUrls('https://pod.example/');
+  const onPod = a15.privateUrls({ remotePod: 'https://pod.example/' });
+  check(onPod.state === a15.urls.state && onPod.fediverse === a15.urls.fediverse
+    && onPod.elsewhere === false,
+    'without privateRoot the private half stays on the pod, exactly as before');
+  const off = a15.privateUrls({ remotePod: 'https://pod.example/', privateRoot: 'http://localhost:8000/dk-pod/ap' });
+  check(off.state === 'http://localhost:8000/dk-pod/ap/ap-state/'
+    && off.fediverse === 'http://localhost:8000/dk-pod/ap/fediverse/' && off.elsewhere === true,
+    'privateRoot moves both trees together, laid out as on the pod');
+  check(a15.urls.state.startsWith('https://pod.example/'),
+    'and urls.state — which is where the lease is built — is untouched by it');
+  const podFetch = a15.privateUrls.call({ urls: a15.urls }, { remotePod: 'https://pod.example/' });
+  check(podFetch.elsewhere === false, 'the default configuration is unchanged');
+
+  // --- `activitypod state --to` copies and verifies before it repoints ---
+  const SHOME15 = fs.mkdtempSync('/tmp/activitypod-move-');
+  const SRC = `http://127.0.0.1:${PPORT}/moveA/`;
+  const DST = `http://127.0.0.1:${PPORT}/moveB/`;
+  fs.writeFileSync(path.join(SHOME15, 'credential.json'), JSON.stringify({
+    remotePod: 'https://pod.example/', privateRoot: SRC,
+    clientId: 'c', secret: 's', webId: 'https://pod.example/profile/card#me',
+    tokenEndpoint: 'https://pod.example/.oidc/token', issuerOrigin: 'https://pod.example',
+  }, null, 2));
+  const seed = new PodStore({ log: () => {} });
+  seed.attach(SRC + 'ap-state/', plainFetch);
+  seed.setConfig({ remotePod: 'https://pod.example/', handle: 'mover', name: 'Mover' });
+  seed.setBlocklist({ domains: ['bad.example'], actors: [] });
+  await seed.commit();
+  await fetch(SRC + 'fediverse/posts/n1', { method: 'PUT', headers: { 'content-type': 'text/turtle' }, body: '<> a as:Note .\n' });
+
+  // ASYNC, deliberately: the CLI talks to the pod being served by THIS
+  // process, so a synchronous exec would deadlock waiting on itself.
+  const { execFile } = await import('node:child_process');
+  const runCli = (args) => new Promise((resolve) => {
+    execFile(process.execPath, [path.join(root, 'bin/activitypod.mjs'), ...args],
+      { env: { ...process.env, AP_HOME: SHOME15, AP_PORT: '18632' } },
+      (err, stdout, stderr) => resolve({ ok: !err, out: String(stdout) + String(stderr) }));
+  });
+
+  const shown = await runCli(['state']);
+  check(shown.ok && shown.out.includes(SRC), `state reports where the private half is (${shown.ok})`);
+
+  refuse = true;
+  const blocked = await runCli(['state', '--to', DST]);
+  const credAfterFail = JSON.parse(fs.readFileSync(path.join(SHOME15, 'credential.json'), 'utf8'));
+  check(!blocked.ok && credAfterFail.privateRoot === SRC,
+    'a copy that does not land leaves the pointer where it was');
+  refuse = false;
+
+  const moved = await runCli(['state', '--to', DST]);
+  const credAfter = JSON.parse(fs.readFileSync(path.join(SHOME15, 'credential.json'), 'utf8'));
+  check(moved.ok && credAfter.privateRoot === DST + '',
+    `and a copy that lands repoints it (${moved.ok ? credAfter.privateRoot : moved.out.slice(-120)})`);
+  check(docs.has('/moveB/ap-state/config.json') && docs.has('/moveB/ap-state/blocklist.json')
+    && docs.has('/moveB/fediverse/posts/n1'),
+    'state documents AND the RDF notes both came across');
+  check(docs.has('/moveA/ap-state/config.json'),
+    'and the old copy is left behind rather than deleted');
+
+  fs.rmSync(SHOME15, { recursive: true, force: true });
+  privatePod.close();
+}
+
 child.kill('SIGTERM');
 fs.rmSync(HOME, { recursive: true, force: true });
 console.log(failures ? `\n${failures} FAILURE(S)` : '\nall green');

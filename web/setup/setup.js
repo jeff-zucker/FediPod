@@ -51,6 +51,8 @@ function paneForm() {
   if (state.resumable) {
     $('fs-pod').hidden = true;
     $('row-password').hidden = true;
+    // Both already settled in the credential this run is resuming from.
+    $('fs-private').hidden = true;
     $('submit').textContent = 'Finish setting up';
   } else if (state.passwordSupplied) {
     $('row-password').hidden = true;      // AP_PASSWORD is set in the environment
@@ -61,6 +63,32 @@ function paneForm() {
     el.addEventListener('change', onEdit);
   }
   $('form').addEventListener('submit', onSubmit);
+  onEdit();
+  offerLocalPods();
+}
+
+// Relay is the default where it is possible: if a pod is already running on
+// this machine, offer it. If none is, say so and fall back to the pod — an
+// option that needs software you do not have is not a default.
+async function offerLocalPods() {
+  const { json } = await api('/setup/local-pods');
+  const pods = json?.pods || [];
+  const note = $('private-found');
+  if (!pods.length) {
+    $('form').elements.privateWhere.value = 'pod';
+    note.textContent = 'No pod is answering on this machine, so this starts out on your own pod. '
+      + 'You can move it later with: bin/activitypod.mjs state --to <url>';
+    onEdit();
+    return;
+  }
+  const first = pods[0];
+  $('privateRoot').value = first.url + 'activitypods-js/';
+  note.textContent = `Found ${first.what} at ${first.url}`
+    + (first.gated
+      ? ' — it answered 401, so it wants credentials. data-kitchen\'s takes a token:'
+        + ' start the agent with AP_STATE_TOKEN set. A pod with real ACLs needs more'
+        + ' than this agent can offer yet.'
+      : '.');
   onEdit();
 }
 
@@ -80,6 +108,9 @@ function answers() {
   };
   if (mode === 'new') a.podName = f.podName.value.trim() || a.handle;
   else a.pod = f.pod.value.trim();
+  if (f.privateWhere.value === 'local' && f.privateRoot.value.trim()) {
+    a.privateRoot = f.privateRoot.value.trim();
+  }
   if (!state.resumable && !state.passwordSupplied) a.password = f.password.value;
   if (f.uiPassword.value) a.uiPassword = f.uiPassword.value;
   return a;
@@ -109,6 +140,7 @@ function onEdit() {
   const mode = state.resumable ? 'existing' : $('form').elements.mode.value;
   $('row-podname').hidden = mode !== 'new';
   $('row-pod').hidden = mode === 'new';
+  $('row-private').hidden = $('form').elements.privateWhere.value !== 'local';
   clearTimeout(editTimer);
   editTimer = setTimeout(preview, 150);
 }

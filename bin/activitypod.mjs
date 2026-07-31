@@ -32,6 +32,11 @@
 //                         ('run' is kept as an alias)
 //   activitypod stop      stop the running agent (graceful: flush + lease release)
 //   activitypod status    show the running agent's status
+//   activitypod state     where the private half lives — your timeline, contacts,
+//                         blocklist and notifications. `--to <container-url>`
+//                         moves it to a pod on this machine, `--to pod` moves it
+//                         back. Copies and verifies before repointing; the old
+//                         copy is left behind. Stop the agent first.
 //   activitypod passwd    set/change the UI password (REQUIRED before any
 //                         non-loopback exposure — it turns the instant
 //                         OAuth redirect into a real login form)
@@ -425,6 +430,85 @@ if (cmd === 'setup' && process.stdin.isTTY && !has('cli')
     // `setup` opens one because that is the whole point of `setup`.
     if (has('open')) openBrowser(named || plain);
   }
+} else if (cmd === 'state') {
+  // Where the private half lives, and how to move it. Copy, verify, THEN
+  // repoint — a pointer moved on its own leaves the agent reading one
+  // container and writing another, which is the divergence this avoids.
+  // The old copy is left behind on purpose; delete it when you are satisfied.
+  const credPath = path.join(HOME, 'credential.json');
+  let cred;
+  try { cred = JSON.parse(fs.readFileSync(credPath, 'utf8')); }
+  catch { console.error(`no identity in ${HOME} — run setup first`); process.exit(2); }
+
+  const { apUrls } = await import(new URL('../lib/wire.mjs', import.meta.url));
+  const { PodStore } = await import(new URL('../lib/store.mjs', import.meta.url));
+  const { PodRdf } = await import(new URL('../lib/podrdf.mjs', import.meta.url));
+  const { Agent } = await import(new URL('../run-agent.mjs', import.meta.url));
+  const where = (c) => c.privateRoot || `${apUrls(c.remotePod, c.root).home}(on the pod)`;
+
+  const to = flag('to');
+  if (!to) {
+    console.log(`private data: ${where(cred)}`);
+    console.log(`public face:  ${apUrls(cred.remotePod, cred.root).home}`);
+    console.log('\nTo move it:  bin/activitypod.mjs state --to <container-url>');
+    console.log('             bin/activitypod.mjs state --to pod');
+    process.exit(0);
+  }
+  if (await fetch(`http://localhost:${PORT}/status`).then(() => true).catch(() => false)) {
+    console.error(`an agent is running on port ${PORT} — stop it first:  bin/activitypod.mjs stop`);
+    process.exit(1);
+  }
+  const target = to === 'pod' ? null : (to.endsWith('/') ? to : to + '/');
+  if (target) { try { new URL(target); } catch { console.error(`"${to}" is not a container URL`); process.exit(2); } }
+  if ((cred.privateRoot || null) === target) { console.log(`already there: ${where(cred)}`); process.exit(0); }
+
+  const agent = new Agent({ home: HOME, log: (...a) => console.log('[state]', ...a) });
+  agent.urls = apUrls(cred.remotePod, cred.root);
+  // Only one of the two sides can be the pod, and moving between two local
+  // pods needs no credential at all — so do not spend a token grant on it.
+  if (!cred.privateRoot || !target) {
+    const { RemotePod } = await import(new URL('../lib/remote.mjs', import.meta.url));
+    agent.remote = new RemotePod(cred, { log: () => {}, home: HOME });
+    await agent.remote.warmup();
+  }
+  const from = agent.privateUrls(cred);
+  const fromFetch = agent.privateFetch(cred);
+  const dest = agent.privateUrls({ ...cred, privateRoot: target });
+  const destFetch = agent.privateFetch({ ...cred, privateRoot: target });
+  console.log(`moving the private half\n  from ${from.state.replace(/ap-state\/$/, '')}\n  to   ${dest.state.replace(/ap-state\/$/, '')}\n`);
+
+  const src = new PodStore({ log: () => {} });
+  src.attach(from.state, fromFetch);
+  await src.load();
+  const dst = new PodStore({ log: (...a) => console.log('[state]', ...a) });
+  dst.attach(dest.state, destFetch);
+  for (const [name, value] of src.cache) dst.write(name, value);
+  if (!await dst.commit()) {
+    console.error('some state documents did not land — nothing was repointed, nothing was deleted');
+    process.exit(1);
+  }
+  console.log(`copied ${src.cache.size} state document(s)`);
+
+  const rdfFrom = new PodRdf({ base: from.fediverse, fetchImpl: fromFetch });
+  const rdfTo = new PodRdf({ base: dest.fediverse, fetchImpl: destFetch });
+  let notes = 0;
+  for (const doc of ['settings', 'contacts']) {
+    try { await rdfTo.put(rdfTo.fedi + doc, await rdfFrom.get(rdfFrom.fedi + doc)); }
+    catch (e) { if (!/ 404$/.test(e.message)) throw e; }
+  }
+  for (const kind of ['posts', 'timeline']) {
+    for (const url of await rdfFrom.listNotes(kind)) {
+      await rdfTo.put(`${rdfTo.fedi}${kind}/${url.split('/').pop()}`, await rdfFrom.get(url));
+      notes++;
+    }
+  }
+  console.log(`copied ${notes} note(s)`);
+
+  if (target) cred.privateRoot = target; else delete cred.privateRoot;
+  fs.writeFileSync(credPath, JSON.stringify(cred, null, 2) + '\n', { mode: 0o600 });
+  console.log(`\nprivate data now: ${where(cred)}`);
+  console.log('The old copy was left where it was — delete it once you are satisfied.');
+  process.exit(0);
 } else if (cmd === 'rotate-key') {
   const { Agent } = await import(new URL('../run-agent.mjs', import.meta.url));
   const agent = new Agent({ home: HOME, log: (...a) => console.log('[rotate-key]', ...a) });

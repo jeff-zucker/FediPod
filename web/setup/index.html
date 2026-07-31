@@ -127,6 +127,26 @@ button:disabled { opacity: .5; cursor: default; }
       <input type="url" id="icon" name="icon" autocomplete="off">
     </fieldset>
 
+    <fieldset id="fs-private">
+      <legend>Where its private data lives</legend>
+      <p class="hint">Your timeline, contacts, blocklist and notifications. Your pod always keeps
+        the public half — your address, your actor, your inbox and your published posts.</p>
+      <label class="choice"><input type="radio" name="privateWhere" value="local" checked>
+        In a pod on this machine</label>
+      <label class="choice"><input type="radio" name="privateWhere" value="pod">
+        On your own pod, with everything else</label>
+
+      <div id="row-private">
+        <label for="privateRoot">Container on that pod</label>
+        <input type="url" id="privateRoot" name="privateRoot" autocomplete="url">
+        <p class="hint" id="private-found"></p>
+      </div>
+      <p class="hint">Keeping it here means your pod never holds your timeline or your contact
+        list, and stops being asked to store everything you read. The cost is that this data
+        then has one copy: no second machine can share it, and recovery is only as good as
+        your backups.</p>
+    </fieldset>
+
     <fieldset id="fs-secrets">
       <legend>Passwords</legend>
 

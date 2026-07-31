@@ -68,6 +68,7 @@ function render() {
     ['kind', config.kind],
     ['state dir', config.home],
     ['port', String(config.port)],
+    ['private data', config.privateRoot || 'on your pod, with everything else'],
   ];
   if (config.quiescedAt) rows.push(['parked since', config.quiescedAt]);
   if (config.movedTo) rows.push(['moved to', config.movedTo]);

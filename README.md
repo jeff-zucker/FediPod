@@ -74,10 +74,43 @@ You may optionally add `--port PORTNUM` to change your local agent's port (defau
 
 Now point your browser (any) at http://localhost:8030 — or your own `--port` if you set it — and there you go!
 
-<!-- CLAUDE 2026-07-30 — added: the two origins, and the record page -->
+<!-- CLAUDE 2026-07-30 — added: the two origins, where private data lives, the record page -->
 `start` prints both URLs and opens nothing — it is run by supervisors and on
 every restart, and a window arriving unasked is not a feature. `--open` opens
 one. `setup` does open a browser, because that is what `setup` is for.
+
+### Where your private data lives
+
+By default your pod holds everything: the public face other servers read, and
+also your timeline, contacts, blocklist and notifications. Setup offers to keep
+that second half in a pod on **this machine** instead, leaving your own pod as a
+relay — your address, your actor, your inbox and your published posts, and
+nothing you did not publish.
+
+The saving is not small. Today every post you *receive* costs your pod several
+writes; afterwards receiving costs it nothing but the inbox drain. Your pod stops
+being asked to store everything you read.
+
+It costs two things, both the same thing really — your private data now has one
+copy:
+
+* **No second machine.** You can migrate to a new one with a backup, but two
+  cannot run at once. (The lease that prevents that stays on your pod, so a
+  second agent still cannot corrupt the first — it just cannot join in.)
+* **Recovery is only as good as your backups**, where today there is nothing to
+  lose because your pod has it all.
+
+Setup picks a pod on this machine when one is answering and falls back to your
+own pod when none is. To see or change it later:
+
+```
+bin/activitypod.mjs state                    # where it lives now
+bin/activitypod.mjs state --to http://localhost:8000/dk-pod/activitypods-js/
+bin/activitypod.mjs state --to pod           # move it back
+```
+
+Stop the agent first. It copies both trees and checks they arrived before it
+repoints anything, and it leaves the old copy where it was for you to delete.
 
 Everything about the actor that can be changed is at
 `http://localhost:8030/admin/` — display name, bio, avatar (saving republishes
@@ -233,6 +266,13 @@ buffers everything, an agent Android kills simply catches up on next start.
 
 <!-- CLAUDE 2026-07-30 — repointed png → svg; the old png moved to drafts/ -->
 ![Solid ActivityPub flow](architecture.svg)
+<!-- /CLAUDE -->
+
+<!-- CLAUDE 2026-07-30 — added: the relay variant diagram -->
+The same two halves with the private trees moved to a pod on your machine —
+see *Where your private data lives* above — are drawn in
+[claude/diagrams/architecture-relay.svg](claude/diagrams/architecture-relay.svg),
+with the reasoning in [claude/plans/pod-as-relay.md](claude/plans/pod-as-relay.md).
 <!-- /CLAUDE -->
 
 ## Transparency
