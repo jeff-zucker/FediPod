@@ -137,6 +137,13 @@ bin/activitypod.mjs state --to pod           # move it back
 Stop the agent first. It copies both trees and checks they arrived before it
 repoints anything, and it leaves the old copy where it was for you to delete.
 
+When a lot has piled up while the agent was off, `/admin/` says so and asks what
+you want: keep everything and let it work through the backlog oldest-first, or
+discard the content older than a week or a month. Discarding drops posts, not
+bookkeeping — follows, unfollows and deletions from that period are still
+applied, so your follower list stays right and nothing stays up that its author
+took down.
+
 Everything about the actor that can be changed is at
 `http://localhost:8030/admin/` — one surface, with first-run setup at
 `/admin/setup/` and room for the rest — display name, bio, avatar (saving republishes
