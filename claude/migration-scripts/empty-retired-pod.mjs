@@ -13,10 +13,18 @@
 // outright would replace that with a 404, which servers treat as a transient
 // failure and retry.
 //
-//   node claude/migration-scripts/empty-retired-pod.mjs --home <dir> [--root ''] [--go]
+//   node claude/migration-scripts/empty-retired-pod.mjs --home <dir> [--root ''] [--go] [--gap 1000]
 //
 // DRY RUN unless given --go: it walks the containers and prints every URL it
 // would delete, and deletes nothing.
+//
+// It goes slowly on purpose — one delete a second by default (`--gap`), because
+// the agent holds itself to 60 requests a minute per pod and a bulk delete is
+// the easiest way to repeat the 2026-07-29 incident. It waits out a
+// `Retry-After` rather than failing everything behind it, retries across
+// several passes (a container will not go while anything is left inside it),
+// prints the actual status for every failure, and is safe to re-run: it
+// re-walks, so it resumes where it stopped.
 //
 // Refuses to run unless the actor already IS a Tombstone — retire first
 // (retire-scn-actor.mjs), or you would be emptying a live actor's pod.
@@ -108,12 +116,58 @@ if (!GO) {
   process.exit(0);
 }
 
-let gone = 0;
-let failed = 0;
-for (const t of targets) {
-  const ok = await store.remove(t.slice(podBase.length));
-  if (ok) { gone++; } else { failed++; console.log(`  FAILED ${t}`); }
+// Deliberately slow. The agent holds itself to 60 requests a minute per pod
+// (AP_MAX_REQUESTS_PER_MIN) because blowing through that is what the 2026-07-29
+// incident was about, and a bulk delete is the easiest way to do it again.
+const GAP_MS = Number(flag('gap', 1000));
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+// RemotePod THROWS while it is in a Retry-After cooldown, so one 429 from the
+// pod turns every remaining delete into a failure. Wait the window out instead.
+async function settle() {
+  while (remote.pausedUntil > Date.now()) {
+    const secs = Math.ceil((remote.pausedUntil - Date.now()) / 1000);
+    console.log(`  pod asked for ${secs}s of quiet — waiting`);
+    await sleep(Math.min(secs, 30) * 1000 + 500);
+  }
 }
-console.log(`\ndeleted ${gone}${failed ? `, ${failed} failed` : ''}`);
+
+async function del(url) {
+  await settle();
+  try {
+    const res = await remote.fetch(url, { method: 'DELETE' });
+    if (res.status < 400 || res.status === 404) return { ok: true };
+    return { ok: false, why: `HTTP ${res.status}` };
+  } catch (e) { return { ok: false, why: e.message }; }
+}
+
+// Several passes: a container will not go while anything is left inside it, so
+// a child that failed once takes its parent down with it. Retrying until no
+// further progress sorts out both ordering and anything transient.
+let remaining = targets;
+let gone = 0;
+for (let pass = 1; pass <= 5 && remaining.length; pass++) {
+  console.log(`\npass ${pass}: ${remaining.length} to go`);
+  const failed = [];
+  for (const t of remaining) {
+    const r = await del(t);
+    if (r.ok) { gone++; } else { failed.push(t); console.log(`  ${r.why}\t${t}`); }
+    await sleep(GAP_MS);
+  }
+  if (failed.length === remaining.length) {
+    console.log('\nno progress this pass — stopping rather than hammering the pod.');
+    remaining = failed;
+    break;
+  }
+  remaining = failed;
+}
+
+console.log(`\ndeleted ${gone}${remaining.length ? `, ${remaining.length} left` : ''}`);
+if (remaining.length) {
+  console.log('\nStill there:');
+  for (const t of remaining) console.log(`  ${t}`);
+  console.log('\nRe-run to try again — it re-walks, so it picks up where it left off.');
+  process.exit(1);
+}
 console.log('The Tombstone is still there. Revoke the pod credential now — after that,');
 console.log('nothing can write to this pod again.');
