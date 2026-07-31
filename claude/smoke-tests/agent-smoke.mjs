@@ -346,25 +346,40 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     `the Create goes to followers and to the mentioned actor (${JSON.stringify(sent[0]?.i)})`);
 
   // Replying without retyping the handles must still reach the group, or a
-  // thread breaks the first time somebody trims their reply.
+  // thread breaks the first time somebody trims their reply. A PERSON trimmed
+  // out of that same reply is not carried: the text is authoritative, which is
+  // what every fediverse client leads people to expect.
   const PARENT = 'https://grp.example/activitypods-js/ap/notes/p9';
+  const sent3 = [];
   const pub3 = new Publisher({
     config: { remotePod: 'https://pod.example/', handle: 'you', name: 'You' },
     remote: { putJson: async () => {}, setAcl: async () => {}, delete: async () => true },
     local: { writeNote: async () => {} },
     store: {
-      getStatuses: () => [{ noteId: PARENT, mentions: [{ href: 'https://grp.example/a/actor', name: '@grp@grp.example' }] }],
+      getStatuses: () => [{ noteId: PARENT, mentions: [
+        { href: 'https://grp.example/a/actor', name: '@grp@grp.example' },
+        { href: 'https://b.example/u/mei', name: '@mei@b.example' },
+      ] }],
       read: () => [], write: () => {}, addStatus: () => {},
       getContacts: () => ({ followers: [], following: [] }),
     },
-    deliverer: { deliverToAll: async () => {} }, publicKeyPem: 'x', log: () => {},
-    resolveMention: async (h) => (h === 'grp@grp.example'
-      ? { id: 'https://grp.example/a/actor', inbox: 'https://grp.example/a/inbox' } : null),
+    deliverer: { deliverToAll: async (i) => sent3.push(...i) }, publicKeyPem: 'x', log: () => {},
+    resolveMention: async (h) => ({
+      'grp@grp.example': { id: 'https://grp.example/a/actor', type: 'Group', inbox: 'https://grp.example/a/inbox' },
+      'mei@b.example': { id: 'https://b.example/u/mei', type: 'Person', inbox: 'https://b.example/u/mei/inbox' },
+    })[h] || null,
   });
   const n3 = await pub3.publishNote('just replying', { inReplyTo: PARENT });
   check(n3.tag?.some(t => t.href === 'https://grp.example/a/actor')
     && n3.cc.includes('https://grp.example/a/actor'),
-    'a reply carries the parent thread\'s mentions even when the text drops them');
+    'a reply carries the parent thread\'s group even when the text drops it');
+  check(!n3.tag?.some(t => t.href === 'https://b.example/u/mei'),
+    'a person trimmed out of the reply text is not carried forward as a tag');
+  check(!sent3.includes('https://b.example/u/mei/inbox'),
+    'and is not delivered to either — trimming the handle means not notifying them');
+  const n3b = await pub3.publishNote('still here @mei@b.example', { inReplyTo: PARENT });
+  check(n3b.tag?.some(t => t.href === 'https://b.example/u/mei'),
+    'but a person the author does retype is mentioned normally');
 }
 
 // --- 5c0. the websocket origins the CSP allows ---
@@ -1351,10 +1366,17 @@ store2.addNotification({ type: 'favourite', actor: ALICE, noteId: OWN });
 
 const delivered = [];
 const puts = [];
+const outbox2 = [];
 const fakeAgent = {
   store: store2,
   configured: () => true,
-  publisher: { urls: urls2, ensureMediaContainer: async () => {}, publishCollections: async () => {} },
+  publisher: {
+    urls: urls2, ensureMediaContainer: async () => {}, publishCollections: async () => {},
+    recordOutbox: async (i) => { outbox2.unshift(i); },
+    unrecordOutbox: async (m) => {
+      for (let k = outbox2.length - 1; k >= 0; k--) if (m(outbox2[k])) outbox2.splice(k, 1);
+    },
+  },
   deliverer: {
     deliver: async (inbox, a) => delivered.push({ inbox, a }),
     deliverToAll: async (inboxes, a) => delivered.push({ inboxes, a }),
@@ -1408,6 +1430,13 @@ check(unfav.json.favourited === false && delivered.some(d => d.a?.type === 'Undo
 const boost = await call(`/api/v1/statuses/${store2.idFor(REPLY)}/reblog`, { method: 'POST' });
 check(boost.json.reblogged === true && delivered.some(d => d.a?.type === 'Announce' && d.a.object === REPLY),
   'reblog delivers Announce to followers');
+// A boost is something the actor said, so it belongs in the public outbox. It
+// used to go only to inboxes, leaving nothing for anyone crawling the outbox.
+check(outbox2.some(i => i?.type === 'Announce' && i.object === REPLY),
+  'the boost is recorded in the outbox');
+const unboost = await call(`/api/v1/statuses/${store2.idFor(REPLY)}/unreblog`, { method: 'POST' });
+check(unboost.json.reblogged === false && !outbox2.some(i => i?.type === 'Announce' && i.object === REPLY),
+  'unreblog takes it back out again');
 
 const fol = await call(`/api/v1/accounts/${store2.idFor('https://m.example/u/carol')}/follow`, { method: 'POST' });
 check(fol.status === 200 && fol.json.requested === true
@@ -1958,6 +1987,7 @@ mockCss.close();
 // (Intake is already imported for section 8.)
 
 const gUrls = wire.apUrls('https://grp.example/');
+const gOutbox = [];   // what the group's stub publisher recorded
 check(wire.actorDoc({ urls: gUrls, handle: 'g', publicKeyPem: 'K' }).type === 'Person'
   && wire.actorDoc({ urls: gUrls, handle: 'g', publicKeyPem: 'K', kind: 'person' }).type === 'Person'
   && wire.actorDoc({ urls: gUrls, handle: 'g', publicKeyPem: 'K', kind: 'group' }).type === 'Group',
@@ -1990,7 +2020,11 @@ function groupIntake({ kind = 'group', following = [] } = {}) {
       deliver: async (inbox, a) => sent.push({ inboxes: [inbox], a }),
       deliverToAll: async (inboxes, a) => sent.push({ inboxes, a }),
     },
-    publisher: { urls: gUrls, publishCollections: async () => {} },
+    publisher: { urls: gUrls, publishCollections: async () => {},
+      recordOutbox: async (i) => { gOutbox.unshift(i); },
+      unrecordOutbox: async (m) => {
+        for (let k = gOutbox.length - 1; k >= 0; k--) if (m(gOutbox[k])) gOutbox.splice(k, 1);
+      } },
   });
   intake.fetchAP = async (u) => notes[u] || null;
   return { st, intake, sent, notes };
@@ -2022,6 +2056,10 @@ const announces = (sent) => sent.filter(x => x.a.type === 'Announce');
     "a member's post is the group's timeline, not a stranger's mention");
   await intake.amplify(n.id);
   check(announces(sent).length === 1, 're-delivery of the same Create announces once');
+  // What a group carries is the whole of what it says, so its outbox is the
+  // only public record of the community's feed.
+  check(gOutbox.some(i => i?.type === 'Announce'),
+    "the group's carry is recorded in its outbox");
 }
 {
   // The author shares b.example's inbox with another member, so that target must
@@ -2076,7 +2114,11 @@ const announces = (sent) => sent.filter(x => x.a.type === 'Announce');
 // --- 9b. eject, retract, hold for review ---
 const { ejectFollower, retractAnnouncement } = await import(path.join(root, 'lib/social.mjs'));
 const groupAgent = ({ st, intake, sent }) => ({
-  store: st, intake, publisher: { urls: gUrls, publishCollections: async () => {} },
+  store: st, intake, publisher: { urls: gUrls, publishCollections: async () => {},
+      recordOutbox: async (i) => { gOutbox.unshift(i); },
+      unrecordOutbox: async (m) => {
+        for (let k = gOutbox.length - 1; k >= 0; k--) if (m(gOutbox[k])) gOutbox.splice(k, 1);
+      } },
   deliverer: {
     deliver: async (inbox, a) => sent.push({ inboxes: [inbox], a }),
     deliverToAll: async (inboxes, a) => sent.push({ inboxes, a }),
@@ -2174,7 +2216,11 @@ function personIntake({ statuses = [], followers = [], origin = {} } = {}) {
           headers: new Map(), body: null, json: async () => r.body };
       },
     },
-    publisher: { urls: gUrls, publishCollections: async () => {} },
+    publisher: { urls: gUrls, publishCollections: async () => {},
+      recordOutbox: async (i) => { gOutbox.unshift(i); },
+      unrecordOutbox: async (m) => {
+        for (let k = gOutbox.length - 1; k >= 0; k--) if (m(gOutbox[k])) gOutbox.splice(k, 1);
+      } },
   });
   return { st, intake, sent, wrote };
 }
@@ -2439,6 +2485,10 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
     publisher: {
       urls: gUrls, config: {}, publishCollections: async () => {},
       publishProfile: async () => { gsent.push({ published: true }); return {}; },
+      recordOutbox: async (i) => { gOutbox.unshift(i); },
+      unrecordOutbox: async (m) => {
+        for (let k = gOutbox.length - 1; k >= 0; k--) if (m(gOutbox[k])) gOutbox.splice(k, 1);
+      },
     },
     deliverer: {
       deliver: async (inbox, a) => gsent.push({ inboxes: [inbox], a }),
@@ -2507,9 +2557,15 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   check(noHold.status === 404, `approving something not held is refused (${noHold.status})`);
   await gpost('/review', { on: false });
 
+  // The fixture seeds the carried post straight into the store, so mirror it
+  // into the outbox the way amplify() would have before undoing it.
+  gOutbox.unshift({ type: 'Announce', id: gUrls.actor + '#announce-1', object: MEM_A + '/n/1' });
+  const carried = gOutbox.filter(i => i?.type === 'Announce').length;
   const ret = await gpost('/retract', { noteId: MEM_A + '/n/1' });
   check(ret.status === 200 && gsent.some(x => x.a?.type === 'Undo'),
     `POST /retract undoes a carried announcement (${ret.status})`);
+  check(gOutbox.filter(i => i?.type === 'Announce').length === carried - 1,
+    'and takes the Announce back out of the outbox');
   const retTwice = await gpost('/retract', { noteId: MEM_A + '/n/1' });
   check(retTwice.status === 500 || retTwice.status === 400,
     `retracting it again errors rather than sending a second Undo (${retTwice.status})`);
@@ -2550,6 +2606,52 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
     && reqPerson.status === 404 && joinsPerson.status === 404,
     'a person has no /members, /eject, /pending, /requests or /joins');
   fs.rmSync(GHOME, { recursive: true, force: true });
+}
+
+// --- 11. blocking one actor, not their whole instance ---
+{
+  const st = new PodStore({ log: () => {} });
+  st.setConfig({ remotePod: 'https://pod.example/', handle: 'you', name: 'You' });
+  const BAD = 'https://m.example/u/troll';
+  const OK = 'https://m.example/u/friend';
+  st.setContacts({ followers: [], following: [
+    { actor: OK, inbox: OK + '/inbox', accepted: true },
+    { actor: BAD, inbox: BAD + '/inbox', accepted: true },
+  ] });
+  st.setBlocklist({ domains: [], actors: [BAD] });
+
+  check(st.isBlocked(BAD) && !st.isBlocked(OK),
+    'an actor block hits that actor and nobody else on their instance');
+  check(!st.isBlocked(OK + '/n/1'), "and does not blanket the instance's notes");
+  check(st.getBlocklist().domains.length === 0 && st.getBlocklist().actors.length === 1,
+    'a blocklist written before actors existed still reads back');
+
+  const pUrls = wire.apUrls('https://pod.example/');
+  const notes = {
+    [BAD + '/n/1']: { id: BAD + '/n/1', type: 'Note', attributedTo: BAD, content: 'x', published: '2026-07-30T00:00:00Z' },
+    [OK + '/n/1']: { id: OK + '/n/1', type: 'Note', attributedTo: OK, content: 'y', published: '2026-07-30T00:00:00Z' },
+  };
+  const bIntake = new Intake({
+    config: st.getConfig(), urls: pUrls, store: st, log: () => {},
+    remote: { getJson: async () => null }, local: { writeNote: async () => {} },
+    deliverer: { deliver: async () => {}, deliverToAll: async () => {} },
+    publisher: { urls: pUrls, publishCollections: async () => {} },
+  });
+  bIntake.fetchAP = async (u) => notes[u] || null;
+
+  const direct = await bIntake.handle({ type: 'Create', actor: BAD, object: notes[BAD + '/n/1'] });
+  check(/blocked/.test(String(direct)), `a blocked actor delivering for themselves is refused (${direct})`);
+
+  // The case a domain-only list could never catch: the author is not the sender,
+  // and is only known once the note has been dereferenced at its origin.
+  const viaBoost = await bIntake.onAnnounce({ type: 'Announce', actor: OK }, OK, BAD + '/n/1');
+  check(/blocked author/.test(String(viaBoost)),
+    `a blocked author reached through somebody else's boost is refused (${viaBoost})`);
+  check(!st.getStatuses().some(x => x.actor === BAD), 'and nothing of theirs is stored');
+
+  const clean = await bIntake.onAnnounce({ type: 'Announce', actor: OK }, OK, OK + '/n/1');
+  check(clean === undefined && st.getStatuses().some(x => x.noteId === OK + '/n/1'),
+    `while their instance-mate still comes through (${clean})`);
 }
 
 child.kill('SIGTERM');

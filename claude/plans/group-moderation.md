@@ -15,7 +15,8 @@ into a member's pod or a remote server's state is not a lever at all.
 | action | command | effect |
 |---|---|---|
 | stop carrying a member | `activitypod mute <actor-url>` (undo `unmute`) | their posts are ingested and dropped instead of amplified; they stay a follower and keep receiving everything |
-| keep a domain out entirely | `POST /block {domain}` | checked in `Intake.handle` *before* the type switch, so it stops posts **and** `Follow`s — a blocked domain cannot join. Domain-scoped, covers subdomains |
+| keep a domain out entirely | `POST /block {domain}` | checked in `Intake.handle` *before* the type switch, so it stops posts **and** `Follow`s — a blocked domain cannot join. Covers subdomains |
+| keep one actor out | `POST /block {actor}` | same door, one actor instead of their whole host. Also checked against the note's **author** after dereferencing, so it holds when they arrive through somebody else's boost or a hashtag feed, and it refuses to follow or resolve them outbound |
 | close the group | `activitypod park` / `revive` | inbox ACL emptied, deliveries 401 immediately, nobody can post at all |
 | see who is here | `activitypod members` | followers with their muted flags |
 | see what was carried | `activitypod announced` | every amplified post: author, note, timestamp |
@@ -26,9 +27,10 @@ into a member's pod or a remote server's state is not a lever at all.
 | hand the group on | `activitypod retire --move-to <actor>` | `Move` to every follower; they migrate with the membership intact |
 | stand it down / end it | `retire --keep-handle` / `retire` | park keeping the name, or `Delete` + Tombstone |
 
-Note the difference between the two per-actor-ish tools: **block is about entry**
-(domain-wide, stops joining), **mute is about amplification** (per-actor, they stay
-joined). Neither is the other's substitute.
+Note the difference between the two per-actor tools: **block is about entry**
+(they cannot join or be ingested at all), **mute is about amplification** (they stay
+joined and keep receiving, their posts just are not carried). Neither is the other's
+substitute.
 
 ## What is not possible, at all
 
@@ -76,9 +78,9 @@ that. `eject` is the sticky one, because it mutes.
 
 ## Still missing
 
-**Per-actor entry blocking.** `block` is domain-granular by construction. There is no
-way to refuse one actor at the door while accepting others on their host — though with
-`joins approve` on, a request from them can simply be refused each time.
+**No way to undo a block.** `POST /block` only ever adds. Removing a domain or an actor
+means editing `blocklist.json` on the pod by hand and restarting. Wanted: `POST /unblock`
+and a `blocks` listing.
 
 **A refused requester is not remembered.** Nothing records that you already said no, so
 a persistent requester reappears in the queue. `eject` after admitting is the workaround.

@@ -50,7 +50,17 @@ Nothing to set up — `solo` is on :8041.
 - [ ] **A plain boost still ingests.** Have a Mastodon account boost one of your posts.
       A regression check: the receiver was taught to unwrap *wrapped* Announces and must
       still accept ordinary ones.
-- [ ] **Boosting out still works.** Boost something from Phanpy.
+- [ ] **Boosting out still works.** Boost something from Phanpy, then fetch your outbox
+      (`<pod>/activitypods-js/ap/outbox`) unauthenticated — the `Announce` should be in
+      `orderedItems` as an inline activity. Un-boost and it should be gone again. Boosts
+      used to go only to inboxes and left no public trace.
+- [ ] **Blocking one actor, not their host.** `POST /block {"actor":"<their-actor-url>"}`
+      to the admin port, then have them post. Nothing of theirs arrives, while somebody
+      else on the same instance still comes through. Test the indirect route too: have an
+      account you follow boost the blocked actor — that is the path a domain block could
+      never see, because the author is only known after the note is fetched.
+      **There is no `unblock`** — undoing means editing `blocklist.json` on the pod and
+      restarting, so use a throwaway actor.
 - [ ] **`describe`.** `describe --summary "…" --icon <url>` → both appear on the actor,
       then on your Mastodon view of it. Mastodon caches hard; give it time.
 - [ ] **Live updates from the named host.** Browsing `http://solo.localhost:8041`, a new
@@ -60,16 +70,15 @@ Nothing to set up — `solo` is on :8041.
 - [ ] **`rotate-key`** — the actor republishes with the new key and delivery keeps working.
 - [ ] **`retire`** → Tombstone with `formerType: Person`. Destructive; do it last.
 
-## One judgment call, not a pass/fail
+## Decided on 2026-07-30, worth confirming live
 
 - [ ] Reply to a thread and **delete one of the prefilled `@handles`** before sending.
-      Check whether that person is still notified.
-
-      They probably will be: replies now carry the parent's mentions forward so a trimmed
-      reply cannot fall out of a group thread. Right for a group. **Possibly wrong for a
-      person** — Mastodon treats removing a mention as "do not notify", and we would be
-      overriding that. If it bothers you, the fix is to carry forward only mentions of
-      `Group` actors.
+      That person should **not** be notified: the reply's text is now authoritative, which
+      is what every fediverse client leads people to expect. Retype the handle and they
+      should be notified normally.
+- [ ] The exception is a **`Group`**, which is carried forward whether or not the client
+      prefilled it — covered by the group section below, and the reason the rule is not
+      simply "the text decides".
 
 ---
 
@@ -116,12 +125,18 @@ the clients are hard to tell apart.
       certain claim in the design.**
 - [ ] **A reply that lost the mention still threads.** Reply again with `@finches@…`
       deleted from the text. It should *still* be carried, because a group accepts replies
-      to anything it holds.
+      to anything it holds — and because our own composer carries a `Group` mention forward
+      even when the author trims it, which is the one exception to the rule that the reply's
+      text decides who is mentioned.
+- [ ] **The group's outbox is its public record.** After a carry, fetch
+      `<group-pod>/activitypods-js/ap/outbox` unauthenticated — the `Announce` should be
+      there inline. This is the only crawlable record of what the community has carried.
 - [ ] Mastodon renders the group as a **Group**, not a person.
 - [ ] `joins approve` → Mastodon offers "Request to follow"; `requests`, then `admit`.
 - [ ] `mute <actor>` → their next post is not carried. `unmute`.
 - [ ] `review on` → the next post is held; `pending` lists it; `approve` releases it.
-- [ ] `retract <note-url>` → the boost disappears from Mastodon.
+- [ ] `retract <note-url>` → the boost disappears from Mastodon, and the `Announce` is
+      gone from the group's outbox too.
 - [ ] `eject <actor>` → Mastodon shows you no longer follow the group.
 - [ ] A member deletes a carried post → the group retracts it.
 - [ ] `retire` on the group → Tombstone with `formerType: Group`. *Fixed today, unverified.*

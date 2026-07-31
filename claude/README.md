@@ -2,7 +2,7 @@
 
 | path | what |
 |---|---|
-| `smoke-tests/agent-smoke.mjs` | the whole test suite (250 checks): boots an unconfigured agent on a scratch `AP_HOME`, then exercises the gate, the Mastodon facade, keys and signing, the wire and pod-RDF builders, intake, the security guards, and every politeness behavior added on 2026-07-29. `npm test` runs it. |
+| `smoke-tests/agent-smoke.mjs` | the whole test suite (264 checks): boots an unconfigured agent on a scratch `AP_HOME`, then exercises the gate, the Mastodon facade, keys and signing, the wire and pod-RDF builders, intake, the security guards, and every politeness behavior added on 2026-07-29. `npm test` runs it. |
 | `backups/` | originals of vendored files patched by hand, e.g. `phanpy-sw-2026-07-29/` (the service worker replaced by a kill-switch). |
 | `diagrams/group-actor.mmd` | mermaid: a group actor as a hub that many pods follow, and what travels each link. |
 | `plans/group-actor.md` | why groups are actors rather than tenants, the four hub designs that were dropped (and the CSS component that is **parked, not rejected**), and what is still open. |
