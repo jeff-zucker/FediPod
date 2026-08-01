@@ -77,10 +77,11 @@ Two gaps, one cause — the state now has a single copy on a machine you own.
 
 - **No concurrent multi-device.** Backups give you serial migration, not
   parallel use.
-- **RPO** goes from zero to your backup interval. Restoring a stale snapshot is
-  not neutral either: `publishCollections()` writes the followers list from local
-  contacts, so an old backup republished would overwrite the pod's newer list.
-  Nothing reconciles that today.
+- **RPO** goes from zero to your backup interval. Restoring a stale snapshot
+  used to make that worse: `publishCollections()` writes the followers list from
+  local contacts, so an old backup republished overwrote the pod's newer list and
+  stopped delivering to whoever was missing. It reconciles now — see
+  *reconcile-on-restore* under Known limits. Statuses still have no such path.
 
 Not costs, on inspection: availability is a pause rather than corruption once the
 ordering fix is in; Android is fine because the local store is text only (your
@@ -242,6 +243,12 @@ survives it.
 - dk's local pod enforces no ACLs at all (`pivot-config/no-auth.json` swaps in
   `allow-all.json`), so the gate token and loopback binding are the whole
   boundary. And it exists only while dk runs.
-- No reconcile-on-restore, and no path that rebuilds a lost local store from the
-  published `ap/notes/` and `followers` on the pod. Both would close most of the
+- ~~No reconcile-on-restore.~~ **Done 2026-08-01** for followers, which is the
+  half that costs you something: `publishCollections` reads the pod's published
+  list first and recovers anyone on it this machine has never heard of,
+  dereferencing each to get the inbox delivery needs. What makes that safe to do
+  unconditionally is that every removal is now recorded — `dropFollower` marks
+  an unfollow, an ejection or a deleted account, so a returning name is a
+  genuine follower rather than a decision being undone. Still no path that
+  rebuilds statuses from the published `ap/notes/`. That would close most of the
   RPO gap.

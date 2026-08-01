@@ -3088,6 +3088,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   const curls = wire.apUrls('https://solo.example/');
   const republished = [];
   const lifecycle = [];
+  let blocklist = { domains: [], actors: [] };
   const cagent = {
     home: CHOME, store: cstore, urls: curls, configured: () => true, logLines: () => [],
     status: () => ({ configured: true, mode: 'active', kind: 'person', handle: 'solo' }),
@@ -3291,6 +3292,68 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
     fs.rmSync(shome, { recursive: true, force: true });
   }
 
+  // ---- unblock, and reconcile-on-restore ----
+  {
+    const { PodStore, dropFollower } = await import(path.join(root, 'lib/store.mjs'));
+    const { Publisher } = await import(path.join(root, 'lib/publisher.mjs'));
+
+    // Blocking without unblocking is a trap: the only way out was editing
+    // blocklist.json by hand.
+    await lpost('/block', { domain: 'spam.example' });
+    await lpost('/block', { actor: 'https://x.example/u' });
+    const listed = await cjson('/blocks');
+    check(listed.status === 200 && listed.json.domains.includes('spam.example')
+      && listed.json.actors.includes('https://x.example/u'),
+      'blocks are listable, both granularities');
+    const un = await lpost('/unblock', { domain: 'spam.example' });
+    check(un.status === 200 && un.json.removed === 1 && !un.json.domains.includes('spam.example')
+      && un.json.actors.includes('https://x.example/u'),
+      'unblocking a domain leaves the actor block alone');
+    const noop = await lpost('/unblock', { domain: 'never.blocked' });
+    check(noop.status === 200 && noop.json.removed === 0,
+      'and unblocking something that was not blocked says so rather than pretending');
+
+    // The tombstone is the whole reason a reconcile is safe.
+    const c = { followers: [{ actor: 'https://a.example/u' }, { actor: 'https://b.example/u' }] };
+    dropFollower(c, 'https://b.example/u', 'ejected');
+    check(c.followers.length === 1 && c.removedFollowers[0].actor === 'https://b.example/u'
+      && c.removedFollowers[0].why === 'ejected',
+      'removing a follower records WHY, so a reconcile cannot undo the decision');
+    dropFollower(c, 'https://b.example/u', 'undo-follow');
+    check(c.removedFollowers.length === 1, 'and leaving twice is still one entry');
+
+    // A local half that is behind the pod: one follower it never heard of, one
+    // it deliberately removed. Only the first comes back.
+    const rstore = new PodStore({ log: () => {} });
+    rstore.write('contacts.json', {
+      followers: [{ actor: 'https://a.example/u', inbox: 'https://a.example/in' }],
+      following: [],
+      removedFollowers: [{ actor: 'https://gone.example/u', why: 'ejected', at: 'T' }],
+    });
+    const pub = new Publisher({
+      config: { remotePod: 'https://me.example/', handle: 'me' },
+      store: rstore, log: () => {},
+      remote: {
+        fetch: async () => ({ ok: true, json: async () => ({ orderedItems: [
+          'https://a.example/u', 'https://back.example/u', 'https://gone.example/u',
+        ] }) }),
+      },
+      deliverer: {
+        signedFetch: async (u) => ({ ok: true, json: async () => ({ id: u, inbox: u + '/inbox' }) }),
+      },
+    });
+    const contacts = rstore.getContacts();
+    const n = await pub.reconcileFollowers(contacts);
+    const back = contacts.followers.map(f => f.actor);
+    check(n === 1 && back.includes('https://back.example/u'),
+      'a follower the pod knows and this machine does not is recovered, with its inbox');
+    check(!back.includes('https://gone.example/u'),
+      'and one that was deliberately removed stays removed');
+    check(contacts.followers.find(f => f.actor === 'https://back.example/u')?.inbox
+      === 'https://back.example/u/inbox',
+      'the inbox comes with them — recovering the name alone would not restore delivery');
+  }
+
   // ---- one account, one pod, refused before anything is made ----
   // A second pod on the same account is what produced a credential bound to the
   // wrong WebID. The refusal has to come BEFORE the create call, or the pod
@@ -3373,6 +3436,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
       getActors: () => ({}), getContacts: () => ({ followers: [], following: [] }),
       getStatuses: () => [], idFor: () => 'id', getMedia: () => ({}), setMedia: () => {},
       read: (n, d) => (n === 'masto-tokens.json' ? [{ token: 'TKN', createdAt: Date.now() }] : d),
+    getBlocklist: () => blocklist, setBlocklist: (b) => { blocklist = b; },
     };
     const papi = new MastoApi({
       agent: {
