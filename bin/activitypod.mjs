@@ -45,6 +45,12 @@
 //                         moves it to a pod on this machine, `--to pod` moves it
 //                         back. Copies and verifies before repointing; the old
 //                         copy is left behind. Stop the agent first.
+//   activitypod home      which directory every identity on this machine lives
+//                         in. `--to <dir>` moves the whole root, rewrites any
+//                         privateRoot that pointed inside it, and refuses while
+//                         an agent is answering. Installs made before the
+//                         2026-07-30 rename keep ~/.activitypod until they run
+//                         this; new ones get ~/.solid-activitypub.
 //   activitypod passwd    set/change the UI password (REQUIRED before any
 //                         non-loopback exposure — it turns the instant
 //                         OAuth redirect into a real login form)
@@ -62,6 +68,8 @@ import path from 'node:path';
 import net from 'node:net';
 import readline from 'node:readline';
 import { spawn } from 'node:child_process';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { apRoot, profilesDir, identityHomes, isLegacyRoot, CURRENT_ROOT } from '../lib/home.mjs';
 
 const args = process.argv.slice(2);
 const cmd = args[0];
@@ -71,12 +79,14 @@ const flag = (name, dflt) => {
 };
 const has = (name) => args.includes('--' + name);
 // One identity per home. --profile <name> is the ergonomic form of picking one:
-// ~/.activitypod for the first, ~/.activitypod/profiles/<name>/ for the rest.
+// the root for the first, <root>/profiles/<name>/ for the rest. lib/home.mjs
+// decides the root — see it for why an old install keeps the old name.
 // An explicit --home / AP_HOME still wins, so existing installs are untouched.
 const PROFILE = flag('profile', process.env.AP_PROFILE || null);
-const PROFILES_DIR = path.join(os.homedir(), '.activitypod', 'profiles');
+const AP_ROOT = apRoot();
+const PROFILES_DIR = profilesDir(AP_ROOT);
 const HOME = flag('home', process.env.AP_HOME
-  || (PROFILE ? path.join(PROFILES_DIR, PROFILE) : path.join(os.homedir(), '.activitypod')));
+  || (PROFILE ? path.join(PROFILES_DIR, PROFILE) : AP_ROOT));
 
 // The port chosen at setup is remembered, so `start`/`stop`/`status` need no
 // flags afterwards. Precedence: --port > AP_PORT > the recorded choice > 8030.
@@ -147,6 +157,11 @@ async function agentOn(port) {
     return typeof body?.configured === 'boolean' ? body : null;
   } catch { return null; }
 }
+
+const isInside = (root, p) => {
+  const rel = path.relative(root, p);
+  return !!rel && !rel.startsWith('..') && !path.isAbsolute(rel);
+};
 
 function openBrowser(url) {
   try {
@@ -403,7 +418,9 @@ if (cmd === 'up') {
   }
 
   const { mintCredential } = await import(new URL('../lib/remote.mjs', import.meta.url));
-  const credential = await mintCredential({ origin: issuer, email, password, name: 'activitypod-js' });
+  // New credentials only: one already registered keeps the name it was minted
+  // under, so existing pods stay as they are unless they are set up again.
+  const credential = await mintCredential({ origin: issuer, email, password, name: 'solid-activitypub' });
   const rec = {
     ...credential,
     remotePod: pod.endsWith('/') ? pod : pod + '/',
@@ -618,13 +635,7 @@ if (cmd === 'up') {
   await finish(agent);
 } else if (cmd === 'profiles') {
   // Local files only, plus a quick liveness probe: nothing here needs the pod.
-  const homes = [{ name: '(default)', dir: path.join(os.homedir(), '.activitypod') }];
-  try {
-    for (const name of fs.readdirSync(PROFILES_DIR).sort()) {
-      const dir = path.join(PROFILES_DIR, name);
-      if (fs.statSync(dir).isDirectory()) homes.push({ name, dir });
-    }
-  } catch { /* no profiles yet */ }
+  const homes = identityHomes(AP_ROOT);
 
   const rows = [];
   for (const { name, dir } of homes) {
@@ -654,8 +665,89 @@ if (cmd === 'up') {
         + `  ${String(r.kind).padEnd(wk)}  ${r.state}`);
     }
   }
-  console.log('\nIdentities under a custom AP_HOME are not listed — only ~/.activitypod'
-    + ' and ~/.activitypod/profiles/*.');
+  console.log(`\nIdentities under a custom AP_HOME are not listed — only ${AP_ROOT}`
+    + ' and its profiles/*.');
+  process.exit(0);
+} else if (cmd === 'home') {
+  // The root holds the credential and the signing keys of every identity on
+  // this machine, so taking the post-rename name is a command you run, never
+  // something an upgrade does behind you. Resolution is in lib/home.mjs.
+  const to = flag('to');
+  const overridden = !!(process.env.AP_HOME || flag('home'));
+
+  if (!to) {
+    console.log(`\nroot:      ${AP_ROOT}${isLegacyRoot(AP_ROOT) ? '   (the name from before the rename)' : ''}`);
+    console.log(`this home: ${HOME}`);
+    for (const { name, dir } of identityHomes(AP_ROOT)) {
+      if (fs.existsSync(path.join(dir, 'credential.json'))) console.log(`  · ${name}`);
+    }
+    if (overridden) {
+      console.log('\nAP_HOME / --home is set, so this run is not using the root above.');
+    } else if (isLegacyRoot(AP_ROOT)) {
+      console.log('\nTake the current name with:\n');
+      console.log(`  ${process.argv[1]} home --to ${path.join(os.homedir(), CURRENT_ROOT)}\n`);
+      console.log('That moves the whole root — the default identity and every profile — and');
+      console.log('refuses while any of them is answering.');
+    }
+    process.exit(0);
+  }
+
+  if (overridden) {
+    console.error('AP_HOME / --home is set. That is an explicit directory, not the root this');
+    console.error('command moves — unset it and run again, or move the directory yourself.');
+    process.exit(2);
+  }
+  const target = path.resolve(to.replace(/^~(?=[/\\]|$)/, os.homedir()));
+  if (target === AP_ROOT) { console.log(`already there: ${AP_ROOT}`); process.exit(0); }
+  if (!fs.existsSync(AP_ROOT)) { console.error(`nothing to move — ${AP_ROOT} does not exist`); process.exit(2); }
+  if (fs.existsSync(target) && fs.readdirSync(target).length) {
+    console.error(`${target} exists and is not empty — refusing to merge two roots`);
+    process.exit(2);
+  }
+
+  // A running agent holds its pidfile and log by path; moving out from under it
+  // strands both and leaves `stop` with nothing to find.
+  const live = [];
+  for (const { name, dir } of identityHomes(AP_ROOT)) {
+    let port = null;
+    try { port = JSON.parse(fs.readFileSync(path.join(dir, 'agent.json'), 'utf8')).port; } catch { continue; }
+    if (port && await agentOn(port)) live.push(`${name} on ${port}`);
+  }
+  if (live.length) {
+    console.error(`still answering: ${live.join(', ')}`);
+    console.error('stop them first — a move would strand the pidfile and log they hold');
+    process.exit(2);
+  }
+
+  fs.mkdirSync(path.dirname(target), { recursive: true });
+  try {
+    fs.renameSync(AP_ROOT, target);
+  } catch (e) {
+    if (e.code !== 'EXDEV') throw e;                  // a different filesystem
+    fs.cpSync(AP_ROOT, target, { recursive: true, preserveTimestamps: true });
+    fs.rmSync(AP_ROOT, { recursive: true, force: true });
+  }
+  console.log(`moved ${AP_ROOT} → ${target}`);
+
+  // privateRoot is recorded as an absolute path. One that pointed inside the
+  // root we just moved now points at nothing, and an agent finding an empty
+  // store reports itself unconfigured rather than saying why.
+  for (const { name, dir } of identityHomes(target)) {
+    const credPath = path.join(dir, 'credential.json');
+    let cred;
+    try { cred = JSON.parse(fs.readFileSync(credPath, 'utf8')); } catch { continue; }
+    if (!cred.privateRoot || /^https?:/i.test(cred.privateRoot)) continue;   // a pod, not a directory
+    const was = cred.privateRoot.startsWith('file:')
+      ? fileURLToPath(cred.privateRoot) : path.resolve(cred.privateRoot);
+    if (!isInside(AP_ROOT, was)) continue;                                   // somewhere else entirely
+    const now = path.join(target, path.relative(AP_ROOT, was));
+    cred.privateRoot = pathToFileURL(now).href + '/';
+    fs.writeFileSync(credPath, JSON.stringify(cred, null, 2), { mode: 0o600 });
+    console.log(`  · ${name}: private data now ${cred.privateRoot}`);
+  }
+
+  console.log('\nIf you installed the service, its unit has the old path baked in as');
+  console.log('Environment=AP_HOME — re-run install-service to update it.');
   process.exit(0);
 } else if (cmd === 'park' || cmd === 'revive') {
   // Park is quiesce plus a snapshot of the follow graph, because unfollowing is
@@ -728,8 +820,11 @@ if (cmd === 'up') {
     console.log(`  · ${following} account(s) get unfollowed — that is what stops posts arriving`);
     console.log('  · the inbox is closed, so anything else is refused rather than stored forever');
   }
+  // revive() opens the inbox first and only then replays parked.json, which a
+  // stand-down never wrote — so it is the right undo here, minus the re-follows.
   console.log(keep
-    ? '\nReversible: follow people again and re-open the inbox with publish-profile.\n'
+    ? '\nReversible: activitypod revive re-opens the inbox. Standing down keeps no snapshot\n'
+      + 'of the follow graph, unlike park, so following people again is on you.\n'
     : '\nYour posts and RDF stay on the pod; the identity does not come back.\n');
 
   const ans = has('yes') ? 'y' : await ask(
@@ -871,7 +966,7 @@ if (cmd === 'up') {
     } else {
       fs.mkdirSync(unitDir, { recursive: true });
       fs.writeFileSync(unit, `[Unit]
-Description=solid-activitypub agent (pod-stored ActivityPub actor)
+Description=Solid ActivityPub agent (pod-stored ActivityPub actor)
 After=network-online.target
 
 [Service]
@@ -1071,8 +1166,8 @@ WantedBy=default.target
     console.log(`${cmd}d ${arg} — ${body.pending} still held`);
   }
 } else {
-  console.log('usage: activitypod <setup|start|stop|status|passwd|tokens|revoke-credential|install-service'
-    + '> [--flags]');
+  console.log('usage: activitypod <setup|start|stop|status|state|home|passwd|tokens|revoke-credential'
+    + '|install-service> [--flags]');
   console.log('  group: members | eject <actor> | mute <actor> | unmute <actor>');
   console.log('         joins <open|approve> | requests | admit <actor> | refuse <actor>');
   console.log('         announced | retract <note> | review <on|off> | pending | approve <note> | decline <note>');

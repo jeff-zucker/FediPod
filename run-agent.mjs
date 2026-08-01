@@ -7,7 +7,8 @@
 //
 //   node run-agent.mjs                      # or: bin/activitypod.mjs run
 //
-// Env: AP_HOME (credential dir + local log, default ~/.activitypod),
+// Env: AP_HOME (credential dir + local log, default ~/.solid-activitypub, or
+//      ~/.activitypod on an install that predates the rename — see lib/home.mjs),
 //      AP_PORT (UI/API/admin, default 8030),
 //      AP_GATE_TOKEN (optional loopback gate; absent → open, loopback-only).
 //
@@ -20,6 +21,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { PodStore } from './lib/store.mjs';
+import { apRoot } from './lib/home.mjs';
 import { storageFor } from './lib/storage.mjs';
 import { resolveKeys } from './lib/keys.mjs';
 import { RemotePod } from './lib/remote.mjs';
@@ -481,7 +483,7 @@ export class Agent {
 }
 
 export async function startAgent({
-  home = process.env.AP_HOME || path.join(os.homedir(), '.activitypod'),
+  home = process.env.AP_HOME || apRoot(),
   port = Number(process.env.AP_PORT) || 8030,
   gateToken = process.env.AP_GATE_TOKEN || '',
   name = null,
@@ -492,15 +494,28 @@ export async function startAgent({
   // connect() sets this from pod state a moment later, but the browser may
   // already be opening — seed it from what setup recorded so the named origin
   // works from the first request.
-  if (!handle) {
-    try { handle = JSON.parse(fs.readFileSync(path.join(home, 'agent.json'), 'utf8')).handle || null; }
-    catch { handle = null; }
+  // agent.json is how everything else finds this agent afterwards — `profiles`,
+  // `stop`, the Actors list. The CLI used to be the only thing that wrote it, so
+  // an agent spawned any other way (the admin page starts them now) ran
+  // invisibly on a port nobody could look up. Merge, so `handle` survives.
+  const agentJson = path.join(home, 'agent.json');
+  let recorded = {};
+  try { recorded = JSON.parse(fs.readFileSync(agentJson, 'utf8')) || {}; } catch { /* first run */ }
+  if (!handle) handle = recorded.handle || null;
+  if (recorded.port !== port) {
+    try {
+      fs.mkdirSync(home, { recursive: true, mode: 0o700 });
+      fs.writeFileSync(agentJson, JSON.stringify({ ...recorded, port }, null, 2) + '\n');
+    } catch { /* the agent still runs; it is just harder to find */ }
   }
   const logFile = path.join(home, 'agent.log');
   const agent = new Agent({ home, log: () => {} });
+  // The port on every line. Agents sharing a home share agent.log, and without
+  // it there is no way to tell which one wrote what — a viewer's startup reads
+  // as the active one's work.
   const log = (...a) => {
-    const line = `${new Date().toISOString()} ${a.join(' ')}`;
-    console.log('[ap]', ...a);
+    const line = `${new Date().toISOString()} :${port} ${a.join(' ')}`;
+    console.log(`[ap:${port}]`, ...a);
     agent.logRing.push(line);
     if (agent.logRing.length > 500) agent.logRing.shift();
     try { fs.appendFileSync(logFile, line + '\n'); } catch { /* logging must never throw */ }

@@ -16,7 +16,7 @@ import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { Readable } from 'node:stream';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const HOME = fs.mkdtempSync('/tmp/activitypod-smoke-');
@@ -91,10 +91,13 @@ if (up) {
   });
   check(badRedirect.status === 400, `off-origin redirect_uri refused (got ${badRedirect.status})`);
   const hdrs = await fetch(`http://127.0.0.1:${PORT}/`, { headers: gh });
+  // 'self', not 'none': /admin/client/ frames the bundled client under a bar of
+  // ours. Same origin only — anything wider would let a visited page put the
+  // agent in a frame, which is what these two headers exist to stop.
   check(hdrs.headers.get('x-content-type-options') === 'nosniff'
-    && /frame-ancestors 'none'/.test(hdrs.headers.get('content-security-policy') || '')
-    && hdrs.headers.get('x-frame-options') === 'DENY',
-    'security headers present on HTML');
+    && /frame-ancestors 'self'/.test(hdrs.headers.get('content-security-policy') || '')
+    && hdrs.headers.get('x-frame-options') === 'SAMEORIGIN',
+    'security headers present on HTML, framing limited to our own origin');
 
   const niPtr = await fetch(`http://127.0.0.1:${PORT}/.well-known/nodeinfo`, { headers: gh });
   const niPtrBody = await niPtr.json();
@@ -396,11 +399,14 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 {
   const { wsOrigins } = await import(path.join(root, 'lib/admin.mjs'));
   const plain = wsOrigins(8041);
-  check(plain.includes('ws://localhost:8041') && plain.includes('ws://127.0.0.1:8041')
-    && plain.includes('ws://[::1]:8041'),
+  check(plain.includes('ws://localhost:8041') && plain.includes('ws://127.0.0.1:8041'),
     'the loopback websocket origins are allowed');
-  check(new Set(plain).size === plain.length && !plain.some(o => /ws:\/\/::/.test(o)),
-    `no duplicates and no unbracketed IPv6 (${plain.join(' ')})`);
+  // No IPv6 in either form. Chrome rejects `ws://[::1]:8041` as a CSP source
+  // expression and then discards the WHOLE connect-src directive — so listing
+  // it cost every other origin on the line, including the one streaming uses.
+  check(!plain.some(o => /::|\[/.test(o)),
+    `no IPv6, bracketed or bare — it invalidates the directive (${plain.join(' ')})`);
+  check(new Set(plain).size === plain.length, 'and no duplicates');
   process.env.AP_ALLOWED_HOSTS = 'solo.localhost:8041';
   const named = wsOrigins(8041);
   delete process.env.AP_ALLOWED_HOSTS;
@@ -700,7 +706,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     json: async () => body, text: async () => JSON.stringify(body),
   });
 
-  check(/^activitypod-js\/\d+\.\d+\.\d+ \(\+https?:\/\/\S+\)$/.test(USER_AGENT),
+  check(/^solid-activitypub\/\d+\.\d+\.\d+ \(\+https?:\/\/\S+\)$/.test(USER_AGENT),
     `the User-Agent names the software and where to complain (${USER_AGENT})`);
 
   // Both the token endpoint and resource requests must carry it.
@@ -1252,6 +1258,81 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   check(fresh.code === 2 && !/already holds/.test(fresh.out) && /email/.test(fresh.out),
     'an unused profile is not blocked by the guard');
 
+  fs.rmSync(fake, { recursive: true, force: true });
+}
+
+// --- 5v-bis. the home root: an old install keeps its name until it is moved ---
+{
+  const { apRoot, CURRENT_ROOT, LEGACY_ROOT } = await import(path.join(root, 'lib/home.mjs'));
+  const { execFileSync } = await import('node:child_process');
+  const cli = path.join(root, 'bin/activitypod.mjs');
+
+  // Resolution is the whole feature: an install that already exists is never
+  // moved by an upgrade, and a fresh one never lands on the retired name.
+  const box = fs.mkdtempSync('/tmp/dk-ap-home-');
+  const fresh = path.join(box, 'fresh');
+  fs.mkdirSync(fresh);
+  check(apRoot(fresh) === path.join(fresh, CURRENT_ROOT),
+    'a machine with neither directory gets the current name');
+
+  const old = path.join(box, 'old');
+  fs.mkdirSync(path.join(old, LEGACY_ROOT), { recursive: true });
+  check(apRoot(old) === path.join(old, LEGACY_ROOT),
+    'an install from before the rename keeps the directory holding its keys');
+
+  const both = path.join(box, 'both');
+  fs.mkdirSync(path.join(both, LEGACY_ROOT), { recursive: true });
+  fs.mkdirSync(path.join(both, CURRENT_ROOT), { recursive: true });
+  check(apRoot(both) === path.join(both, CURRENT_ROOT),
+    'and once the new one exists it wins, so a half-finished move resolves forward');
+
+  // End to end: os.homedir() reads $HOME on POSIX, so the CLI can be pointed at
+  // a throwaway machine.
+  const fake = fs.mkdtempSync('/tmp/dk-ap-move-');
+  const legacy = path.join(fake, LEGACY_ROOT);
+  const priv = path.join(legacy, 'profiles', 'solo', 'private');
+  fs.mkdirSync(path.join(priv, 'ap-state'), { recursive: true });
+  fs.writeFileSync(path.join(legacy, 'credential.json'), JSON.stringify({ remotePod: 'https://a.example/' }));
+  fs.mkdirSync(path.join(legacy, 'profiles', 'solo'), { recursive: true });
+  fs.writeFileSync(path.join(legacy, 'profiles', 'solo', 'credential.json'), JSON.stringify({
+    remotePod: 'https://solo.example/', privateRoot: pathToFileURL(priv).href + '/',
+  }));
+  fs.writeFileSync(path.join(priv, 'ap-state', 'config.json'), JSON.stringify({ handle: 'solo' }));
+  const run = (args) => {
+    try {
+      return { out: execFileSync(process.execPath, [cli, ...args],
+        { env: { ...process.env, HOME: fake, AP_HOME: '' }, stdio: 'pipe' }).toString(), code: 0 };
+    } catch (e) { return { out: (e.stdout || '') + (e.stderr || ''), code: e.status }; }
+  };
+
+  const shown = run(['home']);
+  check(shown.code === 0 && shown.out.includes(legacy) && /before the rename/.test(shown.out)
+    && shown.out.includes(`home --to ${path.join(fake, CURRENT_ROOT)}`),
+    'home names the root, flags the old name, and prints the move as a runnable line');
+
+  const occupied = path.join(fake, 'taken');
+  fs.mkdirSync(occupied); fs.writeFileSync(path.join(occupied, 'x'), 'x');
+  const refused = run(['home', '--to', occupied]);
+  check(refused.code === 2 && /not empty/.test(refused.out) && fs.existsSync(legacy),
+    'moving onto a non-empty directory is refused rather than merged');
+
+  const target = path.join(fake, CURRENT_ROOT);
+  const moved = run(['home', '--to', target]);
+  check(moved.code === 0 && !fs.existsSync(legacy) && fs.existsSync(path.join(target, 'credential.json')),
+    'the move takes the whole root, profiles and all');
+
+  // The trap: privateRoot is absolute, so a move that ignores it leaves an
+  // agent pointing at a directory that no longer exists.
+  const after = JSON.parse(fs.readFileSync(path.join(target, 'profiles/solo/credential.json'), 'utf8'));
+  const movedPriv = path.join(target, 'profiles/solo/private');
+  check(after.privateRoot === pathToFileURL(movedPriv).href + '/'
+    && fs.existsSync(path.join(movedPriv, 'ap-state/config.json')),
+    'and rewrites the privateRoot that pointed inside it, data and all');
+
+  check(/\(default\)/.test(run(['profiles']).out), 'profiles finds them again at the new root');
+  check(/already there/.test(run(['home', '--to', target]).out), 'moving it where it already is does nothing');
+
+  fs.rmSync(box, { recursive: true, force: true });
   fs.rmSync(fake, { recursive: true, force: true });
 }
 
@@ -1994,6 +2075,9 @@ if (up) {
 const { createAccountWithPod } = await import(path.join(root, 'lib/account.mjs'));
 const http = await import('node:http');
 const seen9 = [];
+// Stateful on purpose: an account with no pod may create one, an account that
+// already has one may only reuse it. Both are real states of the same server.
+let ownedPods9 = {};
 const mockCss = http.createServer(async (req, res) => {
   let body = '';
   for await (const c of req) body += c;
@@ -2014,12 +2098,7 @@ const mockCss = http.createServer(async (req, res) => {
     }
     return send9({ pod: 'http://127.0.0.1:18622/newpod/', webId: 'http://127.0.0.1:18622/newpod/profile/card#me' });
   }
-  if (req.url === '/.account/pod/' && req.method === 'GET') {
-    return send9({ pods: {
-      'http://127.0.0.1:18622/takenpod/': 'http://127.0.0.1:18622/.account/pod/x',
-      'http://subpod.127.0.0.1.nip.io:18622/': 'http://127.0.0.1:18622/.account/pod/y',
-    } });
-  }
+  if (req.url === '/.account/pod/' && req.method === 'GET') return send9({ pods: ownedPods9 });
   res.writeHead(404); res.end();
 });
 await new Promise(r => mockCss.listen(18622, '127.0.0.1', r));
@@ -2031,6 +2110,12 @@ check(made9.pod === 'http://127.0.0.1:18622/newpod/' && /card#me$/.test(made9.we
 check(seen9.some(r => r.url === '/.account/password/' && r.body.includes('"pw"'))
   && seen9.some(r => r.url === '/.account/pod/' && r.body.includes('"newpod"')),
   'account API got password + pod name');
+// From here the account owns pods — which is what makes the next two a reuse
+// rather than a create, and any other name a refusal.
+ownedPods9 = {
+  'http://127.0.0.1:18622/takenpod/': 'http://127.0.0.1:18622/.account/pod/x',
+  'http://subpod.127.0.0.1.nip.io:18622/': 'http://127.0.0.1:18622/.account/pod/y',
+};
 const reused = await createAccountWithPod({
   issuer: 'http://127.0.0.1:18622', email: 'x@example.org', password: 'pw', podName: 'takenpod',
 });
@@ -2787,8 +2872,8 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
 
   const fresh = await ask({ mode: 'new', issuer: 'https://solidcommunity.net', podName: 'me', handle: 'you' });
   check(fresh.address === '@you@me.solidcommunity.net' && fresh.resolvable === null
-    && fresh.warnings.includes('subdomain-not-guaranteed'),
-    'a pod that does not exist yet promises nothing about its host');
+    && !fresh.warnings.length,
+    'a pod that does not exist yet previews its address and warns about nothing');
 
   const nonsense = await ask({ mode: 'existing', pod: 'not a url', handle: 'you' });
   check(nonsense.ok === false && /not a pod address/.test(nonsense.error || ''),
@@ -3002,13 +3087,25 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   });
   const curls = wire.apUrls('https://solo.example/');
   const republished = [];
+  const lifecycle = [];
   const cagent = {
     home: CHOME, store: cstore, urls: curls, configured: () => true, logLines: () => [],
     status: () => ({ configured: true, mode: 'active', kind: 'person', handle: 'solo' }),
     readCredential() { return JSON.parse(fs.readFileSync(path.join(CHOME, 'credential.json'), 'utf8')); },
+    requestTakeover: async () => { lifecycle.push('takeover'); return true; },
+    // Both destructive; the checks below assert they are never reached without
+    // the lease, so reaching them at all is the failure.
+    intake: {
+      drain: async () => { lifecycle.push('drain'); },
+      prune: async () => { lifecycle.push('prune'); return { applied: 0, dropped: 0, discarded: 0 }; },
+    },
+    park: async () => { lifecycle.push('park'); return { quiescedAt: 'T', unfollowed: 2, following: 3 }; },
+    revive: async () => { lifecycle.push('revive'); return { refollowed: 2, of: 3 }; },
+    rotateKey: async () => { lifecycle.push('rotate'); return { changed: true }; },
     publisher: {
       urls: curls, config: {},
       publishProfile: async () => { republished.push(1); return { unreachable: [] }; },
+      retireActor: async () => { lifecycle.push('retire'); return { inboxes: 1, deletedAt: 'T' }; },
     },
   };
   startAdmin({ port: CPORT, gateToken: '', agent: cagent, handle: 'solo', log: () => {} });
@@ -3042,6 +3139,20 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   check(renamed.status === 200 && renamed.json.published === true
     && republished.length === beforeRename + 1 && cagent.publisher.config.name === 'Solo',
     'a display name is on the wire, so saving it republishes the actor');
+  check(renamed.json.unreachable === undefined,
+    'and a publish strangers can read says nothing about reachability');
+
+  // Saving IS the republish control, so the readability report has to ride back
+  // on it; there is no second button to carry it.
+  cagent.publisher.publishProfile = async () => {
+    republished.push(1);
+    return { unreachable: ['webfinger', 'actor'] };
+  };
+  const invisible = await cpost({ name: 'Solo' });
+  check(invisible.status === 200 && invisible.json.published === true
+    && JSON.stringify(invisible.json.unreachable) === '["webfinger","actor"]',
+    'a publish no stranger can read is reported on the save that caused it');
+  cagent.publisher.publishProfile = async () => { republished.push(1); return { unreachable: [] }; };
 
   const groupOnly = await cpost({ review: true });
   check(groupOnly.status === 404 && /not a group/.test(groupOnly.json?.error || ''),
@@ -3056,6 +3167,267 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
 
   const cleared = await cpost({ password: '' });
   check(cleared.status === 200 && !cstore.getConfig().uiPassword, 'and an empty one removes it');
+
+  // ---- lifecycle, the page's version of park | revive | rotate-key | retire ----
+  const lpost = (p, body = {}) => cjson(p, {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
+  });
+
+  const takeoversBefore = lifecycle.filter(x => x === 'takeover').length;   // /config claims it too
+  // A viewer may not drain or prune: both DELETE from the pod inbox, which is
+  // what the lease is for. The facade has always refused viewer writes; these
+  // two routes were missed, and the admin page could make a read-only agent do
+  // the one destructive thing single-writer safety exists to prevent.
+  cagent.requestTakeover = async () => false;
+  const viewerDrain = await lpost('/drain');
+  const viewerPrune = await lpost('/inbox/prune', { before: '2026-01-01T00:00:00Z' });
+  check(viewerDrain.status === 503 && /another agent is active/.test(viewerDrain.json?.error || ''),
+    'a viewer that cannot claim the lease is refused the drain');
+  check(viewerPrune.status === 503 && /another agent is active/.test(viewerPrune.json?.error || ''),
+    'and refused the prune, which deletes far more');
+  check(!lifecycle.includes('drain') && !lifecycle.includes('prune'),
+    'and neither one touched the inbox on the way to being refused');
+  cagent.requestTakeover = async () => { lifecycle.push('takeover'); return true; };
+
+  const parked = await lpost('/park');
+  check(parked.status === 200 && parked.json.quiescedAt === 'T' && parked.json.unfollowed === 2
+    && lifecycle.includes('park'), 'the page can park, and gets back what the CLI prints');
+  const revived = await lpost('/revive');
+  check(revived.status === 200 && revived.json.refollowed === 2 && revived.json.of === 3,
+    'and revive, which is a request to re-follow rather than a restoration');
+  const rotated = await lpost('/rotate-key');
+  check(rotated.status === 200 && rotated.json.changed === true && lifecycle.includes('rotate'),
+    'and rotate the signing key');
+  check(lifecycle.filter(x => x === 'takeover').length - takeoversBefore === 3,
+    'each one claims the lease first — a person here outranks an idle agent elsewhere');
+
+  // The interlock, which is the whole reason retire is safe to put on a page.
+  const noConfirm = await lpost('/retire');
+  check(noConfirm.status === 400 && !lifecycle.includes('retire'),
+    'retire without the typed handle is refused, and nothing is delivered');
+  const wrongConfirm = await lpost('/retire', { confirm: 'sol' });
+  check(wrongConfirm.status === 400 && !lifecycle.includes('retire'),
+    'and a near-miss is still a miss — no Delete goes out');
+  const retired = await lpost('/retire', { confirm: 'solo' });
+  check(retired.status === 200 && retired.json.inboxes === 1 && lifecycle.includes('retire'),
+    'the handle typed in full is what actually retires it');
+
+  // ---- the other identities on this machine, as links for the page ----
+  // agent.json is the only file this may read. The sibling's credential is made
+  // unreadable on purpose: if anything here ever opens one, these fail rather
+  // than quietly widening what an agent touches.
+  fs.writeFileSync(path.join(CHOME, 'agent.json'), JSON.stringify({ port: CPORT, handle: 'solo' }));
+  const sib = path.join(CHOME, 'profiles', 'other');
+  fs.mkdirSync(sib, { recursive: true });
+  fs.writeFileSync(path.join(sib, 'agent.json'), JSON.stringify({ port: 18999, handle: 'other' }));
+  const sibCred = path.join(sib, 'credential.json');
+  fs.writeFileSync(sibCred, JSON.stringify({ secret: 'NEVER-READ' }));
+  fs.chmodSync(sibCred, 0o000);
+
+  const others = await cjson('/profiles');
+  const byName = Object.fromEntries((others.json?.identities || []).map(i => [i.name, i]));
+  check(others.status === 200 && byName['(default)']?.current === true
+    && byName['(default)'].admin === `http://localhost:${CPORT}/admin/`,
+    'the page is told which identity it is already looking at, so it can leave it out');
+  check(byName.other?.current === false && byName.other.port === 18999
+    && byName.other.admin === 'http://localhost:18999/admin/'
+    && byName.other.app === 'http://localhost:18999/' && byName.other.mode === null,
+    'a sibling carries both addresses — the record and the client — and reports it is not running');
+  check(!JSON.stringify(others.json).includes('NEVER-READ'),
+    "and a sibling's credential is never opened — agent.json is the whole of it");
+  fs.chmodSync(sibCred, 0o600);
+
+  // ---- creating a second actor from the page ----
+  // The refusals only: actually spawning an agent belongs to the live run, but
+  // a bad name or an existing one must never get as far as making a directory.
+  const badName = await lpost('/new-actor', { handle: 'not a handle' });
+  check(badName.status === 400 && /letters, digits, hyphens and underscores/.test(badName.json?.error || ''),
+    'a new actor is refused a name that cannot also be a directory');
+  // The form says underscores are allowed, so they have to be: a handle the
+  // page invites and the server refuses is worse than either rule alone.
+  const scored = await lpost('/new-actor', { handle: 'jeff_zucker', kind: 'person', mode: 'new' });
+  check(scored.status === 400 && /identity provider|email|password/.test(scored.json?.error || ''),
+    'an underscore is a legal handle — it gets past the name check to the real questions');
+  const climb = await lpost('/new-actor', { handle: '../escape' });
+  check(climb.status === 400 && !fs.existsSync(path.join(CHOME, 'profiles', '..', 'escape')),
+    'and a name that would climb out of profiles/ never becomes a path');
+  const taken = await lpost('/new-actor', { handle: 'other' });
+  check(taken.status === 409 && /already exists/.test(taken.json?.error || ''),
+    'a handle that already has a home is refused rather than started twice');
+  // Nothing may be created for answers setup would reject anyway.
+  const thin = await lpost('/new-actor', { handle: 'fresh', kind: 'person', mode: 'new' });
+  check(thin.status === 400 && /identity provider|email|password/.test(thin.json?.error || '')
+    && !fs.existsSync(path.join(CHOME, 'profiles', 'fresh')),
+    'and a form missing what setup needs is refused before a home or a process exists');
+  // Neither form asks where the private half goes any more: runSetup puts it
+  // beside the credential, which is what makes every new actor relay by
+  // default rather than starting on the pod and moving off later.
+  const asksPrivate = (f) => /privateRoot|privateWhere/.test(fs.readFileSync(path.join(root, f), 'utf8'));
+  check(!asksPrivate('web/admin/index.html') && !asksPrivate('web/admin/setup/index.html'),
+    'neither form asks where the private half goes');
+
+  // And the behaviour behind that: a run with no privateRoot writes one anyway.
+  {
+    const { runSetup, newRun } = await import(path.join(root, 'lib/setup.mjs'));
+    const shome = fs.mkdtempSync('/tmp/dk-ap-relay-default-');
+    const fake = {
+      urls: { actor: 'https://x.example/ap/actor' },
+      store: { getConfig: () => ({}), setConfig: () => {}, flush: async () => {} },
+      publisher: { publishProfile: async () => ({ unreachable: [] }) },
+      bootstrap: async () => {}, connect: async () => {},
+    };
+    const run = await runSetup({
+      home: shome, agent: fake, run: newRun(), log: () => {},
+      answers: { mode: 'new', issuer: 'https://i.example', email: 'a@b.c', password: 'pw',
+        handle: 'nobody', kind: 'person' },
+      deps: {
+        createAccountWithPod: async () => ({ pod: 'https://nobody.i.example/' }),
+        mintCredential: async () => ({ clientId: 'C', secret: 'S', webId: 'https://w.example/#me' }),
+      },
+    });
+    const cred = JSON.parse(fs.readFileSync(path.join(shome, 'credential.json'), 'utf8'));
+    check(run.phase === 'done' && cred.privateRoot === pathToFileURL(path.join(shome, 'private')).href + '/',
+      'a setup that was asked nothing still puts the private half beside the credential');
+    fs.rmSync(shome, { recursive: true, force: true });
+  }
+
+  // ---- one account, one pod, refused before anything is made ----
+  // A second pod on the same account is what produced a credential bound to the
+  // wrong WebID. The refusal has to come BEFORE the create call, or the pod
+  // exists and the account is left in the state that caused it.
+  {
+    const { createAccountWithPod } = await import(path.join(root, 'lib/account.mjs'));
+    const calls = [];
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = async (url, init = {}) => {
+      const u = String(url);
+      calls.push(`${init.method || 'GET'} ${u}`);
+      const j = (o) => new Response(JSON.stringify(o), { headers: { 'content-type': 'application/json' } });
+      if (u.endsWith('/login/password/')) return j({ authorization: 'A' });
+      if (u.endsWith('/.account/')) return j({ controls: { account: { pod: 'https://i.example/.account/pod/' } } });
+      if (u.endsWith('/.account/pod/') && (init.method || 'GET') === 'GET') {
+        return j({ pods: { 'https://taken.i.example/': { webId: 'https://taken.i.example/profile/card#me' } } });
+      }
+      return j({ pod: 'https://made.i.example/' });
+    };
+    let err = null;
+    try {
+      await createAccountWithPod({ issuer: 'https://i.example', email: 'a@b.c', password: 'pw', podName: 'second' });
+    } catch (e) { err = e.message; }
+    globalThis.fetch = realFetch;
+    check(/already has a pod/.test(err || '') && /one account, one pod/.test(err || ''),
+      'a second pod on the same account is refused, naming the one it already has');
+    check(!calls.some(c => c.startsWith('POST https://i.example/.account/pod/')),
+      'and refused BEFORE the create call — nothing is left behind on the server');
+  }
+
+  // ---- the credential must be bound to the pod it is for ----
+  // An account with two pods has two WebIDs. Minting against the first one
+  // authenticates fine and then 403s every write to the second — which reads as
+  // a broken server rather than a mis-bound token, and cost a real setup.
+  {
+    const { runSetup, newRun } = await import(path.join(root, 'lib/setup.mjs'));
+    const whome = fs.mkdtempSync('/tmp/dk-ap-webid-');
+    let minted = null;
+    const fakeAgent = {
+      urls: { actor: 'https://x.example/ap/actor' },
+      store: { getConfig: () => ({}), setConfig: () => {}, flush: async () => {} },
+      publisher: { publishProfile: async () => ({ unreachable: [] }) },
+      bootstrap: async () => {}, connect: async () => {},
+    };
+    await runSetup({
+      home: whome, agent: fakeAgent, run: newRun(), log: () => {},
+      answers: { mode: 'new', issuer: 'https://i.example', email: 'a@b.c', password: 'pw',
+        handle: 'group', podName: 'activitypub', kind: 'person' },
+      deps: {
+        createAccountWithPod: async () => ({
+          pod: 'https://activitypub.i.example/',
+          webId: 'https://activitypub.i.example/profile/card#me',
+        }),
+        mintCredential: async (o) => {
+          minted = o;
+          return { clientId: 'C', secret: 'S', webId: o.webId };
+        },
+      },
+    });
+    check(minted?.webId === 'https://activitypub.i.example/profile/card#me',
+      'the credential is minted for the WebID of the pod just created, not the account default');
+    check(minted?.podUrl === 'https://activitypub.i.example/',
+      'and the pod goes along too, so an existing-pod run can pick the matching WebID');
+    fs.rmSync(whome, { recursive: true, force: true });
+  }
+
+  // ---- the profile editor, as a Mastodon client drives it ----
+  // Everything Phanpy's modal sends: both text fields, both pictures as file
+  // uploads, and the extra-field rows. The pictures must end up in the pod's
+  // media container, because the actor document carries a URL, not bytes.
+  {
+    const { MastoApi } = await import(path.join(root, 'lib/mastoapi.mjs'));
+    const wire2 = await import(path.join(root, 'lib/wire.mjs'));
+    const purls = wire2.apUrls('https://solo.example/');
+    let pcfg = { handle: 'solo', name: 'solo', kind: 'person' };
+    const uploaded = [];
+    let republished = 0;
+    const pstore = {
+      getConfig: () => pcfg, setConfig: (c) => { pcfg = c; }, flush: async () => {},
+      getActors: () => ({}), getContacts: () => ({ followers: [], following: [] }),
+      getStatuses: () => [], idFor: () => 'id', getMedia: () => ({}), setMedia: () => {},
+      read: (n, d) => (n === 'masto-tokens.json' ? [{ token: 'TKN', createdAt: Date.now() }] : d),
+    };
+    const papi = new MastoApi({
+      agent: {
+        configured: () => true, viewer: false, store: pstore, urls: purls,
+        publisher: { urls: purls, config: {}, ensureMediaContainer: async () => {},
+          publishProfile: async () => { republished++; } },
+        remote: { put: async (u, d, ct) => uploaded.push({ u, ct }) },
+      },
+      log: () => {},
+    });
+    const psrv = http.createServer(async (req, res) => {
+      const u = new URL(req.url, 'http://x');
+      if (!await papi.handle(req, res, u.pathname, u)) { res.writeHead(404); res.end('{}'); }
+    });
+    await new Promise(r => psrv.listen(0, '127.0.0.1', r));
+    const pbase = `http://127.0.0.1:${psrv.address().port}`;
+    const B = '----x';
+    const part = (n, v, f, ct) => `--${B}\r\nContent-Disposition: form-data; name="${n}"`
+      + (f ? `; filename="${f}"\r\nContent-Type: ${ct}\r\n` : '\r\n') + `\r\n${v}\r\n`;
+    const sent = part('display_name', 'Solo Actor') + part('note', 'plays records')
+      + part('fields_attributes[0][name]', 'Web') + part('fields_attributes[0][value]', 'https://example.org')
+      + part('fields_attributes[1][name]', '') + part('fields_attributes[1][value]', 'dropped')
+      + part('avatar', 'PNG', 'a.png', 'image/png') + part('header', 'JPG', 'h.jpg', 'image/jpeg')
+      + `--${B}--\r\n`;
+    const saved = await fetch(pbase + '/api/v1/accounts/update_credentials', {
+      method: 'PATCH', body: sent,
+      headers: { 'content-type': `multipart/form-data; boundary=${B}`, authorization: 'Bearer TKN' },
+    });
+    const acct = await saved.json();
+
+    check(saved.status === 200 && pcfg.name === 'Solo Actor' && pcfg.summary === 'plays records'
+      && republished === 1,
+      'a client can set the display name and bio, and the actor is republished');
+    check(uploaded.length === 2 && String(pcfg.icon).startsWith(purls.media)
+      && String(pcfg.image).startsWith(purls.media),
+      'both pictures are uploaded to the pod and the actor carries their URLs');
+    check(JSON.stringify(pcfg.fields) === JSON.stringify([{ name: 'Web', value: 'https://example.org' }]),
+      'extra fields survive, and a row with no name is a deletion rather than a blank');
+    check(acct.display_name === 'Solo Actor' && acct.note === 'plays records'
+      && acct.fields?.[0]?.name === 'Web' && acct.header !== acct.avatar,
+      'and the client gets the saved profile back, not an empty one');
+
+    const vc = await (await fetch(pbase + '/api/v1/accounts/verify_credentials',
+      { headers: { authorization: 'Bearer TKN' } })).json();
+    check(vc.source?.note === 'plays records' && vc.source?.fields?.[0]?.value === 'https://example.org',
+      'and `source` gives the editor the raw text to reopen with, not rendered HTML');
+
+    const pdoc = wire2.actorDoc({ urls: purls, handle: 'solo', name: pcfg.name, publicKeyPem: 'P',
+      summary: pcfg.summary, icon: pcfg.icon, image: pcfg.image, fields: pcfg.fields });
+    check(pdoc.image?.type === 'Image' && pdoc.attachment?.[0]?.type === 'PropertyValue'
+      && pdoc.attachment[0].value === 'https://example.org'
+      && JSON.stringify(pdoc['@context']).includes('PropertyValue'),
+      'the actor publishes image and attachment, with PropertyValue declared in the context');
+    psrv.close();
+  }
 
   const bare = await fetch(`http://localhost:${CPORT}/`, { redirect: 'manual' });
   check(bare.status === 200, `a configured person still gets the client at / (${bare.status})`);

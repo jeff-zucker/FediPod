@@ -3,85 +3,206 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>solid-activitypub — record</title>
+<title>Solid ActivityPub — record</title>
 <style>
-:root { color-scheme: light dark; }
-body { font: 16px/1.5 system-ui, sans-serif; max-width: 44rem; margin: 0 auto; padding: 2rem 1rem 4rem; }
-h1 { font-size: 1.5rem; margin: 0 0 .25rem; }
-h2 { font-size: 1.15rem; margin: 2rem 0 .5rem; }
-h3 { font-size: 1rem; margin: 1.25rem 0 .35rem; }
+/* 20px on the root, not on body, so every rem below scales with it.
+   Two accents, kept apart on purpose: --link is anything you can act on,
+   --heading is structure. Using one colour for both made the headings
+   look clickable. */
+:root { color-scheme: light dark; font-size: 20px; --link: #1a4f8a; --heading: #5b3a8e;
+  /* Warm, so it sits against the blue label rather than under it — and
+     nowhere near the purple the headings use. */
+  --btn-bg: #f4efe6; --btn-edge: #b9ad99; }
+/* The page itself never scrolls: the body is exactly the window, and the open
+   panel takes whatever height is left over rather than pushing past the fold. */
+html { height: 100%; }
+body { font: 1rem/1.5 system-ui, sans-serif; margin: 0; height: 100dvh;
+  box-sizing: border-box; display: flex; flex-direction: column; overflow: hidden; }
+/* The bar spans the window; everything under it stays in a centred column. */
+#page { flex: 1 1 auto; min-height: 0; width: 100%; max-width: 44rem; margin: 0 auto;
+  padding: .5rem 1rem 1rem; box-sizing: border-box;
+  display: flex; flex-direction: column; }
+#page > section, #page > nav, #page > p { flex: 0 0 auto; }
+/* The one exception to the page never scrolling: the new-account form is longer
+   than the window, and its scrollbar belongs at the right edge of the window
+   rather than drawn around the form. While it is open the body scrolls; the
+   rest of the time the layout is fixed and the panels scroll instead. */
+body.adding { height: auto; min-height: 100dvh; overflow: auto; }
+body.adding #page { flex: 0 0 auto; }
+/* `hidden` is a UA rule, so ANY author `display` beats it — `dl { display: grid }`
+   left the facts on screen with the attribute set. Everything here toggles with
+   `hidden`, so it has to outrank them all. */
+[hidden] { display: none !important; }
+h1, h2, h3 { color: var(--heading); }
+a { color: var(--link); }
+/* Every heading below the title is the same: h2 and h3 differ in structure,
+   not in appearance. Flex rows, so the whitespace between the label and the
+   first button is not a text node of its own width — that is what left the
+   Actors select 3px out from the buttons below it. */
+h2, h3 { font-size: 1.15rem; font-weight: 600; display: flex; flex-wrap: wrap;
+  align-items: baseline; gap: .6rem; }
+h2 { margin: 2rem 0 .5rem; }
+/* Identity is the first section, right under the Actors line — it does not need
+   the separation the later headings do. */
+#pane-identity h2 { margin-top: .75rem; }
+/* Upkeep sits evenly between what is above it and the Lifecycle line below it:
+   the same gap on both sides, which is h3's top margin. The sections are flex
+   items, so their margins do NOT collapse — the facts list has to give up its
+   bottom margin or it adds to the one above. */
+#pane-upkeep h2 { margin-top: 1.25rem; }
+/* Identity is a two-column row like the others: the heading in the label
+   column, the facts beside it — so the first fact sits on the heading's own
+   line rather than under it. Baseline, not top: the heading is 23px and the
+   rows are 20px, and aligning their boxes would leave them visibly off. */
+#pane-identity { display: grid; grid-template-columns: calc(8.5rem + .6rem) 1fr;
+  align-items: baseline; }
+#pane-identity h2 { margin: 1.25rem 0 .5rem; }
+#facts { margin: 1.25rem 0 0; }
+#pane-identity > p { grid-column: 1 / -1; }
+h3 { margin: 1.25rem 0 .35rem; }
+/* The heading word sits in a column of its own, so the control that follows it
+   — a select on one row, a button on the next — lines up down the page. */
+.hlabel { display: inline-block; min-width: 8.5rem; }
 p { margin: .5rem 0; }
 .sub { color: #666; margin-top: 0; }
 fieldset { border: 1px solid #bbb; border-radius: .4rem; margin: 1rem 0; padding: .75rem 1rem 1rem; }
-legend { padding: 0 .3rem; font-weight: 600; }
+legend { padding: 0 .3rem; font-weight: 600; color: var(--heading); }
 label { display: block; margin: .75rem 0 .2rem; }
 .hint { color: #666; font-size: .9rem; margin: .15rem 0 0; }
-input[type=text], input[type=url], input[type=password], textarea {
+input[type=text], input[type=email], input[type=url], input[type=password], textarea {
   font: inherit; width: 100%; padding: .5rem; box-sizing: border-box;
   border: 1px solid #999; border-radius: .3rem; background: Field; color: FieldText;
 }
-button { font: inherit; padding: .45rem 1rem; border-radius: .3rem; border: 1px solid #666;
-  background: ButtonFace; color: ButtonText; cursor: pointer; }
+button { font: inherit; padding: .45rem 1rem; border-radius: .3rem; border: 1px solid var(--btn-edge);
+  background: var(--btn-bg); color: var(--link); cursor: pointer; }
 button.primary { font-weight: 600; }
+button.danger { border-color: #b00020; color: #b00020; }
 button:disabled { opacity: .5; cursor: default; }
 dl { display: grid; grid-template-columns: max-content 1fr; gap: .2rem .9rem; margin: .5rem 0; }
 dt { color: #666; }
 dd { margin: 0; word-break: break-all; }
-.address { font-size: 1.2rem; font-weight: 600; word-break: break-all; margin: .25rem 0; }
 .rows { list-style: none; padding: 0; margin: .3rem 0; }
 .rows li { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center;
   padding: .4rem 0; border-top: 1px solid #ddd; }
 .rows li span { flex: 1 1 18rem; word-break: break-all; }
 .muted { color: #666; }
+.others { font-size: 1.15rem; margin: .5rem 0 0; display: flex; flex-wrap: wrap;
+  align-items: baseline; gap: .5rem .6rem; }
+.others-label { color: var(--heading); font-weight: 600; font-size: 1.15rem; margin: 0; }
+#actor-pick { font: inherit; padding: .2rem .4rem; border-radius: .3rem;
+  border: 1px solid var(--btn-edge); background: var(--btn-bg); color: var(--link); }
+/* Small buttons that sit in a line of text. */
+button.inline { font-size: .9rem; padding: .15rem .6rem; }
+button.inline { font-weight: 400; }
+/* Radios read as one line each: label { display: block } alone drops the text
+   below the control. */
+.choice { display: block; margin: .35rem 0; font-weight: normal; }
+.choice input { width: auto; margin-right: .4rem; }
 .warn { border-left: .25rem solid #c60; padding-left: .75rem; }
 .err { border-left: .25rem solid #b00020; padding-left: .75rem; color: #b00020; }
 .ok { border-left: .25rem solid #2a7; padding-left: .75rem; }
-.origins { font-family: ui-monospace, monospace; font-size: .95rem; word-break: break-all; }
+/* Scroll on the panel, never the page: the region claims the leftover height,
+   and min-height:0 is what lets a flex item be shorter than its content. */
+#panels { margin-top: 1.5rem; flex: 1 1 auto; min-height: 0; display: flex; }
+#panels > * { flex: 1 1 auto; min-height: 0; overflow-y: auto; margin: 0; }
 pre { overflow-x: auto; background: #0001; padding: .6rem; border-radius: .3rem; font-size: .9rem; }
 @media (prefers-color-scheme: dark) {
+  :root { --link: #7fb3e8; --heading: #b9a3e3; --btn-bg: #35302a; --btn-edge: #6b6154; }
   .sub, .hint, dt, .muted { color: #aaa; } fieldset { border-color: #555; } .rows li { border-color: #444; }
+  .err { color: #ff8a8a; border-left-color: #ff8a8a; }
+  button.danger { border-color: #ff8a8a; color: #ff8a8a; }
 }
 </style>
+<link rel="stylesheet" href="/admin/bar.css">
 </head>
 <body>
 
-<h1>solid-activitypub</h1>
-<p class="sub" id="strap">reading the record…</p>
+<!-- The same bar the client view carries: one thing, two views. -->
+<nav id="bar">
+  <span class="name">Solid ActivityPub</span>
+  <button type="button" id="bar-fediverse">visit account</button>
+  <button type="button" id="bar-manage" aria-current="page">manage account</button>
+  <button type="button" id="bar-add">add new account</button>
+</nav>
+<div id="page">
 <p class="err" id="fatal" hidden></p>
 <p aria-live="polite" id="say" hidden></p>
 
-<section id="pane-identity" hidden>
-  <h2>Identity</h2>
-  <p class="address" id="address"></p>
-  <dl id="facts"></dl>
-  <p class="hint">The handle, the pod, the identity provider and person-vs-group are what this
-    actor <em>is</em>. Changing any of them means a different actor at a different address —
-    that is a new setup, not an edit.</p>
-  <p class="hint">Where the private data lives is a fact here rather than a setting, because
-    changing it means moving data: stop the agent and run
-    <code>bin/activitypod.mjs state --to &lt;url&gt;</code>.</p>
-</section>
+<!-- Every actor running on this machine. A stopped one is left out: there is
+     no page there to open. Plain links — a top-level navigation sends no
+     Origin, so each agent's own firewall lets it through. -->
+<nav id="pane-others" hidden>
+  <p class="others" id="others-line">
+    <label class="others-label hlabel" for="actor-pick">Local Actors:</label>
+    <select id="actor-pick"></select>
+  </p>
 
-<section id="pane-profile" hidden>
-  <h2>Profile</h2>
-  <p class="hint">These are on the wire: saving republishes the actor document so other servers
-    learn them.</p>
-  <form id="profile-form">
-    <label for="name">Display name</label>
-    <input type="text" id="name" name="name" autocomplete="off">
+  <!-- Everything setup cannot work without. The bio, avatar and UI password it
+       also offers are all changeable afterwards, so they are not asked here —
+       the fuller form is what the new actor opens on. -->
+  <form id="new-actor-form" hidden>
+    <fieldset>
+      <legend>What kind of Actor?</legend>
+      <label class="choice"><input type="radio" name="newKind" value="person" checked>
+        A <strong>person</strong> — an account you read and post from</label>
+      <label class="choice"><input type="radio" name="newKind" value="group">
+        A <strong>group</strong> of fediverse users you manage</label>
+    </fieldset>
 
-    <label for="summary">Bio</label>
-    <textarea id="summary" name="summary" rows="3"></textarea>
+    <fieldset>
+      <legend>Actor's Handle</legend>
+      <input type="text" id="new-handle" autocomplete="off"
+        placeholder="handle part of fediverse address: @HANDLE@server"
+        aria-label="Actor's Handle">
+      <p class="hint">The name in your fediverse address. This is permanent. Letters, digits,
+        hyphens, and underscores only.</p>
+    </fieldset>
 
-    <label for="icon">Avatar URL</label>
-    <input type="url" id="icon" name="icon" autocomplete="off">
+    <fieldset>
+      <legend>Actor's Pod</legend>
+      <label class="choice"><input type="radio" name="newMode" value="new" checked>
+        Create a Solid account and pod for the Actor</label>
+      <label class="choice"><input type="radio" name="newMode" value="existing">
+        Use a pod I already have</label>
 
-    <p><button type="submit" class="primary">Save and republish</button></p>
+      <label for="new-issuer">Solid identity provider</label>
+      <input type="url" id="new-issuer" value="https://solidcommunity.net" autocomplete="url">
+
+      <label for="new-email">Solid Account email/username</label>
+      <input type="email" id="new-email" autocomplete="email" placeholder="you@example.org">
+
+      <label for="new-password">Solid Account password</label>
+      <input type="password" id="new-password" autocomplete="current-password">
+      <p class="hint">Password is sent once in return for a credential which is stored locally.
+        The password itself is never stored. You may revoke the credential without changing the
+        password.</p>
+
+      <div id="new-row-podname">
+        <label for="new-podname">Pod name</label>
+        <input type="text" id="new-podname" autocomplete="off">
+        <p class="hint">The subdomain of your pod address, it will become
+          https://YOUR-POD-NAME.your-identity-provider</p>
+      </div>
+      <div id="new-row-pod" hidden>
+        <label for="new-pod">Pod address</label>
+        <input type="url" id="new-pod" autocomplete="url" placeholder="https://you.solidcommunity.net/">
+      </div>
+    </fieldset>
+
+    <p>
+      <button type="submit" id="new-actor-go" class="primary">Create</button>
+      <button type="button" id="new-actor-cancel">Cancel</button>
+    </p>
   </form>
+</nav>
+
+<section id="pane-identity" hidden>
+  <h2><span class="hlabel">Identity</span></h2>
+  <dl id="facts"></dl>
 </section>
 
 <section id="pane-group" hidden>
-  <h2>Group</h2>
+  <h2><span class="hlabel">Group</span></h2>
 
   <fieldset>
     <legend>Who may join</legend>
@@ -119,7 +240,7 @@ pre { overflow-x: auto; background: #0001; padding: .6rem; border-radius: .3rem;
 </section>
 
 <section id="pane-inbox" hidden>
-  <h2>Inbox</h2>
+  <h2><span class="hlabel">Inbox</span></h2>
   <p id="inbox-summary"></p>
   <p class="hint">Your pod accepts deliveries whether or not this agent is running, so a
     machine that has been off collects them. The agent is working through them oldest first
@@ -141,33 +262,67 @@ pre { overflow-x: auto; background: #0001; padding: .6rem; border-radius: .3rem;
   <p class="err" id="inbox-warn" hidden></p>
 </section>
 
-<section id="pane-access" hidden>
-  <h2>Access</h2>
-  <p class="origins" id="origins"></p>
-  <form id="access-form">
-    <label for="password">Password for this agent's web UI</label>
-    <input type="password" id="password" name="password" autocomplete="new-password">
-    <p class="hint" id="password-state"></p>
-    <p>
-      <button type="submit">Set it</button>
-      <button type="button" id="password-clear">Remove it</button>
-    </p>
-  </form>
-</section>
-
 <section id="pane-upkeep" hidden>
-  <h2>Upkeep</h2>
-  <p>
-    <button id="do-publish">Republish the actor</button>
-    <button id="do-drain">Drain the inbox</button>
-    <button id="do-log">Show the log</button>
-    <button id="do-deadletter">Show dead letters</button>
-  </p>
-  <pre id="output" hidden></pre>
-  <p class="hint">Parking, reviving, retiring and rotating the signing key stay on the command
-    line: <code>bin/activitypod.mjs park | revive | retire | rotate-key</code>.</p>
+  <h2><span class="hlabel">Upkeep</span>
+    <button id="do-drain" class="inline">Drain the inbox</button>
+    <button id="do-log" class="inline">Show the log</button>
+    <button id="do-deadletter" class="inline">Show dead letters</button>
+  </h2>
+  <h3><span class="hlabel">Lifecycle</span>
+    <button id="do-park" class="inline" data-confirm="park">Park</button>
+    <button id="do-revive" class="inline" data-confirm="revive">Revive</button>
+    <button id="do-rotate-key" class="inline" data-confirm="rotate-key">Rotate the signing key</button>
+    <button id="do-retire" class="inline danger" data-confirm="retire">Retire</button>
+  </h3>
+
 </section>
 
+
+<!-- Every panel opens here, at the foot of the page, rather than pushing the
+     lines apart wherever its button happens to sit. One at a time, and each
+     scrolls inside itself so the page does not grow. -->
+<div id="panels">
+<pre id="output" hidden></pre>
+<!-- Every consequence is written here rather than assembled in script: the
+     page asking "are you sure" has to say what it is sure about, and this is
+     the only record of it. Script picks which block to show, nothing else. -->
+<form id="confirm-form" hidden>
+  <div id="warn-park" class="warn" hidden>
+    <p>Everyone you follow gets unfollowed — that is what stops posts arriving — and the
+      inbox closes, so deliveries are refused outright rather than stored. Your followers keep
+      following you and are told nothing. The handle keeps resolving; posts and RDF stay where
+      they are. The follow graph is saved first, so Revive can undo this.</p>
+  </div>
+  <div id="warn-revive" class="warn" hidden>
+    <p>The inbox opens again and a Follow is re-sent to every account in the saved graph. Each
+      one needs the far end to accept it, so this is a request rather than a restoration —
+      some will not come back.</p>
+  </div>
+  <div id="warn-rotate-key" class="warn" hidden>
+    <p>A new keypair replaces the one in this home and the actor is republished so other
+      servers learn it. Any other device still holding the old key stops being able to sign.</p>
+  </div>
+  <div id="warn-retire" class="warn" hidden>
+    <p><strong>This cannot be undone.</strong> A Delete goes to every follower's inbox telling
+      those servers to drop the account and the posts they cached, the actor document is
+      replaced with a Tombstone, and this agent will refuse to start again for this pod. Your
+      posts and RDF stay on the pod; the identity does not come back.</p>
+    <p>Standing down instead — keeping the handle, taking no mail — is
+      <code>bin/activitypod.mjs retire --keep-handle</code>, and moving to another account is
+      <code>--move-to @you@elsewhere</code>.</p>
+    <label for="confirm-handle">Type the handle to confirm</label>
+    <input type="text" id="confirm-handle" autocomplete="off">
+  </div>
+  <p>
+    <button type="submit" id="confirm-go" class="primary">Confirm</button>
+    <button type="button" id="confirm-cancel">Cancel</button>
+  </p>
+</form>
+</div>
+
+</div>
+
+<script src="/admin/bar.js"></script>
 <script src="admin.js"></script>
 </body>
 </html>

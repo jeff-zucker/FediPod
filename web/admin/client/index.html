@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Solid ActivityPub — client</title>
+<style>
+:root { color-scheme: light dark; font-size: 20px; --link: #1a4f8a; --heading: #5b3a8e;
+  --btn-bg: #f4efe6; --btn-edge: #b9ad99; }
+/* The bar is fixed height, the client takes the rest — the page never scrolls,
+   the frame does. */
+html { height: 100%; }
+body { font: 1rem/1.5 system-ui, sans-serif; margin: 0; height: 100dvh;
+  display: flex; flex-direction: column; overflow: hidden; }
+#client { flex: 1 1 auto; min-height: 0; width: 100%; border: 0; }
+@media (prefers-color-scheme: dark) {
+  :root { --link: #7fb3e8; --heading: #b9a3e3; --btn-bg: #35302a; --btn-edge: #6b6154; }
+}
+</style>
+<link rel="stylesheet" href="/admin/bar.css">
+</head>
+<body>
+
+<!-- The same bar the record carries, so the two surfaces are one thing with two
+     views. The client below is this agent's own, at its own root: same origin,
+     which is why framing it needs nothing opened beyond frame-ancestors 'self'. -->
+<nav id="bar">
+  <span class="name">Solid ActivityPub</span>
+  <button type="button" id="bar-fediverse" aria-current="page">visit account</button>
+  <button type="button" id="bar-manage">manage account</button>
+  <button type="button" id="bar-add">add new account</button>
+</nav>
+
+<iframe id="client" src="/" title="fediverse client"></iframe>
+
+<script src="/admin/bar.js"></script>
+</body>
+</html>

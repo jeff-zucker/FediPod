@@ -6,7 +6,12 @@
 // of Phanpy's own inline bootstrap, and nothing else.
 
 const $ = (id) => document.getElementById(id);
-const show = (id) => { for (const s of document.querySelectorAll('body > section')) s.hidden = s.id !== id; };
+// Empty means gone, not a blank line where a sentence used to be.
+const strap = (t) => { const el = $('strap'); el.textContent = t || ''; el.hidden = !t; };
+// By id, not by position: these were `body > section` until a wrapper went
+// round them for layout, and the selector then matched nothing — every pane
+// kept whatever it started as and the page sat on "Reading this agent's state".
+const show = (id) => { for (const s of document.querySelectorAll('section[id^="pane-"]')) s.hidden = s.id !== id; };
 const api = async (path, init) => {
   const res = await fetch(path, init);
   return { status: res.status, json: await res.json().catch(() => null) };
@@ -28,7 +33,7 @@ async function start() {
 }
 
 function paneConfigured() {
-  $('strap').textContent = 'already set up';
+  strap('already set up');
   $('configured-address').textContent = state.handle ? `@${state.handle}` : '';
   $('configured-client').hidden = state.kind === 'group';
   show('pane-configured');
@@ -41,18 +46,17 @@ function paneConfigured() {
 // ---- the form ----
 
 function paneForm() {
-  $('strap').textContent = state.resumable
-    ? 'finishing a setup that did not complete'
-    : 'two questions were asked in the terminal; the rest are here';
+  // Nothing is asked in a terminal any more — every question is on this page.
+  // A fresh run needs no strap at all; a resumed one has something to say.
+  strap(state.resumable ? 'finishing a setup that did not complete' : '');
   if (state.handle) $('handle').value = state.handle;
   // Resuming: the account exists and the credential is minted. Asking for a
   // password again would mint a second one and orphan the first, which cannot
   // be recovered.
   if (state.resumable) {
+    // Both already settled in the credential this run is resuming from.
     $('fs-pod').hidden = true;
     $('row-password').hidden = true;
-    // Both already settled in the credential this run is resuming from.
-    $('fs-private').hidden = true;
     $('submit').textContent = 'Finish setting up';
   } else if (state.passwordSupplied) {
     $('row-password').hidden = true;      // AP_PASSWORD is set in the environment
@@ -64,32 +68,6 @@ function paneForm() {
   }
   $('form').addEventListener('submit', onSubmit);
   onEdit();
-  offerLocalPods();
-}
-
-// Relay is the default where it is possible: if a pod is already running on
-// this machine, offer it. If none is, say so and fall back to the pod — an
-// option that needs software you do not have is not a default.
-async function offerLocalPods() {
-  const { json } = await api('/setup/local-pods');
-  const pods = json?.pods || [];
-  const note = $('private-found');
-  if (!pods.length) {
-    $('form').elements.privateWhere.value = 'pod';
-    note.textContent = 'No pod is answering on this machine, so this starts out on your own pod. '
-      + 'You can move it later with: bin/activitypod.mjs state --to <url>';
-    onEdit();
-    return;
-  }
-  const first = pods[0];
-  $('privateRoot').value = first.url + 'activitypods-js/';
-  note.textContent = `Found ${first.what} at ${first.url}`
-    + (first.gated
-      ? ' — it answered 401, so it wants credentials. data-kitchen\'s takes a token:'
-        + ' start the agent with AP_STATE_TOKEN set. A pod with real ACLs needs more'
-        + ' than this agent can offer yet.'
-      : '.');
-  onEdit();
 }
 
 function answers() {
@@ -100,19 +78,12 @@ function answers() {
     kind,
     mode,
     handle: f.handle.value.trim(),
-    name: f.name.value.trim() || f.handle.value.trim(),
     issuer: f.issuer.value.trim(),
     email: f.email.value.trim(),
-    summary: f.summary.value.trim() || undefined,
-    icon: f.icon.value.trim() || undefined,
   };
   if (mode === 'new') a.podName = f.podName.value.trim() || a.handle;
   else a.pod = f.pod.value.trim();
-  if (f.privateWhere.value === 'local' && f.privateRoot.value.trim()) {
-    a.privateRoot = f.privateRoot.value.trim();
-  }
   if (!state.resumable && !state.passwordSupplied) a.password = f.password.value;
-  if (f.uiPassword.value) a.uiPassword = f.uiPassword.value;
   return a;
 }
 
@@ -123,10 +94,6 @@ const NOTES = {
     `This pod is a path on ${host(a.pod)}, not the root of its own host. WebFinger is `
     + 'answered only at a host root, which this pod cannot write to, so other servers '
     + 'will not find this address. Posting and reading still work; being discovered does not.',
-  'subdomain-not-guaranteed': (a) =>
-    `— provided ${host(a.issuer)} gives each pod its own subdomain. Some servers put pods `
-    + `at ${host(a.issuer)}/<name>/ instead, and a pod sharing a host cannot answer WebFinger `
-    + 'for an address. Setup checks which you got and says so before publishing anything.',
 };
 const REFUSALS = {
   'group-needs-host-root': () =>
@@ -140,7 +107,6 @@ function onEdit() {
   const mode = state.resumable ? 'existing' : $('form').elements.mode.value;
   $('row-podname').hidden = mode !== 'new';
   $('row-pod').hidden = mode === 'new';
-  $('row-private').hidden = $('form').elements.privateWhere.value !== 'local';
   clearTimeout(editTimer);
   editTimer = setTimeout(preview, 150);
 }
@@ -197,7 +163,7 @@ const MARKS = { waiting: '·', running: '⟳', ok: '✓', skipped: '–', error:
 
 async function watchRun() {
   show('pane-run');
-  $('strap').textContent = 'setting up';
+  strap('setting up');
   const { json: run } = await api('/setup/progress');
   if (!run) return;
   renderRun(run);
@@ -237,7 +203,7 @@ function renderRun(run) {
 }
 
 function paneDone(result) {
-  $('strap').textContent = 'set up';
+  strap('set up');
   show('pane-done');
   $('done-address').textContent = result?.address || `@${result?.handle} — no resolvable address`;
   const notes = [];

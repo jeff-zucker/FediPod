@@ -126,11 +126,21 @@ laid out as on the pod: `ap-state/` and `fediverse/`. It may be
   Nothing to install, nothing to keep running, and the store cannot be
   unreachable.
 
-Setup asks, offering whatever pod is already answering on this machine
-(`GET /setup/local-pods` probes dk's `:8000/dk-pod/` and a server on `:4000`) and
-falling back to the pod when nothing is — relay is the default *where it is
-possible*, because an option that needs software you do not have is not a
-default.
+**Setup does not ask, as of 2026-07-31.** `runSetup` writes
+`privateRoot = <home>/private/` whenever the answers do not carry one, so every
+new actor is on the relay from its first write. Both forms lost the question,
+and `GET /setup/local-pods` with its `probeLocalPods` candidate list went with
+them.
+
+That replaced a "relay where possible, else the pod" default that probed for a
+local pod and fell back. The fallback was the problem: starting on the pod and
+moving later is strictly worse than starting local, because `state --to` leaves
+the old copy behind — so the data it was meant to keep off the pod sat there the
+whole time anyway. A directory needs nothing installed, so there is no case where
+relay is impossible and nothing to fall back to.
+
+An explicit `privateRoot` in the answers still wins, which is how a pod URL gets
+chosen; the CLI and the API can both pass one.
 
 Afterwards it is `activitypod state` to see and `activitypod state --to <url>`
 (or `--to pod`) to move. That copies both trees, verifies with `commit()`, and
@@ -224,10 +234,11 @@ survives it.
   offer yet — it fails safe, because writes 401, `commit()` returns false and the
   drain declines to delete anything. A private **directory** has no auth question
   at all: mode 0600, like the credential beside it.
-- Setup still only offers a pod it can find answering; pointing `privateRoot` at
-  a directory is a `credential.json` edit or `activitypod state --to`. Making the
-  directory the offered default is the thing that would let relay be the default
-  on a fresh install everywhere, and it is not done.
+- ~~Setup still only offers a pod it can find answering.~~ **Done 2026-07-31** —
+  a directory beside the credential is now the unconditional default, so relay is
+  what a fresh install gets everywhere. See *Using it* above.
+- Existing installs are untouched: an actor set up before this keeps its state on
+  the pod until `activitypod state --to` is run. `jeff` on this machine is one.
 - dk's local pod enforces no ACLs at all (`pivot-config/no-auth.json` swaps in
   `allow-all.json`), so the gate token and loopback binding are the whole
   boundary. And it exists only while dk runs.

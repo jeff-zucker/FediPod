@@ -49,11 +49,13 @@ async function dpopProof({ keyPair, htm, htu, nonce, accessToken }) {
  * @param {string} o.email      account email
  * @param {string} o.password   account password (transient — never stored)
  * @param {string} [o.webId]    WebID to bind; discovered from the account if absent
+ * @param {string} [o.podUrl]   the pod this credential is for — picks the right
+ *                              WebID when the account owns more than one
  * @param {string} [o.gateToken] x-dk-token, ONLY for the local gated origin
  * @param {string} [o.name]     human label for the credential
  * @returns {{clientId, secret, webId, tokenEndpoint, issuerOrigin}}
  */
-async function mintCredential({ origin, email, password, webId, gateToken, name = 'data-kitchen' }) {
+async function mintCredential({ origin, email, password, webId, podUrl, gateToken, name = 'data-kitchen' }) {
   const accountRoot = `${origin}/.account/`;
 
   const pre = (await jfetch(accountRoot, { gateToken })).json;
@@ -72,8 +74,19 @@ async function mintCredential({ origin, email, password, webId, gateToken, name 
   if (!wid) {
     const linkCtl = controls?.account?.webId;
     const links = linkCtl ? (await jfetch(linkCtl, { gateToken, cookie })).json?.webIdLinks : null;
-    wid = links && Object.keys(links)[0];
+    const all = links ? Object.keys(links) : [];
+    // An account may own several pods, each with its own WebID. Taking the
+    // first is right only by luck: bound to another pod's WebID the credential
+    // authenticates fine and then 403s every write, which reads as a broken
+    // server rather than a mis-bound token.
+    let origins = [];
+    try { origins = podUrl ? all.filter(w => new URL(w).origin === new URL(podUrl).origin) : []; } catch {}
+    wid = origins[0] || all[0];
     if (!wid) throw new Error('no WebID is linked to this account');
+    if (podUrl && !origins.length && all.length > 1) {
+      throw new Error(`this account has ${all.length} WebIDs and none of them is on ${new URL(podUrl).origin} `
+        + '— the pod and the credential would not match');
+    }
   }
 
   const made = await jfetch(ccUrl, { method: 'POST', gateToken, cookie, body: { name, webId: wid } });
@@ -139,7 +152,10 @@ const FORCE_COOLDOWN_MS = 10_000;
 // had to infer us from client-credential names because every request said only
 // "node", which is undici's default.
 const { version: AGENT_VERSION } = require('../package.json');
-const USER_AGENT = `activitypod-js/${AGENT_VERSION} (+https://github.com/jeff-zucker/activitypod-js)`;
+// This is the one on the token grants, so it is the one scn actually logged.
+// Renamed 2026-07-31 in lockstep with lib/ua.mjs — changing only that leaves
+// the grants still announcing the old name.
+const USER_AGENT = `solid-activitypub/${AGENT_VERSION} (+https://github.com/jeff-zucker/solid-activitypub)`;
 
 // A ceiling no timer, retry or future bug can exceed. Steady state is ~3
 // requests/minute, so the default sits 20x above normal use and only engages

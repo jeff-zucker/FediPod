@@ -137,30 +137,33 @@ at app start, and it would republish the actor over the Tombstone.
   identity retired it is no longer federating, so the outside impact is closed;
   porting the hardening only matters if dk is given an actor again.
 
-## TODO once scn is resolved — finish the rename
+## The rename was finished on 2026-07-31
 
 The 2026-07-30 rename to `solid-activitypub` deliberately skipped everything
-that identifies us **to solidcommunity.net**, so the name in their logs keeps
-matching the name in our code while the incident is open. Four lines to change,
-together, in one commit:
+that identifies us **to solidcommunity.net**, so the name in their logs kept
+matching the name in our code while the incident was open. With scn back up and
+both actors retired the same day, the freeze was lifted:
 
 | where | what |
 |---|---|
-| `lib/ua.mjs:16` | `USER_AGENT` — outbound requests to pods |
-| `vendor/idp-grant.cjs:142` | a **second, independent** `USER_AGENT` with the same value — this is the one on the token grants, so it is the one scn actually logged. Easy to miss; changing only `ua.mjs` leaves the grants still announcing the old name |
-| `bin/activitypod.mjs:231` | `mintCredential({ name: 'activitypod-js' })` — the source of `activitypod-js_b507819f…` in their report. Affects newly minted credentials only; existing ones keep the name they were registered under, so old pods stay as they are unless re-setup |
-| `claude/smoke-tests/agent-smoke.mjs:644` | the regex pinning the UA format — must move in the same commit or the suite goes red |
+| `lib/ua.mjs` | `USER_AGENT` — outbound requests to pods |
+| `vendor/idp-grant.cjs` | a **second, independent** `USER_AGENT` with the same value — this is the one on the token grants, so it is the one scn actually logged. Changing only `ua.mjs` would have left the grants still announcing the old name |
+| `bin/activitypod.mjs` | `mintCredential({ name: … })` — the source of `activitypod-js_b507819f…` in their report |
+| `lib/setup.mjs` | **the same mint, in the browser-setup path.** This site did not exist when the list above was written on 07-29; setup moved into the browser on 07-30, and this is the copy a fresh install actually runs. A four-line list would have missed it |
+| `claude/smoke-tests/agent-smoke.mjs` | the regex pinning the UA format, moved in the same commit |
 
-Also change the repo URL inside both UA strings to
-`https://github.com/jeff-zucker/solid-activitypub`; it was left pointing at the
-old repo only because it is part of the frozen UA. Everything else already
-says `solid-activitypub` — including `nodeinfo`'s `software.name`, which is a
-**published pod document**, so any actor that has not restarted since the
-rename is still advertising the old name and needs a restart or
-`publish-profile`.
+Both UA strings were verified identical afterwards, and the repo URL inside them
+now points at `https://github.com/jeff-zucker/solid-activitypub`.
 
-One judgment call to make deliberately rather than by accident: the same
-software appearing under a new User-Agent shortly after an unresolved incident
-looks evasive to anyone watching, even though the rename is real and would have
-happened anyway. Record the date here when you do it, so the record stays
-continuous.
+Only **new** credentials get the new name; one already registered keeps the name
+it was minted under, so existing pods are unchanged unless they are set up again.
+
+`nodeinfo`'s `software.name` already said `solid-activitypub` before this, and it
+is a **published pod document** — an actor that has not restarted since 07-30 is
+still advertising the old name and needs a restart, or a save on `/admin/`, which
+is now the only republish control.
+
+The judgment call, made deliberately: the same software appearing under a new
+User-Agent shortly after an incident can look evasive. It was held until the
+incident was closed on both sides for exactly that reason, and the date is
+recorded here so the record stays continuous.

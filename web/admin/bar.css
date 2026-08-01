@@ -1,0 +1,14 @@
+/* The bar every page of ours carries — the record, the setup form and the
+   client view. One file so the three cannot drift apart. */
+/* Flush with the window on three sides — no margin, and its padding is inside
+   the bar rather than around it. */
+#bar { flex: 0 0 auto; display: flex; align-items: center; gap: .6rem;
+  margin: 0; padding: .5rem 1rem; border-bottom: 1px solid var(--btn-edge); }
+#bar .name { flex: 1 1 auto; font-weight: 600; font-size: 1.15rem; color: var(--heading); }
+/* Plain text, not chrome: three destinations in a row read better without a
+   box round each. */
+#bar button { font: inherit; font-size: .95rem; padding: .15rem .2rem;
+  border: 0; background: none; color: var(--link); cursor: pointer; }
+/* The page you are already on stays in the row, so the set never moves — it is
+   underlined rather than removed. */
+#bar button[aria-current="page"] { text-decoration: underline; text-underline-offset: .3rem; }

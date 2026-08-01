@@ -35,9 +35,9 @@ npm start
 That is the whole thing. It finds a port that is actually free — starting at
 8030, walking up past whatever else is on your machine — starts the agent in
 the background, and opens your browser at the page you need: the setup form the
-first time, your client every time after. It logs to `~/.activitypod/agent.log`
-and `bin/activitypod.mjs stop` stops it. Run it twice and it just tells you it
-is already running.
+first time, your client every time after. It logs to
+`~/.solid-activitypub/agent.log` and `bin/activitypod.mjs stop` stops it. Run it
+twice and it just tells you it is already running.
 
 `--no-open` if you would rather it left your browser alone.
 <!-- /CLAUDE -->
@@ -58,11 +58,12 @@ port [8030]:
 setup continues in the browser — Ctrl-C to stop
 ```
 
-Everything else is asked on that page: person or group, a new account and pod
-or one you already have, your identity provider, email, pod name, display
-name, bio, avatar, and your passwords. It shows the address you are about to
-take — and the same warnings the terminal used to print — before anything is
-created. Nothing is written until you press the button.
+Everything else is asked on that page, and only what setup cannot do without:
+person or group, the handle, and a new account and pod or one you already have
+— identity provider, account email and password, pod name. Display name, bio
+and pictures are not asked; they are the client's job afterwards. It shows the
+address you are about to take before anything is created, and nothing is
+written until you press the button.
 
 Each agent also answers at `http://<handle>.localhost:<port>/`, which is what
 setup opens. A browser keeps its storage per origin, so two identities on one
@@ -100,15 +101,14 @@ one. `setup` does open a browser, because that is what `setup` is for.
 
 ### Where your private data lives
 
-By default your pod holds everything: the public face other servers read, and
-also your timeline, contacts, blocklist and notifications. Setup offers to keep
-that second half in a pod on **this machine** instead, leaving your own pod as a
-relay — your address, your actor, your inbox and your published posts, and
-nothing you did not publish.
+Your timeline, contacts, blocklist and notifications are kept on **this
+machine**, beside the credential, from the actor's first write. Your pod holds
+the public face other servers read and nothing else — your address, your actor,
+your inbox and your published posts. It is a relay, not a filing cabinet.
 
-The saving is not small. Today every post you *receive* costs your pod several
-writes; afterwards receiving costs it nothing but the inbox drain. Your pod stops
-being asked to store everything you read.
+The saving is not small. Kept on the pod, every post you *receive* would cost it
+several writes; kept here, receiving costs it nothing but the inbox drain — so
+pod cost scales with what you publish, not with what you read.
 
 It costs two things, both the same thing really — your private data now has one
 copy:
@@ -116,26 +116,53 @@ copy:
 * **No second machine.** You can migrate to a new one with a backup, but two
   cannot run at once. (The lease that prevents that stays on your pod, so a
   second agent still cannot corrupt the first — it just cannot join in.)
-* **Recovery is only as good as your backups**, where today there is nothing to
-  lose because your pod has it all.
+* **Recovery is only as good as your backups**, where a pod-stored actor has
+  nothing to lose because the pod has it all.
 
-That second half can live either in a **pod** on this machine — data-kitchen's,
-or your own Solid server — or in a plain **directory**, which needs nothing
-running at all. A directory is Turtle and JSON on disk, so it is still your data
-in the ordinary sense; point a Solid server at it later if you want it served.
+It is a plain **directory** — Turtle and JSON on disk, needing nothing running,
+still your data in the ordinary sense; point a Solid server at it later if you
+want it served. It can also be a **pod** on this machine, data-kitchen's or your
+own Solid server, but that is a move you make, not a question setup asks.
 
-Setup picks a pod on this machine when one is answering and falls back to your
-own pod when none is. To see or change it later:
+Setup does not ask, because there is no case where the local directory is
+unavailable and starting on the pod and moving later is strictly worse: the copy
+left behind was on the pod the whole time. To see or change it afterwards:
 
 ```
 bin/activitypod.mjs state                    # where it lives now
 bin/activitypod.mjs state --to http://localhost:8000/dk-pod/activitypods-js/
-bin/activitypod.mjs state --to file:///home/you/.activitypod/private/
+bin/activitypod.mjs state --to file:///home/you/.solid-activitypub/private/
 bin/activitypod.mjs state --to pod           # move it back
 ```
 
 Stop the agent first. It copies both trees and checks they arrived before it
 repoints anything, and it leaves the old copy where it was for you to delete.
+
+<!-- CLAUDE 2026-07-31 — new: the home root and `home --to` -->
+### Where the agent itself lives
+
+One directory holds every identity on this machine — the credential, the signing
+keys, the pidfile and the log — with the first identity at the top and each
+`--profile <name>` in `profiles/<name>/`.
+
+```
+bin/activitypod.mjs home                     # which directory, and what is in it
+```
+
+New installs use `~/.solid-activitypub`. Anything set up before the project was
+renamed on 2026-07-30 has `~/.activitypod`, and **keeps it** — that directory
+holds your private key, so nothing moves it behind your back. Take the new name
+when you want it:
+
+```
+bin/activitypod.mjs home --to ~/.solid-activitypub
+```
+
+It moves the whole root, profiles and all, rewrites any private-data path that
+pointed inside it, and refuses while an agent is still answering. `AP_HOME` and
+`--home` override the lot and are left alone. If you installed the service, its
+unit has the old path baked in, so re-run `install-service` afterwards.
+<!-- /CLAUDE -->
 
 When a lot has piled up while the agent was off, `/admin/` says so and asks what
 you want: keep everything and let it work through the backlog oldest-first, or
@@ -144,15 +171,33 @@ bookkeeping — follows, unfollows and deletions from that period are still
 applied, so your follower list stays right and nothing stays up that its author
 took down.
 
-Everything about the actor that can be changed is at
-`http://localhost:8030/admin/` — one surface, with first-run setup at
-`/admin/setup/` and room for the rest — display name, bio, avatar (saving republishes
-the actor document, so other servers learn them), the agent's own UI password,
-and republish / drain / log / dead letters. The handle, the pod, the identity
-provider and person-vs-group are not editable: they are what the actor *is*,
-and changing one would mean a different actor at a different address.
-Parking, reviving, retiring and rotating the signing key stay on the command
-line.
+The record is at `http://localhost:8030/admin/` — what the actor is, and the
+things you do to it. Identity lists the kind, both identities (the fediverse
+address and the WebID), where the private half is kept and which local address
+answers. Upkeep drains the inbox and shows the log and the dead letters;
+Lifecycle parks, revives, rotates the signing key and retires, each behind a
+confirmation that states its consequences. First-run setup is at
+`/admin/setup/`.
+
+The handle, the pod, the identity provider and person-vs-group are not editable:
+they are what the actor *is*, and changing one would mean a different actor at a
+different address. The display name, bio and pictures are editable, but not
+here — see *Editing the profile* below.
+
+A bar across the top of every page carries the same three destinations: **visit
+account** opens `/admin/client/`, the bundled client under that bar; **manage
+account** is the record; **add new account** opens setup for another actor.
+
+When another actor is running on this machine, the top of the page links to it —
+`admin` for its record, `app` for its client. Only actors that are actually up
+are listed, and not the one you are already on, since neither is somewhere to
+go. `activitypod profiles` is the same information in the terminal, including
+the stopped ones.
+
+Following a link just loads that agent's own page; nothing is shared between
+them. Building the list reads one file per identity, `agent.json`, which holds a
+port and a handle — no other agent's credential or keys are ever opened, and
+there is a test that fails if that changes.
 <!-- /CLAUDE -->
 
 
@@ -184,8 +229,17 @@ bin/activitypod.mjs revoke-credential --email you@example.org   # kill this mach
 ```
 
 <!-- CLAUDE 2026-07-30 — added: describe, and the mention note -->
-Your bio and avatar live in the actor document other servers fetch, so setting
-them republishes it:
+<!-- CLAUDE 2026-08-01 — the client edits the profile now; describe still works -->
+### Editing the profile
+
+Display name, bio, avatar, header and the extra fields are edited in the client,
+through Mastodon's own profile editor — the agent answers
+`PATCH /api/v1/accounts/update_credentials`, so Phanpy's *Edit profile* writes
+them. Pictures are uploaded to the pod's media container and the actor document
+carries their URLs; the actor is republished on save.
+
+The command line still works for the two it always did, and republishes the same
+way:
 
 ```
 bin/activitypod.mjs describe --summary "birds, mostly" --icon https://example/me.png
