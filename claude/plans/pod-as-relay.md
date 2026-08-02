@@ -148,6 +148,19 @@ Afterwards it is `activitypod state` to see and `activitypod state --to <url>`
 only then rewrites the pointer; the old copy is left behind on purpose. It
 refuses while an agent is answering on the port.
 
+Left behind on purpose is not the same as wanted: getting the private half OFF
+the pod is usually the point of moving it, so
+`claude/migration-scripts/clear-pod-private-copy.mjs` is the second step. It
+removes everything under `ap-state/` except **`lease.json`** — pinned to the
+remote pod, and the single-writer guarantee dies with it — and `.keep`, plus the
+whole `fediverse/` tree. Two guards, because this is the one operation here that
+destroys data: every URL is checked against the two container prefixes before a
+DELETE is issued, and anything on the pod with no local counterpart aborts the
+run rather than being deleted. Dry run unless given `--go`.
+
+Done for `jeff` on 2026-08-01: 17 documents removed, `lease.json` and `.keep`
+kept, actor/outbox/followers/webfinger/notes all still answering 200.
+
 ## Parked, kept on purpose: serving the private half
 
 Parked 2026-07-31. Two ideas that only make sense together:
