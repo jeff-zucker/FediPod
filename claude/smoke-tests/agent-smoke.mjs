@@ -1072,6 +1072,83 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   idem.stopRenewal();
 }
 
+// --- 5c-bis. the answers to a Follow that were dropped on the floor ---
+{
+  const { Intake } = await import(path.join(root, 'lib/intake.mjs'));
+  const mk = (following, origin = {}) => {
+    const state = { contacts: { followers: [], following }, notes: [] };
+    let published = 0;
+    const intake = new Intake({
+      config: { kind: 'person' },
+      urls: { inbox: 'https://p.example/in/', actor: 'https://p.example/ap/actor' },
+      remote: {}, local: {},
+      store: {
+        read: (n, d) => d, write: () => {},
+        getContacts: () => JSON.parse(JSON.stringify(state.contacts)),
+        setContacts: (c) => { state.contacts = c; },
+        getStatuses: () => [], getActors: () => ({}), isBlocked: () => false,
+        addNotification: (n) => state.notes.push(n),
+      },
+      deliverer: {}, publisher: { publishCollections: async () => { published++; } }, log: () => {},
+    });
+    intake.fetchAP = async (u) => origin[u] || null;
+    return { intake, state, pub: () => published };
+  };
+  const THEM = 'https://them.example/u/z';
+
+  // Reject: their server has recorded that we do NOT follow them. Ours went on
+  // saying we did, and published it — a disagreement that could never resolve,
+  // because as far as they are concerned the question was answered.
+  const rej = mk([{ actor: THEM, accepted: false }]);
+  await rej.intake.onReject({ type: 'Reject', object: { type: 'Follow' }, actor: THEM }, THEM);
+  check(rej.state.contacts.following.length === 0 && rej.pub() === 1,
+    'a Reject drops the following it refused, and republishes the list');
+
+  const other = mk([{ actor: 'https://someone.else/u/a', accepted: true }]);
+  await other.intake.onReject({ type: 'Reject', object: { type: 'Follow' }, actor: THEM }, THEM);
+  check(other.state.contacts.following.length === 1,
+    'and one from somebody we never followed changes nothing');
+
+  // Move: believed only where the actor's OWN document agrees, since a redirect
+  // anyone can Append is not a redirect.
+  const moved = mk([{ actor: THEM, accepted: true }],
+    { [THEM]: { id: THEM, type: 'Person', movedTo: 'https://new.example/u/z' } });
+  await moved.intake.onMove({ type: 'Move', actor: THEM, target: 'https://new.example/u/z' }, THEM);
+  check(moved.state.contacts.following[0].movedTo === 'https://new.example/u/z'
+    && moved.state.notes.some(n => n.type === 'move'),
+    'a corroborated Move is recorded against the follow, and raised');
+
+  const lying = mk([{ actor: THEM, accepted: true }], { [THEM]: { id: THEM, type: 'Person' } });
+  const verdict = await lying.intake.onMove(
+    { type: 'Move', actor: THEM, target: 'https://attacker.example/u/x' }, THEM);
+  check(typeof verdict === 'string' && !lying.state.contacts.following[0].movedTo,
+    'one the actor does not confirm is refused rather than followed');
+}
+
+// --- 5c-ter. nothing grows without a bound ---
+{
+  const st = new PodStore({ log: () => {} });
+  st.setContacts({ followers: [{ actor: 'https://keep.example/u/f' }], following: [] });
+  for (let i = 0; i < 2100; i++) {
+    st.cacheActor(`https://n.example/u/${i}`, { id: `https://n.example/u/${i}`, type: 'Person', name: `n${i}` });
+  }
+  st.cacheActor('https://keep.example/u/f', { id: 'https://keep.example/u/f', type: 'Person', name: 'Follower' });
+  const cached = st.getActors();
+  check(Object.keys(cached).length <= 2000,
+    `the actor cache is bounded (${Object.keys(cached).length} entries)`);
+  check(!!cached['https://keep.example/u/f'],
+    'and a follower is never evicted from it, however old the entry');
+  check(!cached['https://n.example/u/0'] && !!cached['https://n.example/u/2099'],
+    'the least recently fetched strangers go first');
+
+  const ra = fs.readFileSync(path.join(root, 'run-agent.mjs'), 'utf8');
+  check(/LOG_MAX_BYTES/.test(ra) && /renameSync\(logFile, logFile \+ '\.1'\)/.test(ra),
+    'agent.log rotates rather than growing for the life of the install');
+  // connect() can run twice — the CLI does it deliberately now.
+  check(/this\.intake\?\.stop\(\);\s*\n\s*this\.deliverer\?\.stop\(\);/.test(ra),
+    'and connect stops the timers it is about to replace');
+}
+
 // --- 5d-bis. a remote actor's own fields are not markup we run ---
 {
   const st = new PodStore({ log: () => {} });

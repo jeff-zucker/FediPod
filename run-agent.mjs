@@ -271,6 +271,14 @@ export class Agent {
       writeJsonAtomic(path.join(this.home, 'credential.json'), rest);
     }
     this.local = new PodRdf({ storage: this.privateStorage(cred, 'fediverse') });
+    // connect() can run more than once — connectWithRetry retries after a throw,
+    // and the CLI connects for real after its confirmation. Deliverer arms a
+    // 60s queue timer in its constructor and Intake owns a poll timer and a
+    // websocket, so replacing them without stopping the old ones leaves both
+    // ticking for the life of the process.
+    this.intake?.stop();
+    this.deliverer?.stop();
+    this.tagfeed?.stop();
     this.deliverer = new Deliverer({
       store: this.store, rsaPrivate: keys.rsaPrivate, keyId: this.urls.actor + '#main-key',
       log: this.log, passive: this.viewer,
@@ -539,6 +547,10 @@ export class Agent {
   }
 }
 
+// Two megabytes is a few weeks of an ordinary agent's chatter, and small
+// enough that reading the whole thing is still reasonable.
+const LOG_MAX_BYTES = 2 * 1024 * 1024;
+
 export async function startAgent({
   home = process.env.AP_HOME || apRoot(),
   port = Number(process.env.AP_PORT) || 8030,
@@ -575,6 +587,14 @@ export async function startAgent({
     console.log(`[ap:${port}]`, ...a);
     agent.logRing.push(line);
     if (agent.logRing.length > 500) agent.logRing.shift();
+    try {
+      // Rotated, because nothing else was ever going to. This file is appended
+      // to on every drain, every delivery and every lease event, for the life
+      // of an agent that is meant to run for months — on a phone under Termux
+      // especially, an unbounded log is the thing that fills the disk. One
+      // previous generation is kept; a crash investigation rarely wants two.
+      if (fs.statSync(logFile).size > LOG_MAX_BYTES) fs.renameSync(logFile, logFile + '.1');
+    } catch { /* no log yet, or a rename we cannot do — appending still works */ }
     try { fs.appendFileSync(logFile, line + '\n'); } catch { /* logging must never throw */ }
   };
   agent.log = log;
