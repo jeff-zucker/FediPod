@@ -195,19 +195,25 @@ async function renderOthers() {
   }
 }
 
-// Choosing one goes to its record. A stopped actor has no page until it is
-// running, so it is started first — that takes a few seconds, mostly its pod.
-$('actor-pick').addEventListener('change', async (ev) => {
-  const r = actors[Number(ev.target.value)];
+// Choosing one and GOING to it are separate, because they have to be. Arrowing
+// through a closed <select> fires `change` on every keypress on Windows and
+// Linux, so navigating from the event meant a keyboard user was taken to the
+// first actor they arrowed past — and, for a stopped one, started its pod on
+// the way. Choosing is now free; the button commits.
+const goToActor = async () => {
+  const r = actors[Number($('actor-pick').value)];
   if (!r || r.current) return;
   if (r.mode) { location.href = r.admin; return; }
-  ev.target.disabled = true;
+  $('actor-pick').disabled = true;
+  $('actor-go').disabled = true;
   say(`starting ${r.name}`);
   const started = await write('/start-actor', { name: r.name }, `${r.name} is up`);
-  ev.target.disabled = false;
+  $('actor-pick').disabled = false;
+  $('actor-go').disabled = false;
   if (started?.url) location.href = `${started.url}admin/`;
   else renderOthers();            // put the picker back on the current actor
-});
+};
+$('actor-go').addEventListener('click', goToActor);
 
 // Setting up a new actor asks for exactly what this page cannot already tell
 // it: the pod and the account behind it, and its permanent name. Display name,
@@ -339,17 +345,40 @@ function row(text, sub, actions) {
     // Three leading spaces: the tooltip appears under the pointer, and without
     // them the first word sits behind the cursor.
     if (hint) b.title = `   ${hint}`;
-    b.addEventListener('click', async () => { b.disabled = true; await run(); refreshGroup(); });
+    // Where focus should land afterwards. `b.disabled = true` blurs it to
+    // <body> at once, and refreshGroup() then wipes and rebuilds the list, so
+    // without this every mute, eject, admit or refuse dropped a keyboard user
+    // back to the top of the page.
+    b.addEventListener('click', async () => {
+      const list = li.parentNode;
+      focusAfterRefresh = { listId: list?.id, index: [...(list?.children || [])].indexOf(li), label };
+      b.disabled = true;
+      await run();
+      refreshGroup();
+    });
     li.appendChild(b);
   }
   return li;
 }
+
+// Set by a row action, consumed by the fill() that replaces that row.
+let focusAfterRefresh = null;
 
 function fill(listId, countId, items, make) {
   const ul = $(listId);
   ul.textContent = '';
   $(countId).textContent = items.length ? `(${items.length})` : '(none)';
   for (const it of items) ul.appendChild(make(it));
+  if (!focusAfterRefresh || focusAfterRefresh.listId !== listId) return;
+  const { index, label } = focusAfterRefresh;
+  focusAfterRefresh = null;
+  // The same action on the row that took this one's place, or the row before it
+  // when the list just got shorter. Nothing left to land on is the one case
+  // where the heading is the honest answer.
+  const rows = [...ul.children];
+  const li = rows[Math.min(index, rows.length - 1)];
+  const same = li && [...li.querySelectorAll('button')].find(x => x.textContent === label);
+  (same || li?.querySelector('button') || $(countId).closest('h3'))?.focus?.();
 }
 
 async function refreshGroup() {

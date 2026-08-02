@@ -1190,6 +1190,27 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   // 700ms poll, and announcing six steps twice a second is noise, not progress.
   check(!/id="run-steps"[^>]*aria-live/.test(setup),
     'rather than making the rebuilt step list itself a live region');
+
+  // --- focus management (verified end-to-end in a browser, asserted here) ---
+  const winJs = read('web/admin/window.js');
+  check(/setAttribute\('role', 'dialog'\)/.test(winJs)
+    && /aria-labelledby', 'win-title'/.test(winJs),
+    'the floating panel is a dialog, and says what it is called');
+  check(/focusFirst\(\)/.test(winJs) && /returnTo/.test(winJs),
+    'opening it takes focus, and closing gives it back to whatever opened it');
+  // Which also settles 2.4.11: the window is centred over the very buttons that
+  // open it, so the fix for one is the fix for the other.
+  check(winJs.indexOf('returnTo = opener') < winJs.indexOf('focusFirst();'),
+    'the opener is recorded before focus moves, or there would be nothing to return to');
+
+  // 3.2.2 On Input: arrowing a closed <select> fires change per keypress.
+  check(/id="actor-go"/.test(record) && /\$\('actor-go'\)\.addEventListener\('click'/.test(adminJs),
+    'choosing an actor and going to it are separate actions');
+  check(!/\$\('actor-pick'\)\.addEventListener\('change'/.test(adminJs),
+    'so arrowing through the list no longer navigates, or starts a pod');
+
+  check(/focusAfterRefresh/.test(adminJs),
+    'a group row action puts focus back rather than dropping it on <body>');
 }
 
 // --- 5f-bis. the unauthenticated probes are still this pod's traffic ---

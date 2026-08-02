@@ -19,12 +19,38 @@
   // Every direct child of the body is a panel; showing one hides the rest.
   const panels = () => [...body.children];
   let open = null;
+  // Where focus was when the window opened, so closing can put it back. Without
+  // this, Escape from inside the panel drops focus on <body> and the tab order
+  // restarts from the top of the page.
+  let returnTo = null;
+
+  // It IS a dialog, so it says so — and a dialog that opens without taking
+  // focus leaves a keyboard user tabbing forward through the rest of the page
+  // to find it, and a screen-reader user with no announcement that anything
+  // happened at all. It also sits over the control that opened it, so moving
+  // focus in is what stops that control being focused-but-obscured.
+  win.setAttribute('role', 'dialog');
+  win.setAttribute('aria-modal', 'false');       // the page behind stays usable
+  win.setAttribute('aria-labelledby', 'win-title');
+
+  const focusFirst = () => {
+    const panel = panels().find(p => !p.hidden);
+    const target = panel?.querySelector(
+      'input:not([type=hidden]), select, textarea, button, [href], [tabindex]:not([tabindex="-1"])',
+    );
+    (target || document.getElementById('win-close'))?.focus();
+  };
 
   const close = () => {
     win.hidden = true;
     for (const p of panels()) p.hidden = true;
     const was = open;
     open = null;
+    // Only if focus is still ours to move: the user may have clicked away.
+    const back = returnTo;
+    returnTo = null;
+    if (back && document.contains(back) && win.contains(document.activeElement)) back.focus();
+    else if (back && document.contains(back) && document.activeElement === document.body) back.focus();
     win.dispatchEvent(new CustomEvent('win:closed', { detail: { was } }));
   };
 
@@ -32,11 +58,14 @@
   // itself without every caller repeating the check.
   const show = (id, label) => {
     if (open === id && !win.hidden) { close(); return false; }
+    const opener = document.activeElement;
     for (const p of panels()) p.hidden = p.id !== id;
     title.textContent = label || '';
     win.hidden = false;
     open = id;
     clampIntoView();
+    if (opener && opener !== document.body && !win.contains(opener)) returnTo = opener;
+    focusFirst();
     return true;
   };
 
