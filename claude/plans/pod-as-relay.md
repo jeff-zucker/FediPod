@@ -243,12 +243,57 @@ survives it.
 - dk's local pod enforces no ACLs at all (`pivot-config/no-auth.json` swaps in
   `allow-all.json`), so the gate token and loopback binding are the whole
   boundary. And it exists only while dk runs.
-- ~~No reconcile-on-restore.~~ **Done 2026-08-01** for followers, which is the
-  half that costs you something: `publishCollections` reads the pod's published
-  list first and recovers anyone on it this machine has never heard of,
-  dereferencing each to get the inbox delivery needs. What makes that safe to do
-  unconditionally is that every removal is now recorded — `dropFollower` marks
-  an unfollow, an ejection or a deleted account, so a returning name is a
-  genuine follower rather than a decision being undone. Still no path that
-  rebuilds statuses from the published `ap/notes/`. That would close most of the
-  RPO gap.
+- ~~No reconcile-on-restore.~~ **Done 2026-08-01** — both halves. See below.
+
+## Reconcile on restore, and the rebuild
+
+Added 2026-08-01. The RPO gap is not "the backup is old", it is "the machine now
+knows less than the pod does, and the next publish will make the pod agree with
+it." Three things, in the order they were built.
+
+**Followers.** `publishCollections` reads the pod's published list first and
+recovers anyone on it this machine never heard of, dereferencing each to get the
+inbox delivery needs. Safe to do unconditionally because every removal is
+recorded: `dropFollower` marks an unfollow, an ejection or a deleted account, so
+a returning name is a genuine follower rather than a decision being undone.
+
+**The outbox.** Same shape, and it had to come next, because the outbox is what
+the rebuild reads and a republish from a machine that is behind would PUT an
+empty collection over it — destroying the recovery source before anyone knew
+there was anything to recover. `reconcileOutbox` merges back what the pod
+carries and this machine does not, and `unrecordOutbox` now leaves a tombstone
+(`outbox-removed.json`, bounded at 500) so a deliberate deletion cannot be undone
+by the merge.
+
+**The posts.** `publisher.rebuildStatuses()` — `activitypod rebuild`, `POST
+/rebuild`, or **Recover posts** on the Upkeep line. Reads the outbox, fetches
+each note this machine no longer has, writes them into `statuses.json` and back
+into the RDF under `fediverse/posts/`.
+
+Three decisions worth keeping:
+
+- **The outbox is the index, not the `ap/notes/` listing.** Deleting a post
+  rewrites the outbox in one PUT, so an entry still there is a post that still
+  stands. The note *document* is deleted by a separate request that can fail
+  (`deleteNote`'s `remote.delete` has never checked its result), so walking the
+  container can resurrect a post its author took down. `--from-notes` does walk
+  it, deliberately, for the case where losing the post is the worse outcome —
+  and it still honours the tombstones.
+- **Merge only, never replace.** A status already here keeps its own copy: it
+  carries `favourited`, `reblogged` and the activities an Undo has to name, none
+  of which the pod knows. This is also what makes every failure harmless —
+  `listContainer` returns `[]` for *any* error status, and nothing is what an
+  empty listing recovers.
+- **Written whole, not through `addStatus`.** `addStatus` unshifts and fires the
+  streaming event, so a loop of it arrives backwards and pushes every recovered
+  post at connected clients as if it were new. Sorted by `published` and written
+  once, the way `backfillStatuses` does it, then `commit()` — and the result is
+  reported, because `flush()` throws the answer away.
+
+Recoverable: your own posts, with content, reply target, mentions, attachments
+and slug; and your own boosts of them, with the Announce a later Undo needs.
+Not recoverable, and not a bug: other people's posts in your timeline. They were
+never published by this actor, so the pod never held them.
+
+Still open: `deleteNote` ignores the result of its three `remote.delete` calls,
+which is why `--from-notes` needs the warning it has.

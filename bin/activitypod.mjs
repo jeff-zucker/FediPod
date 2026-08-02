@@ -45,6 +45,12 @@
 //                         moves it to a pod on this machine, `--to pod` moves it
 //                         back. Copies and verifies before repointing; the old
 //                         copy is left behind. Stop the agent first.
+//   activitypod rebuild   put back the posts a restored or replaced machine no
+//                         longer knows about, from what the pod still serves.
+//                         Adds only — a post this machine already has keeps its
+//                         local facts. `--from-notes` also walks ap/notes/,
+//                         which finds more and can bring back a post whose
+//                         deletion the pod refused. The agent must be running.
 //   activitypod home      which directory every identity on this machine lives
 //                         in. `--to <dir>` moves the whole root, rewrites any
 //                         privateRoot that pointed inside it, and refuses while
@@ -1086,6 +1092,29 @@ WantedBy=default.target
     console.error(`agent not reachable on :${PORT} (${e.message})`);
     process.exit(1);
   }
+} else if (cmd === 'rebuild') {
+  // Served by the running agent because it needs the lease: it writes the
+  // statuses store, and two agents writing it is the thing the lease prevents.
+  try {
+    const res = await fetch(`http://localhost:${PORT}/rebuild`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ fromNotes: has('from-notes') }),
+    });
+    const body = await res.json();
+    if (res.status >= 400) { console.error(body.error || `HTTP ${res.status}`); process.exit(1); }
+    if (body.why) { console.error(body.why); process.exit(1); }
+    console.log(`the pod indexed ${body.indexed} post(s); recovered ${body.recovered}`
+      + `${body.reblogs ? `, and marked ${body.reblogs} of them boosted` : ''}`
+      + `${body.rdf ? ` (${body.rdf} written back to the RDF)` : ''}`);
+    if (body.dropped) console.log(`${body.dropped} fell past the 1000-status cap`);
+    if (!body.landed) { console.error('the state write did NOT land — nothing is saved'); process.exit(1); }
+    if (!body.recovered && !has('from-notes')) {
+      console.log('Nothing was missing. `--from-notes` looks past the outbox, at every note the pod still holds.');
+    }
+  } catch (e) {
+    console.error(`agent not reachable on :${PORT} (${e.message})`);
+    process.exit(1);
+  }
 } else if (cmd === 'status') {
   try {
     const res = await fetch(`http://localhost:${PORT}/status`);
@@ -1166,8 +1195,8 @@ WantedBy=default.target
     console.log(`${cmd}d ${arg} — ${body.pending} still held`);
   }
 } else {
-  console.log('usage: activitypod <setup|start|stop|status|state|home|passwd|tokens|revoke-credential'
-    + '|install-service> [--flags]');
+  console.log('usage: activitypod <setup|start|stop|status|state|rebuild|home|passwd|tokens'
+    + '|revoke-credential|install-service> [--flags]');
   console.log('  group: members | eject <actor> | mute <actor> | unmute <actor>');
   console.log('         joins <open|approve> | requests | admit <actor> | refuse <actor>');
   console.log('         announced | retract <note> | review <on|off> | pending | approve <note> | decline <note>');

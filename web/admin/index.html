@@ -9,7 +9,7 @@
    Two accents, kept apart on purpose: --link is anything you can act on,
    --heading is structure. Using one colour for both made the headings
    look clickable. */
-:root { color-scheme: light dark; font-size: 20px; --link: #1a4f8a; --heading: #5b3a8e;
+:root { color-scheme: light dark; font-size: 18px; --link: #1a4f8a; --heading: #5b3a8e;
   /* Warm, so it sits against the blue label rather than under it — and
      nowhere near the purple the headings use. */
   --btn-bg: #f4efe6; --btn-edge: #b9ad99; }
@@ -19,16 +19,17 @@ html { height: 100%; }
 body { font: 1rem/1.5 system-ui, sans-serif; margin: 0; height: 100dvh;
   box-sizing: border-box; display: flex; flex-direction: column; overflow: hidden; }
 /* The bar spans the window; everything under it stays in a centred column. */
-#page { flex: 1 1 auto; min-height: 0; width: 100%; max-width: 44rem; margin: 0 auto;
+/* Wide enough for the longest control line — Upkeep's label plus its four
+   buttons — to stay on one line rather than wrapping. */
+#page { flex: 1 1 auto; min-height: 0; width: 100%; max-width: 52rem; margin: 0 auto;
   padding: .5rem 1rem 1rem; box-sizing: border-box;
   display: flex; flex-direction: column; }
 #page > section, #page > nav, #page > p { flex: 0 0 auto; }
-/* The one exception to the page never scrolling: the new-account form is longer
-   than the window, and its scrollbar belongs at the right edge of the window
-   rather than drawn around the form. While it is open the body scrolls; the
-   rest of the time the layout is fixed and the panels scroll instead. */
-body.adding { height: auto; min-height: 100dvh; overflow: auto; }
-body.adding #page { flex: 0 0 auto; }
+/* Two cases where the page may grow past the window: the new-account form, and
+   a group console, whose members / requests / review / carried lists have no
+   bound. Both scroll on the window rather than inside a box. */
+body.adding, body.group { height: auto; min-height: 100dvh; overflow: auto; }
+body.adding #page, body.group #page { flex: 0 0 auto; }
 /* `hidden` is a UA rule, so ANY author `display` beats it — `dl { display: grid }`
    left the facts on screen with the attribute set. Everything here toggles with
    `hidden`, so it has to outrank them all. */
@@ -92,8 +93,7 @@ dd { margin: 0; word-break: break-all; }
 #actor-pick { font: inherit; padding: .2rem .4rem; border-radius: .3rem;
   border: 1px solid var(--btn-edge); background: var(--btn-bg); color: var(--link); }
 /* Small buttons that sit in a line of text. */
-button.inline { font-size: .9rem; padding: .15rem .6rem; }
-button.inline { font-weight: 400; }
+button.inline { font-size: .9rem; padding: .15rem .6rem; font-weight: 400; }
 /* Radios read as one line each: label { display: block } alone drops the text
    below the control. */
 .choice { display: block; margin: .35rem 0; font-weight: normal; }
@@ -201,34 +201,37 @@ pre { overflow-x: auto; background: #0001; padding: .6rem; border-radius: .3rem;
   <dl id="facts"></dl>
 </section>
 
+<section id="pane-upkeep" hidden>
+  <h2><span class="hlabel">Upkeep</span>
+    <button id="do-moderation" class="inline" hidden>Moderation options</button>
+    <button id="do-drain" class="inline">Drain the inbox</button>
+    <button id="do-rebuild" class="inline">Recover posts</button>
+    <button id="do-log" class="inline">Show the log</button>
+    <button id="do-deadletter" class="inline">Show dead letters</button>
+  </h2>
+  <h3><span class="hlabel">Lifecycle</span>
+    <button id="do-park" class="inline" data-confirm="park">Park</button>
+    <button id="do-revive" class="inline" data-confirm="revive">Revive</button>
+    <button id="do-rotate-key" class="inline" data-confirm="rotate-key">Rotate the signing key</button>
+    <button id="do-retire" class="inline danger" data-confirm="retire">Retire</button>
+  </h3>
+
+</section>
+
 <section id="pane-group" hidden>
-  <h2><span class="hlabel">Group</span></h2>
+  <!-- Both queues are consequences of a moderation setting: with the setting off
+       nothing can ever arrive in them, so the heading would be a standing
+       promise of a list that cannot fill. Shown only when the setting is on AND
+       something is waiting. -->
+  <div id="block-requests" hidden>
+    <h3>Join requests <span class="muted" id="requests-count"></span></h3>
+    <ul class="rows" id="requests"></ul>
+  </div>
 
-  <fieldset>
-    <legend>Who may join</legend>
-    <p id="joins-state" class="muted"></p>
-    <p>
-      <button id="joins-open">Let anyone join</button>
-      <button id="joins-approve">Approve each request</button>
-    </p>
-    <p class="hint">This one is on the wire — the actor document carries it, so changing it
-      republishes.</p>
-  </fieldset>
-
-  <fieldset>
-    <legend>What gets carried</legend>
-    <p id="review-state" class="muted"></p>
-    <p>
-      <button id="review-off">Carry members' posts at once</button>
-      <button id="review-on">Hold them for review</button>
-    </p>
-  </fieldset>
-
-  <h3>Join requests <span class="muted" id="requests-count"></span></h3>
-  <ul class="rows" id="requests"></ul>
-
-  <h3>Held for review <span class="muted" id="pending-count"></span></h3>
-  <ul class="rows" id="pending"></ul>
+  <div id="block-pending" hidden>
+    <h3>Posts to review <span class="muted" id="pending-count"></span></h3>
+    <ul class="rows" id="pending"></ul>
+  </div>
 
   <h3>Members <span class="muted" id="members-count"></span></h3>
   <p class="hint">A group cannot force an unfollow. Muting is declining to carry; ejecting also
@@ -262,26 +265,29 @@ pre { overflow-x: auto; background: #0001; padding: .6rem; border-radius: .3rem;
   <p class="err" id="inbox-warn" hidden></p>
 </section>
 
-<section id="pane-upkeep" hidden>
-  <h2><span class="hlabel">Upkeep</span>
-    <button id="do-drain" class="inline">Drain the inbox</button>
-    <button id="do-log" class="inline">Show the log</button>
-    <button id="do-deadletter" class="inline">Show dead letters</button>
-  </h2>
-  <h3><span class="hlabel">Lifecycle</span>
-    <button id="do-park" class="inline" data-confirm="park">Park</button>
-    <button id="do-revive" class="inline" data-confirm="revive">Revive</button>
-    <button id="do-rotate-key" class="inline" data-confirm="rotate-key">Rotate the signing key</button>
-    <button id="do-retire" class="inline danger" data-confirm="retire">Retire</button>
-  </h3>
-
-</section>
-
-
 <!-- Every panel opens here, at the foot of the page, rather than pushing the
      lines apart wherever its button happens to sit. One at a time, and each
      scrolls inside itself so the page does not grow. -->
 <div id="panels">
+<div id="moderation" hidden>
+  <fieldset>
+    <legend>Join request moderation</legend>
+    <p id="joins-state" class="muted"></p>
+    <p>
+      <button id="joins-open">Let anyone join</button>
+      <button id="joins-approve">Approve each request</button>
+    </p>
+  </fieldset>
+
+  <fieldset>
+    <legend>Post moderation</legend>
+    <p id="review-state" class="muted"></p>
+    <p>
+      <button id="review-off">Carry members' posts at once</button>
+      <button id="review-on">Hold them for review</button>
+    </p>
+  </fieldset>
+</div>
 <pre id="output" hidden></pre>
 <!-- Every consequence is written here rather than assembled in script: the
      page asking "are you sure" has to say what it is sure about, and this is

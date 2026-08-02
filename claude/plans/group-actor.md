@@ -168,11 +168,38 @@ shape is asserted in the suite. That is the one thing a live run would still pro
   person, so member posts file as `timeline` and reach `fediverse/timeline/` (owner-only
   — the operator's record, not a public archive). A stranger posting at the group is
   still a mention, which is right: that is something the operator should see.
-- **Announces are not added to the group's outbox.** `outbox.json` holds note ids, not
-  activities; boosts have never been recorded there either.
-- **Nothing has crossed the network.** The suite exercises real `startAdmin` and real
-  `Intake` in-process. A live run — throwaway group pod, follow from Mastodon, post
-  through it — has not been done.
+- ~~**Announces are not added to the group's outbox.**~~ **Fixed 2026-07-30**: a carry
+  calls `recordOutbox(act)` with the whole activity, because an Announce id is only a
+  fragment on the actor and would not dereference. `outbox.json` is heterogeneous from
+  then on — bare note ids for own posts, activity objects for boosts — and every reader
+  of it has to handle both.
+- ~~**Nothing has crossed the network.**~~ **Done 2026-07-31**: `@group@activitypub.
+  teamid.live` is live with members from Mastodon and from another pod.
+
+## What the live run found (2026-08-01)
+
+- **Every group rendered as `@actor@host`.** `fetchAP` cached only `type === 'Person'`,
+  so a Group was fetched, used and thrown away and nothing knew its `preferredUsername`.
+  A client with no name falls back to the last path segment of the actor URL — which for
+  every actor this agent publishes is the literal word `actor`. `ACTOR_TYPES` now covers
+  Person, Group, Service, Application and Organization. The lesson is the fallback, not
+  the set: a name guessed from a URL is wrong silently and looks deliberate.
+- **Everyone had no followers.** Counts are `totalItems` on the followers/following
+  collections, not fields on the actor document, so a client asking "who is this" was
+  told nobody follows anybody. `social.cacheCounts` fetches both — two GETs, and only
+  when someone asked by name, never on the drain path. A collection that will not answer
+  leaves the count *unset* rather than reported as zero, which is a different claim.
+- **A member's fediverse address is derivable and its WebID is not.** The console lists
+  `@them@their.server`, built from the cached `preferredUsername` and the actor URL's
+  host. `store.handleOf` returns null rather than guessing when the actor is not cached —
+  the same trap as above. A Solid WebID was considered and dropped: nothing in an actor
+  document carries one, `<origin>/profile/card` answers 200 on Mastodon too, and there is
+  no honest way to know it.
+- **Mastodon's follower count for the group lags.** The pod publishes the right
+  `totalItems` immediately; Mastodon shows its cached copy of the actor until it
+  re-fetches, and nothing prompts it to. This agent has never sent an `Update{Group}` —
+  `grep "type: 'Update'" lib/` finds nothing. Not a bug in what is published; a missing
+  push. Unbuilt on purpose, not overlooked.
 
 ## Deferred: several actors in one process
 

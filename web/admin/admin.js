@@ -58,7 +58,7 @@ async function load() {
 // One panel open at a time. Every disclosure on the page — the log/dead-letter
 // output, a lifecycle confirmation — closes through here,
 // so opening one puts the others away rather than stacking them down the page.
-const PANELS = ['output', 'confirm-form'];
+const PANELS = ['output', 'confirm-form', 'moderation'];
 
 function closePanels(keep = null) {
   for (const id of PANELS) if (id !== keep) $(id).hidden = true;
@@ -115,7 +115,10 @@ function render() {
   renderOthers();
   renderInbox();
   if (config.kind === 'group') {
+    // Its lists have no bound, so this page scrolls — see body.group in the CSS.
+    document.body.classList.add('group');
     $('pane-group').hidden = false;
+    $('do-moderation').hidden = false;   // only a group has any
     renderGroupToggles();
     refreshGroup();
   }
@@ -238,14 +241,16 @@ $('new-actor-form').addEventListener('submit', async (ev) => {
 // ---- group ----
 
 function renderGroupToggles() {
+  // Labelled, because the sentence alone reads like an instruction rather than
+  // a report of what the group is doing right now.
   $('joins-state').textContent = config.approveJoins
-    ? 'Each join request waits for you.'
-    : 'Anyone who follows becomes a member at once.';
+    ? 'current state: each join request waits for you.'
+    : 'current state: anyone who follows becomes a member at once.';
   $('joins-open').disabled = !config.approveJoins;
   $('joins-approve').disabled = !!config.approveJoins;
   $('review-state').textContent = config.review
-    ? 'Members’ posts are held until you approve them.'
-    : 'Members’ posts are carried to the group as they arrive.';
+    ? 'current state: members’ posts are held until you approve them.'
+    : 'current state: members’ posts are carried to the group as they arrive.';
   $('review-off').disabled = !config.review;
   $('review-on').disabled = !!config.review;
 }
@@ -264,6 +269,14 @@ const setReview = async (on) => {
     refreshGroup();
   }
 };
+// The settings themselves are a panel like the log is: opened when you mean to
+// change one, not standing between the heading and the lists.
+$('do-moderation').addEventListener('click', () => {
+  if (!$('moderation').hidden) { closePanels(); return; }
+  closePanels('moderation');
+  $('moderation').hidden = false;
+});
+
 $('joins-open').addEventListener('click', () => setJoins(false));
 $('joins-approve').addEventListener('click', () => setJoins(true));
 $('review-off').addEventListener('click', () => setReview(false));
@@ -311,8 +324,13 @@ async function refreshGroup() {
     ['Decline', () => write('/decline', { noteId: p.noteId }, 'declined')],
   ]));
 
+  // A queue nothing can arrive in is not an empty list, it is a list that does
+  // not apply — so the setting has to be on before the heading appears at all.
+  $('block-requests').hidden = !(config.approveJoins && (requests.requests || []).length);
+  $('block-pending').hidden = !(config.review && (pending.pending || []).length);
+
   fill('members', 'members-count', members.members || [], (m) => row(
-    m.actor, m.muted ? 'muted — their posts are not carried' : null,
+    m.handle || m.actor, m.muted ? 'muted — their posts are not carried' : null,
     [
       m.muted
         ? ['Unmute', () => write('/unmute', { actor: m.actor }, 'unmuted')]
@@ -357,6 +375,25 @@ $('do-drain').addEventListener('click', async (ev) => {
     say(`inbox drained — ${box.count ?? 0} still waiting`);
     output(r, 'drain');
   }
+});
+
+// Like the drain, this does work rather than reveals it, so a second click
+// re-runs. Nothing here can lose anything: it only adds posts back.
+$('do-rebuild').addEventListener('click', async (ev) => {
+  const b = ev.currentTarget;
+  b.disabled = true;
+  b.textContent = 'recovering…';
+  say('reading what the pod still holds — one request per post, so this takes a moment');
+  const r = await write('/rebuild', {}, 'checked');
+  b.disabled = false;
+  b.textContent = 'Recover posts';
+  if (!r) return;
+  if (r.why) { say(r.why, 'err'); return; }
+  if (!r.landed) { say('recovered posts could NOT be saved — see the log', 'err'); return; }
+  say(r.recovered
+    ? `recovered ${r.recovered} post(s) the pod had and this machine did not`
+    : `nothing was missing — the pod indexed ${r.indexed} post(s), all of them already here`);
+  output(r, 'rebuild');
 });
 
 $('do-log').addEventListener('click', async () => {

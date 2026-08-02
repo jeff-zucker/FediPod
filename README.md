@@ -174,10 +174,47 @@ took down.
 The record is at `http://localhost:8030/admin/` — what the actor is, and the
 things you do to it. Identity lists the kind, both identities (the fediverse
 address and the WebID), where the private half is kept and which local address
-answers. Upkeep drains the inbox and shows the log and the dead letters;
-Lifecycle parks, revives, rotates the signing key and retires, each behind a
-confirmation that states its consequences. First-run setup is at
+answers. Upkeep drains the inbox, recovers posts, and shows the log and the dead
+letters; Lifecycle parks, revives, rotates the signing key and retires, each
+behind a confirmation that states its consequences. First-run setup is at
 `/admin/setup/`.
+
+<!-- CLAUDE 2026-08-01 — new: getting your own posts back after a restore -->
+### Getting your posts back
+
+Your private half is on this machine, so a restored backup or a replaced machine
+comes back knowing less than the pod does. Your followers are recovered
+automatically on the next publish. Your own posts are not, because putting them
+back means reading them — so it is a thing you ask for:
+
+```bash
+bin/activitypod.mjs rebuild
+```
+
+or **Recover posts** on the Upkeep line of `/admin/`. The agent has to be
+running.
+
+It reads the pod's outbox, fetches each post that this machine no longer has,
+and adds it — to the statuses store and back into the RDF. It never removes or
+overwrites anything: a post already here keeps its own copy, including what only
+this machine knows, like whether you boosted or favourited it.
+
+The outbox is the index rather than the notes container, and that is deliberate.
+Deleting a post rewrites the outbox in one go, so an entry still there is a post
+that still stands. The note document is deleted separately and that request can
+fail, which would leave a deleted post sitting published. If you would rather
+have those back than lose a post:
+
+```bash
+bin/activitypod.mjs rebuild --from-notes
+```
+
+which reads every note the pod still holds, and can bring back one you deleted.
+
+What it cannot recover: other people's posts in your timeline. Those were never
+yours to publish and the pod never had them — only your own posts and your own
+boosts of them are on the pod to read back.
+<!-- /CLAUDE -->
 
 The handle, the pod, the identity provider and person-vs-group are not editable:
 they are what the actor *is*, and changing one would mean a different actor at a
@@ -277,6 +314,20 @@ was created in the first place. That is all it serves: no Mastodon client, no
 `/api/*`, no `/oauth/*`, no tokens, no UI password. The console reaches exactly
 the same loopback routes the commands below already reach, so it grants nobody
 any authority they did not have; it is a different client, not a wider door.
+<!-- /CLAUDE -->
+
+<!-- CLAUDE 2026-08-01 — added: what the console shows now -->
+Members are listed by their fediverse address — `@them@their.server` — rather
+than by the URL their server happens to serve them at. An address only appears
+once the group has actually read that actor's document; anyone it has not, it
+still shows by URL, because guessing the name from the last segment of the URL
+is what once rendered every group as `@actor@host`.
+
+The moderation settings — who may join, what gets carried — are behind
+**Moderation options** on the Upkeep line rather than standing above the lists.
+The join-request and post-review queues appear only when their setting is on and
+something is actually waiting: with the setting off nothing can ever arrive in
+them, so a heading would be promising a list that cannot fill.
 <!-- /CLAUDE -->
 
 Only members are amplified. Anyone can post into a public inbox, so a post is

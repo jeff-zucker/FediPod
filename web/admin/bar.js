@@ -20,5 +20,12 @@
   // 409s the other, which logged a failed request on every setup page.
   fetch('/status').then(r => (r.ok ? r.json() : null)).then((s) => {
     if (s?.handle) document.title = `Solid ActivityPub — ${s.handle}`;
+    // A group serves its console and nothing else — no client, no /api, no
+    // tokens. Disabled rather than hidden: the row stays the same everywhere.
+    const visit = document.getElementById('bar-fediverse');
+    if (s?.kind === 'group' && visit) {
+      visit.disabled = true;
+      visit.title = 'a group has no client of its own';
+    }
   }).catch(() => { /* not up yet; the bar still works */ });
 })();

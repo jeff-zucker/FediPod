@@ -3107,6 +3107,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
       urls: curls, config: {},
       publishProfile: async () => { republished.push(1); return { unreachable: [] }; },
       retireActor: async () => { lifecycle.push('retire'); return { inboxes: 1, deletedAt: 'T' }; },
+      rebuildStatuses: async (o) => { lifecycle.push('rebuild'); return { indexed: 1, recovered: 1, ...o }; },
     },
   };
   startAdmin({ port: CPORT, gateToken: '', agent: cagent, handle: 'solo', log: () => {} });
@@ -3182,12 +3183,17 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   cagent.requestTakeover = async () => false;
   const viewerDrain = await lpost('/drain');
   const viewerPrune = await lpost('/inbox/prune', { before: '2026-01-01T00:00:00Z' });
+  // Same rule for the rebuild: it writes the statuses store, and two agents
+  // writing it is exactly what the lease exists to stop.
+  const viewerRebuild = await lpost('/rebuild');
   check(viewerDrain.status === 503 && /another agent is active/.test(viewerDrain.json?.error || ''),
     'a viewer that cannot claim the lease is refused the drain');
   check(viewerPrune.status === 503 && /another agent is active/.test(viewerPrune.json?.error || ''),
     'and refused the prune, which deletes far more');
-  check(!lifecycle.includes('drain') && !lifecycle.includes('prune'),
-    'and neither one touched the inbox on the way to being refused');
+  check(viewerRebuild.status === 503 && /another agent is active/.test(viewerRebuild.json?.error || ''),
+    'and refused the rebuild, which writes the statuses store');
+  check(!lifecycle.includes('drain') && !lifecycle.includes('prune') && !lifecycle.includes('rebuild'),
+    'and none of the three touched anything on the way to being refused');
   cagent.requestTakeover = async () => { lifecycle.push('takeover'); return true; };
 
   const parked = await lpost('/park');
@@ -3201,6 +3207,12 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
     'and rotate the signing key');
   check(lifecycle.filter(x => x === 'takeover').length - takeoversBefore === 3,
     'each one claims the lease first — a person here outranks an idle agent elsewhere');
+
+  // Counted after that, because the three above IGNORE the takeover result and
+  // this one refuses on it — the same call, a different rule.
+  const rebuilt = await lpost('/rebuild', { fromNotes: true });
+  check(rebuilt.status === 200 && rebuilt.json.recovered === 1 && rebuilt.json.fromNotes === true,
+    'with the lease the rebuild runs, and the wider search is passed through rather than dropped');
 
   // The interlock, which is the whole reason retire is safe to put on a page.
   const noConfirm = await lpost('/retire');
@@ -3292,6 +3304,43 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
     fs.rmSync(shome, { recursive: true, force: true });
   }
 
+  // ---- a group is an actor too ----
+  // fetchAP cached only type Person, so a Group was fetched, used and thrown
+  // away. With nothing cached the facade fell back to the last path segment of
+  // the actor URL — which for every actor here is the literal word `actor`, so
+  // a group searched for by name came back as @actor@host with no name.
+  {
+    const { PodStore } = await import(path.join(root, 'lib/store.mjs'));
+    const { MastoApi } = await import(path.join(root, 'lib/mastoapi.mjs'));
+    const gurls = (await import(path.join(root, 'lib/wire.mjs'))).apUrls('https://me.example/');
+    const gs = new PodStore({ log: () => {} });
+    gs.setConfig({ handle: 'me', remotePod: 'https://me.example/' });
+    const actorUrl = 'https://activitypub.example/activitypods-js/ap/actor';
+
+    const api = new MastoApi({
+      agent: { store: gs, publisher: { urls: gurls }, configured: () => true }, log: () => {},
+    });
+    const bare = api.account(actorUrl);
+    check(bare.username === 'actor',
+      'with nothing cached a client is told the actor is called "actor" — the old bug');
+
+    gs.cacheActor(actorUrl, {
+      id: actorUrl, type: 'Group', preferredUsername: 'group', name: 'group',
+      followers: actorUrl + '/followers',
+    });
+    const named = api.account(actorUrl);
+    check(named.username === 'group' && named.acct === 'group@activitypub.example',
+      'a cached Group renders under its own name');
+    check(named.group === true, 'and is flagged as a group, so a client can say so');
+    check(named.followers_count === 0, 'counts stay 0 until something has asked the collection');
+
+    const withCounts = gs.getActors();
+    withCounts[actorUrl].counts = { followers: 1, following: null };
+    gs.write('actors.json', withCounts);
+    check(api.account(actorUrl).followers_count === 1,
+      'and report what the collection said once it has been asked');
+  }
+
   // ---- unblock, and reconcile-on-restore ----
   {
     const { PodStore, dropFollower } = await import(path.join(root, 'lib/store.mjs'));
@@ -3352,6 +3401,107 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
     check(contacts.followers.find(f => f.actor === 'https://back.example/u')?.inbox
       === 'https://back.example/u/inbox',
       'the inbox comes with them — recovering the name alone would not restore delivery');
+  }
+
+  // ---- rebuilding own posts from the pod's public face ----
+  // The other half of reconcile-on-restore. Followers came back; the posts did
+  // not, and the pod was serving every one of them the whole time.
+  {
+    const { PodStore } = await import(path.join(root, 'lib/store.mjs'));
+    const { Publisher } = await import(path.join(root, 'lib/publisher.mjs'));
+    const POD = 'https://me.example/';
+    const N = POD + 'activitypods-js/ap/notes/';
+    const ACTOR = POD + 'activitypods-js/ap/actor';
+    const note = (slug, extra = {}) => ({
+      id: N + slug, type: 'Note', attributedTo: ACTOR,
+      content: `<p>${slug}</p>`, published: `2026-07-${slug.slice(-2)}T00:00:00.000Z`, ...extra,
+    });
+    const docs = {
+      [POD + 'activitypods-js/ap/outbox']: {
+        type: 'OrderedCollection',
+        orderedItems: [N + 'a-01', N + 'a-02', { type: 'Announce', id: ACTOR + '#announce-9', object: N + 'a-01' }],
+      },
+      [N + 'a-01']: note('a-01'),
+      [N + 'a-02']: note('a-02', { inReplyTo: 'https://far.example/n/7', tag: [{ type: 'Mention', href: 'https://far.example/u', name: '@them@far.example' }] }),
+      [N + 'a-03']: note('a-03'),                   // published, but NOT in the outbox
+    };
+    const written = [];
+    const mkPub = (store) => new Publisher({
+      config: { remotePod: POD, handle: 'me' }, store, log: () => {},
+      remote: {
+        getJson: async (u) => docs[u] ?? null,
+        listContainer: async () => [
+          { url: N + 'a-01' }, { url: N + 'a-01-create' }, { url: N + 'a-01-replies' },
+          { url: N + 'a-02' }, { url: N + 'a-03' }, { url: N + '.keep' },
+        ],
+      },
+      local: { writeNote: async (kind, slug) => { written.push(`${kind}/${slug}`); } },
+    });
+
+    // A machine that lost everything.
+    const empty = new PodStore({ log: () => {} });
+    const r1 = await mkPub(empty).rebuildStatuses();
+    const got = empty.getStatuses();
+    check(r1.recovered === 2 && got.length === 2,
+      `the outbox is the index: both posts it names come back (${r1.recovered})`);
+    check(!got.some(s => s.noteId === N + 'a-03'),
+      'and a note the outbox does not name is left alone — the outbox is what a delete rewrites');
+    check(got[0].noteId === N + 'a-02' && got[0].inReplyTo === 'https://far.example/n/7'
+      && got[0].mentions?.[0]?.name === '@them@far.example' && got[0].kind === 'post'
+      && got[0].slug === 'a-02',
+      'a recovered post carries its reply target, its mentions, its kind and its slug');
+    check(got.find(s => s.noteId === N + 'a-01')?.reblogged === true,
+      'an Announce in the outbox marks its own post boosted, with the activity an Undo would need');
+    check(written.includes('posts/a-01') && written.includes('posts/a-02'),
+      'and the RDF mirror is written back too, which is what a later backfill reads');
+
+    // --from-notes looks past the outbox, and says what it costs.
+    const wider = new PodStore({ log: () => {} });
+    const r2 = await mkPub(wider).rebuildStatuses({ fromNotes: true });
+    check(r2.recovered === 3 && wider.getStatuses().some(s => s.noteId === N + 'a-03'),
+      `--from-notes finds the note the outbox missed (${r2.recovered})`);
+    check(!wider.getStatuses().some(s => /-(create|replies)$/.test(s.noteId)),
+      'and the -create and -replies published beside each note are not mistaken for posts');
+
+    // Merge, never replace: local facts survive.
+    const held = new PodStore({ log: () => {} });
+    held.write('statuses.json', [{ noteId: N + 'a-01', content: 'MINE', favourited: true, kind: 'post' }]);
+    const r3 = await mkPub(held).rebuildStatuses();
+    const mine = held.getStatuses().find(s => s.noteId === N + 'a-01');
+    check(mine.content === 'MINE' && mine.favourited === true,
+      'a post this machine already holds keeps its own copy and its local facts');
+    check(r3.recovered === 1, `and only the genuinely missing one is added (${r3.recovered})`);
+
+    // A post deliberately deleted must not come back.
+    const deleted = new PodStore({ log: () => {} });
+    deleted.write('outbox-removed.json', [{ id: N + 'a-01', at: 'T' }]);
+    const r4 = await mkPub(deleted).rebuildStatuses({ fromNotes: true });
+    check(!deleted.getStatuses().some(s => s.noteId === N + 'a-01'),
+      'a post whose removal was recorded stays gone, even walking the container');
+    check(r4.recovered === 2, `the rest still come back (${r4.recovered})`);
+
+    // The pod that will not answer says so rather than reporting success.
+    const mute = new PodStore({ log: () => {} });
+    const silent = new Publisher({
+      config: { remotePod: POD, handle: 'me' }, store: mute, log: () => {},
+      remote: { getJson: async () => null, listContainer: async () => [] },
+      local: { writeNote: async () => {} },
+    });
+    const r5 = await silent.rebuildStatuses();
+    check(r5.recovered === 0 && !!r5.why,
+      'an unreadable outbox is reported, not reported as "nothing was missing"');
+
+    // The outbox is the index, so republishing from a machine that is behind
+    // must not erase it — that would destroy the recovery source first.
+    const behind = new PodStore({ log: () => {} });
+    behind.write('outbox.json', [N + 'a-02']);
+    behind.write('outbox-removed.json', [{ id: N + 'a-01', at: 'T' }]);
+    const ob = behind.read('outbox.json', []);
+    const n2 = await mkPub(behind).reconcileOutbox(ob);
+    check(n2 === 1 && ob.some(i => i?.type === 'Announce'),
+      `the pod's outbox entries this machine never had are merged back (${n2})`);
+    check(!ob.includes(N + 'a-01'),
+      'and one whose removal was recorded is not resurrected by the merge');
   }
 
   // ---- one account, one pod, refused before anything is made ----

@@ -203,6 +203,15 @@ function renderRun(run) {
 }
 
 function paneDone(result) {
+  // Straight to the thing you set it up FOR. A group has no client of its own,
+  // so it goes to its console instead. Warnings are the exception: an address
+  // nobody can resolve, or documents a stranger cannot read, are worth stopping
+  // for — the client would just look empty and not say why.
+  const stop = !result?.resolvable || result?.unreachable?.length;
+  if (!stop) {
+    location.href = result?.kind === 'group' ? '/admin/' : '/admin/client/';
+    return;
+  }
   strap('set up');
   show('pane-done');
   $('done-address').textContent = result?.address || `@${result?.handle} — no resolvable address`;
