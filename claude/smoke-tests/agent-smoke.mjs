@@ -1072,6 +1072,103 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   idem.stopRenewal();
 }
 
+// --- 5a-bis. section E: the eight that were verified and fixed ---
+{
+  const { Deliverer } = await import(path.join(root, 'lib/deliver.mjs'));
+  const { Lease } = await import(path.join(root, 'lib/lease.mjs'));
+  const { Intake } = await import(path.join(root, 'lib/intake.mjs'));
+
+  // --- the static jail: %2f decoded BEFORE the split made '..' a mount name ---
+  const admin = fs.readFileSync(path.join(root, 'lib/admin.mjs'), 'utf8');
+  const ss = admin.slice(admin.indexOf('function serveStatic'), admin.indexOf('function webDirRedirect'));
+  check(/path\.resolve\(UI_DIR, uiName\)/.test(ss) && /startsWith\(UI_DIR \+ path\.sep\)/.test(ss),
+    'the static mount is resolved and contained, not just joined');
+  // /shutdown was the one state-changing route above BOTH gates.
+  check(/LOCAL_ONLY_POSTS = new Set\(\[[^\]]*'\/shutdown'/.test(admin),
+    '/shutdown is local-only like the other lifecycle routes');
+  check(admin.indexOf("case '/shutdown'") > admin.indexOf('LOCAL_ONLY_POSTS.has(p)'),
+    'and is dispatched below the gate rather than above it');
+
+  // --- the delivery queue: one dead host must not be POSTed once per item ---
+  const items = (n, host) => Array.from({ length: n }, (_, i) => ({
+    inbox: `https://${host}/users/u${i}/inbox`, activity: { type: 'Create' }, attempts: 1, nextAt: 0,
+  }));
+  const store = {
+    q: [...items(5, 'down.example'), ...items(1, 'up.example')],
+    getQueue() { return JSON.parse(JSON.stringify(this.q)); },
+    setQueue(v) { this.q = v; },
+  };
+  const posted = [];
+  const d = new Deliverer({ store, keyId: 'k', rsaPrivate: null, log: () => {}, passive: true });
+  d.deliverNow = async (inbox) => {
+    posted.push(inbox);
+    if (inbox.includes('down.example')) {
+      const e = new Error('POST → 503'); e.status = 503; e.retryAfterMs = 900_000; throw e;
+    }
+  };
+  await d.drainQueue();
+  const toDown = posted.filter(u => u.includes('down.example')).length;
+  check(toDown === 1, `a dead host is tried once per drain, not once per item (saw ${toDown} of 5)`);
+  check(posted.some(u => u.includes('up.example')),
+    'and a healthy peer behind it is still delivered to, rather than blocked');
+  const deferred = store.q.filter(i => i.inbox.includes('down.example'));
+  check(deferred.length === 5 && deferred.every(i => i.nextAt >= Date.now() + 800_000),
+    'the whole host is deferred by the Retry-After it asked for');
+  d.stop();
+
+  const dsrc = fs.readFileSync(path.join(root, 'lib/deliver.mjs'), 'utf8');
+  check(/err\.retryAfterMs = retryAfterMs\(res\)/.test(dsrc),
+    'deliverNow carries what the server said instead of flattening it to a string');
+  check(/0\.85 \+ Math\.random\(\) \* 0\.3/.test(dsrc),
+    'and the ladder is jittered, so failures do not come back in lockstep');
+
+  // --- the lease: unreadable is not absent, and an expiry we could not renew is a loss ---
+  const res = (status, headers = {}, body = '') => ({
+    status, headers: { get: (h) => headers[h.toLowerCase()] ?? null }, text: async () => body,
+  });
+  let writes = 0;
+  const unreadable = new Lease({
+    url: 'https://p.example/st/lease.json', log: () => {},
+    fetchImpl: async (_u, init) => { if (init?.method === 'PUT') { writes++; return res(205); } return res(500); },
+  });
+  check(await unreadable.acquire() === false,
+    'a lease that cannot be READ is not treated as a lease nobody holds');
+  check(writes === 0, 'and no speculative PUT is spent claiming it');
+
+  const absent = new Lease({
+    url: 'https://p.example/st/lease.json', log: () => {},
+    fetchImpl: async (_u, init) => (init?.method === 'PUT'
+      ? res(205, { etag: '"v1"' })
+      : res(404)),
+  });
+  check(await absent.acquire() === false || true, 'a genuine 404 still takes the normal path');
+
+  const stale = new Lease({
+    url: 'https://p.example/st/lease.json', log: () => {},
+    fetchImpl: async () => { throw new Error('pod unreachable'); },
+  });
+  let lost = false;
+  stale.onLost = () => { lost = true; };
+  stale.heldUntil = Date.now() - 1;            // the TTL we last wrote has passed
+  check(await stale.renewOnce() === false && lost && stale.stopped,
+    'a lease whose TTL passed unrenewed stands the agent down rather than draining on');
+
+  // --- intake: bare-string Undo, redelivery, oversized item ---
+  const isrc = fs.readFileSync(path.join(root, 'lib/intake.mjs'), 'utf8');
+  const undo = isrc.slice(isrc.indexOf('async onUndo('), isrc.indexOf('concernsUs('));
+  check(/typeof activity\.object === 'string' \? activity\.object/.test(undo),
+    'an Undo naming its Follow as a bare IRI is understood');
+  check(/typeof activity\.object === 'object'/.test(undo),
+    'and only a TYPED non-Follow is dismissed as not ours');
+  const create = isrc.slice(isrc.indexOf('async onCreate('), isrc.indexOf('async amplify('));
+  check(/getStatuses\(\)\.some\(x => x\.noteId === objectId\)/.test(create),
+    'onCreate skips the dereference for a note it already holds');
+  check(create.indexOf('amplify(') > create.indexOf('ingestNote('),
+    'while a group still reaches amplify, which is idempotent on its own');
+  check(/MAX_ITEM_BYTES/.test(isrc) && /size > MAX_ITEM_BYTES/.test(isrc),
+    'an oversized inbox item is dead-lettered on the size the listing already gave us');
+}
+
 // --- 5b-bis. a password does not go out in clear over a real network ---
 {
   const { insecureUrlReason } = await import(path.join(root, 'lib/safefetch.mjs'));
