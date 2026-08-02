@@ -58,13 +58,15 @@ async function load() {
   if (new URLSearchParams(location.search).has('new')) openNewActor();
 }
 
-// One panel open at a time. Every disclosure on the page — the log/dead-letter
-// output, a lifecycle confirmation — closes through here,
-// so opening one puts the others away rather than stacking them down the page.
-const PANELS = ['output', 'confirm-form', 'moderation'];
-
+// Every disclosure on the page — a form, the log, a lifecycle confirmation —
+// is a panel declared inside the floating window and shown by window.js. It
+// used to be an accordion at the foot of the page, which pushed whatever you
+// were reading out from under you and could only ever show one thing.
+//
+// The reset lives here rather than in window.js: the window knows how to show a
+// panel, not what any of them mean.
 function closePanels(keep = null) {
-  for (const id of PANELS) if (id !== keep) $(id).hidden = true;
+  if (!keep) solWindow.close();
   if (keep !== 'output') outputSource = null;
   if (keep !== 'confirm-form') {
     pending = null;
@@ -72,6 +74,13 @@ function closePanels(keep = null) {
     $('confirm-handle').value = '';
   }
 }
+// Closing it by the ✕ or by Escape has to clear the same state a Cancel does.
+document.getElementById('win').addEventListener('win:closed', () => {
+  outputSource = null;
+  pending = null;
+  for (const k of Object.keys(LIFECYCLE)) $(`warn-${k}`).hidden = true;
+  $('confirm-handle').value = '';
+});
 
 
 function render() {
@@ -279,9 +288,8 @@ const setReview = async (on) => {
 // The settings themselves are a panel like the log is: opened when you mean to
 // change one, not standing between the heading and the lists.
 MODERATION.addEventListener('click', () => {
-  if (!$('moderation').hidden) { closePanels(); return; }
   closePanels('moderation');
-  $('moderation').hidden = false;
+  solWindow.show('moderation', 'Moderation options');
 });
 
 $('joins-open').addEventListener('click', () => setJoins(false));
@@ -356,14 +364,15 @@ async function refreshGroup() {
 // rather than re-fetching the same thing under an already-open panel.
 let outputSource = null;
 
+const OUTPUT_TITLES = { log: 'Log', deadletter: 'Dead letters', drain: 'Inbox drain', rebuild: 'Recovered posts' };
 const output = (obj, source = null) => {
   closePanels('output');
   outputSource = source;
-  $('output').hidden = false;
+  solWindow.show('output', OUTPUT_TITLES[source] || 'Output');
   $('output').textContent = typeof obj === 'string' ? obj : JSON.stringify(obj, null, 2);
 };
 
-const showingFrom = (source) => outputSource === source && !$('output').hidden;
+const showingFrom = (source) => outputSource === source && solWindow.openId() === 'output';
 
 // Drain is the one that does work rather than reveals it, so a second click
 // re-runs instead of closing. It can take a while — the agent joins a sweep
@@ -434,11 +443,12 @@ for (const btn of document.querySelectorAll('[data-confirm]')) {
   btn.addEventListener('click', () => {
     const what = btn.dataset.confirm;
     // The same button again closes its question rather than re-asking it.
-    if (pending === what && !$('confirm-form').hidden) { closePanels(); return; }
+    if (pending === what && solWindow.openId() === 'confirm-form') { closePanels(); return; }
     closePanels();                    // including whatever else was open
     pending = what;
     $(`warn-${what}`).hidden = false;
-    $('confirm-form').hidden = false;
+    solWindow.show('confirm-form', what === 'rotate-key' ? 'Rotate the signing key'
+      : what[0].toUpperCase() + what.slice(1));
     $('confirm-go').className = what === 'retire' ? 'danger' : 'primary';
     $('confirm-go').textContent = what === 'retire' ? 'Retire this actor' : 'Confirm';
     if (what === 'retire') $('confirm-handle').focus();

@@ -104,10 +104,6 @@ button.inline { font-size: .9rem; padding: .15rem .6rem; font-weight: 400; }
 .warn { border-left: .25rem solid #c60; padding-left: .75rem; }
 .err { border-left: .25rem solid #b00020; padding-left: .75rem; color: #b00020; }
 .ok { border-left: .25rem solid #2a7; padding-left: .75rem; }
-/* Scroll on the panel, never the page: the region claims the leftover height,
-   and min-height:0 is what lets a flex item be shorter than its content. */
-#panels { margin-top: 1.5rem; flex: 1 1 auto; min-height: 0; display: flex; }
-#panels > * { flex: 1 1 auto; min-height: 0; overflow-y: auto; margin: 0; }
 pre { overflow-x: auto; background: #0001; padding: .6rem; border-radius: .3rem; font-size: .9rem; }
 @media (prefers-color-scheme: dark) {
   :root { --link: #7fb3e8; --heading: #b9a3e3; --btn-bg: #35302a; --btn-edge: #6b6154; }
@@ -117,6 +113,7 @@ pre { overflow-x: auto; background: #0001; padding: .6rem; border-radius: .3rem;
 }
 </style>
 <link rel="stylesheet" href="/admin/bar.css">
+<link rel="stylesheet" href="/admin/window.css">
 </head>
 <body>
 
@@ -197,6 +194,7 @@ pre { overflow-x: auto; background: #0001; padding: .6rem; border-radius: .3rem;
       <button type="button" id="new-actor-cancel">Cancel</button>
     </p>
   </form>
+
 </nav>
 
 <section id="pane-identity" hidden>
@@ -270,10 +268,13 @@ pre { overflow-x: auto; background: #0001; padding: .6rem; border-radius: .3rem;
   <p class="err" id="inbox-warn" hidden></p>
 </section>
 
-<!-- Every panel opens here, at the foot of the page, rather than pushing the
-     lines apart wherever its button happens to sit. One at a time, and each
-     scrolls inside itself so the page does not grow. -->
-<div id="panels">
+<!-- Every form and panel is DECLARED here, inside the window that shows them.
+     Nothing is built in script — window.js only unhides one at a time, moves
+     the window and closes it. It floats rather than opening at the foot of the
+     page, so it never pushes the line you are reading out from under you. -->
+<div id="win" hidden>
+  <div id="win-bar"><span id="win-title"></span><button type="button" id="win-close" aria-label="Close">✕</button></div>
+  <div id="win-body">
 <div id="moderation" hidden>
   <fieldset>
     <legend>Join request moderation</legend>
@@ -329,11 +330,13 @@ pre { overflow-x: auto; background: #0001; padding: .6rem; border-radius: .3rem;
     <button type="button" id="confirm-cancel">Cancel</button>
   </p>
 </form>
+  </div>
 </div>
 
 </div>
 
 <script src="/admin/bar.js"></script>
+<script src="/admin/window.js"></script>
 <script src="admin.js"></script>
 </body>
 </html>

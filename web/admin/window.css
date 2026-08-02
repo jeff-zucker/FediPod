@@ -1,0 +1,40 @@
+/* window.css — the floating panel every page of ours puts a form in.
+   Shared like bar.css, so the three surfaces cannot drift apart. */
+
+/* Fixed, so it floats over the page rather than pushing it about — which is
+   what the accordions did, moving the line you were reading every time one
+   opened. Resizing is the browser's own grip: `resize` needs `overflow` set to
+   anything but visible, which is also what keeps a long form inside the frame. */
+#win {
+  position: fixed; z-index: 40;
+  top: 5rem; left: 50%; transform: translateX(-50%);
+  width: min(42rem, calc(100vw - 2rem));
+  height: min(26rem, calc(100vh - 8rem));
+  min-width: 18rem; min-height: 8rem;
+  max-width: 100vw; max-height: 100vh;
+  resize: both; overflow: hidden;
+  display: flex; flex-direction: column;
+  background: Canvas; color: CanvasText;
+  border: 1px solid var(--btn-edge); border-radius: .5rem;
+  box-shadow: 0 .6rem 2rem #0004;
+}
+/* Dragged by the bar, so the grab area is obvious and a text selection inside
+   the form never moves the window. */
+#win-bar {
+  flex: 0 0 auto; display: flex; align-items: baseline; gap: .6rem;
+  padding: .45rem .7rem; cursor: move; user-select: none;
+  border-bottom: 1px solid var(--btn-edge); border-radius: .5rem .5rem 0 0;
+  background: var(--btn-bg);
+}
+#win-title { flex: 1 1 auto; font-weight: 600; color: var(--heading); }
+#win-close {
+  font: inherit; line-height: 1; padding: .1rem .45rem; cursor: pointer;
+  border: 0; background: none; color: var(--link);
+}
+/* The window scrolls, never the page — same rule the rest of the app follows. */
+#win-body { flex: 1 1 auto; min-height: 0; overflow: auto; padding: .2rem 1rem 1rem; }
+#win-body > * { margin-top: .6rem; }
+#win-body pre { overflow-x: auto; background: #0001; padding: .6rem; border-radius: .3rem;
+  font-size: .9rem; }
+/* Dragging with the pointer over the frame would otherwise select text inside it. */
+body.dragging { user-select: none; }

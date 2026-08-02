@@ -222,6 +222,16 @@ bookkeeping — follows, unfollows and deletions from that period are still
 applied, so your follower list stays right and nothing stays up that its author
 took down.
 
+<!-- CLAUDE 2026-08-02 — added: the panels float now -->
+The panels those buttons open — the moderation settings, the log, the dead
+letters, a lifecycle confirmation — open in a small window you can move and
+resize, rather than unfolding at the foot of the page. An accordion pushed
+whatever you were reading out from under you, and only one could ever be open,
+so checking the log meant closing what you were looking at. Drag it by its title
+bar, resize from the corner, close it with ✕ or Escape. Full-page forms — adding
+an account, and setup — stay full-page; this is only for what used to fold out.
+<!-- /CLAUDE -->
+
 The record is at `http://localhost:8030/admin/` — what the actor is, and the
 things you do to it. Identity lists the kind, both identities (the fediverse
 address and the WebID), where the private half is kept and which local address
