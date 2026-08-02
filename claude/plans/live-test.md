@@ -97,10 +97,22 @@ Locally only, against `~/css` on :4000, with a group and two throwaway member po
 - **The property the whole design exists for: a member sees another member's post while
   following nothing but the group.**
 
+Against real Mastodon, 2026-08-01, as `@group@activitypub.teamid.live`:
+
+- Created from `add new account` end to end.
+- Followed from Mastodon and from another pod's actor; both land as members and the
+  published `followers` collection carries both.
+- The group serves the client: logged in through Phanpy at its own origin, home timeline
+  renders, `verify_credentials` reports `group: true`.
+- **`Update{actor}` works.** Editing the bio in the client republished the actor, the
+  digest differed, an Update went to every follower inbox — and Mastodon picked up both
+  the new bio *and* the follower count it had been showing stale. That was the whole
+  question behind building it, and the answer is yes: an Update is enough, no separate
+  prompt to re-read the collection is needed.
+
 ## What is left
 
-**None of this has ever run against Mastodon.** Two items are riskier than everything else
-in this document.
+Two items are riskier than everything else in this document.
 
 Set up three identities on a subdomain-capable host — teamid.live works, scn is down.
 Replace `YOUR-EMAIL`; everything else is literal.
