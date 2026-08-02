@@ -261,7 +261,9 @@ function openNewActor() {
   newActorRows();
   $('new-handle').focus();
 }
-$('bar-add').addEventListener('click', openNewActor);
+// It is a link to ?new=1 so it behaves like one everywhere else, but on THIS
+// page the form is already here — open it in place rather than reloading.
+$('bar-add').addEventListener('click', (ev) => { ev.preventDefault(); openNewActor(); });
 $('new-actor-cancel').addEventListener('click', () => { showNewActor(false); say('nothing changed'); });
 
 $('new-actor-form').addEventListener('submit', async (ev) => {

@@ -56,9 +56,9 @@ button:disabled { opacity: .5; cursor: default; }
 
 <nav id="bar">
   <span class="name">Solid ActivityPub</span>
-  <button type="button" id="bar-fediverse" title="   Open the client and read your timeline">visit account</button>
-  <button type="button" id="bar-manage" title="   The record: what this actor is, and what you can do to it">manage account</button>
-  <button type="button" id="bar-add" title="   Set up another actor on this machine, with its own pod" aria-current="page">add new account</button>
+  <a id="bar-fediverse" href="/admin/client/" title="   Open the client and read your timeline">visit account</a>
+  <a id="bar-manage" href="/admin/" title="   The record: what this actor is, and what you can do to it">manage account</a>
+  <a id="bar-add" href="/admin/?new=1" title="   Set up another actor on this machine, with its own pod" aria-current="page">add new account</a>
 </nav>
 <div id="page">
 <p class="sub" id="strap">setting up…</p>

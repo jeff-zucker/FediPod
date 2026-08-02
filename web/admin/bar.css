@@ -32,8 +32,10 @@ body { background: var(--surface); }
 #bar .name { flex: 1 1 auto; font-weight: 600; font-size: 24px; color: var(--heading); }
 /* Plain text, not chrome: three destinations in a row read better without a
    box round each. */
-#bar button { font: inherit; font-size: .95rem; padding: .15rem .2rem;
-  border: 0; background: none; color: var(--link); cursor: pointer; }
+#bar button, #bar a { font: inherit; font-size: .95rem; padding: .15rem .2rem;
+  border: 0; background: none; color: var(--link); cursor: pointer;
+  text-decoration: none; }
 /* The page you are already on stays in the row, so the set never moves — it is
    underlined rather than removed. */
-#bar button[aria-current="page"] { text-decoration: underline; text-underline-offset: .3rem; }
+#bar button[aria-current="page"], #bar a[aria-current="page"] {
+  text-decoration: underline; text-underline-offset: .3rem; }

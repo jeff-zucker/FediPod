@@ -37,8 +37,13 @@
   background: var(--surface);
 }
 #win-title { flex: 1 1 auto; font-weight: 600; color: var(--heading); }
+/* 24x24 is the 2.5.8 minimum; at .1rem of vertical padding this came out
+   21.6px tall, which is a small target for the one control that dismisses the
+   thing covering your page. Same glyph, same place, bigger hit area. */
 #win-close {
-  font: inherit; line-height: 1; padding: .1rem .45rem; cursor: pointer;
+  font: inherit; line-height: 1; cursor: pointer;
+  min-width: 24px; min-height: 24px; padding: .2rem .5rem;
+  display: inline-flex; align-items: center; justify-content: center;
   border: 0; background: none; color: var(--link);
 }
 /* The window scrolls, never the page — same rule the rest of the app follows. */

@@ -4,15 +4,14 @@
 // relationship.
 
 (() => {
-  const go = (id, href) => {
-    const el = document.getElementById(id);
-    if (el) el.addEventListener('click', () => { location.href = href; });
-  };
-  go('bar-fediverse', '/admin/client/');
-  go('bar-manage', '/admin/');
-  // The record page has the form already — it opens it in place rather than
-  // reloading itself. Everywhere else, ?new opens it on arrival.
-  if (!document.getElementById('new-actor-form')) go('bar-add', '/admin/?new=1');
+  // The three destinations are <a href> now: they are navigations, so they
+  // belong in a screen reader's links list, and middle-click and open-in-new-tab
+  // work the way they do everywhere else. Nothing here has to drive them.
+  //
+  // One exception, and it keeps its href as the fallback: on the record page
+  // `add new account` opens the form IN PLACE rather than reloading. admin.js
+  // binds that and calls preventDefault; without the form it is a plain link to
+  // ?new=1, which opens it on arrival.
 
   // The bar says the product; the TAB says which actor, which is what tells two
   // open windows apart without putting the handle in the page twice.

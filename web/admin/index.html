@@ -53,6 +53,16 @@ a { color: var(--link); }
    Actors select 3px out from the buttons below it. */
 h2, h3 { font-size: 1.15rem; font-weight: 600; display: flex; flex-wrap: wrap;
   align-items: baseline; gap: .6rem; }
+/* The buttons used to live INSIDE these headings, so heading navigation — the
+   way a screen-reader user surveys a page — announced "Upkeep Drain the inbox
+   Recover posts Show the log Show dead letters", and every label twice. The row
+   carries the layout now and the heading carries only its own name.
+   Deliberately NOT `display: contents` on the heading: it drops the element
+   from the accessibility tree in some browsers, which is the very thing this
+   change is trying to protect. */
+.headrow { display: flex; flex-wrap: wrap; align-items: baseline; gap: .6rem;
+  margin: 1.25rem 0 .5rem; }
+.headrow h2, .headrow h3 { display: block; margin: 0; }
 h2 { margin: 2rem 0 .5rem; }
 /* Identity is the first section, right under the Actors line — it does not need
    the separation the later headings do. */
@@ -139,20 +149,20 @@ pre { overflow-x: auto; background: #0001; padding: .6rem; border-radius: .3rem;
 <body>
 
 <!-- The same bar the client view carries: one thing, two views. -->
-<nav id="bar">
+<nav id="bar" aria-label="Site">
   <span class="name">Solid ActivityPub</span>
-  <button type="button" id="bar-fediverse" title="   Open the client and read your timeline">visit account</button>
-  <button type="button" id="bar-manage" title="   The record: what this actor is, and what you can do to it" aria-current="page">manage account</button>
-  <button type="button" id="bar-add" title="   Set up another actor on this machine, with its own pod">add new account</button>
+  <a id="bar-fediverse" href="/admin/client/" title="   Open the client and read your timeline">visit account</a>
+  <a id="bar-manage" href="/admin/" title="   The record: what this actor is, and what you can do to it" aria-current="page">manage account</a>
+  <a id="bar-add" href="/admin/?new=1" title="   Set up another actor on this machine, with its own pod">add new account</a>
 </nav>
-<div id="page">
+<main id="page">
 <p class="err" id="fatal" role="alert"></p>
 <p aria-live="polite" id="say"></p>
 
 <!-- Every actor running on this machine. A stopped one is left out: there is
      no page there to open. Plain links — a top-level navigation sends no
      Origin, so each agent's own firewall lets it through. -->
-<nav id="pane-others" hidden>
+<nav id="pane-others" aria-label="Actors on this machine" hidden>
   <p class="others" id="others-line">
     <label class="others-label hlabel" for="actor-pick">Local Actors:</label>
     <select id="actor-pick"></select>
@@ -173,11 +183,12 @@ pre { overflow-x: auto; background: #0001; padding: .6rem; border-radius: .3rem;
 
     <fieldset>
       <legend>Actor's Handle</legend>
+      <label for="new-handle">Handle</label>
       <input type="text" id="new-handle" autocomplete="off"
         placeholder="handle part of fediverse address: @HANDLE@server"
-        aria-label="Actor's Handle">
-      <p class="hint">The name in your fediverse address. This is permanent. Letters, digits,
-        hyphens, and underscores only.</p>
+        aria-describedby="new-handle-hint">
+      <p class="hint" id="new-handle-hint">The name in your fediverse address. This is permanent.
+        Letters, digits, hyphens, and underscores only.</p>
     </fieldset>
 
     <fieldset>
@@ -194,15 +205,16 @@ pre { overflow-x: auto; background: #0001; padding: .6rem; border-radius: .3rem;
       <input type="email" id="new-email" autocomplete="email" placeholder="you@example.org">
 
       <label for="new-password">Solid Account password</label>
-      <input type="password" id="new-password" autocomplete="current-password">
-      <p class="hint">Password is sent once in return for a credential which is stored locally.
+      <input type="password" id="new-password" autocomplete="current-password"
+        aria-describedby="new-password-hint">
+      <p class="hint" id="new-password-hint">Password is sent once in return for a credential which is stored locally.
         The password itself is never stored. You may revoke the credential without changing the
         password.</p>
 
       <div id="new-row-podname">
         <label for="new-podname">Pod name</label>
-        <input type="text" id="new-podname" autocomplete="off">
-        <p class="hint">The subdomain of your pod address, it will become
+        <input type="text" id="new-podname" autocomplete="off" aria-describedby="new-podname-hint">
+        <p class="hint" id="new-podname-hint">The subdomain of your pod address, it will become
           https://YOUR-POD-NAME.your-identity-provider</p>
       </div>
       <div id="new-row-pod" hidden>
@@ -228,19 +240,21 @@ pre { overflow-x: auto; background: #0001; padding: .6rem; border-radius: .3rem;
 </section>
 
 <section id="pane-upkeep" hidden>
-  <h2><span class="hlabel">Upkeep</span>
+  <div class="headrow">
+    <h2><span class="hlabel">Upkeep</span></h2>
     <button id="do-drain" title="   Fetch and handle whatever is waiting in the inbox now" class="inline">Drain the inbox</button>
     <button id="do-rebuild" title="   Put back posts this machine lost, from what the pod still holds" class="inline">Recover posts</button>
     <button id="do-log" title="   This agent's recent log lines" class="inline">Show the log</button>
     <button id="do-deadletter" title="   Deliveries that failed for good and were set aside" class="inline">Show dead letters</button>
-  </h2>
-  <h3><span class="hlabel">Lifecycle</span>
+  </div>
+  <div class="headrow">
+    <h3><span class="hlabel">Lifecycle</span></h3>
     <button id="do-park" title="   Stop the mail but keep the handle — Revive undoes it" class="inline" data-confirm="park">Park</button>
     <button id="do-revive" title="   Open the inbox again and re-follow everyone Park unfollowed" class="inline" data-confirm="revive">Revive</button>
     <button id="do-rotate-key" title="   Replace the signing key and tell other servers the new one" class="inline" data-confirm="rotate-key">Rotate the signing key</button>
     <button id="do-move" title="   Transfer this identity: your followers go to another account" class="inline" data-confirm="move">Transfer identity</button>
     <button id="do-retire" title="   End this identity for good — a Delete, then a Tombstone" class="inline danger" data-confirm="retire">Retire identity</button>
-  </h3>
+  </div>
 
 </section>
 
@@ -251,21 +265,21 @@ pre { overflow-x: auto; background: #0001; padding: .6rem; border-radius: .3rem;
        something is waiting. -->
   <div id="block-requests" hidden>
     <h3>Join requests <span class="muted" id="requests-count"></span></h3>
-    <ul class="rows" id="requests"></ul>
+    <ul class="rows" role="list" id="requests"></ul>
   </div>
 
   <div id="block-pending" hidden>
     <h3>Posts to review <span class="muted" id="pending-count"></span></h3>
-    <ul class="rows" id="pending"></ul>
+    <ul class="rows" role="list" id="pending"></ul>
   </div>
 
   <h3>Members <span class="muted" id="members-count"></span></h3>
   <p class="hint">A group cannot force an unfollow. Muting is declining to carry; ejecting also
     tells their server it is no longer a member.</p>
-  <ul class="rows" id="members"></ul>
+  <ul class="rows" role="list" id="members"></ul>
 
   <h3>Carried <span class="muted" id="announced-count"></span></h3>
-  <ul class="rows" id="announced"></ul>
+  <ul class="rows" role="list" id="announced"></ul>
 </section>
 
 <section id="pane-inbox" hidden>
@@ -296,7 +310,7 @@ pre { overflow-x: auto; background: #0001; padding: .6rem; border-radius: .3rem;
      the window and closes it. It floats rather than opening at the foot of the
      page, so it never pushes the line you are reading out from under you. -->
 <div id="win" hidden>
-  <div id="win-bar"><span id="win-title"></span><button type="button" id="win-close" title="   Close this panel" aria-label="Close">✕</button></div>
+  <div id="win-bar"><span id="win-title"></span><button type="button" id="win-close" title="   Close this panel" aria-label="Close panel">✕</button></div>
   <div id="win-body">
 <div id="moderation" hidden>
   <fieldset>
@@ -371,7 +385,7 @@ pre { overflow-x: auto; background: #0001; padding: .6rem; border-radius: .3rem;
   </div>
 </div>
 
-</div>
+</main>
 
 <script src="/admin/bar.js"></script>
 <script src="/admin/window.js"></script>

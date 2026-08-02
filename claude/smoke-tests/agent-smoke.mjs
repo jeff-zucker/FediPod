@@ -1211,6 +1211,39 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
   check(/focusAfterRefresh/.test(adminJs),
     'a group row action puts focus back rather than dropping it on <body>');
+
+  // --- semantics ---
+  check(/<main id="page">/.test(record), 'the record page wraps its content in a main landmark');
+  check(/<nav id="bar" aria-label="Site">/.test(record)
+    && /<nav id="pane-others" aria-label="[^"]+"/.test(record),
+    'and both nav landmarks are named, so they can be told apart');
+  // The buttons used to sit INSIDE the headings, so heading navigation read
+  // "Upkeep Drain the inbox Recover posts Show the log Show dead letters".
+  check(/<h2><span class="hlabel">Upkeep<\/span><\/h2>/.test(record)
+    && /class="headrow"/.test(record),
+    'headings end at their own name, with the toolbar beside rather than inside');
+  check(!/\.headrow h2, \.headrow h3 \{ display: contents/.test(record),
+    'and not via display:contents, which drops the heading from the tree in some browsers');
+
+  // Navigations are links: they belong in a links list, and open in a new tab.
+  for (const [label, f] of [['record', 'web/admin/index.html'], ['client', 'web/admin/client/index.html'],
+    ['setup', 'web/admin/setup/index.html']]) {
+    const page = read(f);
+    check((page.match(/<a id="bar-(fediverse|manage|add)" href="/g) || []).length === 3,
+      `${label}'s three destinations are links, not buttons that assign location.href`);
+  }
+  check(!/location\.href = href/.test(read('web/admin/bar.js')),
+    'and bar.js no longer drives them by hand');
+
+  // Hints were reachable only by hovering a title attribute.
+  check((record.match(/aria-describedby="[a-z-]+-hint"/g) || []).length >= 3
+    && /<label for="new-handle">/.test(record),
+    'field hints are announced with their field, and the handle has a real label');
+
+  check(/#win-close \{[\s\S]*?min-height: 24px/.test(read('web/admin/window.css')),
+    'the close button meets the 24px target minimum (2.5.8)');
+  check((record.match(/<ul class="rows" role="list"/g) || []).length === 4,
+    'and list-style:none no longer strips the group lists of their list semantics');
 }
 
 // --- 5f-bis. the unauthenticated probes are still this pod's traffic ---
@@ -3646,11 +3679,14 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   // word sits behind the cursor.
   for (const page of ['/admin/', '/admin/setup/', '/admin/client/']) {
     const html = await g(page).then(r => r.text());
-    const buttons = html.match(/<button[^>]*>/g) || [];
+    // Links too: the bar's three destinations ARE navigations, so they are
+    // <a href> now, and the client view is nothing but the bar.
+    const buttons = [...(html.match(/<button[^>]*>/g) || []),
+      ...(html.match(/<a id="bar-[^>]*>/g) || [])];
     const untitled = buttons.filter(b => !/\btitle="/.test(b));
     const unpadded = buttons.filter(b => /\btitle="(?!   )/.test(b));
     check(buttons.length > 0 && !untitled.length,
-      `every button on ${page} has a help title (${buttons.length - untitled.length}/${buttons.length})`);
+      `every control on ${page} has a help title (${buttons.length - untitled.length}/${buttons.length})`);
     check(!unpadded.length,
       `and every one of them starts with three spaces, clear of the pointer (${page})`);
   }
