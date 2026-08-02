@@ -84,7 +84,7 @@ import { spawn } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { apRoot, profilesDir, identityHomes, isLegacyRoot, CURRENT_ROOT, tildify, rootOf,
   readRoot, writeRoot, defaultProfile, profileHome, rootHoldsIdentity, ROOT_FILE,
-  recordLastUsed } from '../lib/home.mjs';
+  recordLastUsed, writeJsonAtomic } from '../lib/home.mjs';
 
 const args = process.argv.slice(2);
 const cmd = args[0];
@@ -134,7 +134,7 @@ function recordAgent(fields) {
   try {
     fs.mkdirSync(HOME, { recursive: true, mode: 0o700 });
     const rec = { ...recordedAgent(), ...fields };
-    fs.writeFileSync(path.join(HOME, 'agent.json'), JSON.stringify(rec, null, 2) + '\n');
+    writeJsonAtomic(path.join(HOME, 'agent.json'), rec, { mode: 0o644 });
   } catch { /* the flag still works, it just isn't remembered */ }
 }
 let PORT = Number(flag('port', process.env.AP_PORT || recordedPort() || 8030));
@@ -547,7 +547,7 @@ if (cmd === 'up') {
     ...(has('rotate-key') ? { rotateKeyOnce: true } : {}),
   };
   fs.mkdirSync(HOME, { recursive: true, mode: 0o700 });
-  fs.writeFileSync(path.join(HOME, 'credential.json'), JSON.stringify(rec, null, 2) + '\n', { mode: 0o600 });
+  writeJsonAtomic(path.join(HOME, 'credential.json'), rec);
   // The one you just made is the one you are using.
   if (rootOf(HOME) === AP_ROOT) recordLastUsed(AP_ROOT, path.basename(HOME));
   recordAgent({ port: PORT, handle });   // later commands need no --port
@@ -754,7 +754,7 @@ if (cmd === 'up') {
   console.log(`copied ${notes} note(s)`);
 
   if (target) cred.privateRoot = target; else delete cred.privateRoot;
-  fs.writeFileSync(credPath, JSON.stringify(cred, null, 2) + '\n', { mode: 0o600 });
+  writeJsonAtomic(credPath, cred);
   console.log(`\nprivate data now: ${where(cred)}`);
   console.log('The old copy was left where it was — delete it once you are satisfied.');
   process.exit(0);
@@ -762,6 +762,20 @@ if (cmd === 'up') {
   requireIdentity();
   const { Agent } = await import(new URL('../run-agent.mjs', import.meta.url));
   const agent = new Agent({ home: HOME, log: (...a) => console.log('[rotate-key]', ...a) });
+  // A home whose keys.json is gone or truncated cannot connect() at all:
+  // resolveKeys refuses to mint over a key the actor already publishes, which
+  // is the right default — minting silently would invalidate every signature
+  // the other device can still make. It did leave the advice that refusal
+  // prints ("run activitypod rotate-key") a dead end, though, because this
+  // command connects first and meets the same refusal. --force arms the
+  // one-shot rotation in the credential so the connect can get past it.
+  const forced = has('force');
+  const rotateCredPath = path.join(HOME, 'credential.json');
+  if (forced) {
+    const cred = JSON.parse(fs.readFileSync(rotateCredPath, 'utf8'));
+    writeJsonAtomic(rotateCredPath, { ...cred, rotateKeyOnce: true });
+    console.log('--force: the replacement key is minted as the agent connects\n');
+  }
   if (!await agent.connect()) {
     console.error('nothing to rotate — no configured agent in this AP_HOME');
     process.exit(2);
@@ -774,8 +788,15 @@ if (cmd === 'up') {
   const ans = has('yes') ? 'y' : await ask('rotate now? (y/n)', 'n');
   endAsking();
   if (!/^y/i.test(ans)) { console.log('key unchanged'); process.exit(0); }
-  const r = await agent.rotateKey();
-  console.log(r.changed ? 'rotated and republished' : 'no change — the key was already fresh');
+  if (forced) {
+    // connect() has already minted it; all that is left is telling the
+    // fediverse. Calling rotateKey here would mint a second one for nothing.
+    await agent.publisher.publishProfile();
+    console.log('rotated and republished');
+  } else {
+    const r = await agent.rotateKey();
+    console.log(r.changed ? 'rotated and republished' : 'no change — the key was already fresh');
+  }
   await finish(agent);
 } else if (cmd === 'profiles') {
   // Local files only, plus a quick liveness probe: nothing here needs the pod.
@@ -896,7 +917,7 @@ if (cmd === 'up') {
         ? fileURLToPath(cred.privateRoot) : path.resolve(cred.privateRoot);
       if (isInside(AP_ROOT, was) && !isInside(dest, was)) {
         cred.privateRoot = pathToFileURL(path.join(dest, path.relative(AP_ROOT, was))).href + '/';
-        fs.writeFileSync(credPath, JSON.stringify(cred, null, 2) + '\n', { mode: 0o600 });
+        writeJsonAtomic(credPath, cred);
         console.log(`  private data now ${tildify(cred.privateRoot)}`);
       }
     }
@@ -988,7 +1009,7 @@ if (cmd === 'up') {
     if (!isInside(AP_ROOT, was)) continue;                                   // somewhere else entirely
     const now = path.join(target, path.relative(AP_ROOT, was));
     cred.privateRoot = pathToFileURL(now).href + '/';
-    fs.writeFileSync(credPath, JSON.stringify(cred, null, 2), { mode: 0o600 });
+    writeJsonAtomic(credPath, cred);
     console.log(`  · ${name}: private data now ${cred.privateRoot}`);
   }
 

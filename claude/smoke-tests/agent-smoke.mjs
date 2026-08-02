@@ -1072,6 +1072,44 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   idem.stopRenewal();
 }
 
+// --- 5i-bis. what cannot be replaced is not written in place ---
+{
+  const { writeJsonAtomic, writeFileAtomic } = await import(path.join(root, 'lib/home.mjs'));
+  const dir = fs.mkdtempSync('/tmp/ap-atomic-');
+  const file = path.join(dir, 'keys.json');
+
+  writeJsonAtomic(file, { rsa: { privatePem: 'first' } });
+  check(JSON.parse(fs.readFileSync(file, 'utf8')).rsa.privatePem === 'first', 'the file is written');
+  check((fs.statSync(file).mode & 0o777) === 0o600, 'and is owner-only, as key material must be');
+
+  // The point of the exercise: the old content is intact right up to the
+  // rename, so there is no instant at which the file is empty or half there.
+  writeJsonAtomic(file, { rsa: { privatePem: 'second' } });
+  check(JSON.parse(fs.readFileSync(file, 'utf8')).rsa.privatePem === 'second', 'and replaced whole');
+  check(fs.readdirSync(dir).filter(n => n.endsWith('.tmp')).length === 0,
+    'leaving no temporary file behind');
+
+  writeFileAtomic(path.join(dir, 'sub', 'deep.json'), '{}\n');
+  check(fs.existsSync(path.join(dir, 'sub', 'deep.json')), 'a missing parent directory is created');
+  fs.rmSync(dir, { recursive: true, force: true });
+
+  // No irreplaceable file is still written with a truncating writeFileSync.
+  for (const f of ['lib/keys.mjs', 'lib/setup.mjs', 'lib/home.mjs', 'run-agent.mjs', 'bin/activitypod.mjs']) {
+    const src = fs.readFileSync(path.join(root, f), 'utf8');
+    const bad = src.split('\n').filter(l => /writeFileSync/.test(l) && /JSON\.stringify/.test(l));
+    check(bad.length === 0, `${f} writes no JSON state non-atomically${bad.length ? ': ' + bad[0].trim() : ''}`);
+  }
+
+  // The advice a missing key prints has to name a command that can run —
+  // rotate-key connects before it rotates, so the bare form meets the same
+  // refusal that sent you there.
+  const keysSrc = fs.readFileSync(path.join(root, 'lib/keys.mjs'), 'utf8');
+  check(/rotate-key --force/.test(keysSrc), 'the no-key error points at a command that works');
+  const binSrc = fs.readFileSync(path.join(root, 'bin/activitypod.mjs'), 'utf8');
+  check(/const forced = has\('force'\)/.test(binSrc) && /rotateKeyOnce: true/.test(binSrc),
+    'and rotate-key --force arms the one-shot rotation so connect can get past it');
+}
+
 // --- 5j-bis. the ACL document is built by rdflib, and round-trips ---
 {
   const { RemotePod } = await import(path.join(root, 'lib/remote.mjs'));

@@ -21,7 +21,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { PodStore } from './lib/store.mjs';
-import { apRoot } from './lib/home.mjs';
+import { apRoot, writeJsonAtomic } from './lib/home.mjs';
 import { storageFor } from './lib/storage.mjs';
 import { resolveKeys } from './lib/keys.mjs';
 import { RemotePod } from './lib/remote.mjs';
@@ -159,7 +159,7 @@ export class Agent {
     let rec = {};
     try { rec = JSON.parse(fs.readFileSync(file, 'utf8')) || {}; } catch { /* first run */ }
     if (rec.handle === handle) return;
-    try { fs.writeFileSync(file, JSON.stringify({ ...rec, handle }, null, 2) + '\n'); }
+    try { writeJsonAtomic(file, { ...rec, handle }, { mode: 0o644 }); }
     catch { /* the agent still runs; its links are just bare */ }
   }
 
@@ -251,7 +251,7 @@ export class Agent {
     });
     if (cred.rotateKeyOnce) {                       // one-shot flag
       const { rotateKeyOnce, ...rest } = cred;
-      fs.writeFileSync(path.join(this.home, 'credential.json'), JSON.stringify(rest, null, 2) + '\n', { mode: 0o600 });
+      writeJsonAtomic(path.join(this.home, 'credential.json'), rest);
     }
     this.local = new PodRdf({ storage: this.privateStorage(cred, 'fediverse') });
     this.deliverer = new Deliverer({
@@ -531,7 +531,7 @@ export async function startAgent({
   if (recorded.port !== port) {
     try {
       fs.mkdirSync(home, { recursive: true, mode: 0o700 });
-      fs.writeFileSync(agentJson, JSON.stringify({ ...recorded, port }, null, 2) + '\n');
+      writeJsonAtomic(agentJson, { ...recorded, port }, { mode: 0o644 });
     } catch { /* the agent still runs; it is just harder to find */ }
   }
   const logFile = path.join(home, 'agent.log');
