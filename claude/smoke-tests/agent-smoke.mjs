@@ -1030,6 +1030,44 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   idem.stopRenewal();
 }
 
+// --- 5n-bis. outbound delivery: bounded, and one drain at a time ---
+{
+  const { Deliverer } = await import(path.join(root, 'lib/deliver.mjs'));
+  const src = fs.readFileSync(path.join(root, 'lib/deliver.mjs'), 'utf8');
+
+  // The deadline is on the object built ONCE, above the redirect loop, so four
+  // hops share it rather than each getting a fresh 15s.
+  const signed = src.slice(src.indexOf('async signedFetch('), src.indexOf('async deliverNow('));
+  check(/AbortSignal\.timeout/.test(signed) && signed.indexOf('AbortSignal.timeout') < signed.indexOf('for (let hop'),
+    'signedFetch sets one deadline for the whole redirect chain, not one per hop');
+  check(/init\.signal \|\| AbortSignal/.test(signed),
+    'and a caller may still pass its own signal');
+
+  // A drain that outlives its 60s tick must not be joined by the next one.
+  const store = {
+    q: [{ inbox: 'https://slow.example/inbox', activity: { type: 'Create' }, attempts: 1, nextAt: 0 }],
+    getQueue() { return JSON.parse(JSON.stringify(this.q)); },
+    setQueue(v) { this.q = v; },
+  };
+  let inFlight = 0; let overlapped = false; let posts = 0;
+  const d = new Deliverer({ store, keyId: 'k', rsaPrivate: null, log: () => {}, passive: true });
+  d.deliverNow = async () => {
+    posts++;
+    inFlight++;
+    if (inFlight > 1) overlapped = true;
+    await new Promise(r => setTimeout(r, 40));
+    inFlight--;
+    throw new Error('still down');
+  };
+  await Promise.all([d.drainQueue(), d.drainQueue()]);   // two ticks, together
+  await d._draining;                                     // the single follow-up, if any
+  check(!overlapped, 'two ticks landing together never run two drains at once');
+  check(posts <= 2, `and a stalled peer is not re-POSTed once per overlapping tick (saw ${posts})`);
+  check(store.q.length === 1 && store.q[0].attempts === 2,
+    `the attempt count advances exactly once, so the backoff converges (${store.q[0]?.attempts})`);
+  d.stop();
+}
+
 // --- 5o-ter. a pod asking to be left alone is left alone by EVERY method ---
 {
   const { RemotePod } = await import(path.join(root, 'lib/remote.mjs'));
