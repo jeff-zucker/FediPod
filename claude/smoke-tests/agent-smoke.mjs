@@ -351,6 +351,68 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   check(tight.acls.length === 0, 'ensurePrivateAcls writes nothing when the trees are already private');
 }
 
+// --- 5c0. a follower event publishes what it changed, and nothing else ---
+{
+  const { Publisher } = await import(path.join(root, 'lib/publisher.mjs'));
+  const mk = () => {
+    const seen = [];
+    const pub = new Publisher({
+      config: { remotePod: 'https://pod.example/', handle: 'you', name: 'You' },
+      remote: {
+        putJson: async (u) => { seen.push(`PUT ${u.replace('https://pod.example/', '')}`); },
+        setAcl: async (u) => { seen.push(`ACL ${u.replace('https://pod.example/', '')}`); },
+        // reconcileFollowers reads through fetch; reconcileOutbox through getJson
+        fetch: async (u) => { seen.push(`GET ${u.replace('https://pod.example/', '')}`); return { ok: false }; },
+        getJson: async (u) => { seen.push(`GET ${u.replace('https://pod.example/', '')}`); return null; },
+      },
+      local: { writeContacts: async () => {} },
+      store: {
+        read: () => [], write: () => {}, getStatuses: () => [],
+        getContacts: () => ({ followers: [{ actor: 'https://a.example/u/x' }], following: [] }),
+        setContacts: () => {},
+      },
+      deliverer: { deliverToAll: async () => {} }, publicKeyPem: 'x', log: () => {},
+    });
+    return { pub, seen };
+  };
+
+  const all = mk();
+  await all.pub.publishCollections();
+  check(all.seen.length === 8,
+    `an unnarrowed publish is still the whole surface — 2 reads, 3 PUTs, 3 ACLs (saw ${all.seen.length})`);
+
+  // One new follower changes the follower list. It does not change what this
+  // actor follows, it does not change the outbox, and it cannot change an ACL
+  // whose body is a pure function of the WebID.
+  const one = mk();
+  await one.pub.publishCollections({ followers: true });
+  check(one.seen.length === 2 && one.seen[0].endsWith('ap/followers') && one.seen[0].startsWith('GET')
+    && one.seen[1].endsWith('ap/followers') && one.seen[1].startsWith('PUT'),
+    `a follower event costs one read and one PUT (saw ${one.seen.join(', ') || 'nothing'})`);
+  check(!one.seen.some(s => s.startsWith('ACL')),
+    'and rewrites no ACL — those are written once, by publishProfile');
+  check(!one.seen.some(s => s.includes('outbox') || s.includes('following')),
+    'and touches neither the outbox nor the following collection');
+
+  // The reconcile is the guard that stops a restored-and-behind machine
+  // publishing a short list over the pod's longer one, so a narrowed publish
+  // must still run the one belonging to what it overwrites.
+  check(one.seen[0].startsWith('GET') && one.seen[0].endsWith('ap/followers'),
+    'the followers reconcile still runs — it is what protects a restored machine');
+  const ob = mk();
+  await ob.pub.publishCollections({ outbox: true });
+  check(ob.seen[0].startsWith('GET') && ob.seen[0].endsWith('ap/outbox')
+    && ob.seen[1].startsWith('PUT') && ob.seen[1].endsWith('ap/outbox'),
+    'and the outbox reconcile runs when the outbox is what is being written');
+
+  // Every caller that knows what it changed says so.
+  for (const [file, fn] of [['lib/intake.mjs', 'intake'], ['lib/social.mjs', 'social']]) {
+    const src = fs.readFileSync(path.join(root, file), 'utf8');
+    check(!/publishCollections\(\)/.test(src),
+      `${fn} never publishes the whole surface for a single event`);
+  }
+}
+
 // --- 5c1. a Create is a document of its own, so a group's Announce resolves ---
 {
   const { Publisher } = await import(path.join(root, 'lib/publisher.mjs'));
