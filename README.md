@@ -237,6 +237,30 @@ port and a handle — no other agent's credential or keys are ever opened, and
 there is a test that fails if that changes.
 <!-- /CLAUDE -->
 
+<!-- CLAUDE 2026-08-01 — new: every link is named, and the client is pinned -->
+Each identity is listed by its fediverse address — `jeff@jeff-zucker.teamid.live`
+— and **every link to one uses its own origin**, `http://<handle>.localhost:<port>/`,
+never the bare `http://localhost:<port>/`.
+
+That matters more than it looks. A browser keys storage per origin, so a row of
+identities all linked at `localhost:<port>` files them in one bucket, and the
+client you open there shows whichever account that bucket happens to hold — one
+actor's login on another actor's page, with the profile editor pointed at a host
+that cannot answer. The named origin is what keeps them apart, so anything that
+builds a URL for you now spends the handle on it: the Actors list, the startup
+line in `agent.log`, what `setup` opens and tells you to log in as, and the page
+a newly created actor lands on. A stopped identity is named too, from the handle
+in its `agent.json`, since it is not running to be asked.
+
+Storing per origin is only half of it, though: the client is a general fediverse
+client and nothing made its current account agree with the agent serving it. So
+when you open a client whose stored account is not this actor, it is sent to its
+own login for this instance and back — no typing, one trip, once per identity.
+The login itself lands on the client at `/`, the same place the Actors list's
+`app` link goes; the bar comes back with it the next time you open `visit
+account`.
+<!-- /CLAUDE -->
+
 
 ### Running the agent as a service
 
@@ -274,6 +298,19 @@ through Mastodon's own profile editor — the agent answers
 `PATCH /api/v1/accounts/update_credentials`, so Phanpy's *Edit profile* writes
 them. Pictures are uploaded to the pod's media container and the actor document
 carries their URLs; the actor is republished on save.
+
+<!-- CLAUDE 2026-08-01 — added: the edit now reaches other servers -->
+Republishing puts the new document on your pod, but nothing obliges another
+server to come back and read it — Mastodon shows the copy it cached, follower
+count included, until something makes it look again. So a save now also delivers
+an `Update` to every follower, and your edit is visible to them at once instead
+of whenever their cache happens to expire.
+
+It goes out only when the actor document actually changed. Starting the agent
+never publishes — every republish is something you asked for — but a save can
+still change nothing the actor document carries, so the agent keeps a digest of
+what it last published and stays quiet when the new one matches.
+<!-- /CLAUDE -->
 
 The command line still works for the two it always did, and republishes the same
 way:

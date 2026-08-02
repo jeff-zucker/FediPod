@@ -149,3 +149,62 @@ socket down.
   blocklist panel.
 - Nothing here has been run against a real CSS. §13 drives the real account API
   and the real mint against a mock; everything past the mint is faked.
+
+## The named origin is only half of it (2026-08-01)
+
+Each identity answers at `<handle>.localhost:<port>` so a browser keys its
+storage separately — two identities on one machine otherwise share a client
+login and become impossible to tell apart. That was built; what was missing is
+that almost nothing *used* it.
+
+**Every URL this project hands a browser now carries the handle.** The sharp
+ones were `GET /profiles`, which returned `http://localhost:<port>/admin/` and
+the sibling's handle on adjacent lines, and `POST /new-actor`, which returned
+`{ handle, url: 'http://localhost:<port>/admin/setup/' }` — the handle and the
+bare URL in the same object literal. Also: the startup banner (the only record
+of where to browse on a detached `npm start`), `POST /start-actor`, the `--cli`
+setup tail (which opened the shared origin *and* told you to log the client into
+it), and `up`'s unconfigured branch. `namedOrigin(handle, port)` in `admin.mjs`
+is the one place that builds it now.
+
+Left bare on purpose: the CLI's own `fetch('http://localhost:<port>/…')` calls.
+Those are process-to-self HTTP with no browser storage anywhere near them.
+
+**`agent.json` was not holding the handle.** `connect()` sets the guard's label
+from pod state, so the named origin worked from the first *request* — but
+nothing outside the process can read pod state, so every external link was built
+from a file that had only a port. `Agent.recordHandle()` caches it beside the
+port on connect. Pod state stays the authority; this is the cache. Until it ran,
+this machine's three identities all had `{"port":N}` and every link came out
+bare, which is exactly the bug that made it visible.
+
+## Pinning the client to its own actor
+
+Per-origin storage keeps identities apart. It does not make the client's
+*current* account agree with the agent serving the page — the client keeps a
+list and picks one, and a leftover account from another identity wins. That is
+how `@jeff@jeff.localhost:4000` turned up on the group's page with the profile
+editor pointed at a Solid pod that answers `UnauthorizedHttpError` to
+`/api/v1/instance`.
+
+`web/admin/client/client.js` closes it. The frame keeps declaring what it loads
+(`src="/"`, unchanged); the script asks `/status` for this agent's `actor`, and
+if no stored account's `info.uri` matches, navigates the loaded app to
+`#/login?instance=<host>&submit=1`.
+
+Three things that took reading the bundle to get right:
+
+- **Match on the actor URI, not the origin.** `accounts[i].instanceURL` answers
+  "which account logged in at this origin", which is a different question — and
+  it is the one that goes wrong when two origins get mixed. `info.uri` is the
+  pod actor URI and is exact.
+- **The query goes after the hash.** It is a HashRouter, so `?instance=` on the
+  document query is invisible to `useSearchParams`.
+- **`submit` must be non-empty.** `searchParams.get('submit')` returns `""` for
+  a bare `?submit=`, which is falsy, so the auto-submit never registers.
+
+What it costs: the OAuth round trip takes over the top window and lands on the
+client at `/` without the bar. Once per identity, and `/` is where the Actors
+list's `app` link goes anyway, so it is not a strange place to end up — the bar
+returns on the next `visit account`. Phanpy builds its callback from
+`location.pathname`, so returning to `/admin/client/` is not ours to choose.

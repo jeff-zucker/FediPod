@@ -282,10 +282,11 @@ if (cmd === 'up') {
     if (!already) port = await freePortFrom(preferred + 1);
   }
 
+  // Both branches take the named origin: setup at the shared one would file the
+  // first login under localhost:<port>, and the identity is stuck with it.
   const label = hostLabel(recordedAgent().handle);
-  const url = configured
-    ? (label ? `http://${label}.localhost:${port}/` : `http://localhost:${port}/`)
-    : `http://localhost:${port}/admin/setup/`;
+  const origin = `http://${label ? label + '.' : ''}localhost:${port}`;
+  const url = configured ? `${origin}/` : `${origin}/admin/setup/`;
 
   if (already) {
     console.log(`already running on port ${port} — ${url}`);
@@ -453,6 +454,7 @@ if (cmd === 'up') {
 
   // Straight into serving — setup ends with a working client in the browser.
   const { startAdmin } = await import(new URL('../lib/admin.mjs', import.meta.url));
+  const { hostLabel } = await import(new URL('../lib/guard.mjs', import.meta.url));
   startAdmin({ port: PORT, handle, gateToken: process.env.AP_GATE_TOKEN || '', agent, log: (...a) => console.log('[ap]', ...a) });
   const shutdown = () => {
     setTimeout(() => process.exit(0), 5000).unref();   // never hang a stop on a slow pod
@@ -461,12 +463,17 @@ if (cmd === 'up') {
   };
   process.on('SIGINT', shutdown);
   process.on('SIGTERM', shutdown);
-  const url = `http://localhost:${PORT}/`;
+  // The named origin, and the instance to log the client into is that same
+  // origin. Opening the shared one and then telling you to log in there is how
+  // two identities end up sharing a browser storage bucket, and a client on the
+  // shared origin shows whichever account it happens to hold.
+  const label = hostLabel(handle);
+  const authority = `${label ? label + '.' : ''}localhost:${PORT}`;
+  const url = `http://${authority}/`;
   if (kind === 'group') {
-    // A group has no human reading a timeline, so it serves no client.
-    console.log(`group running on ${url} — no client UI; see \`activitypod members\``);
+    console.log(`group running on ${url} — see \`activitypod members\``);
   } else {
-    console.log(`agent running — opening ${url} (log in with instance localhost:${PORT})`);
+    console.log(`agent running — opening ${url} (log in with instance ${authority})`);
     openBrowser(url);
   }
 } else if (cmd === 'start' || cmd === 'run') {   // 'run' kept as an alias

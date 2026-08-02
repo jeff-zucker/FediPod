@@ -149,6 +149,20 @@ export class Agent {
     await this.store.flush();
   }
 
+  // Cache the handle in agent.json, merging so the port survives. Nothing
+  // outside this process can read pod state, so this file is the only place a
+  // sibling — or the next start, before it connects — can learn the name to
+  // build this identity's origin from.
+  recordHandle(handle) {
+    if (!handle || !this.home) return;
+    const file = path.join(this.home, 'agent.json');
+    let rec = {};
+    try { rec = JSON.parse(fs.readFileSync(file, 'utf8')) || {}; } catch { /* first run */ }
+    if (rec.handle === handle) return;
+    try { fs.writeFileSync(file, JSON.stringify({ ...rec, handle }, null, 2) + '\n'); }
+    catch { /* the agent still runs; its links are just bare */ }
+  }
+
   // Bring federation up from the credential file + pod state. `name` (from
   // `run --name "…"`) updates the display name other servers show, without
   // the collateral of re-running setup.
@@ -202,6 +216,12 @@ export class Agent {
     // machine gets a browser origin of its own. Known only now: the admin
     // server was listening before any of this was read.
     this.authorities?.setHandle(config.handle);
+    // And write it down beside the port. Everything that links to this identity
+    // from OUTSIDE the process builds the origin from agent.json — the Actors
+    // list, a sibling's page, the next start — and an identity set up before the
+    // handle was recorded has only a port there, so every one of those links
+    // came out bare. Pod state is the authority; this is the cache of it.
+    this.recordHandle(config.handle);
 
     // Exactly one agent may act on a pod (inbox drains are destructive
     // reads); later arrivals become read-only viewers of the same state.

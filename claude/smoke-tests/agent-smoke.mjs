@@ -941,10 +941,15 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     const written = new Map();
     const delivered = [];
     let saved = { ...config };
+    const docs = new Map();
     const store = {
       getStatuses: () => [],
       getConfig: () => saved,
       setConfig: (c) => { saved = c; },
+      // publishProfile records the digest of the actor document it published,
+      // so it can tell a real change from the republish every start does.
+      read: (n, d) => (docs.has(n) ? docs.get(n) : d),
+      write: (n, v) => { docs.set(n, v); },
       flush: async () => {},
       getContacts: () => ({
         followers: [{ actor: 'https://m.example/users/a', inbox: 'https://m.example/inbox' }],
@@ -982,7 +987,6 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   q.publisher.remote.setAcl = async (u, m) => { reopened.push([u, m]); };
   q.publisher.config = { ...config, quiescedAt: q.saved().quiescedAt };
   q.publisher.local = { writeSettings: async () => {}, writeContacts: async () => {} };
-  q.publisher.store.read = (_n, d) => d;
   await q.publisher.publishProfile();
   const inboxAcl = reopened.filter(([u]) => u === q.publisher.urls.inbox).pop();
   check(inboxAcl && inboxAcl[1].length === 0,
@@ -1000,6 +1004,41 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   check(actor?.movedTo === target && actor.type === 'Person' && actor.id === m.publisher.urls.actor
     && m.saved().movedTo === target,
     'the actor stays a Person and advertises movedTo, so the old handle still resolves');
+
+  // ---- an edited profile reaches the people looking at it ----
+  // Nothing obliges a server to re-fetch an actor it already holds, so a bio or
+  // an avatar was invisible to everyone until their cache expired — and a
+  // follower count with it, which is what made this visible.
+  {
+    const u = build();
+    u.publisher.local = { writeSettings: async () => {}, writeContacts: async () => {} };
+    u.publisher.publishCollections = async () => {};
+
+    // Nothing calls publishProfile on a plain start — every caller is a
+    // deliberate republish — so the first one is a real change and goes out.
+    // A silent first publish would spend an edit recording a digest, and that
+    // edit is the one whose invisibility this exists to fix.
+    const first = await u.publisher.publishProfile();
+    check(first.updated === 1 && u.delivered.length === 1,
+      'the first publish is a republish like any other, so it goes out');
+
+    const again = await u.publisher.publishProfile();
+    check(again.updated === 0 && u.delivered.length === 1,
+      'a republish that changes nothing sends nothing — which /config does whenever you save a field the actor does not carry');
+
+    u.publisher.config = { ...config, summary: 'now with a bio' };
+    const changed = await u.publisher.publishProfile();
+    const up = u.delivered[1]?.activity;
+    check(changed.updated === 1 && up?.type === 'Update' && up.actor === u.publisher.urls.actor,
+      `a real edit delivers an Update to each follower inbox (${changed.updated})`);
+    check(up?.object?.id === u.publisher.urls.actor && /now with a bio/.test(up.object.summary || '')
+      && up.object['@context'] === undefined && !!up['@context'],
+      `carrying the whole actor document, with its context hoisted onto the activity (${JSON.stringify(up?.object?.summary)})`);
+
+    const settled = await u.publisher.publishProfile();
+    check(settled.updated === 0 && u.delivered.length === 2,
+      'and the publish after that is quiet again — it is the document that decides, not the call');
+  }
 }
 
 // --- 5t. parking is quiet AND revivable ---
@@ -2710,6 +2749,21 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   const groupElse = await g('/whatever');
   check(groupElse.status === 404, `everything else is still refused (${groupElse.status})`);
 
+  // The client wrapper. The iframe DECLARES what it loads and keeps declaring
+  // it — client.js only navigates the loaded app to its own login route when the
+  // stored account is not this agent's actor, which is the whole fix for a
+  // leftover login from another identity showing up on this one's page.
+  const wrapper = await g('/admin/client/').then(r => r.text());
+  check(/<iframe[^>]+id="client"[^>]+src="\/"/.test(wrapper),
+    'the client wrapper names its own source in the markup, not from script');
+  check(/<script src="client\.js">/.test(wrapper),
+    'and loads the script that pins it to this agent\'s actor');
+  const pin = await g('/admin/client/client.js').then(r => r.text());
+  check(/info\?\.uri === status\.actor/.test(pin),
+    'which matches on the actor URI — "who logged in at this origin" is a different question');
+  check(/submit=1/.test(pin) && /#\/login\?/.test(pin),
+    'and hands the client its instance after the hash, with a non-empty submit — an empty one never fires');
+
   const mem = await gjson('/members');
   check(mem.status === 200 && mem.json.members.length === 1
     && mem.json.members[0].actor === MEM_A && mem.json.members[0].muted === false,
@@ -3121,7 +3175,9 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   let blocklist = { domains: [], actors: [] };
   const cagent = {
     home: CHOME, store: cstore, urls: curls, configured: () => true, logLines: () => [],
-    status: () => ({ configured: true, mode: 'active', kind: 'person', handle: 'solo' }),
+    // `actor` is in the real /status (run-agent.mjs) and is what the fediverse
+    // address is assembled from — the handle, at the pod host its actor sits on.
+    status: () => ({ configured: true, mode: 'active', kind: 'person', handle: 'solo', actor: curls.actor }),
     readCredential() { return JSON.parse(fs.readFileSync(path.join(CHOME, 'credential.json'), 'utf8')); },
     requestTakeover: async () => { lifecycle.push('takeover'); return true; },
     // Both destructive; the checks below assert they are never reached without
@@ -3270,12 +3326,23 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   const others = await cjson('/profiles');
   const byName = Object.fromEntries((others.json?.identities || []).map(i => [i.name, i]));
   check(others.status === 200 && byName['(default)']?.current === true
-    && byName['(default)'].admin === `http://localhost:${CPORT}/admin/`,
+    && byName['(default)'].admin === `http://solo.localhost:${CPORT}/admin/`,
     'the page is told which identity it is already looking at, so it can leave it out');
+  // Named, not the bare loopback. A browser keys storage per ORIGIN, so a row
+  // of identities all linked at localhost:<port> files them in one bucket —
+  // which is how a client ends up holding one actor's login on another's page.
   check(byName.other?.current === false && byName.other.port === 18999
-    && byName.other.admin === 'http://localhost:18999/admin/'
-    && byName.other.app === 'http://localhost:18999/' && byName.other.mode === null,
+    && byName.other.admin === 'http://other.localhost:18999/admin/'
+    && byName.other.app === 'http://other.localhost:18999/' && byName.other.mode === null,
     'a sibling carries both addresses — the record and the client — and reports it is not running');
+  check(byName.other.handle === 'other',
+    'a STOPPED sibling is still named, from the handle agent.json records — it never answers to be asked');
+  // The address is the actor as everyone else sees it, and the only form that
+  // stays distinct: two identities can share a handle, never a handle AND a pod.
+  check(byName['(default)'].address === 'solo@solo.example',
+    `a running identity reports its fediverse address (${byName['(default)'].address})`);
+  check(byName.other.address === null,
+    'and a stopped one reports none rather than guessing a pod it never named');
   check(!JSON.stringify(others.json).includes('NEVER-READ'),
     "and a sibling's credential is never opened — agent.json is the whole of it");
   fs.chmodSync(sibCred, 0o600);

@@ -144,12 +144,12 @@ async function renderOthers() {
   const sel = $('actor-pick');
   sel.textContent = '';
   if (!actors.length) return;
-  // Two actors can present the same word — a profile directory named for a
-  // handle another identity already answers to, which is what a half-finished
-  // setup leaves behind. Say the port in that case rather than offering the
-  // same name twice with no way to tell them apart.
-  const label = (r) => (r.handle || r.name) + (r.mode && r.mode !== 'active' ? ` (${r.mode})` : '')
-    + (r.mode ? '' : ' (stopped)');
+  // The fediverse address, which is what the actor IS to everyone else, and the
+  // only form that stays distinct: two identities can share a local handle, but
+  // never a handle AND a pod. A stopped one has no address to report — nothing
+  // answered — so it falls back to the name it is filed under.
+  const label = (r) => (r.address || r.handle || r.name)
+    + (r.mode && r.mode !== 'active' ? ` (${r.mode})` : '') + (r.mode ? '' : ' (stopped)');
   const seen = {};
   for (const r of actors) seen[label(r)] = (seen[label(r)] || 0) + 1;
 

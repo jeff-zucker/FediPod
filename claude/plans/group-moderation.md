@@ -78,12 +78,28 @@ that. `eject` is the sticky one, because it mutes.
 
 ## Still missing
 
-**No way to undo a block.** `POST /block` only ever adds. Removing a domain or an actor
-means editing `blocklist.json` on the pod by hand and restarting. Wanted: `POST /unblock`
-and a `blocks` listing.
+~~**No way to undo a block.**~~ **Done 2026-08-01**, in `c3664a2`. `POST /unblock` removes
+a domain or an actor and reports how many it removed — nothing, when it was never blocked,
+rather than pretending — and `GET /blocks` lists both granularities. Editing
+`blocklist.json` by hand and restarting is no longer the only way out.
 
 **A refused requester is not remembered.** Nothing records that you already said no, so
 a persistent requester reappears in the queue. `eject` after admitting is the workaround.
+
+~~**A profile edit is invisible to everyone.**~~ **Done 2026-08-01.** Nothing obliges a
+server to re-fetch an actor it already holds, so a group's name, bio or avatar — and its
+follower count, which is what made this visible — stayed at whatever the far side had
+cached. `publishProfile` now delivers `Update{actor}` to every follower inbox, and only
+when the document it just published differs from the one it published last, which a digest
+in `published.json` decides.
+
+A silent first publish was built and then removed, and the reason is worth keeping: nothing
+calls `publishProfile` on a plain start — every caller is a deliberate republish (setup, a
+rename, an edit, `describe`, a key rotation, an actor document found missing). So a "first
+run records the digest and sends nothing" rule would have spent a real edit doing nothing
+but bookkeeping, and that edit is exactly the one whose invisibility this fixes. What the
+digest is actually for is the republish that changes nothing — `/config` does one whenever
+you save a field the actor document does not carry.
 
 ## The blunt instrument, and its trap
 

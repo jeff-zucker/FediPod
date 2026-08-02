@@ -4,7 +4,9 @@
    the bar rather than around it. */
 #bar { flex: 0 0 auto; display: flex; align-items: center; gap: .6rem;
   margin: 0; padding: .5rem 1rem; border-bottom: 1px solid var(--btn-edge); }
-#bar .name { flex: 1 1 auto; font-weight: 600; font-size: 1.15rem; color: var(--heading); }
+/* The app title, in px rather than rem: it is chrome, the same on every page,
+   not something that should move when a page changes its base size. */
+#bar .name { flex: 1 1 auto; font-weight: 600; font-size: 24px; color: var(--heading); }
 /* Plain text, not chrome: three destinations in a row read better without a
    box round each. */
 #bar button { font: inherit; font-size: .95rem; padding: .15rem .2rem;
