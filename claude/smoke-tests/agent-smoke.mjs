@@ -939,6 +939,44 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   const kept = await contested.renewOnce();
   check(kept === false && lost && seen[0] === 'PUT' && seen[1] === 'GET',
     'a 412 costs one extra read and reports the lease lost');
+
+  // Losing it must STOP the chain. It used to re-arm in `finally` regardless of
+  // what renewOnce returned, so a demoted agent kept paying ~80 requests/hour
+  // for the life of the process.
+  check(contested.stopped === true && contested.timer === null,
+    'a lost lease stops renewing rather than re-arming');
+
+  // And the loser must not keep the winner's ETag: with it, the next conditional
+  // PUT succeeds and the stood-down agent silently takes the lease back.
+  check(contested.etag === null,
+    "losing the lease forgets the new holder's ETag, so it cannot be re-claimed");
+
+  // startRenewal is reached twice on the parked path; two chains would double a
+  // parked agent's writes, which is the one thing a parked agent must not do.
+  const idem = new Lease({
+    url: 'https://p.example/st/lease.json', fetchImpl: async () => res(404), log: () => {},
+  });
+  idem.startRenewal();
+  const first = idem.timer;
+  idem.startRenewal();
+  check(idem.timer === first, 'startRenewal is idempotent — a second call adds no second chain');
+  idem.stopRenewal();
+  check(idem.timer === null && idem.stopped, 'stopRenewal clears the timer and latches');
+  idem.startRenewal();
+  check(idem.timer !== null && idem.stopped === false,
+    'and it is restartable afterwards, for a viewer promoted back to active');
+  idem.stopRenewal();
+}
+
+// --- 5o-bis. demoting stands the lease down with everything else ---
+{
+  const src = fs.readFileSync(path.join(root, 'run-agent.mjs'), 'utf8');
+  const demote = src.slice(src.indexOf('  demote() {'), src.indexOf('  async requestTakeover'));
+  check(/this\.lease\?\.stopRenewal\(\)/.test(demote),
+    'demote() stops lease renewal, not just intake/tagfeed/deliverer');
+  const active = src.slice(src.indexOf('async startActive'), src.indexOf('  demote() {'));
+  check((active.match(/lease\.startRenewal\(\)/g) || []).length === 1,
+    'startActive arms lease renewal exactly once, including on the parked path');
 }
 
 // --- 5p. the poll stands down while push is up ---

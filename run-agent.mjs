@@ -410,8 +410,7 @@ export class Agent {
     // starting the agent by accident does not undo the quiet.
     if (this.store.getConfig()?.quiescedAt) {
       this.log('parked — not draining or polling; run `activitypod revive` to resume');
-      this.lease.startRenewal();
-      return;
+      return;                                // renewal is already running, above
     }
     await this.intake.start();
     this.tagfeed = new TagFeed({ store: this.store, intake: this.intake, log: this.log });
@@ -450,6 +449,10 @@ export class Agent {
     this.intake?.stop();
     this.tagfeed?.stop();
     this.deliverer?.stop();
+    // The lease too: standing down means standing down. Left renewing, a viewer
+    // keeps writing to the pod on the active agent's behalf and can win the
+    // lease back on a conditional PUT it had no business making.
+    this.lease?.stopRenewal();
     this.startViewer();
   }
 
