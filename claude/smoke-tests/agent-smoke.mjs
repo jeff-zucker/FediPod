@@ -925,6 +925,48 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   check(grown > firstCooldown * 2, `the cooldown doubles with repeated failure (${Math.round(grown / 1000)}s)`);
 }
 
+// --- 5k-bis. a pod that will not give us an item has not told us to bin it ---
+{
+  const { Intake } = await import(path.join(root, 'lib/intake.mjs'));
+  const mk = (itemStatus) => {
+    const deleted = [];
+    const state = {};
+    const store = {
+      read: (n, d) => (n in state ? JSON.parse(JSON.stringify(state[n])) : d),
+      write: (n, v) => { state[n] = v; },
+      commit: async () => true,
+      addDeadLetter: (e) => { (state.dead ||= []).push(e); },
+      getDeadLetters: () => state.dead || [],
+    };
+    const intake = new Intake({
+      config: {}, urls: { inbox: 'https://p.example/in/', base: 'https://p.example/' },
+      remote: {
+        listContainer: async () => [{ url: 'https://p.example/in/1', size: 10, modified: '2026-01-01' }],
+        fetch: async () => ({ status: itemStatus, text: async () => '', json: async () => null }),
+        delete: async (u) => { deleted.push(u); return true; },
+      },
+      local: {}, store, deliverer: {}, publisher: {}, log: () => {},
+    });
+    return { intake, deleted, state, store };
+  };
+
+  // A 500 on the item read used to be filed as 'unparsable JSON' — a REJECTION,
+  // dead-lettered with a null body and then DELETEd. The delivery was destroyed
+  // by a transient pod fault and nothing recorded what it had been.
+  const bad = mk(500);
+  await bad.intake.drain();
+  check(bad.deleted.length === 0, 'a 500 on an inbox item does not delete it');
+  check((bad.store.getDeadLetters() || []).length === 0,
+    'and does not dead-letter it as unparsable — the pod said nothing about its contents');
+  check(bad.state['intake-attempts.json']?.['https://p.example/in/1']?.n === 1,
+    'it counts as one failed attempt, so five of them still dead-letter it eventually');
+
+  // 404 is different: the item really is gone, so removing it is right.
+  const gone = mk(404);
+  await gone.intake.drain();
+  check(gone.deleted.length === 1, 'a 404 still deletes — the item is already gone');
+}
+
 // --- 5r. a restart reuses its token instead of asking for another ---
 {
   const { createRequire } = await import('node:module');
