@@ -973,6 +973,35 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     'a live saved channel is reconnected without POSTing a new one');
 }
 
+// --- 5r2. a pod's own infrastructure is never deletable ---
+// Standing rule after a pod was crippled: settings/, the root .well-known, any
+// .acl or .meta, and the profile are what make a pod a pod. Deleting one does
+// not degrade it, it stops it — and it cannot be repaired by the tool that broke
+// it, because that tool can no longer authenticate. The guard lives on
+// RemotePod.delete because every DELETE goes through there, so no script can
+// route around it, and it is a DENY-list: the next script will have a different
+// allow-prefix and the same things it must never touch.
+{
+  const { protectedFromDeletion } = await import(path.join(root, 'lib/remote.mjs'));
+  const refuses = (u) => { try { protectedFromDeletion(u); return false; } catch { return true; } };
+  const P = 'https://pod.example';
+  check(refuses(`${P}/profile/card`) && refuses(`${P}/profile/`),
+    'the WebID document cannot be deleted — nothing could authenticate as the pod again');
+  check(refuses(`${P}/settings/prefs.ttl`) && refuses(`${P}/settings/`),
+    "nor anything in the pod's settings");
+  check(refuses(`${P}/.well-known/webfinger`),
+    'nor discovery, which is how the handle resolves at all');
+  check(refuses(`${P}/ap/notes/n1.acl`) && refuses(`${P}/ap/notes/n1.meta`),
+    'nor an .acl or .meta anywhere — what they govern becomes unreachable');
+  check(refuses(`${P}/`), 'nor the pod root');
+  check(!refuses(`${P}/ap/notes/2026-01-01-abcd`) && !refuses(`${P}/ap/inbox/item`)
+    && !refuses(`${P}/activitypods-js/ap-state/statuses.json`)
+    && !refuses(`${P}/activitypods-js/fediverse/posts/n1`),
+    'and everything the agent legitimately deletes still goes through');
+  check(!refuses(`${P}/profiles-of-mine/x`),
+    'the match is on a path SEGMENT — a container merely starting with "profile" is not the profile');
+}
+
 // --- 5s. standing an actor down keeps the handle and stops the mail ---
 {
   const { Agent } = await import(path.join(root, 'run-agent.mjs'));
