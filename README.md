@@ -148,11 +148,53 @@ Stop the agent first. It copies both trees and checks they arrived before it
 repoints anything, and it leaves the old copy where it was for you to delete.
 
 <!-- CLAUDE 2026-07-31 — new: the home root and `home --to` -->
+<!-- CLAUDE 2026-08-02 — rewritten: every identity is a named folder now -->
 ### Where the agent itself lives
 
-One directory holds every identity on this machine — the credential, the signing
-keys, the pidfile and the log — with the first identity at the top and each
-`--profile <name>` in `profiles/<name>/`.
+One directory holds every identity on this machine, and **every identity is a
+named folder under `profiles/`** — its credential, signing keys, pidfile, log
+and private data all inside its own:
+
+```
+~/.solid-activitypub/
+  root.json              which identity was used last
+  profiles/
+    jeff/     credential.json  keys.json  agent.json  agent.log  private/
+    group/    …
+```
+
+The first identity used to live at the top of the root instead, with no name of
+its own — so one identity's folder contained all the others, and the listing had
+to invent the word `(default)` for the one that hadn't got a name. Which was the
+tell: something you have to name when you display it doesn't have an identity, it
+has a position.
+
+**You never pick a default.** `root.json` records whichever identity you last
+started, and that is what a plain command means afterwards:
+
+```
+bin/activitypod.mjs --profile group start   # today
+bin/activitypod.mjs status                  # …means group from now on
+```
+
+Nothing to configure and nothing to keep in sync — the answer can't drift from
+the identity you actually work in, because working in it is what sets it. With
+one identity there is no question to answer; with several and none ever started,
+a plain command asks rather than guessing, since guessing means guessing which
+fediverse account you meant.
+
+If your root still keeps an identity at its top level, from before this:
+
+```
+bin/activitypod.mjs home --restructure
+```
+
+which moves that identity's own files down into `profiles/<its handle>/`, leaves
+`profiles/` where it is, rewrites its private-data path, and refuses while any
+agent is answering. Its keys move with it; nothing is copied and left behind.
+<!-- /CLAUDE -->
+
+<!-- CLAUDE 2026-07-31 — the root's own name -->
 
 ```
 bin/activitypod.mjs home                     # which directory, and what is in it

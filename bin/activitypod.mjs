@@ -51,12 +51,19 @@
 //                         local facts. `--from-notes` also walks ap/notes/,
 //                         which finds more and can bring back a post whose
 //                         deletion the pod refused. The agent must be running.
+//   (the default identity) is whichever one you last STARTED. Every identity is
+//                         profiles/<name>/, and the root records the last one
+//                         used, so `--profile x start` today is what plain
+//                         `start` gives you tomorrow. Nothing to configure.
 //   activitypod home      which directory every identity on this machine lives
 //                         in. `--to <dir>` moves the whole root, rewrites any
 //                         privateRoot that pointed inside it, and refuses while
-//                         an agent is answering. Installs made before the
+//                         an agent is answering. `--restructure` is the one-time
+//                         move for a root from before every identity lived in
+//                         profiles/: it takes the identity at the top level down
+//                         into profiles/<its handle>/. Installs made before the
 //                         2026-07-30 rename keep ~/.activitypod until they run
-//                         this; new ones get ~/.solid-activitypub.
+//                         `--to`; new ones get ~/.solid-activitypub.
 //   activitypod passwd    set/change the UI password (REQUIRED before any
 //                         non-loopback exposure — it turns the instant
 //                         OAuth redirect into a real login form)
@@ -75,7 +82,9 @@ import net from 'node:net';
 import readline from 'node:readline';
 import { spawn } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { apRoot, profilesDir, identityHomes, isLegacyRoot, CURRENT_ROOT, tildify } from '../lib/home.mjs';
+import { apRoot, profilesDir, identityHomes, isLegacyRoot, CURRENT_ROOT, tildify, rootOf,
+  readRoot, writeRoot, defaultProfile, profileHome, rootHoldsIdentity, ROOT_FILE,
+  recordLastUsed } from '../lib/home.mjs';
 
 const args = process.argv.slice(2);
 const cmd = args[0];
@@ -84,15 +93,32 @@ const flag = (name, dflt) => {
   return i >= 0 ? args[i + 1] : dflt;
 };
 const has = (name) => args.includes('--' + name);
-// One identity per home. --profile <name> is the ergonomic form of picking one:
-// the root for the first, <root>/profiles/<name>/ for the rest. lib/home.mjs
-// decides the root — see it for why an old install keeps the old name.
-// An explicit --home / AP_HOME still wins, so existing installs are untouched.
+// One identity per home, and EVERY identity is `<root>/profiles/<name>/`. There
+// is no privileged unnamed one: `root.json` names which you get when you do not
+// say, and that is a pointer you can change rather than a directory you have to
+// move a private key out of. lib/home.mjs decides the root.
+//
+// An explicit --home / AP_HOME still wins and is taken literally: you named a
+// directory, so that directory is the identity, root.json unread. That is what
+// `rootOf` has always documented for a custom home.
 const PROFILE = flag('profile', process.env.AP_PROFILE || null);
 const AP_ROOT = apRoot();
 const PROFILES_DIR = profilesDir(AP_ROOT);
-const HOME = flag('home', process.env.AP_HOME
-  || (PROFILE ? path.join(PROFILES_DIR, PROFILE) : AP_ROOT));
+
+// `let`, because setup does not know which identity it is until it has asked for
+// the handle — the home is named after it. Everything below reads HOME at call
+// time, so reassigning it once, early, is enough; PORT is the exception and is
+// recomputed with it.
+let DEFAULT_ISSUE = null;                      // set when the pointer is unusable
+let HOME = flag('home', process.env.AP_HOME || (() => {
+  if (PROFILE) return profileHome(AP_ROOT, PROFILE);
+  const d = defaultProfile(AP_ROOT);
+  if (typeof d === 'string') return profileHome(AP_ROOT, d);
+  DEFAULT_ISSUE = d?.missing
+    ? `${ROOT_FILE} names "${d.missing}", which is not an identity here`
+    : 'there is more than one identity here and none is the default';
+  return profileHome(AP_ROOT, d?.missing || '');
+})());
 
 // The port chosen at setup is remembered, so `start`/`stop`/`status` need no
 // flags afterwards. Precedence: --port > AP_PORT > the recorded choice > 8030.
@@ -111,7 +137,57 @@ function recordAgent(fields) {
     fs.writeFileSync(path.join(HOME, 'agent.json'), JSON.stringify(rec, null, 2) + '\n');
   } catch { /* the flag still works, it just isn't remembered */ }
 }
-const PORT = Number(flag('port', process.env.AP_PORT || recordedPort() || 8030));
+let PORT = Number(flag('port', process.env.AP_PORT || recordedPort() || 8030));
+
+// Setup is the one command that cannot know its home in advance: the identity is
+// named after the handle, and the handle is the first thing it asks. Everything
+// that reads HOME does so at call time, so pointing it at the right directory as
+// soon as the name exists is enough — PORT is recomputed because it was read
+// from the old home's agent.json.
+function useProfile(name) {
+  HOME = flag('home', process.env.AP_HOME || profileHome(AP_ROOT, name));
+  PORT = Number(flag('port', process.env.AP_PORT || recordedPort() || 8030));
+  DEFAULT_ISSUE = null;
+  return HOME;
+}
+
+// A handle becomes a directory name, so it is checked before it is one. Same
+// rule the admin API applies before creating an actor (admin.mjs) — without it
+// a handle containing a slash or `..` climbs out of profiles/.
+const HANDLE_RE = /^[a-z0-9][a-z0-9_-]{0,30}$/;
+function requireHandle(handle) {
+  if (HANDLE_RE.test(handle)) return handle;
+  console.error(`"${handle}" cannot be a handle: letters, digits, hyphens and underscores,`);
+  console.error('starting with a letter or digit, at most 31 characters.');
+  process.exit(2);
+}
+
+// Commands that act on an identity need one decided. Says which of the three
+// ways it failed, because "no identity" and "which identity" are different
+// problems with different fixes.
+function requireIdentity() {
+  // An explicit AP_HOME / --home is an explicit identity directory. Nothing
+  // about the machine's root applies to it — including whether that root has
+  // been restructured, which is somebody else's install's problem.
+  if (process.env.AP_HOME || flag('home')) return;
+  if (rootHoldsIdentity(AP_ROOT)) {
+    console.error(`${tildify(AP_ROOT)} still keeps an identity at its top level.`);
+    console.error('Every identity lives in profiles/<name>/ now. Move this one down with:\n');
+    console.error(`  ${process.argv[1]} home --restructure\n`);
+    process.exit(2);
+  }
+  if (!DEFAULT_ISSUE) return;
+  const homes = identityHomes(AP_ROOT).filter(h => fs.existsSync(path.join(h.dir, 'credential.json')));
+  console.error(DEFAULT_ISSUE + '.');
+  if (homes.length) {
+    console.error(`\n  ${process.argv[1]} --profile <name> start\n`);
+    console.error('Whichever you start is remembered, so plain commands mean that one afterwards.');
+    console.error(`here: ${homes.map(h => h.name).join(', ')}`);
+  } else {
+    console.error(`\nThere are no identities yet — ${process.argv[1]} setup`);
+  }
+  process.exit(2);
+}
 
 function askHidden(prompt) {
   return new Promise((resolve) => {
@@ -224,6 +300,11 @@ function refuseExistingIdentity() {
 async function runBrowserSetup() {
   const handle = flag('handle') || await ask('handle (the name in your address; permanent)');
   if (!handle) { console.error('a handle is required'); process.exit(2); }
+  // The handle names the home, so nothing can be decided before it — including
+  // which identity would be overwritten, and which port was remembered.
+  requireHandle(handle);
+  useProfile(PROFILE || handle);
+  refuseExistingIdentity();
   const port = flag('port') ? PORT : (Number(await ask('port', String(PORT))) || PORT);
   endAsking();
 
@@ -269,6 +350,23 @@ async function runBrowserSetup() {
 // when there is. Detached, because you asked for an agent, not a terminal
 // that is now busy: it logs to AP_HOME/agent.log and `stop` finds it by pidfile.
 if (cmd === 'up') {
+  // A fresh machine has no identity, and an identity is named after its handle,
+  // so there is no home to start in until that is asked. One question, the same
+  // one `setup` opens with — `npm start` stays the single command it was.
+  if (DEFAULT_ISSUE && !identityHomes(AP_ROOT).some(h => fs.existsSync(path.join(h.dir, 'credential.json')))) {
+    if (!process.stdin.isTTY) {
+      console.error('no identities yet — bin/activitypod.mjs setup');
+      process.exit(2);
+    }
+    const first = await ask('handle (the name in your address; permanent)');
+    endAsking();
+    if (!first) { console.error('a handle is required'); process.exit(2); }
+    requireHandle(first);
+    useProfile(first);
+  } else {
+    requireIdentity();
+  }
+  if (rootOf(HOME) === AP_ROOT) recordLastUsed(AP_ROOT, path.basename(HOME));
   const preferred = Number(flag('port', process.env.AP_PORT || recordedPort() || 8030));
   const configured = fs.existsSync(path.join(HOME, 'credential.json'));
   const { hostLabel } = await import(new URL('../lib/guard.mjs', import.meta.url));
@@ -284,7 +382,10 @@ if (cmd === 'up') {
 
   // Both branches take the named origin: setup at the shared one would file the
   // first login under localhost:<port>, and the identity is stuck with it.
-  const label = hostLabel(recordedAgent().handle);
+  // The profile name is the handle — that is what naming identities after them
+  // bought — so the named origin works on the very first run, before anything
+  // has been recorded.
+  const label = hostLabel(recordedAgent().handle || path.basename(HOME));
   const origin = `http://${label ? label + '.' : ''}localhost:${port}`;
   const url = configured ? `${origin}/` : `${origin}/admin/setup/`;
 
@@ -317,12 +418,16 @@ if (cmd === 'up') {
     : 'setup continues in the browser. Stop it with:  bin/activitypod.mjs stop');
   if (!has('no-open')) openBrowser(url);
   process.exit(0);
+} else if (cmd === 'setup' && PROFILE && (useProfile(PROFILE), refuseExistingIdentity(), false)) {
+  // Unreachable: --profile names the home before anything is asked, so the
+  // collision is knowable now. refuseExistingIdentity exits when it finds one;
+  // when it does not, this falls through to the real branches below.
 } else if (cmd === 'setup' && process.stdin.isTTY && !has('cli')
     && !IDENTITY_FLAGS.some(f => args.includes('--' + f))) {
-  refuseExistingIdentity();
+  // No refusal yet: which identity this would overwrite is not knowable until
+  // the handle is asked, because the handle is what names the home.
   await runBrowserSetup();
 } else if (cmd === 'setup') {
-  refuseExistingIdentity();
   const root = flag('root');
   const kind = has('group') ? 'group' : 'person';
   const approveJoins = has('group') && has('approve-joins');
@@ -361,6 +466,12 @@ if (cmd === 'up') {
     console.error('an email and a handle are required');
     process.exit(2);
   }
+  // Before anything irreversible: the account creation and the mint are both
+  // one-way, and a credential is shown once. A home that cannot be decided has
+  // to be refused here, not after there is something to lose.
+  requireHandle(handle);
+  useProfile(PROFILE || handle);
+  refuseExistingIdentity();
   const podName = newAccount
     ? (flag('pod-name') || await ask('pod name (this becomes the domain of your address)', handle))
     : null;
@@ -437,6 +548,8 @@ if (cmd === 'up') {
   };
   fs.mkdirSync(HOME, { recursive: true, mode: 0o700 });
   fs.writeFileSync(path.join(HOME, 'credential.json'), JSON.stringify(rec, null, 2) + '\n', { mode: 0o600 });
+  // The one you just made is the one you are using.
+  if (rootOf(HOME) === AP_ROOT) recordLastUsed(AP_ROOT, path.basename(HOME));
   recordAgent({ port: PORT, handle });   // later commands need no --port
   console.log(`credential minted and saved to ${path.join(HOME, 'credential.json')}`);
 
@@ -477,6 +590,11 @@ if (cmd === 'up') {
     openBrowser(url);
   }
 } else if (cmd === 'start' || cmd === 'run') {   // 'run' kept as an alias
+  requireIdentity();
+  // Starting one is what makes it the default — so `--profile group start`
+  // today is what a plain command means tomorrow. Recorded before the agent
+  // comes up, because a start that fails still expressed the intent.
+  if (rootOf(HOME) === AP_ROOT) recordLastUsed(AP_ROOT, path.basename(HOME));
   // This flag is read only by setup; it silently did nothing here, while the
   // key guard's own error message told people to use it.
   if (has('rotate-key')) {
@@ -551,6 +669,7 @@ if (cmd === 'up') {
     if (has('open')) openBrowser(named || plain);
   }
 } else if (cmd === 'state') {
+  requireIdentity();
   // Where the private half lives, and how to move it. Copy, verify, THEN
   // repoint — a pointer moved on its own leaves the agent reading one
   // container and writing another, which is the divergence this avoids.
@@ -640,6 +759,7 @@ if (cmd === 'up') {
   console.log('The old copy was left where it was — delete it once you are satisfied.');
   process.exit(0);
 } else if (cmd === 'rotate-key') {
+  requireIdentity();
   const { Agent } = await import(new URL('../run-agent.mjs', import.meta.url));
   const agent = new Agent({ home: HOME, log: (...a) => console.log('[rotate-key]', ...a) });
   if (!await agent.connect()) {
@@ -679,6 +799,9 @@ if (cmd === 'up') {
       state: live ? `${live.mode}${live.podRequests ? ` · ${live.podRequests.perMinuteNow}/min` : ''}` : 'not running' });
   }
 
+  // Which one answers with no --profile. A property of the ROOT, not of any
+  // identity — which is the whole point of it being a pointer.
+  const theDefault = (() => { const d = defaultProfile(AP_ROOT); return typeof d === 'string' ? d : null; })();
   if (!rows.length) console.log('no identities yet — bin/activitypod.mjs setup');
   else {
     const w = (k, min) => Math.max(min, ...rows.map(r => String(r[k]).length));
@@ -686,11 +809,102 @@ if (cmd === 'up') {
     console.log(`${'PROFILE'.padEnd(wn)}  ${'POD'.padEnd(wp)}  ${'PORT'.padEnd(wo)}  ${'KIND'.padEnd(wk)}  STATE`);
     for (const r of rows) {
       console.log(`${r.name.padEnd(wn)}  ${String(r.pod).padEnd(wp)}  ${String(r.port).padEnd(wo)}`
-        + `  ${String(r.kind).padEnd(wk)}  ${r.state}`);
+        + `  ${String(r.kind).padEnd(wk)}  ${r.state}${r.name === theDefault ? '  (default)' : ''}`);
     }
   }
   console.log(`\nIdentities under a custom AP_HOME are not listed — only ${AP_ROOT}`
     + ' and its profiles/*.');
+  process.exit(0);
+} else if (cmd === 'home' && has('restructure')) {
+  // One-time: move the identity that lives AT the root down into
+  // profiles/<name>/, so every identity is a named folder and none of them
+  // contains the others. Its own files only — profiles/ stays where it is.
+  if (process.env.AP_HOME || flag('home')) {
+    console.error('AP_HOME / --home is set. That is an explicit identity directory, not the');
+    console.error('root this restructures — unset it and run again.');
+    process.exit(2);
+  }
+  if (!rootHoldsIdentity(AP_ROOT)) {
+    console.log(`nothing to move — ${tildify(AP_ROOT)} keeps no identity at its top level`);
+    const d = defaultProfile(AP_ROOT);
+    if (typeof d === 'string') console.log(`default identity: ${d}`);
+    process.exit(0);
+  }
+  // Its name is its handle, which agent.json records and pod state confirms.
+  // Falling back to the credential's pod host keeps a half-set-up root movable.
+  let name = null;
+  try { name = JSON.parse(fs.readFileSync(path.join(AP_ROOT, 'agent.json'), 'utf8')).handle || null; } catch {}
+  if (!name) {
+    try {
+      const cfg = JSON.parse(fs.readFileSync(path.join(AP_ROOT, 'private/ap-state/config.json'), 'utf8'));
+      name = cfg.handle || null;
+    } catch {}
+  }
+  name = flag('name', name);
+  if (!name) {
+    console.error('cannot tell what this identity is called — no handle in agent.json or pod state.');
+    console.error(`Name it:  ${process.argv[1]} home --restructure --name <name>`);
+    process.exit(2);
+  }
+  requireHandle(name);
+  const dest = profileHome(AP_ROOT, name);
+  if (fs.existsSync(dest) && fs.readdirSync(dest).length) {
+    console.error(`${tildify(dest)} exists and is not empty — refusing to merge two identities`);
+    console.error(`Give the moved one another name:  ${process.argv[1]} home --restructure --name <name>`);
+    process.exit(2);
+  }
+
+  // A running agent holds its pidfile and log by path. Same refusal `--to` makes.
+  const live = [];
+  for (const { name: n, dir } of [{ name, dir: AP_ROOT }, ...identityHomes(AP_ROOT)]) {
+    let port = null;
+    try { port = JSON.parse(fs.readFileSync(path.join(dir, 'agent.json'), 'utf8')).port; } catch { continue; }
+    if (port && await agentOn(port)) live.push(`${n} on ${port}`);
+  }
+  if (live.length) {
+    console.error(`still answering: ${live.join(', ')}`);
+    console.error('stop them first — a move would strand the pidfile and log they hold');
+    process.exit(2);
+  }
+
+  // Its own files, named explicitly. Everything else at the root — profiles/,
+  // and root.json once it exists — belongs to the root and stays.
+  const MOVE = ['credential.json', 'keys.json', 'agent.json', 'agent.log', 'token.json',
+    'backoff.json', 'private'];
+  fs.mkdirSync(dest, { recursive: true, mode: 0o700 });
+  const moved = [];
+  for (const f of MOVE) {
+    const from = path.join(AP_ROOT, f);
+    if (!fs.existsSync(from)) continue;
+    fs.renameSync(from, path.join(dest, f));
+    moved.push(f);
+  }
+  // A pidfile names a process that was told to stop. Carrying it forward would
+  // point `stop` at a pid nobody owns.
+  fs.rmSync(path.join(AP_ROOT, 'agent.pid'), { force: true });
+  console.log(`moved ${moved.length} item(s) → ${tildify(dest)}`);
+  console.log(`  ${moved.join(', ')}`);
+
+  // privateRoot is an absolute path; one that pointed at the root's private/
+  // now points at nothing, and an agent finding an empty store reports itself
+  // unconfigured rather than saying why.
+  const credPath = path.join(dest, 'credential.json');
+  try {
+    const cred = JSON.parse(fs.readFileSync(credPath, 'utf8'));
+    if (cred.privateRoot && !/^https?:/i.test(cred.privateRoot)) {
+      const was = cred.privateRoot.startsWith('file:')
+        ? fileURLToPath(cred.privateRoot) : path.resolve(cred.privateRoot);
+      if (isInside(AP_ROOT, was) && !isInside(dest, was)) {
+        cred.privateRoot = pathToFileURL(path.join(dest, path.relative(AP_ROOT, was))).href + '/';
+        fs.writeFileSync(credPath, JSON.stringify(cred, null, 2) + '\n', { mode: 0o600 });
+        console.log(`  private data now ${tildify(cred.privateRoot)}`);
+      }
+    }
+  } catch { /* no credential to repoint */ }
+
+  recordLastUsed(AP_ROOT, name);
+  console.log(`\n${name} is what a plain command means now. Start another with`);
+  console.log(`\`${path.basename(process.argv[1])} --profile <name> start\` and that becomes the one instead.`);
   process.exit(0);
 } else if (cmd === 'home') {
   // The root holds the credential and the signing keys of every identity on
@@ -702,8 +916,16 @@ if (cmd === 'up') {
   if (!to) {
     console.log(`\nroot:      ${tildify(AP_ROOT)}${isLegacyRoot(AP_ROOT) ? '   (the name from before the rename)' : ''}`);
     console.log(`this home: ${tildify(HOME)}`);
+    const d = defaultProfile(AP_ROOT);
     for (const { name, dir } of identityHomes(AP_ROOT)) {
-      if (fs.existsSync(path.join(dir, 'credential.json'))) console.log(`  · ${name}`);
+      if (fs.existsSync(path.join(dir, 'credential.json'))) {
+        console.log(`  · ${name}${name === d ? '   (default)' : ''}`);
+      }
+    }
+    if (rootHoldsIdentity(AP_ROOT)) {
+      console.log('\nThis root still keeps an identity at its top level, from before every');
+      console.log('identity moved under profiles/. Move it down with:\n');
+      console.log(`  ${process.argv[1]} home --restructure\n`);
     }
     if (overridden) {
       console.log('\nAP_HOME / --home is set, so this run is not using the root above.');
@@ -925,6 +1147,7 @@ if (cmd === 'up') {
     console.log('\nrevoke with: activitypod tokens --revoke <prefix>   (or --revoke-all)');
   }
 } else if (cmd === 'stop') {
+  requireIdentity();
   const pidFile = path.join(HOME, 'agent.pid');
   let pid = null;
   try { pid = Number(fs.readFileSync(pidFile, 'utf8').trim()); } catch {}
@@ -956,6 +1179,7 @@ if (cmd === 'up') {
   console.error('agent did not exit within 10s — kill it with: kill -9 ' + pid);
   process.exit(1);
 } else if (cmd === 'passwd') {
+  requireIdentity();
   const { Agent } = await import(new URL('../run-agent.mjs', import.meta.url));
   const { hashPassword } = await import(new URL('../lib/mastoapi.mjs', import.meta.url));
   const { RemotePod } = await import(new URL('../lib/remote.mjs', import.meta.url));
@@ -1111,6 +1335,7 @@ WantedBy=default.target
     process.exit(1);
   }
 } else if (cmd === 'rebuild') {
+  requireIdentity();
   // Served by the running agent because it needs the lease: it writes the
   // statuses store, and two agents writing it is the thing the lease prevents.
   try {
@@ -1134,6 +1359,7 @@ WantedBy=default.target
     process.exit(1);
   }
 } else if (cmd === 'status') {
+  requireIdentity();
   try {
     const res = await fetch(`http://localhost:${PORT}/status`);
     console.log(JSON.stringify(await res.json(), null, 2));
@@ -1213,8 +1439,8 @@ WantedBy=default.target
     console.log(`${cmd}d ${arg} — ${body.pending} still held`);
   }
 } else {
-  console.log('usage: activitypod <setup|start|stop|status|state|rebuild|home|passwd|tokens'
-    + '|revoke-credential|install-service> [--flags]');
+  console.log('usage: activitypod <setup|start|stop|status|state|rebuild|home|passwd'
+    + '|tokens|revoke-credential|install-service> [--flags]');
   console.log('  group: members | eject <actor> | mute <actor> | unmute <actor>');
   console.log('         joins <open|approve> | requests | admit <actor> | refuse <actor>');
   console.log('         announced | retract <note> | review <on|off> | pending | approve <note> | decline <note>');

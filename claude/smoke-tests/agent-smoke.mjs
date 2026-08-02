@@ -1266,9 +1266,12 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     fs.writeFileSync(path.join(dir, 'credential.json'), JSON.stringify({ remotePod: pod }));
     if (port) fs.writeFileSync(path.join(dir, 'agent.json'), JSON.stringify({ port }));
   };
-  mk(path.join(fake, '.activitypod'), 'https://first.example/', 18991);
+  // Every identity is profiles/<name>/ — none of them at the root. The root
+  // holds only the pointer saying which was used last.
+  mk(path.join(fake, '.activitypod/profiles/first'), 'https://first.example/', 18991);
   mk(path.join(fake, '.activitypod/profiles/work'), 'https://work.example/', 18992);
   mk(path.join(fake, '.activitypod/profiles/play'), 'https://play.example/', null);
+  fs.writeFileSync(path.join(fake, '.activitypod/root.json'), JSON.stringify({ default: 'first' }));
   const run = (args) => {
     try {
       return { out: execFileSync(process.execPath, [cli, ...args],
@@ -1277,15 +1280,22 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   };
 
   const listed = run(['profiles']);
-  check(/\(default\)\s+first\.example/.test(listed.out) && /work\s+work\.example\s+18992/.test(listed.out)
+  check(/first\s+first\.example/.test(listed.out) && /work\s+work\.example\s+18992/.test(listed.out)
     && /play\s+play\.example/.test(listed.out) && /not running/.test(listed.out),
-    'profiles lists the default home and every named profile');
+    'profiles lists every identity by its own name — none of them nameless');
+  // Which one a plain command means. It is a property of the ROOT, not of any
+  // identity, which is the whole reason it is a pointer.
+  check(/first\s+first\.example.*\(default\)/.test(listed.out)
+    && !/work.*\(default\)/.test(listed.out),
+    'and marks the one that was used last, from root.json');
 
   // Setup must refuse before asking for anything, and say where to go instead.
-  const clobber = run(['setup', '--pod', 'https://x.example/']);
+  // --handle, so the home is decided: the identity is named after it now, and
+  // nothing can be refused before the name exists.
+  const clobber = run(['setup', '--handle', 'first', '--pod', 'https://x.example/', '--email', 'a@b.c']);
   check(clobber.code === 2 && /already holds an identity: https:\/\/first\.example\//.test(clobber.out)
-    && /--profile <name>/.test(clobber.out),
-    'setup refuses to overwrite an existing credential, with exit 2');
+    && /profiles[\\/]first already holds/.test(clobber.out),
+    'setup refuses to overwrite an existing credential, and names the home it means');
 
   // --profile selects its own home, and is refused there on its own merits.
   const perProfile = run(['setup', '--profile', 'work', '--pod', 'https://x.example/']);
@@ -1296,6 +1306,24 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   const fresh = run(['setup', '--profile', 'brand-new', '--pod', 'https://x.example/']);
   check(fresh.code === 2 && !/already holds/.test(fresh.out) && /email/.test(fresh.out),
     'an unused profile is not blocked by the guard');
+
+  // A handle becomes a directory name, so it is checked before it is one.
+  const climb = run(['setup', '--handle', '../escape', '--pod', 'https://x.example/', '--email', 'a@b.c']);
+  check(climb.code === 2 && /cannot be a handle/.test(climb.out)
+    && !fs.existsSync(path.join(fake, '.activitypod/profiles/../escape')),
+    'a handle that would climb out of profiles/ is refused before it is a directory');
+
+  // No pointer and more than one identity is a real question. Picking silently
+  // would be picking somebody's fediverse account for them.
+  fs.rmSync(path.join(fake, '.activitypod/root.json'));
+  const ambiguous = run(['status']);
+  check(ambiguous.code === 2 && /more than one identity/.test(ambiguous.out)
+    && /first/.test(ambiguous.out) && /work/.test(ambiguous.out),
+    'with no pointer and several identities, a plain command asks rather than guesses');
+  fs.writeFileSync(path.join(fake, '.activitypod/root.json'), JSON.stringify({ default: 'nobody' }));
+  const dangling = run(['status']);
+  check(dangling.code === 2 && /nobody/.test(dangling.out),
+    'and a pointer at an identity that is not there says so rather than falling back');
 
   fs.rmSync(fake, { recursive: true, force: true });
 }
@@ -3165,8 +3193,13 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   const { startAdmin } = await import(path.join(root, 'lib/admin.mjs'));
   const CPORT = 18628;
   const CHOME = fs.mkdtempSync('/tmp/activitypod-config-');
+  // CHOME is the ROOT; the identity itself is a profile under it. /new-actor
+  // builds sibling directories as rootOf(agent.home)/profiles/<handle>, so the
+  // root has to stay the root or those refusals stop being about anything.
+  const CSELF = path.join(CHOME, 'profiles', 'solo');
+  fs.mkdirSync(CSELF, { recursive: true });
   // A configured PERSON: the credential file is what `/` keys on.
-  fs.writeFileSync(path.join(CHOME, 'credential.json'),
+  fs.writeFileSync(path.join(CSELF, 'credential.json'),
     JSON.stringify({ remotePod: 'https://solo.example/', webId: 'https://solo.example/profile/card#me',
       issuerOrigin: 'https://example', clientId: 'CID', secret: 'SECRET-NOT-FOR-THE-PAGE' }));
   const cstore = new PodStore({ log: () => {} });
@@ -3179,11 +3212,11 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   const lifecycle = [];
   let blocklist = { domains: [], actors: [] };
   const cagent = {
-    home: CHOME, store: cstore, urls: curls, configured: () => true, logLines: () => [],
+    home: CSELF, store: cstore, urls: curls, configured: () => true, logLines: () => [],
     // `actor` is in the real /status (run-agent.mjs) and is what the fediverse
     // address is assembled from — the handle, at the pod host its actor sits on.
     status: () => ({ configured: true, mode: 'active', kind: 'person', handle: 'solo', actor: curls.actor }),
-    readCredential() { return JSON.parse(fs.readFileSync(path.join(CHOME, 'credential.json'), 'utf8')); },
+    readCredential() { return JSON.parse(fs.readFileSync(path.join(CSELF, 'credential.json'), 'utf8')); },
     requestTakeover: async () => { lifecycle.push('takeover'); return true; },
     // Both destructive; the checks below assert they are never reached without
     // the lease, so reaching them at all is the failure.
@@ -3320,7 +3353,8 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   // agent.json is the only file this may read. The sibling's credential is made
   // unreadable on purpose: if anything here ever opens one, these fail rather
   // than quietly widening what an agent touches.
-  fs.writeFileSync(path.join(CHOME, 'agent.json'), JSON.stringify({ port: CPORT, handle: 'solo' }));
+  fs.writeFileSync(path.join(CSELF, 'agent.json'), JSON.stringify({ port: CPORT, handle: 'solo' }));
+  fs.writeFileSync(path.join(CHOME, 'root.json'), JSON.stringify({ default: 'solo' }));
   const sib = path.join(CHOME, 'profiles', 'other');
   fs.mkdirSync(sib, { recursive: true });
   fs.writeFileSync(path.join(sib, 'agent.json'), JSON.stringify({ port: 18999, handle: 'other' }));
@@ -3330,9 +3364,16 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
 
   const others = await cjson('/profiles');
   const byName = Object.fromEntries((others.json?.identities || []).map(i => [i.name, i]));
-  check(others.status === 200 && byName['(default)']?.current === true
-    && byName['(default)'].admin === `http://solo.localhost:${CPORT}/admin/`,
+  // Both rows, asserted explicitly: with the current identity re-keyed from the
+  // invented '(default)' to its own name, a payload that lost it entirely would
+  // still satisfy every sibling check below.
+  check((others.json?.identities || []).length === 2,
+    `both identities are listed (${(others.json?.identities || []).length})`);
+  check(others.status === 200 && byName.solo?.current === true
+    && byName.solo.admin === `http://solo.localhost:${CPORT}/admin/`,
     'the page is told which identity it is already looking at, so it can leave it out');
+  check(byName.solo?.lastUsed === true && byName.other?.lastUsed === false,
+    'and which one a plain command means, which is a different question from which page you are on');
   // Named, not the bare loopback. A browser keys storage per ORIGIN, so a row
   // of identities all linked at localhost:<port> files them in one bucket —
   // which is how a client ends up holding one actor's login on another's page.
@@ -3344,8 +3385,8 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
     'a STOPPED sibling is still named, from the handle agent.json records — it never answers to be asked');
   // The address is the actor as everyone else sees it, and the only form that
   // stays distinct: two identities can share a handle, never a handle AND a pod.
-  check(byName['(default)'].address === 'solo@solo.example',
-    `a running identity reports its fediverse address (${byName['(default)'].address})`);
+  check(byName.solo.address === 'solo@solo.example',
+    `a running identity reports its fediverse address (${byName.solo.address})`);
   check(byName.other.address === null,
     'and a stopped one reports none rather than guessing a pod it never named');
   check(!JSON.stringify(others.json).includes('NEVER-READ'),
