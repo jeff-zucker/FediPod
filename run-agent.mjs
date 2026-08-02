@@ -413,7 +413,10 @@ export class Agent {
       return;                                // renewal is already running, above
     }
     await this.intake.start();
-    this.tagfeed = new TagFeed({ store: this.store, intake: this.intake, log: this.log });
+    // Reused, not replaced: demote() stops this instance but does not clear it,
+    // so constructing a new one over the top orphaned the old chain beyond the
+    // reach of any later stop().
+    this.tagfeed ||= new TagFeed({ store: this.store, intake: this.intake, log: this.log });
     this.tagfeed.start();
     this.log(`federating as @${this.store.getConfig()?.handle}@${new URL(this.urls.base).host}`);
     if (this.renamed) {
@@ -473,7 +476,7 @@ export class Agent {
       if (this.viewer) return;                 // lost it again in the meantime
       try {
         await this.intake.start();
-        this.tagfeed = new TagFeed({ store: this.store, intake: this.intake, log: this.log });
+        this.tagfeed ||= new TagFeed({ store: this.store, intake: this.intake, log: this.log });
         this.tagfeed.start();
         this.log('takeover complete — draining resumed on this device');
       } catch (e) { this.log(`takeover drain start: ${e.message}`); }

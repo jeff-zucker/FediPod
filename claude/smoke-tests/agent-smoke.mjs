@@ -1072,6 +1072,36 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   idem.stopRenewal();
 }
 
+// --- 5k-ter. every self-scheduling loop stops when it is told to ---
+{
+  const { TagFeed } = await import(path.join(root, 'lib/tagfeed.mjs'));
+  const store = { read: (_n, d) => d, write: () => {}, getStatuses: () => [], isBlocked: () => false };
+
+  // stop() read `this.stopped` in its `finally` and never wrote it, so a stop
+  // landing while a sweep was in flight re-armed the chain regardless.
+  const tf = new TagFeed({ store, intake: {}, log: () => {}, fetcher: async () => ({ status: 500 }) });
+  tf.stop();
+  check(tf.stopped === true, 'TagFeed.stop() latches, like Intake.stop() always has');
+  tf.start();
+  check(tf.stopped === false, 'and start() clears it, so a demoted agent can be promoted back');
+  tf.stop();
+
+  // demote() stops the feed but does not clear it, so constructing a new one
+  // over the top left the old chain sweeping with nothing able to reach it.
+  const src = fs.readFileSync(path.join(root, 'run-agent.mjs'), 'utf8');
+  check(!/this\.tagfeed = new TagFeed/.test(src) && (src.match(/this\.tagfeed \|\|= new TagFeed/g) || []).length === 2,
+    'run-agent reuses its TagFeed rather than orphaning a live one');
+
+  // The push socket's backoff must not treat "opened, then dropped" as success.
+  const intakeSrc = fs.readFileSync(path.join(root, 'lib/intake.mjs'), 'utf8');
+  const onopen = intakeSrc.slice(intakeSrc.indexOf('this.ws.onopen'), intakeSrc.indexOf('this.ws.onmessage'));
+  check(!/reconnectTries = 0/.test(onopen),
+    'a bare open no longer resets the reconnect backoff to its 2s floor');
+  const onclose = intakeSrc.slice(intakeSrc.indexOf('this.ws.onclose'), intakeSrc.indexOf('this.ws.onerror'));
+  check(/RECONNECT_STABLE_MS/.test(onclose) && /reconnectTries = 0/.test(onclose),
+    'only a socket that stayed up for a while does');
+}
+
 // --- 5l-bis. a stranger cannot spend our requests, or evict our followers ---
 {
   const { Intake } = await import(path.join(root, 'lib/intake.mjs'));
