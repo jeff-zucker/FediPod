@@ -1165,6 +1165,31 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   check(/class="err" role="alert"/.test(masto), 'as does the login form');
   check(/<label for="password">/.test(masto),
     'whose password field has a real label, not just a placeholder');
+
+  // A live region put into the accessibility tree in the SAME task as its text
+  // does not reliably announce, so none of them is toggled with `hidden`: they
+  // stay in the tree and disappear by being empty.
+  check(!/id="(say|fatal)"[^>]*hidden/.test(record)
+    && /#say:empty, #fatal:empty \{ display: none/.test(record),
+    'the record page keeps its status regions in the tree and hides them when empty');
+  check(!/id="(form|run)-error"[^>]*hidden/.test(setup)
+    && /#form-error:empty, #run-error:empty \{ display: none/.test(setup),
+    'and so does setup');
+  const adminJs = read('web/admin/admin.js');
+  check(!/\$\('say'\)[\s\S]{0,40}hidden = false/.test(adminJs)
+    && !/\$\('fatal'\)\.hidden = false/.test(adminJs),
+    'and nothing unhides one on its way to writing into it');
+
+  // Setup progress was a bare glyph per step, and a run that DIED said nothing.
+  const setupJs = read('web/admin/setup/setup.js');
+  check(/mark\.setAttribute\('aria-label'/.test(setupJs),
+    'each setup step glyph has a name — a rotating arrow is not a word');
+  check(/id="run-say" role="status"/.test(setup) && /\$\('run-say'\)/.test(setupJs),
+    'and one polite line reports the step that is actually moving');
+  // Deliberately not a live region over the whole list: it is rebuilt on every
+  // 700ms poll, and announcing six steps twice a second is noise, not progress.
+  check(!/id="run-steps"[^>]*aria-live/.test(setup),
+    'rather than making the rebuilt step list itself a live region');
 }
 
 // --- 5f-bis. the unauthenticated probes are still this pod's traffic ---

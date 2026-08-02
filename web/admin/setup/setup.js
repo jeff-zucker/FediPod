@@ -137,12 +137,11 @@ async function preview() {
 
 async function onSubmit(ev) {
   ev.preventDefault();
-  $('form-error').hidden = true;
+  $('form-error').textContent = '';
   $('submit').disabled = true;
   const { status, json } = await postJson('/setup', answers());
   if (status !== 202) {
     $('submit').disabled = false;
-    $('form-error').hidden = false;
     $('form-error').textContent = json?.error || `setup refused (HTTP ${status})`;
     return;
   }
@@ -170,7 +169,6 @@ async function watchRun() {
   if (run.phase === 'running') return setTimeout(watchRun, 700);
   if (run.phase === 'done') return paneDone(run.result);
   $('run-title').textContent = 'Setup stopped';
-  $('run-error').hidden = false;
   $('run-error').textContent = run.error || 'unknown error';
   $('run-again').hidden = false;
   $('run-again').onclick = async () => {
@@ -190,6 +188,9 @@ function renderRun(run) {
     const mark = document.createElement('span');
     mark.className = 'state';
     mark.textContent = MARKS[s.state] || '·';
+    // The glyph is the whole of what says how a step went, and `⟳` read aloud
+    // is not a word. Naming it leaves the visual result exactly as it was.
+    mark.setAttribute('aria-label', s.state || 'waiting');
     li.appendChild(mark);
     li.appendChild(document.createTextNode(LABELS[s.key] || s.key));
     if (s.note) {
@@ -200,6 +201,14 @@ function renderRun(run) {
     }
     ul.appendChild(li);
   }
+  // One polite line rather than a live region over the whole list: the list is
+  // rebuilt from scratch on every poll, and announcing all six steps twice a
+  // second is not progress, it is noise. Only the step actually moving is said.
+  const now = run.steps.find(s => s.state === 'running')
+    || [...run.steps].reverse().find(s => s.state && s.state !== 'waiting');
+  const say = now ? `${LABELS[now.key] || now.key}: ${now.state}` : '';
+  const line = $('run-say');
+  if (line && line.textContent !== say) line.textContent = say;
 }
 
 function paneDone(result) {

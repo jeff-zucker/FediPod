@@ -22,9 +22,11 @@ let config = null;
 // list on the next pass — after which getElementById would not find it again.
 const MODERATION = $('do-moderation');
 
+// #say and #fatal live in the accessibility tree from load and hide by being
+// empty (see the stylesheet). Unhiding a live region and filling it in the same
+// task is the classic way to get no announcement at all.
 function say(text, cls = 'ok') {
   const el = $('say');
-  el.hidden = false;
   el.className = cls;
   el.textContent = text;
 }
@@ -40,7 +42,6 @@ async function write(path, body, done) {
 async function load() {
   const { status, json } = await api('/config');
   if (status === 409) {
-    $('fatal').hidden = false;
     $('fatal').textContent = 'This agent has no identity yet.';
     const a = document.createElement('a');
     a.href = '/admin/setup/';
@@ -49,7 +50,6 @@ async function load() {
     return;
   }
   if (status !== 200 || !json) {
-    $('fatal').hidden = false;
     $('fatal').textContent = json?.error || `could not read the record (HTTP ${status})`;
     return;
   }

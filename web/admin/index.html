@@ -41,6 +41,10 @@ body.adding #page, body.group #page { flex: 0 0 auto; }
    left the facts on screen with the attribute set. Everything here toggles with
    `hidden`, so it has to outrank them all. */
 [hidden] { display: none !important; }
+/* The two status regions are never `hidden`: a live region put into the
+   accessibility tree in the same task as its text does not reliably announce,
+   so they stay in it and disappear by being empty instead. */
+#say:empty, #fatal:empty { display: none; }
 h1, h2, h3 { color: var(--heading); }
 a { color: var(--link); }
 /* Every heading below the title is the same: h2 and h3 differ in structure,
@@ -142,8 +146,8 @@ pre { overflow-x: auto; background: #0001; padding: .6rem; border-radius: .3rem;
   <button type="button" id="bar-add" title="   Set up another actor on this machine, with its own pod">add new account</button>
 </nav>
 <div id="page">
-<p class="err" id="fatal" role="alert" hidden></p>
-<p aria-live="polite" id="say" hidden></p>
+<p class="err" id="fatal" role="alert"></p>
+<p aria-live="polite" id="say"></p>
 
 <!-- Every actor running on this machine. A stopped one is left out: there is
      no page there to open. Plain links — a top-level navigation sends no

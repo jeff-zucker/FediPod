@@ -33,6 +33,12 @@ button:disabled { opacity: .5; cursor: default; }
 .address { font-size: 1.2rem; font-weight: 600; word-break: break-all; }
 .warn { border-left: .25rem solid #c60; padding-left: .75rem; }
 .err { border-left: .25rem solid #b00020; padding-left: .75rem; color: #b00020; }
+/* Announced, not shown: the step list beside it already says this visually. */
+/* In the accessibility tree from load, hidden by being empty: a live region
+   added to the tree in the same task as its text does not announce. */
+#form-error:empty, #run-error:empty { display: none; }
+.sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 .steps { list-style: none; padding: 0; }
 .steps li { padding: .3rem 0; }
 .steps .state { display: inline-block; width: 1.6rem; }
@@ -85,7 +91,8 @@ button:disabled { opacity: .5; cursor: default; }
 <section id="pane-run" hidden>
   <h2 id="run-title">Setting up</h2>
   <ul class="steps" id="run-steps"></ul>
-  <p class="err" id="run-error" role="alert" hidden></p>
+  <p class="sr-only" id="run-say" role="status"></p>
+  <p class="err" id="run-error" role="alert"></p>
   <p><button id="run-again" title="   Try the step that failed again" hidden>Try again</button></p>
 </section>
 
@@ -149,7 +156,7 @@ button:disabled { opacity: .5; cursor: default; }
     <p>The handle and the pod cannot be changed afterwards. Everything else — display
       name, bio, pictures — you set in the client.</p>
 
-    <p class="err" id="form-error" role="alert" hidden></p>
+    <p class="err" id="form-error" role="alert"></p>
     <p><button type="submit" class="primary" id="submit" title="   Create it">Create it</button></p>
   </form>
 </section>
