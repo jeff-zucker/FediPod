@@ -1072,6 +1072,40 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   idem.stopRenewal();
 }
 
+// --- 5m-bis. commit() reports on writes that fired their own debounce ---
+{
+  const { PodStore } = await import(path.join(root, 'lib/store.mjs'));
+  const mk = (ok) => new PodStore({
+    storage: { base: 'https://p.example/st/', write: async () => ({ ok, retry: false, why: 'refused' }) },
+    log: () => {},
+  });
+
+  // Forced out by commit itself: this path always worked.
+  const forced = mk(false);
+  forced.write('contacts.json', { followers: [] });
+  check(await forced.commit() === false, 'commit reports a refused write it forced out itself');
+
+  // Fired on its own 300ms debounce BEFORE commit was called. `chain` waits for
+  // it but used to discard the result, so commit returned true for a document
+  // the pod had refused — and commit's caller is the drain, about to delete the
+  // pod's only copy of what that document describes.
+  const selfFired = mk(false);
+  selfFired.write('deadletter.json', [{ at: 'now' }]);
+  await new Promise(r => setTimeout(r, 400));            // let the debounce fire
+  check(selfFired.timers.size === 0, 'the debounce fired on its own, outside any commit');
+  check(await selfFired.commit() === false,
+    'and commit still reports the refusal rather than a clean sweep');
+
+  // A verdict is consumed once reported: one refusal must not condemn every
+  // later commit for the life of the process.
+  const recovering = new PodStore({
+    storage: { base: 'https://p.example/st/', write: async () => ({ ok: true }) }, log: () => {},
+  });
+  recovering.verdicts.set('deadletter.json', false);
+  check(await recovering.commit() === false, 'a recorded refusal is reported once');
+  check(await recovering.commit() === true, 'and cleared, so a later good commit is not condemned by it');
+}
+
 // --- 5n-bis. outbound delivery: bounded, and one drain at a time ---
 {
   const { Deliverer } = await import(path.join(root, 'lib/deliver.mjs'));
@@ -4229,15 +4263,16 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
       // Unparsable on purpose: a guaranteed rejection, so the item's only
       // record is the dead letter the store is about to be asked to keep.
       fetch: async () => ({ status: 200, text: async () => 'not json' }),
-      delete: async (u) => { deleted.push(u); },
+      delete: async (u) => { deleted.push(u); return true; },
       getJson: async () => null,
     },
     local: { writeNote: async () => {} },
     deliverer: { deliver: async () => {}, deliverToAll: async () => {} },
     publisher: { urls: {}, config: {} },
   });
-  check(intake15.strictCommit === true,
-    'state on another origin from the inbox means the drain must commit first');
+  check(intake15.strictCommit === undefined
+    && !/strictCommit/.test(fs.readFileSync(path.join(root, 'lib/intake.mjs'), 'utf8')),
+    'the drain commits before it deletes unconditionally — no same-origin exemption');
 
   refuse = true;
   await intake15.drain();
