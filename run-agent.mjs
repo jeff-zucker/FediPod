@@ -229,6 +229,15 @@ export class Agent {
     // came out bare. Pod state is the authority; this is the cache of it.
     this.recordHandle(config.handle);
 
+    // Said once, where the config is finally known. It cannot be checked at
+    // listen time — the server is up before any pod state is read — and it
+    // cannot be a refusal, because the operator may be mid-setup. The actual
+    // enforcement is per-request, in mastoapi's authorize path.
+    if (process.env.AP_ALLOWED_HOSTS && !config.uiPassword) {
+      this.log('WARNING: AP_ALLOWED_HOSTS is set and no UI password is — logins from those '
+        + 'addresses are refused until you run `activitypod passwd`');
+    }
+
     if (!act) return true;                   // reading only — see the note above
 
     // Exactly one agent may act on a pod (inbox drains are destructive

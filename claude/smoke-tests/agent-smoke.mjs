@@ -2462,6 +2462,54 @@ if (up) {
   check(st.getConfig()?.handle === 'b', 're-attaching the same tree keeps its cache');
 }
 
+// --- 8b4. no password + not this machine = no bearer ---
+{
+  const { MastoApi } = await import(path.join(root, 'lib/mastoapi.mjs'));
+  const { Authorities } = await import(path.join(root, 'lib/guard.mjs'));
+  const allowed = new Authorities(8030, 'me');
+  const st = new PodStore({ log: () => {} });
+  st.setConfig({ remotePod: 'https://p.example/', handle: 'me', name: 'me' });   // no uiPassword
+  const api = new MastoApi({
+    store: st, agent: { configured: () => true, store: st }, allowed,
+    host: 'me.localhost:8030', log: () => {},
+  });
+
+  const ask = async (host) => {
+    const res = { status: 0, body: null, headers: null,
+      writeHead(s, h) { this.status = s; this.headers = h; }, end(b) { this.body = b; } };
+    const req = Readable.from([]);
+    req.method = 'GET';
+    req.headers = { host };
+    await api.handle(req, res, '/oauth/authorize',
+      new URL('http://x/oauth/authorize?redirect_uri=urn:ietf:wg:oauth:2.0:oob'));
+    return res;
+  };
+
+  // Loopback: whoever reaches it IS the user, and the instant path is honest.
+  const local = await ask('localhost:8030');
+  check(local.status === 200 && /"code"/.test(local.body || ''),
+    'on loopback with no password, authorize still mints instantly');
+  const named = await ask('me.localhost:8030');
+  check(named.status === 200 && /"code"/.test(named.body || ''),
+    "and on this identity's own named origin");
+
+  // A tailnet name or reverse-proxy domain added through AP_ALLOWED_HOSTS is a
+  // different matter: anyone who reaches it would be handed a 90-day bearer for
+  // the whole facade, update_credentials included.
+  process.env.AP_ALLOWED_HOSTS = 'agent.tailnet.example';
+  allowed.rebuild();
+  const remote = await ask('agent.tailnet.example');
+  delete process.env.AP_ALLOWED_HOSTS;
+  allowed.rebuild();
+  check(remote.status === 403 && /passwd/.test(remote.body || ''),
+    `an exposed address with no password is refused, and told what to run (${remote.status})`);
+
+  // The one place the precondition is stated where it can be seen.
+  const ra = fs.readFileSync(path.join(root, 'run-agent.mjs'), 'utf8');
+  check(/AP_ALLOWED_HOSTS && !config\.uiPassword/.test(ra),
+    'and the agent says so at startup, once the config is known');
+}
+
 // --- 8c. real OAuth when a UI password is set ---
 {
   const { hashPassword } = await import(path.join(root, 'lib/mastoapi.mjs'));
