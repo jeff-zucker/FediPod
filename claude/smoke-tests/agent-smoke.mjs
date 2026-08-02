@@ -1072,6 +1072,31 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   idem.stopRenewal();
 }
 
+// --- 5f-bis. the unauthenticated probes are still this pod's traffic ---
+{
+  const { RemotePod } = await import(path.join(root, 'lib/remote.mjs'));
+  const pod = new RemotePod({ webId: 'https://p.example/profile/card#me' }, { log: () => {} });
+  check(pod.stats().probes === 0, 'probes are counted, so /status stops under-reporting by design');
+
+  // A cooldown armed by anything else silences them too: ten of these ride on
+  // every profile save, and a pod that asked for quiet is asking them as well.
+  pod.pausedUntil = Date.now() + 60_000;
+  let refused = false;
+  await pod.probe('https://p.example/ap/actor').catch(() => { refused = true; });
+  check(refused && pod.stats().probes === 0,
+    'and are refused inside the pod cooldown, without opening a socket');
+
+  const pub = fs.readFileSync(path.join(root, 'lib/publisher.mjs'), 'utf8');
+  check(/this\.remote\.probe\(u, i\)/.test(pub) && !/probeFetch = \(u, i\) => fetch/.test(pub),
+    'publisher probes through the pod rather than round the side of it');
+  // Still credential-free: it asks what a STRANGER sees, and answering that
+  // with our own credentials would answer a different question.
+  const rem = fs.readFileSync(path.join(root, 'lib/remote.mjs'), 'utf8');
+  const probeBody = rem.slice(rem.indexOf('async probe('), rem.indexOf('async fetch('));
+  check(/await fetch\(url, init\)/.test(probeBody) && !/session\.fetch/.test(probeBody),
+    'and still without credentials, which is the whole point of a probe');
+}
+
 // --- 5g-bis. a command you decline should not have acted already ---
 {
   const bin = fs.readFileSync(path.join(root, 'bin/activitypod.mjs'), 'utf8');
