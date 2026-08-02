@@ -1117,8 +1117,10 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   d.stop();
 
   const dsrc = fs.readFileSync(path.join(root, 'lib/deliver.mjs'), 'utf8');
-  check(/err\.retryAfterMs = retryAfterMs\(res\)/.test(dsrc),
-    'deliverNow carries what the server said instead of flattening it to a string');
+  check(/const ra = retryAfterMs\(res/.test(dsrc) && /if \(ra != null\) err\.retryAfterMs = ra/.test(dsrc),
+    'deliverNow carries a Retry-After only when the server actually sent one');
+  check(/retryAfterMs\(res, 24 \* 60 \* 60_000\)/.test(dsrc),
+    "and honours a long one rather than clipping it to the pod path's 30-minute ceiling");
   check(/0\.85 \+ Math\.random\(\) \* 0\.3/.test(dsrc),
     'and the ladder is jittered, so failures do not come back in lockstep');
 
@@ -1135,13 +1137,31 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     'a lease that cannot be READ is not treated as a lease nobody holds');
   check(writes === 0, 'and no speculative PUT is spent claiming it');
 
+  // A real 404 IS an answer: nobody holds it, so claim it. The stub reflects
+  // the write, or the confirming GET would 404 the acquire it just made.
+  let stored = null;
   const absent = new Lease({
     url: 'https://p.example/st/lease.json', log: () => {},
-    fetchImpl: async (_u, init) => (init?.method === 'PUT'
-      ? res(205, { etag: '"v1"' })
-      : res(404)),
+    fetchImpl: async (_u, init) => {
+      if (init?.method === 'PUT') { stored = init.body; return res(205, { etag: '"v1"' }); }
+      return stored ? res(200, { etag: '"v1"' }, stored) : res(404);
+    },
   });
-  check(await absent.acquire() === false || true, 'a genuine 404 still takes the normal path');
+  check(await absent.acquire() === true, 'a genuine 404 means nobody holds it, so it is claimed');
+  check(absent.heldUntil > Date.now() && absent.heldUntil <= Date.now() + 300_000,
+    'and heldUntil comes from the document actually written');
+
+  // A 200 carrying garbage is not a lease anybody holds — overwriting it is
+  // the repair, so it must not brick the agent into viewer mode forever.
+  let wrote = null;
+  const corrupt = new Lease({
+    url: 'https://p.example/st/lease.json', log: () => {},
+    fetchImpl: async (_u, init) => {
+      if (init?.method === 'PUT') { wrote = init.body; return res(205, { etag: '"v2"' }); }
+      return wrote ? res(200, { etag: '"v2"' }, wrote) : res(200, {}, 'not json at all');
+    },
+  });
+  check(await corrupt.acquire() === true, 'an unparsable lease document is repaired, not fatal');
 
   const stale = new Lease({
     url: 'https://p.example/st/lease.json', log: () => {},
@@ -1161,12 +1181,86 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   check(/typeof activity\.object === 'object'/.test(undo),
     'and only a TYPED non-Follow is dismissed as not ours');
   const create = isrc.slice(isrc.indexOf('async onCreate('), isrc.indexOf('async amplify('));
-  check(/getStatuses\(\)\.some\(x => x\.noteId === objectId\)/.test(create),
-    'onCreate skips the dereference for a note it already holds');
+  check(/x\.kind === 'timeline' \|\| x\.kind === 'mention'/.test(create),
+    'onCreate skips the dereference only for a note it has actually ingested');
+  check(!/some\(x => x\.noteId === objectId\)\s*\)/.test(create),
+    "and not for a tag-feed placeholder, which has no note, notification or reply entry");
   check(create.indexOf('amplify(') > create.indexOf('ingestNote('),
     'while a group still reaches amplify, which is idempotent on its own');
   check(/MAX_ITEM_BYTES/.test(isrc) && /size > MAX_ITEM_BYTES/.test(isrc),
     'an oversized inbox item is dead-lettered on the size the listing already gave us');
+}
+
+// --- 5a-ter. the regressions the first cut of those fixes introduced ---
+{
+  const { Deliverer } = await import(path.join(root, 'lib/deliver.mjs'));
+  const { Lease } = await import(path.join(root, 'lib/lease.mjs'));
+  const res = (status, headers = {}, body = '') => ({
+    status, headers: { get: (h) => headers[h.toLowerCase()] ?? null }, text: async () => body,
+  });
+  const mkQueue = (q) => ({ q, getQueue() { return JSON.parse(JSON.stringify(this.q)); }, setQueue(v) { this.q = v; } });
+
+  // A 410 Gone is about ONE recipient. Cooling the whole host for it starved
+  // every other follower on that instance — which on a big one is most of them.
+  const store = mkQueue([
+    { inbox: 'https://big.example/users/gone/inbox', activity: { type: 'Create' }, attempts: 1, nextAt: 0 },
+    { inbox: 'https://big.example/users/alice/inbox', activity: { type: 'Create' }, attempts: 1, nextAt: 0 },
+  ]);
+  const seen = [];
+  const d = new Deliverer({ store, keyId: 'k', rsaPrivate: null, log: () => {}, passive: true });
+  d.deliverNow = async (inbox) => {
+    seen.push(inbox);
+    if (inbox.includes('gone')) { const e = new Error('410'); e.status = 410; throw e; }
+  };
+  await d.drainQueue();
+  check(seen.some(u => u.includes('alice')),
+    'a per-recipient 410 does not cool the host — the healthy follower is still delivered to');
+
+  // A 503 with NO Retry-After must keep the exponential ladder. Defaulting to
+  // 60s collapsed it, and 512 minutes became one — the hammering shape.
+  const s2 = mkQueue([{ inbox: 'https://down.example/inbox', activity: { type: 'Create' }, attempts: 6, nextAt: 0 }]);
+  const d2 = new Deliverer({ store: s2, keyId: 'k', rsaPrivate: null, log: () => {}, passive: true });
+  d2.deliverNow = async () => { const e = new Error('503'); e.status = 503; throw e; };
+  await d2.drainQueue();
+  const waited = s2.q[0].nextAt - Date.now();
+  check(waited > 60 * 60_000,
+    `a header-less 503 keeps the ladder (${Math.round(waited / 60000)} min, not a flat 60s)`);
+  d.stop(); d2.stop();
+
+  // Deferred siblings must ADVANCE, or only the item that opened the socket
+  // ever climbs the ladder and a queue of K takes K times as long to give up.
+  const dsrc = fs.readFileSync(path.join(root, 'lib/deliver.mjs'), 'utf8');
+  const cool = dsrc.slice(dsrc.indexOf('if (until && until > now)'), dsrc.indexOf('      try {'));
+  check(/item\.attempts \+= 1/.test(cool) && /MAX_ATTEMPTS/.test(cool),
+    'a cooled sibling advances its own ladder and can still be given up on');
+  check(dsrc.indexOf('this._cooling.set(host') < dsrc.indexOf('giving up on'),
+    'and the host is cooled before the give-up test, not after it');
+  check(/this\._cooling \|\|= new Map\(\)/.test(dsrc),
+    'the breaker outlives one drain, so a Retry-After reaches items not yet due');
+
+  // The lease sentinel must not read as "somebody else holds it".
+  const flaky = new Lease({
+    url: 'https://p.example/st/lease.json', log: () => {},
+    fetchImpl: async (_u, init) => (init?.method === 'PUT' ? res(412) : res(500)),
+  });
+  flaky.etag = '"v1"';
+  flaky.heldUntil = Date.now() + 300_000;                // still ours by the clock
+  let lost = false;
+  flaky.onLost = () => { lost = true; };
+  const kept = await flaky.renewOnce();
+  check(kept === true && !lost && !flaky.stopped,
+    'a pod GET we could not make is not a takeover — the agent keeps its lease');
+
+  // And the destructive path can ask, rather than waiting up to ~117s for the
+  // next renewal tick to notice the TTL passed.
+  const held = new Lease({ url: 'x', fetchImpl: async () => res(404), log: () => {} });
+  held.heldUntil = Date.now() + 60_000;
+  check(held.stillHeld() === true, 'stillHeld is true inside the TTL');
+  held.heldUntil = Date.now() - 1;
+  check(held.stillHeld() === false, 'and false once it has passed');
+  const isrc = fs.readFileSync(path.join(root, 'lib/intake.mjs'), 'utf8');
+  check(/this\.lease && !this\.lease\.stillHeld\(\)/.test(isrc),
+    'and the drain asks before it deletes anything from the pod');
 }
 
 // --- 5b-bis. a password does not go out in clear over a real network ---
@@ -1835,12 +1929,22 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
   // A follow recorded before followId was kept has none to match; requiring one
   // would strand it.
+  // An Undo that identifies NOTHING is refused outright, even against a record
+  // with no followId. Those records are exactly what reconcileFollowers writes
+  // when recovering a restored machine, so accepting an object-less Undo would
+  // let anyone evict every recovered follower. Mastodon sends the id.
   const legacy = mk({ followers: [{ actor: 'https://them.example/u/z' }], following: [] });
   await legacy.intake.onUndo(
     { type: 'Undo', actor: 'https://them.example/u/z', object: { type: 'Follow' } },
     'https://them.example/u/z');
-  check(legacy.state.contacts.followers.length === 0,
-    'a follow from before followId was recorded can still be undone');
+  check(legacy.state.contacts.followers.length === 1,
+    'an Undo naming no Follow at all evicts nobody, even a record with no followId');
+  const legacyNamed = mk({ followers: [{ actor: 'https://them.example/u/z' }], following: [] });
+  await legacyNamed.intake.onUndo(
+    { type: 'Undo', actor: 'https://them.example/u/z', object: { type: 'Follow', id: 'https://them.example/f/old' } },
+    'https://them.example/u/z');
+  check(legacyNamed.state.contacts.followers.length === 0,
+    'while one that names a Follow still undoes a record from before followId was kept');
 }
 
 // --- 5m-bis. commit() reports on writes that fired their own debounce ---

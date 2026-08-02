@@ -292,7 +292,7 @@ export class Agent {
     // search/deref; start() (draining) is active-only.
     this.intake = new Intake({
       config, urls: this.urls, remote: this.remote, local: this.local, store: this.store,
-      deliverer: this.deliverer, publisher: this.publisher, log: this.log,
+      deliverer: this.deliverer, publisher: this.publisher, log: this.log, lease: this.lease,
     });
     if (this.viewer) {
       this.startViewer();
