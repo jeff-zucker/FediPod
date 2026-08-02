@@ -85,6 +85,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { apRoot, profilesDir, identityHomes, isLegacyRoot, CURRENT_ROOT, tildify, rootOf,
   readRoot, writeRoot, defaultProfile, profileHome, rootHoldsIdentity, ROOT_FILE,
   recordLastUsed, writeJsonAtomic } from '../lib/home.mjs';
+import { insecureUrlReason } from '../lib/safefetch.mjs';
 
 const args = process.argv.slice(2);
 const cmd = args[0];
@@ -460,6 +461,15 @@ if (cmd === 'up') {
   if (!newAccount && !pod) { console.error('no pod given'); process.exit(2); }
 
   const issuer = flag('issuer') || await ask('Solid identity provider', 'https://solidcommunity.net');
+  // Before the password is asked for, let alone sent. The issuer is where it
+  // goes and the pod is where the credential it buys is used, so an http:
+  // address off this machine puts both in clear. Loopback is exempt: it never
+  // reaches a network interface, and a pod on this machine is an ordinary way
+  // to run this.
+  for (const [url, what] of [[issuer, 'identity provider address'], [pod, 'pod address']]) {
+    const bad = insecureUrlReason(url, what);
+    if (bad) { console.error(bad); process.exit(2); }
+  }
   const email = flag('email') || await ask(`account email at ${new URL(issuer).host}`);
   const handle = flag('handle') || await ask('handle (the name in your address; permanent)');
   if (!email || !handle) {
@@ -753,6 +763,10 @@ if (cmd === 'up') {
   }
   console.log(`copied ${notes} note(s)`);
 
+  if (/^https?:/i.test(target || '')) {
+    const bad = insecureUrlReason(target, 'private-data address');
+    if (bad) { console.error(bad); process.exit(2); }
+  }
   if (target) cred.privateRoot = target; else delete cred.privateRoot;
   writeJsonAtomic(credPath, cred);
   console.log(`\nprivate data now: ${where(cred)}`);

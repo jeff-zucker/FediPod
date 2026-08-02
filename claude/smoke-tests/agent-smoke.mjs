@@ -1072,6 +1072,57 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   idem.stopRenewal();
 }
 
+// --- 5b-bis. a password does not go out in clear over a real network ---
+{
+  const { insecureUrlReason } = await import(path.join(root, 'lib/safefetch.mjs'));
+  const { setupInputError } = await import(path.join(root, 'lib/setup.mjs'));
+
+  // Loopback cannot leak: it never reaches a network interface, so plaintext
+  // there crosses nothing — and a pod on this machine is a documented way to
+  // run this, `state --to http://localhost:8000/…` included.
+  for (const ok of ['https://you.solidcommunity.net/', 'http://localhost:8000/dk-pod/',
+    'http://127.0.0.1:3000/', 'http://jeff.localhost:8030/', 'http://[::1]:3000/']) {
+    check(insecureUrlReason(ok, 'pod address') === null, `allowed: ${ok}`);
+  }
+  // A LAN address is a real wire, shared with everything else on it — the
+  // mistake this is actually here to catch, since it looks local and is not.
+  for (const no of ['http://192.168.1.50:3000/', 'http://10.0.0.7/', 'http://pod.example.org/']) {
+    check(!!insecureUrlReason(no, 'pod address'), `refused: ${no}`);
+  }
+  check(/ftp/.test(insecureUrlReason('ftp://pod.example.org/', 'pod address') || ''),
+    'and a scheme that is neither http nor https says so');
+  check(insecureUrlReason(undefined, 'pod address') === null,
+    'an absent address is not this check’s business');
+
+  // Refused BEFORE the password is asked for, not after it has been sent.
+  const base = { handle: 'you', mode: 'existing', email: 'you@example.org' };
+  // No password supplied here on purpose: the scheme is refused ahead of the
+  // "password is required" check, so the answer is about the address rather
+  // than about a field the user has not reached yet.
+  const noPw = setupInputError({ ...base, issuer: 'http://idp.example.org', pod: 'https://ok.example/' });
+  check(/identity provider/.test(noPw || '') && noPw !== 'the account password is required',
+    'an http identity provider is refused before the password is even required');
+  const badPod = setupInputError({ ...base, issuer: 'https://ok.example', password: 'x', pod: 'http://pod.example.org/' });
+  check(/pod address/.test(badPod || ''), 'and an http pod address is refused too');
+  check(setupInputError({ ...base, issuer: 'https://ok.example', password: 'x', pod: 'https://ok.example/' }) === null,
+    'while an ordinary https setup passes');
+  check(setupInputError({ ...base, issuer: 'http://localhost:3000', password: 'x', pod: 'http://localhost:3000/me/' }) === null,
+    'and so does a wholly local one');
+
+  // The private half is timelines, contacts and notifications; a file: root has
+  // no transport to secure and must not be caught by this.
+  check(setupInputError({ ...base, issuer: 'https://ok.example', password: 'x', pod: 'https://ok.example/',
+    privateRoot: 'file:///home/you/.solid-activitypub/private/' }) === null,
+    'a file: private root is a directory, not a transport');
+  check(!!setupInputError({ ...base, issuer: 'https://ok.example', password: 'x', pod: 'https://ok.example/',
+    privateRoot: 'http://192.168.1.50/private/' }),
+    'but an http one off this machine is refused');
+
+  const bin = fs.readFileSync(path.join(root, 'bin/activitypod.mjs'), 'utf8');
+  check((bin.match(/insecureUrlReason/g) || []).length >= 2,
+    'the CLI checks it too — setup and `state --to` both take these addresses');
+}
+
 // --- 5c-bis. the answers to a Follow that were dropped on the floor ---
 {
   const { Intake } = await import(path.join(root, 'lib/intake.mjs'));
