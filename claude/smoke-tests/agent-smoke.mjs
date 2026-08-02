@@ -1072,6 +1072,81 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   idem.stopRenewal();
 }
 
+// --- 5l-bis. a stranger cannot spend our requests, or evict our followers ---
+{
+  const { Intake } = await import(path.join(root, 'lib/intake.mjs'));
+  const mk = (contacts) => {
+    const state = { contacts };
+    const fetched = [];
+    const intake = new Intake({
+      config: {}, urls: { inbox: 'https://p.example/in/', actor: 'https://p.example/ap/actor', notes: 'https://p.example/ap/notes/' },
+      remote: {}, local: {},
+      store: {
+        read: (n, d) => d, write: () => {},
+        getContacts: () => JSON.parse(JSON.stringify(state.contacts)),
+        setContacts: (c) => { state.contacts = c; },
+        getStatuses: () => [], getActors: () => ({}), getRequests: () => [], setRequests: () => {},
+        isBlocked: () => false, addNotification: () => {}, addDeadLetter: () => {},
+      },
+      deliverer: {}, publisher: { publishCollections: async () => {} }, log: () => {},
+    });
+    intake.fetchAP = async (u) => { fetched.push(u); return null; };
+    return { intake, state, fetched };
+  };
+
+  // Update{actor} from someone we have never heard of. onDelete has refused
+  // this since the day it was written; onUpdate did not, so any of the many
+  // Update activities Mastodon broadcasts — or one anybody Appends by hand —
+  // bought a signed GET to a host of the sender's choosing, and because the
+  // failure throws rather than returning a rejection, five of them.
+  const stranger = mk({ followers: [], following: [] });
+  const verdict = await stranger.intake.onUpdate(
+    { type: 'Update', actor: 'https://victim.example/u/x', object: 'https://victim.example/u/x' },
+    'https://victim.example/u/x');
+  check(stranger.fetched.length === 0,
+    'an Update for an actor we do not know costs no outbound request');
+  check(verdict === undefined, 'and is dropped rather than retried five times');
+
+  // Someone we DO know still gets refetched — that is the whole point of it.
+  const knownOne = mk({ followers: [{ actor: 'https://friend.example/u/y' }], following: [] });
+  await knownOne.intake.onUpdate(
+    { type: 'Update', actor: 'https://friend.example/u/y', object: 'https://friend.example/u/y' },
+    'https://friend.example/u/y').catch(() => {});
+  check(knownOne.fetched.length === 1, 'an Update from a follower we hold is still verified at its origin');
+
+  // Undo{Follow} with no object.id. The mismatch guard read `undoneId &&`, so
+  // omitting the id skipped it entirely — and this path dereferences nothing,
+  // so there was no origin to disagree. Three lines, any follower, evicted.
+  const held = mk({ followers: [{ actor: 'https://them.example/u/z', followId: 'https://them.example/f/1' }], following: [] });
+  await held.intake.onUndo(
+    { type: 'Undo', actor: 'https://them.example/u/z', object: { type: 'Follow' } },
+    'https://them.example/u/z');
+  check(held.state.contacts.followers.length === 1,
+    'an Undo that names no Follow evicts nobody');
+
+  const wrong = mk({ followers: [{ actor: 'https://them.example/u/z', followId: 'https://them.example/f/1' }], following: [] });
+  await wrong.intake.onUndo(
+    { type: 'Undo', actor: 'https://them.example/u/z', object: { type: 'Follow', id: 'https://them.example/f/OTHER' } },
+    'https://them.example/u/z');
+  check(wrong.state.contacts.followers.length === 1, 'nor does one naming a different Follow');
+
+  const right = mk({ followers: [{ actor: 'https://them.example/u/z', followId: 'https://them.example/f/1' }], following: [] });
+  await right.intake.onUndo(
+    { type: 'Undo', actor: 'https://them.example/u/z', object: { type: 'Follow', id: 'https://them.example/f/1' } },
+    'https://them.example/u/z');
+  check(right.state.contacts.followers.length === 0,
+    'and a genuine unfollow, naming the Follow we hold, still works');
+
+  // A follow recorded before followId was kept has none to match; requiring one
+  // would strand it.
+  const legacy = mk({ followers: [{ actor: 'https://them.example/u/z' }], following: [] });
+  await legacy.intake.onUndo(
+    { type: 'Undo', actor: 'https://them.example/u/z', object: { type: 'Follow' } },
+    'https://them.example/u/z');
+  check(legacy.state.contacts.followers.length === 0,
+    'a follow from before followId was recorded can still be undone');
+}
+
 // --- 5m-bis. commit() reports on writes that fired their own debounce ---
 {
   const { PodStore } = await import(path.join(root, 'lib/store.mjs'));
@@ -2285,6 +2360,28 @@ if (up) {
   check(isPrivateAddress('127.0.0.1') && isPrivateAddress('169.254.169.254')
     && isPrivateAddress('::1') && !isPrivateAddress('93.184.216.34'),
     'address classifier: private vs public');
+
+  // The v4-mapped spelling that actually ARRIVES. The filter matched only the
+  // dotted form, which the WHATWG URL parser never produces: it normalises an
+  // IPv6 literal to compressed hex, so every private v4 range was reachable by
+  // writing it as `[::ffff:7f00:1]`.
+  check(new URL('http://[::ffff:127.0.0.1]/x').hostname === '[::ffff:7f00:1]',
+    'a v4-mapped literal reaches the filter as compressed hex, never as a dotted quad');
+  const mapped = [
+    ['::ffff:7f00:1', '127.0.0.1'], ['::ffff:a00:1', '10.0.0.1'],
+    ['::ffff:c0a8:1', '192.168.0.1'], ['::ffff:ac10:1', '172.16.0.1'],
+    ['::ffff:a9fe:a9fe', '169.254.169.254'],
+  ];
+  check(mapped.every(([hex]) => isPrivateAddress(hex)),
+    `every private v4 range is caught in its mapped-hex spelling too (${mapped.map(m => m[1]).join(', ')})`);
+  check(isPrivateAddress('::ffff:127.0.0.1'), 'and the dotted spelling still is');
+  check(!isPrivateAddress('::ffff:808:808') && !isPrivateAddress('2606:4700::1111'),
+    'while a mapped PUBLIC address, and ordinary v6, still pass');
+  check(isPrivateAddress('fe80::1') && isPrivateAddress('fe9f::1')
+    && isPrivateAddress('ff02::1') && isPrivateAddress('fec0::1'),
+    'fe80::/10 is matched across all four nibbles, and multicast and site-local are refused');
+  check(await assertPublicUrl('http://[::ffff:7f00:1]:8030/status').then(() => false).catch(() => true),
+    'a URL naming loopback in mapped-hex form is refused');
   const pinned = await assertPublicUrl('https://mastodon.social/api/v1/instance').catch(() => null);
   check(!!pinned?.address && !isPrivateAddress(pinned.address),
     `SSRF guard allows a public host and returns its address to pin (${pinned?.address || 'none'})`);
@@ -2895,12 +2992,29 @@ const NOTE = 'https://a.example/u/ann/n/1';
     'an upstream edit is refetched at the origin and rewritten locally');
 }
 {
+  // A follower, because that is the only way an Update{Person} for them
+  // legitimately arrives — and, since onUpdate gained onDelete's known-actor
+  // guard, the only way it is acted on rather than dropped unread.
   const p = personIntake({
+    followers: [{ actor: MEM_A, inbox: MEM_A + '/inbox' }],
     origin: { [MEM_A]: { status: 200, body: { id: MEM_A, type: 'Person', preferredUsername: 'ann', name: 'Ann Renamed' } } },
   });
   await p.intake.onUpdate({ type: 'Update', object: { id: MEM_A } }, MEM_A);
   check(p.st.getActors()[MEM_A]?.name === 'Ann Renamed',
     'Update{Person} refreshes the cached profile instead of going stale forever');
+}
+{
+  // The same activity from someone we have never heard of. Mastodon broadcasts
+  // a great many Updates, and anyone at all can Append one naming any host.
+  let asked = 0;
+  const p = personIntake({
+    origin: { [MEM_A]: { status: 200, body: { id: MEM_A, type: 'Person', name: 'Whoever' } } },
+  });
+  const realFetch = p.intake.deliverer.signedFetch;
+  p.intake.deliverer.signedFetch = async (u) => { asked++; return realFetch(u); };
+  await p.intake.onUpdate({ type: 'Update', object: { id: MEM_A } }, MEM_A);
+  check(asked === 0 && !p.st.getActors()[MEM_A],
+    `an Update{Person} for someone we never knew costs no request (asked ${asked})`);
 }
 {
   const parent = gUrls.notes + 'p1';
