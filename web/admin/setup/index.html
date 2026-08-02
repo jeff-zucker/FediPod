@@ -47,9 +47,9 @@ button:disabled { opacity: .5; cursor: default; }
 
 <nav id="bar">
   <span class="name">Solid ActivityPub</span>
-  <button type="button" id="bar-fediverse">visit account</button>
-  <button type="button" id="bar-manage">manage account</button>
-  <button type="button" id="bar-add" aria-current="page">add new account</button>
+  <button type="button" id="bar-fediverse" title="   Open the client and read your timeline">visit account</button>
+  <button type="button" id="bar-manage" title="   The record: what this actor is, and what you can do to it">manage account</button>
+  <button type="button" id="bar-add" title="   Set up another actor on this machine, with its own pod" aria-current="page">add new account</button>
 </nav>
 <div id="page">
 <p class="sub" id="strap">setting up…</p>
@@ -83,7 +83,7 @@ button:disabled { opacity: .5; cursor: default; }
   <h2 id="run-title">Setting up</h2>
   <ul class="steps" id="run-steps"></ul>
   <p class="err" id="run-error" hidden></p>
-  <p><button id="run-again" hidden>Try again</button></p>
+  <p><button id="run-again" title="   Try the step that failed again" hidden>Try again</button></p>
 </section>
 
 <section id="pane-form" hidden>
@@ -147,7 +147,7 @@ button:disabled { opacity: .5; cursor: default; }
       name, bio, pictures — you set in the client.</p>
 
     <p class="err" id="form-error" hidden></p>
-    <p><button type="submit" class="primary" id="submit">Create it</button></p>
+    <p><button type="submit" class="primary" id="submit" title="   Create it">Create it</button></p>
   </form>
 </section>
 

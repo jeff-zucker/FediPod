@@ -2863,6 +2863,20 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
     'the client wrapper names its own source in the markup, not from script');
   check(/<script src="client\.js">/.test(wrapper),
     'and loads the script that pins it to this agent\'s actor');
+  // Every button says briefly what it does, and every title starts with three
+  // spaces — the tooltip appears under the pointer, so without them the first
+  // word sits behind the cursor.
+  for (const page of ['/admin/', '/admin/setup/', '/admin/client/']) {
+    const html = await g(page).then(r => r.text());
+    const buttons = html.match(/<button[^>]*>/g) || [];
+    const untitled = buttons.filter(b => !/\btitle="/.test(b));
+    const unpadded = buttons.filter(b => /\btitle="(?!   )/.test(b));
+    check(buttons.length > 0 && !untitled.length,
+      `every button on ${page} has a help title (${buttons.length - untitled.length}/${buttons.length})`);
+    check(!unpadded.length,
+      `and every one of them starts with three spaces, clear of the pointer (${page})`);
+  }
+
   const pin = await g('/admin/client/client.js').then(r => r.text());
   check(/info\?\.uri === status\.actor/.test(pin),
     'which matches on the actor URI — "who logged in at this origin" is a different question');

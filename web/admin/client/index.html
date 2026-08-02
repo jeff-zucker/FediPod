@@ -26,9 +26,9 @@ body { font: 1rem/1.5 system-ui, sans-serif; margin: 0; height: 100dvh;
      which is why framing it needs nothing opened beyond frame-ancestors 'self'. -->
 <nav id="bar">
   <span class="name">Solid ActivityPub</span>
-  <button type="button" id="bar-fediverse" aria-current="page">visit account</button>
-  <button type="button" id="bar-manage">manage account</button>
-  <button type="button" id="bar-add">add new account</button>
+  <button type="button" id="bar-fediverse" title="   Open the client and read your timeline" aria-current="page">visit account</button>
+  <button type="button" id="bar-manage" title="   The record: what this actor is, and what you can do to it">manage account</button>
+  <button type="button" id="bar-add" title="   Set up another actor on this machine, with its own pod">add new account</button>
 </nav>
 
 <iframe id="client" src="/" title="fediverse client"></iframe>

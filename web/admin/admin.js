@@ -313,9 +313,12 @@ function row(text, sub, actions) {
     span.appendChild(small);
   }
   li.appendChild(span);
-  for (const [label, run] of actions) {
+  for (const [label, run, hint] of actions) {
     const b = document.createElement('button');
     b.textContent = label;
+    // Three leading spaces: the tooltip appears under the pointer, and without
+    // them the first word sits behind the cursor.
+    if (hint) b.title = `   ${hint}`;
     b.addEventListener('click', async () => { b.disabled = true; await run(); refreshGroup(); });
     li.appendChild(b);
   }
@@ -334,13 +337,13 @@ async function refreshGroup() {
     ['/members', '/requests', '/pending', '/announced'].map(p => api(p).then(r => r.json || {})));
 
   fill('requests', 'requests-count', requests.requests || [], (r) => row(r.actor, r.at, [
-    ['Admit', () => write('/admit', { actor: r.actor }, 'admitted')],
-    ['Refuse', () => write('/refuse', { actor: r.actor }, 'refused')],
+    ['Admit', () => write('/admit', { actor: r.actor }, 'admitted'), 'Let them in — they become a member'],
+    ['Refuse', () => write('/refuse', { actor: r.actor }, 'refused'), 'Turn this request down; they may ask again'],
   ]));
 
   fill('pending', 'pending-count', pending.pending || [], (p) => row(p.noteId, `${p.actor} · ${p.at}`, [
-    ['Carry it', () => write('/approve', { noteId: p.noteId }, 'carried')],
-    ['Decline', () => write('/decline', { noteId: p.noteId }, 'declined')],
+    ['Carry it', () => write('/approve', { noteId: p.noteId }, 'carried'), 'Announce this post to every member'],
+    ['Decline', () => write('/decline', { noteId: p.noteId }, 'declined'), 'Do not carry it — the post stays up on its author\u2019s pod'],
   ]));
 
   // A queue nothing can arrive in is not an empty list, it is a list that does
@@ -352,14 +355,14 @@ async function refreshGroup() {
     m.handle || m.actor, m.muted ? 'muted — their posts are not carried' : null,
     [
       m.muted
-        ? ['Unmute', () => write('/unmute', { actor: m.actor }, 'unmuted')]
-        : ['Mute', () => write('/mute', { actor: m.actor }, 'muted')],
-      ['Eject', () => write('/eject', { actor: m.actor }, 'ejected')],
+        ? ['Unmute', () => write('/unmute', { actor: m.actor }, 'unmuted'), 'Carry their posts again']
+        : ['Mute', () => write('/mute', { actor: m.actor }, 'muted'), 'Stop carrying their posts; they stay a member'],
+      ['Eject', () => write('/eject', { actor: m.actor }, 'ejected'), 'Remove them and tell their server; also mutes'],
     ]));
 
   fill('announced', 'announced-count', announced.announced || [], (a) => row(
     a.noteId, `${a.actor} · ${a.announcedAt}`,
-    [['Retract', () => write('/retract', { noteId: a.noteId }, 'retracted')]]));
+    [['Retract', () => write('/retract', { noteId: a.noteId }, 'retracted'), 'Un-say this announcement to everyone it reached']]));
 }
 
 // ---- upkeep ----

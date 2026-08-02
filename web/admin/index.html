@@ -120,9 +120,9 @@ pre { overflow-x: auto; background: #0001; padding: .6rem; border-radius: .3rem;
 <!-- The same bar the client view carries: one thing, two views. -->
 <nav id="bar">
   <span class="name">Solid ActivityPub</span>
-  <button type="button" id="bar-fediverse">visit account</button>
-  <button type="button" id="bar-manage" aria-current="page">manage account</button>
-  <button type="button" id="bar-add">add new account</button>
+  <button type="button" id="bar-fediverse" title="   Open the client and read your timeline">visit account</button>
+  <button type="button" id="bar-manage" title="   The record: what this actor is, and what you can do to it" aria-current="page">manage account</button>
+  <button type="button" id="bar-add" title="   Set up another actor on this machine, with its own pod">add new account</button>
 </nav>
 <div id="page">
 <p class="err" id="fatal" hidden></p>
@@ -190,8 +190,8 @@ pre { overflow-x: auto; background: #0001; padding: .6rem; border-radius: .3rem;
     </fieldset>
 
     <p>
-      <button type="submit" id="new-actor-go" class="primary">Create</button>
-      <button type="button" id="new-actor-cancel">Cancel</button>
+      <button type="submit" id="new-actor-go" title="   Create the account, the pod and the actor" class="primary">Create</button>
+      <button type="button" id="new-actor-cancel" title="   Change nothing and close">Cancel</button>
     </p>
   </form>
 
@@ -202,22 +202,22 @@ pre { overflow-x: auto; background: #0001; padding: .6rem; border-radius: .3rem;
   <dl id="facts"></dl>
   <!-- Declared here, and render() puts it beside the kind — the row it belongs
        to is generated, so this is the only place it can be written down. -->
-  <button id="do-moderation" class="inline" hidden>Moderation options</button>
+  <button id="do-moderation" title="   Who may join this group, and what it carries" class="inline" hidden>Moderation options</button>
 </section>
 
 <section id="pane-upkeep" hidden>
   <h2><span class="hlabel">Upkeep</span>
-    <button id="do-drain" class="inline">Drain the inbox</button>
-    <button id="do-rebuild" class="inline">Recover posts</button>
-    <button id="do-log" class="inline">Show the log</button>
-    <button id="do-deadletter" class="inline">Show dead letters</button>
+    <button id="do-drain" title="   Fetch and handle whatever is waiting in the inbox now" class="inline">Drain the inbox</button>
+    <button id="do-rebuild" title="   Put back posts this machine lost, from what the pod still holds" class="inline">Recover posts</button>
+    <button id="do-log" title="   This agent's recent log lines" class="inline">Show the log</button>
+    <button id="do-deadletter" title="   Deliveries that failed for good and were set aside" class="inline">Show dead letters</button>
   </h2>
   <h3><span class="hlabel">Lifecycle</span>
-    <button id="do-park" class="inline" data-confirm="park">Park</button>
-    <button id="do-revive" class="inline" data-confirm="revive">Revive</button>
-    <button id="do-rotate-key" class="inline" data-confirm="rotate-key">Rotate the signing key</button>
-    <button id="do-move" class="inline" data-confirm="move">Move</button>
-    <button id="do-retire" class="inline danger" data-confirm="retire">Retire</button>
+    <button id="do-park" title="   Stop the mail but keep the handle — Revive undoes it" class="inline" data-confirm="park">Park</button>
+    <button id="do-revive" title="   Open the inbox again and re-follow everyone Park unfollowed" class="inline" data-confirm="revive">Revive</button>
+    <button id="do-rotate-key" title="   Replace the signing key and tell other servers the new one" class="inline" data-confirm="rotate-key">Rotate the signing key</button>
+    <button id="do-move" title="   Hand your followers to another account; this handle redirects" class="inline" data-confirm="move">Move</button>
+    <button id="do-retire" title="   End this identity for good — a Delete, then a Tombstone" class="inline danger" data-confirm="retire">Retire</button>
   </h3>
 
 </section>
@@ -253,14 +253,14 @@ pre { overflow-x: auto; background: #0001; padding: .6rem; border-radius: .3rem;
     machine that has been off collects them. The agent is working through them oldest first
     and will get there on its own — this is only here if you would rather not wait.</p>
   <p>
-    <button id="inbox-keep">Keep everything</button>
+    <button id="inbox-keep" title="   Keep everything and let the agent work through it">Keep everything</button>
     <label for="inbox-before">or discard content older than</label>
     <select id="inbox-before">
       <option value="7">7 days</option>
       <option value="30" selected>30 days</option>
       <option value="90">90 days</option>
     </select>
-    <button id="inbox-prune" class="primary">Discard it</button>
+    <button id="inbox-prune" title="   Discard content older than the chosen age; keep the bookkeeping" class="primary">Discard it</button>
   </p>
   <p class="hint">Discarding drops posts, not bookkeeping: follows, unfollows, acceptances
     and deletions in that period are still applied, so your follower list stays right and
@@ -274,15 +274,15 @@ pre { overflow-x: auto; background: #0001; padding: .6rem; border-radius: .3rem;
      the window and closes it. It floats rather than opening at the foot of the
      page, so it never pushes the line you are reading out from under you. -->
 <div id="win" hidden>
-  <div id="win-bar"><span id="win-title"></span><button type="button" id="win-close" aria-label="Close">✕</button></div>
+  <div id="win-bar"><span id="win-title"></span><button type="button" id="win-close" title="   Close this panel" aria-label="Close">✕</button></div>
   <div id="win-body">
 <div id="moderation" hidden>
   <fieldset>
     <legend>Join request moderation</legend>
     <p id="joins-state" class="muted"></p>
     <p>
-      <button id="joins-open">Let anyone join</button>
-      <button id="joins-approve">Approve each request</button>
+      <button id="joins-open" title="   Anyone who follows becomes a member at once">Let anyone join</button>
+      <button id="joins-approve" title="   Hold each join request until you answer it">Approve each request</button>
     </p>
   </fieldset>
 
@@ -290,8 +290,8 @@ pre { overflow-x: auto; background: #0001; padding: .6rem; border-radius: .3rem;
     <legend>Post moderation</legend>
     <p id="review-state" class="muted"></p>
     <p>
-      <button id="review-off">Carry members' posts at once</button>
-      <button id="review-on">Hold them for review</button>
+      <button id="review-off" title="   Carry members' posts as they arrive">Carry members' posts at once</button>
+      <button id="review-on" title="   Hold every member post until you approve it">Hold them for review</button>
     </p>
   </fieldset>
 </div>
@@ -321,9 +321,9 @@ pre { overflow-x: auto; background: #0001; padding: .6rem; border-radius: .3rem;
       replaced with a Tombstone, and this agent will refuse to start again for this pod. Your
       posts and RDF stay on the pod; the identity does not come back.</p>
     <p>Two things that are not this, and can be done from here:
-      <button type="button" id="go-park" class="inline">Park it instead</button>
+      <button type="button" id="go-park" title="   Park instead: keeps the handle, just stops the mail" class="inline">Park it instead</button>
       keeps the handle resolving and just stops the mail, and Revive undoes it.
-      <button type="button" id="go-move" class="inline">Move it instead</button>
+      <button type="button" id="go-move" title="   Move instead: hands your followers to another account" class="inline">Move it instead</button>
       hands your followers to another account.</p>
     <label for="confirm-handle">Type the handle to confirm</label>
     <input type="text" id="confirm-handle" autocomplete="off">
@@ -342,8 +342,8 @@ pre { overflow-x: auto; background: #0001; padding: .6rem; border-radius: .3rem;
     <input type="text" id="confirm-handle-move" autocomplete="off">
   </div>
   <p>
-    <button type="submit" id="confirm-go" class="primary">Confirm</button>
-    <button type="button" id="confirm-cancel">Cancel</button>
+    <button type="submit" id="confirm-go" title="   Do it" class="primary">Confirm</button>
+    <button type="button" id="confirm-cancel" title="   Change nothing and close">Cancel</button>
   </p>
 </form>
   </div>
