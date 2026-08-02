@@ -112,6 +112,12 @@ Against real Mastodon, 2026-08-01, as `@group@activitypub.teamid.live`:
 
 ## What is left
 
+**PARKED 2026-08-02, do not re-raise: live-testing `state --to pod`.** The command
+stays — it is kept for a possible future — but exercising it against a real pod is
+not wanted. It would write an identity's whole private tree back onto the pod,
+which is precisely what the relay design exists to avoid, to prove a path nobody
+currently needs. It stays on the untested list as a fact, not as a gap.
+
 Two items are riskier than everything else in this document.
 
 Set up three identities on a subdomain-capable host — teamid.live works, scn is down.
