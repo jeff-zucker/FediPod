@@ -22,7 +22,7 @@ label { display: block; margin: .75rem 0 .2rem; }
 .hint { color: #666; font-size: .9rem; margin: .15rem 0 0; }
 input[type=text], input[type=email], input[type=url], input[type=password], textarea {
   font: inherit; width: 100%; padding: .5rem; box-sizing: border-box;
-  border: 1px solid #999; border-radius: .3rem; background: Field; color: FieldText;
+  border: 1px solid #767676; border-radius: .3rem; background: Field; color: FieldText;
 }
 .choice { display: block; margin: .35rem 0; font-weight: normal; }
 .choice input { margin-right: .4rem; }
@@ -39,7 +39,10 @@ button:disabled { opacity: .5; cursor: default; }
 .note { color: #666; font-size: .9rem; word-break: break-all; }
 .origins { font-family: ui-monospace, monospace; font-size: .95rem; word-break: break-all; }
 @media (prefers-color-scheme: dark) { :root { --heading: #7fb3e8; }
-  .sub, .hint, .note { color: #aaa; } fieldset { border-color: #555; } }
+  .sub, .hint, .note { color: #aaa; } fieldset { border-color: #555; }
+  /* 2.40:1 without this — the record page has always had the override and
+     this page, where an error IS the whole message, did not. */
+  .err { color: #ff8a8a; border-left-color: #ff8a8a; } }
 </style>
 <link rel="stylesheet" href="/admin/bar.css">
 </head>
@@ -82,7 +85,7 @@ button:disabled { opacity: .5; cursor: default; }
 <section id="pane-run" hidden>
   <h2 id="run-title">Setting up</h2>
   <ul class="steps" id="run-steps"></ul>
-  <p class="err" id="run-error" hidden></p>
+  <p class="err" id="run-error" role="alert" hidden></p>
   <p><button id="run-again" title="   Try the step that failed again" hidden>Try again</button></p>
 </section>
 
@@ -146,7 +149,7 @@ button:disabled { opacity: .5; cursor: default; }
     <p>The handle and the pod cannot be changed afterwards. Everything else — display
       name, bio, pictures — you set in the client.</p>
 
-    <p class="err" id="form-error" hidden></p>
+    <p class="err" id="form-error" role="alert" hidden></p>
     <p><button type="submit" class="primary" id="submit" title="   Create it">Create it</button></p>
   </form>
 </section>

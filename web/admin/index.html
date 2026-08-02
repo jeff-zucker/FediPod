@@ -12,7 +12,10 @@
 :root { color-scheme: light dark; font-size: 18px; --link: #1a4f8a; --heading: #5b3a8e;
   /* Warm, so it sits against the blue label rather than under it — and
      nowhere near the purple the headings use. */
-  --btn-bg: #f4efe6; --btn-edge: #b9ad99; }
+  /* 3.54:1 against the fill and 3.61:1 against the page. At #b9ad99 it was
+     1.93:1 and 2.21:1 — under the 3:1 a control boundary needs, and the fill
+     alone is 1.15:1, so there was no second way to see where a button was. */
+  --btn-bg: #f4efe6; --btn-edge: #8a7a61; }
 /* The page itself never scrolls: the body is exactly the window, and the open
    panel takes whatever height is left over rather than pushing past the fold. */
 html { height: 100%; }
@@ -21,9 +24,13 @@ body { font: 1rem/1.5 system-ui, sans-serif; margin: 0; height: 100dvh;
 /* The bar spans the window; everything under it stays in a centred column. */
 /* 960, matching the bar above it, and wide enough for the longest control line
    — Upkeep's label plus its four buttons — to stay on one line. */
+/* The WINDOW never scrolls; the column does. Without an overflow here the
+   page had no scroll container anywhere, so at zoom — or just a short window —
+   Upkeep and Lifecycle were cut off with no way to reach them. The two escape
+   hatches below only ever covered adding an account and a group console. */
 #page { flex: 1 1 auto; min-height: 0; width: 100%; max-width: 960px; margin: 0 auto;
   padding: 1.75rem 1rem 1rem; box-sizing: border-box;
-  display: flex; flex-direction: column; }
+  display: flex; flex-direction: column; overflow-y: auto; }
 #page > section, #page > nav, #page > p { flex: 0 0 auto; }
 /* Two cases where the page may grow past the window: the new-account form, and
    a group console, whose members / requests / review / carried lists have no
@@ -55,8 +62,15 @@ h2 { margin: 2rem 0 .5rem; }
    column, the facts beside it — so the first fact sits on the heading's own
    line rather than under it. Baseline, not top: the heading is 23px and the
    rows are 20px, and aligning their boxes would leave them visibly off. */
-#pane-identity { display: grid; grid-template-columns: calc(8.5rem + .6rem) 1fr;
-  align-items: baseline; }
+/* One column when there is no room for two, in the same spirit as the
+   flex-wrap on the headings above: at 320px the two tracks together outrun
+   #page and the value column collapsed to about one character wide. */
+#pane-identity { display: block; }
+@media (min-width: 34rem) {
+  #pane-identity { display: grid; grid-template-columns: calc(8.5rem + .6rem) 1fr;
+    align-items: baseline; }
+  dl { display: grid; grid-template-columns: max-content 1fr; gap: .2rem .9rem; }
+}
 #pane-identity h2 { margin: 1.25rem 0 .5rem; }
 /* It sits after the kind, on that row, so it needs a gap from the word and must
    not stretch the row's line height. */
@@ -75,14 +89,17 @@ label { display: block; margin: .75rem 0 .2rem; }
 .hint { color: #666; font-size: .9rem; margin: .15rem 0 0; }
 input[type=text], input[type=email], input[type=url], input[type=password], textarea {
   font: inherit; width: 100%; padding: .5rem; box-sizing: border-box;
-  border: 1px solid #999; border-radius: .3rem; background: Field; color: FieldText;
+  /* 4.54:1 against a white Field; #999 was 2.85:1, under the 3:1 a control
+     boundary needs — and this border is the whole of what makes an input
+     distinct from the page. */
+  border: 1px solid #767676; border-radius: .3rem; background: Field; color: FieldText;
 }
 button { font: inherit; padding: .45rem 1rem; border-radius: .3rem; border: 1px solid var(--btn-edge);
   background: var(--btn-bg); color: var(--link); cursor: pointer; }
 button.primary { font-weight: 600; }
 button.danger { border-color: #b00020; color: #b00020; }
 button:disabled { opacity: .5; cursor: default; }
-dl { display: grid; grid-template-columns: max-content 1fr; gap: .2rem .9rem; margin: .5rem 0; }
+dl { margin: .5rem 0; }        /* grid only above 34rem — see the media query above */
 dt { color: #666; }
 dd { margin: 0; word-break: break-all; }
 .rows { list-style: none; padding: 0; margin: .3rem 0; }
@@ -106,7 +123,7 @@ button.inline { font-size: .9rem; padding: .15rem .6rem; font-weight: 400; }
 .ok { border-left: .25rem solid #2a7; padding-left: .75rem; }
 pre { overflow-x: auto; background: #0001; padding: .6rem; border-radius: .3rem; font-size: .9rem; }
 @media (prefers-color-scheme: dark) {
-  :root { --link: #7fb3e8; --heading: #b9a3e3; --btn-bg: #35302a; --btn-edge: #6b6154; }
+  :root { --link: #7fb3e8; --heading: #b9a3e3; --btn-bg: #35302a; --btn-edge: #9a8d7a; }
   .sub, .hint, dt, .muted { color: #aaa; } fieldset { border-color: #555; } .rows li { border-color: #444; }
   .err { color: #ff8a8a; border-left-color: #ff8a8a; }
   button.danger { border-color: #ff8a8a; color: #ff8a8a; }
@@ -125,7 +142,7 @@ pre { overflow-x: auto; background: #0001; padding: .6rem; border-radius: .3rem;
   <button type="button" id="bar-add" title="   Set up another actor on this machine, with its own pod">add new account</button>
 </nav>
 <div id="page">
-<p class="err" id="fatal" hidden></p>
+<p class="err" id="fatal" role="alert" hidden></p>
 <p aria-live="polite" id="say" hidden></p>
 
 <!-- Every actor running on this machine. A stopped one is left out: there is

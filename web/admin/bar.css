@@ -20,7 +20,10 @@ body { background: var(--surface); }
    keeps it at 1rem once the window is narrower than the column.
    No rule underneath: the tone change is the boundary, and a line as well
    would be drawing it twice. */
-#bar { flex: 0 0 auto; display: flex; align-items: center; gap: .6rem;
+/* Wraps, because it does not fit: at 320px the title plus three destinations
+   ran 67px past the viewport, and the bar is on every page — so the whole
+   document scrolled sideways whatever was under it. */
+#bar { flex: 0 0 auto; display: flex; align-items: center; gap: .6rem; flex-wrap: wrap;
   width: 100%; max-width: none; margin: 0; box-sizing: border-box;
   padding: .5rem max(1rem, calc((100% - 960px) / 2 + 1rem));
   background: var(--raised); }

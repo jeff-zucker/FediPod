@@ -1072,6 +1072,101 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   idem.stopRenewal();
 }
 
+// --- 5e-bis. accessibility: contrast, reflow, language, status messages ---
+{
+  const read = (f) => fs.readFileSync(path.join(root, f), 'utf8');
+  const record = read('web/admin/index.html');
+  const setup = read('web/admin/setup/index.html');
+  const masto = read('lib/mastoapi.mjs');
+
+  // --- contrast, computed rather than eyeballed ---
+  const lum = (hex) => {
+    const h = hex.replace('#', '');
+    const [r, g, b] = [0, 2, 4].map(i => parseInt(h.slice(i, i + 2), 16) / 255)
+      .map(c => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+  const ratio = (a, b) => {
+    const [x, y] = [lum(a), lum(b)];
+    return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
+  };
+  const token = (css, name, dark = false) => {
+    // the dark block redeclares :root, so search from it when asked
+    const from = dark ? css.indexOf('prefers-color-scheme: dark') : 0;
+    const m = new RegExp(`${name}:\\s*(#[0-9a-fA-F]{3,6})`).exec(css.slice(from));
+    return m && m[1];
+  };
+
+  check(Math.abs(ratio('#ffffff', '#000000') - 21) < 0.01, 'the contrast helper agrees with the known 21:1');
+
+  // The page background is --surface from bar.css, not white — that is the
+  // pair a reader actually sees.
+  const SURFACE = '#f0f2f5', SURFACE_DARK = '#18191a';
+  for (const [name, dark, bg] of [['--link', false, SURFACE], ['--heading', false, SURFACE],
+    ['--link', true, SURFACE_DARK], ['--heading', true, SURFACE_DARK]]) {
+    const c = token(record, name, dark);
+    check(c && ratio(c, bg) >= 4.5,
+      `${name}${dark ? ' (dark)' : ''} ${c} on ${bg} = ${ratio(c, bg).toFixed(2)}:1, AA text`);
+  }
+
+  // A control boundary needs 3:1, and the fill alone cannot carry it: --btn-bg
+  // against the page is 1.15:1, so the edge is the only thing that says where a
+  // button is.
+  for (const dark of [false, true]) {
+    const edge = token(record, '--btn-edge', dark);
+    const fill = token(record, '--btn-bg', dark);
+    check(edge && fill && ratio(edge, fill) >= 3,
+      `--btn-edge${dark ? ' (dark)' : ''} ${edge} on ${fill} = ${ratio(edge, fill).toFixed(2)}:1, 1.4.11`);
+  }
+  for (const [label, css] of [['record', record], ['setup', setup]]) {
+    const m = /border: 1px solid (#[0-9a-f]{3,6});[^\n]*background: Field/.exec(css);
+    check(m && ratio(m[1], '#ffffff') >= 3,
+      `${label} input border ${m?.[1]} on a white Field = ${m ? ratio(m[1], '#ffffff').toFixed(2) : '?'}:1, 1.4.11`);
+  }
+
+  // Error text in dark mode: #b00020 on a near-black canvas is 2.40:1, and on
+  // both these pages the error IS the message.
+  for (const [label, css] of [['record', record], ['setup', setup], ['login form', masto]]) {
+    // From the LAST dark block: the login form has two, and the earlier one
+    // is followed by the light .err, which is the value being corrected.
+    const darkFrom = css.lastIndexOf('prefers-color-scheme');
+    const m = /\.err\s*\{[^}]*color:\s*(#[0-9a-fA-F]{3,6})/.exec(css.slice(darkFrom));
+    check(m && ratio(m[1], SURFACE_DARK) >= 4.5,
+      `${label} .err in dark ${m?.[1]} = ${m ? ratio(m[1], SURFACE_DARK).toFixed(2) : '?'}:1`);
+  }
+
+  // --- the author's own 16px floor, which only holds because the root is 18px ---
+  const rootPx = Number(/:root\s*\{[^}]*font-size:\s*(\d+)px/.exec(record)?.[1]);
+  check(rootPx === 18, `the record page root is ${rootPx}px`);
+  const smallest = Math.min(...[...record.matchAll(/font-size:\s*([\d.]+)rem/g)].map(m => Number(m[1])));
+  check(smallest * rootPx >= 16,
+    `the smallest rule is ${smallest}rem = ${(smallest * rootPx).toFixed(1)}px, above the 16px floor`);
+
+  // --- reflow: the window does not scroll, so the column must ---
+  check(/#page \{[^}]*overflow-y: auto/.test(record),
+    'the record page has a scroll container, so its lower sections are reachable');
+  check(/@media \(min-width: 34rem\)/.test(record),
+    'and its two-column grids collapse to one when there is no room');
+  // Measured at 320px in a real browser: the bar was the last thing running
+  // past the viewport, and it is on every page, so it scrolled all of them.
+  check(/#bar \{[^}]*flex-wrap: wrap/.test(read('web/admin/bar.css')),
+    'the bar wraps rather than pushing every page sideways at 320px');
+
+  // --- Level A: every page declares its language ---
+  for (const [label, css] of [['record', record], ['setup', setup],
+    ['client', read('web/admin/client/index.html')], ['login form', masto]]) {
+    check(/<html lang="en"/.test(css), `${label} declares its language (3.1.1)`);
+  }
+
+  // --- 4.1.3: a message the user must act on is announced ---
+  check(/id="fatal" role="alert"/.test(record), 'the record page announces a fatal error');
+  check((setup.match(/class="err" id="[a-z-]+" role="alert"/g) || []).length === 2,
+    'and setup announces both of its errors');
+  check(/class="err" role="alert"/.test(masto), 'as does the login form');
+  check(/<label for="password">/.test(masto),
+    'whose password field has a real label, not just a placeholder');
+}
+
 // --- 5f-bis. the unauthenticated probes are still this pod's traffic ---
 {
   const { RemotePod } = await import(path.join(root, 'lib/remote.mjs'));
