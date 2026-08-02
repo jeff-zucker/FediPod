@@ -303,17 +303,40 @@ bin/activitypod.mjs setup --group --profile mygroup --new-account
 ```
 
 Run it like any other identity — `start`, `stop`, `status`, `park`, `retire` —
-on its own port. It serves no client UI, because there is no timeline for a
-human to read, which also means it has no login and no client tokens.
+on its own port.
+<!-- CLAUDE 2026-08-01 — corrected in place: a group serves the client now -->
+<!-- was: "It serves no client UI, because there is no timeline for a human to
+     read, which also means it has no login and no client tokens." -->
+<!-- /CLAUDE -->
 
 <!-- CLAUDE 2026-07-30 — added: a group serves its own two pages, and only those -->
-A group does serve its own two pages. `http://localhost:<port>/` is its console
-at `/admin/` — members, join requests, the review queue, what it has carried,
-and every moderation action below as a button — and `/admin/setup/` is where it
-was created in the first place. That is all it serves: no Mastodon client, no
-`/api/*`, no `/oauth/*`, no tokens, no UI password. The console reaches exactly
-the same loopback routes the commands below already reach, so it grants nobody
-any authority they did not have; it is a different client, not a wider door.
+<!-- CLAUDE 2026-08-01 — rewritten: the client is no longer withheld -->
+A group serves the same three surfaces every identity does.
+`http://localhost:<port>/` is the client; `/admin/` is its console — members,
+join requests, the review queue, what it has carried, and every moderation
+action below as a button; `/admin/setup/` is where it was created.
+
+The client was withheld until 2026-08-01, on the reasoning that a group has no
+timeline a human reads. It has both halves of one: statuses are what it carried,
+notifications are who joined. And its operator has a bio to write and a profile
+they want to look at the way everyone else sees it — both of which are the
+client's job.
+
+What that opens is a login and client tokens, which a group did not have before.
+`activitypod passwd` has never had a group carve-out, so a group can be gated
+exactly like a person before it is exposed anywhere but loopback — and with no
+password set, `/oauth/authorize` redirects instantly, for a group exactly as for
+a person.
+
+Two things the client will offer a group that do not mean what they look like:
+composing posts a Note *as* the group, which is a legitimate announcement but
+not the path a member's post takes; and following someone pulls their posts into
+the group's timeline without making them a member — membership is who follows
+the group, never who it follows.
+
+The console reaches exactly the same loopback routes the commands below already
+reach, so it grants nobody any authority they did not have; it is a different
+client, not a wider door.
 <!-- /CLAUDE -->
 
 <!-- CLAUDE 2026-08-01 — added: what the console shows now -->
@@ -324,7 +347,9 @@ still shows by URL, because guessing the name from the last segment of the URL
 is what once rendered every group as `@actor@host`.
 
 The moderation settings — who may join, what gets carried — are behind
-**Moderation options** on the Upkeep line rather than standing above the lists.
+**Moderation options**, which sits beside the kind in Identity — what a group can
+be moderated into is a property of being one — rather than standing above the
+lists.
 The join-request and post-review queues appear only when their setting is on and
 something is actually waiting: with the setting off nothing can ever arrive in
 them, so a heading would be promising a list that cannot fill.

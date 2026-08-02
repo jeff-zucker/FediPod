@@ -1610,6 +1610,31 @@ check(del.status === 200 && delivered.some(d => d.a?.type === 'Delete' && d.a.ob
   && !store2.getStatuses().some(s => s.noteId === OWN2),
   'DELETE status federates Delete + removes from mirror');
 
+// A pod that refuses the delete used to be invisible: the three deletes were
+// unchecked, so the post came off this machine and stayed publicly readable,
+// with nothing to show for it and nothing left to try again with.
+{
+  const wasDelete = fakeAgent.remote.delete;
+  const tried = [];
+  fakeAgent.remote.delete = async (u) => { tried.push(u); return false; };
+  const refused = await call(`/api/v1/statuses/${store2.idFor(OWN)}`, { method: 'DELETE' });
+  check(refused.status === 502 && /still published/.test(refused.json?.error || ''),
+    `a pod that will not remove the note is reported, not reported as deleted (${refused.status})`);
+  check(store2.getStatuses().some(s => s.noteId === OWN),
+    'and the post is kept here, because otherwise there is nothing to try again with');
+  check(tried.includes(OWN) && tried.includes(OWN + '-create'),
+    'the -create is checked too: it embeds the whole note, so leaving it behind republishes the post');
+
+  // Only the note and its -create are worth failing on.
+  fakeAgent.remote.delete = async (u) => !u.endsWith('-replies');
+  const anyway = await call(`/api/v1/statuses/${store2.idFor(OWN)}`, { method: 'DELETE' });
+  check(anyway.status === 200 && !store2.getStatuses().some(s => s.noteId === OWN),
+    'an empty replies collection that will not go is not a reason to keep the post');
+  fakeAgent.remote.delete = wasDelete;
+  store2.addStatus({ noteId: OWN, actor: urls2.actor, content: '<p>root</p>',
+    published: '2026-07-28T01:00:00Z', kind: 'post', slug: 'n1' });
+}
+
 const q = await call('/api/v2/search?q=root');
 check(q.status === 200 && q.json.statuses.length === 1 && q.json.statuses[0].uri === OWN,
   'text search finds mirror content');
@@ -2617,6 +2642,10 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   const { startAdmin } = await import(path.join(root, 'lib/admin.mjs'));
   const GPORT = 18624;
   const GHOME = fs.mkdtempSync('/tmp/activitypod-group-');
+  // A set-up group: without the credential FILE the bare URL is a trip to
+  // setup, which is right and is not what the checks below are about.
+  fs.writeFileSync(path.join(GHOME, 'credential.json'),
+    JSON.stringify({ remotePod: 'https://grp.example/', id: 'x', secret: 'y' }));
   const gstore = new PodStore({ log: () => {} });
   gstore.setConfig({ remotePod: 'https://grp.example/', handle: 'grp', name: 'grp', kind: 'group' });
   gstore.setContacts({ followers: [{ actor: MEM_A, inbox: MEM_A + '/inbox' }], following: [] });
@@ -2656,20 +2685,21 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   check(st.status === 200 && st.json.kind === 'group',
     `a group agent still answers /status with its kind (${st.status})`);
 
-  const inst = await g('/api/v1/instance');
+  // The client was withheld from a group until 2026-08-01 on the reasoning that
+  // it has no timeline a human reads. It has both halves of one — statuses are
+  // what it carried, notifications are who joined — and its operator has a bio
+  // to edit and a profile to look at the way everyone else sees it.
+  const inst = await gjson('/api/v1/instance');
   const oauth = await g('/oauth/token', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
-  check(inst.status === 404 && oauth.status === 404,
-    `a group serves no /api/* or /oauth/* (instance ${inst.status}, token ${oauth.status})`);
+  check(inst.status === 200 && /grp/.test(inst.json?.title || '') && oauth.status !== 404,
+    `a group serves /api/* and /oauth/* like anyone else (instance ${inst.status}, token ${oauth.status})`);
 
   const ui = await g('/manifest.webmanifest');
-  check(ui.status === 404, `a group mounts no client UI (${ui.status})`);
+  check(ui.status === 200, `and mounts the client UI (${ui.status})`);
 
-  // A group is set up in the browser like anything else, and it has a display
-  // name to change — so it serves web/ and only web/. What stays gone is the
-  // client and, with it, the whole token/oauth surface asserted just above.
   const groupRoot = await g('/', { redirect: 'manual' });
-  check(groupRoot.status === 302 && groupRoot.headers.get('location') === '/admin/',
-    `a group's bare URL is its console, not a timeline (${groupRoot.status})`);
+  check(groupRoot.status === 200,
+    `a group's bare URL is its client, the same as anyone's (${groupRoot.status})`);
   const groupAdmin = await g('/admin/');
   const groupSetup = await g('/admin/setup/');
   check(groupAdmin.status === 200 && groupSetup.status === 200,

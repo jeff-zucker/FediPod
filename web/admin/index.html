@@ -58,6 +58,9 @@ h2 { margin: 2rem 0 .5rem; }
 #pane-identity { display: grid; grid-template-columns: calc(8.5rem + .6rem) 1fr;
   align-items: baseline; }
 #pane-identity h2 { margin: 1.25rem 0 .5rem; }
+/* It sits after the kind, on that row, so it needs a gap from the word and must
+   not stretch the row's line height. */
+#do-moderation { margin-left: .6rem; vertical-align: baseline; }
 #facts { margin: 1.25rem 0 0; }
 #pane-identity > p { grid-column: 1 / -1; }
 h3 { margin: 1.25rem 0 .35rem; }
@@ -199,11 +202,13 @@ pre { overflow-x: auto; background: #0001; padding: .6rem; border-radius: .3rem;
 <section id="pane-identity" hidden>
   <h2><span class="hlabel">Identity</span></h2>
   <dl id="facts"></dl>
+  <!-- Declared here, and render() puts it beside the kind — the row it belongs
+       to is generated, so this is the only place it can be written down. -->
+  <button id="do-moderation" class="inline" hidden>Moderation options</button>
 </section>
 
 <section id="pane-upkeep" hidden>
   <h2><span class="hlabel">Upkeep</span>
-    <button id="do-moderation" class="inline" hidden>Moderation options</button>
     <button id="do-drain" class="inline">Drain the inbox</button>
     <button id="do-rebuild" class="inline">Recover posts</button>
     <button id="do-log" class="inline">Show the log</button>

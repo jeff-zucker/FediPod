@@ -295,5 +295,15 @@ and slug; and your own boosts of them, with the Announce a later Undo needs.
 Not recoverable, and not a bug: other people's posts in your timeline. They were
 never published by this actor, so the pod never held them.
 
-Still open: `deleteNote` ignores the result of its three `remote.delete` calls,
-which is why `--from-notes` needs the warning it has.
+`deleteNote` used to ignore the result of all three `remote.delete` calls, which
+is where the `--from-notes` warning came from. **Fixed 2026-08-01**: the note and
+its `-create` are both checked and both have to go — the `-create` embeds the
+whole note, so leaving it behind republishes the post under another name. A
+refusal returns `{ok: false}`, the facade answers 502, and the post is kept
+locally rather than reported deleted: removing it would leave nothing to try
+again with and nothing to show that it is still up. The empty `-replies` is
+still best effort, because once the note is gone nothing references it.
+
+The warning stays anyway. A delete can still fail while the agent is off, or
+against a pod that accepted the DELETE and did not act on it, and `--from-notes`
+is the one path that reads past the tombstones.

@@ -18,6 +18,9 @@ const postJson = (path, body) => api(path, {
 });
 
 let config = null;
+// Held, because render() moves it into a generated row and empties that row's
+// list on the next pass — after which getElementById would not find it again.
+const MODERATION = $('do-moderation');
 
 function say(text, cls = 'ok') {
   const el = $('say');
@@ -99,6 +102,10 @@ function render() {
     dt.textContent = k;
     const dd = document.createElement('dd');
     dd.textContent = v;
+    // What a group can be moderated into is a property of BEING a group, so the
+    // way in sits on the row that says so. Moved rather than built here: the
+    // page still declares the button, and `facts` is emptied on every render.
+    if (k === 'kind' && config.kind === 'group') dd.append(MODERATION);
     facts.append(dt, dd);
   }
   if (!config.address) {
@@ -118,7 +125,7 @@ function render() {
     // Its lists have no bound, so this page scrolls — see body.group in the CSS.
     document.body.classList.add('group');
     $('pane-group').hidden = false;
-    $('do-moderation').hidden = false;   // only a group has any
+    MODERATION.hidden = false;           // only a group has any
     renderGroupToggles();
     refreshGroup();
   }
@@ -271,7 +278,7 @@ const setReview = async (on) => {
 };
 // The settings themselves are a panel like the log is: opened when you mean to
 // change one, not standing between the heading and the lists.
-$('do-moderation').addEventListener('click', () => {
+MODERATION.addEventListener('click', () => {
   if (!$('moderation').hidden) { closePanels(); return; }
   closePanels('moderation');
   $('moderation').hidden = false;

@@ -195,6 +195,30 @@ shape is asserted in the suite. That is the one thing a live run would still pro
   the same trap as above. A Solid WebID was considered and dropped: nothing in an actor
   document carries one, `<origin>/profile/card` answers 200 on Mastodon too, and there is
   no honest way to know it.
+- **A group serves the client** (2026-08-01). `visit account` was greyed out
+  because a group had no client; un-greying it framed the group's own console,
+  which is what made the real question visible: *should* a group have one? Yes.
+  The original reasoning — "no timeline a human reads" — was wrong twice over. A
+  group has statuses (what it carried) and notifications (who joined), and its
+  operator has a bio to write and a profile to see the way everyone else does.
+
+  Three carve-outs removed in `lib/admin.mjs`: the `!isGroup()` on the
+  `/api/*`+`/oauth/*` gate, the `/` → `/admin/` redirect, and the 404 on every
+  static file. Plus `mastoapi.account()` now reads `group` from config for
+  self — our own actor is not in the actor cache, so a group asking about itself
+  was told it was a person.
+
+  What it opens is a login and client tokens. `passwd` has never had a group
+  carve-out, so a group is gateable exactly like a person; with no password set
+  `/oauth/authorize` redirects instantly, for both. Verified live: logged in as
+  `@group@activitypub.teamid.live` through Phanpy, home timeline rendered,
+  `verify_credentials` returns `group: true`, `followers_count: 2`, and a
+  `source` — so the bio editor opens populated.
+
+  Two capabilities a group gains that read oddly: composing posts a Note *as*
+  the group (legitimate, but not the Announce path a member's post takes), and
+  following someone pulls their posts into the group's timeline without making
+  them a member — `ingestNote` reads `followers` for a group, never `following`.
 - **Mastodon's follower count for the group lags.** The pod publishes the right
   `totalItems` immediately; Mastodon shows its cached copy of the actor until it
   re-fetches, and nothing prompts it to. This agent has never sent an `Update{Group}` —
