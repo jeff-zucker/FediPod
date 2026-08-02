@@ -3299,6 +3299,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
     park: async () => { lifecycle.push('park'); return { quiescedAt: 'T', unfollowed: 2, following: 3 }; },
     revive: async () => { lifecycle.push('revive'); return { refollowed: 2, of: 3 }; },
     rotateKey: async () => { lifecycle.push('rotate'); return { changed: true }; },
+    moveTo: async (target) => { lifecycle.push('move'); return { target, inboxes: 1, unfollowed: 2, following: 2 }; },
     publisher: {
       urls: curls, config: {},
       publishProfile: async () => { republished.push(1); return { unreachable: [] }; },
@@ -3403,6 +3404,22 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
     'and rotate the signing key');
   check(lifecycle.filter(x => x === 'takeover').length - takeoversBefore === 3,
     'each one claims the lease first — a person here outranks an idle agent elsewhere');
+
+  // Move is the other irreversible, federated one, and it was CLI-only — the
+  // retire warning pointed at a command line. Same typed-handle interlock as
+  // retire, plus a target, and both are checked before anything leaves.
+  const moveNoTarget = await lpost('/move', { confirm: 'solo' });
+  check(moveNoTarget.status === 400 && /target required/.test(moveNoTarget.json?.error || ''),
+    'a move with no destination is refused');
+  const moveNoConfirm = await lpost('/move', { target: 'https://elsewhere.example/u/me' });
+  check(moveNoConfirm.status === 400 && /type the handle/.test(moveNoConfirm.json?.error || ''),
+    'and one with no typed handle is refused — a stray click cannot produce it');
+  const moveWrong = await lpost('/move', { target: 'https://elsewhere.example/u/me', confirm: 'not-solo' });
+  check(moveWrong.status === 400 && !lifecycle.includes('move'),
+    'a wrong handle is refused, and nothing federated on the way to being refused');
+  const moved = await lpost('/move', { target: 'https://elsewhere.example/u/me', confirm: 'solo' });
+  check(moved.status === 200 && lifecycle.includes('move') && moved.json.target === 'https://elsewhere.example/u/me',
+    `with the handle typed it moves, carrying the target through (${moved.status})`);
 
   // Counted after that, because the three above IGNORE the takeover result and
   // this one refuses on it — the same call, a different rule.

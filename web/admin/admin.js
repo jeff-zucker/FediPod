@@ -70,16 +70,20 @@ function closePanels(keep = null) {
   if (keep !== 'output') outputSource = null;
   if (keep !== 'confirm-form') {
     pending = null;
-    for (const k of Object.keys(LIFECYCLE)) $(`warn-${k}`).hidden = true;
+    for (const k of Object.keys(LIFECYCLE)) $(`warn-${k}`)?.hidden !== undefined && ($(`warn-${k}`).hidden = true);
     $('confirm-handle').value = '';
+    $('confirm-handle-move').value = '';
+    $('move-target').value = '';
   }
 }
 // Closing it by the ✕ or by Escape has to clear the same state a Cancel does.
 document.getElementById('win').addEventListener('win:closed', () => {
   outputSource = null;
   pending = null;
-  for (const k of Object.keys(LIFECYCLE)) $(`warn-${k}`).hidden = true;
+  for (const k of Object.keys(LIFECYCLE)) $(`warn-${k}`)?.hidden !== undefined && ($(`warn-${k}`).hidden = true);
   $('confirm-handle').value = '';
+  $('confirm-handle-move').value = '';
+  $('move-target').value = '';
 });
 
 
@@ -430,10 +434,12 @@ $('do-deadletter').addEventListener('click', async () => {
 // Retire also wants the handle typed, because a misclick cannot produce it.
 
 const LIFECYCLE = {
-  park: { path: '/park', done: (r) => `parked ${r.quiescedAt}: unfollowed ${r.unfollowed}/${r.following}, inbox closed` },
-  revive: { path: '/revive', done: (r) => `revived: inbox open, ${r.refollowed}/${r.of} follow(s) re-sent` },
-  'rotate-key': { path: '/rotate-key', done: (r) => (r.changed ? 'rotated and republished' : 'no change — the key was already fresh') },
-  retire: { path: '/retire', done: (r) => `retired ${r.deletedAt}: Delete delivered to ${r.inboxes} inbox(es)` },
+  park: { path: '/park', title: 'Park', done: (r) => `parked ${r.quiescedAt}: unfollowed ${r.unfollowed}/${r.following}, inbox closed` },
+  revive: { path: '/revive', title: 'Revive', done: (r) => `revived: inbox open, ${r.refollowed}/${r.of} follow(s) re-sent` },
+  'rotate-key': { path: '/rotate-key', title: 'Rotate the signing key', done: (r) => (r.changed ? 'rotated and republished' : 'no change — the key was already fresh') },
+  retire: { path: '/retire', title: 'Retire', go: 'Retire this actor', danger: true, done: (r) => `retired ${r.deletedAt}: Delete delivered to ${r.inboxes} inbox(es)` },
+  move: { path: '/move', title: 'Move this account', go: 'Move it', focus: 'move-target',
+    done: (r) => `moved to ${r.target}: Move delivered to ${r.inboxes} inbox(es), unfollowed ${r.unfollowed}/${r.following}` },
 };
 let pending = null;
 
@@ -446,14 +452,26 @@ for (const btn of document.querySelectorAll('[data-confirm]')) {
     if (pending === what && solWindow.openId() === 'confirm-form') { closePanels(); return; }
     closePanels();                    // including whatever else was open
     pending = what;
+    const spec = LIFECYCLE[what];
     $(`warn-${what}`).hidden = false;
-    solWindow.show('confirm-form', what === 'rotate-key' ? 'Rotate the signing key'
-      : what[0].toUpperCase() + what.slice(1));
-    $('confirm-go').className = what === 'retire' ? 'danger' : 'primary';
-    $('confirm-go').textContent = what === 'retire' ? 'Retire this actor' : 'Confirm';
-    if (what === 'retire') $('confirm-handle').focus();
+    solWindow.show('confirm-form', spec.title);
+    $('confirm-go').className = spec.danger ? 'danger' : 'primary';
+    $('confirm-go').textContent = spec.go || 'Confirm';
+    if (spec.focus) $(spec.focus).focus();
+    else if (what === 'retire') $('confirm-handle').focus();
   });
 }
+
+// Offered from inside the retire warning: someone reading it has already said
+// what they want ("not this account, here, any more") and these are the two
+// answers that are not destruction. Switching panels rather than closing means
+// they do not have to go and find the button themselves.
+const openConfirm = (what) => {
+  closePanels();                 // or `show` toggles: same panel, different warning
+  document.querySelector(`[data-confirm="${what}"]`).click();
+};
+$('go-park').addEventListener('click', () => openConfirm('park'));
+$('go-move').addEventListener('click', () => openConfirm('move'));
 
 $('confirm-cancel').addEventListener('click', () => { closeConfirm(); say('nothing changed'); });
 
@@ -461,7 +479,10 @@ $('confirm-form').addEventListener('submit', async (ev) => {
   ev.preventDefault();
   if (!pending) return;
   const what = pending;
-  const body = what === 'retire' ? { confirm: $('confirm-handle').value.trim() } : {};
+  const body = what === 'retire' ? { confirm: $('confirm-handle').value.trim() }
+    : what === 'move' ? { target: $('move-target').value.trim(), confirm: $('confirm-handle-move').value.trim() }
+      : {};
+  if (what === 'move' && !body.target) { say('name the account to move to', 'err'); return; }
   $('confirm-go').disabled = true;
   say(`${what} — this talks to the pod and to other servers, so it takes a moment`);
   const r = await write(LIFECYCLE[what].path, body, what);

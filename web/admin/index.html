@@ -216,6 +216,7 @@ pre { overflow-x: auto; background: #0001; padding: .6rem; border-radius: .3rem;
     <button id="do-park" class="inline" data-confirm="park">Park</button>
     <button id="do-revive" class="inline" data-confirm="revive">Revive</button>
     <button id="do-rotate-key" class="inline" data-confirm="rotate-key">Rotate the signing key</button>
+    <button id="do-move" class="inline" data-confirm="move">Move</button>
     <button id="do-retire" class="inline danger" data-confirm="retire">Retire</button>
   </h3>
 
@@ -319,11 +320,26 @@ pre { overflow-x: auto; background: #0001; padding: .6rem; border-radius: .3rem;
       those servers to drop the account and the posts they cached, the actor document is
       replaced with a Tombstone, and this agent will refuse to start again for this pod. Your
       posts and RDF stay on the pod; the identity does not come back.</p>
-    <p>Standing down instead — keeping the handle, taking no mail — is
-      <code>bin/activitypod.mjs retire --keep-handle</code>, and moving to another account is
-      <code>--move-to @you@elsewhere</code>.</p>
+    <p>Two things that are not this, and can be done from here:
+      <button type="button" id="go-park" class="inline">Park it instead</button>
+      keeps the handle resolving and just stops the mail, and Revive undoes it.
+      <button type="button" id="go-move" class="inline">Move it instead</button>
+      hands your followers to another account.</p>
     <label for="confirm-handle">Type the handle to confirm</label>
     <input type="text" id="confirm-handle" autocomplete="off">
+  </div>
+  <div id="warn-move" class="warn" hidden>
+    <p>A <code>Move</code> goes to every follower's inbox and their servers migrate them to the
+      account you name, so they end up following that one instead. The actor left behind
+      advertises <code>movedTo</code>, so this handle keeps resolving as a redirect rather than
+      breaking — nothing here is deleted.</p>
+    <p>Then this identity is parked, exactly as Park would: everyone it follows is unfollowed
+      and the inbox is closed. Migrating is the far end's decision, so some followers will not
+      come across.</p>
+    <label for="move-target">Move to</label>
+    <input type="text" id="move-target" autocomplete="off" placeholder="@you@elsewhere or an actor URL">
+    <label for="confirm-handle-move">Type this actor's handle to confirm</label>
+    <input type="text" id="confirm-handle-move" autocomplete="off">
   </div>
   <p>
     <button type="submit" id="confirm-go" class="primary">Confirm</button>

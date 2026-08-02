@@ -8,10 +8,14 @@
 #win {
   position: fixed; z-index: 40;
   top: 5rem; left: 50%; transform: translateX(-50%);
-  width: min(42rem, calc(100vw - 2rem));
-  height: min(26rem, calc(100vh - 8rem));
+  width: min(46rem, calc(100vw - 2rem));
+  /* Tall enough for what is in it and no taller: a fixed height made a short
+     panel roomy and a long one scroll for no reason. `auto` up to a cap, so it
+     only ever scrolls when the content genuinely will not fit the screen — and
+     the moment you drag the corner, that inline height wins over both. */
+  height: auto;
   min-width: 18rem; min-height: 8rem;
-  max-width: 100vw; max-height: 100vh;
+  max-width: 100vw; max-height: calc(100vh - 7rem);
   resize: both; overflow: hidden;
   display: flex; flex-direction: column;
   /* Raised, like the bar: it sits ON the page, so it takes the same colour the
