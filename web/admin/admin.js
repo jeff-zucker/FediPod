@@ -441,8 +441,8 @@ const LIFECYCLE = {
   revive: { path: '/revive', title: 'Revive', done: (r) => `revived: inbox open, ${r.refollowed}/${r.of} follow(s) re-sent` },
   'rotate-key': { path: '/rotate-key', title: 'Rotate the signing key', done: (r) => (r.changed ? 'rotated and republished' : 'no change — the key was already fresh') },
   retire: { path: '/retire', title: 'Retire', go: 'Retire this actor', danger: true, done: (r) => `retired ${r.deletedAt}: Delete delivered to ${r.inboxes} inbox(es)` },
-  move: { path: '/move', title: 'Move this account', go: 'Move it', focus: 'move-target',
-    done: (r) => `moved to ${r.target}: Move delivered to ${r.inboxes} inbox(es), unfollowed ${r.unfollowed}/${r.following}` },
+  move: { path: '/move', title: 'Transfer this identity', go: 'Transfer it', focus: 'move-target',
+    done: (r) => `transferred to ${r.target}: Move delivered to ${r.inboxes} inbox(es), unfollowed ${r.unfollowed}/${r.following}` },
 };
 let pending = null;
 
@@ -485,7 +485,7 @@ $('confirm-form').addEventListener('submit', async (ev) => {
   const body = what === 'retire' ? { confirm: $('confirm-handle').value.trim() }
     : what === 'move' ? { target: $('move-target').value.trim(), confirm: $('confirm-handle-move').value.trim() }
       : {};
-  if (what === 'move' && !body.target) { say('name the account to move to', 'err'); return; }
+  if (what === 'move' && !body.target) { say('name the account to transfer to', 'err'); return; }
   $('confirm-go').disabled = true;
   say(`${what} — this talks to the pod and to other servers, so it takes a moment`);
   const r = await write(LIFECYCLE[what].path, body, what);

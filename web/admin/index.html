@@ -216,7 +216,7 @@ pre { overflow-x: auto; background: #0001; padding: .6rem; border-radius: .3rem;
     <button id="do-park" title="   Stop the mail but keep the handle — Revive undoes it" class="inline" data-confirm="park">Park</button>
     <button id="do-revive" title="   Open the inbox again and re-follow everyone Park unfollowed" class="inline" data-confirm="revive">Revive</button>
     <button id="do-rotate-key" title="   Replace the signing key and tell other servers the new one" class="inline" data-confirm="rotate-key">Rotate the signing key</button>
-    <button id="do-move" title="   Hand your followers to another account; this handle redirects" class="inline" data-confirm="move">Move</button>
+    <button id="do-move" title="   Transfer this identity: your followers go to another account" class="inline" data-confirm="move">Transfer identity</button>
     <button id="do-retire" title="   End this identity for good — a Delete, then a Tombstone" class="inline danger" data-confirm="retire">Retire</button>
   </h3>
 
@@ -323,7 +323,7 @@ pre { overflow-x: auto; background: #0001; padding: .6rem; border-radius: .3rem;
     <p>Two things that are not this, and can be done from here:
       <button type="button" id="go-park" title="   Park instead: keeps the handle, just stops the mail" class="inline">Park it instead</button>
       keeps the handle resolving and just stops the mail, and Revive undoes it.
-      <button type="button" id="go-move" title="   Move instead: hands your followers to another account" class="inline">Move it instead</button>
+      <button type="button" id="go-move" title="   Transfer instead: hands your followers to another account" class="inline">Transfer it instead</button>
       hands your followers to another account.</p>
     <label for="confirm-handle">Type the handle to confirm</label>
     <input type="text" id="confirm-handle" autocomplete="off">
@@ -336,7 +336,7 @@ pre { overflow-x: auto; background: #0001; padding: .6rem; border-radius: .3rem;
     <p>Then this identity is parked, exactly as Park would: everyone it follows is unfollowed
       and the inbox is closed. Migrating is the far end's decision, so some followers will not
       come across.</p>
-    <label for="move-target">Move to</label>
+    <label for="move-target">Transfer to</label>
     <input type="text" id="move-target" autocomplete="off" placeholder="@you@elsewhere or an actor URL">
     <label for="confirm-handle-move">Type this actor's handle to confirm</label>
     <input type="text" id="confirm-handle-move" autocomplete="off">
