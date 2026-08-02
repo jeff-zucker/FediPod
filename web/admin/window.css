@@ -14,10 +14,10 @@
   max-width: 100vw; max-height: 100vh;
   resize: both; overflow: hidden;
   display: flex; flex-direction: column;
-  /* The page's own surface, so the window reads as part of the app rather than
-     a system dialog dropped on top of it. It is lifted off the page by the
-     shadow, not by being a different colour. */
-  background: var(--surface); color: CanvasText;
+  /* Raised, like the bar: it sits ON the page, so it takes the same colour the
+     bar does rather than the page's own. The shadow lifts it; the colour says
+     which layer it belongs to. */
+  background: var(--raised); color: CanvasText;
   border: 1px solid var(--btn-edge); border-radius: .5rem;
   box-shadow: 0 .6rem 2rem #0004;
 }
@@ -30,7 +30,7 @@
   flex: 0 0 auto; display: flex; align-items: baseline; gap: .6rem;
   padding: .45rem .7rem; cursor: move; user-select: none;
   border-bottom: 1px solid var(--btn-edge); border-radius: .5rem .5rem 0 0;
-  background: var(--surface-sunk);
+  background: var(--surface);
 }
 #win-title { flex: 1 1 auto; font-weight: 600; color: var(--heading); }
 #win-close {
