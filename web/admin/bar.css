@@ -4,9 +4,20 @@
    page's left edge and the buttons over its right rather than out at the window
    borders. `width: 100%` with `box-sizing: border-box` keeps the padding inside
    that 960 instead of adding to it, which is what makes the two margins equal. */
+/* Phanpy's own two surface colours, read off the running client rather than
+   guessed: --bg-color is the page, --bg-faded-color the one behind it. Ours are
+   the same two, so the record and the client do not look like different apps.
+   Declared here because bar.css is on all three pages. */
+:root { --surface: #fff; --surface-sunk: #f0f2f5; }
+@media (prefers-color-scheme: dark) {
+  :root { --surface: #242526; --surface-sunk: #18191a; }
+}
+body { background: var(--surface); }
+/* No rule under the bar: the tone change between the two surfaces separates
+   them, and a line as well is one boundary drawn twice. */
 #bar { flex: 0 0 auto; display: flex; align-items: center; gap: .6rem;
   width: 100%; max-width: 960px; margin: 0 auto; box-sizing: border-box;
-  padding: .5rem 1rem; border-bottom: 1px solid var(--btn-edge); }
+  padding: .5rem 1rem; background: var(--surface-sunk); }
 /* The app title, in px rather than rem: it is chrome, the same on every page,
    not something that should move when a page changes its base size. */
 #bar .name { flex: 1 1 auto; font-weight: 600; font-size: 24px; color: var(--heading); }
