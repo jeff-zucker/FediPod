@@ -1072,6 +1072,51 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   idem.stopRenewal();
 }
 
+// --- 5j-bis. the ACL document is built by rdflib, and round-trips ---
+{
+  const { RemotePod } = await import(path.join(root, 'lib/remote.mjs'));
+  const $rdf = await import('rdflib');
+  const ACL = $rdf.Namespace('http://www.w3.org/ns/auth/acl#');
+  const pod = Object.create(RemotePod.prototype);
+  pod.webId = 'https://me.example/profile/card#me';
+  const target = 'https://me.example/ap/inbox/';
+
+  const modesOf = (ttl, frag) => {
+    const g = $rdf.graph();
+    $rdf.parse(ttl, g, target + '.acl', 'text/turtle');   // throws if it is not Turtle
+    return {
+      modes: g.each($rdf.sym(`${target}.acl#${frag}`), ACL('mode'), null).map(n => n.value.split('#')[1]).sort(),
+      agent: g.any($rdf.sym(`${target}.acl#owner`), ACL('agent'), null)?.value,
+      accessTo: g.any($rdf.sym(`${target}.acl#owner`), ACL('accessTo'), null)?.value,
+    };
+  };
+
+  const pubRead = pod.aclDoc(target, ['Read']);
+  check(modesOf(pubRead, 'public').modes.join() === 'Read'
+    && modesOf(pubRead, 'owner').modes.join() === 'Control,Read,Write',
+    'a public-Read ACL round-trips: the world reads, the owner controls');
+  const append = pod.aclDoc(target, ['Append']);
+  check(modesOf(append, 'public').modes.join() === 'Append',
+    'and a public-Append one — what the inbox actually needs');
+  const ownerOnly = pod.aclDoc(target, []);
+  check(modesOf(ownerOnly, 'public').modes.length === 0
+    && modesOf(ownerOnly, 'owner').modes.length === 3,
+    'an empty mode list yields an owner-only document, with no public authorization at all');
+  const one = modesOf(pubRead, 'owner');
+  check(one.agent === pod.webId && one.accessTo === target,
+    'the owner authorization names the WebID and the resource it governs');
+
+  // rdflib refuses an illegal IRI locally, rather than serialising a document
+  // that means something other than what was asked for.
+  let threw = false;
+  try { pod.aclDoc('not a url', ['Read']); } catch { threw = true; }
+  check(threw, 'an unusable target throws here rather than being PUT to the pod');
+
+  const src = fs.readFileSync(path.join(root, 'lib/remote.mjs'), 'utf8');
+  check(!/@prefix acl:/.test(src) && /\$rdf\.serialize/.test(src),
+    'no Turtle is assembled from template literals — the last such site in the project');
+}
+
 // --- 5k-ter. every self-scheduling loop stops when it is told to ---
 {
   const { TagFeed } = await import(path.join(root, 'lib/tagfeed.mjs'));
