@@ -1072,6 +1072,44 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   idem.stopRenewal();
 }
 
+// --- 5h-bis. a pod container is a boundary, in both implementations ---
+{
+  const { HttpStorage, FileStorage } = await import(path.join(root, 'lib/storage.mjs'));
+  const asked = [];
+  const st = new HttpStorage('https://pod.example/ap/fediverse/',
+    async (u, i) => { asked.push(`${i?.method || 'GET'} ${u}`); return { status: 200, text: async () => '', headers: { get: () => null } }; });
+
+  // FileStorage has checked this since it was written; HttpStorage concatenated
+  // and let fetch normalise the segments away.
+  for (const escape of ['../../ap/actor', '../../../.well-known/solid', 'a/../../../x']) {
+    let threw = false;
+    try { await st.read(escape); } catch { threw = true; }
+    check(threw, `HttpStorage refuses a path that climbs out: ${escape}`);
+  }
+  let wrote = false;
+  try { await st.write('../../ap/actor', 'x', 'text/turtle'); } catch { wrote = true; }
+  check(wrote, 'and refuses to write outside its container');
+  let removed = false;
+  try { await st.remove('../../ap/actor'); } catch { removed = true; }
+  check(removed, 'and to delete outside it');
+  check(asked.length === 0, 'none of which reached the pod at all');
+
+  await st.read('timeline/2026-01-01-abcd1234');
+  check(asked.length === 1 && asked[0].endsWith('/ap/fediverse/timeline/2026-01-01-abcd1234'),
+    'while an ordinary child still resolves under the base');
+
+  // The reachable input: `published` comes from a remote document, and its
+  // first ten characters lead the storage path.
+  const src = fs.readFileSync(path.join(root, 'lib/intake.mjs'), 'utf8');
+  check(/\^\\d\{4\}-\\d\{2\}-\\d\{2\}\$/.test(src),
+    'a note published-date is a date before it is used as a path component');
+
+  const fst = new FileStorage('/tmp/ap-jail-check/');
+  let fsThrew = false;
+  try { await fst.read('../../etc/passwd'); } catch { fsThrew = true; }
+  check(fsThrew, 'and the filesystem implementation still refuses the same thing');
+}
+
 // --- 5i-bis. what cannot be replaced is not written in place ---
 {
   const { writeJsonAtomic, writeFileAtomic } = await import(path.join(root, 'lib/home.mjs'));
