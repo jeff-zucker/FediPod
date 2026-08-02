@@ -1072,6 +1072,99 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   idem.stopRenewal();
 }
 
+// --- 5d-bis. a remote actor's own fields are not markup we run ---
+{
+  const st = new PodStore({ log: () => {} });
+  st.cacheActor('https://evil.example/u/x', {
+    id: 'https://evil.example/u/x', type: 'Person',
+    name: 'Ann<img src=x onerror=alert(1)>',
+    preferredUsername: 'ann<script>alert(2)</script>',
+    summary: '<p>hi<script>alert(3)</script><img src=x onerror=alert(4)></p>',
+    icon: { url: 'javascript:alert(5)' },
+    image: { url: 'https://ok.example/h.png' },
+  });
+  const rec = st.getActors()['https://evil.example/u/x'];
+  // The facade serves `summary` as an account's `note`, which every Mastodon
+  // client renders as HTML. Note CONTENT was sanitized at all four of its entry
+  // points; this, the other thing a remote party writes, was not.
+  check(!/<script|onerror/i.test(rec.summary), `a hostile bio is sanitized (${rec.summary})`);
+  check(rec.name === 'Ann' && rec.preferredUsername === 'ann',
+    `and names are plain text, not markup (${rec.name} / ${rec.preferredUsername})`);
+  check(rec.icon === null, 'a javascript: avatar is dropped rather than written into an img src');
+  check(rec.image === 'https://ok.example/h.png', 'while an ordinary https one is kept');
+
+  st.cacheActor('https://ok.example/u/y', {
+    id: 'https://ok.example/u/y', type: 'Person', name: 'Kofi',
+    summary: '<p>birds, <em>mostly</em>. <a href="https://ok.example">site</a></p>',
+  });
+  const good = st.getActors()['https://ok.example/u/y'];
+  check(/<em>mostly<\/em>/.test(good.summary) && /<a /.test(good.summary),
+    'an ordinary bio keeps the markup a bio is allowed to have');
+}
+
+// --- 5d-ter. an inbound Follow cannot be bound to the actor it names ---
+{
+  const { Intake } = await import(path.join(root, 'lib/intake.mjs'));
+  const mk = (config) => {
+    const state = { contacts: { followers: [], following: [] }, requests: [] };
+    const sent = [];
+    const intake = new Intake({
+      config,
+      urls: { inbox: 'https://p.example/in/', actor: 'https://p.example/ap/actor' },
+      remote: {}, local: {},
+      store: {
+        read: (n, d) => d, write: () => {},
+        getContacts: () => JSON.parse(JSON.stringify(state.contacts)),
+        setContacts: (c) => { state.contacts = c; },
+        getRequests: () => JSON.parse(JSON.stringify(state.requests)),
+        setRequests: (r) => { state.requests = r; },
+        getStatuses: () => [], getActors: () => ({}), isBlocked: () => false,
+        addNotification: () => {},
+      },
+      deliverer: { deliver: async (i, a) => sent.push({ i, a }) },
+      publisher: { publishCollections: async () => {} }, log: () => {},
+    });
+    intake.fetchAP = async (u) => ({ id: u, type: 'Person', inbox: u + '/inbox' });
+    return { intake, state, sent };
+  };
+  const follow = { type: 'Follow', id: 'https://them.example/f/9', actor: 'https://them.example/u/z' };
+
+  // Nothing proves the Follow came from the actor it names, so it waits rather
+  // than earning a signed Accept delivered to that person in our name.
+  const person = mk({ kind: 'person' });
+  await person.intake.onFollow(follow, follow.actor);
+  check(person.state.contacts.followers.length === 0 && person.state.requests.length === 1,
+    'an unverifiable Follow becomes a request rather than a follower');
+  check(person.sent.length === 0, 'and no Accept is signed and delivered to whoever it named');
+
+  const trusting = mk({ kind: 'person', autoAcceptFollows: true });
+  await trusting.intake.onFollow(follow, follow.actor);
+  check(trusting.state.contacts.followers.length === 1 && trusting.sent.length === 1,
+    'autoAcceptFollows: true restores the old behaviour for anyone who wants it');
+
+  // A GROUP is left alone: approveJoins:false is its operator saying in as many
+  // words that anyone may join, which is documented behaviour.
+  const openGroup = mk({ kind: 'group', approveJoins: false });
+  await openGroup.intake.onFollow(follow, follow.actor);
+  check(openGroup.state.contacts.followers.length === 1,
+    'an open group still admits at once — its gate is its own opt-in setting');
+
+  const gatedGroup = mk({ kind: 'group', approveJoins: true });
+  await gatedGroup.intake.onFollow(follow, follow.actor);
+  check(gatedGroup.state.requests.length === 1, 'and a gated one still queues');
+
+  // A queue nobody can answer is worse than no queue.
+  const admin = fs.readFileSync(path.join(root, 'lib/admin.mjs'), 'utf8');
+  const gated = (route) => {
+    const at = admin.indexOf(route);
+    return admin.slice(at, at + 300).includes("error: 'not a group'");
+  };
+  check(!gated("p === '/requests'") && !gated("case '/admit':"),
+    'reading and answering the queue are not group-only routes');
+  check(/refreshRequests/.test(fs.readFileSync(path.join(root, 'web/admin/admin.js'), 'utf8')),
+    'and the record page shows it to a person');
+}
+
 // --- 5e-bis. accessibility: contrast, reflow, language, status messages ---
 {
   const read = (f) => fs.readFileSync(path.join(root, f), 'utf8');
@@ -3781,12 +3874,20 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   const asPerson = await gjson('/members');
   const ejPerson = await gpost('/eject', { actor: MEM_B });
   const pendPerson = await gjson('/pending');
-  const reqPerson = await gjson('/requests');
   const joinsPerson = await gpost('/joins', { approve: true });
   check(asPerson.status === 404 && asPerson.json.error === 'not a group'
     && ejPerson.status === 404 && pendPerson.status === 404
-    && reqPerson.status === 404 && joinsPerson.status === 404,
-    'a person has no /members, /eject, /pending, /requests or /joins');
+    && joinsPerson.status === 404,
+    'a person has no /members, /eject, /pending or /joins');
+  // /requests, /admit and /refuse ARE a person's now: an inbound Follow cannot
+  // be bound to the actor it names, so one waits there — and a queue with no
+  // way to read or answer it would be worse than no queue.
+  const reqPerson = await gjson('/requests');
+  check(reqPerson.status === 200 && Array.isArray(reqPerson.json.requests),
+    'but a person does have /requests, because unverifiable follows wait in it');
+  const admitPerson = await gpost('/admit', { actor: 'https://nobody.example/u/x' });
+  check(admitPerson.status !== 404,
+    'and /admit answers for a person rather than 404ing the queue away');
   fs.rmSync(GHOME, { recursive: true, force: true });
 }
 

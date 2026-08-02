@@ -161,6 +161,11 @@ function render() {
     MODERATION.hidden = false;           // only a group has any
     renderGroupToggles();
     refreshGroup();
+  } else {
+    // A person has a follow-request queue too now: nothing binds an inbound
+    // Follow to the actor it names, so one that cannot be verified waits here
+    // rather than being accepted on the strength of who it claims to be.
+    refreshRequests();
   }
 }
 
@@ -381,6 +386,25 @@ function fill(listId, countId, items, make) {
   const li = rows[Math.min(index, rows.length - 1)];
   const same = li && [...li.querySelectorAll('button')].find(x => x.textContent === label);
   (same || li?.querySelector('button') || $(countId).closest('h3'))?.focus?.();
+}
+
+// The request rows, shared: a group calls them joins, a person calls them
+// follows, and the two do exactly the same thing to exactly the same queue.
+function fillRequests(list) {
+  fill('requests', 'requests-count', list, (r) => row(r.actor, r.at, [
+    ['Accept', () => write('/admit', { actor: r.actor }, 'accepted'), 'Let them follow you'],
+    ['Refuse', () => write('/refuse', { actor: r.actor }, 'refused'), 'Turn this down; they may ask again'],
+  ]));
+}
+
+// A person's whole group pane is this one block, and only when it has something
+// in it — an empty heading promising a list is what the group console avoids too.
+async function refreshRequests() {
+  const { json } = await api('/requests');
+  const list = json?.requests || [];
+  $('pane-group').hidden = !list.length;
+  $('block-requests').hidden = !list.length;
+  if (list.length) fillRequests(list);
 }
 
 async function refreshGroup() {
