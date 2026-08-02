@@ -19,6 +19,7 @@ import { Readable } from 'node:stream';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+let bootLog = '';
 const HOME = fs.mkdtempSync('/tmp/activitypod-smoke-');
 const PORT = 18621;
 const TOKEN = 'smoke-token';
@@ -26,13 +27,55 @@ const TOKEN = 'smoke-token';
 let failures = 0;
 const check = (ok, label) => { console.log(`${ok ? 'PASS' : 'FAIL'}  ${label}`); if (!ok) failures++; };
 
+// Every port in this suite is a fixed number, so an agent LEFT OVER FROM AN
+// EARLIER RUN answers in our child's place. That is not a flake, it is a suite
+// that passes while testing a different process: the child dies on EADDRINUSE,
+// its complaint goes into a bootLog nobody prints unless a check fails, and
+// every request lands on the old one. Verified — a leftover agent on 18621
+// produced 451 PASS against code that was never under test. When it then dies
+// mid-run you get ECONNRESET instead, which is how this was noticed at all.
+//
+// They leaked because the child is killed on the last line of a clean run, and
+// a crash never reaches it. Both halves are fixed: this refuses to start, and
+// the child is reaped on every exit path below.
+async function refusePortInUse(port) {
+  const answered = await fetch(`http://127.0.0.1:${port}/status`, { signal: AbortSignal.timeout(1500) })
+    .then(() => true).catch(() => false);
+  if (!answered) return;
+  console.log(`FAIL  port ${port} is already answering — most likely an agent left over`);
+  console.log('      from an earlier run of this suite. It would answer in place of the one');
+  console.log('      under test, and the run would go green without testing your changes.');
+  console.log(`      Find it with:  ss -ltnp | grep ${port}`);
+  process.exit(1);
+}
+await refusePortInUse(PORT);
+
 // --- 1. boot (unconfigured: no credential.json in HOME) ---
 const child = spawn(process.execPath, [path.join(root, 'run-agent.mjs')], {
   cwd: root,
   env: { ...process.env, AP_HOME: HOME, AP_PORT: String(PORT), AP_GATE_TOKEN: TOKEN },
   stdio: ['ignore', 'pipe', 'pipe'],
 });
-let bootLog = '';
+// The child is killed at the END of a clean run. A crash never reached that
+// line, so every crashed run leaked an agent onto 18621 and poisoned the next
+// one — which is what made this self-sustaining rather than a one-off.
+const reap = () => { try { child.kill('SIGKILL'); } catch { /* already gone */ } };
+process.on('exit', reap);
+for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => { reap(); process.exit(1); });
+process.on('uncaughtException', (e) => {
+  reap();
+  console.log(`FAIL  the suite threw: ${e.message}`);
+  console.log('--- agent log ---\n' + bootLog);
+  process.exit(1);
+});
+
+// A child that dies mid-run makes every later request fail in a way that looks
+// like a broken test. Say which it was.
+child.on('exit', (code, sig) => {
+  if (code === 0 || sig === 'SIGTERM' || sig === 'SIGKILL') return;
+  console.log(`FAIL  the agent under test exited early (code=${code} signal=${sig})`);
+  console.log('--- agent log ---\n' + bootLog);
+});
 child.stdout.on('data', d => { bootLog += d; });
 child.stderr.on('data', d => { bootLog += d; });
 
