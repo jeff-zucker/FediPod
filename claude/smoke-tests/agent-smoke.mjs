@@ -968,6 +968,63 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   idem.stopRenewal();
 }
 
+// --- 5o-ter. a pod asking to be left alone is left alone by EVERY method ---
+{
+  const { RemotePod } = await import(path.join(root, 'lib/remote.mjs'));
+  const res = (status, headers = {}, body = '') => ({
+    status, headers: { get: (h) => headers[h.toLowerCase()] ?? null },
+    text: async () => body, json: async () => JSON.parse(body),
+  });
+
+  const mk = (answer) => {
+    const seen = [];
+    const pod = new RemotePod({ webId: 'https://p.example/profile/card#me' }, { log: () => {} });
+    pod.session = { fetch: async (u, init) => { seen.push(init?.method || 'GET'); return answer(u, init); } };
+    return { pod, seen };
+  };
+
+  // A 429 answered to a WRITE must arm the cooldown. It never did: put/putJson/
+  // getJson/delete all went straight to session.fetch, so only a read could
+  // ever record that the pod had asked for quiet.
+  const w = mk(() => res(429, { 'retry-after': '120' }));
+  await w.pod.put('https://p.example/ap/actor', '{}', 'application/json').catch(() => {});
+  check(w.pod.pausedUntil > Date.now() + 60_000, 'a 429 on a PUT arms the pod cooldown');
+
+  // And once armed, nothing opens another socket until it expires.
+  const before = w.seen.length;
+  let threw = 0;
+  for (const call of [
+    () => w.pod.putJson('https://p.example/ap/outbox', {}),
+    () => w.pod.getJson('https://p.example/ap/actor'),
+    () => w.pod.delete('https://p.example/ap/inbox/1'),
+  ]) await call().catch(() => { threw++; });
+  check(threw === 3 && w.seen.length === before,
+    'inside the cooldown, writes/reads/deletes fail fast without opening a socket');
+
+  // A read that FAILED is not a document that is ABSENT — the distinction the
+  // replies collection depends on.
+  const g = mk(() => res(500));
+  let gotNull = false;
+  await g.pod.getJson('https://p.example/ap/n/1-replies')
+    .then((v) => { gotNull = v === null; }).catch(() => {});
+  check(gotNull === false, 'getJson throws on a failed read rather than reporting the document absent');
+
+  const g404 = mk(() => res(404));
+  check(await g404.pod.getJson('https://p.example/ap/n/1-replies') === null,
+    'a genuine 404 is still reported as absent');
+
+  // The caller that rewrites what it read must not treat a failure as empty.
+  const intakeSrc = fs.readFileSync(path.join(root, 'lib/intake.mjs'), 'utf8');
+  const addReply = intakeSrc.slice(intakeSrc.indexOf('async addReply('), intakeSrc.indexOf('async onAccept('));
+  check(!/getJson\([^)]*\)\.catch/.test(addReply),
+    'addReply does not swallow a failed read into an empty replies collection');
+
+  const remoteSrc = fs.readFileSync(path.join(root, 'lib/remote.mjs'), 'utf8');
+  const body = remoteSrc.slice(remoteSrc.indexOf('async put('));
+  check(!/this\.session\.fetch/.test(body),
+    'no method below fetch() reaches session.fetch directly, bypassing the cooldown');
+}
+
 // --- 5o-bis. demoting stands the lease down with everything else ---
 {
   const src = fs.readFileSync(path.join(root, 'run-agent.mjs'), 'utf8');
