@@ -776,7 +776,10 @@ if (cmd === 'up') {
     writeJsonAtomic(rotateCredPath, { ...cred, rotateKeyOnce: true });
     console.log('--force: the replacement key is minted as the agent connects\n');
   }
-  if (!await agent.connect()) {
+  // Read-only until you say yes: connecting for real acquires the lease and
+  // starts the whole active agent — a destructive inbox drain, a channel
+  // subscription, ACL probes and a tag-feed sweep — before the prompt.
+  if (!await agent.connect({ act: false })) {
     console.error('nothing to rotate — no configured agent in this AP_HOME');
     process.exit(2);
   }
@@ -788,6 +791,7 @@ if (cmd === 'up') {
   const ans = has('yes') ? 'y' : await ask('rotate now? (y/n)', 'n');
   endAsking();
   if (!/^y/i.test(ans)) { console.log('key unchanged'); process.exit(0); }
+  await agent.connect();                          // now it may act
   if (forced) {
     // connect() has already minted it; all that is left is telling the
     // fediverse. Calling rotateKey here would mint a second one for nothing.
@@ -1021,7 +1025,10 @@ if (cmd === 'up') {
   // what stops the traffic and also what destroys the record needed to come back.
   const { Agent } = await import(new URL('../run-agent.mjs', import.meta.url));
   const agent = new Agent({ home: HOME, log: (...a) => console.log(`[${cmd}]`, ...a) });
-  if (!await agent.connect()) {
+  // Read-only until you say yes: connecting for real acquires the lease and
+  // starts the whole active agent — a destructive inbox drain, a channel
+  // subscription, ACL probes and a tag-feed sweep — before the prompt.
+  if (!await agent.connect({ act: false })) {
     console.error(`nothing to ${cmd} — no configured, un-retired agent in this AP_HOME`);
     process.exit(2);
   }
@@ -1040,6 +1047,7 @@ if (cmd === 'up') {
     const ans = has('yes') ? 'y' : await ask('park this actor? (y/n)', 'n');
     endAsking();
     if (!/^y/i.test(ans)) { console.log('nothing changed'); process.exit(0); }
+    await agent.connect();                        // now it may act
     const r = await agent.park();
     console.log(`parked: unfollowed ${r.unfollowed}/${r.following}, ${r.snapshot} remembered, inbox closed`);
   } else {
@@ -1050,6 +1058,7 @@ if (cmd === 'up') {
     const ans = has('yes') ? 'y' : await ask('revive this actor? (y/n)', 'y');
     endAsking();
     if (!/^y/i.test(ans)) { console.log('nothing changed'); process.exit(0); }
+    await agent.connect();                        // now it may act
     const r = await agent.revive();
     console.log(`revived: inbox open, ${r.refollowed}/${r.of} follow(s) re-sent`);
   }
@@ -1060,7 +1069,10 @@ if (cmd === 'up') {
   const { Agent } = await import(new URL('../run-agent.mjs', import.meta.url));
   const { resolveHandle } = await import(new URL('../lib/social.mjs', import.meta.url));
   const agent = new Agent({ home: HOME, log: (...a) => console.log('[retire]', ...a) });
-  if (!await agent.connect()) {
+  // Read-only until you say yes: connecting for real acquires the lease and
+  // starts the whole active agent — a destructive inbox drain, a channel
+  // subscription, ACL probes and a tag-feed sweep — before the prompt.
+  if (!await agent.connect({ act: false })) {
     console.error('nothing to retire — no configured, un-retired agent in this AP_HOME');
     process.exit(2);
   }
@@ -1098,6 +1110,7 @@ if (cmd === 'up') {
     keep ? 'stand this actor down? (y/n)' : 'retire this actor? this cannot be undone (y/n)', 'n');
   endAsking();
   if (!/^y/i.test(ans)) { console.log('nothing changed'); process.exit(0); }
+  await agent.connect();                          // now it may act
 
   if (moveTo) {
     // Accept either a full actor URL or @user@host.

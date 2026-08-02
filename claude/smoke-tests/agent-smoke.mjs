@@ -1072,6 +1072,34 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   idem.stopRenewal();
 }
 
+// --- 5g-bis. a command you decline should not have acted already ---
+{
+  const bin = fs.readFileSync(path.join(root, 'bin/activitypod.mjs'), 'utf8');
+  const ra = fs.readFileSync(path.join(root, 'run-agent.mjs'), 'utf8');
+
+  check(/async connect\(\{ name = null, repair = true, act = true \} = \{\}\)/.test(ra)
+    && /if \(!act\) return true;/.test(ra),
+    'connect({ act: false }) reads the identity and stops short of acting');
+  // The stop has to come BEFORE the lease, or a declined command still holds it
+  // for the full 300s TTL and demotes the next start to a read-only viewer.
+  check(ra.indexOf('if (!act) return true;') < ra.indexOf('this.lease = new Lease('),
+    'and stops before the lease is acquired, not after');
+
+  check((bin.match(/connect\(\{ act: false \}\)/g) || []).length === 3,
+    'park/revive, retire and rotate-key all ask before they act');
+  check((bin.match(/now it may act/g) || []).length === 4,
+    'and each connects for real once the answer is yes');
+
+  // A forced reload belongs on promotion only: connect() has already loaded.
+  check(/if \(promoted\) await this\.refreshBeforeActing\(\)/.test(ra)
+    && (ra.match(/startActive\(\{ promoted: true \}\)/g) || []).length === 2,
+    'state is re-read when a viewer is promoted, not on every start');
+  const store = fs.readFileSync(path.join(root, 'lib/store.mjs'), 'utf8');
+  check(/async load\(\{ force = false \} = \{\}\)/.test(store)
+    && (store.match(/force \? null : this\.etags/g) || []).length === 2,
+    'load({ force }) sends no ETag, for the container or for any document under it');
+}
+
 // --- 5h-bis. a pod container is a boundary, in both implementations ---
 {
   const { HttpStorage, FileStorage } = await import(path.join(root, 'lib/storage.mjs'));

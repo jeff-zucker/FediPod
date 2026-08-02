@@ -166,7 +166,13 @@ export class Agent {
   // Bring federation up from the credential file + pod state. `name` (from
   // `run --name "…"`) updates the display name other servers show, without
   // the collateral of re-running setup.
-  async connect({ name = null, repair = true } = {}) {
+  // `act: false` reads the identity and stops. Everything a confirmation prompt
+  // needs — the handle, the host, the follow counts — is in pod state that is
+  // loaded by then, while acquiring the lease, draining the inbox, subscribing a
+  // notification channel, probing the ACLs and sweeping the tag feed are all
+  // things a command you are about to decline should never have spent. The
+  // command calls connect() again, without the flag, if you say yes.
+  async connect({ name = null, repair = true, act = true } = {}) {
     const cred = this.readCredential();
     if (!cred) return false;
     if (!this.remote) {
@@ -222,6 +228,8 @@ export class Agent {
     // handle was recorded has only a port there, so every one of those links
     // came out bare. Pod state is the authority; this is the cache of it.
     this.recordHandle(config.handle);
+
+    if (!act) return true;                   // reading only — see the note above
 
     // Exactly one agent may act on a pod (inbox drains are destructive
     // reads); later arrivals become read-only viewers of the same state.
@@ -286,7 +294,7 @@ export class Agent {
     if (!this.viewer) return false;
     if (!await this.lease.takeover()) return false;
     this.log('took the lease over');
-    await this.startActive();
+    await this.startActive({ promoted: true });
     return true;
   }
 
@@ -389,7 +397,7 @@ export class Agent {
       try {
         if (this.viewer && await this.lease.acquire()) {
           this.log('lease freed — promoting to ACTIVE');
-          await this.startActive();
+          await this.startActive({ promoted: true });
           return;
         }
         if (this.viewer) await this.store.load();
@@ -400,9 +408,10 @@ export class Agent {
 
   // The acting half: lease renewal, inbox drain, tag feed, delivery queue.
   // Called at connect when the lease is ours, or on viewer promotion.
-  async startActive({ repair = true } = {}) {
+  async startActive({ repair = true, promoted = false } = {}) {
     this.viewer = false;
     clearInterval(this.refreshTimer);
+    if (promoted) await this.refreshBeforeActing();
     this.lease.onLost = () => this.demote();
     this.lease.startRenewal();
     this.deliverer.startQueue();
@@ -444,6 +453,18 @@ export class Agent {
     this.backfillStatuses().catch(e => this.log(`statuses backfill failed: ${e.message}`));
   }
 
+  // Re-read state before acting on what we hold. A viewer's cache is kept
+  // current by revalidation against the CONTAINER, whose ETag vouches for its
+  // children existing rather than for their contents — so a peer rewriting
+  // contacts.json or statuses.json in place moves nothing this agent would
+  // notice. Only on promotion, never on a timer, and only documents that really
+  // changed come back with a body.
+  async refreshBeforeActing() {
+    if (!this.store.storage) return;
+    await this.store.load({ force: true })
+      .catch(e => this.log(`state refresh on promotion: ${e.message}`));
+  }
+
   // Another device claimed the lease (its user acted there) — stand down to
   // viewer so exactly one agent keeps draining.
   demote() {
@@ -475,6 +496,7 @@ export class Agent {
     setTimeout(async () => {
       if (this.viewer) return;                 // lost it again in the meantime
       try {
+        await this.refreshBeforeActing();
         await this.intake.start();
         this.tagfeed ||= new TagFeed({ store: this.store, intake: this.intake, log: this.log });
         this.tagfeed.start();
