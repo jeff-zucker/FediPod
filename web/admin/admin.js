@@ -97,10 +97,14 @@ function render() {
   // the heading; the pod, the issuer and the actor URL all read off the WebID;
   // and where the private half sits is not something you act on from here.
   const origins = config.origins || {};
+  // Two of these are addresses of things you can open, so they are links. The
+  // fediverse one goes to this actor's own page in the client, same origin, so
+  // it stays in the tab. The Solid one leaves for the pod, so it does not.
   const rows = [
     ['kind', config.kind ? config.kind[0].toUpperCase() + config.kind.slice(1) : config.kind],
-    ['Fediverse identity', config.address || `@${config.handle} — no resolvable address`],
-    ['Solid identity', config.webId],
+    ['Fediverse identity', config.address || `@${config.handle} — no resolvable address`,
+      config.accountId && config.address ? { href: `/admin/client/#/a/${config.accountId}` } : null],
+    ['Solid identity', config.webId, config.remotePod ? { href: config.remotePod, blank: true } : null],
     ['local store', config.home],
     // The address you actually open, not the bare number — the named origin when
     // there is one, since that is what the client and the OAuth redirect use.
@@ -109,12 +113,28 @@ function render() {
   ];
   if (config.quiescedAt) rows.push(['parked since', config.quiescedAt]);
   if (config.movedTo) rows.push(['moved to', config.movedTo]);
-  for (const [k, v] of rows) {
+  for (const [k, v, link] of rows) {
     if (!v) continue;
     const dt = document.createElement('dt');
     dt.textContent = k;
     const dd = document.createElement('dd');
-    dd.textContent = v;
+    if (link) {
+      const a = document.createElement('a');
+      a.href = link.href;
+      a.textContent = v;
+      if (link.blank) {
+        a.target = '_blank';
+        // noopener because the pod is another origin: without it the page we
+        // open gets a handle on this one through window.opener.
+        a.rel = 'noopener';
+        a.title = `   Open ${link.href} in a new tab`;
+      } else {
+        a.title = `   This actor's page in our client`;
+      }
+      dd.appendChild(a);
+    } else {
+      dd.textContent = v;
+    }
     // What a group can be moderated into is a property of BEING a group, so the
     // way in sits on the row that says so. Moved rather than built here: the
     // page still declares the button, and `facts` is emptied on every render.
@@ -440,7 +460,7 @@ const LIFECYCLE = {
   park: { path: '/park', title: 'Park', done: (r) => `parked ${r.quiescedAt}: unfollowed ${r.unfollowed}/${r.following}, inbox closed` },
   revive: { path: '/revive', title: 'Revive', done: (r) => `revived: inbox open, ${r.refollowed}/${r.of} follow(s) re-sent` },
   'rotate-key': { path: '/rotate-key', title: 'Rotate the signing key', done: (r) => (r.changed ? 'rotated and republished' : 'no change — the key was already fresh') },
-  retire: { path: '/retire', title: 'Retire', go: 'Retire this actor', danger: true, done: (r) => `retired ${r.deletedAt}: Delete delivered to ${r.inboxes} inbox(es)` },
+  retire: { path: '/retire', title: 'Retire this identity', go: 'Retire it', danger: true, done: (r) => `retired ${r.deletedAt}: Delete delivered to ${r.inboxes} inbox(es)` },
   move: { path: '/move', title: 'Transfer this identity', go: 'Transfer it', focus: 'move-target',
     done: (r) => `transferred to ${r.target}: Move delivered to ${r.inboxes} inbox(es), unfollowed ${r.unfollowed}/${r.following}` },
 };

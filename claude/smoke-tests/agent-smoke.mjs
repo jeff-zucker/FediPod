@@ -2880,6 +2880,8 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   const pin = await g('/admin/client/client.js').then(r => r.text());
   check(/info\?\.uri === status\.actor/.test(pin),
     'which matches on the actor URI — "who logged in at this origin" is a different question');
+  check(/location\.hash/.test(pin) && /whenReady/.test(pin),
+    'and forwards a deep link from the wrapper into the frame, so a link to an actor\'s page keeps the bar');
   check(/submit=1/.test(pin) && /#\/login\?/.test(pin),
     'and hands the client its instance after the hash, with a non-empty submit — an empty one never fires');
 

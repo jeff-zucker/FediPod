@@ -237,7 +237,7 @@ things you do to it. Identity lists the kind, both identities (the fediverse
 address and the WebID), where the private half is kept and which local address
 answers. Upkeep drains the inbox, recovers posts, and shows the log and the dead
 letters; Lifecycle parks, revives, rotates the signing key, transfers the identity to
-another account and retires, each behind a confirmation that states its
+another account and retires it, each behind a confirmation that states its
 consequences. First-run setup is at `/admin/setup/`.
 
 <!-- CLAUDE 2026-08-02 — added: move is in the UI, and retire offers it -->
@@ -247,8 +247,8 @@ advertises `movedTo`, so the old handle keeps resolving as a redirect rather
 than breaking. Name the destination as `@you@elsewhere` or an actor URL — a
 handle is resolved for you, because the Move's target has to be an actor URI or
 the far side has nothing to migrate anyone to. Afterwards the identity is
-parked, exactly as Park would. Transfer and retire both want the handle typed,
-being the two that cannot be taken back.
+parked, exactly as Park would. **Transfer identity** and **Retire identity** both want the handle typed, being
+the two that cannot be taken back.
 
 The retire confirmation offers those two directly rather than naming a command
 to go and type. Standing down keeps the handle and just stops the mail;

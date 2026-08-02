@@ -29,17 +29,27 @@
   const status = await fetch('/status').then(r => (r.ok ? r.json() : null)).catch(() => null);
   if (!status?.actor) return;                 // not set up yet; setup owns that
 
+  // A deep link into the client — the record links an actor's own page this way
+  // — arrives as a hash on THIS page, and the frame never sees it. Forward it,
+  // so the link lands where it says while keeping the bar above it.
+  const wanted = location.hash && location.hash !== '#' ? location.hash : null;
+  const sendTo = (hash) => {
+    try { frame.contentWindow.location.hash = hash; } catch { /* not ready yet */ }
+  };
+  const whenReady = (fn) => {
+    if (frame.contentWindow?.location?.href && frame.contentWindow.location.href !== 'about:blank') fn();
+    else frame.addEventListener('load', fn, { once: true });
+  };
+
   let accounts = [];
   try { accounts = JSON.parse(localStorage.getItem('accounts') || '[]'); } catch { /* unreadable */ }
-  if (accounts.some(a => a?.info?.uri === status.actor)) return;   // already ours
+  if (accounts.some(a => a?.info?.uri === status.actor)) {          // already ours
+    if (wanted) whenReady(() => sendTo(wanted));
+    return;
+  }
 
-  // Same origin, so the frame's own host is the instance to log into.
-  const go = () => {
-    try {
-      frame.contentWindow.location.hash =
-        `#/login?instance=${encodeURIComponent(location.host)}&submit=1`;
-    } catch { /* frame not ready; the load handler below gets it */ }
-  };
-  if (frame.contentWindow?.location?.href && frame.contentWindow.location.href !== 'about:blank') go();
-  else frame.addEventListener('load', go, { once: true });
+  // Same origin, so the frame's own host is the instance to log into. A deep
+  // link is dropped here on purpose: logging in navigates the frame anyway, and
+  // arriving somewhere unexpected afterwards is worse than arriving home.
+  whenReady(() => sendTo(`#/login?instance=${encodeURIComponent(location.host)}&submit=1`));
 })();
