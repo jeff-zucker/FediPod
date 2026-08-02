@@ -75,7 +75,7 @@ import net from 'node:net';
 import readline from 'node:readline';
 import { spawn } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { apRoot, profilesDir, identityHomes, isLegacyRoot, CURRENT_ROOT } from '../lib/home.mjs';
+import { apRoot, profilesDir, identityHomes, isLegacyRoot, CURRENT_ROOT, tildify } from '../lib/home.mjs';
 
 const args = process.argv.slice(2);
 const cmd = args[0];
@@ -564,13 +564,14 @@ if (cmd === 'up') {
   const { PodStore } = await import(new URL('../lib/store.mjs', import.meta.url));
   const { PodRdf } = await import(new URL('../lib/podrdf.mjs', import.meta.url));
   const { Agent } = await import(new URL('../run-agent.mjs', import.meta.url));
-  const where = (c) => c.privateRoot || `${apUrls(c.remotePod, c.root).home}(on the pod)`;
+  const where = (c) => (c.privateRoot ? tildify(c.privateRoot) : `${apUrls(c.remotePod, c.root).home}(on the pod)`);
 
   const to = flag('to');
   if (!to) {
     console.log(`private data: ${where(cred)}`);
     console.log(`public face:  ${apUrls(cred.remotePod, cred.root).home}`);
-    console.log('\nTo move it:  bin/activitypod.mjs state --to <container-url>');
+    console.log('\nTo move it:  bin/activitypod.mjs state --to ~/somewhere/private/');
+    console.log('             bin/activitypod.mjs state --to <container-url>');
     console.log('             bin/activitypod.mjs state --to pod');
     process.exit(0);
   }
@@ -578,8 +579,18 @@ if (cmd === 'up') {
     console.error(`an agent is running on port ${PORT} — stop it first:  bin/activitypod.mjs stop`);
     process.exit(1);
   }
-  const target = to === 'pod' ? null : (to.endsWith('/') ? to : to + '/');
-  if (target) { try { new URL(target); } catch { console.error(`"${to}" is not a container URL`); process.exit(2); } }
+  // A path or a URL. `state` prints the path form, so refusing it here would
+  // mean what the command shows you is not what it takes back — two chars before
+  // the colon, so a Windows drive letter is a path rather than a scheme.
+  let target = null;
+  if (to !== 'pod') {
+    const asPath = !/^[a-z][a-z0-9+.-]+:/i.test(to);
+    const raw = asPath
+      ? pathToFileURL(path.resolve(to.replace(/^~(?=[/\\]|$)/, os.homedir()))).href
+      : to;
+    target = raw.endsWith('/') ? raw : raw + '/';
+    try { new URL(target); } catch { console.error(`"${to}" is not a container URL or a path`); process.exit(2); }
+  }
   if ((cred.privateRoot || null) === target) { console.log(`already there: ${where(cred)}`); process.exit(0); }
 
   const agent = new Agent({ home: HOME, log: (...a) => console.log('[state]', ...a) });
@@ -689,8 +700,8 @@ if (cmd === 'up') {
   const overridden = !!(process.env.AP_HOME || flag('home'));
 
   if (!to) {
-    console.log(`\nroot:      ${AP_ROOT}${isLegacyRoot(AP_ROOT) ? '   (the name from before the rename)' : ''}`);
-    console.log(`this home: ${HOME}`);
+    console.log(`\nroot:      ${tildify(AP_ROOT)}${isLegacyRoot(AP_ROOT) ? '   (the name from before the rename)' : ''}`);
+    console.log(`this home: ${tildify(HOME)}`);
     for (const { name, dir } of identityHomes(AP_ROOT)) {
       if (fs.existsSync(path.join(dir, 'credential.json'))) console.log(`  · ${name}`);
     }

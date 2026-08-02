@@ -130,10 +130,19 @@ left behind was on the pod the whole time. To see or change it afterwards:
 
 ```
 bin/activitypod.mjs state                    # where it lives now
+bin/activitypod.mjs state --to ~/somewhere/private/
 bin/activitypod.mjs state --to http://localhost:8000/dk-pod/activitypods-js/
-bin/activitypod.mjs state --to file:///home/you/.solid-activitypub/private/
 bin/activitypod.mjs state --to pod           # move it back
 ```
+
+<!-- CLAUDE 2026-08-01 — added: paths are shown short, and taken short -->
+`--to` takes a path or a URL. Paths are shown the way you would type them —
+`~/.solid-activitypub/private/` rather than
+`file:///home/you/.solid-activitypub/private/` — and what it prints is what it
+takes back, so you can paste one line into the next. A command it suggests you
+run still names the directory in full: display is for reading, a command is for
+pasting.
+<!-- /CLAUDE -->
 
 Stop the agent first. It copies both trees and checks they arrived before it
 repoints anything, and it leaves the old copy where it was for you to delete.

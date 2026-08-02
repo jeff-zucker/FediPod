@@ -1345,9 +1345,14 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   };
 
   const shown = run(['home']);
-  check(shown.code === 0 && shown.out.includes(legacy) && /before the rename/.test(shown.out)
+  // Displayed paths are tildified — the home directory is the least interesting
+  // part of every one of them. The runnable line is NOT: a command you are meant
+  // to paste says exactly which directory it means.
+  check(shown.code === 0 && /root:\s+~\/\.activitypod/.test(shown.out) && /before the rename/.test(shown.out)
     && shown.out.includes(`home --to ${path.join(fake, CURRENT_ROOT)}`),
-    'home names the root, flags the old name, and prints the move as a runnable line');
+    'home names the root as ~/…, flags the old name, and prints the move as a runnable absolute line');
+  check(!/root:\s+\/.*\.activitypod/.test(shown.out),
+    'and does not also print the long form of the root it just shortened');
 
   const occupied = path.join(fake, 'taken');
   fs.mkdirSync(occupied); fs.writeFileSync(path.join(occupied, 'x'), 'x');
@@ -3970,6 +3975,20 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
     'state documents AND the RDF notes both came across');
   check(docs.has('/moveA/ap-state/config.json'),
     'and the old copy is left behind rather than deleted');
+
+  // `state` PRINTS the path form, so it has to take the path form back — a
+  // command that shows you one thing and accepts another is a trap.
+  const asPath = path.join(SHOME15, 'by-path');
+  const byPath = await runCli(['state', '--to', asPath]);
+  const credByPath = JSON.parse(fs.readFileSync(path.join(SHOME15, 'credential.json'), 'utf8'));
+  check(byPath.ok && credByPath.privateRoot === pathToFileURL(asPath).href + '/',
+    `--to takes a bare path and records it as a file: URL (${byPath.ok ? credByPath.privateRoot : byPath.out.slice(-140)})`);
+  check(fs.existsSync(path.join(asPath, 'ap-state', 'config.json')),
+    'and the documents really are on disk there');
+
+  const shownPath = await runCli(['state']);
+  check(shownPath.out.includes('by-path') && !shownPath.out.includes('file://'),
+    `state shows the path rather than the file: URL (${shownPath.out.split('\n')[0]})`);
 
   fs.rmSync(SHOME15, { recursive: true, force: true });
   privatePod.close();
