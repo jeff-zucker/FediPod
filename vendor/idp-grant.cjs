@@ -218,8 +218,13 @@ function createGrantSession(rec, { gateToken, gatedOrigin, backoffFile = null, t
   // to a fresh key and a fresh grant.
   const saved = readSavedToken(tokenFile);
   const keyPairP = saved
-    ? importSavedKey(saved).catch(() => generateKeyPair('ES256'))
-    : generateKeyPair('ES256');
+    // `extractable: true` because the DPoP key is exported two ways: as the
+    // public JWK that rides in every proof header, and to token.json so a
+    // restart resumes the same session instead of minting a fresh grant. jose 6
+    // makes generated keys non-extractable by default, which turns both of
+    // those into "non-extractable CryptoKey cannot be exported as a JWK".
+    ? importSavedKey(saved).catch(() => generateKeyPair('ES256', { extractable: true }))
+    : generateKeyPair('ES256', { extractable: true });
   let accessToken = saved?.accessToken || null;
   let expiresAt = saved?.expiresAt || 0;
   let rsNonce = null;
