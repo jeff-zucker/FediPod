@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="820" height="644" viewBox="0 0 820 644" role="img" aria-labelledby="ttl dsc">
 <title id="ttl">Solid ActivityPub — the pod as a relay, the private half on your machine</title>
-<desc id="dsc">The same two halves as the main architecture diagram, with the private half moved. The pod keeps what the ActivityPub protocol forces to be public: webfinger and host-meta at the host root, the actor document and public key, an inbox anyone may append to, public copies of the outbox, followers, following and notes, media, and nodeinfo. It keeps one private thing as well, the lease, because that is what stops two machines acting at once. The agent is local: it publishes the public face, delivers signed activities, drains the inbox, looks up handles, serves a Mastodon-compatible client API with a client built in, and polls public hashtag timelines directly. Everything else private is a plain directory on your machine,, beside the credential and the signing key: your notes and the timeline you received as RDF, and the operational state. The agent publishes and drains against the remote pod and receives notification pushes from it.</desc>
+<desc id="dsc">The same two halves as the main architecture diagram, with the private half moved. The pod keeps what the ActivityPub protocol forces to be public: webfinger and host-meta at the host root, the actor document and public key, an inbox anyone may append to, public copies of the outbox, followers, following and notes, media, and nodeinfo. The outbox is paged to save load on the pod host. The pod keeps one private thing as well, the lease, because that is what stops two machines acting at once. The agent is local: it publishes the public face, signs and POSTs activities, collects and verifies the inbox, looks up handles by webfinger, serves a Mastodon-compatible client API with a client built in, and polls public hashtag timelines without the pod being involved. Everything else private is a local pod or a directory: notes, timeline, contacts, blocklist, client tokens, the Solid credential and the Fediverse signing key. The agent publishes and drains against the remote pod and receives notification pushes from it.</desc>
 <style>
   text { font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif; }
   .t  { font-size: 14px; font-weight: 400; }
@@ -51,7 +51,7 @@
 <text class="ts boxtx" x="70" y="324">the relay: mail lands here</text>
 <rect class="box" x="56" y="340" width="248" height="42" rx="4" stroke-width="0.5"/>
 <text class="t boxtx" x="70" y="358">outbox, followers, following, notes</text>
-<text class="ts boxtx" x="70" y="374">paged, so a post costs the same at 5000</text>
+<text class="ts boxtx" x="70" y="374">paged to save load on the pod host</text>
 <rect class="box" x="56" y="390" width="248" height="42" rx="4" stroke-width="0.5"/>
 <text class="t boxtx" x="70" y="408">media</text>
 <text class="ts boxtx" x="70" y="424">attachments, so their ids resolve</text>
@@ -73,7 +73,7 @@
 <text class="ts boxtx" x="530" y="274">signs and POSTs activities</text>
 <rect class="box" x="516" y="290" width="248" height="42" rx="4" stroke-width="0.5"/>
 <text class="t boxtx" x="530" y="308">intake</text>
-<text class="ts boxtx" x="530" y="324">stores it, THEN deletes it</text>
+<text class="ts boxtx" x="530" y="324">collects and verifies the inbox</text>
 <rect class="box" x="516" y="340" width="248" height="42" rx="4" stroke-width="0.5"/>
 <text class="t boxtx" x="530" y="358">resolveHandle</text>
 <text class="ts boxtx" x="530" y="374">webfinger lookups for handles</text>
@@ -94,9 +94,9 @@
 <line class="arr" x1="320" y1="308" x2="498" y2="308" marker-end="url(#arrow)"/>
 
 <rect class="coral" x="500" y="530" width="280" height="94" rx="8" stroke-width="0.5"/>
-<text class="th coraltx" x="640" y="554" text-anchor="middle">A directory on your machine</text>
-<text class="ts coraltx" x="518" y="576">your notes and the timeline you received, as RDF</text>
-<text class="ts coraltx" x="518" y="592">contacts, queue, blocklist, client tokens</text>
-<text class="ts coraltx" x="518" y="608">beside the credential and the signing key</text>
+<text class="th coraltx" x="640" y="554" text-anchor="middle">A local pod or directory</text>
+<text class="ts coraltx" x="518" y="576">notes, timeline, contacts, blocklist,</text>
+<text class="ts coraltx" x="518" y="592">client tokens, Solid credential,</text>
+<text class="ts coraltx" x="518" y="608">Fediverse signing key</text>
 <line class="arr" x1="640" y1="530" x2="640" y2="503" marker-end="url(#arrow)"/>
 </svg>
