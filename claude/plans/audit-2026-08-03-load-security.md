@@ -244,6 +244,10 @@ inventory is F1's first output.
 Ordered by what a stranger can do to you, then by what the last round's own fixes broke. One
 commit per step, smoke checks with each, pause for review between.
 
+**Done so far** (2026-08-03, 752 → 782 checks, green): **A1–A3** in `bb7e853`, **B4–B5** in
+`47fd225` (which also closed the same forgery at its two other sites, the tag feed and the URL
+branch of `/api/v2/search`), **B10** in `7bc16f6`. Everything else below is untouched.
+
 **A. Exposure — first, because it is the park's stated revisit condition.**
 1. Decide locality from the connection, not the header: `req.socket.remoteAddress` in
    `Authorities.isLocal`, keeping the Host test as a weaker second check. Because a same-host
