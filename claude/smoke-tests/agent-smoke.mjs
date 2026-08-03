@@ -1335,6 +1335,83 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   docs[OB] = wireM.orderedCollection(OB, ['a', 'b']);
   check((await pub.readPublishedOutbox())?.length === 2,
     'and the flat collection an older actor still publishes is read as it always was');
+
+  // --- and REMOVING one costs the same as adding one ---
+  //
+  // Anchoring at the oldest end is right for appends and wrong for removals:
+  // deriving the pages from position meant every entry after the hole shifted
+  // back one, so every page from there to the newest was rewritten. Taking down
+  // one old post rewrote the whole history.
+  pub.remote.delete = async (u) => { seen.push(`DEL ${u.split('/ap/')[1]}`); };
+  const firstIndex = state['published.json'].outboxIndex;
+  check(Array.isArray(firstIndex) && firstIndex.length === 3
+    && firstIndex[0].length === 20 && firstIndex[2].length === 5,
+    `the page assignment is kept, oldest page first (${firstIndex?.map(p => p.length).join('/')})`);
+
+  // The contrast, kept in the suite rather than measured once: derive the pages
+  // from position, as outboxPages does, and taking the oldest entry out changes
+  // every one of them.
+  const full = state['outbox.json'];
+  const short = full.filter(i => i !== 'https://pod.example/ap/notes/n1');
+  const derivedBefore = wireM.outboxPages(full).map(p => JSON.stringify(p));
+  const derivedAfter = wireM.outboxPages(short).map(p => JSON.stringify(p));
+  check(derivedAfter.filter((x, i) => x !== derivedBefore[i]).length === 3,
+    'deriving pages from position would rewrite all three for one old removal');
+  const keptAfter = wireM.outboxPaging(short, state['published.json'].outboxIndex).pages
+    .map(p => JSON.stringify(p));
+  const keptBefore = wireM.outboxPaging(full, state['published.json'].outboxIndex).pages
+    .map(p => JSON.stringify(p));
+  check(keptAfter.filter((x, i) => x !== keptBefore[i]).length === 1,
+    'keeping the assignment rewrites exactly the one that held it');
+
+  seen.length = 0;
+  await pub.unrecordOutbox(i => i === 'https://pod.example/ap/notes/n1');   // the OLDEST
+  check(seen.filter(x => x.startsWith('PUT outbox-')).length === 1,
+    `removing the oldest entry rewrites one page, not all of them (${seen.join(', ')})`);
+  check(state['published.json'].outboxIndex[0].length === 19
+    && state['published.json'].outboxIndex[2].length === 5,
+    'the page it was on is simply one shorter, and the pages above it do not move');
+
+  // A short page must not confuse the head, or `first` points below the newest
+  // page and everything above it stops being reachable.
+  seen.length = 0;
+  await pub.publishOutbox(state['outbox.json']);
+  const headDoc = wireM.outboxHead(OB, 44, 3);
+  check(headDoc.first === `${OB}-3`,
+    '`first` still names the newest page once a page has gone short');
+
+  // The repair path: the pod has lost the pages, our digests still match, and
+  // without force we would rewrite the head to point at documents that 404.
+  seen.length = 0;
+  await pub.publishOutbox(state['outbox.json'], { force: true });
+  check(seen.filter(x => x.startsWith('PUT outbox-')).length === 3,
+    `force rewrites every page, which is the whole point of the repair path (${seen.filter(x => x.startsWith('PUT outbox-')).length})`);
+  check(seen.filter(x => x.startsWith('ACL outbox-')).length === 3,
+    'and their ACLs, because a lost page lost those too');
+
+  // Emptying an OLD page leaves it numbered where it is. Closing the gap up
+  // would renumber every page above it, which is the re-slicing this exists to
+  // avoid — one empty document is the cheaper end of that trade.
+  seen.length = 0;
+  const oldest = new Set(state['outbox.json'].slice(-19));                 // all of page 1
+  await pub.unrecordOutbox(i => oldest.has(i));
+  check(state['published.json'].outboxIndex.length === 3
+    && state['published.json'].outboxIndex[0].length === 0
+    && state['published.json'].outboxIndex[2].length === 5,
+    `an emptied old page keeps its number rather than renumbering the rest (${
+      state['published.json'].outboxIndex.map(p => p.length).join('/')})`);
+
+  // Removing the NEWEST entries is the case that really shrinks the collection:
+  // the pages above the new count are orphans the head no longer points at, but
+  // whose URLs are public and guessable, still serving activities taken back.
+  seen.length = 0;
+  const newest = new Set(state['outbox.json'].slice(0, 5));                // all of page 3
+  await pub.unrecordOutbox(i => newest.has(i));
+  check(seen.filter(x => x.startsWith('DEL outbox-')).length === 1,
+    `the page the outbox shrank past is deleted, not left serving (${
+      seen.filter(x => x.startsWith('DEL')).join(', ') || 'none'})`);
+  check(state['published.json'].outboxIndex.length === 2,
+    'and the assignment shrinks with it');
 }
 
 // --- 5a-septies. paging, revocation, and two helpers that were two ---
@@ -1540,6 +1617,72 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   const isrc = fs.readFileSync(path.join(root, 'lib/intake.mjs'), 'utf8');
   check(!/note\.type !== 'Note'/.test(isrc),
     'and neither ingestNote nor onUpdate insists on Note any more');
+
+  // --- one inbound Delete{actor} is one outbox publish ---
+  {
+    const { Intake } = await import(path.join(root, 'lib/intake.mjs'));
+    const GONE = 'https://gone.example/u/x';
+    const statuses = Array.from({ length: 12 }, (_, i) => ({
+      noteId: `${GONE.replace('/u/x', '')}/n/${i}`, actor: GONE,
+      announceActivity: { id: `https://p.example/ap/a/${i}`, type: 'Announce' },
+    }));
+    let unrecords = 0;
+    let removed = 0;
+    const intake = new Intake({
+      config: { kind: 'group' },
+      urls: { actor: 'https://p.example/ap/actor', notes: 'https://p.example/ap/notes/' },
+      remote: {}, local: { delete: async () => {}, fedi: 'x/' },
+      store: {
+        read: (n, d) => d, write: () => {},
+        getContacts: () => ({ followers: [{ actor: GONE }], following: [] }),
+        setContacts: () => {}, getStatuses: () => statuses, getActors: () => ({}),
+        isBlocked: () => false, removeStatus: () => {}, updateStatus: () => {},
+      },
+      deliverer: { deliverToAll: async () => {} },
+      publisher: {
+        publishCollections: async () => {},
+        unrecordOutbox: async (m) => { unrecords++; removed = statuses.filter(s => m(s.announceActivity)).length; },
+      },
+      log: () => {},
+    });
+    intake.isGone = async () => true;
+    intake.known = () => true;
+    await intake.onDelete({ type: 'Delete', object: GONE, actor: GONE }, GONE);
+    check(unrecords === 1,
+      `a departing member's whole history is one outbox publish, not one each (${unrecords})`);
+    check(removed === 12, `and all ${removed} of their carried posts come out of it`);
+  }
+
+  // --- a publish that could not be confirmed does not record its digest ---
+  {
+    const { Publisher } = await import(path.join(root, 'lib/publisher.mjs'));
+    const state = {};
+    const mkPub = (readable) => new Publisher({
+      config: { remotePod: 'https://pod.example/', handle: 'you', name: 'You' },
+      remote: {
+        put: async () => {}, putJson: async () => {}, setAcl: async () => {},
+        delete: async () => {}, getJson: async () => null, fetch: async () => ({ ok: false }),
+      },
+      local: { writeContacts: async () => {}, writeSettings: async () => {} },
+      store: {
+        read: (n, d) => (n in state ? JSON.parse(JSON.stringify(state[n])) : d),
+        write: (n, v) => { state[n] = v; },
+        getStatuses: () => [], getContacts: () => ({ followers: [], following: [] }), setContacts: () => {},
+      },
+      deliverer: { deliverToAll: async () => {} }, publicKeyPem: 'x', log: () => {},
+      probeFetch: async () => ({ ok: readable, status: readable ? 200 : 403 }),
+    });
+    const bad = await mkPub(false).publishProfile();
+    check(bad.unreachable.length > 0 && !state['published.json']?.surfaceDigest,
+      `a publish nobody can read records no digest (${bad.unreachable.length} unreachable)`);
+    // ...so the save the operator makes BECAUSE the first did not work is not
+    // waved through as "profile unchanged".
+    const retry = await mkPub(true).publishProfile();
+    check(!retry.skipped && state['published.json'].surfaceDigest,
+      'and the retry actually republishes rather than being skipped as a no-op');
+    const third = await mkPub(true).publishProfile();
+    check(third.skipped, 'once it is genuinely up there, the digest does its job again');
+  }
 
   // --- a document may only speak for its own origin ---
   {
