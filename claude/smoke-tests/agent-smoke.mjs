@@ -5906,6 +5906,20 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   check(shownPath.out.includes('by-path') && !shownPath.out.includes('file://'),
     `state shows the path rather than the file: URL (${shownPath.out.split('\n')[0]})`);
 
+  // The refusal has to come BEFORE the copy. It used to be the last thing the
+  // command did: a typo'd `http://` destination got every state document —
+  // masto-tokens.json included — and every RDF note, in the clear, and was then
+  // told the address was unacceptable. "nothing was repointed, nothing was
+  // deleted" was true, and read as nothing having happened.
+  const clear = await runCli(['state', '--to', 'http://nas.local/private/']);
+  check(!clear.ok && /unencrypted private-data address/.test(clear.out),
+    'a plaintext destination off this machine is refused');
+  check(!/moving the private half|copied \d+ state document/.test(clear.out),
+    'and refused before a single document is sent, not after they all are');
+  // Loopback still crosses no wire, which is what the existing moves rely on.
+  const loop = await runCli(['state', '--to', `http://127.0.0.1:${PPORT}/moveC/`]);
+  check(loop.ok, `a loopback http destination is still allowed (${loop.ok ? 'ok' : loop.out.slice(-140)})`);
+
   fs.rmSync(SHOME15, { recursive: true, force: true });
   privatePod.close();
 }

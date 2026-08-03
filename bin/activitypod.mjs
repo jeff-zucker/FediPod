@@ -725,6 +725,17 @@ if (cmd === 'up') {
     try { new URL(target); } catch { console.error(`"${to}" is not a container URL or a path`); process.exit(2); }
   }
   if ((cred.privateRoot || null) === target) { console.log(`already there: ${where(cred)}`); process.exit(0); }
+  // Before anything is built or sent, not after. This check used to sit at the
+  // very bottom, past the copy — so `--to http://nas.local/private/`, a typo
+  // for https or a plaintext box on the LAN, wrote every state document
+  // (masto-tokens.json included) and every RDF note to that host in the clear,
+  // and only then said the address was refused. The messages around it, which
+  // say nothing was repointed and the old copy was left where it was, were
+  // true and read as "nothing happened".
+  if (/^https?:/i.test(target || '')) {
+    const bad = insecureUrlReason(target, 'private-data address');
+    if (bad) { console.error(bad); process.exit(2); }
+  }
 
   const agent = new Agent({ home: HOME, log: (...a) => console.log('[state]', ...a) });
   agent.urls = apUrls(cred.remotePod, cred.root);
@@ -779,10 +790,6 @@ if (cmd === 'up') {
     console.log('and wrong if you expected a timeline here. Check the source if so.\n');
   }
 
-  if (/^https?:/i.test(target || '')) {
-    const bad = insecureUrlReason(target, 'private-data address');
-    if (bad) { console.error(bad); process.exit(2); }
-  }
   if (target) cred.privateRoot = target; else delete cred.privateRoot;
   writeJsonAtomic(credPath, cred);
   console.log(`\nprivate data now: ${where(cred)}`);
