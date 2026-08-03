@@ -498,10 +498,12 @@ once the group has actually read that actor's document; anyone it has not, it
 still shows by URL, because guessing the name from the last segment of the URL
 is what once rendered every group as `@actor@host`.
 
-The moderation settings — who may join, what gets carried — are behind
-**Moderation options**, which sits beside the kind in Identity — what a group can
-be moderated into is a property of being one — rather than standing above the
-lists.
+<!-- CLAUDE 2026-08-03 — the Moderation options panel became two dropdowns -->
+The moderation settings — who may join, what gets carried — are two dropdowns
+right on the kind line in Identity: **join requests** and **posts**, each
+reading *moderated* or *unmoderated*. What each shows is the current state, and
+changing the word is the whole action — what a group can be moderated into is a
+property of being one, so the controls sit on the row that says "Group".
 The join-request and post-review queues appear only when their setting is on and
 something is actually waiting: with the setting off nothing can ever arrive in
 them, so a heading would be promising a list that cannot fill.
