@@ -378,8 +378,8 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
   const all = mk();
   await all.pub.publishCollections();
-  check(all.seen.length === 8,
-    `an unnarrowed publish is still the whole surface — 2 reads, 3 PUTs, 3 ACLs (saw ${all.seen.length})`);
+  check(all.seen.length === 10,
+    `an unnarrowed publish is still the whole surface — the outbox is a page + a head now (saw ${all.seen.length})`);
 
   // One new follower changes the follower list. It does not change what this
   // actor follows, it does not change the outbox, and it cannot change an ACL
@@ -401,9 +401,11 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     'the followers reconcile still runs — it is what protects a restored machine');
   const ob = mk();
   await ob.pub.publishCollections({ outbox: true });
-  check(ob.seen[0].startsWith('GET') && ob.seen[0].endsWith('ap/outbox')
-    && ob.seen[1].startsWith('PUT') && ob.seen[1].endsWith('ap/outbox'),
+  check(ob.seen[0].startsWith('GET') && ob.seen[0].endsWith('ap/outbox'),
     'and the outbox reconcile runs when the outbox is what is being written');
+  check(ob.seen.some(x => x.startsWith('PUT') && /ap\/outbox-\d+$/.test(x))
+    && ob.seen.some(x => x.startsWith('PUT') && x.endsWith('ap/outbox')),
+    'which writes a page and the head, not one document carrying everything');
 
   // Every caller that knows what it changed says so.
   for (const [file, fn] of [['lib/intake.mjs', 'intake'], ['lib/social.mjs', 'social']]) {
@@ -1189,6 +1191,76 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     'while a group still reaches amplify, which is idempotent on its own');
   check(/MAX_ITEM_BYTES/.test(isrc) && /size > MAX_ITEM_BYTES/.test(isrc),
     'an oversized inbox item is dead-lettered on the size the listing already gave us');
+}
+
+// --- 5a-octies. the outbox is paged, so posting costs the same at 5000 posts ---
+{
+  const wireM = await import(path.join(root, 'lib/wire.mjs'));
+  const { Publisher } = await import(path.join(root, 'lib/publisher.mjs'));
+
+  // Pages are anchored at the OLDEST end. Number them from the newest and every
+  // boundary shifts each time you post, which is the original problem again.
+  const items = Array.from({ length: 45 }, (_, i) => `n${45 - i}`);      // newest-first
+  const b4 = wireM.outboxPages(items).map(x => JSON.stringify(x));
+  const aft = wireM.outboxPages(['n46', ...items]).map(x => JSON.stringify(x));
+  check(aft.filter((x, i) => x !== b4[i]).length === 1,
+    'one new activity changes exactly one page, however long the history');
+  check(wireM.outboxPages([]).length === 1,
+    'an empty outbox still has a page, so `first` always points somewhere');
+
+  const head = wireM.outboxHead('https://p/ap/outbox', 45);
+  check(head.first === 'https://p/ap/outbox-3' && head.last === 'https://p/ap/outbox-1',
+    '`first` is the NEWEST page, which is the direction a client reads');
+  check(wireM.outboxPage('https://p/ap/outbox', 3, []).next === 'https://p/ap/outbox-2'
+    && !wireM.outboxPage('https://p/ap/outbox', 1, []).next,
+    '`next` walks backwards in time and stops at the oldest page');
+  check(!wireM.outboxPage('https://p/ap/outbox', 2, []).prev,
+    'and a sealed page carries no prev, so it never needs rewriting');
+
+  // The cost that used to grow with everything you had ever said.
+  const seen = [];
+  const state = {};
+  const pub = new Publisher({
+    config: { remotePod: 'https://pod.example/', handle: 'you', name: 'You' },
+    remote: {
+      put: async () => {}, putJson: async (u) => seen.push(`PUT ${u.split('/ap/')[1]}`),
+      setAcl: async (u) => seen.push(`ACL ${u.split('/ap/')[1]}`),
+      fetch: async () => ({ ok: false }),
+      getJson: async () => null,
+    },
+    local: { writeContacts: async () => {} },
+    store: {
+      read: (n, d) => (n in state ? JSON.parse(JSON.stringify(state[n])) : d),
+      write: (n, v) => { state[n] = v; },
+      getStatuses: () => [], getContacts: () => ({ followers: [], following: [] }), setContacts: () => {},
+    },
+    deliverer: { deliverToAll: async () => {} }, publicKeyPem: 'x', log: () => {},
+  });
+  const costs = [];
+  for (let i = 1; i <= 45; i++) {
+    seen.length = 0;
+    await pub.recordOutbox(`https://pod.example/ap/notes/n${i}`);
+    costs.push(seen.length);
+  }
+  check(costs[1] === 2 && costs[43] === 2,
+    `posting costs the same at 45 posts as at 2 (${costs[1]} then ${costs[43]} requests)`);
+  check(costs[20] === 3, 'except the post that opens a new page, which also writes its ACL');
+  check(state['outbox.json'].length === 45, 'and nothing is dropped — every activity is still there');
+
+  // rebuild reads this to recover posts a lost machine no longer has, so the
+  // walk has to work — including against the flat collection this used to write.
+  const OB = pub.urls.outbox;
+  const docs = { [OB]: wireM.outboxHead(OB, 45) };
+  wireM.outboxPages(state['outbox.json']).forEach((pg, i) => {
+    docs[wireM.outboxPageId(OB, i + 1)] = wireM.outboxPage(OB, i + 1, pg);
+  });
+  pub.remote.getJson = async (u) => docs[u] || null;
+  const walked = await pub.readPublishedOutbox();
+  check(walked?.length === 45, `walking the pages recovers every activity (${walked?.length})`);
+
+  docs[OB] = wireM.orderedCollection(OB, ['a', 'b']);
+  check((await pub.readPublishedOutbox())?.length === 2,
+    'and the flat collection an older actor still publishes is read as it always was');
 }
 
 // --- 5a-septies. paging, revocation, and two helpers that were two ---
