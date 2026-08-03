@@ -213,6 +213,30 @@ if (up) {
   check((await reuse.json()).access_token === tokBody.access_token,
     'a live token still exchanges for itself');
 
+  // --- the admin body must say it is JSON ---
+  // A cross-origin form POST needs no preflight, and JSON.parse never cared
+  // what Content-Type claimed, so a visited page could reach every write route.
+  const formish = await fetch(`http://127.0.0.1:${PORT}/block`, {
+    method: 'POST', headers: { ...gh, 'content-type': 'text/plain;charset=UTF-8' },
+    body: JSON.stringify({ domain: 'evil.example' }),
+  });
+  check(formish.status === 400 && /application\/json/.test((await formish.json()).error),
+    `a form-shaped POST is refused whatever the body says (got ${formish.status})`);
+  const urlencoded = await fetch(`http://127.0.0.1:${PORT}/block`, {
+    method: 'POST', headers: { ...gh, 'content-type': 'application/x-www-form-urlencoded' },
+    body: '{"domain":"evil.example"}',
+  });
+  check(urlencoded.status === 400, `and so is the other preflight-free encoding (got ${urlencoded.status})`);
+  // `stop` POSTs /shutdown with neither, so an empty body still has to parse.
+  const noType = await fetch(`http://127.0.0.1:${PORT}/block`, { method: 'POST', headers: gh });
+  check(noType.status === 400 && /domain or actor/.test((await noType.json()).error),
+    'an empty body with no content-type still reaches the route');
+  const proper = await fetch(`http://127.0.0.1:${PORT}/block`, {
+    method: 'POST', headers: { ...gh, 'content-type': 'application/json' },
+    body: JSON.stringify({ domain: 'evil.example' }),
+  });
+  check(proper.status === 200, `a JSON POST is unaffected (got ${proper.status})`);
+
   const stubs = await fetch(`http://127.0.0.1:${PORT}/api/v1/filters`, { headers: gh });
   check(stubs.status === 200 && Array.isArray(await stubs.json()), 'stub endpoint returns []');
 
@@ -530,9 +554,17 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   check([null, 'a_b', 'A B', 'x@y', '-lead', 'trail-', ''].every(h => hostLabel(h) === null),
     'anything that is not already a DNS label gets no named origin, rather than being mangled');
   const withLabel = allowedAuthorities(8041, ['solo']);
-  check(withLabel.has('solo.localhost:8041') && withLabel.has('solo.localhost')
-    && withLabel.has('localhost:8041'),
+  check(withLabel.has('solo.localhost:8041') && withLabel.has('localhost:8041'),
     'the named origin joins the loopback set, it does not replace it');
+  // `http://localhost` IS port 80. Emitting the port-less form whatever port we
+  // are on put every other local server's pages inside our own origin set — a
+  // page on 127.0.0.1:80 sends `Origin: http://localhost`, which passed.
+  check(!withLabel.has('solo.localhost') && !withLabel.has('localhost')
+    && !withLabel.has('127.0.0.1'),
+    'the port-less authority is not ours unless we are on 80/443');
+  const on80 = allowedAuthorities(80, ['solo']);
+  check(on80.has('localhost') && on80.has('solo.localhost') && on80.has('localhost:80'),
+    'on port 80 the port-less authority really is ours');
   const wsNamed = wsOrigins(8041, ['solo']);
   check(wsNamed.includes('ws://solo.localhost:8041')
     && new Set(wsNamed).size === wsNamed.length,
@@ -554,6 +586,30 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   check(exposed.has('box.tailnet.example:8041') && !exposed.isLocal('box.tailnet.example:8041')
     && exposed.isLocal('solo.localhost:8041') && exposed.isLocal('localhost:8041'),
     'a deliberately exposed host is allowed but is not "this machine"');
+
+  // --- locality is a property of the connection too, not the header alone ---
+  const { isLoopbackSocket, exposureProblem } = await import(path.join(root, 'lib/guard.mjs'));
+  const req = (host, addr) => ({ headers: { host }, socket: { remoteAddress: addr } });
+  check(isLoopbackSocket(req('x', '127.0.0.1')) && isLoopbackSocket(req('x', '::1'))
+    && isLoopbackSocket(req('x', '::ffff:127.0.0.1'))
+    && !isLoopbackSocket(req('x', '10.0.0.4')) && !isLoopbackSocket({ headers: {} }),
+    'a loopback socket is recognised in all three spellings, and absence is not one');
+  check(auth.isLocalRequest(req('localhost:8041', '127.0.0.1'))
+    && !auth.isLocalRequest(req('localhost:8041', '10.0.0.4'))
+    && !auth.isLocalRequest(req('evil.example', '127.0.0.1')),
+    'a local-only route wants the Host AND the socket to agree');
+
+  // The whole reason the check above is not enough: a same-host proxy connects
+  // from loopback and rewrites Host to one, so an exposed agent has nothing
+  // left but a shared secret. Refuse rather than pretend.
+  check(exposureProblem({ allowedHosts: '', gateToken: '' }) === null
+    && exposureProblem({ allowedHosts: '  , ', gateToken: '' }) === null,
+    'an agent that is not exposed needs no gate token');
+  check(exposureProblem({ allowedHosts: 'box.tailnet.example', gateToken: 's3cret' }) === null,
+    'an exposed agent with a gate token is allowed to start');
+  const why = exposureProblem({ allowedHosts: 'box.tailnet.example', gateToken: '' });
+  check(typeof why === 'string' && /AP_GATE_TOKEN/.test(why) && /box\.tailnet\.example/.test(why),
+    'an exposed agent with no gate token is refused, and told which host and which variable');
 }
 
 // --- 5c1b. bio, avatar and mentions ---
@@ -3480,12 +3536,16 @@ if (up) {
     host: 'me.localhost:8030', log: () => {},
   });
 
-  const ask = async (host) => {
+  // The socket is part of the request the authorize path now reads: locality is
+  // decided by where the connection came from as well as what Host it asked
+  // for, so a fixture that models only the header models only half of it.
+  const ask = async (host, remoteAddress = '127.0.0.1') => {
     const res = { status: 0, body: null, headers: null,
       writeHead(s, h) { this.status = s; this.headers = h; }, end(b) { this.body = b; } };
     const req = Readable.from([]);
     req.method = 'GET';
     req.headers = { host };
+    req.socket = { remoteAddress };
     await api.handle(req, res, '/oauth/authorize',
       new URL('http://x/oauth/authorize?redirect_uri=urn:ietf:wg:oauth:2.0:oob'));
     return res;
@@ -3509,6 +3569,13 @@ if (up) {
   allowed.rebuild();
   check(remote.status === 403 && /passwd/.test(remote.body || ''),
     `an exposed address with no password is refused, and told what to run (${remote.status})`);
+
+  // And the forgery that check used to be worth nothing against: a caller who
+  // reaches an exposed agent and simply CLAIMS a loopback Host. The header is
+  // the client's to write; the socket is not.
+  const forgedHost = await ask('localhost:8030', '10.0.0.4');
+  check(forgedHost.status === 403,
+    `claiming Host: localhost from off-machine no longer mints (${forgedHost.status})`);
 
   // The one place the precondition is stated where it can be seen.
   const ra = fs.readFileSync(path.join(root, 'run-agent.mjs'), 'utf8');

@@ -69,7 +69,12 @@ function cookieValue(header, name) {
   return undefined;
 }
 
-function makeGate(token, { allowOrigins = [] } = {}) {
+// `publicEndpoints` opts back into the exemptions above. They are CSS's rules,
+// vendored with this file: this agent serves no WebID document and no OIDC
+// provider, so on it they exempt three paths that only ever 404 — and would
+// silently un-gate any future route underneath them. An agent exposed by
+// AP_ALLOWED_HOSTS has nothing but this token, so the gate has to be total.
+function makeGate(token, { allowOrigins = [], publicEndpoints = false } = {}) {
   // gate(req, res) → true when the gate handled the response (caller stops).
   function gate(req, res) {
     if (!token) return false;
@@ -94,7 +99,7 @@ function makeGate(token, { allowOrigins = [] } = {}) {
     const from = req.headers.origin || req.headers.referer || '';
     if (allowOrigins.some((o) => from === o || from.startsWith(o + '/'))) return false;
 
-    if (isPublicEndpoint(req)) return false;   // public WebID / OIDC endpoints
+    if (publicEndpoints && isPublicEndpoint(req)) return false;   // public WebID / OIDC endpoints
 
     res.writeHead(401, { 'content-type': 'text/plain' });
     res.end('solid-activitypub: missing or bad token\n');

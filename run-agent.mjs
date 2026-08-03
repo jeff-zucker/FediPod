@@ -32,6 +32,7 @@ import { Intake } from './lib/intake.mjs';
 import { TagFeed } from './lib/tagfeed.mjs';
 import { Lease } from './lib/lease.mjs';
 import { startAdmin } from './lib/admin.mjs';
+import { exposureProblem } from './lib/guard.mjs';
 import { apUrls } from './lib/wire.mjs';
 import { followActor, unfollowActor, resolveHandle } from './lib/social.mjs';
 
@@ -229,13 +230,14 @@ export class Agent {
     // came out bare. Pod state is the authority; this is the cache of it.
     this.recordHandle(config.handle);
 
-    // Said once, where the config is finally known. It cannot be checked at
-    // listen time — the server is up before any pod state is read — and it
-    // cannot be a refusal, because the operator may be mid-setup. The actual
-    // enforcement is per-request, in mastoapi's authorize path.
+    // Said once, where the config is finally known. Exposure without a gate
+    // token is refused before the socket opens (startAgent), so reaching here
+    // means the token is set and the whole surface is behind it. A UI password
+    // is the second, per-person half: without one, anyone who has the token
+    // gets a client bearer for the asking.
     if (process.env.AP_ALLOWED_HOSTS && !config.uiPassword) {
-      this.log('WARNING: AP_ALLOWED_HOSTS is set and no UI password is — logins from those '
-        + 'addresses are refused until you run `activitypod passwd`');
+      this.log('WARNING: AP_ALLOWED_HOSTS is set and no UI password is — anyone holding '
+        + 'AP_GATE_TOKEN can mint a client token. Run `activitypod passwd`.');
     }
 
     if (!act) return true;                   // reading only — see the note above
@@ -602,6 +604,15 @@ export async function startAgent({
   };
   agent.log = log;
   agent.store.log = log;
+  // Before the socket, not after: an agent that must not be reachable at that
+  // address must never have answered there. This used to be a warning said at
+  // connect time, which is both too late (the server has been listening for
+  // seconds) and too narrow (it only ever described the OAuth login).
+  const exposure = exposureProblem({ allowedHosts: process.env.AP_ALLOWED_HOSTS, gateToken });
+  if (exposure) {
+    log(`refusing to start:\n${exposure}`);
+    process.exit(2);
+  }
   startAdmin({ port, gateToken, agent, log, handle });
 
   // The pod (or its issuer) can be briefly unreachable — a 504 from the
