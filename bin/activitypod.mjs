@@ -720,18 +720,24 @@ if (cmd === 'up') {
   // and it has to cover ALL of them: a running agent holds its state
   // write-through in memory, so a copy taken underneath one is overwritten by
   // its next write.
-  const live = [];
-  for (const { name, dir } of homes) {
-    let port = null;
-    try { port = JSON.parse(fs.readFileSync(path.join(dir, 'agent.json'), 'utf8')).port; } catch { continue; }
-    if (!port) continue;
-    const why = await somethingOn(port);
-    if (why) live.push(`${name} on ${port} (${why})`);
-  }
-  if (live.length) {
-    console.error(`still answering: ${live.join(', ')}`);
-    console.error('stop them first — a running agent would overwrite the copy with what it holds');
-    process.exit(2);
+  // Only when something is actually going to be written. A dry run reads
+  // credential files and prints what it found, and refusing to do THAT while
+  // the agents are up defeats the whole point of leading with the inventory:
+  // you would have to stop everything to find out whether you needed to.
+  if (has('apply')) {
+    const live = [];
+    for (const { name, dir } of homes) {
+      let port = null;
+      try { port = JSON.parse(fs.readFileSync(path.join(dir, 'agent.json'), 'utf8')).port; } catch { continue; }
+      if (!port) continue;
+      const why = await somethingOn(port);
+      if (why) live.push(`${name} on ${port} (${why})`);
+    }
+    if (live.length) {
+      console.error(`still answering: ${live.join(', ')}`);
+      console.error('stop them first — a running agent would overwrite the copy with what it holds');
+      process.exit(2);
+    }
   }
 
   const rows = [];
@@ -891,7 +897,18 @@ if (cmd === 'up') {
   if (!cred.privateRoot || !target) {
     const { RemotePod } = await import(new URL('../lib/remote.mjs', import.meta.url));
     agent.remote = new RemotePod(cred, { log: () => {}, home: HOME });
-    await agent.remote.warmup();
+    // A pod that is not there is the ordinary case for an identity nobody has
+    // run in a while, and it used to arrive as an unhandled rejection — 20
+    // lines of undici internals ending in ECONNREFUSED, with the reason on the
+    // last line. Say which pod and why, and stop.
+    try { await agent.remote.warmup(); }
+    catch (e) {
+      const why = e?.cause?.code === 'ECONNREFUSED' ? 'nothing is listening there' : (e.message || String(e));
+      console.error(`cannot reach the pod this identity keeps its private half on:`);
+      console.error(`  ${cred.remotePod} — ${why}`);
+      console.error('Nothing was copied and nothing was repointed. Start the pod and try again.');
+      process.exit(1);
+    }
   }
   const destCred = { ...cred, privateRoot: target };
   const from = agent.privateUrls(cred);
