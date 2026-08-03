@@ -173,7 +173,7 @@ has a position.
 started, and that is what a plain command means afterwards:
 
 ```
-bin/activitypod.mjs --profile group start   # today
+bin/activitypod.mjs start --profile group   # today
 bin/activitypod.mjs status                  # …means group from now on
 ```
 
