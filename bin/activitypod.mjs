@@ -86,6 +86,7 @@ import { apRoot, profilesDir, identityHomes, isLegacyRoot, CURRENT_ROOT, tildify
   readRoot, writeRoot, defaultProfile, profileHome, rootHoldsIdentity, ROOT_FILE,
   recordLastUsed, writeJsonAtomic } from '../lib/home.mjs';
 import { insecureUrlReason } from '../lib/safefetch.mjs';
+import { portFree, freePortFrom } from '../lib/ports.mjs';
 
 const args = process.argv.slice(2);
 const cmd = args[0];
@@ -216,21 +217,9 @@ function endAsking() { sharedRl?.close(); sharedRl = null; }
 // "Occupied" means "cannot be bound", not "does not answer HTTP": something
 // holding a port without speaking HTTP reads as free to a GET, and then the
 // agent dies on EADDRINUSE.
-function portFree(port) {
-  return new Promise((resolve) => {
-    const probe = net.createServer();
-    probe.once('error', () => resolve(false));
-    probe.once('listening', () => probe.close(() => resolve(true)));
-    probe.listen(port, '127.0.0.1');
-  });
-}
 
 // The first port from `first` upward that binds. Walking always ends in one,
 // so this is a step rather than a condition.
-async function freePortFrom(first, span = 50) {
-  for (let p = first; p < first + span; p++) if (await portFree(p)) return p;
-  throw new Error(`no free port between ${first} and ${first + span}`);
-}
 
 // Whatever is on the port — is it one of ours?
 async function agentOn(port) {
@@ -378,7 +367,11 @@ if (cmd === 'up') {
     already = await agentOn(preferred);
     // Ours already — nothing to start. Anything else is simply not this port;
     // walking on is what "occupied" has always meant here.
-    if (!already) port = await freePortFrom(preferred + 1);
+    if (!already) {
+      port = await freePortFrom(preferred + 1);
+      // The shared helper returns null; the message is this command's to write.
+      if (port == null) throw new Error(`no free port between ${preferred + 1} and ${preferred + 51}`);
+    }
   }
 
   // Both branches take the named origin: setup at the shared one would file the
@@ -762,6 +755,18 @@ if (cmd === 'up') {
     }
   }
   console.log(`copied ${notes} note(s)`);
+
+  // An empty source produces an empty destination, and every check above
+  // passes: nothing failed to land because nothing was sent. The command then
+  // repointed the credential and said it had moved your private data. Say what
+  // actually happened instead — an empty move is usually a wrong --from, and
+  // finding that out later means looking for a timeline that was never there.
+  if (src.cache.size === 0 && notes === 0) {
+    console.log('\nNOTHING WAS COPIED — the source held no state documents and no notes.');
+    console.log(`  from: ${where(cred)}`);
+    console.log('The pointer is being moved anyway, which is right for a fresh identity');
+    console.log('and wrong if you expected a timeline here. Check the source if so.\n');
+  }
 
   if (/^https?:/i.test(target || '')) {
     const bad = insecureUrlReason(target, 'private-data address');

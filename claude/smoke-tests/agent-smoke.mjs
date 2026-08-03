@@ -1191,6 +1191,58 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     'an oversized inbox item is dead-lettered on the size the listing already gave us');
 }
 
+// --- 5a-septies. paging, revocation, and two helpers that were two ---
+{
+  const masto = fs.readFileSync(path.join(root, 'lib/mastoapi.mjs'), 'utf8');
+
+  // A client walks a timeline by following the Link header. Nothing emitted
+  // one, so an account's posts stopped at the first page whatever it asked for.
+  check(/rel="next"/.test(masto) && /rel="prev"/.test(masto),
+    'the API emits the Link header clients page with');
+  check(/max_id/.test(masto) && /since_id/.test(masto) && /min_id/.test(masto),
+    'and honours all three cursors, not just max_id');
+  const accStatuses = masto.slice(masto.indexOf('mAccStatuses'), masto.indexOf('mAccStatuses') + 600);
+  check(/this\.page\(/.test(accStatuses),
+    "an account's own statuses paginate rather than stopping at 20");
+
+  // Logging out of a client left a working 90-day bearer behind.
+  const rev = masto.slice(masto.indexOf("'/oauth/revoke'"), masto.indexOf("'/oauth/revoke'") + 700);
+  check(/masto-tokens\.json/.test(rev) && /filter\(r => r\.token !== gone\)/.test(rev),
+    '/oauth/revoke actually drops the token');
+
+  // idFor scanned the whole map on the status-render path, once per status,
+  // for a mapping the hash already determines.
+  const store = fs.readFileSync(path.join(root, 'lib/store.mjs'), 'utf8');
+  const idFor = store.slice(store.indexOf('idFor(url)'), store.indexOf('urlFor(id)'));
+  check(idFor.indexOf('createHash') < idFor.indexOf('Object.entries'),
+    'idFor computes the id before it considers scanning for a legacy one');
+  const { PodStore } = await import(path.join(root, 'lib/store.mjs'));
+  const st = new PodStore({ log: () => {} });
+  const a = st.idFor('https://x.example/n/1');
+  check(st.idFor('https://x.example/n/1') === a, 'and is stable for the same url');
+  st.write('ids.json', { legacyid: 'https://y.example/n/2' });
+  check(st.idFor('https://y.example/n/2') === 'legacyid',
+    'while an id a client is still holding keeps resolving');
+
+  // portFree/freePortFrom lived twice and had already drifted — one returned
+  // null on exhaustion, the other threw, and both spawn agents.
+  for (const f of ['lib/admin.mjs', 'bin/activitypod.mjs']) {
+    const src = fs.readFileSync(path.join(root, f), 'utf8');
+    check(!/^(async )?function (portFree|freePortFrom)/m.test(src),
+      `${f} no longer carries its own copy`);
+    check(/from '(\.\.\/lib|\.)\/ports\.mjs'/.test(src), `${f} imports the shared one`);
+  }
+  const { freePortFrom } = await import(path.join(root, 'lib/ports.mjs'));
+  check(await freePortFrom(1, 1) === null, 'the shared helper returns null rather than throwing');
+
+  // rebuild is one pod GET per post ever made, in one burst.
+  check(/REBUILD_MAX_PER_RUN/.test(fs.readFileSync(path.join(root, 'lib/publisher.mjs'), 'utf8')),
+    'rebuild is capped per run and says so when it stops');
+  // and an empty state migration used to report success
+  check(/NOTHING WAS COPIED/.test(fs.readFileSync(path.join(root, 'bin/activitypod.mjs'), 'utf8')),
+    '`state --to` says when it moved nothing rather than reporting a move');
+}
+
 // --- 5a-sexies. a profile save that changes nothing costs nothing ---
 {
   const { Publisher } = await import(path.join(root, 'lib/publisher.mjs'));
