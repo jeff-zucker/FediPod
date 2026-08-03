@@ -1541,8 +1541,61 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   check(!/note\.type !== 'Note'/.test(isrc),
     'and neither ingestNote nor onUpdate insists on Note any more');
 
+  // --- a document may only speak for its own origin ---
+  {
+    const { authorOf } = await import(path.join(root, 'lib/intake.mjs'));
+    const NOTE = 'https://evil.example/n/1';
+    const ALICE = 'https://mastodon.example/users/alice';
+    check(authorOf({ id: NOTE, attributedTo: ALICE }) === null,
+      'a note cannot be attributed to an actor at another origin');
+    check(authorOf({ id: NOTE, attributedTo: { id: ALICE } }) === null
+      && authorOf({ id: NOTE, attributedTo: [ALICE] }) === null,
+      'and the object and array spellings of attributedTo are refused too');
+    const MINE = 'https://evil.example/u/x';
+    check(authorOf({ id: NOTE, attributedTo: MINE }) === MINE
+      && authorOf({ id: NOTE, attributedTo: [{ id: MINE }] }) === MINE,
+      'its own origin still vouches for its own author, however it is spelled');
+    // The Create envelope is same-origin-checked already, so the delivering
+    // actor is a safe fallback there — and is refused on a boost, where it is
+    // the booster and crediting them would be its own small forgery.
+    check(authorOf({ id: NOTE }, MINE) === MINE && authorOf({ id: NOTE }, ALICE) === null,
+      'an unattributed note falls back to the deliverer only at its own origin');
+    check(authorOf({ id: NOTE }) === null && authorOf({}, MINE) === null
+      && authorOf(null) === null,
+      'and with nothing to go on it names nobody rather than guessing');
+  }
+
+  // --- the actor cache is keyed on who vouched, not on who claimed ---
+  {
+    const { Intake } = await import(path.join(root, 'lib/intake.mjs'));
+    const cached = {};
+    const intake = new Intake({
+      config: {}, urls: {}, remote: {}, local: {},
+      store: { read: (n, d) => d, write: () => {}, cacheActor: (u, d) => { cached[u] = d; } },
+      deliverer: {
+        signedFetch: async (u) => ({
+          status: 200,
+          headers: { get: () => 'application/activity+json' },
+          // Whatever we ask for, this host answers with a document claiming to
+          // BE somebody else's actor.
+          text: async () => JSON.stringify({
+            id: 'https://mastodon.example/users/alice', type: 'Person',
+            name: 'Alice (verified)', preferredUsername: 'alice',
+          }),
+          body: null,
+        }),
+      },
+      publisher: {}, log: () => {},
+    });
+    const doc = await intake.fetchAP('https://evil.example/actor');
+    check(doc && doc.id === 'https://mastodon.example/users/alice',
+      'the document is still returned, so the callers can reject it on id');
+    check(Object.keys(cached).length === 0,
+      'but a stranger claiming another actor\'s id does not get cached under it');
+  }
+
   // --- the tag feed ---
-  const mk = (fetcher, blocked = []) => {
+  const mk = (fetcher, blocked = [], attributedTo = null) => {
     const added = [];
     const tf = new TagFeed({
       store: {
@@ -1551,7 +1604,16 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
         isBlocked: (u) => blocked.some(b => String(u).startsWith(b)),
         addStatus: (s) => added.push(s),
       },
-      intake: { fetchAP: async (u) => ({ id: u, type: 'Note', content: 'hi', attributedTo: 'https://spam.example/u/x' }) },
+      // The author is at the note's OWN origin, because a note cannot speak for
+      // an actor anywhere else — the fixture used to serve every note as
+      // spam.example's work whatever host it came from, which is the forgery
+      // authorOf now refuses.
+      intake: {
+        fetchAP: async (u) => ({
+          id: u, type: 'Note', content: 'hi',
+          attributedTo: attributedTo || `${new URL(u).origin}/u/x`,
+        }),
+      },
       log: () => {}, fetcher,
     });
     return { tf, added };
@@ -1570,6 +1632,17 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   const okRun = mk(async () => ({ status: 200, json: async () => [{ uri: 'https://ok.example/n/1' }] }));
   await okRun.tf.sweep();
   check(okRun.added.length === 1, 'while an unblocked one still does');
+
+  // The other way round a block, and the reason it worked: nothing checked that
+  // the note's origin had any business naming that author. Post under a
+  // followed tag from a host you control, credit it to anyone.
+  const forged = mk(
+    async () => ({ status: 200, json: async () => [{ uri: 'https://evil.example/n/1' }] }),
+    [], 'https://mastodon.example/users/alice',
+  );
+  await forged.tf.sweep();
+  check(forged.added.length === 0,
+    'a tagged note cannot name an author its own origin does not vouch for');
 
   // It is somebody else's server, polled on our schedule, with no other way to
   // ask us to stop. A 429 used to log a line and change nothing.
