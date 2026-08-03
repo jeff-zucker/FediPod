@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="820" height="710" viewBox="0 0 820 710" role="img" aria-labelledby="ttl dsc">
+<svg xmlns="http://www.w3.org/2000/svg" width="820" height="644" viewBox="0 0 820 644" role="img" aria-labelledby="ttl dsc">
 <title id="ttl">Solid ActivityPub — the pod as a relay, the private half on your machine</title>
-<desc id="dsc">The same two halves as the main architecture diagram, with one box moved. The pod keeps what the ActivityPub protocol forces to be public — webfinger and host-meta at the host root, the actor document and public key, an inbox anyone may append to, public copies of the outbox, followers and notes, and media — plus one private document, the lease, which stays because it is what stops two machines acting at once. The agent is unchanged and still local. Everything else private moves to a pod on your machine: the RDF truth in fediverse slash, the operational state in ap-state slash, and AP_HOME with the credential and signing key. The agent publishes and drains against the remote pod and receives notification pushes from it. Two costs: no concurrent multi-device, and recovery bounded by your backup interval rather than free.</desc>
+<desc id="dsc">The same two halves as the main architecture diagram, with the private half moved. The pod keeps what the ActivityPub protocol forces to be public: webfinger and host-meta at the host root, the actor document and public key, an inbox anyone may append to, public copies of the outbox, followers, following and notes, media, and nodeinfo. It keeps one private thing as well, the lease, because that is what stops two machines acting at once. The agent is local: it publishes the public face, delivers signed activities, drains the inbox, looks up handles, serves a Mastodon-compatible client API with a client built in, and polls public hashtag timelines directly. Everything else private is a plain directory on your machine,, beside the credential and the signing key: your notes and the timeline you received as RDF, and the operational state. The agent publishes and drains against the remote pod and receives notification pushes from it.</desc>
 <style>
   text { font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif; }
   .t  { font-size: 14px; font-weight: 400; }
@@ -37,45 +37,52 @@
 <text class="th graytx" x="56" y="62">The fediverse</text>
 <text class="ts graytx" x="56" y="79">Mastodon, Lemmy, anyone else</text>
 
-<rect class="teal" x="40" y="128" width="280" height="354" rx="8" stroke-width="0.5"/>
+<rect class="teal" x="40" y="128" width="280" height="420" rx="8" stroke-width="0.5"/>
 <text class="th tealtx" x="180" y="152" text-anchor="middle">A pod — the relay</text>
 <text class="ts tealtx" x="180" y="170" text-anchor="middle">what must be public, and one thing more</text>
 <rect class="box" x="56" y="190" width="248" height="42" rx="4" stroke-width="0.5"/>
 <text class="t boxtx" x="70" y="208">webfinger + host-meta</text>
-<text class="ts boxtx" x="70" y="224">at the host root</text>
+<text class="ts boxtx" x="70" y="224">at the host root, so the handle resolves</text>
 <rect class="box" x="56" y="240" width="248" height="42" rx="4" stroke-width="0.5"/>
-<text class="t boxtx" x="70" y="258">ap/actor + public key</text>
-<text class="ts boxtx" x="70" y="274">fetched to check signatures</text>
+<text class="t boxtx" x="70" y="258">actor document + public key</text>
+<text class="ts boxtx" x="70" y="274">fetched to check your signatures</text>
 <rect class="box" x="56" y="290" width="248" height="42" rx="4" stroke-width="0.5"/>
-<text class="t boxtx" x="70" y="308">ap/inbox — public append</text>
+<text class="t boxtx" x="70" y="308">inbox — anyone may append</text>
 <text class="ts boxtx" x="70" y="324">the relay: mail lands here</text>
 <rect class="box" x="56" y="340" width="248" height="42" rx="4" stroke-width="0.5"/>
-<text class="t boxtx" x="70" y="358">ap/outbox, followers, notes</text>
-<text class="ts boxtx" x="70" y="374">copies, so ids resolve</text>
+<text class="t boxtx" x="70" y="358">outbox, followers, following, notes</text>
+<text class="ts boxtx" x="70" y="374">paged, so a post costs the same at 5000</text>
 <rect class="box" x="56" y="390" width="248" height="42" rx="4" stroke-width="0.5"/>
-<text class="t boxtx" x="70" y="408">ap/media</text>
-<text class="ts boxtx" x="70" y="424">attachments, same reason</text>
-<rect class="box" x="56" y="440" width="248" height="26" rx="4" stroke-width="0.5" stroke-dasharray="3 3"/>
-<text class="ts boxtx" x="70" y="457">ap-state/lease.json — the single writer</text>
+<text class="t boxtx" x="70" y="408">media</text>
+<text class="ts boxtx" x="70" y="424">attachments, so their ids resolve</text>
+<rect class="box" x="56" y="440" width="248" height="42" rx="4" stroke-width="0.5"/>
+<text class="t boxtx" x="70" y="458">nodeinfo</text>
+<text class="ts boxtx" x="70" y="474">what a client probes when it logs in</text>
+<rect class="box" x="56" y="490" width="248" height="42" rx="4" stroke-width="0.5" stroke-dasharray="3 3"/>
+<text class="t boxtx" x="70" y="508">the lease — the single writer</text>
+<text class="ts boxtx" x="70" y="524">stays here even when nothing else does</text>
 
-<rect class="purple" x="500" y="128" width="280" height="320" rx="8" stroke-width="0.5"/>
+<rect class="purple" x="500" y="128" width="280" height="374" rx="8" stroke-width="0.5"/>
 <text class="th purpletx" x="640" y="152" text-anchor="middle">Solid ActivityPub (local)</text>
 <text class="ts purpletx" x="640" y="170" text-anchor="middle">behavior part of an AP server</text>
 <rect class="box" x="516" y="190" width="248" height="42" rx="4" stroke-width="0.5"/>
 <text class="t boxtx" x="530" y="208">publish</text>
-<text class="ts boxtx" x="530" y="224">the public face only</text>
+<text class="ts boxtx" x="530" y="224">keeps the public face current</text>
 <rect class="box" x="516" y="240" width="248" height="42" rx="4" stroke-width="0.5"/>
 <text class="t boxtx" x="530" y="258">deliver</text>
 <text class="ts boxtx" x="530" y="274">signs and POSTs activities</text>
-<rect class="box" x="516" y="290" width="248" height="46" rx="4" stroke-width="0.5"/>
+<rect class="box" x="516" y="290" width="248" height="42" rx="4" stroke-width="0.5"/>
 <text class="t boxtx" x="530" y="308">intake</text>
 <text class="ts boxtx" x="530" y="324">stores it, THEN deletes it</text>
-<rect class="box" x="516" y="344" width="248" height="42" rx="4" stroke-width="0.5"/>
-<text class="t boxtx" x="530" y="362">resolveHandle</text>
-<text class="ts boxtx" x="530" y="378">webfinger lookups for handles</text>
-<rect class="box" x="516" y="394" width="248" height="42" rx="4" stroke-width="0.5"/>
-<text class="t boxtx" x="530" y="412">admin</text>
-<text class="ts boxtx" x="530" y="428">serves the local web UI</text>
+<rect class="box" x="516" y="340" width="248" height="42" rx="4" stroke-width="0.5"/>
+<text class="t boxtx" x="530" y="358">resolveHandle</text>
+<text class="ts boxtx" x="530" y="374">webfinger lookups for handles</text>
+<rect class="box" x="516" y="390" width="248" height="42" rx="4" stroke-width="0.5"/>
+<text class="t boxtx" x="530" y="408">client API + web UI</text>
+<text class="ts boxtx" x="530" y="424">Mastodon-compatible, a client built in</text>
+<rect class="box" x="516" y="440" width="248" height="46" rx="4" stroke-width="0.5"/>
+<text class="t boxtx" x="530" y="458">tag feed</text>
+<text class="ts boxtx" x="530" y="474">public hashtags, never touches the pod</text>
 
 <line class="arr" x1="180" y1="88" x2="180" y2="126" marker-end="url(#arrow)"/>
 <text class="ts graytx" x="192" y="112">fetches + delivers</text>
@@ -86,22 +93,10 @@
 <text class="ts graytx" x="410" y="296" text-anchor="middle">pushes notifications</text>
 <line class="arr" x1="320" y1="308" x2="498" y2="308" marker-end="url(#arrow)"/>
 
-<rect class="coral" x="500" y="510" width="280" height="150" rx="8" stroke-width="0.5"/>
-<text class="th coraltx" x="640" y="534" text-anchor="middle">A pod on your machine</text>
-<text class="ts coraltx" x="518" y="558">fediverse/ — your notes as RDF</text>
-<text class="ts coraltx" x="518" y="576">ap-state/ — config, contacts, queue,</text>
-<text class="ts coraltx" x="518" y="592">statuses, notifications, blocklist</text>
-<text class="ts coraltx" x="518" y="610">AP_HOME — credential + signing key</text>
-<text class="ts coraltx" x="640" y="636" text-anchor="middle">a local Solid pod: dk's, or your own.</text>
-<text class="ts coraltx" x="640" y="652" text-anchor="middle">Still a pod, so your apps can read it.</text>
-<line class="arr" x1="640" y1="510" x2="640" y2="449" marker-end="url(#arrow)"/>
-
-<rect class="gray" x="40" y="510" width="440" height="150" rx="8" stroke-width="0.5"/>
-<text class="th graytx" x="58" y="534">What moves, and what it costs</text>
-<text class="ts graytx" x="58" y="558">The pod keeps only what the protocol forces to be public.</text>
-<text class="ts graytx" x="58" y="574">Everything private moves to a pod on your machine.</text>
-<text class="ts graytx" x="58" y="598">Two costs, one cause — the state now has a single copy.</text>
-<text class="ts graytx" x="58" y="614">No second reader, so no concurrent multi-device. No second</text>
-<text class="ts graytx" x="58" y="630">copy, so recovery is bounded by your backup interval instead</text>
-<text class="ts graytx" x="58" y="646">of being free.</text>
+<rect class="coral" x="500" y="530" width="280" height="94" rx="8" stroke-width="0.5"/>
+<text class="th coraltx" x="640" y="554" text-anchor="middle">A directory on your machine</text>
+<text class="ts coraltx" x="518" y="576">your notes and the timeline you received, as RDF</text>
+<text class="ts coraltx" x="518" y="592">contacts, queue, blocklist, client tokens</text>
+<text class="ts coraltx" x="518" y="608">beside the credential and the signing key</text>
+<line class="arr" x1="640" y1="530" x2="640" y2="503" marker-end="url(#arrow)"/>
 </svg>
