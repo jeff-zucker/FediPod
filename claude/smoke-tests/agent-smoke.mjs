@@ -1955,10 +1955,10 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     'the opener is recorded before focus moves, or there would be nothing to return to');
 
   // 3.2.2 On Input: arrowing a closed <select> fires change per keypress.
-  check(/id="actor-go"/.test(record) && /\$\('actor-go'\)\.addEventListener\('click'/.test(adminJs),
-    'choosing an actor and going to it are separate actions');
-  check(!/\$\('actor-pick'\)\.addEventListener\('change'/.test(adminJs),
-    'so arrowing through the list no longer navigates, or starts a pod');
+  check(!/id="actor-go"/.test(record),
+    'the picker is the control — no extra button beside it');
+  check(/arrowing = true/.test(adminJs) && /if \(!arrowing\) goToActor\(\)/.test(adminJs),
+    'so arrowing suppresses it, while a mouse pick navigates as it always did');
 
   check(/focusAfterRefresh/.test(adminJs),
     'a group row action puts focus back rather than dropping it on <body>');

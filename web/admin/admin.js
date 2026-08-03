@@ -210,15 +210,29 @@ const goToActor = async () => {
   if (!r || r.current) return;
   if (r.mode) { location.href = r.admin; return; }
   $('actor-pick').disabled = true;
-  $('actor-go').disabled = true;
   say(`starting ${r.name}`);
   const started = await write('/start-actor', { name: r.name }, `${r.name} is up`);
   $('actor-pick').disabled = false;
-  $('actor-go').disabled = false;
   if (started?.url) location.href = `${started.url}admin/`;
   else renderOthers();            // put the picker back on the current actor
 };
-$('actor-go').addEventListener('click', goToActor);
+// Choosing one goes to its record, as it always has.
+//
+// Arrowing is the one case that must not: on a closed select every Arrow
+// keypress fires `change`, so a keyboard user browsing the list would be
+// carried off to the first actor they passed — and for a stopped one that
+// boots its pod. An arrow key arms a flag and the change it causes is ignored;
+// Enter commits. A mouse never sets the flag, so clicking behaves as before.
+let arrowing = false;
+$('actor-pick').addEventListener('keydown', (ev) => {
+  if (['ArrowUp', 'ArrowDown', 'Home', 'End', 'PageUp', 'PageDown'].includes(ev.key)) arrowing = true;
+  if (ev.key === 'Enter') { arrowing = false; goToActor(); }
+});
+$('actor-pick').addEventListener('pointerdown', () => { arrowing = false; });
+$('actor-pick').addEventListener('change', () => {
+  if (!arrowing) goToActor();
+  arrowing = false;
+});
 
 // Setting up a new actor asks for exactly what this page cannot already tell
 // it: the pod and the account behind it, and its permanent name. Display name,
