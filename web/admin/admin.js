@@ -20,7 +20,7 @@ const postJson = (path, body) => api(path, {
 let config = null;
 // Held, because render() moves it into a generated row and empties that row's
 // list on the next pass — after which getElementById would not find it again.
-const MODERATION = $('do-moderation');
+const MODERATION = $('moderation');
 
 // #say and #fatal live in the accessibility tree from load and hide by being
 // empty (see the stylesheet). Unhiding a live region and filling it in the same
@@ -136,8 +136,8 @@ function render() {
       dd.textContent = v;
     }
     // What a group can be moderated into is a property of BEING a group, so the
-    // way in sits on the row that says so. Moved rather than built here: the
-    // page still declares the button, and `facts` is emptied on every render.
+    // controls sit on the row that says so. Moved rather than built here: the
+    // page still declares them, and `facts` is emptied on every render.
     if (k === 'kind' && config.kind === 'group') dd.append(MODERATION);
     facts.append(dt, dd);
   }
@@ -307,46 +307,72 @@ $('new-actor-form').addEventListener('submit', async (ev) => {
 
 // ---- group ----
 
+// Each control shows the setting it would change, so what it displays IS the
+// current state — no separate sentence reporting it.
+const MOD = { on: 'moderated', off: 'unmoderated' };
 function renderGroupToggles() {
-  // Labelled, because the sentence alone reads like an instruction rather than
-  // a report of what the group is doing right now.
-  $('joins-state').textContent = config.approveJoins
-    ? 'current state: each join request waits for you.'
-    : 'current state: anyone who follows becomes a member at once.';
-  $('joins-open').disabled = !config.approveJoins;
-  $('joins-approve').disabled = !!config.approveJoins;
-  $('review-state').textContent = config.review
-    ? 'current state: members’ posts are held until you approve them.'
-    : 'current state: members’ posts are carried to the group as they arrive.';
-  $('review-off').disabled = !config.review;
-  $('review-on').disabled = !!config.review;
+  $('joins-mod').value = config.approveJoins ? MOD.on : MOD.off;
+  $('review-mod').value = config.review ? MOD.on : MOD.off;
 }
 
+// One write at a time, because committing an open picker with Enter fires our
+// keydown AND the browser's change — the second call must find the first still
+// holding the flag, or config, not yet updated by the awaited write, lets a
+// duplicate POST through.
+let modBusy = false;
 const setJoins = async (approve) => {
-  if (await write('/joins', { approve }, approve ? 'join requests will wait' : 'anyone may join')) {
-    config.approveJoins = approve;
+  // Picking the value already in force is not a change: no write, and no
+  // republish of the actor for a setting that did not move.
+  if (modBusy || approve === !!config.approveJoins) return;
+  modBusy = true;
+  try {
+    if (await write('/joins', { approve }, approve ? 'join requests will wait' : 'anyone may join')) {
+      config.approveJoins = approve;
+      refreshGroup();
+    }
+    // Both ways: refused, the control must not keep the value it did not get;
+    // granted, a blur meanwhile may have repainted it to the old state.
     renderGroupToggles();
-    refreshGroup();
-  }
+  } finally { modBusy = false; }
 };
 const setReview = async (on) => {
-  if (await write('/review', { on }, on ? 'posts will be held' : 'posts will be carried at once')) {
-    config.review = on;
+  if (modBusy || on === !!config.review) return;
+  modBusy = true;
+  try {
+    if (await write('/review', { on }, on ? 'posts will be held' : 'posts will be carried at once')) {
+      config.review = on;
+      refreshGroup();
+    }
     renderGroupToggles();
-    refreshGroup();
-  }
+  } finally { modBusy = false; }
 };
-// The settings themselves are a panel like the log is: opened when you mean to
-// change one, not standing between the heading and the lists.
-MODERATION.addEventListener('click', () => {
-  closePanels('moderation');
-  solWindow.show('moderation', 'Moderation options');
-});
 
-$('joins-open').addEventListener('click', () => setJoins(false));
-$('joins-approve').addEventListener('click', () => setJoins(true));
-$('review-off').addEventListener('click', () => setReview(false));
-$('review-on').addEventListener('click', () => setReview(true));
+// Arrowing a closed select fires `change` on every keypress, so a keyboard user
+// running down the list would apply each value they passed — here that silently
+// opens or closes the group. An arrow arms a flag and the change it causes is
+// ignored; Enter commits. A mouse never sets the flag, so clicking is unchanged.
+// Same guard as the actor picker above, for the same reason.
+function onPick(el, apply) {
+  let arrowing = false;
+  el.addEventListener('keydown', (ev) => {
+    if (['ArrowUp', 'ArrowDown', 'Home', 'End', 'PageUp', 'PageDown'].includes(ev.key)) arrowing = true;
+    if (ev.key === 'Enter') { arrowing = false; apply(el.value); }
+    // Escape abandons the armed value; what shows must return to what is.
+    if (ev.key === 'Escape') { arrowing = false; renderGroupToggles(); }
+  });
+  // Leaving abandons too. Unconditional, because the swallow above already
+  // consumed the flag — the select may show a state that was never applied,
+  // and repainting from config costs nothing when it does match.
+  el.addEventListener('blur', () => { arrowing = false; renderGroupToggles(); });
+  el.addEventListener('pointerdown', () => { arrowing = false; });
+  el.addEventListener('change', () => {
+    if (!arrowing) apply(el.value);
+    arrowing = false;
+  });
+}
+
+onPick($('joins-mod'), (v) => setJoins(v === MOD.on));
+onPick($('review-mod'), (v) => setReview(v === MOD.on));
 
 // One row: what it is, then what can be done to it.
 function row(text, sub, actions) {

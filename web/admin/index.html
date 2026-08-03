@@ -86,10 +86,18 @@ h2 { margin: 2rem 0 .5rem; }
   dl { display: grid; grid-template-columns: max-content 1fr; gap: .2rem .9rem; }
 }
 #pane-identity h2 { margin: 1.25rem 0 .5rem; }
-/* It sits after the kind, on that row, so it needs a gap from the word and must
-   not stretch the row's line height. */
-#do-moderation { margin-left: .6rem; vertical-align: baseline; }
 #facts { margin: 1.25rem 0 0; }
+/* They sit after the kind, on that row, so they need a gap from the word and
+   must not stretch the row's line height. */
+/* break-all is for the long identifiers in the other rows; these are words. */
+#moderation { margin-left: .6rem; word-break: normal; }
+/* Muted like the dt column: these qualify the kind, they don't compete with it. */
+#moderation label { display: inline; margin: 0 .3rem 0 .5rem; font-weight: normal; color: #666; }
+/* Font up to the page's — a default select is under 16px — and padding down to
+   nothing tall, so the kind row keeps its line height. Bordered like the text
+   inputs above: the border is what makes a control distinct from the page. */
+#moderation select { font: inherit; padding: 0 .1rem;
+  border: 1px solid #767676; border-radius: .3rem; background: Field; color: FieldText; }
 #pane-identity > p { grid-column: 1 / -1; }
 h3 { margin: 1.25rem 0 .35rem; }
 /* The heading word sits in a column of its own, so the control that follows it
@@ -138,7 +146,7 @@ button.inline { font-size: .9rem; padding: .15rem .6rem; font-weight: 400; }
 pre { overflow-x: auto; background: #0001; padding: .6rem; border-radius: .3rem; font-size: .9rem; }
 @media (prefers-color-scheme: dark) {
   :root { --link: #7fb3e8; --heading: #b9a3e3; --btn-bg: #35302a; --btn-edge: #9a8d7a; }
-  .sub, .hint, dt, .muted { color: #aaa; } fieldset { border-color: #555; } .rows li { border-color: #444; }
+  .sub, .hint, dt, .muted, #moderation label { color: #aaa; } fieldset { border-color: #555; } .rows li { border-color: #444; }
   .err { color: #ff8a8a; border-left-color: #ff8a8a; }
   button.danger { border-color: #ff8a8a; color: #ff8a8a; }
 }
@@ -233,9 +241,22 @@ pre { overflow-x: auto; background: #0001; padding: .6rem; border-radius: .3rem;
 <section id="pane-identity" hidden>
   <h2><span class="hlabel">Identity</span></h2>
   <dl id="facts"></dl>
-  <!-- Declared here, and render() puts it beside the kind — the row it belongs
-       to is generated, so this is the only place it can be written down. -->
-  <button id="do-moderation" title="   Who may join this group, and what it carries" class="inline" hidden>Moderation options</button>
+  <!-- Declared here, and render() puts these on the kind row — the row they
+       belong to is generated, so this is the only place they can be written
+       down. Each reads as the setting it would change, so what it shows IS the
+       current state: changing the word is the whole action, with no save. -->
+  <span id="moderation" hidden>
+    <label for="joins-mod">join requests</label>
+    <select id="joins-mod" title="   Whether each join request waits for you">
+      <option value="unmoderated">unmoderated</option>
+      <option value="moderated">moderated</option>
+    </select>
+    <label for="review-mod">posts</label>
+    <select id="review-mod" title="   Whether members’ posts wait for you">
+      <option value="unmoderated">unmoderated</option>
+      <option value="moderated">moderated</option>
+    </select>
+  </span>
 </section>
 
 <section id="pane-upkeep" hidden>
@@ -311,25 +332,6 @@ pre { overflow-x: auto; background: #0001; padding: .6rem; border-radius: .3rem;
 <div id="win" hidden>
   <div id="win-bar"><span id="win-title"></span><button type="button" id="win-close" title="   Close this panel" aria-label="Close panel">✕</button></div>
   <div id="win-body">
-<div id="moderation" hidden>
-  <fieldset>
-    <legend>Join request moderation</legend>
-    <p id="joins-state" class="muted"></p>
-    <p>
-      <button id="joins-open" title="   Anyone who follows becomes a member at once">Let anyone join</button>
-      <button id="joins-approve" title="   Hold each join request until you answer it">Approve each request</button>
-    </p>
-  </fieldset>
-
-  <fieldset>
-    <legend>Post moderation</legend>
-    <p id="review-state" class="muted"></p>
-    <p>
-      <button id="review-off" title="   Carry members' posts as they arrive">Carry members' posts at once</button>
-      <button id="review-on" title="   Hold every member post until you approve it">Hold them for review</button>
-    </p>
-  </fieldset>
-</div>
 <pre id="output" hidden></pre>
 <!-- Every consequence is written here rather than assembled in script: the
      page asking "are you sure" has to say what it is sure about, and this is
