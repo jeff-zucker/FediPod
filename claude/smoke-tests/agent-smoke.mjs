@@ -1191,6 +1191,69 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     'an oversized inbox item is dead-lettered on the size the listing already gave us');
 }
 
+// --- 5a-quater. the fediverse posts more than Notes, and a tag is not a hole ---
+{
+  const { isContentType } = await import(path.join(root, 'lib/intake.mjs'));
+  const { TagFeed } = await import(path.join(root, 'lib/tagfeed.mjs'));
+
+  // Insisting on Note dead-lettered an Article, a poll, a PeerTube video and a
+  // Lemmy post from people the owner had chosen to follow — silently.
+  for (const t of ['Note', 'Article', 'Question', 'Page', 'Video', 'Audio', 'Image', 'Event']) {
+    check(isContentType(t), `${t} is content the fediverse actually posts`);
+  }
+  for (const t of ['Person', 'Follow', 'Collection', undefined]) {
+    check(!isContentType(t), `${t} is not, and is still refused`);
+  }
+  const isrc = fs.readFileSync(path.join(root, 'lib/intake.mjs'), 'utf8');
+  check(!/note\.type !== 'Note'/.test(isrc),
+    'and neither ingestNote nor onUpdate insists on Note any more');
+
+  // --- the tag feed ---
+  const mk = (fetcher, blocked = []) => {
+    const added = [];
+    const tf = new TagFeed({
+      store: {
+        read: (_n, d) => ({ ...d, instance: 'https://inst.example', tags: ['solid'] }),
+        write: () => {}, getStatuses: () => [], getActors: () => ({}),
+        isBlocked: (u) => blocked.some(b => String(u).startsWith(b)),
+        addStatus: (s) => added.push(s),
+      },
+      intake: { fetchAP: async (u) => ({ id: u, type: 'Note', content: 'hi', attributedTo: 'https://spam.example/u/x' }) },
+      log: () => {}, fetcher,
+    });
+    return { tf, added };
+  };
+
+  // A blocked author reached the timeline by posting under a tag: this path
+  // never went through ingestNote, where the author check lives.
+  const blockedRun = mk(
+    async () => ({ status: 200, json: async () => [{ uri: 'https://spam.example/n/1' }] }),
+    ['https://spam.example'],
+  );
+  await blockedRun.tf.sweep();
+  check(blockedRun.added.length === 0,
+    'a blocked author does not reach the timeline through a hashtag');
+
+  const okRun = mk(async () => ({ status: 200, json: async () => [{ uri: 'https://ok.example/n/1' }] }));
+  await okRun.tf.sweep();
+  check(okRun.added.length === 1, 'while an unblocked one still does');
+
+  // It is somebody else's server, polled on our schedule, with no other way to
+  // ask us to stop. A 429 used to log a line and change nothing.
+  let asked = 0;
+  const refused = mk(async () => { asked++; return { status: 429, headers: { get: () => null }, json: async () => [] }; });
+  await refused.tf.sweep();
+  const first = asked;
+  check(refused.tf.quietUntil > Date.now() + 10 * 60_000,
+    'a 429 puts the tag feed to sleep rather than continuing on cadence');
+  await refused.tf.sweep();
+  check(asked === first, 'and the next sweep does not ask again while it is backing off');
+
+  const src = fs.readFileSync(path.join(root, 'lib/tagfeed.mjs'), 'utf8');
+  check(/retryAfterMs\(res\)/.test(src), 'a Retry-After it sends is honoured');
+  check(/this\.failures = 0/.test(src), 'and an instance that answers clears the ladder');
+}
+
 // --- 5a-ter. the regressions the first cut of those fixes introduced ---
 {
   const { Deliverer } = await import(path.join(root, 'lib/deliver.mjs'));
