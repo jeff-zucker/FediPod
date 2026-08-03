@@ -1618,6 +1618,102 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   check(!/note\.type !== 'Note'/.test(isrc),
     'and neither ingestNote nor onUpdate insists on Note any more');
 
+  // --- the steady-state writes that changed nothing ---
+  {
+    const { PodStore } = await import(path.join(root, 'lib/store.mjs'));
+    const { Deliverer } = await import(path.join(root, 'lib/deliver.mjs'));
+    const puts = [];
+    const st = new PodStore({ log: () => {} });
+    st.attach({
+      base: 'mem://', list: async () => ({ names: [], etag: null }),
+      read: async () => ({ ok: false }), remove: async () => true,
+      write: async (name) => { puts.push(name); return { ok: true }; },
+    });
+
+    // One item waiting on a far-future nextAt. The only early return is on an
+    // EMPTY queue, so every 60s tick used to rewrite queue.json byte for byte —
+    // 1440 identical writes a day, and the ordinary ladder reaches hours-long
+    // waits by attempt 6, so any peer that fails a few times got there.
+    const d = new Deliverer({ store: st, keyId: 'k', rsaPrivate: null, log: () => {}, passive: true });
+    st.setQueue([{ inbox: 'https://down.example/in', activity: { type: 'Create' }, attempts: 3, nextAt: Date.now() + 3600_000 }]);
+    await st.commit();
+    puts.length = 0;
+    await d.drainQueue();
+    await d.drainQueue();
+    await st.commit();
+    check(puts.length === 0,
+      `a queue where nothing was due is not rewritten (${puts.length} write(s))`);
+    // ...but one that moved still is, or the attempt counts never converge.
+    st.setQueue([{ inbox: 'https://down.example/in', activity: { type: 'Create' }, attempts: 3, nextAt: Date.now() - 1000 }]);
+    await st.commit();
+    puts.length = 0;
+    await d.drainQueue();
+    await st.commit();
+    check(puts.includes('queue.json'), 'and one where something was due still is');
+
+    // hold(): a sweep's writes are left to the commit boundary it already has,
+    // because the 300ms debounce cannot coalesce a drain — every handler awaits
+    // somebody else's server first, so each timer fires before the next item.
+    puts.length = 0;
+    st.hold();
+    for (let i = 0; i < 20; i++) st.write('statuses.json', [{ n: i }]);
+    check(puts.length === 0, 'a held store writes nothing on its own');
+    const landed = await st.commit();
+    check(landed && puts.filter(p => p === 'statuses.json').length === 1,
+      `twenty writes inside a sweep are one document write (${puts.length})`);
+    // Anything still dirty when the hold ends is re-armed, not stranded.
+    st.write('actors.json', { a: 1 });
+    st.release();
+    await new Promise(r => setTimeout(r, 60));
+    await st.commit();
+    check(puts.includes('actors.json'),
+      'and a write made while held is never dropped when the hold ends');
+
+    // Remote text is bounded where it enters, because these documents are
+    // serialized WHOLE on every change: one planted actor with a megabyte of
+    // bio permanently inflated actors.json.
+    st.cacheActor('https://evil.example/u/x', {
+      id: 'https://evil.example/u/x', type: 'Person',
+      name: 'n'.repeat(9000), summary: 'x'.repeat(900_000),
+    });
+    const cached = st.getActors()['https://evil.example/u/x'];
+    check(cached.name.length <= 500 && cached.summary.length <= 5_000,
+      `a planted name and bio are clamped (${cached.name.length}, ${cached.summary.length})`);
+    st.addStatus({ noteId: 'https://evil.example/n/1', content: 'c'.repeat(200_000) });
+    const got = st.getStatuses().find(s => s.noteId === 'https://evil.example/n/1');
+    check(got.content.length === 100_000 && got.truncated === true,
+      'and so is a planted post, which says so rather than pretending');
+  }
+
+  // --- a sweep publishes the collections once, not once per event ---
+  {
+    const { Intake } = await import(path.join(root, 'lib/intake.mjs'));
+    let published = [];
+    const intake = new Intake({
+      config: {}, urls: {}, remote: {}, local: {},
+      store: { read: (n, d) => d, write: () => {} },
+      deliverer: {}, log: () => {},
+      publisher: { publishCollections: async (w) => { published.push(w); } },
+    });
+    // Outside a sweep there is no boundary to wait for.
+    await intake.republish({ followers: true });
+    check(published.length === 1, 'outside a sweep a republish happens straight away');
+
+    published = [];
+    intake._inSweep = true;
+    for (let i = 0; i < 50; i++) await intake.republish({ followers: true });
+    await intake.republish({ following: true });
+    check(published.length === 0, 'inside one, fifty follow events publish nothing yet');
+    await intake._publishPending();
+    check(published.length === 1 && published[0].followers && published[0].following,
+      `and the sweep ends with a single publish covering both lists (${published.length})`);
+    // Each publishCollections({followers}) is a full GET of the pod's followers
+    // collection plus a PUT of it, and the answer is built from contacts.json in
+    // memory — so fifty of them were a hundred requests for one result.
+    await intake._publishPending();
+    check(published.length === 1, 'and it takes what it published, so it cannot fire twice');
+  }
+
   // --- one inbound Delete{actor} is one outbox publish ---
   {
     const { Intake } = await import(path.join(root, 'lib/intake.mjs'));
