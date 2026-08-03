@@ -244,9 +244,31 @@ inventory is F1's first output.
 Ordered by what a stranger can do to you, then by what the last round's own fixes broke. One
 commit per step, smoke checks with each, pause for review between.
 
-**Done so far** (2026-08-03, 752 → 782 checks, green): **A1–A3** in `bb7e853`, **B4–B5** in
-`47fd225` (which also closed the same forgery at its two other sites, the tag feed and the URL
-branch of `/api/v2/search`), **B10** in `7bc16f6`. Everything else below is untouched.
+**Status, 2026-08-03 — A, B4/B5, B10, C, F and D are DONE.** 752 → 826 checks, green
+throughout, and each group verified against a running agent as well as the suite.
+
+| group | commit | note |
+|---|---|---|
+| A1–A3 | `bb7e853` | exposure requires `AP_GATE_TOKEN`, refused before the socket opens |
+| B4–B5 | `47fd225` | also closed the same forgery at its two other sites (tag feed, URL search) |
+| B10 | `7bc16f6` | `state --to` validates before it copies |
+| C11–C14 | `adfd5b9` | plus `force`, the digest-on-failure fix, and reconcile only when it can help |
+| F1–F5 | `81977b6` | `state --all` / `--drop-remote` / `upgrade`, layout stamp, startup report |
+| D | `88fcd7c` | queue, drain debounce, per-sweep republish, `page()` clones, length caps |
+
+**Still open**, in the order I would take them: the rest of B (B6 `javascript:` actors and
+unverified Like/Announce notifications, B7 `addReply`, B8 the Undo carve-out, B9 media
+Content-Type and the group review queue); then the low tail below, of which the sharpest are
+the WebSocket URL from the pod response (`lib/intake.mjs:236`), `undici` being an undeclared
+dependency that DNS-pinning silently depends on, and `lib/social.mjs:37` not checking the
+WebFinger subject.
+
+Two things found while fixing rather than while auditing, both now closed and both worth
+remembering: `outboxHead` derived `first` from `ceil(total/20)`, which stops being the page
+count the moment a page can be short — it would have hidden every activity above the newest
+full page; and the sweep's "is anything running" check used `agentOn`, which reads a
+gate-tokened agent's 401 as "stopped", so it would have copied a live agent's state out from
+under it. `home --restructure` had the same blind spot while moving a private key.
 
 **A. Exposure — first, because it is the park's stated revisit condition.**
 1. Decide locality from the connection, not the header: `req.socket.remoteAddress` in
