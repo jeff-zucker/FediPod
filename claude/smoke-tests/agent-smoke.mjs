@@ -5809,8 +5809,11 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
     }));
     fs.writeFileSync(path.join(CHOME, 'agent.json'), JSON.stringify({ port: 18805, handle: 'wren' }));
     const up4 = await run(CHOME, ['up', '--no-open']);
-    check(up4.ok && /http:\/\/wren\.localhost:18805\//.test(up4.out) && !/admin\/setup/.test(up4.out),
-      'an agent that has an identity opens its own named origin, not the form');
+    // The client pinned to the actor, not the bare root — root is vendored
+    // Phanpy with no account bound. The old `${origin}/` also matched the
+    // origin regex alone, so the path is asserted explicitly.
+    check(up4.ok && /http:\/\/wren\.localhost:18805\/admin\/client\//.test(up4.out) && !/admin\/setup/.test(up4.out),
+      'an agent that has an identity opens its own client, not bare Phanpy or the form');
   } finally {
     for (const h of homes) await run(h, ['stop']);
     for (const h of homes) fs.rmSync(h, { recursive: true, force: true });

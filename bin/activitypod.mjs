@@ -381,7 +381,9 @@ if (cmd === 'up') {
   // has been recorded.
   const label = hostLabel(recordedAgent().handle || path.basename(HOME));
   const origin = `http://${label ? label + '.' : ''}localhost:${port}`;
-  const url = configured ? `${origin}/` : `${origin}/admin/setup/`;
+  // The client pinned to this actor, not the bare root — root serves vendored
+  // Phanpy with no account bound, which reads as the wrong app entirely.
+  const url = configured ? `${origin}/admin/client/` : `${origin}/admin/setup/`;
 
   if (already) {
     console.log(`already running on port ${port} — ${url}`);
