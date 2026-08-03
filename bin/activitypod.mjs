@@ -545,6 +545,15 @@ if (cmd === 'up') {
   const rec = {
     ...credential,
     remotePod: pod.endsWith('/') ? pod : pod + '/',
+    // The private half goes on THIS machine, exactly as the browser setup does
+    // (lib/setup.mjs). Omitting it here meant the two paths produced different
+    // installs from the same answers: the CLI put the timeline, contacts,
+    // blocklist and notifications on the pod — the layout the relay design
+    // exists to avoid, and the one that makes receiving a post cost pod writes.
+    // It also made provisioning write a tree it did not need, which is where a
+    // slow server showed it up.
+    privateRoot: flag('private-root')
+      || pathToFileURL(path.join(HOME, 'private')).href + '/',
     ...(root ? { root } : {}),
     ...(flag('keys') === 'pod' ? { keysMode: 'pod' } : {}),
     ...(has('rotate-key') ? { rotateKeyOnce: true } : {}),

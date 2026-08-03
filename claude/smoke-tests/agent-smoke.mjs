@@ -1193,6 +1193,24 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     'an oversized inbox item is dead-lettered on the size the listing already gave us');
 }
 
+// --- 5a-nonies. both setup paths produce the same install ---
+{
+  const bin = fs.readFileSync(path.join(root, 'bin/activitypod.mjs'), 'utf8');
+  const setupJs = fs.readFileSync(path.join(root, 'lib/setup.mjs'), 'utf8');
+
+  // They diverged: the browser path defaulted privateRoot to a local file: URL
+  // and the CLI path left it unset, so the same answers produced two different
+  // installs — one keeping the timeline, contacts, blocklist and notifications
+  // on this machine, the other putting all of it on the pod. The second is the
+  // layout the relay design exists to avoid, and it makes RECEIVING a post cost
+  // pod writes rather than nothing.
+  const local = /pathToFileURL\(path\.join\(\w+, 'private'\)\)\.href \+ '\/'/;
+  check(local.test(setupJs), 'the browser setup keeps the private half on this machine');
+  check(local.test(bin), 'and so does the CLI setup');
+  check(/privateRoot: flag\('private-root'\)/.test(bin),
+    'with the same escape hatch for putting it somewhere else on purpose');
+}
+
 // --- 5a-octies. the outbox is paged, so posting costs the same at 5000 posts ---
 {
   const wireM = await import(path.join(root, 'lib/wire.mjs'));
