@@ -388,6 +388,7 @@ function row(text, sub, actions) {
   li.appendChild(span);
   for (const [label, run, hint] of actions) {
     const b = document.createElement('button');
+    b.className = 'inline';           // sized like the page's other buttons
     b.textContent = label;
     // Three leading spaces: the tooltip appears under the pointer, and without
     // them the first word sits behind the cursor.
