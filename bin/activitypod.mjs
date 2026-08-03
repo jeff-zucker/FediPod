@@ -221,6 +221,18 @@ function endAsking() { sharedRl?.close(); sharedRl = null; }
 // The first port from `first` upward that binds. Walking always ends in one,
 // so this is a step rather than a condition.
 
+// Is anything at all on this port? For the operations that MOVE data, "it did
+// not answer as one of ours" is not the same as "nothing is there": an agent
+// started with AP_GATE_TOKEN answers 401 to an un-tokened /status, so agentOn
+// reads a perfectly live agent as stopped — and a sweep that trusted it would
+// copy the state out from under one, which the next write then overwrites.
+// Bind to find out, and fail closed.
+async function somethingOn(port) {
+  const mine = await agentOn(port);
+  if (mine) return 'running';
+  return (await portFree(port)) ? null : 'something is on the port and did not answer as ours';
+}
+
 // Whatever is on the port — is it one of ours?
 async function agentOn(port) {
   try {
@@ -559,6 +571,9 @@ if (cmd === 'up') {
     ...(root ? { root } : {}),
     ...(flag('keys') === 'pod' ? { keysMode: 'pod' } : {}),
     ...(has('rotate-key') ? { rotateKeyOnce: true } : {}),
+    // What shape this install is. Both setup paths stamp it, so `upgrade` can
+    // tell an old install from a new one rather than inferring it.
+    layout: (await import(new URL('../lib/migrate.mjs', import.meta.url))).CURRENT_LAYOUT,
   };
   fs.mkdirSync(HOME, { recursive: true, mode: 0o700 });
   writeJsonAtomic(path.join(HOME, 'credential.json'), rec);
@@ -682,6 +697,138 @@ if (cmd === 'up') {
     // `setup` opens one because that is the whole point of `setup`.
     if (has('open')) openBrowser(named || plain);
   }
+} else if (cmd === 'state' && (has('all') || has('drop-remote'))) {
+  // The root-wide half. `state --to` moves ONE identity, with the right AP_HOME
+  // set by hand; this runs over every identity under the root.
+  //
+  // Per identity, in its own process. HOME, PORT and the root are resolved at
+  // module load from the environment, so doing several in one process would
+  // mean re-deriving all of it — and a failure part way would be sharing state
+  // with the next one. A spawn per identity is a handful of processes for a
+  // one-shot migration, and each is exactly the command you could have typed.
+  const { execFile } = await import('node:child_process');
+  const { needsStateMove, pendingSteps } = await import(new URL('../lib/migrate.mjs', import.meta.url));
+  const { apUrls } = await import(new URL('../lib/wire.mjs', import.meta.url));
+
+  const homes = identityHomes(AP_ROOT);
+  if (!homes.length) {
+    console.log(`no identities under ${tildify(AP_ROOT)} — nothing to move`);
+    process.exit(0);
+  }
+
+  // The same refusal `--to` and `home --restructure` make, for the same reason,
+  // and it has to cover ALL of them: a running agent holds its state
+  // write-through in memory, so a copy taken underneath one is overwritten by
+  // its next write.
+  const live = [];
+  for (const { name, dir } of homes) {
+    let port = null;
+    try { port = JSON.parse(fs.readFileSync(path.join(dir, 'agent.json'), 'utf8')).port; } catch { continue; }
+    if (!port) continue;
+    const why = await somethingOn(port);
+    if (why) live.push(`${name} on ${port} (${why})`);
+  }
+  if (live.length) {
+    console.error(`still answering: ${live.join(', ')}`);
+    console.error('stop them first — a running agent would overwrite the copy with what it holds');
+    process.exit(2);
+  }
+
+  const rows = [];
+  for (const { name, dir } of homes) {
+    let cred = null;
+    try { cred = JSON.parse(fs.readFileSync(path.join(dir, 'credential.json'), 'utf8')); } catch { continue; }
+    rows.push({ name, dir, cred, pending: pendingSteps(cred) });
+  }
+  if (!rows.length) { console.log('no identities with a credential yet'); process.exit(0); }
+
+  if (has('drop-remote')) {
+    // Deliberately separate from the move, and second. While both copies exist
+    // the move is reversible; this is the step that ends that, so it is never
+    // something you get by accident.
+    const { RemotePod } = await import(new URL('../lib/remote.mjs', import.meta.url));
+    const { classifyRemoteState } = await import(new URL('../lib/migrate.mjs', import.meta.url));
+    const apply = has('apply');
+    for (const { name, dir, cred } of rows) {
+      if (needsStateMove(cred)) {
+        console.log(`${name}: still on the pod — run \`state --all --apply\` first`);
+        continue;
+      }
+      const urls = apUrls(cred.remotePod, cred.root);
+      const remote = new RemotePod(cred, { log: () => {}, home: dir });
+      try { await remote.warmup(); } catch (e) { console.error(`${name}: ${e.message}`); continue; }
+      const children = (await remote.listContainer(urls.state)).map(c => c.url);
+      const { drop, keep } = classifyRemoteState(children, urls.state);
+      console.log(`${name}: ${drop.length} document(s) to remove, ${keep.length} kept`);
+      for (const k of keep) console.log(`    keep ${k.name} — ${k.why}`);
+      for (const d of drop) {
+        if (!apply) { console.log(`    would remove ${d.name}`); continue; }
+        try { await remote.delete(d.url); console.log(`    removed ${d.name}`); }
+        catch (e) { console.error(`    ${d.name}: ${e.message}`); }
+      }
+    }
+    if (!apply) console.log('\nThis was a dry run. Add --apply to remove them.');
+    process.exit(0);
+  }
+
+  const apply = has('apply');
+  console.log(apply ? 'Moving the private half onto this machine.\n'
+    : 'What a move would do. Nothing is written without --apply.\n');
+  let moved = 0;
+  for (const { name, dir, cred, pending } of rows) {
+    const home = cred.privateRoot ? tildify(cred.privateRoot)
+      : `${apUrls(cred.remotePod, cred.root).home} (ON THE POD)`;
+    if (!pending.length) { console.log(`${name}: already current — ${home}`); continue; }
+    const dest = pathToFileURL(path.join(dir, 'private')).href + '/';
+    if (!apply) {
+      console.log(`${name}: ${home}\n    → would move to ${tildify(dest)}`);
+      continue;
+    }
+    const out = await new Promise((resolve) => {
+      execFile(process.execPath, [process.argv[1], 'state', '--to', dest],
+        { env: { ...process.env, AP_HOME: dir, AP_PROFILE: '' } },
+        (err, stdout, stderr) => resolve({ ok: !err, text: String(stdout) + String(stderr) }));
+    });
+    console.log(`${name}: ${out.ok ? 'moved' : 'FAILED'}`);
+    for (const line of out.text.split('\n').filter(Boolean)) console.log(`    ${line}`);
+    if (out.ok) moved++;
+  }
+  if (apply) {
+    console.log(`\n${moved} identit(ies) moved. The pod still holds the old copy —`);
+    console.log('`state --drop-remote` removes it once you are satisfied.');
+  } else {
+    console.log('\nRe-run with --apply to do it.');
+  }
+  process.exit(0);
+} else if (cmd === 'upgrade') {
+  // One runner, every identity. The point is that being behind is a thing you
+  // can ASK about rather than something you find out from a pod bill.
+  const { pendingSteps, layoutOf, CURRENT_LAYOUT, isCurrent } =
+    await import(new URL('../lib/migrate.mjs', import.meta.url));
+  const homes = identityHomes(AP_ROOT);
+  const behind = [];
+  for (const { name, dir } of homes) {
+    let cred = null;
+    try { cred = JSON.parse(fs.readFileSync(path.join(dir, 'credential.json'), 'utf8')); } catch { continue; }
+    const pending = pendingSteps(cred);
+    console.log(`${name}: layout ${layoutOf(cred)} of ${CURRENT_LAYOUT}${pending.length ? '' : ' — current'}`);
+    for (const s of pending) console.log(`    ${s.id}: ${s.what}\n      (${s.why})`);
+    // Nothing to do and never stamped: an install that was already in the right
+    // shape. Record it, so `upgrade` stops asking and the agent stops warning.
+    if (isCurrent(cred) && layoutOf(cred) < CURRENT_LAYOUT) {
+      writeJsonAtomic(path.join(dir, 'credential.json'), { ...cred, layout: CURRENT_LAYOUT });
+      console.log('    stamped as current');
+    }
+    if (pending.length) behind.push(name);
+  }
+  if (!homes.length) console.log(`no identities under ${tildify(AP_ROOT)}`);
+  else if (behind.length) {
+    console.log(`\n${behind.length} identit(ies) behind: ${behind.join(', ')}`);
+    console.log('The only step is the state move. See what it would do:');
+    console.log(`  ${path.basename(process.argv[1])} state --all`);
+    console.log('then re-run it with --apply.');
+  } else if (homes.length) console.log('\nEverything here is at the current layout.');
+  process.exit(0);
 } else if (cmd === 'state') {
   requireIdentity();
   // Where the private half lives, and how to move it. Copy, verify, THEN
@@ -791,9 +938,18 @@ if (cmd === 'up') {
   }
 
   if (target) cred.privateRoot = target; else delete cred.privateRoot;
+  // Stamp what this install now IS, so `upgrade` stops naming it and the agent
+  // stops saying it is behind. Moving back onto the pod un-stamps it, which is
+  // honest rather than punitive: that is the old shape, and it should read as
+  // the old shape whoever chose it.
+  {
+    const { CURRENT_LAYOUT, isCurrent } = await import(new URL('../lib/migrate.mjs', import.meta.url));
+    if (isCurrent(cred)) cred.layout = CURRENT_LAYOUT; else delete cred.layout;
+  }
   writeJsonAtomic(credPath, cred);
   console.log(`\nprivate data now: ${where(cred)}`);
-  console.log('The old copy was left where it was — delete it once you are satisfied.');
+  console.log('The old copy was left where it was — `state --drop-remote` removes it');
+  console.log('once you are satisfied, or delete it by hand.');
   process.exit(0);
 } else if (cmd === 'rotate-key') {
   requireIdentity();
@@ -921,7 +1077,11 @@ if (cmd === 'up') {
   for (const { name: n, dir } of [{ name, dir: AP_ROOT }, ...identityHomes(AP_ROOT)]) {
     let port = null;
     try { port = JSON.parse(fs.readFileSync(path.join(dir, 'agent.json'), 'utf8')).port; } catch { continue; }
-    if (port && await agentOn(port)) live.push(`${n} on ${port}`);
+    if (!port) continue;
+    // somethingOn, not agentOn: a gated agent answers 401 to an un-tokened
+    // /status, and this moves its private key out from under it.
+    const why = await somethingOn(port);
+    if (why) live.push(`${n} on ${port} (${why})`);
   }
   if (live.length) {
     console.error(`still answering: ${live.join(', ')}`);
@@ -1510,8 +1670,12 @@ WantedBy=default.target
     console.log(`${cmd}d ${arg} — ${body.pending} still held`);
   }
 } else {
-  console.log('usage: activitypod <setup|start|stop|status|state|rebuild|home|passwd'
+  console.log('usage: activitypod <setup|start|stop|status|state|upgrade|rebuild|home|passwd'
     + '|tokens|revoke-credential|install-service> [--flags]');
+  console.log('  state: --to <path|url|pod>   move THIS identity\'s private half');
+  console.log('         --all [--apply]       move every identity\'s onto this machine');
+  console.log('         --drop-remote [--apply]  remove the pod\'s copy afterwards');
+  console.log('  upgrade: what every identity here is behind on, and stamp the ones that are not');
   console.log('  group: members | eject <actor> | mute <actor> | unmute <actor>');
   console.log('         joins <open|approve> | requests | admit <actor> | refuse <actor>');
   console.log('         announced | retract <note> | review <on|off> | pending | approve <note> | decline <note>');

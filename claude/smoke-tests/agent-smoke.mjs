@@ -6063,6 +6063,105 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   const loop = await runCli(['state', '--to', `http://127.0.0.1:${PPORT}/moveC/`]);
   check(loop.ok, `a loopback http destination is still allowed (${loop.ok ? 'ok' : loop.out.slice(-140)})`);
 
+  let CURRENT_LAYOUT = null;
+  // --- moving EVERY identity, and knowing which ones are behind ---
+  //
+  // bbba587 fixed the default and nothing else: `privateRoot` absent still means
+  // "on the pod", so every identity set up before it kept the old layout with
+  // nothing to show for it. A new default only fixes installs that do not exist
+  // yet, which is why this is a numbered step with a runner rather than a note.
+  {
+    const mig = await import(path.join(root, 'lib/migrate.mjs'));
+    CURRENT_LAYOUT = mig.CURRENT_LAYOUT;
+    check(mig.layoutOf({}) === 0 && mig.layoutOf({ layout: 1 }) === 1,
+      'an unstamped install reads as layout 0 rather than as an error');
+    check(mig.needsStateMove({}) && !mig.needsStateMove({ privateRoot: 'file:///x/' }),
+      'the private half being absent is what "behind" means');
+    check(!mig.needsStateMove({ privateRoot: 'https://pod.example/mine/' }),
+      'and an operator who pointed it somewhere deliberately is left alone');
+    check(mig.isCurrent({ privateRoot: 'file:///x/' }) && !mig.isCurrent({}),
+      'isCurrent is decided by the shape, not by the stamp');
+
+    const base = 'https://pod.example/activitypods-js/ap-state/';
+    const { drop, keep } = mig.classifyRemoteState([
+      base + 'config.json', base + 'contacts.json', base + 'masto-tokens.json',
+      base + 'lease.json', base + '.keep', base + 'something-else.json',
+    ], base);
+    check(drop.length === 3 && drop.every(d => mig.MOVED_STATE_DOCS.has(d.name)),
+      `only the documents the move copied are dropped (${drop.map(d => d.name).join(', ')})`);
+    check(keep.some(k => k.name === 'lease.json') && keep.some(k => k.name === '.keep')
+      && keep.some(k => k.name === 'something-else.json'),
+      'the lease, the container marker and anything not ours are kept');
+
+    // The backstop under all of it: the lease is on the pod BECAUSE the private
+    // half need not be, so a migration must never be able to take it.
+    const { protectedFromDeletion } = await import(path.join(root, 'lib/remote.mjs'));
+    let refused = false;
+    try { protectedFromDeletion(base + 'lease.json'); } catch { refused = true; }
+    check(refused, 'and RemotePod.delete refuses the lease outright, wherever the call came from');
+  }
+
+  {
+    // A scratch ROOT, so the sweep has more than one identity to walk.
+    const RHOME = fs.mkdtempSync('/tmp/activitypod-root-');
+    const profiles = path.join(RHOME, '.solid-activitypub', 'profiles');
+    const mkIdentity = (name, cred, agentJson = null) => {
+      const dir = path.join(profiles, name);
+      fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(path.join(dir, 'credential.json'), JSON.stringify(cred));
+      if (agentJson) fs.writeFileSync(path.join(dir, 'agent.json'), JSON.stringify(agentJson));
+      return dir;
+    };
+    const POD = { remotePod: 'https://pod.example/', clientId: 'c', secret: 's' };
+    const oldDir = mkIdentity('old', { ...POD });                        // on the pod
+    mkIdentity('new', { ...POD, privateRoot: 'file:///tmp/newprivate/' });   // already right
+
+    const runRoot = (args) => new Promise((resolve) => {
+      execFile(process.execPath, [path.join(root, 'bin/activitypod.mjs'), ...args],
+        { env: { ...process.env, HOME: RHOME, AP_HOME: '', AP_PROFILE: '' } },
+        (err, stdout, stderr) => resolve({ ok: !err, out: String(stdout) + String(stderr) }));
+    });
+
+    const up = await runRoot(['upgrade']);
+    check(up.out.includes('old: layout 0 of 1') && /state-off-pod/.test(up.out),
+      'upgrade names the identity that is behind, and the step it is behind on');
+    check(/new: layout 0 of 1 — current/.test(up.out) && up.out.includes('stamped as current'),
+      'an install that is already the right shape is stamped rather than migrated');
+    const newCred = JSON.parse(fs.readFileSync(path.join(profiles, 'new', 'credential.json'), 'utf8'));
+    check(newCred.layout === CURRENT_LAYOUT, 'and the stamp lands in its credential');
+
+    const dry = await runRoot(['state', '--all']);
+    check(dry.out.includes('ON THE POD') && dry.out.includes('would move to'),
+      'the sweep leads with the inventory, not with a mutation');
+    check(dry.out.includes('new: already current') && !dry.out.includes('would move to /tmp/newprivate'),
+      'and does not offer to move one that is already where it should be');
+    const stillOld = JSON.parse(fs.readFileSync(path.join(oldDir, 'credential.json'), 'utf8'));
+    check(!stillOld.privateRoot && !stillOld.layout, 'a dry run writes nothing at all');
+
+    // A running agent holds its state write-through, so a copy taken underneath
+    // it is overwritten by its next write. The suite's own agent is answering,
+    // so pointing an identity at that port is a real live one.
+    fs.writeFileSync(path.join(oldDir, 'agent.json'), JSON.stringify({ port: PORT }));
+    const busy = await runRoot(['state', '--all', '--apply']);
+    check(!busy.ok && /still answering/.test(busy.out),
+      `the sweep refuses while any identity is running (${busy.out.split('\n')[0]})`);
+    const afterBusy = JSON.parse(fs.readFileSync(path.join(oldDir, 'credential.json'), 'utf8'));
+    check(!afterBusy.privateRoot, 'and refusing means refusing all of them, not the ones after it');
+    fs.rmSync(path.join(oldDir, 'agent.json'), { force: true });
+
+    // The move itself is `state --to`, tested above. What matters here is that a
+    // failure is per-identity and leaves the credential alone rather than half
+    // repointed — pod.example does not resolve, so this one cannot succeed.
+    const applied = await runRoot(['state', '--all', '--apply']);
+    check(/old: FAILED/.test(applied.out),
+      `an identity that cannot be moved is reported, not skipped silently (${/old: (\w+)/.exec(applied.out)?.[1]})`);
+    const afterFail = JSON.parse(fs.readFileSync(path.join(oldDir, 'credential.json'), 'utf8'));
+    check(!afterFail.privateRoot && !afterFail.layout,
+      'and its credential still points where it did');
+
+    fs.rmSync(RHOME, { recursive: true, force: true });
+  }
+
   fs.rmSync(SHOME15, { recursive: true, force: true });
   privatePod.close();
 }

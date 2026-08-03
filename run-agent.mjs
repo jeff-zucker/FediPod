@@ -33,6 +33,7 @@ import { TagFeed } from './lib/tagfeed.mjs';
 import { Lease } from './lib/lease.mjs';
 import { startAdmin } from './lib/admin.mjs';
 import { exposureProblem } from './lib/guard.mjs';
+import { pendingSteps } from './lib/migrate.mjs';
 import { apUrls } from './lib/wire.mjs';
 import { followActor, unfollowActor, resolveHandle } from './lib/social.mjs';
 
@@ -235,6 +236,15 @@ export class Agent {
     // means the token is set and the whole surface is behind it. A UI password
     // is the second, per-person half: without one, anyone who has the token
     // gets a client bearer for the asking.
+    // An install made before the shape changed goes on working, which is why
+    // nothing here refuses — but it should not go on SILENTLY. The whole reason
+    // this is said out loud is that bbba587 changed a default and every install
+    // that already existed kept the old layout with nothing to show for it.
+    for (const step of pendingSteps(cred)) {
+      this.log(`this identity is on an older layout: ${step.what} (${step.why}). `
+        + 'Run `activitypod upgrade` to see what is pending.');
+    }
+
     if (process.env.AP_ALLOWED_HOSTS && !config.uiPassword) {
       this.log('WARNING: AP_ALLOWED_HOSTS is set and no UI password is — anyone holding '
         + 'AP_GATE_TOKEN can mint a client token. Run `activitypod passwd`.');
