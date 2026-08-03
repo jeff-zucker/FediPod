@@ -1395,9 +1395,10 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   // a mount that IS a symlink out of ui/ still escaped it.
   check(/realpathSync\(cand\)/.test(admin) && /realpathSync\(UI_DIR\)/.test(admin),
     'the static mount is resolved through symlinks, like the jail below it');
-  // Raw exception text carries filesystem paths and internals.
-  check(/error: 'the agent failed to handle that/.test(admin) && /e\.stack \|\| e\.message/.test(admin),
-    'the detail goes to the log and the caller gets a sentence');
+  // Loopback-only bind, no CORS: the only caller is the operator, so a generic
+  // sentence hid the reason from the one person entitled to it.
+  check(/error: e\.message \|\| String\(e\)/.test(admin) && /e\.stack \|\| e\.message/.test(admin),
+    'the console shows the real error and the stack still goes to the log');
   // The CSP comment claimed a containment property connect-src does not have.
   check(/it is a code-execution one/.test(admin),
     'the CSP comment says what the policy actually buys');
