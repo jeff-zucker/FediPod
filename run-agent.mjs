@@ -403,7 +403,7 @@ export class Agent {
     const doc = await this.remote.getJson(this.urls.actor);
     if (doc?.id) return false;
     this.log('actor document missing from the pod — republishing');
-    await this.publisher.publishProfile();
+    await this.publisher.publishProfile({ force: true });   // the digest cannot know this
     return true;
   }
 

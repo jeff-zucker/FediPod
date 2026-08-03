@@ -1191,6 +1191,58 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     'an oversized inbox item is dead-lettered on the size the listing already gave us');
 }
 
+// --- 5a-sexies. a profile save that changes nothing costs nothing ---
+{
+  const { Publisher } = await import(path.join(root, 'lib/publisher.mjs'));
+  const seen = [];
+  const state = {};
+  const pub = new Publisher({
+    config: { remotePod: 'https://pod.example/', handle: 'you', name: 'You' },
+    remote: {
+      put: async (u) => { seen.push(`PUT ${u}`); },
+      putJson: async (u) => { seen.push(`PUT ${u}`); },
+      setAcl: async (u) => { seen.push(`ACL ${u}`); },
+      fetch: async () => ({ ok: false }), getJson: async () => null,
+    },
+    local: { writeSettings: async () => {}, writeContacts: async () => {} },
+    store: {
+      read: (n, d) => (n in state ? JSON.parse(JSON.stringify(state[n])) : d),
+      write: (n, v) => { state[n] = v; },
+      getStatuses: () => [], getContacts: () => ({ followers: [], following: [] }),
+      setContacts: () => {},
+    },
+    deliverer: { deliverToAll: async () => {} },
+    publicKeyPem: 'x', log: () => {},
+    probeFetch: async () => ({ status: 200 }),
+  });
+
+  await pub.publishProfile();
+  check(seen.length > 20, `the first publish writes the whole surface (${seen.length} requests)`);
+
+  // Phanpy's editor submits the whole form every time, so "saved without
+  // changing anything" is the ordinary case rather than a rare one.
+  const before = seen.length;
+  const again = await pub.publishProfile();
+  check(seen.length === before && again.skipped === true,
+    `saving again with nothing changed costs 0 requests (was ${before})`);
+
+  pub.config.summary = 'birds, mostly';
+  await pub.publishProfile();
+  check(seen.length > before, 'while an actual edit publishes as before');
+
+  // The digest cannot know the pod has LOST the actor — which is exactly when
+  // the repair path runs, and skipping there would leave the agent reporting
+  // success while nobody can resolve the account.
+  const n = seen.length;
+  await pub.publishProfile({ force: true });
+  check(seen.length > n, 'and force publishes regardless of the digest');
+
+  check(/publishProfile\(\{ force: true \}\)/.test(fs.readFileSync(path.join(root, 'run-agent.mjs'), 'utf8')),
+    'the repair path forces, because it publishes BECAUSE the pod is missing it');
+  check(/publishProfile\(\{ force: true \}\)/.test(fs.readFileSync(path.join(root, 'lib/admin.mjs'), 'utf8')),
+    'and so does the explicit republish control');
+}
+
 // --- 5a-quinquies. the low tail ---
 {
   const read = (f) => fs.readFileSync(path.join(root, f), 'utf8');
