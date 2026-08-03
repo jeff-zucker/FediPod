@@ -3129,8 +3129,11 @@ store2.write('statuses.json', [
   { noteId: REPLY, actor: ALICE, content: '<p>a reply</p>', published: '2026-07-28T02:00:00Z', inReplyTo: OWN, kind: 'timeline' },
   { noteId: OWN, actor: urls2.actor, content: '<p>root</p>', published: '2026-07-28T01:00:00Z', kind: 'post', slug: 'n1' },
 ]);
+const DAN = 'https://m.example/u/dan';
 store2.setContacts({
-  followers: [{ actor: ALICE, inbox: 'https://m.example/u/alice/inbox', followId: 'f1' }],
+  // Append order is arrival order: dan followed after alice.
+  followers: [{ actor: ALICE, inbox: 'https://m.example/u/alice/inbox', followId: 'f1' },
+    { actor: DAN, inbox: 'https://m.example/u/dan/inbox', followId: 'f2' }],
   following: [{ actor: 'https://m.example/u/bob', inbox: 'https://m.example/u/bob/inbox', accepted: true,
     followActivity: { id: 'x#follow-1', type: 'Follow' } }],
 });
@@ -3215,6 +3218,48 @@ const fol = await call(`/api/v1/accounts/${store2.idFor('https://m.example/u/car
 check(fol.status === 200 && fol.json.requested === true
   && delivered.some(d => d.a?.type === 'Follow' && d.a.object === 'https://m.example/u/carol'),
   'follow by id delivers Follow, relationship requested');
+
+// Phanpy renders the counts from `account`, then opens them through these two
+// routes. Neither existed, so every profile said "error loading accounts".
+// carol is pending at this point (the follow above), bob is accepted.
+const selfId = store2.idFor(urls2.actor);
+const myFollowing = await call(`/api/v1/accounts/${selfId}/following`);
+check(myFollowing.status === 200 && myFollowing.json.length === 1
+  && myFollowing.json[0].uri === 'https://m.example/u/bob',
+  `following lists the accepted follow and not the pending one (got ${JSON.stringify(myFollowing.json?.map(a => a.uri))})`);
+
+// Newest first, like Mastodon: the contact arrays append, so serving them as
+// stored put the oldest on page one and made since_id answer its complement.
+const myFollowers = await call(`/api/v1/accounts/${selfId}/followers`);
+check(myFollowers.status === 200 && myFollowers.json.length === 2
+  && myFollowers.json[0].uri === DAN && myFollowers.json[1].uri === ALICE,
+  `followers list newest first (got ${JSON.stringify(myFollowers.json?.map(a => a.uri))})`);
+
+// The number and the list it opens read the same array — they disagreed while
+// the count included pending follows, so clicking "2" showed one account.
+const me = await call('/api/v1/accounts/verify_credentials');
+check(me.json.following_count === myFollowing.json.length
+  && me.json.followers_count === myFollowers.json.length,
+  `the counts equal the lists behind them (${me.json?.following_count}/${me.json?.followers_count})`);
+
+// A stranger's collections live on their own server; opening a profile does not
+// buy a fetch of it. Empty is a truthful answer, an error is not.
+const theirs = await call(`/api/v1/accounts/${store2.idFor(ALICE)}/following`);
+check(theirs.status === 200 && Array.isArray(theirs.json) && theirs.json.length === 0,
+  'a remote account lists empty rather than erroring');
+
+const noSuch = await call('/api/v1/accounts/deadbeef/followers');
+check(noSuch.status === 404, 'an unknown account is still 404');
+
+// Cursors name an ACTOR here, not a note — page() took the field as a parameter
+// so the statuses paths keep naming notes.
+const oneOf = await call(`/api/v1/accounts/${selfId}/following?limit=1`);
+check(oneOf.status === 200 && oneOf.json.length === 1, 'limit is honoured on an account list');
+
+const fam = await call('/api/v1/accounts/familiar_followers?id[]=aa&id[]=bb');
+check(fam.status === 200 && fam.json.length === 2 && fam.json[0].id === 'aa'
+  && Array.isArray(fam.json[0].accounts) && fam.json[0].accounts.length === 0,
+  'familiar_followers answers per requested id, with no graph to report');
 
 const mark = await call('/api/v1/markers', { method: 'POST', body: JSON.stringify({ home: { last_read_id: 'abc' } }) });
 const markBack = await call('/api/v1/markers');
