@@ -287,6 +287,9 @@ export class Agent {
       config, remote: this.remote, local: this.local, store: this.store,
       deliverer: this.deliverer, publicKeyPem: keys.rsaPublicPem, log: this.log,
       resolveMention: (h) => resolveHandle(this, h),
+      // Whether the fediverse tree is on the pod at all, so the ACL check does
+      // not probe for something the default layout keeps on local disk.
+      privateOnPod: !cred.privateRoot,
     });
     // Intake is constructed even for viewers — its signed fetchAP powers
     // search/deref; start() (draining) is active-only.

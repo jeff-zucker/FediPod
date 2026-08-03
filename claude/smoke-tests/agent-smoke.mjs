@@ -1191,6 +1191,88 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     'an oversized inbox item is dead-lettered on the size the listing already gave us');
 }
 
+// --- 5a-quinquies. the low tail ---
+{
+  const read = (f) => fs.readFileSync(path.join(root, f), 'utf8');
+  const admin = read('lib/admin.mjs');
+  const masto = read('lib/mastoapi.mjs');
+
+  // The mount check was lexical while sendFile's has always been realpath, so
+  // a mount that IS a symlink out of ui/ still escaped it.
+  check(/realpathSync\(cand\)/.test(admin) && /realpathSync\(UI_DIR\)/.test(admin),
+    'the static mount is resolved through symlinks, like the jail below it');
+  // Raw exception text carries filesystem paths and internals.
+  check(/error: 'the agent failed to handle that/.test(admin) && /e\.stack \|\| e\.message/.test(admin),
+    'the detail goes to the log and the caller gets a sentence');
+  // The CSP comment claimed a containment property connect-src does not have.
+  check(/it is a code-execution one/.test(admin),
+    'the CSP comment says what the policy actually buys');
+
+  // readBody destroyed the socket and never settled, so the handler awaited
+  // for the life of the process.
+  const rbAt = masto.indexOf('function readBody');
+  const rb = masto.slice(rbAt, rbAt + 900);
+  check(/req\.destroy\(\); reject\(new Error\('request body too large'\)\)/.test(rb),
+    'an oversized body is rejected rather than left hanging');
+  // status() clones the whole array for its reply count, so every render of
+  // more than one status has to pass `all`.
+  check(!/\.map\(s => this\.status\(s\)\)/.test(masto),
+    'no timeline render clones the statuses array once per status');
+  check(/published\?\.unreachable/.test(masto),
+    'and a save that left the actor unreadable says so rather than reporting success');
+
+  // One timeout default, in one place.
+  const sf = read('lib/safefetch.mjs');
+  check(/export const HTTP_TIMEOUT_MS/.test(sf),
+    'AP_HTTP_TIMEOUT_MS has one default, exported once');
+  for (const f of ['lib/publisher.mjs', 'lib/intake.mjs', 'lib/deliver.mjs']) {
+    check(!/AP_HTTP_TIMEOUT_MS/.test(read(f)), `${f} reads it rather than redeclaring it`);
+  }
+  check(/signal: init\.signal \|\| AbortSignal\.timeout\(HTTP_TIMEOUT_MS\)/.test(sf),
+    'and safeFetch itself now has the deadline it never had');
+
+  // A leftover .<pid>.tmp is not a note.
+  const { PodRdf } = await import(path.join(root, 'lib/podrdf.mjs'));
+  const listed = [];
+  const rdf = new PodRdf({ storage: { base: 'file:///tmp/x/', list: async () => ({
+    names: ['2026-01-01-abcd1234', '2026-01-01-abcd1234.4242.tmp', 'notes.acl'],
+  }) } });
+  listed.push(...await rdf.listNotes('timeline'));
+  check(listed.length === 1 && listed[0].endsWith('2026-01-01-abcd1234'),
+    `an interrupted write's leftover is not offered to the parser (${listed.length} listed)`);
+
+  // An Accept has to answer the Follow we sent.
+  const { Intake } = await import(path.join(root, 'lib/intake.mjs'));
+  const mkA = (rec) => {
+    const state = { contacts: { followers: [], following: [rec] } };
+    const intake = new Intake({
+      config: {}, urls: {}, remote: {}, local: {},
+      store: {
+        read: (_n, d) => d, write: () => {},
+        getContacts: () => JSON.parse(JSON.stringify(state.contacts)),
+        setContacts: (c) => { state.contacts = c; },
+        getStatuses: () => [], getActors: () => ({}), isBlocked: () => false,
+      },
+      deliverer: {}, publisher: { publishCollections: async () => {} }, log: () => {},
+    });
+    return { intake, state };
+  };
+  const THEM = 'https://them.example/u/z';
+  const wrong = mkA({ actor: THEM, accepted: false, followActivity: { id: 'https://us.example/f/1' } });
+  await wrong.intake.onAccept({ type: 'Accept', object: { id: 'https://us.example/f/OTHER' } }, THEM);
+  check(wrong.state.contacts.following[0].accepted === false,
+    'an Accept answering a Follow we never sent does not mark us accepted');
+  const right = mkA({ actor: THEM, accepted: false, followActivity: { id: 'https://us.example/f/1' } });
+  await right.intake.onAccept({ type: 'Accept', object: { id: 'https://us.example/f/1' } }, THEM);
+  check(right.state.contacts.following[0].accepted === true, 'and the one that does, does');
+
+  // The ACL probe should not ask about a tree the default layout keeps on disk.
+  check(/privateOnPod === false \? \[\] :/.test(read('lib/publisher.mjs')),
+    'ensurePrivateAcls does not probe a fediverse tree that is not on the pod');
+  check(/privateOnPod: !cred\.privateRoot/.test(read('run-agent.mjs')),
+    'and the agent tells it which layout this install uses');
+}
+
 // --- 5a-quater. the fediverse posts more than Notes, and a tag is not a hole ---
 {
   const { isContentType } = await import(path.join(root, 'lib/intake.mjs'));
