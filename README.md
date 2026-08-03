@@ -292,6 +292,33 @@ yours to publish and the pod never had them — only your own posts and your own
 boosts of them are on the pod to read back.
 <!-- /CLAUDE -->
 
+<!-- CLAUDE 2026-08-02 — new: follows are approved now, and why -->
+### Follow requests
+
+When somebody follows you, they appear under **Follow requests** on `/admin/`
+with **Accept** and **Refuse** beside them. Your account is, in fediverse terms,
+locked.
+
+The reason is that nothing in the protocol lets this agent know a Follow really
+came from the account it names. Deliveries arrive as plain documents in your
+pod's inbox, which is open to the world by design — that is what makes you
+reachable — and an LDN body carries none of the signature headers a direct
+delivery would. For a Create or a Delete that does not matter, because there is
+an object at the sender's own server to go and re-read; a Follow has nothing to
+check against. So anyone at all could have named anyone at all, and this agent
+would have signed an acceptance and started sending them everything you post.
+
+If you would rather have the old behaviour, one line in the config restores it:
+
+```json
+{ "autoAcceptFollows": true }
+```
+
+A **group** is unaffected either way — `joins open` and `joins approve` still
+mean exactly what they did, because a group's operator has already said in as
+many words whether anyone may join.
+<!-- /CLAUDE -->
+
 The handle, the pod, the identity provider and person-vs-group are not editable:
 they are what the actor *is*, and changing one would mean a different actor at a
 different address. The display name, bio and pictures are editable, but not
@@ -364,6 +391,18 @@ Two more when you need them:
 bin/activitypod.mjs tokens                  # list client logins; --revoke <prefix> / --revoke-all
 bin/activitypod.mjs revoke-credential --email you@example.org   # kill this machine's pod credential
 ```
+
+<!-- CLAUDE 2026-08-02 — added: the --force that makes the advice true -->
+If this home's `keys.json` is lost or damaged, the agent refuses to start rather
+than mint a replacement behind your back — a new key would invalidate every
+signature the other device holding the old one can still make. Recovering from
+that needs `rotate-key --force`, which mints the replacement and republishes the
+actor so other servers learn it:
+
+```
+bin/activitypod.mjs rotate-key --force
+```
+<!-- /CLAUDE -->
 
 <!-- CLAUDE 2026-07-30 — added: describe, and the mention note -->
 <!-- CLAUDE 2026-08-01 — the client edits the profile now; describe still works -->
@@ -531,6 +570,21 @@ bin/activitypod.mjs start      # then open http://localhost:8030/
 
 `termux-wake-lock` keeps it alive in the background; and because the pod
 buffers everything, an agent Android kills simply catches up on next start.
+
+<!-- CLAUDE 2026-08-02 — new: setup refuses a plaintext pod that is not local -->
+### A note on http:// addresses
+
+Setup refuses an `http://` pod or identity provider that is not on this machine.
+Those two addresses carry your account password and the credential it buys, and
+nothing used to check the scheme, so a typo sent both in clear.
+
+Loopback is exempt and always will be: `http://localhost:8000/…`,
+`http://127.0.0.1:…` and any `*.localhost` name never reach a network interface,
+so there is nothing to encrypt. A pod on this machine is an ordinary way to run
+this. What gets refused is the address that looks local and is not — a LAN
+address like `http://192.168.1.50:3000/` is a real wire shared with every other
+device on it.
+<!-- /CLAUDE -->
 
 ## Requirements
 
