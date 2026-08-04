@@ -1780,6 +1780,37 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     check(third.skipped, 'once it is genuinely up there, the digest does its job again');
   }
 
+  // --- a flood of forged favourites cannot erase real notifications ---
+  {
+    const { PodStore } = await import(path.join(root, 'lib/store.mjs'));
+    const { httpUrl } = await import(path.join(root, 'lib/intake.mjs'));
+    check(httpUrl('https://a.example/u/x') && httpUrl('http://localhost:3000/x')
+      && !httpUrl('javascript:alert(1)') && !httpUrl('data:text/html,x')
+      && !httpUrl('') && !httpUrl(null),
+      'an actor has to be an http(s) URL, and the two that reach a client href do not qualify');
+
+    const st = new PodStore({ log: () => {} });
+    // Fifty real ones, then a thousand forged favourites — each a different
+    // actor string, so the content-hash dedupe does not catch them.
+    for (let i = 0; i < 50; i++) st.addNotification({ type: 'mention', actor: `https://friend.example/u/${i}` });
+    for (let i = 0; i < 1000; i++) {
+      st.addNotification({ type: 'favourite', actor: `https://evil.example/u/${i}`, unverified: true });
+    }
+    const after = st.getNotifications();
+    check(after.filter(n => !n.unverified).length === 50,
+      `every real notification survives a 1000-strong flood (${after.filter(n => !n.unverified).length}/50)`);
+    check(after.length === 500, `and the list is still capped (${after.length})`);
+    check(after.filter(n => n.unverified).length === 450,
+      'the flood fills what is left over and evicts only itself');
+    // Nothing changes for an ordinary run that never reaches the cap.
+    const calm = new PodStore({ log: () => {} });
+    for (let i = 0; i < 10; i++) {
+      calm.addNotification({ type: 'favourite', actor: `https://e.example/u/${i}`, unverified: true });
+    }
+    check(calm.getNotifications().length === 10,
+      'below the cap an unverified one is kept like any other, so strangers still show up');
+  }
+
   // --- a document may only speak for its own origin ---
   {
     const { authorOf } = await import(path.join(root, 'lib/intake.mjs'));
