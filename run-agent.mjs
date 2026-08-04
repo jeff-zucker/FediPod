@@ -1,9 +1,17 @@
 // run-agent.mjs — solid-activitypub: a standalone single-actor ActivityPub
-// agent whose entire existence lives on a remote Solid pod. The pod serves
-// the public wire face (/activitypods-js/ap/), holds the RDF truth
-// (/activitypods-js/fediverse/) and the operational state
-// (/activitypods-js/ap-state/); this process is a disposable outbound-only
-// worker — any machine holding the credential file resumes the actor.
+// agent. The remote pod is a RELAY: it serves the public wire face
+// (/activitypods-js/ap/) and buffers inbound mail in a public-append inbox
+// while this process is off, and it keeps one private document, the lease,
+// because a lock only one machine can reach coordinates nothing.
+//
+// Everything else private is on THIS machine — the RDF truth and the
+// operational state, in a directory beside the credential and the signing key.
+// So a machine holding only the credential file does NOT resume the actor: it
+// resumes the identity with an empty timeline, contacts, blocklist and
+// notifications, and `activitypod rebuild` recovers the posts the pod still
+// carries. `privateRoot` absent in credential.json is the pre-2026-08-03
+// layout and still means both trees are on the pod; `activitypod upgrade`
+// says so and `state --all` moves them.
 //
 //   node run-agent.mjs                      # or: bin/activitypod.mjs run
 //
@@ -53,9 +61,10 @@ export class Agent {
   configured() { return !!this.remote && !!this.store.getConfig(); }
 
   // Where the private half lives. `privateRoot` in the credential file names a
-  // container — normally on a pod on this machine — under which the same two
-  // trees are laid out as on the pod. Absent means on the pod, exactly as
-  // before, so an existing install is untouched.
+  // container — by default a plain directory beside the credential, and a pod
+  // on this machine if you move it there — under which the same two trees are
+  // laid out as on the pod. Absent means on the pod, exactly as before, so an
+  // existing install is untouched.
   privateUrls(cred, urls = this.urls) {
     if (!cred.privateRoot) {
       return { state: urls.state, fediverse: urls.fediverse, elsewhere: false };

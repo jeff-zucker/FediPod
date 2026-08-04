@@ -113,11 +113,17 @@ pod cost scales with what you publish, not with what you read.
 It costs two things, both the same thing really — your private data now has one
 copy:
 
-* **No second machine.** You can migrate to a new one with a backup, but two
-  cannot run at once. (The lease that prevents that stays on your pod, so a
-  second agent still cannot corrupt the first — it just cannot join in.)
-* **Recovery is only as good as your backups**, where a pod-stored actor has
-  nothing to lose because the pod has it all.
+* **No second machine.** A second agent starts, but as a read-only viewer of its
+  own copy — and on another machine that copy is empty, so there is nothing for
+  it to show. (The lease that decides which one acts stays on your pod.)
+<!-- CLAUDE 2026-08-03 — the recovery bullet said the opposite of what the code
+     does, and contradicted "Getting your posts back" below -->
+* **Some of it only your backups can bring back.** Not all: your followers
+  return by themselves on the next publish, and `activitypod rebuild` recovers
+  your own posts from the pod's outbox — see *Getting your posts back*. What is
+  gone with the machine is the timeline you received, your notifications, your
+  blocklist and your client logins.
+<!-- /CLAUDE -->
 
 It is a plain **directory** — Turtle and JSON on disk, needing nothing running,
 still your data in the ordinary sense; point a Solid server at it later if you

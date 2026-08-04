@@ -2,7 +2,7 @@
 
 | path | what |
 |---|---|
-| `smoke-tests/agent-smoke.mjs` | the whole test suite (469 checks): boots an unconfigured agent on a scratch `AP_HOME`, then exercises the gate, the Mastodon facade, keys and signing, the wire and pod-RDF builders, intake, the security guards, every politeness behavior added on 2026-07-29, and (§12–§14) the browser setup flow, the named origin and the editable record. `npm test` runs it. |
+| `smoke-tests/agent-smoke.mjs` | the whole test suite (839 checks): boots an unconfigured agent on a scratch `AP_HOME`, then exercises the gate, the Mastodon facade, keys and signing, the wire and pod-RDF builders, intake, the security guards, every politeness behavior added on 2026-07-29, and (§12–§14) the browser setup flow, the named origin and the editable record. `npm test` runs it. |
 | `migration-scripts/` | one-shot repair and teardown tools, kept because each does something no command does. `clear-pod-private-copy.mjs` removes the copy `state --to` leaves on the pod — everything under `ap-state/` except `lease.json` (pinned to the pod on purpose) and `.keep`, plus the whole `fediverse/` tree, and refuses outright if anything there has no local counterpart. `retire-scn-actor.mjs` retires an identity whose own agent cannot (dk's has no retire endpoint; the standalone one wants its state on the pod). `empty-retired-pod.mjs` empties the agent's container and leaves the Tombstone, because CSS has no delete-pod handler at all. Both dry-run unless given `--go`. |
 | `backups/` | originals of vendored files patched by hand, e.g. `phanpy-sw-2026-07-29/` (the service worker replaced by a kill-switch). |
 | `diagrams/group-actor.mmd` | mermaid: a group actor as a hub that many pods follow, and what travels each link. |
