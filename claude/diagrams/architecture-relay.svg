@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="820" height="644" viewBox="0 0 820 644" role="img" aria-labelledby="ttl dsc">
+<svg xmlns="http://www.w3.org/2000/svg" width="820" height="674" viewBox="0 0 820 674" role="img" aria-labelledby="ttl dsc">
 <title id="ttl">Solid ActivityPub — the pod as a relay, the private half on your machine</title>
-<desc id="dsc">The same two halves as the main architecture diagram, with the private half moved. The pod keeps what the ActivityPub protocol forces to be public: webfinger and host-meta at the host root, the actor document and public key, an inbox anyone may append to, public copies of the outbox, followers, following and notes, media, and nodeinfo. The outbox is paged to save load on the pod host. The pod keeps one private thing as well, the lease, because that is what stops two machines acting at once. The agent is local: it publishes the public face, signs and POSTs activities, collects and verifies the inbox, looks up handles by webfinger, serves a Mastodon-compatible client API with a client built in, and polls public hashtag timelines without the pod being involved. Everything else private is a local pod or a directory: notes, timeline, contacts, blocklist, client tokens, the Solid credential and the Fediverse signing key. The agent publishes and drains against the remote pod and receives notification pushes from it.</desc>
+<desc id="dsc">The same two halves as the main architecture diagram, with the private half moved. The pod keeps what the ActivityPub protocol forces to be public: webfinger and host-meta at the host root, the actor document and public key, an inbox anyone may append to, public copies of the outbox, followers, following and notes, media, and nodeinfo. The outbox is paged to save load on the pod host. The pod keeps one private thing as well, the lease, because that is what stops two machines acting at once. The agent is local: it publishes the public face, signs and POSTs activities, collects and verifies the inbox, looks up handles by webfinger, serves a Mastodon-compatible client API with a client built in, and polls public hashtag timelines without the pod being involved. Everything else private is a local pod or a directory: notes, timeline, contacts, blocklist, client tokens, the Solid credential and the Fediverse signing key. A browser on your machine loads the client and the admin page from the agent. The agent publishes and drains against the remote pod and receives notification pushes from it.</desc>
 <style>
   text { font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif; }
   .t  { font-size: 14px; font-weight: 400; }
@@ -35,7 +35,7 @@
 
 <rect class="gray" x="40" y="40" width="740" height="48" rx="4" stroke-width="0.5"/>
 <text class="th graytx" x="56" y="62">The fediverse</text>
-<text class="ts graytx" x="56" y="79">Mastodon, Lemmy, anyone else</text>
+<text class="ts graytx" x="56" y="79">Mastodon, Lemmy, PeerTube, anyone else</text>
 
 <rect class="teal" x="40" y="128" width="280" height="420" rx="8" stroke-width="0.5"/>
 <text class="th tealtx" x="180" y="152" text-anchor="middle">A pod — the relay</text>
@@ -78,11 +78,11 @@
 <text class="t boxtx" x="530" y="358">resolveHandle</text>
 <text class="ts boxtx" x="530" y="374">webfinger lookups for handles</text>
 <rect class="box" x="516" y="390" width="248" height="42" rx="4" stroke-width="0.5"/>
-<text class="t boxtx" x="530" y="408">client API + web UI</text>
-<text class="ts boxtx" x="530" y="424">Mastodon-compatible, a client built in</text>
+<text class="t boxtx" x="530" y="408">tag feed</text>
+<text class="ts boxtx" x="530" y="424">public hashtags, never touches the pod</text>
 <rect class="box" x="516" y="440" width="248" height="46" rx="4" stroke-width="0.5"/>
-<text class="t boxtx" x="530" y="458">tag feed</text>
-<text class="ts boxtx" x="530" y="474">public hashtags, never touches the pod</text>
+<text class="t boxtx" x="530" y="458">client API + web UI</text>
+<text class="ts boxtx" x="530" y="474">Mastodon-compatible, a client built in</text>
 
 <line class="arr" x1="180" y1="88" x2="180" y2="126" marker-end="url(#arrow)"/>
 <text class="ts graytx" x="192" y="112">fetches + delivers</text>
@@ -93,10 +93,14 @@
 <text class="ts graytx" x="410" y="296" text-anchor="middle">pushes notifications</text>
 <line class="arr" x1="320" y1="308" x2="498" y2="308" marker-end="url(#arrow)"/>
 
-<rect class="coral" x="500" y="530" width="280" height="94" rx="8" stroke-width="0.5"/>
-<text class="th coraltx" x="640" y="554" text-anchor="middle">A local pod or directory</text>
-<text class="ts coraltx" x="518" y="576">notes, timeline, contacts, blocklist,</text>
-<text class="ts coraltx" x="518" y="592">client tokens, Solid credential,</text>
-<text class="ts coraltx" x="518" y="608">Fediverse signing key</text>
-<line class="arr" x1="640" y1="530" x2="640" y2="503" marker-end="url(#arrow)"/>
+<rect class="coral" x="285" y="560" width="250" height="94" rx="8" stroke-width="0.5"/>
+<text class="th coraltx" x="410" y="584" text-anchor="middle">A local pod or directory</text>
+<text class="ts coraltx" x="303" y="606">notes, timeline, contacts, blocklist,</text>
+<text class="ts coraltx" x="303" y="622">client tokens, Solid credential,</text>
+<text class="ts coraltx" x="303" y="638">Fediverse signing key</text>
+<line class="arr" x1="517" y1="560" x2="517" y2="503" marker-end="url(#arrow)"/>
+<rect class="gray" x="560" y="560" width="220" height="64" rx="8" stroke-width="0.5"/>
+<text class="th graytx" x="670" y="584" text-anchor="middle">Your browser</text>
+<text class="ts graytx" x="670" y="606" text-anchor="middle">the client and the admin page</text>
+<line class="arr" x1="670" y1="560" x2="670" y2="503" marker-end="url(#arrow)"/>
 </svg>
