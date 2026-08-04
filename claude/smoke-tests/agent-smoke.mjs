@@ -1798,6 +1798,21 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     check(third.skipped, 'once it is genuinely up there, the digest does its job again');
   }
 
+  // --- the push socket has to be the pod's own ---
+  {
+    const { sameSocketOrigin } = await import(path.join(root, 'lib/intake.mjs'));
+    check(sameSocketOrigin('wss://pod.example/ws/abc', 'https://pod.example/')
+      && sameSocketOrigin('ws://localhost:3000/ws', 'http://localhost:3000/'),
+      'the pod\'s own socket is accepted, including a pod on this machine');
+    check(!sameSocketOrigin('wss://evil.example/ws', 'https://pod.example/'),
+      'a subscription naming somebody else is not');
+    check(!sameSocketOrigin('ws://pod.example/ws', 'https://pod.example/'),
+      'and neither is a downgrade to ws:// from an https pod');
+    check(!sameSocketOrigin('https://pod.example/ws', 'https://pod.example/')
+      && !sameSocketOrigin('', 'https://pod.example/') && !sameSocketOrigin(null, null),
+      'nor a non-socket scheme, nor nothing at all');
+  }
+
   // --- one host does not get to name another host's actor ---
   //
   // A handle arrives in the Mention tags of a note somebody else wrote, so
@@ -4585,6 +4600,25 @@ const groupAgent = ({ st, intake, sent }) => ({
   await g.intake.amplify(n.id, { approved: true });
   check(announces(g.sent).length === 1 && !g.st.getPending().length,
     'approving carries it and clears the queue');
+}
+{
+  // Full REFUSES the newest; it used to unshift and slice, so one member
+  // posting 500 notes silently discarded everything the operator was still
+  // deciding about — never carried, never refused, no record they arrived.
+  const g = groupIntake();
+  g.st.setConfig({ ...g.st.getConfig(), review: true });
+  g.intake.config = g.st.getConfig();
+  const oldest = 'https://member.example/n/OLDEST';
+  g.st.setPending([{ noteId: oldest, actor: MEM_A, at: '2026-01-01T00:00:00Z' },
+    ...Array.from({ length: 499 }, (_, i) => ({ noteId: `https://member.example/n/${i}`, actor: MEM_A }))]);
+  const n = gPost(MEM_A + '/n/flood', MEM_A);
+  g.notes[n.id] = n;
+  await g.intake.onCreate(gCreate(n), MEM_A);
+  const pend = g.st.getPending();
+  check(pend.length === 500 && pend.some(p => p.noteId === oldest),
+    `a full review queue keeps what the operator was deciding about (${pend.length})`);
+  check(!pend.some(p => p.noteId === n.id) && !announces(g.sent).length,
+    'and the post that would have pushed it out is refused, not carried');
 }
 {
   const g = groupIntake();
