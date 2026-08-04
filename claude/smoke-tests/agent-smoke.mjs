@@ -529,6 +529,50 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     'but a person the author does retype is mentioned normally');
 }
 
+// --- 5b2. editing, visibility and content warnings ---
+{
+  const { Publisher } = await import(path.join(root, 'lib/publisher.mjs'));
+  const PUB = 'https://www.w3.org/ns/activitystreams#Public';
+  const putDocs = {};
+  const statuses = [];
+  const sent = [];
+  const pub = new Publisher({
+    config: { remotePod: 'https://pod.example/', handle: 'you', name: 'You' },
+    remote: { putJson: async (id, doc) => { putDocs[id] = doc; }, setAcl: async () => {}, delete: async () => true },
+    local: { writeNote: async () => {} },
+    store: {
+      getStatuses: () => statuses, read: () => [], write: () => {},
+      addStatus: (s) => statuses.unshift(s),
+      updateStatus: (noteId, patch) => {
+        const i = statuses.findIndex(x => x.noteId === noteId);
+        if (i < 0) return null;
+        statuses[i] = { ...statuses[i], ...patch };
+        return statuses[i];
+      },
+      getContacts: () => ({ followers: [{ actor: 'f', inbox: 'https://f.example/inbox' }], following: [] }),
+    },
+    deliverer: { deliverToAll: async (i, a) => sent.push(a) },
+    publicKeyPem: 'x', log: () => {},
+    resolveMention: async () => null,
+  });
+  const note = await pub.publishNote('first words', { visibility: 'unlisted', spoilerText: 'cw here' });
+  check(note.summary === 'cw here', 'a content warning rides the note as its summary');
+  check(!note.to.includes(PUB) && note.cc.includes(PUB), 'unlisted: Public moves from to into cc');
+  const s = statuses.find(x => x.noteId === note.id);
+  check(s.visibility === 'unlisted' && s.spoiler === 'cw here' && s.text === 'first words',
+    'the store keeps visibility, the spoiler and the raw text');
+  const patched = await pub.updateNote(s, { content: 'second words', spoilerText: null });
+  check(!!patched.editedAt && patched.text === 'second words',
+    'an edit patches the store and stamps editedAt');
+  const up = sent.find(a => a.type === 'Update');
+  check(!!up && up.object.id === note.id && up.object.updated === patched.editedAt,
+    'the Update keeps the note id and carries the edit stamp');
+  check(String(putDocs[note.id]?.content || '').includes('second words'),
+    'the pod note document is overwritten in place');
+  check(String(putDocs[note.id + '-create']?.object?.content || '').includes('second words'),
+    'and the Create document resolves to the edited text');
+}
+
 // --- 5c0. the websocket origins the CSP allows ---
 {
   const { wsOrigins } = await import(path.join(root, 'lib/admin.mjs'));
