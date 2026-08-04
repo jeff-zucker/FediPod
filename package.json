@@ -5,13 +5,35 @@
   "type": "module",
   "license": "MIT",
   "author": "Jeff Zucker",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jeff-zucker/solid-activitypub.git"
+  },
+  "homepage": "https://github.com/jeff-zucker/solid-activitypub#readme",
+  "bugs": "https://github.com/jeff-zucker/solid-activitypub/issues",
   "bin": {
     "solid-activitypub": "bin/solid-activitypub.mjs"
   },
+  "files": [
+    "bin",
+    "lib",
+    "web",
+    "ui",
+    "vendor",
+    "phanpy/dist",
+    "run-agent.mjs",
+    "scripts",
+    "claude/smoke-tests",
+    "gui.md",
+    "cli.md",
+    "groups.md",
+    "architecture.svg"
+  ],
   "scripts": {
     "start": "node bin/solid-activitypub.mjs up",
     "install-service": "node bin/solid-activitypub.mjs install-service",
     "uninstall-service": "node bin/solid-activitypub.mjs uninstall-service",
+    "prepublishOnly": "npm test",
     "test": "node claude/smoke-tests/agent-smoke.mjs && node scripts/verify-ui.mjs",
     "verify-ui": "node scripts/verify-ui.mjs",
     "audit": "npm audit --omit=dev",
