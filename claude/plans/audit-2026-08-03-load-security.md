@@ -265,15 +265,23 @@ one agent per item, rather than carried forward from the audit:
   about 25 lines across four files, but it changes what a live actor publishes, so it wants a
   throwaway pod and a check that Mastodon still resolves the actor. Phase 2 needs an
   SSRF-guarded JSON-LD context loader the plan does not mention.
-- **Media upload takes the client's Content-Type verbatim** (`lib/mastoapi.mjs`). Left
-  deliberately: reaching that route needs a bearer, which needs loopback or the operator's own
-  password, so the realistic outcome is the operator uploading their own HTML to their own pod.
+That is the only item left in this file. The media Content-Type item that sat here was
+**wrong to leave** and is now fixed (`6629e19`): a bearer is not "only you", because the
+Mastodon facade exists so third-party clients can connect, so any client you authorize could
+have left a page on the pod's origin that runs as your identity. Triaging it by the gate and
+stopping there produced the wrong call, not merely a thin write-up.
 
 Closed on 2026-08-03 after the table above: the follower-eviction pair (`f3c61f6`), the
 notification flood and the actor scheme (`7332515`), `addReply`'s attacker-chosen parent
 (`24bb88e`), the three false doc claims (`5a3c573`), `undici` declared and the WebFinger round
 trip (`1d190f8`), the push-socket origin and the group review queue (`f37bb72`, corrected in
-`e6d58af`).
+`e6d58af` after the live agents dropped to polling), and the media Content-Type (`6629e19`).
+
+**Verified live** on 2026-08-03 against the three real actors: from outside and with no
+credential, WebFinger resolves to the actor, the actor carries a public key and an inbox, and
+the outbox, followers and notes are all readable. Their outboxes are still the pre-paging flat
+format, which is valid and converts on the next publish. What remains untested needs a
+Mastodon account: whether a post reaches a follower, and whether a reply threads back.
 
 Two things found while fixing rather than while auditing, both now closed and both worth
 remembering: `outboxHead` derived `first` from `ceil(total/20)`, which stops being the page
