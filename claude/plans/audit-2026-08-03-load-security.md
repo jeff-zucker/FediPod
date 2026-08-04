@@ -256,12 +256,24 @@ throughout, and each group verified against a running agent as well as the suite
 | F1–F5 | `81977b6` | `state --all` / `--drop-remote` / `upgrade`, layout stamp, startup report |
 | D | `88fcd7c` | queue, drain debounce, per-sweep republish, `page()` clones, length caps |
 
-**Still open**, in the order I would take them: the rest of B (B6 `javascript:` actors and
-unverified Like/Announce notifications, B7 `addReply`, B8 the Undo carve-out, B9 media
-Content-Type and the group review queue); then the low tail below, of which the sharpest are
-the WebSocket URL from the pod response (`lib/intake.mjs:236`), `undici` being an undeclared
-dependency that DNS-pinning silently depends on, and `lib/social.mjs:37` not checking the
-WebFinger subject.
+**Still open** — everything else in this file is done. Re-verified against HEAD on 2026-08-03,
+one agent per item, rather than carried forward from the audit:
+
+- **Inbound signature verification** (`claude/plans/inbound-verification.md`), the one large
+  piece. Its fedify assumptions survived the version 2 move and Phases 1 and 2 are still
+  buildable as written. Phase 1 publishes the Ed25519 key `lib/keys.mjs` already generates —
+  about 25 lines across four files, but it changes what a live actor publishes, so it wants a
+  throwaway pod and a check that Mastodon still resolves the actor. Phase 2 needs an
+  SSRF-guarded JSON-LD context loader the plan does not mention.
+- **Media upload takes the client's Content-Type verbatim** (`lib/mastoapi.mjs`). Left
+  deliberately: reaching that route needs a bearer, which needs loopback or the operator's own
+  password, so the realistic outcome is the operator uploading their own HTML to their own pod.
+
+Closed on 2026-08-03 after the table above: the follower-eviction pair (`f3c61f6`), the
+notification flood and the actor scheme (`7332515`), `addReply`'s attacker-chosen parent
+(`24bb88e`), the three false doc claims (`5a3c573`), `undici` declared and the WebFinger round
+trip (`1d190f8`), the push-socket origin and the group review queue (`f37bb72`, corrected in
+`e6d58af`).
 
 Two things found while fixing rather than while auditing, both now closed and both worth
 remembering: `outboxHead` derived `first` from `ceil(total/20)`, which stops being the page
