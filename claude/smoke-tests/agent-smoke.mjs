@@ -4983,8 +4983,11 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   check(tPerson.formerType === 'Person' && tGroup.formerType === 'Group',
     `a retired group leaves a Group tombstone, not a Person one (${tGroup.formerType})`);
   check(gated.manuallyApprovesFollowers === true
-    && gated['@context'][2]?.manuallyApprovesFollowers === 'as:manuallyApprovesFollowers',
+    && gated['@context'].some(c => c?.manuallyApprovesFollowers === 'as:manuallyApprovesFollowers'),
     'a gated group advertises manuallyApprovesFollowers, declared inline as Mastodon does');
+  check(String(gated.featured || '').endsWith('ap/featured')
+    && gated['@context'].some(c => c?.toot && c?.featured),
+    'the actor names its featured collection, with the term declared');
 }
 {
   const g = groupIntake();
