@@ -46,3 +46,7 @@ drafts/
 # agent state, when AP_HOME is pointed inside the repo
 token.json
 backoff.json
+
+# Claude working notes stay local; only the smoke suite ships
+/claude/*
+!/claude/smoke-tests/
