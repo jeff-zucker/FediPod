@@ -1798,6 +1798,50 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     check(third.skipped, 'once it is genuinely up there, the digest does its job again');
   }
 
+  // --- one host does not get to name another host's actor ---
+  //
+  // A handle arrives in the Mention tags of a note somebody else wrote, so
+  // evil.example answering for @x@evil.example with a real, busy actor
+  // elsewhere got that actor addressed, tagged and delivered to, over our
+  // signature, in a thread they had nothing to do with.
+  {
+    const { confirmDelegation } = await import(path.join(root, 'lib/social.mjs'));
+    const jrdFor = (href) => ({ links: [{ rel: 'self', type: 'application/activity+json', href }] });
+    const ok = async (p) => { await p; return true; };
+    const threw = async (p) => { try { await p; return false; } catch { return true; } };
+
+    let asked = 0;
+    const count = async (a) => { asked++; return jrdFor('https://m.example/users/mei'); };
+    check(await ok(confirmDelegation('m.example',
+      { id: 'https://m.example/users/mei', preferredUsername: 'mei' }, count)) && asked === 0,
+      'a handle on the actor\'s own host is self-consistent, and costs no second lookup');
+
+    // The ordinary delegated setup: @mei@example.com served by m.example.
+    check(await ok(confirmDelegation('example.com',
+      { id: 'https://m.example/users/mei', preferredUsername: 'mei' }, count)) && asked === 1,
+      'a delegated handle passes when the actor\'s own host agrees, at one extra lookup');
+
+    check(await threw(confirmDelegation('evil.example',
+      { id: 'https://m.example/users/mei', preferredUsername: 'mei' },
+      async () => jrdFor('https://m.example/users/SOMEONE-ELSE'))),
+      'but not when that host says the name belongs to a different actor');
+    check(await threw(confirmDelegation('evil.example',
+      { id: 'https://m.example/users/mei', preferredUsername: 'mei' }, async () => null)),
+      'nor when it will not answer at all');
+    check(await threw(confirmDelegation('evil.example',
+      { id: 'https://m.example/users/mei' }, async () => jrdFor('https://m.example/users/mei'))),
+      'nor when the actor names no username to confirm it by');
+    check(await threw(confirmDelegation('evil.example', { id: 'not-a-url' }, async () => null)),
+      'and an actor id that is not a URL is refused outright');
+  }
+
+  // --- the SSRF pinning dependency is declared, not inherited ---
+  {
+    const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
+    check(!!pkg.dependencies?.undici,
+      'undici is a declared dependency — DNS-rebinding pinning silently depends on it');
+  }
+
   // --- a flood of forged favourites cannot erase real notifications ---
   {
     const { PodStore } = await import(path.join(root, 'lib/store.mjs'));
