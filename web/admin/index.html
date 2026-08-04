@@ -271,7 +271,8 @@ pre { overflow-x: auto; background: #0001; padding: .6rem; border-radius: .3rem;
     <h3><span class="hlabel">Lifecycle</span></h3>
     <button id="do-park" title="   Stop the mail but keep the handle — Revive undoes it" class="inline" data-confirm="park">Park</button>
     <button id="do-revive" title="   Open the inbox again and re-follow everyone Park unfollowed" class="inline" data-confirm="revive">Revive</button>
-    <button id="do-rotate-key" title="   Replace the signing key and tell other servers the new one" class="inline" data-confirm="rotate-key">Rotate the signing key</button>
+    <button id="do-rotate-key" title="   Replace the signing key and tell other servers the new one" class="inline" data-confirm="rotate-key">Rotate signing key</button>
+    <button id="do-move-state" title="   Move where this identity's private data is kept" class="inline" data-confirm="move-state">Move data</button>
     <button id="do-move" title="   Transfer this identity: your followers go to another account" class="inline" data-confirm="move">Transfer identity</button>
     <button id="do-retire" title="   End this identity for good — a Delete, then a Tombstone" class="inline danger" data-confirm="retire">Retire identity</button>
   </div>
@@ -364,6 +365,28 @@ pre { overflow-x: auto; background: #0001; padding: .6rem; border-radius: .3rem;
       hands your followers to another account.</p>
     <label for="confirm-handle">Type the handle to confirm</label>
     <input type="text" id="confirm-handle" autocomplete="off">
+  </div>
+  <div id="warn-move-state" class="warn" hidden>
+    <p>Your timeline, contacts, blocklist and notifications move to the place you choose.
+      Everything is copied and checked before the agent switches over, and the old copy is
+      left where it was for you to delete. The agent keeps running.</p>
+    <fieldset>
+      <legend>Where to</legend>
+      <label class="choice"><input type="radio" name="stateWhere" value="path" checked>
+        another place on this device</label>
+      <label class="choice"><input type="radio" name="stateWhere" value="url">
+        another device</label>
+      <label class="choice"><input type="radio" name="stateWhere" value="pod">
+        onto the pod</label>
+      <div id="state-row-path">
+        <label for="state-path">Directory</label>
+        <input type="text" id="state-path" autocomplete="off" placeholder="~/somewhere/private/">
+      </div>
+      <div id="state-row-url" hidden>
+        <label for="state-url">Address the other device serves</label>
+        <input type="url" id="state-url" autocomplete="off" placeholder="https://other-device.example/private/">
+      </div>
+    </fieldset>
   </div>
   <div id="warn-move" class="warn" hidden>
     <p>A <code>Move</code> goes to every follower's inbox and their servers migrate them to the

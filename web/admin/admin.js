@@ -5,7 +5,7 @@
 // form that never mentions a field cannot delete it; and anything on the wire is
 // not real until the actor is republished, which POST /config does for itself.
 //
-// The UI password is deliberately not here — `activitypod passwd` sets it. It
+// The UI password is deliberately not here — `solid-activitypub passwd` sets it. It
 // only gates /oauth/authorize, so it does nothing for a loopback-only agent.
 
 const $ = (id) => document.getElementById(id);
@@ -65,25 +65,26 @@ async function load() {
 //
 // The reset lives here rather than in window.js: the window knows how to show a
 // panel, not what any of them mean.
-function closePanels(keep = null) {
-  if (!keep) solWindow.close();
-  if (keep !== 'output') outputSource = null;
-  if (keep !== 'confirm-form') {
-    pending = null;
-    for (const k of Object.keys(LIFECYCLE)) $(`warn-${k}`)?.hidden !== undefined && ($(`warn-${k}`).hidden = true);
-    $('confirm-handle').value = '';
-    $('confirm-handle-move').value = '';
-    $('move-target').value = '';
-  }
-}
-// Closing it by the ✕ or by Escape has to clear the same state a Cancel does.
-document.getElementById('win').addEventListener('win:closed', () => {
-  outputSource = null;
+function resetConfirm() {
   pending = null;
   for (const k of Object.keys(LIFECYCLE)) $(`warn-${k}`)?.hidden !== undefined && ($(`warn-${k}`).hidden = true);
   $('confirm-handle').value = '';
   $('confirm-handle-move').value = '';
   $('move-target').value = '';
+  $('state-path').value = '';
+  $('state-url').value = '';
+  document.querySelector('input[name=stateWhere][value=path]').checked = true;
+  stateRows();
+}
+function closePanels(keep = null) {
+  if (!keep) solWindow.close();
+  if (keep !== 'output') outputSource = null;
+  if (keep !== 'confirm-form') resetConfirm();
+}
+// Closing it by the ✕ or by Escape has to clear the same state a Cancel does.
+document.getElementById('win').addEventListener('win:closed', () => {
+  outputSource = null;
+  resetConfirm();
 });
 
 
@@ -559,7 +560,21 @@ const LIFECYCLE = {
   retire: { path: '/retire', title: 'Retire this identity', go: 'Retire it', danger: true, done: (r) => `retired ${r.deletedAt}: Delete delivered to ${r.inboxes} inbox(es)` },
   move: { path: '/move', title: 'Transfer this identity', go: 'Transfer it', focus: 'move-target',
     done: (r) => `transferred to ${r.target}: Move delivered to ${r.inboxes} inbox(es), unfollowed ${r.unfollowed}/${r.following}` },
+  'move-state': { path: '/state-move', title: 'Move private data', go: 'Move it', focus: 'state-path',
+    done: (r) => (r.unchanged ? 'already there — nothing moved'
+      : `moved ${r.docs} document(s) and ${r.notes} post(s) — private data is now ${r.now}`) },
 };
+
+// The destination choice reveals the field it needs: a directory for this
+// device, an address for another one, nothing for the pod.
+function stateRows() {
+  const w = picked('stateWhere');
+  $('state-row-path').hidden = w !== 'path';
+  $('state-row-url').hidden = w !== 'url';
+}
+for (const el of document.querySelectorAll('input[name=stateWhere]')) {
+  el.addEventListener('change', stateRows);
+}
 let pending = null;
 
 const closeConfirm = () => closePanels();
@@ -600,10 +615,16 @@ $('confirm-form').addEventListener('submit', async (ev) => {
   const what = pending;
   const body = what === 'retire' ? { confirm: $('confirm-handle').value.trim() }
     : what === 'move' ? { target: $('move-target').value.trim(), confirm: $('confirm-handle-move').value.trim() }
-      : {};
+      : what === 'move-state' ? {
+        to: picked('stateWhere') === 'pod' ? 'pod'
+          : picked('stateWhere') === 'url' ? $('state-url').value.trim() : $('state-path').value.trim(),
+      }
+        : {};
   if (what === 'move' && !body.target) { say('name the account to transfer to', 'err'); return; }
+  if (what === 'move-state' && !body.to) { say('name the destination', 'err'); return; }
   $('confirm-go').disabled = true;
-  say(`${what} — this talks to the pod and to other servers, so it takes a moment`);
+  say(what === 'move-state' ? 'moving your private data — copying, checking, then switching over'
+    : `${what} — this talks to the pod and to other servers, so it takes a moment`);
   const r = await write(LIFECYCLE[what].path, body, what);
   $('confirm-go').disabled = false;
   if (!r) return;                        // write() already said why

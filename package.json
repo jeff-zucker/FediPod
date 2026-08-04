@@ -6,10 +6,12 @@
   "license": "MIT",
   "author": "Jeff Zucker",
   "bin": {
-    "activitypod": "bin/activitypod.mjs"
+    "solid-activitypub": "bin/solid-activitypub.mjs"
   },
   "scripts": {
-    "start": "node bin/activitypod.mjs up",
+    "start": "node bin/solid-activitypub.mjs up",
+    "install-service": "node bin/solid-activitypub.mjs install-service",
+    "uninstall-service": "node bin/solid-activitypub.mjs uninstall-service",
     "test": "node claude/smoke-tests/agent-smoke.mjs && node scripts/verify-ui.mjs",
     "verify-ui": "node scripts/verify-ui.mjs",
     "audit": "npm audit --omit=dev",

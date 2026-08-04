@@ -5,7 +5,7 @@
 //   node scripts/build-dist.mjs        → dist/solid-activitypub-<version>.tar.gz
 //
 // Unpack-and-go:  tar xzf solid-activitypub-*.tar.gz && cd solid-activitypub
-//                 bin/activitypod.mjs setup      (asks two questions, then
+//                 bin/solid-activitypub.mjs setup      (asks two questions, then
 //                 finishes in the browser)
 
 import { execFileSync } from 'node:child_process';

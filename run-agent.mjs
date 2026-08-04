@@ -8,19 +8,19 @@
 // operational state, in a directory beside the credential and the signing key.
 // So a machine holding only the credential file does NOT resume the actor: it
 // resumes the identity with an empty timeline, contacts, blocklist and
-// notifications, and `activitypod rebuild` recovers the posts the pod still
+// notifications, and `solid-activitypub rebuild` recovers the posts the pod still
 // carries. `privateRoot` absent in credential.json is the pre-2026-08-03
-// layout and still means both trees are on the pod; `activitypod upgrade`
+// layout and still means both trees are on the pod; `solid-activitypub upgrade`
 // says so and `state --all` moves them.
 //
-//   node run-agent.mjs                      # or: bin/activitypod.mjs run
+//   node run-agent.mjs                      # or: bin/solid-activitypub.mjs run
 //
 // Env: AP_HOME (credential dir + local log, default ~/.solid-activitypub, or
 //      ~/.activitypod on an install that predates the rename — see lib/home.mjs),
 //      AP_PORT (UI/API/admin, default 8030),
 //      AP_GATE_TOKEN (optional loopback gate; absent → open, loopback-only).
 //
-// Until `bin/activitypod.mjs setup` has minted a credential the agent idles:
+// Until `bin/solid-activitypub.mjs setup` has minted a credential the agent idles:
 // UI + admin up, no federation.
 
 import fs from 'node:fs';
@@ -251,12 +251,12 @@ export class Agent {
     // that already existed kept the old layout with nothing to show for it.
     for (const step of pendingSteps(cred)) {
       this.log(`this identity is on an older layout: ${step.what} (${step.why}). `
-        + 'Run `activitypod upgrade` to see what is pending.');
+        + 'Run `solid-activitypub upgrade` to see what is pending.');
     }
 
     if (process.env.AP_ALLOWED_HOSTS && !config.uiPassword) {
       this.log('WARNING: AP_ALLOWED_HOSTS is set and no UI password is — anyone holding '
-        + 'AP_GATE_TOKEN can mint a client token. Run `activitypod passwd`.');
+        + 'AP_GATE_TOKEN can mint a client token. Run `solid-activitypub passwd`.');
     }
 
     if (!act) return true;                   // reading only — see the note above
@@ -459,7 +459,7 @@ export class Agent {
     // Parked: no draining (the inbox is closed anyway) and no tag feed, so
     // starting the agent by accident does not undo the quiet.
     if (this.store.getConfig()?.quiescedAt) {
-      this.log('parked — not draining or polling; run `activitypod revive` to resume');
+      this.log('parked — not draining or polling; run `solid-activitypub revive` to resume');
       return;                                // renewal is already running, above
     }
     await this.intake.start();
@@ -648,7 +648,7 @@ export async function startAgent({
           if (takeover && agent.viewer) await agent.takeOver();
           return;
         }
-        log('unconfigured — run `bin/activitypod.mjs setup` to begin');
+        log('unconfigured — run `bin/solid-activitypub.mjs setup` to begin');
         return;                                    // no credential: retrying won't help
       } catch (e) {
         // Caps at an hour, not ten minutes: a pod that has refused for an hour

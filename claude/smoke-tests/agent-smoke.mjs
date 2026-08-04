@@ -19,8 +19,11 @@ import { Readable } from 'node:stream';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+// Throwaway agents must not claim (or yield) the real machine's directory
+// door on 8030 — every child spawned below inherits this.
+process.env.AP_DIRECTORY = '0';
 let bootLog = '';
-const HOME = fs.mkdtempSync('/tmp/activitypod-smoke-');
+const HOME = fs.mkdtempSync('/tmp/solid-activitypub-smoke-');
 const PORT = 18621;
 const TOKEN = 'smoke-token';
 
@@ -1269,7 +1272,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
 // --- 5a-nonies. both setup paths produce the same install ---
 {
-  const bin = fs.readFileSync(path.join(root, 'bin/activitypod.mjs'), 'utf8');
+  const bin = fs.readFileSync(path.join(root, 'bin/solid-activitypub.mjs'), 'utf8');
   const setupJs = fs.readFileSync(path.join(root, 'lib/setup.mjs'), 'utf8');
 
   // They diverged: the browser path defaulted privateRoot to a local file: URL
@@ -1467,7 +1470,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
   // portFree/freePortFrom lived twice and had already drifted — one returned
   // null on exhaustion, the other threw, and both spawn agents.
-  for (const f of ['lib/admin.mjs', 'bin/activitypod.mjs']) {
+  for (const f of ['lib/admin.mjs', 'bin/solid-activitypub.mjs']) {
     const src = fs.readFileSync(path.join(root, f), 'utf8');
     check(!/^(async )?function (portFree|freePortFrom)/m.test(src),
       `${f} no longer carries its own copy`);
@@ -1480,7 +1483,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   check(/REBUILD_MAX_PER_RUN/.test(fs.readFileSync(path.join(root, 'lib/publisher.mjs'), 'utf8')),
     'rebuild is capped per run and says so when it stops');
   // and an empty state migration used to report success
-  check(/NOTHING WAS COPIED/.test(fs.readFileSync(path.join(root, 'bin/activitypod.mjs'), 'utf8')),
+  check(/NOTHING WAS COPIED/.test(fs.readFileSync(path.join(root, 'bin/solid-activitypub.mjs'), 'utf8')),
     '`state --to` says when it moved nothing rather than reporting a move');
 }
 
@@ -2158,7 +2161,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     privateRoot: 'http://192.168.1.50/private/' }),
     'but an http one off this machine is refused');
 
-  const bin = fs.readFileSync(path.join(root, 'bin/activitypod.mjs'), 'utf8');
+  const bin = fs.readFileSync(path.join(root, 'bin/solid-activitypub.mjs'), 'utf8');
   check((bin.match(/insecureUrlReason/g) || []).length >= 2,
     'the CLI checks it too — setup and `state --to` both take these addresses');
 }
@@ -2534,7 +2537,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
 // --- 5g-bis. a command you decline should not have acted already ---
 {
-  const bin = fs.readFileSync(path.join(root, 'bin/activitypod.mjs'), 'utf8');
+  const bin = fs.readFileSync(path.join(root, 'bin/solid-activitypub.mjs'), 'utf8');
   const ra = fs.readFileSync(path.join(root, 'run-agent.mjs'), 'utf8');
 
   check(/async connect\(\{ name = null, repair = true, act = true \} = \{\}\)/.test(ra)
@@ -2620,7 +2623,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   fs.rmSync(dir, { recursive: true, force: true });
 
   // No irreplaceable file is still written with a truncating writeFileSync.
-  for (const f of ['lib/keys.mjs', 'lib/setup.mjs', 'lib/home.mjs', 'run-agent.mjs', 'bin/activitypod.mjs']) {
+  for (const f of ['lib/keys.mjs', 'lib/setup.mjs', 'lib/home.mjs', 'run-agent.mjs', 'bin/solid-activitypub.mjs']) {
     const src = fs.readFileSync(path.join(root, f), 'utf8');
     const bad = src.split('\n').filter(l => /writeFileSync/.test(l) && /JSON\.stringify/.test(l));
     check(bad.length === 0, `${f} writes no JSON state non-atomically${bad.length ? ': ' + bad[0].trim() : ''}`);
@@ -2631,7 +2634,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   // refusal that sent you there.
   const keysSrc = fs.readFileSync(path.join(root, 'lib/keys.mjs'), 'utf8');
   check(/rotate-key --force/.test(keysSrc), 'the no-key error points at a command that works');
-  const binSrc = fs.readFileSync(path.join(root, 'bin/activitypod.mjs'), 'utf8');
+  const binSrc = fs.readFileSync(path.join(root, 'bin/solid-activitypub.mjs'), 'utf8');
   check(/const forced = has\('force'\)/.test(binSrc) && /rotateKeyOnce: true/.test(binSrc),
     'and rotate-key --force arms the one-shot rotation so connect can get past it');
 }
@@ -3345,7 +3348,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 // --- 5u. one identity per home: profiles, and no silent clobbering ---
 {
   const { execFileSync } = await import('node:child_process');
-  const cli = path.join(root, 'bin/activitypod.mjs');
+  const cli = path.join(root, 'bin/solid-activitypub.mjs');
   const fake = fs.mkdtempSync('/tmp/dk-ap-ids-');
   const mk = (dir, pod, port) => {
     fs.mkdirSync(dir, { recursive: true });
@@ -3418,7 +3421,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 {
   const { apRoot, CURRENT_ROOT, LEGACY_ROOT } = await import(path.join(root, 'lib/home.mjs'));
   const { execFileSync } = await import('node:child_process');
-  const cli = path.join(root, 'bin/activitypod.mjs');
+  const cli = path.join(root, 'bin/solid-activitypub.mjs');
 
   // Resolution is the whole feature: an install that already exists is never
   // moved by an upgrade, and a fresh one never lands on the retired name.
@@ -4261,7 +4264,7 @@ if (up) {
 {
   const { execFileSync } = await import('node:child_process');
   const home = fs.mkdtempSync('/tmp/dk-ap-kill-');
-  const cli = path.join(root, 'bin/activitypod.mjs');
+  const cli = path.join(root, 'bin/solid-activitypub.mjs');
   const child3 = spawn(process.execPath, [cli, 'start', '--port', '18791'], {
     cwd: root, env: { ...process.env, AP_HOME: home }, stdio: 'ignore',
   });
@@ -4299,7 +4302,7 @@ if (up) {
 {
   const { execFileSync } = await import('node:child_process');
   const home = fs.mkdtempSync('/tmp/dk-ap-replace-');
-  const cli = path.join(root, 'bin/activitypod.mjs');
+  const cli = path.join(root, 'bin/solid-activitypub.mjs');
   const first = spawn(process.execPath, [cli, 'start', '--port', '18796'], {
     cwd: root, env: { ...process.env, AP_HOME: home }, stdio: 'ignore',
   });
@@ -4341,7 +4344,7 @@ if (up) {
 {
   const { execFileSync } = await import('node:child_process');
   const home = fs.mkdtempSync('/tmp/dk-ap-port-');
-  const cli = path.join(root, 'bin/activitypod.mjs');
+  const cli = path.join(root, 'bin/solid-activitypub.mjs');
   const child2 = spawn(process.execPath, [cli, 'start', '--port', '18778'], {
     cwd: root, env: { ...process.env, AP_HOME: home }, stdio: 'ignore', detached: false,
   });
@@ -4369,8 +4372,8 @@ if (up) {
   const { execFileSync } = await import('node:child_process');
   const say = (plat) => execFileSync(process.execPath, ['-e', `
     Object.defineProperty(process, 'platform', { value: '${plat}' });
-    process.argv = [process.argv[0], 'bin/activitypod.mjs', 'install-service'];
-    await import('${path.join(root, 'bin/activitypod.mjs')}');
+    process.argv = [process.argv[0], 'bin/solid-activitypub.mjs', 'install-service'];
+    await import('${path.join(root, 'bin/solid-activitypub.mjs')}');
   `, '--input-type=module'], { cwd: root }).toString();
   const android = say('android');
   const other = say('freebsd');
@@ -4964,7 +4967,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
 {
   const { startAdmin } = await import(path.join(root, 'lib/admin.mjs'));
   const GPORT = 18624;
-  const GHOME = fs.mkdtempSync('/tmp/activitypod-group-');
+  const GHOME = fs.mkdtempSync('/tmp/solid-activitypub-group-');
   // A set-up group: without the credential FILE the bare URL is a trip to
   // setup, which is right and is not what the checks below are about.
   fs.writeFileSync(path.join(GHOME, 'credential.json'),
@@ -5352,7 +5355,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
     };
   };
   const slog13 = [];
-  const SHOME = fs.mkdtempSync('/tmp/activitypod-setup-');
+  const SHOME = fs.mkdtempSync('/tmp/solid-activitypub-setup-');
   const sagent = makeAgent(SHOME);
   startAdmin({ port: SPORT, gateToken: '', agent: sagent, log: (...a) => slog13.push(a.join(' ')) });
   await new Promise(r => setTimeout(r, 150));
@@ -5435,7 +5438,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   check(/^HTTP\/1\.1 200/.test(named), 'and the agent now answers at its own name');
 
   // --- resuming a setup that died after the mint ---
-  const RHOME = fs.mkdtempSync('/tmp/activitypod-resume-');
+  const RHOME = fs.mkdtempSync('/tmp/solid-activitypub-resume-');
   fs.copyFileSync(credFile, path.join(RHOME, 'credential.json'));
   const mintsBefore = mints;
   const ragent = makeAgent(RHOME);
@@ -5470,7 +5473,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
 {
   const { startAdmin } = await import(path.join(root, 'lib/admin.mjs'));
   const CPORT = 18628;
-  const CHOME = fs.mkdtempSync('/tmp/activitypod-config-');
+  const CHOME = fs.mkdtempSync('/tmp/solid-activitypub-config-');
   // CHOME is the ROOT; the identity itself is a profile under it. /new-actor
   // builds sibling directories as rootOf(agent.home)/profiles/<handle>, so the
   // root has to stay the root or those refusals stop being about anything.
@@ -6208,7 +6211,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
 
   // --- privateRoot moves both private trees, and never the lease ---
   const { Agent } = await import(path.join(root, 'run-agent.mjs'));
-  const a15 = new Agent({ home: '/tmp/activitypod-private-probe', log: () => {} });
+  const a15 = new Agent({ home: '/tmp/solid-activitypub-private-probe', log: () => {} });
   a15.urls = wire.apUrls('https://pod.example/');
   const onPod = a15.privateUrls({ remotePod: 'https://pod.example/' });
   check(onPod.state === a15.urls.state && onPod.fediverse === a15.urls.fediverse
@@ -6224,7 +6227,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   check(podFetch.elsewhere === false, 'the default configuration is unchanged');
 
   // --- the same store over a directory: no server, no round-trip ---
-  const FDIR = fs.mkdtempSync('/tmp/activitypod-files-');
+  const FDIR = fs.mkdtempSync('/tmp/solid-activitypub-files-');
   const fstore = new PodStore({ log: () => {} });
   fstore.attach(new FileStorage(FDIR + '/ap-state/'));
   fstore.setConfig({ handle: 'onfiles', name: 'On Files' });
@@ -6268,8 +6271,8 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
     `a path may not climb out of its container (${escaped})`);
   fs.rmSync(FDIR, { recursive: true, force: true });
 
-  // --- `activitypod state --to` copies and verifies before it repoints ---
-  const SHOME15 = fs.mkdtempSync('/tmp/activitypod-move-');
+  // --- `solid-activitypub state --to` copies and verifies before it repoints ---
+  const SHOME15 = fs.mkdtempSync('/tmp/solid-activitypub-move-');
   const SRC = `http://127.0.0.1:${PPORT}/moveA/`;
   const DST = `http://127.0.0.1:${PPORT}/moveB/`;
   fs.writeFileSync(path.join(SHOME15, 'credential.json'), JSON.stringify({
@@ -6288,7 +6291,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   // process, so a synchronous exec would deadlock waiting on itself.
   const { execFile } = await import('node:child_process');
   const runCli = (args) => new Promise((resolve) => {
-    execFile(process.execPath, [path.join(root, 'bin/activitypod.mjs'), ...args],
+    execFile(process.execPath, [path.join(root, 'bin/solid-activitypub.mjs'), ...args],
       { env: { ...process.env, AP_HOME: SHOME15, AP_PORT: '18632' } },
       (err, stdout, stderr) => resolve({ ok: !err, out: String(stdout) + String(stderr) }));
   });
@@ -6381,7 +6384,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
 
   {
     // A scratch ROOT, so the sweep has more than one identity to walk.
-    const RHOME = fs.mkdtempSync('/tmp/activitypod-root-');
+    const RHOME = fs.mkdtempSync('/tmp/solid-activitypub-root-');
     const profiles = path.join(RHOME, '.solid-activitypub', 'profiles');
     const mkIdentity = (name, cred, agentJson = null) => {
       const dir = path.join(profiles, name);
@@ -6395,7 +6398,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
     mkIdentity('new', { ...POD, privateRoot: 'file:///tmp/newprivate/' });   // already right
 
     const runRoot = (args) => new Promise((resolve) => {
-      execFile(process.execPath, [path.join(root, 'bin/activitypod.mjs'), ...args],
+      execFile(process.execPath, [path.join(root, 'bin/solid-activitypub.mjs'), ...args],
         { env: { ...process.env, HOME: RHOME, AP_HOME: '', AP_PROFILE: '' } },
         (err, stdout, stderr) => resolve({ ok: !err, out: String(stdout) + String(stderr) }));
     });
@@ -6449,9 +6452,9 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   const { execFile } = await import('node:child_process');
   const { default: net16 } = await import('node:net');
   const homes = [];
-  const mkHome = (tag) => { const h = fs.mkdtempSync(`/tmp/activitypod-up-${tag}-`); homes.push(h); return h; };
+  const mkHome = (tag) => { const h = fs.mkdtempSync(`/tmp/solid-activitypub-up-${tag}-`); homes.push(h); return h; };
   const run = (home, args) => new Promise((resolve) => {
-    execFile(process.execPath, [path.join(root, 'bin/activitypod.mjs'), ...args],
+    execFile(process.execPath, [path.join(root, 'bin/solid-activitypub.mjs'), ...args],
       { env: { ...process.env, AP_HOME: home } },
       (err, stdout, stderr) => resolve({ ok: !err, out: String(stdout) + String(stderr) }));
   });
@@ -6566,6 +6569,104 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
     'listContainer sorts oldest-first — an LDP listing is a set, so nothing else would');
   check(listed[0].size === 100 && listed[0].modified === '2026-07-02T00:00:00.000Z',
     'and carries size and modified from the same response, at no extra cost');
+}
+
+// --- 18. copyPrivateHalf between directories, and the page's /state-move route ---
+{
+  const { copyPrivateHalf, CURRENT_LAYOUT } = await import(path.join(root, 'lib/migrate.mjs'));
+  const MDIR = fs.mkdtempSync('/tmp/solid-activitypub-statemove-');
+  const SRC18 = path.join(MDIR, 'src');
+  const DST18 = path.join(MDIR, 'dst');
+
+  const seed18 = new PodStore({ log: () => {} });
+  seed18.attach(new FileStorage(SRC18 + '/ap-state/'));
+  seed18.setConfig({ handle: 'mover18', name: 'Mover' });
+  seed18.setBlocklist({ domains: ['bad.example'], actors: [] });
+  await seed18.commit();
+  const srcRdf = new PodRdf({ storage: new FileStorage(SRC18 + '/fediverse/') });
+  await srcRdf.put(srcRdf.fedi + 'settings', '<> a <http://www.w3.org/2002/07/owl#Thing> .\n');
+  await srcRdf.writeNote('posts', 'p1', {
+    noteId: 'https://m.example/n/1', actor: 'https://m.example/u/a',
+    published: '2026-08-01T00:00:00Z', content: 'carried\t"across"',
+  });
+  await srcRdf.writeNote('timeline', 't1', {
+    noteId: 'https://m.example/n/2', actor: 'https://m.example/u/b',
+    published: '2026-08-02T00:00:00Z', content: 'seen, not written',
+  });
+
+  const copied = await copyPrivateHalf({
+    from: { state: new FileStorage(SRC18 + '/ap-state/'), fediverse: new FileStorage(SRC18 + '/fediverse/') },
+    to: { state: new FileStorage(DST18 + '/ap-state/'), fediverse: new FileStorage(DST18 + '/fediverse/') },
+  });
+  check(copied.docs === 2 && copied.notes === 2,
+    `copyPrivateHalf counts what it moved (${copied.docs} docs, ${copied.notes} notes)`);
+
+  const dstStore = new PodStore({ log: () => {} });
+  dstStore.attach(new FileStorage(DST18 + '/ap-state/'));
+  await dstStore.load();
+  check(dstStore.getConfig()?.handle === 'mover18' && dstStore.getBlocklist().domains[0] === 'bad.example',
+    'the state documents read back intact at the destination');
+  const dstRdf = new PodRdf({ storage: new FileStorage(DST18 + '/fediverse/') });
+  const dstPost = await dstRdf.readNote((await dstRdf.listNotes('posts'))[0]);
+  const dstSeen = await dstRdf.readNote((await dstRdf.listNotes('timeline'))[0]);
+  check(dstPost.content === 'carried\t"across"' && dstPost.noteId === 'https://m.example/n/1'
+    && dstSeen.content === 'seen, not written',
+    'and the RDF notes survive the trip, escaping and all');
+  check(/owl#Thing/.test(await dstRdf.get(dstRdf.fedi + 'settings')),
+    'settings came across too — contacts being absent was tolerated, not fatal');
+  check(fs.existsSync(path.join(SRC18, 'ap-state', 'config.json'))
+    && fs.existsSync(path.join(SRC18, 'fediverse', 'posts', 'p1')),
+    'the source is copy-only: every document is still where it was');
+
+  // The route the record page calls, over a real Agent whose private half is
+  // the directory seeded above. No pod behind it: connect is stubbed, because
+  // what is under test is quiesce → copy → repoint → reconnect, not the pod.
+  const { startAdmin: startAdmin18 } = await import(path.join(root, 'lib/admin.mjs'));
+  const { Agent: Agent18 } = await import(path.join(root, 'run-agent.mjs'));
+  const AHOME18 = path.join(MDIR, 'home');
+  fs.mkdirSync(AHOME18, { recursive: true });
+  const srcRoot = pathToFileURL(SRC18).href + '/';
+  fs.writeFileSync(path.join(AHOME18, 'credential.json'), JSON.stringify({
+    remotePod: 'https://pod.example/', clientId: 'c', secret: 's', privateRoot: srcRoot,
+  }));
+  const magent = new Agent18({ home: AHOME18, log: () => {} });
+  magent.urls = wire.apUrls('https://pod.example/');
+  magent.configured = () => true;
+  magent.requestTakeover = async () => true;
+  let reconnects = 0;
+  magent.connect = async () => { reconnects++; };
+  magent.store.attach(magent.privateStorage(magent.readCredential(), 'state'));
+  await magent.store.load();
+
+  const MPORT = 18641;
+  startAdmin18({ port: MPORT, gateToken: '', agent: magent, handle: 'mover18', log: () => {} });
+  await new Promise(r => setTimeout(r, 150));
+  const mpost = (body) => fetch(`http://localhost:${MPORT}/state-move`, {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
+  }).then(async r => ({ status: r.status, json: await r.json().catch(() => null) }));
+
+  const noTarget = await mpost({});
+  check(noTarget.status === 400 && /say where/.test(noTarget.json?.error || ''),
+    `a move with no destination is refused (${noTarget.status})`);
+  check(JSON.parse(fs.readFileSync(path.join(AHOME18, 'credential.json'), 'utf8')).privateRoot === srcRoot,
+    'and being refused wrote nothing — the credential still points at the source');
+
+  const MOVED18 = path.join(MDIR, 'moved');
+  const ok18 = await mpost({ to: MOVED18 });
+  check(ok18.status === 200 && ok18.json?.ok === true && ok18.json.docs === 2 && ok18.json.notes === 2,
+    `a directory target moves the data (${ok18.status}: ${JSON.stringify(ok18.json).slice(0, 100)})`);
+  const credMoved = JSON.parse(fs.readFileSync(path.join(AHOME18, 'credential.json'), 'utf8'));
+  check(credMoved.privateRoot === pathToFileURL(MOVED18).href + '/' && credMoved.layout === CURRENT_LAYOUT,
+    'the credential is repointed to the directory as a file: URL, and stamped current');
+  check(fs.existsSync(path.join(MOVED18, 'ap-state', 'config.json'))
+    && fs.existsSync(path.join(MOVED18, 'fediverse', 'posts', 'p1')),
+    'the documents and notes really are at the new location');
+  check(fs.existsSync(path.join(SRC18, 'ap-state', 'config.json')),
+    'and the old copy is left behind, exactly as the CLI move leaves it');
+  check(reconnects === 1 && magent.store.storage.base === pathToFileURL(MOVED18).href + '/ap-state/',
+    'the running agent reattached its store to the new location and reconnected');
+
+  fs.rmSync(MDIR, { recursive: true, force: true });
 }
 
 child.kill('SIGTERM');

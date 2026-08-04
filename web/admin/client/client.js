@@ -43,9 +43,19 @@
 
   let accounts = [];
   try { accounts = JSON.parse(localStorage.getItem('accounts') || '[]'); } catch { /* unreadable */ }
-  if (accounts.some(a => a?.info?.uri === status.actor)) {          // already ours
-    if (wanted) whenReady(() => sendTo(wanted));
-    return;
+  const ours = accounts.find(a => a?.info?.uri === status.actor);
+  if (ours) {
+    // A stored login can be dead — its token revoked or minted by a run that
+    // never finished. Trusting it shows an empty client with no way out, so
+    // ask the facade first; a dead one falls through to the same one-trip
+    // login a missing account gets.
+    const alive = ours.accessToken && await fetch('/api/v1/accounts/verify_credentials', {
+      headers: { authorization: `Bearer ${ours.accessToken}` },
+    }).then(r => r.ok).catch(() => false);
+    if (alive) {
+      if (wanted) whenReady(() => sendTo(wanted));
+      return;
+    }
   }
 
   // Same origin, so the frame's own host is the instance to log into. A deep

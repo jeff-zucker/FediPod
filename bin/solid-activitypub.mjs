@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-// activitypod.mjs — CLI for the standalone pod-stored ActivityPub actor.
+// solid-activitypub.mjs — CLI for the standalone pod-stored ActivityPub actor.
 //
-//   npm start   (= activitypod up)
+//   npm start   (= solid-activitypub up)
 //     The one command. Finds a port that BINDS — starting from the recorded
 //     one, or 8030 — puts the agent behind it detached (logging to
 //     AP_HOME/agent.log, stoppable by pidfile), and opens the browser where
@@ -9,7 +9,7 @@
 //     the client when there is. Already running? It says so and opens that.
 //     --no-open leaves the browser alone; --port names a starting port.
 //
-//   activitypod setup
+//   solid-activitypub setup
 //     Asks two things at the terminal — the handle, which is permanent and
 //     names the agent's own origin, and the port — then starts serving and
 //     opens http://<handle>.localhost:<port>/, where the rest is asked:
@@ -18,8 +18,8 @@
 //     is created until you say so there, and the address you are about to
 //     take is shown before you do.
 //
-//   activitypod setup --new-account --email you@example.org --handle you
-//   activitypod setup --pod https://you.solidcommunity.net/ \
+//   solid-activitypub setup --new-account --email you@example.org --handle you
+//   solid-activitypub setup --pod https://you.solidcommunity.net/ \
 //       --issuer https://solidcommunity.net --email you@example.org --handle you
 //     Any identity flag (--new-account, --pod, --issuer, --email, --name,
 //     --pod-name, --group, --summary, --icon, --root, --keys) keeps setup
@@ -31,21 +31,21 @@
 //     --keys pod stores them in pod state instead, so several devices can
 //     sign as the same actor without copying files.
 //
-//   activitypod start     start the agent (UI + API on http://localhost:8030/
+//   solid-activitypub start     start the agent (UI + API on http://localhost:8030/
 //                         and http://<handle>.localhost:8030/ — one origin per
 //                         identity, so two agents stop sharing one login).
 //                         Prints both URLs; --open also opens a browser.
 //                         --name "Your Name" sets the display name other
 //                         servers show, and republishes the actor
 //                         ('run' is kept as an alias)
-//   activitypod stop      stop the running agent (graceful: flush + lease release)
-//   activitypod status    show the running agent's status
-//   activitypod state     where the private half lives — your timeline, contacts,
+//   solid-activitypub stop      stop the running agent (graceful: flush + lease release)
+//   solid-activitypub status    show the running agent's status
+//   solid-activitypub state     where the private half lives — your timeline, contacts,
 //                         blocklist and notifications. `--to <container-url>`
 //                         moves it to a pod on this machine, `--to pod` moves it
 //                         back. Copies and verifies before repointing; the old
 //                         copy is left behind. Stop the agent first.
-//   activitypod rebuild   put back the posts a restored or replaced machine no
+//   solid-activitypub rebuild   put back the posts a restored or replaced machine no
 //                         longer knows about, from what the pod still serves.
 //                         Adds only — a post this machine already has keeps its
 //                         local facts. `--from-notes` also walks ap/notes/,
@@ -55,7 +55,7 @@
 //                         profiles/<name>/, and the root records the last one
 //                         used, so `--profile x start` today is what plain
 //                         `start` gives you tomorrow. Nothing to configure.
-//   activitypod home      which directory every identity on this machine lives
+//   solid-activitypub home      which directory every identity on this machine lives
 //                         in. `--to <dir>` moves the whole root, rewrites any
 //                         privateRoot that pointed inside it, and refuses while
 //                         an agent is answering. `--restructure` is the one-time
@@ -64,16 +64,16 @@
 //                         into profiles/<its handle>/. Installs made before the
 //                         2026-07-30 rename keep ~/.activitypod until they run
 //                         `--to`; new ones get ~/.solid-activitypub.
-//   activitypod passwd    set/change the UI password (REQUIRED before any
+//   solid-activitypub passwd    set/change the UI password (REQUIRED before any
 //                         non-loopback exposure — it turns the instant
 //                         OAuth redirect into a real login form)
-//   activitypod tokens    list client tokens; --revoke <prefix> / --revoke-all
-//   activitypod revoke-credential --email you@example.org
+//   solid-activitypub tokens    list client tokens; --revoke <prefix> / --revoke-all
+//   solid-activitypub revoke-credential --email you@example.org
 //                         kill this machine's pod credential server-side and
 //                         delete it locally (the answer to a suspected leak)
-//   activitypod install-service    start at boot + restart on crash
+//   solid-activitypub install-service    start at boot + restart on crash
 //                                  (systemd --user on Linux, launchd on mac)
-//   activitypod uninstall-service  remove that registration
+//   solid-activitypub uninstall-service  remove that registration
 
 import fs from 'node:fs';
 import os from 'node:os';
@@ -95,6 +95,17 @@ const flag = (name, dflt) => {
   return i >= 0 ? args[i + 1] : dflt;
 };
 const has = (name) => args.includes('--' + name);
+// The port can also be given bare — `npm start 8081` reaches us as `up 8081`,
+// because npm passes positionals through but eats `--port`. Bare form only for
+// the start-style commands, where a lone number cannot mean anything else.
+const barePort = () => {
+  if (!['up', 'start', 'run'].includes(cmd)) return null;
+  for (let i = 1; i < args.length; i++) {
+    if (/^\d+$/.test(args[i]) && !args[i - 1].startsWith('--')) return args[i];
+  }
+  return null;
+};
+const portFlag = () => flag('port', null) || barePort();
 // One identity per home, and EVERY identity is `<root>/profiles/<name>/`. There
 // is no privileged unnamed one: `root.json` names which you get when you do not
 // say, and that is a pointer you can change rather than a directory you have to
@@ -123,7 +134,8 @@ let HOME = flag('home', process.env.AP_HOME || (() => {
 })());
 
 // The port chosen at setup is remembered, so `start`/`stop`/`status` need no
-// flags afterwards. Precedence: --port > AP_PORT > the recorded choice > 8030.
+// flags afterwards. Precedence: --port (or a bare port number, `npm start
+// 8081`) > AP_PORT > the recorded choice > 8030.
 // The handle is remembered alongside it, for the named origin: the agent also
 // answers at <handle>.localhost:<port>, and that has to work from the first
 // request, before pod state has been read.
@@ -139,7 +151,7 @@ function recordAgent(fields) {
     writeJsonAtomic(path.join(HOME, 'agent.json'), rec, { mode: 0o644 });
   } catch { /* the flag still works, it just isn't remembered */ }
 }
-let PORT = Number(flag('port', process.env.AP_PORT || recordedPort() || 8030));
+let PORT = Number(portFlag() || process.env.AP_PORT || recordedPort() || 8030);
 
 // Setup is the one command that cannot know its home in advance: the identity is
 // named after the handle, and the handle is the first thing it asks. Everything
@@ -148,7 +160,7 @@ let PORT = Number(flag('port', process.env.AP_PORT || recordedPort() || 8030));
 // from the old home's agent.json.
 function useProfile(name) {
   HOME = flag('home', process.env.AP_HOME || profileHome(AP_ROOT, name));
-  PORT = Number(flag('port', process.env.AP_PORT || recordedPort() || 8030));
+  PORT = Number(portFlag() || process.env.AP_PORT || recordedPort() || 8030);
   DEFAULT_ISSUE = null;
   return HOME;
 }
@@ -285,12 +297,12 @@ function refuseExistingIdentity() {
   let held = '(unreadable)';
   try { held = JSON.parse(fs.readFileSync(credPath, 'utf8')).remotePod; } catch {}
   console.error(`${HOME} already holds an identity: ${held}`);
-  console.error('For another identity:  bin/activitypod.mjs setup --profile <name>');
-  console.error('To list what exists:   bin/activitypod.mjs profiles');
+  console.error('For another identity:  bin/solid-activitypub.mjs setup --profile <name>');
+  console.error('To list what exists:   bin/solid-activitypub.mjs profiles');
   console.error('To replace this one:   add --force (the old credential is lost)');
   console.error('');
   console.error('If a setup died half-way, do NOT re-run it — the credential it already');
-  console.error('minted cannot be minted twice. Run `bin/activitypod.mjs start` and');
+  console.error('minted cannot be minted twice. Run `bin/solid-activitypub.mjs start` and');
   console.error('finish at /admin/setup/ in the browser.');
   process.exit(2);
 }
@@ -307,7 +319,7 @@ async function runBrowserSetup() {
   requireHandle(handle);
   useProfile(PROFILE || handle);
   refuseExistingIdentity();
-  const port = flag('port') ? PORT : (Number(await ask('port', String(PORT))) || PORT);
+  const port = portFlag() ? PORT : (Number(await ask('port', String(PORT))) || PORT);
   endAsking();
 
   // Recorded before the server starts, so `stop`/`status` work while the
@@ -357,7 +369,7 @@ if (cmd === 'up') {
   // one `setup` opens with — `npm start` stays the single command it was.
   if (DEFAULT_ISSUE && !identityHomes(AP_ROOT).some(h => fs.existsSync(path.join(h.dir, 'credential.json')))) {
     if (!process.stdin.isTTY) {
-      console.error('no identities yet — bin/activitypod.mjs setup');
+      console.error('no identities yet — bin/solid-activitypub.mjs setup');
       process.exit(2);
     }
     const first = await ask('handle (the name in your address; permanent)');
@@ -369,7 +381,7 @@ if (cmd === 'up') {
     requireIdentity();
   }
   if (rootOf(HOME) === AP_ROOT) recordLastUsed(AP_ROOT, path.basename(HOME));
-  const preferred = Number(flag('port', process.env.AP_PORT || recordedPort() || 8030));
+  const preferred = Number(portFlag() || process.env.AP_PORT || recordedPort() || 8030);
   const configured = fs.existsSync(path.join(HOME, 'credential.json'));
   const { hostLabel } = await import(new URL('../lib/guard.mjs', import.meta.url));
 
@@ -377,12 +389,16 @@ if (cmd === 'up') {
   let already = null;
   if (!await portFree(preferred)) {
     already = await agentOn(preferred);
-    // Ours already — nothing to start. Anything else is simply not this port;
-    // walking on is what "occupied" has always meant here.
+    // Ours already — nothing to start. The directory door yields to a real
+    // owner of its port. Anything else is simply not this port; walking on is
+    // what "occupied" has always meant here.
     if (!already) {
-      port = await freePortFrom(preferred + 1);
-      // The shared helper returns null; the message is this command's to write.
-      if (port == null) throw new Error(`no free port between ${preferred + 1} and ${preferred + 51}`);
+      const { yieldDirectory } = await import(new URL('../lib/directory.mjs', import.meta.url));
+      if (!await yieldDirectory(preferred, { portFree })) {
+        port = await freePortFrom(preferred + 1);
+        // The shared helper returns null; the message is this command's to write.
+        if (port == null) throw new Error(`no free port between ${preferred + 1} and ${preferred + 51}`);
+      }
     }
   }
 
@@ -422,8 +438,8 @@ if (cmd === 'up') {
     if (port !== preferred) console.log(`port ${preferred} was taken, so it moved to ${port}`);
   }
   console.log(`\n  ${url}\n`);
-  console.log(configured ? 'stop it with:  bin/activitypod.mjs stop'
-    : 'setup continues in the browser. Stop it with:  bin/activitypod.mjs stop');
+  console.log(configured ? 'stop it with:  bin/solid-activitypub.mjs stop'
+    : 'setup continues in the browser. Stop it with:  bin/solid-activitypub.mjs stop');
   if (!has('no-open')) openBrowser(url);
   process.exit(0);
 } else if (cmd === 'setup' && PROFILE && (useProfile(PROFILE), refuseExistingIdentity(), false)) {
@@ -506,7 +522,7 @@ if (cmd === 'up') {
   if (kind === 'group' && !newAccount && !wfHost) {
     console.error(`${pod} is a path on ${new URL(pod).host}, not the root of its own host.`);
     console.error('WebFinger is answered only at a host root, so nobody could find this group.');
-    console.error('Give the group a pod of its own:  bin/activitypod.mjs setup --group --new-account');
+    console.error('Give the group a pod of its own:  bin/solid-activitypub.mjs setup --group --new-account');
     process.exit(2);
   }
   console.log(kind === 'group' ? '\nThe group will be:\n' : '\nYou will be:\n');
@@ -613,7 +629,7 @@ if (cmd === 'up') {
   const authority = `${label ? label + '.' : ''}localhost:${PORT}`;
   const url = `http://${authority}/`;
   if (kind === 'group') {
-    console.log(`group running on ${url} — see \`activitypod members\``);
+    console.log(`group running on ${url} — see \`solid-activitypub members\``);
   } else {
     console.log(`agent running — opening ${url} (log in with instance ${authority})`);
     openBrowser(url);
@@ -627,10 +643,10 @@ if (cmd === 'up') {
   // This flag is read only by setup; it silently did nothing here, while the
   // key guard's own error message told people to use it.
   if (has('rotate-key')) {
-    console.error('start does not rotate keys — use:  bin/activitypod.mjs rotate-key');
+    console.error('start does not rotate keys — use:  bin/solid-activitypub.mjs rotate-key');
     process.exit(2);
   }
-  if (flag('port')) recordAgent({ port: PORT });   // `start --port N` moves it for good
+  if (portFlag()) recordAgent({ port: PORT });   // `start --port N` (or bare N) moves it for good
 
   // Something already on the port? Offer to take it over rather than dying
   // with "address in use" and leaving the user to hunt the process down.
@@ -643,7 +659,7 @@ if (cmd === 'up') {
     const who = pid ? `pid ${pid}` : 'started elsewhere';
     if (!has('replace') && !process.stdin.isTTY) {
       console.error(`an agent is already running on port ${PORT} (${who}).`);
-      console.error('Stop it with `activitypod stop`, or start this one with --replace.');
+      console.error('Stop it with `solid-activitypub stop`, or start this one with --replace.');
       process.exit(1);
     }
     const ans = has('replace')
@@ -847,8 +863,6 @@ if (cmd === 'up') {
   catch { console.error(`no identity in ${HOME} — run setup first`); process.exit(2); }
 
   const { apUrls } = await import(new URL('../lib/wire.mjs', import.meta.url));
-  const { PodStore } = await import(new URL('../lib/store.mjs', import.meta.url));
-  const { PodRdf } = await import(new URL('../lib/podrdf.mjs', import.meta.url));
   const { Agent } = await import(new URL('../run-agent.mjs', import.meta.url));
   const where = (c) => (c.privateRoot ? tildify(c.privateRoot) : `${apUrls(c.remotePod, c.root).home}(on the pod)`);
 
@@ -856,13 +870,13 @@ if (cmd === 'up') {
   if (!to) {
     console.log(`private data: ${where(cred)}`);
     console.log(`public face:  ${apUrls(cred.remotePod, cred.root).home}`);
-    console.log('\nTo move it:  bin/activitypod.mjs state --to ~/somewhere/private/');
-    console.log('             bin/activitypod.mjs state --to <container-url>');
-    console.log('             bin/activitypod.mjs state --to pod');
+    console.log('\nTo move it:  bin/solid-activitypub.mjs state --to ~/somewhere/private/');
+    console.log('             bin/solid-activitypub.mjs state --to <container-url>');
+    console.log('             bin/solid-activitypub.mjs state --to pod');
     process.exit(0);
   }
   if (await fetch(`http://localhost:${PORT}/status`).then(() => true).catch(() => false)) {
-    console.error(`an agent is running on port ${PORT} — stop it first:  bin/activitypod.mjs stop`);
+    console.error(`an agent is running on port ${PORT} — stop it first:  bin/solid-activitypub.mjs stop`);
     process.exit(1);
   }
   // A path or a URL. `state` prints the path form, so refusing it here would
@@ -915,39 +929,24 @@ if (cmd === 'up') {
   const dest = agent.privateUrls(destCred);
   console.log(`moving the private half\n  from ${from.state.replace(/ap-state\/$/, '')}\n  to   ${dest.state.replace(/ap-state\/$/, '')}\n`);
 
-  const src = new PodStore({ log: () => {} });
-  src.attach(agent.privateStorage(cred, 'state'));
-  await src.load();
-  const dst = new PodStore({ log: (...a) => console.log('[state]', ...a) });
-  dst.attach(agent.privateStorage(destCred, 'state'));
-  for (const [name, value] of src.cache) dst.write(name, value);
-  if (!await dst.commit()) {
-    console.error('some state documents did not land — nothing was repointed, nothing was deleted');
-    process.exit(1);
-  }
-  console.log(`copied ${src.cache.size} state document(s)`);
-
-  const rdfFrom = new PodRdf({ storage: agent.privateStorage(cred, 'fediverse') });
-  const rdfTo = new PodRdf({ storage: agent.privateStorage(destCred, 'fediverse') });
-  let notes = 0;
-  for (const doc of ['settings', 'contacts']) {
-    try { await rdfTo.put(rdfTo.fedi + doc, await rdfFrom.get(rdfFrom.fedi + doc)); }
-    catch (e) { if (!/ 404$/.test(e.message)) throw e; }
-  }
-  for (const kind of ['posts', 'timeline']) {
-    for (const url of await rdfFrom.listNotes(kind)) {
-      await rdfTo.put(`${rdfTo.fedi}${kind}/${url.split('/').pop()}`, await rdfFrom.get(url));
-      notes++;
-    }
-  }
-  console.log(`copied ${notes} note(s)`);
+  const { copyPrivateHalf } = await import(new URL('../lib/migrate.mjs', import.meta.url));
+  let copied;
+  try {
+    copied = await copyPrivateHalf({
+      from: { state: agent.privateStorage(cred, 'state'), fediverse: agent.privateStorage(cred, 'fediverse') },
+      to: { state: agent.privateStorage(destCred, 'state'), fediverse: agent.privateStorage(destCred, 'fediverse') },
+      log: (...a) => console.log('[state]', ...a),
+    });
+  } catch (e) { console.error(e.message); process.exit(1); }
+  console.log(`copied ${copied.docs} state document(s)`);
+  console.log(`copied ${copied.notes} note(s)`);
 
   // An empty source produces an empty destination, and every check above
   // passes: nothing failed to land because nothing was sent. The command then
   // repointed the credential and said it had moved your private data. Say what
   // actually happened instead — an empty move is usually a wrong --from, and
   // finding that out later means looking for a timeline that was never there.
-  if (src.cache.size === 0 && notes === 0) {
+  if (copied.docs === 0 && copied.notes === 0) {
     console.log('\nNOTHING WAS COPIED — the source held no state documents and no notes.');
     console.log(`  from: ${where(cred)}`);
     console.log('The pointer is being moved anyway, which is right for a fresh identity');
@@ -976,7 +975,7 @@ if (cmd === 'up') {
   // resolveKeys refuses to mint over a key the actor already publishes, which
   // is the right default — minting silently would invalidate every signature
   // the other device can still make. It did leave the advice that refusal
-  // prints ("run activitypod rotate-key") a dead end, though, because this
+  // prints ("run solid-activitypub rotate-key") a dead end, though, because this
   // command connects first and meets the same refusal. --force arms the
   // one-shot rotation in the credential so the connect can get past it.
   const forced = has('force');
@@ -1037,7 +1036,7 @@ if (cmd === 'up') {
   // Which one answers with no --profile. A property of the ROOT, not of any
   // identity — which is the whole point of it being a pointer.
   const theDefault = (() => { const d = defaultProfile(AP_ROOT); return typeof d === 'string' ? d : null; })();
-  if (!rows.length) console.log('no identities yet — bin/activitypod.mjs setup');
+  if (!rows.length) console.log('no identities yet — bin/solid-activitypub.mjs setup');
   else {
     const w = (k, min) => Math.max(min, ...rows.map(r => String(r[k]).length));
     const [wn, wp, wo, wk] = [w('name', 7), w('pod', 3), w('port', 4), w('kind', 4)];
@@ -1257,7 +1256,7 @@ if (cmd === 'up') {
     console.log(`  · ${contacts.followers.length} follower(s) keep following you — nothing is told you left`);
     console.log('  · the handle keeps resolving; posts and RDF stay where they are');
     console.log('  · a parked agent that gets started will not drain or poll\n');
-    console.log('Quietest state short of retiring. Undo with:  activitypod revive\n');
+    console.log('Quietest state short of retiring. Undo with:  solid-activitypub revive\n');
     const ans = has('yes') ? 'y' : await ask('park this actor? (y/n)', 'n');
     endAsking();
     if (!/^y/i.test(ans)) { console.log('nothing changed'); process.exit(0); }
@@ -1316,7 +1315,7 @@ if (cmd === 'up') {
   // revive() opens the inbox first and only then replays parked.json, which a
   // stand-down never wrote — so it is the right undo here, minus the re-follows.
   console.log(keep
-    ? '\nReversible: activitypod revive re-opens the inbox. Standing down keeps no snapshot\n'
+    ? '\nReversible: solid-activitypub revive re-opens the inbox. Standing down keeps no snapshot\n'
       + 'of the follow graph, unlike park, so following people again is on you.\n'
     : '\nYour posts and RDF stay on the pod; the identity does not come back.\n');
 
@@ -1334,7 +1333,7 @@ if (cmd === 'up') {
   } else if (keep) {
     const r = await agent.park();                 // same thing, and revivable
     console.log(`stood down ${r.quiescedAt}: unfollowed ${r.unfollowed}/${r.following}, inbox closed`);
-    console.log('undo with:  activitypod revive');
+    console.log('undo with:  solid-activitypub revive');
   } else {
     const r = await agent.publisher.retireActor();
     console.log(`retired ${r.deletedAt}: Delete delivered to ${r.inboxes} inbox(es)`);
@@ -1392,7 +1391,7 @@ if (cmd === 'up') {
       const age = r.createdAt ? `${Math.round((Date.now() - r.createdAt) / 86400000)}d old` : 'undated';
       console.log(`${r.token.slice(0, 8)}…  ${age}`);
     }
-    console.log('\nrevoke with: activitypod tokens --revoke <prefix>   (or --revoke-all)');
+    console.log('\nrevoke with: solid-activitypub tokens --revoke <prefix>   (or --revoke-all)');
   }
 } else if (cmd === 'stop') {
   requireIdentity();
@@ -1408,7 +1407,7 @@ if (cmd === 'up') {
     if (asked) { console.log(`agent on port ${PORT} asked to stop`); process.exit(0); }
     console.error(`no agent found: no pidfile at ${pidFile}, nothing answering on port ${PORT}.`);
     console.error('If it is on another port, add --port N; a service install stops with:');
-    console.error('  systemctl --user stop activitypod');
+    console.error('  systemctl --user stop solid-activitypub');
     process.exit(1);
   }
   try { process.kill(pid, 'SIGTERM'); } catch {
@@ -1451,24 +1450,66 @@ if (cmd === 'up') {
   const { execFileSync } = await import('node:child_process');
   const runAgentPath = new URL('../run-agent.mjs', import.meta.url).pathname;
   const sh = (file, a) => { try { execFileSync(file, a, { stdio: 'pipe' }); return true; } catch { return false; } };
+  // Every identity with a credential gets a service of its own: a stopped
+  // actor's pod goes on collecting deliveries, so "installed" means ALL of
+  // them start at boot, each on its recorded port.
+  const identities = [];
+  for (const { name, dir } of identityHomes(AP_ROOT)) {
+    if (!fs.existsSync(path.join(dir, 'credential.json'))) continue;
+    let rec = {};
+    try { rec = JSON.parse(fs.readFileSync(path.join(dir, 'agent.json'), 'utf8')) || {}; } catch { /* no record yet */ }
+    if (!Number(rec.port)) {
+      console.log(`${name}: no recorded port — start it once (\`up --profile ${name}\`), then re-run install-service`);
+      continue;
+    }
+    identities.push({ name, dir, port: Number(rec.port), handle: rec.handle || name });
+  }
+  if (cmd === 'install-service' && !identities.length) {
+    console.error('no identities with a credential and a recorded port — nothing to install');
+    process.exit(2);
+  }
+  // Graceful handover: an identity already running outside the service is
+  // stopped through its own /shutdown so the unit can take the port.
+  const handOver = async ({ name, port }) => {
+    if (!await agentOn(port)) return;
+    await fetch(`http://localhost:${port}/shutdown`, { method: 'POST' }).catch(() => {});
+    for (let i = 0; i < 20 && !await portFree(port); i++) await new Promise(r => setTimeout(r, 250));
+    console.log(`${name}: was running detached — stopped for the service to take over`);
+  };
+
   if (process.platform === 'linux') {
     const unitDir = path.join(os.homedir(), '.config/systemd/user');
-    const unit = path.join(unitDir, 'activitypod.service');
+    const unitOf = (name) => `solid-activitypub-${name}.service`;
+    // Old shapes are cleared on both paths: the pre-rename activitypod.service,
+    // the single-identity solid-activitypub.service, and any per-identity unit
+    // for an identity that no longer exists here.
+    const dropOld = () => {
+      const keep = new Set(cmd === 'install-service' ? identities.map(i => unitOf(i.name)) : []);
+      let units = [];
+      try { units = fs.readdirSync(unitDir).filter(u => /^(activitypod|solid-activitypub)(-.+)?\.service$/.test(u)); } catch { /* no unit dir */ }
+      for (const u of units) {
+        if (keep.has(u)) continue;
+        sh('systemctl', ['--user', 'disable', '--now', u]);
+        fs.rmSync(path.join(unitDir, u), { force: true });
+        console.log(`removed ${u}`);
+      }
+    };
     if (cmd === 'uninstall-service') {
-      sh('systemctl', ['--user', 'disable', '--now', 'activitypod.service']);
-      fs.rmSync(unit, { force: true });
+      dropOld();
       sh('systemctl', ['--user', 'daemon-reload']);
-      console.log('service removed');
+      console.log('service(s) removed');
     } else {
       fs.mkdirSync(unitDir, { recursive: true });
-      fs.writeFileSync(unit, `[Unit]
-Description=Solid ActivityPub agent (pod-stored ActivityPub actor)
+      dropOld();
+      for (const id of identities) {
+        fs.writeFileSync(path.join(unitDir, unitOf(id.name)), `[Unit]
+Description=Solid ActivityPub agent — ${id.handle}
 After=network-online.target
 
 [Service]
 ExecStart=${process.execPath} ${runAgentPath}
-Environment=AP_HOME=${HOME}
-Environment=AP_PORT=${PORT}
+Environment=AP_HOME=${id.dir}
+Environment=AP_PORT=${id.port}
 Restart=on-failure
 RestartSec=30
 # A crash loop must not become a request loop against the pod.
@@ -1478,63 +1519,96 @@ StartLimitBurst=5
 [Install]
 WantedBy=default.target
 `);
-      sh('systemctl', ['--user', 'daemon-reload']);
-      sh('systemctl', ['--user', 'enable', 'activitypod.service']);
-      sh('loginctl', ['enable-linger', os.userInfo().username]);   // keep running while logged out
-      const portBusy = await fetch(`http://localhost:${PORT}/status`).then(() => true).catch(() => false);
-      if (portBusy) {
-        console.log(`installed + enabled (starts at next boot). Port ${PORT} is in use right now — stop that agent, then: systemctl --user start activitypod`);
-      } else {
-        sh('systemctl', ['--user', 'start', 'activitypod.service']);
-        console.log('installed, enabled and started');
       }
-      console.log('logs: journalctl --user -u activitypod -f');
+      sh('systemctl', ['--user', 'daemon-reload']);
+      sh('loginctl', ['enable-linger', os.userInfo().username]);   // keep running while logged out
+      for (const id of identities) {
+        sh('systemctl', ['--user', 'enable', unitOf(id.name)]);
+        await handOver(id);
+        if (await portFree(id.port)) {
+          sh('systemctl', ['--user', 'start', unitOf(id.name)]);
+          console.log(`${id.handle}: installed, enabled and started on port ${id.port}`);
+        } else {
+          console.log(`${id.handle}: installed + enabled (starts at next boot). Port ${id.port} is held by something that is not ours — free it, then: systemctl --user start ${unitOf(id.name)}`);
+        }
+      }
+      console.log('logs: journalctl --user -u solid-activitypub-<name> -f');
     }
   } else if (process.platform === 'darwin') {
-    const plist = path.join(os.homedir(), 'Library/LaunchAgents/net.activitypod.agent.plist');
+    const agents = path.join(os.homedir(), 'Library/LaunchAgents');
+    const plistOf = (name) => path.join(agents, `net.solid-activitypub.${name}.agent.plist`);
+    // Old shapes are cleared on both paths: pre-rename net.activitypod.agent,
+    // the single-identity net.solid-activitypub.agent, and any per-identity
+    // plist for an identity that no longer exists here.
+    const dropOld = () => {
+      const keep = new Set(cmd === 'install-service' ? identities.map(i => plistOf(i.name)) : []);
+      let plists = [];
+      try {
+        plists = fs.readdirSync(agents)
+          .filter(f => /^net\.(activitypod|solid-activitypub)(\..+)?\.agent\.plist$/.test(f))
+          .map(f => path.join(agents, f));
+      } catch { /* no LaunchAgents dir */ }
+      for (const p of plists) {
+        if (keep.has(p)) continue;
+        sh('launchctl', ['unload', p]);
+        fs.rmSync(p, { force: true });
+        console.log(`removed ${path.basename(p)}`);
+      }
+    };
     if (cmd === 'uninstall-service') {
-      sh('launchctl', ['unload', plist]);
-      fs.rmSync(plist, { force: true });
-      console.log('service removed');
+      dropOld();
+      console.log('service(s) removed');
     } else {
-      fs.mkdirSync(path.dirname(plist), { recursive: true });
-      fs.writeFileSync(plist, `<?xml version="1.0" encoding="UTF-8"?>
+      fs.mkdirSync(agents, { recursive: true });
+      dropOld();
+      for (const id of identities) {
+        const plist = plistOf(id.name);
+        sh('launchctl', ['unload', plist]);      // replacing our own older copy
+        fs.writeFileSync(plist, `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
-  <key>Label</key><string>net.activitypod.agent</string>
+  <key>Label</key><string>net.solid-activitypub.${id.name}.agent</string>
   <key>ProgramArguments</key><array>
     <string>${process.execPath}</string><string>${runAgentPath}</string>
   </array>
   <key>EnvironmentVariables</key><dict>
-    <key>AP_HOME</key><string>${HOME}</string>
-    <key>AP_PORT</key><string>${PORT}</string>
+    <key>AP_HOME</key><string>${id.dir}</string>
+    <key>AP_PORT</key><string>${id.port}</string>
   </dict>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><dict><key>SuccessfulExit</key><false/></dict>
   <key>ThrottleInterval</key><integer>30</integer>
 </dict></plist>
 `);
-      sh('launchctl', ['load', plist]);
-      console.log('installed and loaded (starts at login)');
+        await handOver(id);
+        sh('launchctl', ['load', plist]);
+        console.log(`${id.handle}: installed and loaded (starts at login)`);
+      }
     }
   } else if (process.platform === 'win32') {
     // schtasks is scriptable, but this path is UNTESTED here (no Windows
     // machine); the equivalent command is printed either way so a failure
     // is actionable rather than mysterious.
-    const task = 'activitypod';
-    const tr = `"${process.execPath}" "${runAgentPath}"`;
+    const taskOf = (name) => `solid-activitypub-${name}`;
     if (cmd === 'uninstall-service') {
-      const gone = sh('schtasks', ['/delete', '/tn', task, '/f']);
-      console.log(gone ? 'scheduled task removed' : `could not remove it — run: schtasks /delete /tn ${task} /f`);
+      sh('schtasks', ['/delete', '/tn', 'activitypod', '/f']);        // pre-rename name
+      sh('schtasks', ['/delete', '/tn', 'solid-activitypub', '/f']);  // single-identity name
+      for (const id of identities) sh('schtasks', ['/delete', '/tn', taskOf(id.name), '/f']);
+      console.log('scheduled task(s) removed');
     } else {
-      const made = sh('schtasks', ['/create', '/tn', task, '/tr', tr, '/sc', 'onlogon', '/rl', 'limited', '/f']);
-      if (made) {
-        console.log('scheduled task created — starts at log on (untested on Windows; please report)');
-        console.log(`set AP_HOME=${HOME} and AP_PORT=${PORT} in the task's environment if they are not your defaults`);
-      } else {
-        console.log('could not create the task automatically. Run this in an elevated prompt:');
-        console.log(`  schtasks /create /tn ${task} /tr ${tr} /sc onlogon /rl limited /f`);
-        console.log(`with AP_HOME=${HOME} AP_PORT=${PORT}.`);
+      sh('schtasks', ['/delete', '/tn', 'activitypod', '/f']);        // pre-rename name
+      sh('schtasks', ['/delete', '/tn', 'solid-activitypub', '/f']);  // single-identity name
+      for (const id of identities) {
+        const tr = `"${process.execPath}" "${runAgentPath}"`;
+        const made = sh('schtasks', ['/create', '/tn', taskOf(id.name), '/tr', tr, '/sc', 'onlogon', '/rl', 'limited', '/f']);
+        if (made) {
+          console.log(`${id.handle}: scheduled task created — starts at log on (untested on Windows; please report)`);
+          console.log(`  set AP_HOME=${id.dir} and AP_PORT=${id.port} in the task's environment`);
+        } else {
+          console.log(`${id.handle}: could not create the task automatically. Run this in an elevated prompt:`);
+          console.log(`  schtasks /create /tn ${taskOf(id.name)} /tr ${tr} /sc onlogon /rl limited /f`);
+          console.log(`  with AP_HOME=${id.dir} AP_PORT=${id.port}.`);
+        }
       }
     }
   } else if (process.platform === 'android' || process.env.PREFIX?.includes('com.termux')) {
@@ -1544,28 +1618,28 @@ WantedBy=default.target
     // The agent is designed for this: whatever Android kills, the pod
     // buffered, and the next start catches up.
     if (cmd === 'uninstall-service') {
-      console.log('Termux: remove ~/.termux/boot/activitypod.sh (and `sv-disable activitypod` if you used termux-services).');
+      console.log('Termux: remove ~/.termux/boot/solid-activitypub.sh (activitypod.sh on an older install, and `sv-disable` the matching service if you used termux-services).');
     } else {
       const boot = path.join(os.homedir(), '.termux/boot');
       console.log('Android/Termux has no service manager. To start at boot:');
       console.log('  1. install the Termux:Boot app (F-Droid), open it once');
-      console.log(`  2. mkdir -p ${boot} && cat > ${boot}/activitypod.sh <<'EOF'`);
+      console.log(`  2. mkdir -p ${boot} && cat > ${boot}/solid-activitypub.sh <<'EOF'`);
       console.log('#!/data/data/com.termux/files/usr/bin/sh');
       console.log('termux-wake-lock');
-      console.log(`AP_HOME=${HOME} AP_PORT=${PORT} ${process.execPath} ${runAgentPath} &`);
+      for (const id of identities) console.log(`AP_HOME=${id.dir} AP_PORT=${id.port} ${process.execPath} ${runAgentPath} &`);
       console.log('EOF');
-      console.log(`  3. chmod +x ${boot}/activitypod.sh`);
-      console.log('\nWithout Termux:Boot, run `termux-wake-lock` then `activitypod run` —');
+      console.log(`  3. chmod +x ${boot}/solid-activitypub.sh`);
+      console.log('\nWithout Termux:Boot, run `termux-wake-lock` then `solid-activitypub run` —');
       console.log('anything Android kills is buffered on the pod and catches up next start.');
     }
   } else {
-    console.log(`no service integration for platform "${process.platform}". Run it yourself with:`);
-    console.log(`  AP_HOME=${HOME} AP_PORT=${PORT} ${process.execPath} ${runAgentPath}`);
+    console.log(`no service integration for platform "${process.platform}". Run each yourself with:`);
+    for (const id of identities) console.log(`  AP_HOME=${id.dir} AP_PORT=${id.port} ${process.execPath} ${runAgentPath}`);
   }
 } else if (cmd === 'describe') {
   // The bio and the avatar. Both live in the actor document, so this republishes.
   if (!flag('summary') && !flag('icon')) {
-    console.error('usage: activitypod describe --summary "what this is" --icon <url>');
+    console.error('usage: solid-activitypub describe --summary "what this is" --icon <url>');
     process.exit(2);
   }
   const payload = {};
@@ -1624,11 +1698,11 @@ WantedBy=default.target
   const post = !GETS.includes(cmd);
   const arg = post ? (flag('actor') || flag('note') || args[1]) : null;
   if (post && !TOGGLES[cmd] && !arg) {
-    console.error(`usage: activitypod ${cmd} <${BY_ACTOR.includes(cmd) ? 'actor' : 'note'}-url>`);
+    console.error(`usage: solid-activitypub ${cmd} <${BY_ACTOR.includes(cmd) ? 'actor' : 'note'}-url>`);
     process.exit(2);
   }
   if (TOGGLES[cmd] && !TOGGLES[cmd].includes(arg)) {
-    console.error(`usage: activitypod ${cmd} <${TOGGLES[cmd].join('|')}>`);
+    console.error(`usage: solid-activitypub ${cmd} <${TOGGLES[cmd].join('|')}>`);
     process.exit(2);
   }
   const payload = cmd === 'review' ? { on: arg === 'on' }
@@ -1652,22 +1726,22 @@ WantedBy=default.target
   if (cmd === 'members') {
     if (!body.members.length) console.log('no members yet — nobody has followed this group');
     for (const m of body.members) console.log(`${m.muted ? 'muted ' : '      '}${m.actor}`);
-    console.log('\nstop carrying someone: activitypod mute <actor-url>   (undo: unmute)');
-    console.log('remove them entirely:  activitypod eject <actor-url>');
+    console.log('\nstop carrying someone: solid-activitypub mute <actor-url>   (undo: unmute)');
+    console.log('remove them entirely:  solid-activitypub eject <actor-url>');
   } else if (cmd === 'announced') {
     if (!body.announced.length) console.log('nothing carried yet');
     for (const a of body.announced) console.log(`${a.announcedAt}  ${a.actor}  ${a.noteId}`);
-    console.log('\nunsay one: activitypod retract <note-url>');
+    console.log('\nunsay one: solid-activitypub retract <note-url>');
   } else if (cmd === 'pending') {
     console.log(`review is ${body.review ? 'ON' : 'off'}`);
     if (!body.pending.length) console.log('nothing held');
     for (const q of body.pending) console.log(`${q.at}  ${q.actor}  ${q.noteId}`);
-    if (body.pending.length) console.log('\nactivitypod approve <note-url>   (or decline)');
+    if (body.pending.length) console.log('\nsolid-activitypub approve <note-url>   (or decline)');
   } else if (cmd === 'requests') {
     console.log(`joins ${body.approveJoins ? 'need approval' : 'are open — anyone can join'}`);
     if (!body.requests.length) console.log('nobody waiting');
     for (const q of body.requests) console.log(`${q.at}  ${q.actor}`);
-    if (body.requests.length) console.log('\nactivitypod admit <actor-url>   (or refuse)');
+    if (body.requests.length) console.log('\nsolid-activitypub admit <actor-url>   (or refuse)');
   } else if (cmd === 'joins') {
     console.log(body.approveJoins
       ? 'joins now need approval — the actor advertises manuallyApprovesFollowers and was republished'
@@ -1687,7 +1761,7 @@ WantedBy=default.target
     console.log(`${cmd}d ${arg} — ${body.pending} still held`);
   }
 } else {
-  console.log('usage: activitypod <setup|start|stop|status|state|upgrade|rebuild|home|passwd'
+  console.log('usage: solid-activitypub <setup|start|stop|status|state|upgrade|rebuild|home|passwd'
     + '|tokens|revoke-credential|install-service> [--flags]');
   console.log('  state: --to <path|url|pod>   move THIS identity\'s private half');
   console.log('         --all [--apply]       move every identity\'s onto this machine');
