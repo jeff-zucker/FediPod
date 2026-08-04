@@ -300,6 +300,7 @@ export class Agent {
     this.intake?.stop();
     this.deliverer?.stop();
     this.tagfeed?.stop();
+    clearInterval(this.schedTimer);
     this.deliverer = new Deliverer({
       store: this.store, rsaPrivate: keys.rsaPrivate, keyId: this.urls.actor + '#main-key',
       log: this.log, passive: this.viewer,
@@ -468,6 +469,22 @@ export class Agent {
     // reach of any later stop().
     this.tagfeed ||= new TagFeed({ store: this.store, intake: this.intake, log: this.log });
     this.tagfeed.start();
+    // Scheduled posts: a 30s sweep publishes what has come due. The entry is
+    // removed before publishing, so a slow publish cannot double-post; a
+    // failed one is dropped with its reason in the log.
+    clearInterval(this.schedTimer);
+    this.schedTimer = setInterval(() => {
+      const due = this.store.getScheduled().filter(e => Date.parse(e.scheduledAt) <= Date.now());
+      for (const e of due) {
+        this.store.setScheduled(this.store.getScheduled().filter(x => x.id !== e.id));
+        this.publisher.publishNote(e.params.status, {
+          inReplyTo: e.params.inReplyTo, attachments: e.params.attachments,
+          visibility: e.params.visibility, spoilerText: e.params.spoilerText,
+        }).then(() => this.log(`scheduled post published (${e.id})`))
+          .catch(err => this.log(`scheduled post ${e.id} failed: ${err.message} — dropped`));
+      }
+    }, 30_000);
+    this.schedTimer.unref();
     this.log(`federating as @${this.store.getConfig()?.handle}@${new URL(this.urls.base).host}`);
     if (this.renamed) {
       // The display name lives in the actor document, so a rename only
@@ -514,6 +531,7 @@ export class Agent {
     this.intake?.stop();
     this.tagfeed?.stop();
     this.deliverer?.stop();
+    clearInterval(this.schedTimer);
     // The lease too: standing down means standing down. Left renewing, a viewer
     // keeps writing to the pod on the active agent's behalf and can win the
     // lease back on a conditional PUT it had no business making.
