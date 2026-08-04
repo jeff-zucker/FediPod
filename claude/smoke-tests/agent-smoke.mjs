@@ -667,8 +667,10 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   const rUrls = wire.apUrls('https://pod.example/');
   const OURS = rUrls.notes + 'n1';
   const put = {};
+  const rStore = new PodStore({ log: () => {} });
+  rStore.addStatus({ noteId: OURS, kind: 'post', actor: rUrls.actor });
   const ri = new IntakeCls({
-    config: {}, urls: rUrls, store: new PodStore({ log: () => {} }), log: () => {},
+    config: {}, urls: rUrls, store: rStore, log: () => {},
     remote: { getJson: async (u) => put[u] || null, putJson: async (u, b) => { put[u] = b; } },
     local: {}, deliverer: {}, publisher: { urls: rUrls },
   });
@@ -681,6 +683,22 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     `replies accumulate without duplicates (${coll?.items?.length})`);
   check(coll.totalItems === 2 && coll.id === OURS + '-replies',
     'the collection carries its own id and count');
+
+  // `inReplyTo` is read off a document at the SENDER's origin, and the only
+  // check used to be that it started with our notes prefix — so a stranger
+  // named a note we never wrote and we created a document on the pod at a URL
+  // of their choosing, then grew it one whole re-PUT at a time.
+  const invented = rUrls.notes + 'never-written-this';
+  await ri.addReply(invented, 'https://evil.example/n/1');
+  check(!put[invented + '-replies'],
+    'a reply to a note we never wrote creates nothing, however our the URL looks');
+
+  // And the collection is rewritten whole each time, so it needs a ceiling of
+  // its own — the number of replies is a stranger's to choose.
+  for (let i = 0; i < 600; i++) await ri.addReply(OURS, `https://flood.example/n/${i}`);
+  const capped = put[OURS + '-replies'];
+  check(capped.items.length === 500 && capped.items.at(-1) === 'https://flood.example/n/599',
+    `the replies collection is capped, newest kept (${capped.items.length})`);
 }
 
 // --- 5c2. the public surface is verified, not assumed ---
@@ -4687,6 +4705,9 @@ const NOTE = 'https://a.example/u/ann/n/1';
   const p = personIntake({ origin: { [reply.id]: { status: 200, body: reply } } });
   const puts = {};
   p.intake.remote = { getJson: async (u) => puts[u] || null, putJson: async (u, b) => { puts[u] = b; } };
+  // The parent has to be a post we actually made — that is what stops a
+  // stranger naming an invented note under our own prefix.
+  p.st.addStatus({ noteId: parent, kind: 'post', actor: gUrls.actor });
   await p.intake.ingestNote(reply.id, MEM_A);
   check(puts[parent + '-replies']?.items?.includes(reply.id),
     "a reply to one of our notes lands in that note's replies collection end to end");
