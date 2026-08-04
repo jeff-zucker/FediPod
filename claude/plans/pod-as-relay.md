@@ -1,6 +1,6 @@
 # The pod as a relay
 
-Built 2026-07-30. Diagram: `claude/diagrams/architecture-relay.svg`.
+Built 2026-07-30. Diagram: `architecture-relay.svg`, at repo root.
 
 The pod used to be the whole storage story — the public wire face, the RDF truth
 in `fediverse/`, and every state document in `ap-state/`. `privateRoot` in the
@@ -25,7 +25,8 @@ Everything else is public because ActivityPub makes it so:
 
 ## Why the gain is large for one box moved
 
-The topology does not change: same nodes, same edges as `architecture.svg`. What
+The topology does not change: same nodes, same edges as the drawing this
+replaced (now `drafts/architecture.svg`). What
 changes is where the weight sits. Every activity you *receive* costs the pod
 several writes today — the note into `fediverse/timeline/` as RDF, plus
 `statuses.json`, usually `notifications.json`, often `contacts.json` — each a

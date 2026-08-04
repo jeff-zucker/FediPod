@@ -596,15 +596,14 @@ device on it.
 
 ## Architecture
 
-<!-- CLAUDE 2026-07-30 — repointed png → svg; the old png moved to drafts/ -->
-![Solid ActivityPub flow](architecture.svg)
-<!-- /CLAUDE -->
+<!-- CLAUDE 2026-08-03 — the relay drawing is the one at root now, redrawn for
+     the current layout; the older two-halves svg moved to drafts/ -->
+![Solid ActivityPub flow](architecture-relay.svg)
 
-<!-- CLAUDE 2026-07-30 — added: the relay variant diagram -->
-The same two halves with the private trees moved to a pod on your machine —
-see *Where your private data lives* above — are drawn in
-[claude/diagrams/architecture-relay.svg](claude/diagrams/architecture-relay.svg),
-with the reasoning in [claude/plans/pod-as-relay.md](claude/plans/pod-as-relay.md).
+The pod is the discovery and public storage half. The agent is the behaviour
+half and the private storage sits beside it, on your machine — see *Where your
+private data lives* above. The reasoning is in
+[claude/plans/pod-as-relay.md](claude/plans/pod-as-relay.md).
 <!-- /CLAUDE -->
 
 ## Transparency
