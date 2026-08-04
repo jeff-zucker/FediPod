@@ -69,12 +69,14 @@ machine, running or stopped. First-run setup is at `/admin/setup/`. The buttons 
 small windows you can drag by the title bar, resize from the corner, and close
 with ✕ or Escape.
 
-* **Identity** — the kind, both addresses (fediverse and WebID), where the
-  private half is kept, and which local address answers.
+* **Identity** — the kind, a **status** control (active or parked — parking
+  stops the mail and keeps the handle; setting it back to active re-follows
+  the saved graph), both addresses (fediverse and WebID), where the private
+  half is kept, and which local address answers.
 * **Upkeep** — drain the inbox, recover posts, the log, the dead letters.
-* **Lifecycle** — park, revive, rotate the signing key, move the private data,
-  transfer the identity to another account, retire it — each behind a
-  confirmation that states its consequences.
+* **Lifecycle** — rotate the signing key, move the private data, transfer the
+  identity to another account, retire it — each behind a confirmation that
+  states its consequences.
 
 **Transfer identity** hands your followers to another account: a `Move` goes to
 every follower's inbox, their servers migrate them, and the old handle keeps

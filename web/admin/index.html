@@ -96,7 +96,7 @@ h2 { margin: 2rem 0 .5rem; }
 /* Font up to the page's — a default select is under 16px — and padding down to
    nothing tall, so the kind row keeps its line height. Bordered like the text
    inputs above: the border is what makes a control distinct from the page. */
-#moderation select { font: inherit; padding: 0 .1rem;
+#moderation select, #status-ctl select { font: inherit; padding: 0 .1rem;
   border: 1px solid #767676; border-radius: .3rem; background: Field; color: FieldText; }
 #pane-identity > p { grid-column: 1 / -1; }
 h3 { margin: 1.25rem 0 .35rem; }
@@ -257,6 +257,12 @@ pre { overflow-x: auto; background: #0001; padding: .6rem; border-radius: .3rem;
       <option value="moderated">moderated</option>
     </select>
   </span>
+  <span id="status-ctl" hidden>
+    <select id="status-pick" title="   Whether this actor is receiving mail — parking stops it and keeps the handle; active re-follows the saved graph">
+      <option value="active">active</option>
+      <option value="parked">parked</option>
+    </select>
+  </span>
 </section>
 
 <section id="pane-upkeep" hidden>
@@ -269,8 +275,6 @@ pre { overflow-x: auto; background: #0001; padding: .6rem; border-radius: .3rem;
   </div>
   <div class="headrow">
     <h3><span class="hlabel">Lifecycle</span></h3>
-    <button id="do-park" title="   Stop the mail but keep the handle — Revive undoes it" class="inline" data-confirm="park">Park</button>
-    <button id="do-revive" title="   Open the inbox again and re-follow everyone Park unfollowed" class="inline" data-confirm="revive">Revive</button>
     <button id="do-rotate-key" title="   Replace the signing key and tell other servers the new one" class="inline" data-confirm="rotate-key">Rotate signing key</button>
     <button id="do-move-state" title="   Move where this identity's private data is kept" class="inline" data-confirm="move-state">Move data</button>
     <button id="do-move" title="   Transfer this identity: your followers go to another account" class="inline" data-confirm="move">Transfer identity</button>
@@ -338,17 +342,6 @@ pre { overflow-x: auto; background: #0001; padding: .6rem; border-radius: .3rem;
      page asking "are you sure" has to say what it is sure about, and this is
      the only record of it. Script picks which block to show, nothing else. -->
 <form id="confirm-form" hidden>
-  <div id="warn-park" class="warn" hidden>
-    <p>Everyone you follow gets unfollowed — that is what stops posts arriving — and the
-      inbox closes, so deliveries are refused outright rather than stored. Your followers keep
-      following you and are told nothing. The handle keeps resolving; posts and RDF stay where
-      they are. The follow graph is saved first, so Revive can undo this.</p>
-  </div>
-  <div id="warn-revive" class="warn" hidden>
-    <p>The inbox opens again and a Follow is re-sent to every account in the saved graph. Each
-      one needs the far end to accept it, so this is a request rather than a restoration —
-      some will not come back.</p>
-  </div>
   <div id="warn-rotate-key" class="warn" hidden>
     <p>A new keypair replaces the one in this home and the actor is republished so other
       servers learn it. Any other device still holding the old key stops being able to sign.</p>
@@ -360,7 +353,8 @@ pre { overflow-x: auto; background: #0001; padding: .6rem; border-radius: .3rem;
       posts and RDF stay on the pod; the identity does not come back.</p>
     <p>Two things that are not this, and can be done from here:
       <button type="button" id="go-park" title="   Park instead: keeps the handle, just stops the mail" class="inline">Park it instead</button>
-      keeps the handle resolving and just stops the mail, and Revive undoes it.
+      keeps the handle resolving and just stops the mail — setting status back to
+      active undoes it.
       <button type="button" id="go-move" title="   Transfer instead: hands your followers to another account" class="inline">Transfer it instead</button>
       hands your followers to another account.</p>
     <label for="confirm-handle">Type the handle to confirm</label>

@@ -21,6 +21,8 @@ let config = null;
 // Held, because render() moves it into a generated row and empties that row's
 // list on the next pass — after which getElementById would not find it again.
 const MODERATION = $('moderation');
+const STATUS = $('status-ctl');
+const STATUS_PICK = $('status-pick');   // held: getElementById can't see it mid-render
 
 // #say and #fatal live in the accessibility tree from load and hide by being
 // empty (see the stylesheet). Unhiding a live region and filling it in the same
@@ -103,6 +105,9 @@ function render() {
   // it stays in the tab. The Solid one leaves for the pod, so it does not.
   const rows = [
     ['kind', config.kind ? config.kind[0].toUpperCase() + config.kind.slice(1) : config.kind],
+    // The value is the select itself — what it shows IS the state, and
+    // changing the word is the whole action, like the moderation controls.
+    ['status', 'ctl'],
     ['Fediverse identity', config.address || `@${config.handle} — no resolvable address`,
       config.accountId && config.address ? { href: `/admin/client/#/a/${config.accountId}` } : null],
     ['Solid identity', config.webId, config.remotePod ? { href: config.remotePod, blank: true } : null],
@@ -140,6 +145,12 @@ function render() {
     // controls sit on the row that says so. Moved rather than built here: the
     // page still declares them, and `facts` is emptied on every render.
     if (k === 'kind' && config.kind === 'group') dd.append(MODERATION);
+    if (k === 'status') {
+      dd.textContent = '';
+      dd.append(STATUS);
+      STATUS.hidden = false;
+      renderStatus();
+    }
     facts.append(dt, dd);
   }
   if (!config.address) {
@@ -315,6 +326,29 @@ function renderGroupToggles() {
   $('joins-mod').value = config.approveJoins ? MOD.on : MOD.off;
   $('review-mod').value = config.review ? MOD.on : MOD.off;
 }
+function renderStatus() {
+  STATUS_PICK.value = config.quiescedAt ? 'parked' : 'active';
+}
+
+// Parking is reversible — the follow graph is saved first and going back to
+// active re-sends a Follow to everyone in it — so the word applies directly,
+// like the moderation controls. The result line says what actually happened.
+let statusBusy = false;
+const setStatus = async (parked) => {
+  if (statusBusy || parked === !!config.quiescedAt) return;
+  statusBusy = true;
+  try {
+    const r = await write(parked ? '/park' : '/revive', {},
+      parked ? 'parking — unfollowing everyone and closing the inbox' : 'reviving — re-following the saved graph');
+    if (r) {
+      say(parked
+        ? `parked ${r.quiescedAt}: unfollowed ${r.unfollowed}/${r.following}, inbox closed`
+        : `revived: inbox open, ${r.refollowed}/${r.of} follow(s) re-sent`);
+      await load();
+    }
+    renderStatus();
+  } finally { statusBusy = false; }
+};
 
 // One write at a time, because committing an open picker with Enter fires our
 // keydown AND the browser's change — the second call must find the first still
@@ -353,18 +387,18 @@ const setReview = async (on) => {
 // opens or closes the group. An arrow arms a flag and the change it causes is
 // ignored; Enter commits. A mouse never sets the flag, so clicking is unchanged.
 // Same guard as the actor picker above, for the same reason.
-function onPick(el, apply) {
+function onPick(el, apply, repaint = renderGroupToggles) {
   let arrowing = false;
   el.addEventListener('keydown', (ev) => {
     if (['ArrowUp', 'ArrowDown', 'Home', 'End', 'PageUp', 'PageDown'].includes(ev.key)) arrowing = true;
     if (ev.key === 'Enter') { arrowing = false; apply(el.value); }
     // Escape abandons the armed value; what shows must return to what is.
-    if (ev.key === 'Escape') { arrowing = false; renderGroupToggles(); }
+    if (ev.key === 'Escape') { arrowing = false; repaint(); }
   });
   // Leaving abandons too. Unconditional, because the swallow above already
   // consumed the flag — the select may show a state that was never applied,
   // and repainting from config costs nothing when it does match.
-  el.addEventListener('blur', () => { arrowing = false; renderGroupToggles(); });
+  el.addEventListener('blur', () => { arrowing = false; repaint(); });
   el.addEventListener('pointerdown', () => { arrowing = false; });
   el.addEventListener('change', () => {
     if (!arrowing) apply(el.value);
@@ -374,6 +408,7 @@ function onPick(el, apply) {
 
 onPick($('joins-mod'), (v) => setJoins(v === MOD.on));
 onPick($('review-mod'), (v) => setReview(v === MOD.on));
+onPick(STATUS_PICK, (v) => setStatus(v === 'parked'), renderStatus);
 
 // One row: what it is, then what can be done to it.
 function row(text, sub, actions) {
@@ -554,8 +589,6 @@ $('do-deadletter').addEventListener('click', async () => {
 // Retire also wants the handle typed, because a misclick cannot produce it.
 
 const LIFECYCLE = {
-  park: { path: '/park', title: 'Park', done: (r) => `parked ${r.quiescedAt}: unfollowed ${r.unfollowed}/${r.following}, inbox closed` },
-  revive: { path: '/revive', title: 'Revive', done: (r) => `revived: inbox open, ${r.refollowed}/${r.of} follow(s) re-sent` },
   'rotate-key': { path: '/rotate-key', title: 'Rotate the signing key', done: (r) => (r.changed ? 'rotated and republished' : 'no change — the key was already fresh') },
   retire: { path: '/retire', title: 'Retire this identity', go: 'Retire it', danger: true, done: (r) => `retired ${r.deletedAt}: Delete delivered to ${r.inboxes} inbox(es)` },
   move: { path: '/move', title: 'Transfer this identity', go: 'Transfer it', focus: 'move-target',
@@ -604,7 +637,9 @@ const openConfirm = (what) => {
   closePanels();                 // or `show` toggles: same panel, different warning
   document.querySelector(`[data-confirm="${what}"]`).click();
 };
-$('go-park').addEventListener('click', () => openConfirm('park'));
+// Park lives on the status control now; from inside the retire warning it is
+// still one click — close the question and park.
+$('go-park').addEventListener('click', () => { closePanels(); setStatus(true); });
 $('go-move').addEventListener('click', () => openConfirm('move'));
 
 $('confirm-cancel').addEventListener('click', () => { closeConfirm(); say('nothing changed'); });
