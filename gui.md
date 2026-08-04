@@ -1,11 +1,11 @@
-### The Admin interface — `/admin/`
+# The Admin interface
 
-Open `http://localhost:8030/` while any agent is running to reach it. The
-actions whose consequences go beyond their labels:
+Open `http://localhost:8030/` while any agent is running to reach it, then choose `manage account` and select the actor you want from the local actors dropdown.
 
-* **Parking** (the status control) stops the mail, unfollows your followers, but keeps your handle
+
+* **Parking** (the status control) stops the mail and unfollows people you follow, but keeps your handle
   alive. Setting it back to active re-follows everyone — as requests, so a
-  few may not come back.
+  few may not come back.  If your local machine is going to be off for more than a couple of days, you should park the account because, if you don't, mail will accumulate on the pod possibly causing load issues.
 * **Move data** copies your local data to the new place and checks it before
   switching over. The old copy is left behind for you to delete.
 * **Transfer identity** hands your followers to the account you name; your
@@ -23,13 +23,13 @@ actions whose consequences go beyond their labels:
 The handle, the pod and person-vs-group are permanent. The display name, bio
 and pictures are edited in the client, not here.
 
-### Follow requests
+## Handling follow requests
 
 New followers appear under **Follow requests** with **Accept** and **Refuse**
 beside them; nothing is accepted without you. Groups are different — joining
 follows the group's own moderation settings; see [Groups](groups.md).
 
-### Protecting & recovering your data
+## Protecting & recovering your data
 
 Your posts, timeline, contacts, blocklist and notifications are kept locally,
 in `~/.solid-activitypub`. This is the only copy, which means you should back

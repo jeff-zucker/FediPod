@@ -2,9 +2,9 @@
 
 - access the fediverse from a Solid pod
 
-`Solid ActivityPub` is a standalone, single-actor ActivityPub agent that stores your data on any subdomained Solid Pod and runs on any device that supports node >20. The agent can be moved from one device to another without any change to your account. There is support for fediverse group formation and management, see [Groups](groups.md).
+`Solid ActivityPub` is a standalone, single-user ActivityPub agent that stores your public data on almost any subdomained Solid Pod and runs on any device that supports node >20. The agent can be moved from one device to another without any change to your account. There is support for fediverse group formation and management, see [Groups](groups.md).
 
-This project is inspired by the fantastic [ActivityPods project](https://github.com/activitypods) and is meant to be a light weight alternative rather than a replacement.
+This project is inspired by the fantastic [ActivityPods project](https://github.com/activitypods) and is meant to be a lightweight alternative rather than a replacement.
 
 ## Requirements
 
@@ -15,7 +15,7 @@ This project is inspired by the fantastic [ActivityPods project](https://github.
   * has a domain name
   * is almost always on
 
-Note : if you don't have a pod or pod account matching that description, setup will easily create one for you.
+Note : if you don't have a pod account, setup will easily create one for you.
 
 ## Installation
 
@@ -31,28 +31,27 @@ npm install
 
 You only have to do setup once per device. Just run `npm start` from the project folder. From nothing — no fediverse account, no pod — one command creates the account, the pod, the actor, and leaves you in the client looking at your fediverse home with a pre-stocked home feed. Setup will prompt you for needed information. If you already have a pod, you'll be offered the opportunity to either create a new pod for your ActivityPub data or to store it on your existing pod.
 
-**If a setup dies part-way through, do not re-run it.** Run `npm start`
-and finish setup in the browser.
-
-
 ### Running the agent
 
-From the install folder (in Termux on Android), run `npm start`. You may optionally add a port number (`npm start 8081`) to change your local agent's port (default is 8030).
+From the install folder, run `npm start`. You may optionally add a port number (`npm start 8081`) to change your local agent's port (default is 8030).
 
 Now point your browser (any) at http://localhost:8030 — or your own port if you set one — and there you go!
 
 ### Running the agent as a service
 
-If you don't want to run the agent each time, you can install it as a system service :
+If you don't want to run the agent each time, you can install it as a system service. This is recommended as leaving the agent off causes your mail to pile up on the pod host.  To create a system service :
 ```
 npm run install-service
 ```
-This registers the agent with systemd (Linux) or launchd (macOS) so it starts at boot, restarts on crash, and needs no terminal.
-<!-- CLAUDE 2026-08-04 — correction: install-service now covers every identity; delete these markers when done -->
 It registers every identity on this machine, one service each, so all of your actors start at boot. An identity running in a terminal is stopped and taken over by its service.
-<!-- /CLAUDE -->
+
 `npm run uninstall-service` reverses it. 
 
+## Managing your Solid-ActivityPub install
+
+You can manage your posts, see logs, park, move, transfer your account and perform other actions. See the [GUI admin](gui.md) and [CLI admin](cli.md) pages.
+
+You can also use the admin tools to create other actors, either groups or persons.  You may have as many as you want on the local machine, but each one needs a separate pod.
 
 ## Fediverse Clients
 
@@ -68,7 +67,7 @@ configurable public-hashtag feed (`POST /tagfeed`) fill the timeline.
 
 - **Web clients**: drop any static Mastodon client dist into `ui/<name>/`
   and it is served at `/<name>/`, same-origin — see `ui/README.md`.
-- **Desktop clients** (Tuba, Whalebird, …): add `http://localhost:8030` as a
+- **Desktop clients** (Tuba, Whalebird, …): add `http://localhost:8030` (or other port for other agent) as a
   custom instance.
 - **Streaming**: the agent serves the Mastodon streaming API
   (`/api/v1/streaming`, WebSocket) so clients update live instead of polling.
@@ -76,7 +75,7 @@ configurable public-hashtag feed (`POST /tagfeed`) fill the timeline.
 
 ## Architecture
 
-`Activitypods` requires a server which provides both an ActivityPub server and a Solid server and thus requires a specific server setup.  `Solid ActivityPub`, on the other hand, can be installed on any https-served pod.  It does this by splitting the AP server into two parts.  The pod part provides discovery (webfinger) and stores public data while the local server provides the AP actions and storage for private data.
+`Activitypods` requires a server which provides both an ActivityPub server and a Solid server and thus requires a specific server setup.  `Solid ActivityPub`, on the other hand, can be installed on any subdomained https-served pod.  It does this by splitting the ActivityPub server into two parts.  The pod part provides discovery (webfinger) and stores public data while the local server provides the ActivityPub actions and storage for private data.
 
 ![Solid ActivityPub flow](architecture.svg)
 
