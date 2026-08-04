@@ -1798,6 +1798,29 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     check(third.skipped, 'once it is genuinely up there, the digest does its job again');
   }
 
+  // --- an upload cannot become a page on the pod's origin ---
+  //
+  // The media container is world-readable and sits on the pod's own origin, the
+  // same origin as the WebID and the ACLs. A file stored as text/html is a page
+  // served from that identity. A bearer is not "only you": the facade exists so
+  // third-party clients can connect, tokens last 90 days, no scope is enforced.
+  {
+    const { attachmentType, extensionFor } = await import(path.join(root, 'lib/mastoapi.mjs'));
+    const stored = (t) => attachmentType(t);
+    check(stored('image/jpeg') === 'image/jpeg' && stored('video/mp4') === 'video/mp4'
+      && stored('audio/ogg') === 'audio/ogg',
+      'pictures, video and sound are stored as what they are');
+    for (const t of ['text/html', 'text/html; charset=utf-8', 'application/xhtml+xml',
+      'image/svg+xml', 'application/javascript', 'garbage', '', null]) {
+      check(stored(t) === 'application/octet-stream',
+        `${t || '(no type)'} is stored as bytes, not as something a browser runs`);
+    }
+    check(extensionFor(stored('text/html'), 'evil.html') === 'bin',
+      'and the filename cannot put .html back on it');
+    check(extensionFor('image/png', 'x.png') === 'png' && extensionFor('video/mp4', 'c.mp4') === 'mp4',
+      'while an ordinary attachment keeps the suffix it should have');
+  }
+
   // --- the push socket has to be the pod's own ---
   {
     const { sameSocketOrigin } = await import(path.join(root, 'lib/intake.mjs'));
