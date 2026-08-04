@@ -1,6 +1,6 @@
 # The pod as a relay
 
-Built 2026-07-30. Diagram: `architecture-relay.svg`, at repo root.
+Built 2026-07-30. Diagram: `architecture.svg`, at repo root.
 
 The pod used to be the whole storage story — the public wire face, the RDF truth
 in `fediverse/`, and every state document in `ap-state/`. `privateRoot` in the

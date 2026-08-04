@@ -604,7 +604,7 @@ device on it.
 
 <!-- CLAUDE 2026-08-03 — the relay drawing is the one at root now, redrawn for
      the current layout; the older two-halves svg moved to drafts/ -->
-![Solid ActivityPub flow](architecture-relay.svg)
+![Solid ActivityPub flow](architecture.svg)
 
 The pod is the discovery and public storage half. The agent is the behaviour
 half and the private storage sits beside it, on your machine — see *Where your
