@@ -2635,24 +2635,43 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   check(right.state.contacts.followers.length === 0,
     'and a genuine unfollow, naming the Follow we hold, still works');
 
-  // A follow recorded before followId was kept has none to match; requiring one
-  // would strand it.
-  // An Undo that identifies NOTHING is refused outright, even against a record
-  // with no followId. Those records are exactly what reconcileFollowers writes
-  // when recovering a restored machine, so accepting an object-less Undo would
-  // let anyone evict every recovered follower. Mastodon sends the id.
-  const legacy = mk({ followers: [{ actor: 'https://them.example/u/z' }], following: [] });
-  await legacy.intake.onUndo(
-    { type: 'Undo', actor: 'https://them.example/u/z', object: { type: 'Follow' } },
-    'https://them.example/u/z');
-  check(legacy.state.contacts.followers.length === 1,
-    'an Undo naming no Follow at all evicts nobody, even a record with no followId');
-  const legacyNamed = mk({ followers: [{ actor: 'https://them.example/u/z' }], following: [] });
-  await legacyNamed.intake.onUndo(
-    { type: 'Undo', actor: 'https://them.example/u/z', object: { type: 'Follow', id: 'https://them.example/f/old' } },
-    'https://them.example/u/z');
-  check(legacyNamed.state.contacts.followers.length === 0,
-    'while one that names a Follow still undoes a record from before followId was kept');
+  // A record with NO followId cannot be matched at all, and used to be evicted
+  // by an Undo naming anything. reconcileFollowers writes exactly those when a
+  // restored machine recovers its followers from the pod — the pod publishes WHO
+  // follows and never the id of the Follow that did it — so after a restore one
+  // unauthenticated POST removed any follower, permanently: dropFollower leaves
+  // a mark, the next reconcile will not undo it, and their server recorded no
+  // unfollow so it never resends.
+  for (const [what, rec] of [
+    ['recovered from the pod', { actor: 'https://them.example/u/z', recovered: true, followId: null }],
+    ['recorded before ids were kept', { actor: 'https://them.example/u/z' }],
+  ]) {
+    for (const [shape, object] of [
+      ['naming nothing', { type: 'Follow' }],
+      ['naming an id of their choosing', { type: 'Follow', id: 'https://them.example/f/anything' }],
+      ['a bare IRI', 'https://them.example/f/anything'],
+    ]) {
+      const u = mk({ followers: [{ ...rec }], following: [] });
+      await u.intake.onUndo({ type: 'Undo', actor: 'https://them.example/u/z', object },
+        'https://them.example/u/z');
+      check(u.state.contacts.followers.length === 1,
+        `a follower ${what} survives an Undo ${shape}`);
+    }
+  }
+
+  // ...and the id an Undo matches on cannot be SET by an inbound Follow, or the
+  // attacker just chooses it first: Follow naming any published follower, then
+  // Undo naming the id you picked.
+  const HIM = 'https://them.example/u/z';
+  const reFollow = mk({ followers: [{ actor: HIM, inbox: HIM + '/in', followId: 'https://them.example/f/1' }], following: [] },
+    { [HIM]: { id: HIM, type: 'Person', inbox: HIM + '/in' } });
+  await reFollow.intake.onFollow({ type: 'Follow', actor: HIM, id: 'https://evil.example/chosen' }, HIM);
+  check(reFollow.state.contacts.followers[0].followId === 'https://them.example/f/1',
+    'a re-Follow does not overwrite the follow id we already hold');
+  await reFollow.intake.onUndo(
+    { type: 'Undo', actor: HIM, object: { type: 'Follow', id: 'https://evil.example/chosen' } }, HIM);
+  check(reFollow.state.contacts.followers.length === 1,
+    'so an Undo naming the attacker-chosen id evicts nobody');
 }
 
 // --- 5m-bis. commit() reports on writes that fired their own debounce ---
