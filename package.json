@@ -51,6 +51,8 @@
     "node": ">=20"
   },
   "overrides": {
-    "@opentelemetry/core": "^2.8.0"
+    "@opentelemetry/core": "^2.8.0",
+    "package.json": "npm:empty-npm-package@1.0.0",
+    "package-lock.json": "npm:empty-npm-package@1.0.0"
   }
 }
