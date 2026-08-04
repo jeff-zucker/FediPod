@@ -6,6 +6,7 @@
   .t  { font-size: 14px; font-weight: 400; }
   .th { font-size: 14px; font-weight: 500; }
   .ts { font-size: 12px; font-weight: 400; }
+  .cc { font-size: 11px; font-weight: 400; font-style: italic; }
   .teal   { fill: #E1F5EE; stroke: #0F6E56; }
   .purple { fill: #EEEDFE; stroke: #534AB7; }
   .gray   { fill: #F1EFE8; stroke: #5F5E5A; }
@@ -103,4 +104,5 @@
 <text class="th graytx" x="757" y="566" text-anchor="middle">Your browser</text>
 <text class="ts graytx" x="757" y="588" text-anchor="middle">the client and the admin page</text>
 <line class="arr" x1="757" y1="542" x2="757" y2="503" marker-end="url(#arrow)"/>
+<text class="cc graytx" x="40" y="636">(cc) 4.0 By, Jeff Zucker, 2026</text>
 </svg>
