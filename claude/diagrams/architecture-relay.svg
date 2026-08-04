@@ -64,7 +64,7 @@
 
 <rect class="purple" x="500" y="128" width="280" height="374" rx="8" stroke-width="0.5"/>
 <text class="th purpletx" x="640" y="152" text-anchor="middle">Solid ActivityPub (local)</text>
-<text class="ts purpletx" x="640" y="170" text-anchor="middle">AP server behaviour and private storage</text>
+<text class="ts purpletx" x="640" y="170" text-anchor="middle">AP server behaviour &amp; private storage</text>
 <rect class="box" x="516" y="190" width="248" height="42" rx="4" stroke-width="0.5"/>
 <text class="t boxtx" x="530" y="208">publish</text>
 <text class="ts boxtx" x="530" y="224">keeps the public face current</text>
