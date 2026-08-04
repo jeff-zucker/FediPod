@@ -573,6 +573,34 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     'and the Create document resolves to the edited text');
 }
 
+// --- 5b3. voting: one bare Note per choice, to the poll's author alone ---
+{
+  const social = await import(path.join(root, 'lib/social.mjs'));
+  const sent = [];
+  let patched = null;
+  const agent = {
+    publisher: { urls: { actor: 'https://you.example/ap/actor', notes: 'https://you.example/ap/notes/' } },
+    intake: { fetchAP: async () => ({ id: 'https://poll.example/u/a', inbox: 'https://poll.example/inbox' }) },
+    remote: { putJson: async () => {} },
+    deliverer: { deliverToAll: async (i, a) => sent.push({ i, a }) },
+    store: { updateStatus: (id, patch) => { patched = patch; return patch; } },
+  };
+  const s = { noteId: 'https://poll.example/n/1', actor: 'https://poll.example/u/a',
+    poll: { multiple: false, options: [{ title: 'yes', votes: 2 }, { title: 'no', votes: 5 }] } };
+  check(!(await social.votePoll(agent, s, [0, 1])).ok, 'a single-choice poll refuses two choices');
+  const r = await social.votePoll(agent, s, [1]);
+  check(r.ok && sent.length === 1 && sent[0].i[0] === 'https://poll.example/inbox',
+    'the vote goes to the poll author alone');
+  check(sent[0].a.type === 'Create' && sent[0].a.object.name === 'no'
+    && sent[0].a.object.inReplyTo === s.noteId && !sent[0].a.object.content,
+    'and is a bare Note naming the option');
+  check(!!patched?.poll?.voted && patched.poll.ownVotes[0] === 1 && patched.poll.options[1].votes === 6,
+    'our copy marks the vote and bumps the tally');
+  check(!(await social.votePoll(agent, { ...s, poll: patched.poll }, [0])).ok, 'voting twice is refused');
+  check(!(await social.votePoll(agent, { ...s, poll: { ...s.poll, closed: true } }, [0])).ok,
+    'a closed poll is refused');
+}
+
 // --- 5c0. the websocket origins the CSP allows ---
 {
   const { wsOrigins } = await import(path.join(root, 'lib/admin.mjs'));
