@@ -1804,8 +1804,18 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     check(sameSocketOrigin('wss://pod.example/ws/abc', 'https://pod.example/')
       && sameSocketOrigin('ws://localhost:3000/ws', 'http://localhost:3000/'),
       'the pod\'s own socket is accepted, including a pod on this machine');
+    // The real deployment: a CSS server giving every pod a subdomain answers
+    // notifications from the server root. Requiring an exact host dropped the
+    // live agents to polling, which the suite had no way to know.
+    check(sameSocketOrigin('wss://teamid.live/.notifications/WebSocketChannel2023/abc',
+      'https://jeff-zucker.teamid.live/'),
+      'and so is the server root that serves a subdomain pod');
     check(!sameSocketOrigin('wss://evil.example/ws', 'https://pod.example/'),
       'a subscription naming somebody else is not');
+    check(!sameSocketOrigin('wss://other.teamid.live/ws', 'https://jeff-zucker.teamid.live/'),
+      'nor a sibling subdomain, which is a different pod on the same server');
+    check(!sameSocketOrigin('wss://live/ws', 'https://jeff-zucker.teamid.live/'),
+      'nor a one-label host posing as everyone\'s parent');
     check(!sameSocketOrigin('ws://pod.example/ws', 'https://pod.example/'),
       'and neither is a downgrade to ws:// from an https pod');
     check(!sameSocketOrigin('https://pod.example/ws', 'https://pod.example/')
