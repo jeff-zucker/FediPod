@@ -551,9 +551,10 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
       },
       getContacts: () => ({ followers: [{ actor: 'f', inbox: 'https://f.example/inbox' }], following: [] }),
     },
-    deliverer: { deliverToAll: async (i, a) => sent.push(a) },
+    deliverer: { deliverToAll: async (i, a) => sent.push({ i, a }) },
     publicKeyPem: 'x', log: () => {},
-    resolveMention: async () => null,
+    resolveMention: async (h) => (h === 'kofi@b.example'
+      ? { id: 'https://b.example/u/kofi', inbox: 'https://b.example/u/kofi/inbox' } : null),
   });
   const note = await pub.publishNote('first words', { visibility: 'unlisted', spoilerText: 'cw here' });
   check(note.summary === 'cw here', 'a content warning rides the note as its summary');
@@ -564,13 +565,34 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   const patched = await pub.updateNote(s, { content: 'second words', spoilerText: null });
   check(!!patched.editedAt && patched.text === 'second words',
     'an edit patches the store and stamps editedAt');
-  const up = sent.find(a => a.type === 'Update');
+  const up = sent.find(x => x.a.type === 'Update')?.a;
   check(!!up && up.object.id === note.id && up.object.updated === patched.editedAt,
     'the Update keeps the note id and carries the edit stamp');
   check(String(putDocs[note.id]?.content || '').includes('second words'),
     'the pod note document is overwritten in place');
   check(String(putDocs[note.id + '-create']?.object?.content || '').includes('second words'),
     'and the Create document resolves to the edited text');
+
+  // followers-only and direct: addressing, container, outbox, delivery, gate
+  pub.probeFetch = async () => ({ status: 403 });
+  const OUTBOX = 'https://pod.example/activitypods-js/ap/outbox';
+  const outboxBefore = JSON.stringify(putDocs[OUTBOX] || null);
+  const pn = await pub.publishNote('for followers only', { visibility: 'private' });
+  check(!JSON.stringify([pn.to, pn.cc]).includes(PUB) && pn.id.includes('/ap/private/'),
+    'a followers-only note carries no Public address and lives in the private container');
+  const dm = await pub.publishNote('psst @kofi@b.example', { visibility: 'direct' });
+  const dmSent = sent[sent.length - 1];
+  check(dm.to.length === 1 && dm.to[0] === 'https://b.example/u/kofi' && dm.cc.length === 0,
+    'a direct note is addressed to the people it names and nobody else');
+  check(dmSent.i.length === 1 && dmSent.i[0] === 'https://b.example/u/kofi/inbox',
+    'and is delivered to their inbox alone — no followers');
+  check(JSON.stringify(putDocs[OUTBOX] || null) === outboxBefore,
+    'neither private nor direct touched the public outbox');
+  pub._privateVerdict = undefined;
+  pub.probeFetch = async () => ({ status: 200 });
+  const refused = await pub.publishNote('secret', { visibility: 'private' }).then(() => null, e => e.message);
+  check(/serves private documents to strangers/.test(refused || ''),
+    'a pod that hands the canary to strangers refuses private posts');
 }
 
 // --- 5b3. voting: one bare Note per choice, to the poll's author alone ---
