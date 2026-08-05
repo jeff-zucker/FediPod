@@ -6782,6 +6782,537 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   fs.rmSync(MDIR, { recursive: true, force: true });
 }
 
+// --- 19. bluesky connection: session, stamped guard, refresh, re-login, cooldown ---
+{
+  const { Atproto } = await import('../../lib/atproto.mjs');
+  const http19 = await import('node:http');
+  const BDIR = fs.mkdtempSync('/tmp/dk-ap-bsky-');
+  const seen19 = [];
+  let refreshMode = 'ok';        // ok | dead
+  let expireNext = false;
+  let rate = false;
+  let sessions = 0;
+  const srv19 = http19.createServer((req, res) => {
+    let raw = '';
+    req.on('data', (d) => { raw += d; });
+    req.on('end', () => {
+      const body = raw ? JSON.parse(raw) : null;
+      seen19.push({ url: req.url, auth: req.headers.authorization || null, body });
+      const send = (code, obj) => { res.writeHead(code, { 'content-type': 'application/json', ...(code === 429 ? { 'retry-after': '2' } : {}) }); res.end(JSON.stringify(obj)); };
+      if (rate) return send(429, { error: 'RateLimitExceeded' });
+      if (req.url === '/xrpc/com.atproto.server.createSession') {
+        sessions++;
+        if (body?.password !== 'app-pass') return send(401, { error: 'AuthenticationRequired', message: 'bad password' });
+        return send(200, { did: 'did:plc:test19', handle: 'wren.test', accessJwt: `at-${sessions}`, refreshJwt: `rt-${sessions}` });
+      }
+      if (req.url === '/xrpc/com.atproto.server.refreshSession') {
+        if (refreshMode === 'dead') return send(400, { error: 'ExpiredToken', message: 'refresh token expired' });
+        return send(200, { did: 'did:plc:test19', handle: 'wren.test', accessJwt: `at-r${sessions}`, refreshJwt: `rt-r${sessions}` });
+      }
+      if (req.url === '/xrpc/com.atproto.server.deleteSession') return send(200, {});
+      if (req.url.startsWith('/xrpc/app.bsky.actor.getProfile')) {
+        if (expireNext) { expireNext = false; return send(400, { error: 'ExpiredToken', message: 'stale' }); }
+        return send(200, { did: 'did:plc:test19', handle: 'wren.test', token: req.headers.authorization });
+      }
+      send(404, { error: 'MethodNotImplemented' });
+    });
+  });
+  await new Promise(r => srv19.listen(18643, '127.0.0.1', r));
+
+  const bsky = new Atproto({ localDir: BDIR, actorId: 'https://p.example/ap/actor', log: () => {}, fetcher: (u, i) => fetch(u, i) });
+  await bsky.connect({ service: 'http://127.0.0.1:18643', identifier: 'wren.test', appPassword: 'app-pass' });
+  const rec19 = JSON.parse(fs.readFileSync(path.join(BDIR, 'atproto.json'), 'utf8'));
+  check(rec19.did === 'did:plc:test19' && rec19.mintedFor === 'https://p.example/ap/actor'
+    && rec19.appPassword === 'app-pass',
+    'connect stores the session stamped for this actor, app password kept for re-login');
+  check((fs.statSync(path.join(BDIR, 'atproto.json')).mode & 0o777) === 0o600,
+    'the credential file is 0600 — same rules as the signing key');
+  check(bsky.status().connected && bsky.status().handle === 'wren.test',
+    'status reads connected from the credential, not from memory');
+
+  const other = new Atproto({ localDir: BDIR, actorId: 'https://q.example/ap/actor', log: () => {}, fetcher: (u, i) => fetch(u, i) });
+  check(!other.connected(), 'a credential minted for another actor is treated as absent, never adopted');
+
+  const p1 = await bsky.xrpc('app.bsky.actor.getProfile', { params: { actor: 'did:plc:test19' } });
+  check(p1.token === 'Bearer at-1', 'xrpc carries the access token');
+
+  expireNext = true;
+  const p2 = await bsky.xrpc('app.bsky.actor.getProfile', { params: { actor: 'did:plc:test19' } });
+  check(p2.token === 'Bearer at-r1' && bsky.read().refreshJwt === 'rt-r1',
+    'an expired access token refreshes once and the call retries with the new one');
+
+  refreshMode = 'dead';
+  expireNext = true;
+  const p3 = await bsky.xrpc('app.bsky.actor.getProfile', { params: { actor: 'did:plc:test19' } });
+  check(p3.token === 'Bearer at-2' && sessions === 2,
+    'a dead refresh token re-logins with the stored app password instead of failing');
+
+  rate = true;
+  const failed = await bsky.xrpc('app.bsky.actor.getProfile', { params: { actor: 'x' } }).catch(e => e);
+  check(failed instanceof Error && bsky.pausedUntil > Date.now(),
+    'a 429 arms the cooldown, Retry-After honored');
+  const while19 = seen19.length;
+  const fast = await bsky.xrpc('app.bsky.actor.getProfile', { params: { actor: 'x' } }).catch(e => e);
+  check(fast instanceof Error && /back off/.test(fast.message) && seen19.length === while19,
+    'while cooling down, calls fail fast without opening a socket');
+  rate = false;
+  bsky.pausedUntil = 0;
+
+  await bsky.disconnect();
+  check(!fs.existsSync(path.join(BDIR, 'atproto.json')) && !bsky.connected(),
+    'disconnect tears the session down and removes the credential');
+
+  srv19.close();
+  fs.rmSync(BDIR, { recursive: true, force: true });
+}
+
+// --- 20. bluesky cross-posting: conversion, the public-only gate, delete propagation ---
+{
+  const { Atproto, bskyText } = await import('../../lib/atproto.mjs');
+  const { Publisher } = await import(path.join(root, 'lib/publisher.mjs'));
+  const social20 = await import(path.join(root, 'lib/social.mjs'));
+  const http20 = await import('node:http');
+
+  // Conversion. Byte offsets, not code units: the é before the URL is 2 bytes.
+  const t1 = bskyText('héllo https://x.example/p and #Solid too', 'https://pod.example/n/1');
+  const link1 = t1.facets.find(f => f.features[0].$type === 'app.bsky.richtext.facet#link');
+  const tag1 = t1.facets.find(f => f.features[0].$type === 'app.bsky.richtext.facet#tag');
+  check(!t1.truncated && link1.index.byteStart === 7 && link1.features[0].uri === 'https://x.example/p',
+    'a link facet counts UTF-8 bytes, not characters');
+  check(tag1 && tag1.features[0].tag === 'Solid'
+    && t1.text.startsWith('héllo '),
+    'a #tag becomes a tag facet and the text is untouched');
+
+  const NOTE_URL = 'https://pod.example/ap/notes/2026-08-05-abcd1234';
+  const long = 'word '.repeat(120).trim();               // 599 graphemes
+  const t2 = bskyText(long, NOTE_URL);
+  const segCount = (s) => { let n = 0; for (const _ of new Intl.Segmenter().segment(s)) n++; return n; };
+  const tail2 = t2.facets.at(-1);
+  check(t2.truncated && segCount(t2.text) <= 300 && t2.text.endsWith(NOTE_URL)
+    && tail2.features[0].uri === NOTE_URL,
+    'over 300 graphemes truncates and links back to the pod note');
+
+  // A live mock PDS for the record/blob traffic.
+  const BDIR20 = fs.mkdtempSync('/tmp/dk-ap-bsky20-');
+  const records = [];
+  const deletes = [];
+  let blobs = 0;
+  const srv20 = http20.createServer((req, res) => {
+    const chunks = [];
+    req.on('data', (d) => chunks.push(d));
+    req.on('end', () => {
+      const raw = Buffer.concat(chunks);
+      const send = (code, obj) => { res.writeHead(code, { 'content-type': 'application/json' }); res.end(JSON.stringify(obj)); };
+      if (req.url === '/xrpc/com.atproto.server.createSession') {
+        return send(200, { did: 'did:plc:m2', handle: 'you.test', accessJwt: 'a', refreshJwt: 'r' });
+      }
+      if (req.url === '/img.png') { res.writeHead(200, { 'content-type': 'image/png' }); return res.end(Buffer.alloc(64, 7)); }
+      if (req.url === '/xrpc/com.atproto.repo.uploadBlob') {
+        blobs++;
+        return send(200, { blob: { $type: 'blob', ref: { $link: `bafy${blobs}` }, mimeType: req.headers['content-type'], size: raw.length } });
+      }
+      if (req.url === '/xrpc/com.atproto.repo.createRecord') {
+        const body = JSON.parse(raw.toString());
+        records.push(body);
+        return send(200, { uri: `at://${body.repo}/${body.collection}/rkey${records.length}`, cid: `cid${records.length}` });
+      }
+      if (req.url === '/xrpc/com.atproto.repo.deleteRecord') {
+        deletes.push(JSON.parse(raw.toString()));
+        return send(200, {});
+      }
+      send(404, { error: 'MethodNotImplemented' });
+    });
+  });
+  await new Promise(r => srv20.listen(18644, '127.0.0.1', r));
+
+  const bsky20 = new Atproto({ localDir: BDIR20, actorId: 'https://p.example/ap/actor', log: () => {}, fetcher: (u, i) => fetch(u, i) });
+  await bsky20.connect({ service: 'http://127.0.0.1:18644', identifier: 'you.test', appPassword: 'x' });
+
+  const mirror = await bsky20.crossPost({
+    text: 'a picture #art', published: '2026-08-05T00:00:00.000Z',
+    attachments: [{ url: 'http://127.0.0.1:18644/img.png', mediaType: 'image/png', description: 'a red square' }],
+  }, { noteUrl: NOTE_URL });
+  const rec20 = records[0];
+  check(mirror.uri === 'at://did:plc:m2/app.bsky.feed.post/rkey1' && rec20.record.text === 'a picture #art'
+    && rec20.record.createdAt === '2026-08-05T00:00:00.000Z',
+    'crossPost writes an app.bsky.feed.post with the note text and stamp');
+  check(blobs === 1 && rec20.record.embed?.images?.[0]?.alt === 'a red square',
+    'an image rides as a blob with its description as alt text');
+
+  // The gate, through the real publishNote: public mirrors, anything else must not.
+  const statuses = [];
+  const patched = [];
+  const calls = [];
+  const mkStore = () => ({
+    read: () => ({}), write: () => {}, getStatuses: () => statuses,
+    addStatus: (s) => statuses.push(s),
+    updateStatus: (id, patch) => patched.push([id, patch]),
+    getContacts: () => ({ followers: [], following: [] }),
+    getConfig: () => ({ atproto: { crossPost: true } }),
+  });
+  const pub20 = new Publisher({
+    config: { remotePod: 'https://pod.example/', handle: 'you', name: 'You' },
+    remote: { putJson: async () => {}, setAcl: async () => {}, getJson: async () => null, fetch: async () => ({ ok: false }) },
+    local: { writeNote: async () => {} },
+    store: mkStore(),
+    deliverer: { deliverToAll: async () => {} },
+    publicKeyPem: 'x', log: () => {},
+  });
+  pub20.recordOutbox = async () => {};
+  pub20.privateReady = async () => true;
+  pub20.atproto = {
+    connected: () => true,
+    crossPost: async (post, o) => { calls.push([post, o]); return { uri: 'at://d/c/r1', cid: 'c1' }; },
+  };
+  await pub20.publishNote('hello world', {});
+  check(calls.length === 1 && patched.at(-1)[1].atproto.uri === 'at://d/c/r1',
+    'a public post mirrors and the status records the at:// uri');
+  await pub20.publishNote('quiet one', { visibility: 'unlisted' });
+  await pub20.publishNote('secret', { visibility: 'direct' });
+  check(calls.length === 1, 'unlisted and direct posts NEVER reach the mirror');
+
+  pub20.atproto.crossPost = async () => { throw new Error('pds down'); };
+  const note20 = await pub20.publishNote('resilient', {});
+  check(!!note20?.id && patched.at(-1)[1].atproto.error === 'pds down',
+    'a mirror failure never fails the post, and is recorded on the status');
+
+  // Delete propagation, through the real deleteNote.
+  const removed = [];
+  const agent20 = {
+    publisher: Object.assign(pub20, { unrecordOutbox: async () => {} }),
+    deliverer: { deliverToAll: async () => {} },
+    remote: { delete: async () => true },
+    local: { fedi: 'x/', delete: async () => {} },
+    store: { getContacts: () => ({ followers: [], following: [] }), removeStatus: (id) => removed.push(id) },
+    atproto: bsky20,
+    log: () => {},
+  };
+  const del = await social20.deleteNote(agent20, {
+    noteId: 'https://pod.example/ap/notes/x', atproto: { uri: 'at://did:plc:m2/app.bsky.feed.post/rkey1' },
+  });
+  check(del.ok && deletes.length === 1 && deletes[0].rkey === 'rkey1',
+    'deleting the post deletes its Bluesky mirror too');
+
+  srv20.close();
+  fs.rmSync(BDIR20, { recursive: true, force: true });
+}
+
+// --- 21. bluesky feed mixing: mirror, notifications, and the read-only guards ---
+{
+  const { BskyFeed, postUrl } = await import('../../lib/bskyfeed.mjs');
+  const { MastoApi } = await import(path.join(root, 'lib/mastoapi.mjs'));
+  const wire21 = await import(path.join(root, 'lib/wire.mjs'));
+
+  const statuses21 = [{
+    noteId: 'https://pod.example/ap/notes/mine', actor: 'https://pod.example/ap/actor',
+    kind: 'post', published: '2026-08-01T00:00:00.000Z',
+    atproto: { uri: 'at://did:plc:me/app.bsky.feed.post/mine1' },
+  }];
+  const actors21 = {};
+  const notifications21 = [];
+  const hookCalls = [];
+  const store21 = {
+    read: (n, d) => d, write: () => {},
+    getStatuses: () => statuses21,
+    addStatus: (s) => statuses21.unshift(s),
+    getActors: () => actors21,
+    cacheActor: (u, doc) => { actors21[u] = { ...doc, preferredUsername: doc.preferredUsername }; },
+    isBlocked: () => false,
+    addNotification: (n) => notifications21.push(n),
+  };
+  const AUTHOR = { did: 'did:plc:alice', handle: 'alice.test', displayName: 'Alice', avatar: 'https://cdn.test/a.jpg' };
+  const feedFixture = {
+    feed: [
+      { post: { uri: 'at://did:plc:me/app.bsky.feed.post/own', author: { did: 'did:plc:me', handle: 'me' }, record: { text: 'me', createdAt: '2026-08-05T01:00:00.000Z' } } },
+      { post: { uri: 'at://did:plc:alice/app.bsky.feed.post/p1', author: AUTHOR,
+        record: { text: '<script>hi</script> from bsky', createdAt: '2026-08-05T02:00:00.000Z' },
+        embed: { images: [{ fullsize: 'https://cdn.test/full.jpg', alt: 'a cat' }] } } },
+      { post: { uri: 'at://did:plc:alice/app.bsky.feed.post/p2', author: AUTHOR, record: { text: 'boosted', createdAt: '2026-08-05T03:00:00.000Z' } },
+        reason: { $type: 'app.bsky.feed.defs#reasonRepost', by: { did: 'did:plc:bob', handle: 'bob.test' } } },
+    ],
+  };
+  const notsFixture = {
+    notifications: [
+      { author: AUTHOR, reason: 'like', reasonSubject: 'at://did:plc:me/app.bsky.feed.post/mine1' },
+      { author: AUTHOR, reason: 'follow' },
+      { author: AUTHOR, reason: 'mention', uri: 'at://did:plc:alice/app.bsky.feed.post/m1',
+        record: { text: 'hey @you', createdAt: '2026-08-05T04:00:00.000Z' }, indexedAt: '2026-08-05T04:00:01.000Z' },
+    ],
+  };
+  const feed21 = new BskyFeed({
+    store: store21,
+    atproto: {
+      connected: () => true, read: () => ({ did: 'did:plc:me' }),
+      xrpc: async (nsid) => (nsid === 'app.bsky.feed.getTimeline' ? feedFixture : notsFixture),
+    },
+    log: () => {},
+    onNotification: async (n, { actor }) => hookCalls.push([n.reason, actor]),
+  });
+  await feed21.sweep();
+
+  const mirrored = statuses21.filter(s => s.kind === 'bsky');
+  check(mirrored.length === 3 && !statuses21.some(s => s.noteId.endsWith('/own')),
+    'the timeline mirrors others’ posts and never our own');
+  const p1 = statuses21.find(s => s.noteId.endsWith('/p1'));
+  check(p1.content.includes('&lt;script&gt;') && p1.link === 'https://bsky.app/profile/did:plc:alice/post/p1'
+    && p1.attachments?.[0]?.description === 'a cat',
+    'mirrored text is escaped, linked to its Bluesky page, images carried with alt');
+  const p2 = statuses21.find(s => s.noteId.endsWith('/p2'));
+  check(p2.via === 'https://bsky.app/profile/did:plc:bob'
+    && actors21['https://bsky.app/profile/did:plc:alice']?.preferredUsername === 'alice.test',
+    'a repost carries who boosted it, and authors land in the actor cache');
+  const fav = notifications21.find(n => n.type === 'favourite');
+  check(fav && fav.noteId === 'https://pod.example/ap/notes/mine',
+    'a like on the mirror notifies against the POD post it mirrors');
+  check(notifications21.some(n => n.type === 'follow') && notifications21.some(n => n.type === 'mention')
+    && statuses21.some(s => s.noteId.endsWith('/m1')),
+    'follows and mentions notify, and the mention text itself is mirrored');
+  check(JSON.stringify(hookCalls.map(h => h[0]).sort()) === JSON.stringify(['follow', 'mention']),
+    'the group hook hears follows and mentions, nothing else');
+
+  const before21 = statuses21.length;
+  await feed21.sweep();
+  check(statuses21.length === before21, 'a second sweep adds nothing new');
+
+  // The facade guards, through the real routes.
+  const bskyNote = statuses21.find(s => s.noteId.endsWith('/p1'));
+  const ids21 = new Map([['b1', bskyNote.noteId]]);
+  const purls21 = wire21.apUrls('https://pod.example/');
+  const gapi = new MastoApi({
+    agent: {
+      configured: () => true, viewer: false, urls: purls21,
+      publisher: { urls: purls21, config: {}, privateReady: async () => true },
+      store: {
+        getConfig: () => ({ handle: 'you' }), getStatuses: () => statuses21,
+        getActors: () => actors21, getContacts: () => ({ followers: [], following: [] }),
+        idFor: (u) => [...ids21.entries()].find(([, v]) => v === u)?.[0] || 'zz',
+        urlFor: (id) => ids21.get(id) || null,
+        getMedia: () => ({}), getMuted: () => ({ actors: [] }),
+        read: (n, d) => (n === 'masto-tokens.json' ? [{ token: 'T21', createdAt: Date.now() }] : d),
+      },
+      log: () => {},
+    },
+    log: () => {},
+  });
+  const gsrv = http.createServer(async (req, res) => {
+    const u = new URL(req.url, 'http://x');
+    if (!await gapi.handle(req, res, u.pathname, u)) { res.writeHead(404); res.end('{}'); }
+  });
+  await new Promise(r => gsrv.listen(0, '127.0.0.1', r));
+  const gbase = `http://127.0.0.1:${gsrv.address().port}`;
+  const ghdr = { authorization: 'Bearer T21', 'content-type': 'application/json' };
+
+  const gfav = await fetch(`${gbase}/api/v1/statuses/b1/favourite`, { method: 'POST', headers: ghdr, body: '{}' });
+  check(gfav.status === 422 && /Bluesky/.test((await gfav.json()).error),
+    'favouriting a mirrored Bluesky post answers 422, not a broken Like');
+  const grep = await fetch(`${gbase}/api/v1/statuses`, {
+    method: 'POST', headers: ghdr, body: JSON.stringify({ status: 'hi', in_reply_to_id: 'b1' }),
+  });
+  check(grep.status === 422 && /Bluesky/.test((await grep.json()).error),
+    'replying to one answers 422 the same way');
+  const ghome = await (await fetch(`${gbase}/api/v1/timelines/home`, { headers: ghdr })).json();
+  const gentry = ghome.find(x => x.uri === bskyNote.noteId);
+  check(gentry && gentry.url === bskyNote.link && gentry.account.username === 'alice.test',
+    'the home timeline serves the mirror with its Bluesky page as the link');
+  gsrv.close();
+}
+
+// --- 22. bluesky members in a group: bridged-first, degrade to unbridged ---
+{
+  const { BskyGroup } = await import('../../lib/bskygroup.mjs');
+  const { Publisher } = await import(path.join(root, 'lib/publisher.mjs'));
+  const social22 = await import(path.join(root, 'lib/social.mjs'));
+
+  const mkStore = (cfg = {}) => {
+    const docs = {};
+    const state = {
+      statuses: [], contacts: { followers: [], following: [] }, requests: [],
+      pending: [], muted: { actors: [] }, notifications: [], config: { kind: 'group', ...cfg },
+    };
+    return {
+      state,
+      read: (n, d) => (n in docs ? docs[n] : d), write: (n, v) => { docs[n] = v; },
+      getConfig: () => state.config,
+      getStatuses: () => state.statuses,
+      addStatus: (s) => state.statuses.unshift(s),
+      updateStatus: (id, patch) => {
+        const s = state.statuses.find(x => x.noteId === id);
+        if (s) Object.assign(s, patch);
+        return s;
+      },
+      getContacts: () => state.contacts, setContacts: (c) => { state.contacts = c; },
+      getRequests: () => state.requests, setRequests: (r) => { state.requests = r; },
+      getPending: () => state.pending, setPending: (p) => { state.pending = p; },
+      getMuted: () => state.muted, setMuted: (m) => { state.muted = m; },
+      addNotification: (n) => state.notifications.push(n),
+      isBlocked: () => false,
+      getActors: () => ({}), cacheActor: () => {},
+      handleOf: (u) => (u.includes('alice') ? '@alice.test@bsky.app' : '@m@f.example'),
+    };
+  };
+  const mkAtproto = () => {
+    const wrote = [];
+    return {
+      wrote,
+      connected: () => true,
+      read: () => ({ did: 'did:plc:group' }),
+      xrpc: async (nsid, opts) => {
+        wrote.push([nsid, opts?.body]);
+        if (nsid === 'com.atproto.repo.createRecord') return { uri: `at://did:plc:group/${opts.body.collection}/rk${wrote.length}`, cid: 'c' };
+        return {};
+      },
+      deleteCrossPost: async (uri) => { wrote.push(['delete', uri]); },
+    };
+  };
+  const ALICE = { did: 'did:plc:alice', handle: 'alice.test' };
+
+  // Open joins, unbridged: member lands, nudged exactly once.
+  {
+    const store = mkStore({ approveJoins: false });
+    const ap = mkAtproto();
+    const g = new BskyGroup({ store, atproto: ap, intake: null, log: () => {}, fetcher: async () => ({ status: 404 }) });
+    await g.onFollow(ALICE);
+    await g.onFollow(ALICE);                       // a second follow event changes nothing
+    const member = store.state.contacts.followers[0];
+    const nudges = ap.wrote.filter(([n, b]) => n === 'com.atproto.repo.createRecord' && b.collection === 'app.bsky.feed.post');
+    check(store.state.contacts.followers.length === 1 && member.bsky.did === ALICE.did && !!member.nudgedAt,
+      'an unbridged native follow becomes a Bluesky-only member');
+    check(nudges.length === 1 && nudges[0][1].record.facets[0].features[0].did === ALICE.did
+      && /ap\.brid\.gy/.test(nudges[0][1].record.text),
+      'the bridge nudge goes out exactly once, mentioning them properly');
+  }
+
+  // Bridged: the native follow is left to the AP path.
+  {
+    const store = mkStore({});
+    const ap = mkAtproto();
+    const g = new BskyGroup({ store, atproto: ap, intake: null, log: () => {}, fetcher: async () => ({ status: 200 }) });
+    await g.onFollow(ALICE);
+    check(store.state.contacts.followers.length === 0 && ap.wrote.length === 0,
+      'a bridged follower is not made a Bluesky-only member — their join arrives over AP');
+  }
+
+  // Moderated joins: the same queue, admit and refuse both work.
+  {
+    const store = mkStore({ approveJoins: true });
+    const ap = mkAtproto();
+    const g = new BskyGroup({ store, atproto: ap, intake: null, log: () => {}, fetcher: async () => ({ status: 404 }) });
+    await g.onFollow(ALICE);
+    await g.onFollow({ did: 'did:plc:carol', handle: 'carol.test' });
+    check(store.state.requests.length === 2 && store.state.contacts.followers.length === 0,
+      'with approveJoins on, native follows wait in the requests queue');
+    const agent22 = {
+      store, bskygroup: g, log: () => {},
+      publisher: { publishCollections: async () => {}, urls: { actor: 'https://g.example/ap/actor' } },
+      deliverer: { deliver: async () => { throw new Error('nothing deliverable to a bsky member'); } },
+    };
+    const adm = await social22.admitRequest(agent22, 'https://bsky.app/profile/did:plc:alice');
+    check(adm.ok && store.state.contacts.followers[0]?.bsky?.did === ALICE.did
+      && !!store.state.contacts.followers[0].nudgedAt,
+      'admit seats the member with no Accept to deliver, and nudges');
+    await social22.refuseRequest(agent22, 'https://bsky.app/profile/did:plc:carol');
+    const blocks = ap.wrote.filter(([n, b]) => n === 'com.atproto.repo.createRecord' && b.collection === 'app.bsky.graph.block');
+    check(store.state.requests.length === 0 && blocks.length === 1 && blocks[0][1].record.subject === 'did:plc:carol',
+      'refuse clears the request and blocks the DID, the only refusal that can stick');
+  }
+
+  // Submission through the real amplify: review holds, approval reposts, retract deletes.
+  {
+    const { Intake } = await import(path.join(root, 'lib/intake.mjs'));
+    const store = mkStore({});
+    const ap = mkAtproto();
+    const announced = [];
+    const intake22 = new Intake({
+      config: { handle: 'g', review: true },
+      urls: { actor: 'https://g.example/ap/actor', inbox: 'https://g.example/ap/inbox/' },
+      store, log: () => {},
+      remote: {}, local: { writeNote: async () => {} },
+      deliverer: { deliverToAll: async (t, a) => announced.push(a) },
+      publisher: { recordOutbox: async () => {}, urls: { actor: 'https://g.example/ap/actor' } },
+    });
+    const g = new BskyGroup({ store, atproto: ap, intake: intake22, log: () => {}, fetcher: async () => ({ status: 404 }) });
+    intake22.bskyGroup = g;
+    store.state.contacts.followers.push({ actor: 'https://bsky.app/profile/did:plc:alice', bsky: ALICE });
+    store.state.statuses.push({
+      noteId: 'at://did:plc:alice/app.bsky.feed.post/s1', cid: 'cid-s1',
+      actor: 'https://bsky.app/profile/did:plc:alice', kind: 'bsky',
+    });
+
+    await g.onMention({ uri: 'at://did:plc:alice/app.bsky.feed.post/s1', author: ALICE });
+    check(store.state.pending.length === 1 && ap.wrote.length === 0,
+      'a member mention waits in the review queue, nothing carried yet');
+    await g.onMention({ uri: 'at://did:plc:nobody/app.bsky.feed.post/x', author: { did: 'did:plc:nobody', handle: 'n' } });
+    check(store.state.pending.length === 1, 'a non-member mention is ignored outright');
+
+    await intake22.amplify('at://did:plc:alice/app.bsky.feed.post/s1', { approved: true });
+    const reposts = ap.wrote.filter(([n, b]) => n === 'com.atproto.repo.createRecord' && b.collection === 'app.bsky.feed.repost');
+    const s22 = store.state.statuses.find(s => s.noteId.endsWith('/s1'));
+    check(reposts.length === 1 && reposts[0][1].record.subject.cid === 'cid-s1'
+      && !!s22.repostUri && store.state.pending.length === 0 && announced.length === 0,
+      'approval carries by native repost — and provably does NOT Announce to AP');
+
+    const ret = await intake22.retract('at://did:plc:alice/app.bsky.feed.post/s1');
+    check(ret.ok && ap.wrote.some(([n, u]) => n === 'delete' && String(u).includes('app.bsky.feed.repost'))
+      && !s22.repostUri,
+      'retract deletes the repost and clears the carry');
+
+    // An AP member's post: Announce as ever, plus the native mirror for
+    // Bluesky-side followers.
+    store.state.config.atproto = { crossPost: true };
+    store.state.contacts.followers.push({ actor: 'https://f.example/u/m', inbox: 'https://f.example/inbox' });
+    store.state.statuses.push({
+      noteId: 'https://f.example/notes/n1', actor: 'https://f.example/u/m',
+      kind: 'timeline', content: '<p>hello from the fediverse</p>',
+    });
+    intake22.config.review = false;
+    await intake22.amplify('https://f.example/notes/n1', {});
+    const mirrors = ap.wrote.filter(([n, b]) => n === 'com.atproto.repo.createRecord'
+      && b.collection === 'app.bsky.feed.post' && /via @m@f\.example/.test(b.record.text));
+    check(announced.length === 1 && mirrors.length === 1 && /hello from the fediverse/.test(mirrors[0][1].record.text),
+      'an AP member post is Announced AND mirrored natively with attribution');
+  }
+
+  // Eject blocks the DID; the published followers collection never lists bsky members.
+  {
+    const store = mkStore({});
+    const ap = mkAtproto();
+    const g = new BskyGroup({ store, atproto: ap, intake: null, log: () => {}, fetcher: async () => ({ status: 404 }) });
+    store.state.contacts.followers.push(
+      { actor: 'https://bsky.app/profile/did:plc:alice', bsky: ALICE },
+      { actor: 'https://f.example/u/m', inbox: 'https://f.example/inbox' },
+    );
+    const puts = [];
+    const agent22b = {
+      store, bskygroup: g, log: () => {},
+      publisher: {
+        urls: { actor: 'https://g.example/ap/actor' },
+        publishCollections: async () => {},
+      },
+      deliverer: { deliver: async () => {} },
+    };
+    const ej = await social22.ejectFollower(agent22b, 'https://bsky.app/profile/did:plc:alice');
+    check(ej.ok && ap.wrote.some(([n, b]) => n === 'com.atproto.repo.createRecord' && b.collection === 'app.bsky.graph.block')
+      && store.state.muted.actors.includes('https://bsky.app/profile/did:plc:alice'),
+      'eject drops the member, mutes them, and blocks the DID');
+
+    const pub22 = new Publisher({
+      config: { remotePod: 'https://g.example/', handle: 'g' },
+      remote: {
+        putJson: async (u, doc) => puts.push([u, doc]),
+        setAcl: async () => {}, fetch: async () => ({ ok: false }), getJson: async () => null,
+      },
+      local: { writeContacts: async () => {} },
+      store, deliverer: {}, publicKeyPem: 'x', log: () => {},
+    });
+    store.state.contacts.followers.push({ actor: 'https://bsky.app/profile/did:plc:zed', bsky: { did: 'did:plc:zed', handle: 'z' } });
+    await pub22.publishCollections({ followers: true });
+    const fdoc = puts.find(([u]) => u.endsWith('ap/followers'))?.[1];
+    check(fdoc && !JSON.stringify(fdoc).includes('bsky.app')
+      && fdoc.orderedItems.includes('https://f.example/u/m'),
+      'the published AP followers collection lists only dereferenceable actors');
+  }
+}
+
 child.kill('SIGTERM');
 fs.rmSync(HOME, { recursive: true, force: true });
 console.log(failures ? `\n${failures} FAILURE(S)` : '\nall green');
