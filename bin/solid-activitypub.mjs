@@ -1760,6 +1760,56 @@ WantedBy=default.target
   } else {
     console.log(`${cmd}d ${arg} — ${body.pending} still held`);
   }
+} else if (cmd === 'bsky') {
+  // Bluesky account commands, served by the running agent's admin API.
+  const sub = args[1];
+  let out;
+  try {
+    if (sub === 'connect') {
+      const identifier = flag('handle') || args[2];
+      const appPassword = flag('app-password') || args[3];
+      if (!identifier || !appPassword) {
+        console.error('usage: solid-activitypub bsky connect <handle> <app-password> [--service https://bsky.social]');
+        process.exit(2);
+      }
+      const res = await fetch(`http://localhost:${PORT}/atproto/connect`, {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ identifier, appPassword, service: flag('service') }),
+      });
+      out = await res.json();
+      if (res.status >= 400) { console.error(out.error || `HTTP ${res.status}`); process.exit(1); }
+      console.log(`connected: @${out.handle} on ${out.service}`);
+      console.log('public posts will cross-post; turn off: solid-activitypub bsky crosspost off');
+    } else if (sub === 'disconnect') {
+      const res = await fetch(`http://localhost:${PORT}/atproto/disconnect`, {
+        method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}',
+      });
+      out = await res.json();
+      if (res.status >= 400) { console.error(out.error || `HTTP ${res.status}`); process.exit(1); }
+      console.log('disconnected — the local credential is gone');
+    } else if (sub === 'crosspost') {
+      if (!['on', 'off'].includes(args[2])) {
+        console.error('usage: solid-activitypub bsky crosspost <on|off>');
+        process.exit(2);
+      }
+      const res = await fetch(`http://localhost:${PORT}/atproto`, {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ crossPost: args[2] === 'on' }),
+      });
+      out = await res.json();
+      if (res.status >= 400) { console.error(out.error || `HTTP ${res.status}`); process.exit(1); }
+      console.log(`cross-posting is ${out.atproto.crossPost ? 'on' : 'off'}`);
+    } else {
+      const res = await fetch(`http://localhost:${PORT}/status`);
+      out = await res.json();
+      const a = out.atproto;
+      if (!a?.connected) console.log('no bluesky account connected — solid-activitypub bsky connect <handle> <app-password>');
+      else console.log(`@${a.handle} (${a.did}) on ${a.service}${a.lastError ? `\nlast error: ${a.lastError}` : ''}`);
+    }
+  } catch (e) {
+    console.error(`agent not reachable on :${PORT} (${e.message})`);
+    process.exit(1);
+  }
 } else {
   console.log('usage: solid-activitypub <setup|start|stop|status|state|upgrade|rebuild|home|passwd'
     + '|tokens|revoke-credential|install-service> [--flags]');
@@ -1767,6 +1817,7 @@ WantedBy=default.target
   console.log('         --all [--apply]       move every identity\'s onto this machine');
   console.log('         --drop-remote [--apply]  remove the pod\'s copy afterwards');
   console.log('  upgrade: what every identity here is behind on, and stamp the ones that are not');
+  console.log('  bsky: connect <handle> <app-password> | disconnect | crosspost <on|off> | status');
   console.log('  group: members | eject <actor> | mute <actor> | unmute <actor>');
   console.log('         joins <open|approve> | requests | admit <actor> | refuse <actor>');
   console.log('         announced | retract <note> | review <on|off> | pending | approve <note> | decline <note>');

@@ -163,7 +163,8 @@ function render() {
 
   // pane-others carries the create control too, so it appears even when this is
   // the only actor and even if /profiles cannot be read.
-  for (const id of ['pane-others', 'pane-identity', 'pane-upkeep']) $(id).hidden = false;
+  for (const id of ['pane-others', 'pane-identity', 'pane-bluesky', 'pane-upkeep']) $(id).hidden = false;
+  renderBluesky();
   renderOthers();
   renderInbox();
   if (config.kind === 'group') {
@@ -317,6 +318,58 @@ $('new-actor-form').addEventListener('submit', async (ev) => {
   if (r?.url) location.href = r.url;      // its own page, where the progress is
 });
 
+// ---- bluesky ----
+
+// The card is either a connect form or the connected account; never both.
+function renderBluesky() {
+  const on = !!config.atproto?.connected;
+  $('bsky-form').hidden = on;
+  $('bsky-connected').hidden = !on;
+  if (!on) return;
+  const facts = $('bsky-facts');
+  facts.textContent = '';
+  for (const [dt, dd] of [['account', `@${config.atproto.handle}`], ['service', config.atproto.service]]) {
+    const t = document.createElement('dt'); t.textContent = dt;
+    const d = document.createElement('dd'); d.textContent = dd;
+    facts.append(t, d);
+  }
+  $('bsky-crosspost').value = config.atproto.crossPost ? 'on' : 'off';
+}
+
+let bskyBusy = false;
+$('bsky-connect').addEventListener('click', async () => {
+  if (bskyBusy) return;
+  bskyBusy = true;
+  try {
+    const r = await write('/atproto/connect', {
+      service: $('bsky-service').value.trim(),
+      identifier: $('bsky-identifier').value.trim(),
+      appPassword: $('bsky-password').value,
+    }, 'bluesky account connected');
+    if (r) {
+      $('bsky-password').value = '';
+      await load();
+    }
+  } finally { bskyBusy = false; }
+});
+$('bsky-disconnect').addEventListener('click', async () => {
+  if (bskyBusy) return;
+  bskyBusy = true;
+  try {
+    if (await write('/atproto/disconnect', {}, 'bluesky account disconnected')) await load();
+  } finally { bskyBusy = false; }
+});
+const setCrossPost = async (on) => {
+  if (bskyBusy || on === !!config.atproto?.crossPost) return;
+  bskyBusy = true;
+  try {
+    if (await write('/atproto', { crossPost: on }, on ? 'public posts will cross-post' : 'cross-posting off')) {
+      config.atproto.crossPost = on;
+    }
+    renderBluesky();
+  } finally { bskyBusy = false; }
+};
+
 // ---- group ----
 
 // Each control shows the setting it would change, so what it displays IS the
@@ -409,6 +462,7 @@ function onPick(el, apply, repaint = renderGroupToggles) {
 onPick($('joins-mod'), (v) => setJoins(v === MOD.on));
 onPick($('review-mod'), (v) => setReview(v === MOD.on));
 onPick(STATUS_PICK, (v) => setStatus(v === 'parked'), renderStatus);
+onPick($('bsky-crosspost'), (v) => setCrossPost(v === 'on'), renderBluesky);
 
 // One row: what it is, then what can be done to it.
 function row(text, sub, actions) {

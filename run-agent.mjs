@@ -38,6 +38,9 @@ import { Deliverer } from './lib/deliver.mjs';
 import { Publisher } from './lib/publisher.mjs';
 import { Intake } from './lib/intake.mjs';
 import { TagFeed } from './lib/tagfeed.mjs';
+import { Atproto } from './lib/atproto.mjs';
+import { BskyFeed } from './lib/bskyfeed.mjs';
+import { BskyGroup } from './lib/bskygroup.mjs';
 import { Lease } from './lib/lease.mjs';
 import { startAdmin } from './lib/admin.mjs';
 import { exposureProblem } from './lib/guard.mjs';
@@ -109,6 +112,7 @@ export class Agent {
       tagfeed: this.tagfeed
         ? { ...this.tagfeed.config(), lastSweep: this.tagfeed.lastSweep, lastAdded: this.tagfeed.lastAdded }
         : null,
+      atproto: this.atproto?.status() || null,
       // Anyone asking whether this agent is hammering their server can read the
       // answer here instead of in their access log.
       podRequests: this.remote?.stats?.() || null,
@@ -319,6 +323,14 @@ export class Agent {
       config, urls: this.urls, remote: this.remote, local: this.local, store: this.store,
       deliverer: this.deliverer, publisher: this.publisher, log: this.log, lease: this.lease,
     });
+    // The Bluesky connection, when one exists. Stamped to this actor; a
+    // credential connected for another identity is treated as absent.
+    this.atproto = new Atproto({ localDir: this.home, actorId: this.urls.actor, log: this.log });
+    this.publisher.atproto = this.atproto;
+    this.bskyfeed?.stop();
+    this.bskyfeed = null;
+    this.bskygroup = null;
+    this.intake.bskyGroup = null;
     if (this.viewer) {
       this.startViewer();
       this.log(`another agent is active for this pod — viewing as @${config.handle} (read-only)`);
@@ -469,6 +481,7 @@ export class Agent {
     // reach of any later stop().
     this.tagfeed ||= new TagFeed({ store: this.store, intake: this.intake, log: this.log });
     this.tagfeed.start();
+    this.startBsky();
     // Scheduled posts: a 30s sweep publishes what has come due. The entry is
     // removed before publishing, so a slow publish cannot double-post; a
     // failed one is dropped with its reason in the log.
@@ -525,11 +538,39 @@ export class Agent {
 
   // Another device claimed the lease (its user acted there) — stand down to
   // viewer so exactly one agent keeps draining.
+  // The Bluesky mirror poll, only ever running when an account is connected.
+  // Reused, not replaced, for the same orphaned-timer reason as tagfeed.
+  startBsky() {
+    if (this.viewer || !this.atproto?.connected()) return;
+    if (this.store.getConfig()?.quiescedAt) return;
+    // A group's account is the group's presence on Bluesky: follows are joins,
+    // mentions are submissions, and both ride the notification hook.
+    if (this.store.getConfig()?.kind === 'group') {
+      this.bskygroup ||= new BskyGroup({
+        store: this.store, atproto: this.atproto, intake: this.intake,
+        publisher: this.publisher, log: this.log,
+      });
+      this.intake.bskyGroup = this.bskygroup;
+    }
+    this.bskyfeed ||= new BskyFeed({
+      store: this.store, atproto: this.atproto, log: this.log,
+      onNotification: async (n) => {
+        if (!this.bskygroup) return;
+        if (n.reason === 'follow') await this.bskygroup.onFollow(n.author);
+        else await this.bskygroup.onMention(n);
+      },
+    });
+    this.bskyfeed.start();
+  }
+
+  stopBsky() { this.bskyfeed?.stop(); }
+
   demote() {
     if (this.viewer) return;
     this.log('another device took over — demoting to viewer');
     this.intake?.stop();
     this.tagfeed?.stop();
+    this.bskyfeed?.stop();
     this.deliverer?.stop();
     clearInterval(this.schedTimer);
     // The lease too: standing down means standing down. Left renewing, a viewer
@@ -559,6 +600,7 @@ export class Agent {
         await this.intake.start();
         this.tagfeed ||= new TagFeed({ store: this.store, intake: this.intake, log: this.log });
         this.tagfeed.start();
+        this.startBsky();
         this.log('takeover complete — draining resumed on this device');
       } catch (e) { this.log(`takeover drain start: ${e.message}`); }
     }, 35_000).unref?.();                      // > one renewal interval: old agent has demoted
