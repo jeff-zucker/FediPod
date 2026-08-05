@@ -62,7 +62,6 @@ click, using `localhost:8030` (or your own port) as the instance.
 The agent federates for real: follow/unfollow, post, reply, favourite,
 boost, media, delete; incoming boosts from people you follow and a
 configurable public-hashtag feed (`POST /tagfeed`) fill the timeline.
-<!-- CLAUDE 2026-08-04 — the facade grew a lot today; delete markers when done -->
 Also: editing posts, content warnings, polls and voting, all four visibility
 levels (followers-only and direct posts work only on a pod that enforces
 access control — on one that doesn't, the composer refuses and says why),
@@ -70,7 +69,7 @@ a conversations view for direct messages, bookmarks, favourites, lists,
 keyword filters, scheduled posts, pinned posts (visible from other servers),
 blocking and muting from the client, custom emojis, and web-push
 notifications that reach you while the client is closed.
-<!-- /CLAUDE -->
+
 
 ### Other clients
 
