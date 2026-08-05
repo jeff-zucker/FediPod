@@ -4646,6 +4646,22 @@ const announces = (sent) => sent.filter(x => x.a.type === 'Announce');
   check(!announces(sent).length, 'a muted member is ingested but not amplified');
 }
 {
+  // A member DMing the group addressed it to the group alone; a followers-only
+  // post it received addressed the author's followers. Neither is public, and
+  // carrying either would widen the author's audience for them.
+  const { st, intake, sent, notes } = groupIntake();
+  const dm = { ...gPost(MEM_A + '/n/3', MEM_A), to: [gUrls.actor], cc: [] };
+  notes[dm.id] = dm;
+  await intake.onCreate(gCreate(dm), MEM_A);
+  check(!announces(sent).length && !!st.getStatuses().find(s => s.noteId === dm.id),
+    'a DM to the group is kept but never announced');
+  const fo = { ...gPost(MEM_A + '/n/4', MEM_A), to: [MEM_A + '/followers'], cc: [gUrls.actor] };
+  notes[fo.id] = fo;
+  await intake.onCreate(gCreate(fo), MEM_A);
+  check(!announces(sent).length,
+    'a followers-only post the group received is never announced either');
+}
+{
   // An inbound Announce must not re-enter the fan-out. The group follows MEM_A
   // here only so onAnnounce gets past its own followed-actor gate.
   const { intake, sent, notes } = groupIntake({
