@@ -25,6 +25,7 @@ const STATUS = $('status-ctl');
 const STATUS_PICK = $('status-pick');   // held: getElementById can't see it mid-render
 const BSKY_CTL = $('bsky-ctl');
 const BSKY_CONNECT_CTL = $('bsky-connect-ctl');
+const BSKY_CROSSPOST = $('bsky-crosspost');   // held: it rides BSKY_CTL into a generated row
 
 // #say and #fatal live in the accessibility tree from load and hide by being
 // empty (see the stylesheet). Unhiding a live region and filling it in the same
@@ -168,7 +169,7 @@ function render() {
         dd.append(a, ' ', BSKY_CTL);
         BSKY_CTL.hidden = false;
         BSKY_CONNECT_CTL.hidden = true;
-        $('bsky-crosspost').value = config.atproto.crossPost ? 'on' : 'off';
+        BSKY_CROSSPOST.value = config.atproto.crossPost ? 'on' : 'off';
       } else {
         dd.append(BSKY_CONNECT_CTL);
         BSKY_CONNECT_CTL.hidden = false;
@@ -381,7 +382,7 @@ const setCrossPost = async (on) => {
     if (await write('/atproto', { crossPost: on }, on ? 'public posts will cross-post' : 'cross-posting off')) {
       config.atproto.crossPost = on;
     }
-    $('bsky-crosspost').value = config.atproto?.crossPost ? 'on' : 'off';
+    BSKY_CROSSPOST.value = config.atproto?.crossPost ? 'on' : 'off';
   } finally { bskyBusy = false; }
 };
 
@@ -477,8 +478,8 @@ function onPick(el, apply, repaint = renderGroupToggles) {
 onPick($('joins-mod'), (v) => setJoins(v === MOD.on));
 onPick($('review-mod'), (v) => setReview(v === MOD.on));
 onPick(STATUS_PICK, (v) => setStatus(v === 'parked'), renderStatus);
-onPick($('bsky-crosspost'), (v) => setCrossPost(v === 'on'),
-  () => { $('bsky-crosspost').value = config?.atproto?.crossPost ? 'on' : 'off'; });
+onPick(BSKY_CROSSPOST, (v) => setCrossPost(v === 'on'),
+  () => { BSKY_CROSSPOST.value = config?.atproto?.crossPost ? 'on' : 'off'; });
 
 // One row: what it is, then what can be done to it.
 function row(text, sub, actions) {
