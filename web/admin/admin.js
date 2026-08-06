@@ -337,7 +337,8 @@ function renderBluesky() {
 }
 
 let bskyBusy = false;
-$('bsky-connect').addEventListener('click', async () => {
+$('bsky-form').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
   if (bskyBusy) return;
   bskyBusy = true;
   try {

@@ -267,17 +267,17 @@ pre { overflow-x: auto; background: #0001; padding: .6rem; border-radius: .3rem;
 
 <section id="pane-bluesky" hidden>
   <h2><span class="hlabel">Bluesky</span></h2>
-  <div id="bsky-form">
+  <form id="bsky-form">
     <p class="hint">Connect a Bluesky account this identity also posts as. The app password
       stays on this machine; make one under Bluesky's Settings → App Passwords.</p>
     <label for="bsky-service">service</label>
     <input id="bsky-service" value="https://bsky.social" autocomplete="off">
     <label for="bsky-identifier">handle</label>
-    <input id="bsky-identifier" placeholder="you.bsky.social" autocomplete="off">
+    <input id="bsky-identifier" placeholder="you.bsky.social" autocomplete="username">
     <label for="bsky-password">app password</label>
-    <input id="bsky-password" type="password" autocomplete="off">
-    <button id="bsky-connect" class="inline" title="   Sign in to the Bluesky account with the app password">Connect</button>
-  </div>
+    <input id="bsky-password" type="password" autocomplete="current-password">
+    <button id="bsky-connect" type="submit" class="inline" title="   Sign in to the Bluesky account with the app password">Connect</button>
+  </form>
   <div id="bsky-connected" hidden>
     <dl id="bsky-facts"></dl>
     <label for="bsky-crosspost">cross-post public posts</label>
