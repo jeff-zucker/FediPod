@@ -7085,6 +7085,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   const bskyNote = statuses21.find(s => s.noteId.endsWith('/p1'));
   const ids21 = new Map([['b1', bskyNote.noteId]]);
   const purls21 = wire21.apUrls('https://pod.example/');
+  const docs21 = {};
   const gapi = new MastoApi({
     agent: {
       configured: () => true, viewer: false, urls: purls21,
@@ -7104,7 +7105,8 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
         },
         urlFor: (id) => ids21.get(id) || null,
         getMedia: () => ({}), getMuted: () => ({ actors: [] }),
-        read: (n, d) => (n === 'masto-tokens.json' ? [{ token: 'T21', createdAt: Date.now() }] : d),
+        read: (n, d) => (n === 'masto-tokens.json' ? [{ token: 'T21', createdAt: Date.now() }] : (docs21[n] ?? d)),
+        write: (n, v) => { docs21[n] = v; },        // the instance doc mints a VAPID key
       },
       log: () => {},
     },
@@ -7141,6 +7143,17 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
     'fetching a carried row by its id returns the carry, not a 404');
   const gctx = await fetch(`${gbase}/api/v1/statuses/${gboost.id}/context`, { headers: ghdr });
   check(gctx.status === 200, 'and its thread resolves too');
+
+  // The live feed's address, in both spellings clients read — an empty one
+  // costs live updates, and some clients read it without a guard and throw.
+  const gi2 = await (await fetch(`${gbase}/api/v2/instance`, { headers: ghdr })).json();
+  const gi1 = await (await fetch(`${gbase}/api/v1/instance`, { headers: ghdr })).json();
+  const wsHost = new URL(gbase).host;
+  check(gi2.configuration?.urls?.streaming === `ws://${wsHost}/api/v1/streaming`
+    && gi2.urls?.streaming_api === `ws://${wsHost}/api/v1/streaming`,
+    'v2 instance names the streaming endpoint at THIS agent, both spellings');
+  check(gi1.urls?.streaming_api === `ws://${wsHost}/api/v1/streaming`,
+    'v1 instance names it too');
 
   // A mentioned group must arrive as a mention ENTITY, so the client opens its
   // profile in-app instead of navigating to the raw actor document.
