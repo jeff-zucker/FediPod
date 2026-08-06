@@ -7371,6 +7371,18 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   check(page.includes('@group@activitypub.example') && page.includes('authorize_interaction')
     && page.includes('a group on the fediverse'),
     'the page shows the address, says what it is, and carries the remote-follow control');
+
+  // The actor advertises the page as its url, and mention ANCHORS point at the
+  // mentioned actor's page — the tag keeps the id, which servers match on.
+  const actor23 = wire23.actorDoc({
+    urls: wire23.apUrls('https://p.example/'), handle: 'p', name: 'P', publicKeyPem: 'K',
+  });
+  check(actor23.url === 'https://p.example/ap/profile.html',
+    'the actor url is the human page, not machine data');
+  const html23 = wire23.contentHtml('hi @friend', [
+    { handle: 'friend', actor: 'https://m.example/users/friend', page: 'https://m.example/@friend' }]);
+  check(html23.includes('href="https://m.example/@friend"') && !html23.includes('users/friend"'),
+    'a mention anchor sends people to the page; without one it falls back to the id');
 }
 
 child.kill('SIGTERM');
