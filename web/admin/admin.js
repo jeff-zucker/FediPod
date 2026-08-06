@@ -23,6 +23,8 @@ let config = null;
 const MODERATION = $('moderation');
 const STATUS = $('status-ctl');
 const STATUS_PICK = $('status-pick');   // held: getElementById can't see it mid-render
+const BSKY_CTL = $('bsky-ctl');
+const BSKY_CONNECT_CTL = $('bsky-connect-ctl');
 
 // #say and #fatal live in the accessibility tree from load and hide by being
 // empty (see the stylesheet). Unhiding a live region and filling it in the same
@@ -87,6 +89,7 @@ function closePanels(keep = null) {
 document.getElementById('win').addEventListener('win:closed', () => {
   outputSource = null;
   resetConfirm();
+  $('bsky-password').value = '';        // never leave a secret in a closed panel
 });
 
 
@@ -111,6 +114,7 @@ function render() {
     ['Fediverse identity', config.address || `@${config.handle} — no resolvable address`,
       config.accountId && config.address ? { href: `/admin/client/#/a/${config.accountId}` } : null],
     ['Solid identity', config.webId, config.remotePod ? { href: config.remotePod, blank: true } : null],
+    ['Bluesky identity', 'ctl'],
     ['local store', config.home],
     // The address you actually open, not the bare number — the named origin when
     // there is one, since that is what the client and the OAuth redirect use.
@@ -151,6 +155,25 @@ function render() {
       STATUS.hidden = false;
       renderStatus();
     }
+    // Connected: the account itself, then the way out. Not: a form on the page.
+    if (k === 'Bluesky identity') {
+      dd.textContent = '';
+      if (config.atproto?.connected) {
+        const a = document.createElement('a');
+        a.href = `https://bsky.app/profile/${config.atproto.handle}`;
+        a.textContent = `@${config.atproto.handle}`;
+        a.target = '_blank';
+        a.rel = 'noopener';
+        a.title = `   Open this account's Bluesky page in a new tab`;
+        dd.append(a, ' ', BSKY_CTL);
+        BSKY_CTL.hidden = false;
+        BSKY_CONNECT_CTL.hidden = true;
+      } else {
+        dd.append(BSKY_CONNECT_CTL);
+        BSKY_CONNECT_CTL.hidden = false;
+        BSKY_CTL.hidden = true;
+      }
+    }
     facts.append(dt, dd);
   }
   if (!config.address) {
@@ -163,8 +186,7 @@ function render() {
 
   // pane-others carries the create control too, so it appears even when this is
   // the only actor and even if /profiles cannot be read.
-  for (const id of ['pane-others', 'pane-identity', 'pane-bluesky', 'pane-upkeep']) $(id).hidden = false;
-  renderBluesky();
+  for (const id of ['pane-others', 'pane-identity', 'pane-upkeep']) $(id).hidden = false;
   renderOthers();
   renderInbox();
   if (config.kind === 'group') {
@@ -320,21 +342,11 @@ $('new-actor-form').addEventListener('submit', async (ev) => {
 
 // ---- bluesky ----
 
-// The card is either a connect form or the connected account; never both.
-function renderBluesky() {
-  const on = !!config.atproto?.connected;
-  $('bsky-form').hidden = on;
-  $('bsky-connected').hidden = !on;
-  if (!on) return;
-  const facts = $('bsky-facts');
-  facts.textContent = '';
-  for (const [dt, dd] of [['account', `@${config.atproto.handle}`], ['service', config.atproto.service]]) {
-    const t = document.createElement('dt'); t.textContent = dt;
-    const d = document.createElement('dd'); d.textContent = dd;
-    facts.append(t, d);
-  }
-  $('bsky-crosspost').value = config.atproto.crossPost ? 'on' : 'off';
-}
+// The connect form lives in the floating window, like every other form here.
+$('bsky-open').addEventListener('click', () => {
+  closePanels();
+  solWindow.show('bsky-form', 'Connect Bluesky account');
+});
 
 let bskyBusy = false;
 $('bsky-form').addEventListener('submit', async (ev) => {
@@ -349,6 +361,7 @@ $('bsky-form').addEventListener('submit', async (ev) => {
     }, 'bluesky account connected');
     if (r) {
       $('bsky-password').value = '';
+      closePanels();
       await load();
     }
   } finally { bskyBusy = false; }
@@ -360,16 +373,6 @@ $('bsky-disconnect').addEventListener('click', async () => {
     if (await write('/atproto/disconnect', {}, 'bluesky account disconnected')) await load();
   } finally { bskyBusy = false; }
 });
-const setCrossPost = async (on) => {
-  if (bskyBusy || on === !!config.atproto?.crossPost) return;
-  bskyBusy = true;
-  try {
-    if (await write('/atproto', { crossPost: on }, on ? 'public posts will cross-post' : 'cross-posting off')) {
-      config.atproto.crossPost = on;
-    }
-    renderBluesky();
-  } finally { bskyBusy = false; }
-};
 
 // ---- group ----
 
@@ -463,7 +466,6 @@ function onPick(el, apply, repaint = renderGroupToggles) {
 onPick($('joins-mod'), (v) => setJoins(v === MOD.on));
 onPick($('review-mod'), (v) => setReview(v === MOD.on));
 onPick(STATUS_PICK, (v) => setStatus(v === 'parked'), renderStatus);
-onPick($('bsky-crosspost'), (v) => setCrossPost(v === 'on'), renderBluesky);
 
 // One row: what it is, then what can be done to it.
 function row(text, sub, actions) {

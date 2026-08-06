@@ -263,30 +263,12 @@ pre { overflow-x: auto; background: #0001; padding: .6rem; border-radius: .3rem;
       <option value="parked">parked</option>
     </select>
   </span>
-</section>
-
-<section id="pane-bluesky" hidden>
-  <h2><span class="hlabel">Bluesky</span></h2>
-  <form id="bsky-form">
-    <p class="hint">Connect a Bluesky account this identity also posts as. The app password
-      stays on this machine; make one under Bluesky's Settings → App Passwords.</p>
-    <label for="bsky-service">service</label>
-    <input id="bsky-service" value="https://bsky.social" autocomplete="off">
-    <label for="bsky-identifier">handle</label>
-    <input id="bsky-identifier" placeholder="you.bsky.social" autocomplete="username">
-    <label for="bsky-password">app password</label>
-    <input id="bsky-password" type="password" autocomplete="current-password">
-    <button id="bsky-connect" type="submit" class="inline" title="   Sign in to the Bluesky account with the app password">Connect</button>
-  </form>
-  <div id="bsky-connected" hidden>
-    <dl id="bsky-facts"></dl>
-    <label for="bsky-crosspost">cross-post public posts</label>
-    <select id="bsky-crosspost" title="   Whether your public posts also go to the Bluesky account">
-      <option value="on">on</option>
-      <option value="off">off</option>
-    </select>
-    <button id="bsky-disconnect" class="inline danger" title="   Forget the Bluesky session and remove the stored credential">Disconnect</button>
-  </div>
+  <span id="bsky-connect-ctl" hidden>
+    <button type="button" id="bsky-open" class="inline" title="   Connect a Bluesky account this identity also posts as">Connect Bluesky account</button>
+  </span>
+  <span id="bsky-ctl" hidden>
+    <button type="button" id="bsky-disconnect" class="inline danger" title="   Forget the Bluesky session and remove the stored credential">Disconnect</button>
+  </span>
 </section>
 
 <section id="pane-upkeep" hidden>
@@ -362,6 +344,17 @@ pre { overflow-x: auto; background: #0001; padding: .6rem; border-radius: .3rem;
   <div id="win-bar"><span id="win-title"></span><button type="button" id="win-close" title="   Close this panel" aria-label="Close panel">✕</button></div>
   <div id="win-body">
 <pre id="output" hidden></pre>
+<form id="bsky-form" hidden>
+  <p class="hint">Connect a Bluesky account this identity also posts as. The app password
+    stays on this machine; make one under Bluesky's Settings → App Passwords.</p>
+  <label for="bsky-service">service</label>
+  <input id="bsky-service" value="https://bsky.social" autocomplete="off">
+  <label for="bsky-identifier">handle</label>
+  <input id="bsky-identifier" placeholder="you.bsky.social" autocomplete="username">
+  <label for="bsky-password">app password</label>
+  <input id="bsky-password" type="password" autocomplete="current-password">
+  <button id="bsky-connect" type="submit" class="inline" title="   Sign in to the Bluesky account with the app password">Connect</button>
+</form>
 <!-- Every consequence is written here rather than assembled in script: the
      page asking "are you sure" has to say what it is sure about, and this is
      the only record of it. Script picks which block to show, nothing else. -->
