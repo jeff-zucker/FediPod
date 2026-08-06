@@ -7092,7 +7092,16 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
       store: {
         getConfig: () => ({ handle: 'you' }), getStatuses: () => statuses21,
         getActors: () => actors21, getContacts: () => ({ followers: [], following: [] }),
-        idFor: (u) => [...ids21.entries()].find(([, v]) => v === u)?.[0] || 'zz',
+        // Mints on first sight, like the real store — the carry envelope asks
+        // for an id that has never been seen before.
+        idFor: (u) => {
+          const held = [...ids21.entries()].find(([, v]) => v === u)?.[0];
+          if (held) return held;
+          // Hex, like the real store — the status routes match [a-f0-9] only.
+          const made = 'ab' + ids21.size.toString(16).padStart(2, '0');
+          ids21.set(made, u);
+          return made;
+        },
         urlFor: (id) => ids21.get(id) || null,
         getMedia: () => ({}), getMuted: () => ({ actors: [] }),
         read: (n, d) => (n === 'masto-tokens.json' ? [{ token: 'T21', createdAt: Date.now() }] : d),
@@ -7125,6 +7134,13 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   check(gboost && gboost.account.username === 'bob.test' && gboost.reblog.account.username === 'alice.test'
     && gboost.content === '',
     'a carried post renders as the carrier boosting the inner post');
+  // The envelope's own id must resolve — a 404 here makes a client drop the row.
+  const gby = await fetch(`${gbase}/api/v1/statuses/${gboost.id}`, { headers: ghdr });
+  const gbyJson = await gby.json();
+  check(gby.status === 200 && gbyJson.reblog?.uri === gboost.reblog.uri,
+    'fetching a carried row by its id returns the carry, not a 404');
+  const gctx = await fetch(`${gbase}/api/v1/statuses/${gboost.id}/context`, { headers: ghdr });
+  check(gctx.status === 200, 'and its thread resolves too');
 
   // A mentioned group must arrive as a mention ENTITY, so the client opens its
   // profile in-app instead of navigating to the raw actor document.
