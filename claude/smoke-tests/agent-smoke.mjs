@@ -7331,6 +7331,48 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   }
 }
 
+// --- 22b. a group's carry promotes a note we only held as a mention ---
+{
+  const { Intake } = await import(path.join(root, 'lib/intake.mjs'));
+  const GROUP = 'https://g.example/ap/actor';
+  const NOTE = 'https://f.example/users/v/statuses/1';
+  const st = [{ noteId: NOTE, actor: 'https://f.example/users/v', kind: 'mention' }];
+  const intake22b = new Intake({
+    config: { handle: 'me' },
+    urls: { actor: 'https://me.example/ap/actor', inbox: 'https://me.example/ap/inbox/', notes: 'https://me.example/ap/notes/' },
+    store: {
+      getStatuses: () => st,
+      updateStatus: (id, patch) => Object.assign(st.find(s => s.noteId === id), patch),
+      getContacts: () => ({ followers: [], following: [{ actor: GROUP, accepted: true }] }),
+      isBlocked: () => false,
+    },
+    remote: {}, local: {}, deliverer: {}, publisher: {}, log: () => {},
+  });
+  await intake22b.onAnnounce({ type: 'Announce', object: NOTE }, GROUP, NOTE);
+  check(st[0].kind === 'timeline' && st[0].via === GROUP,
+    'a followed group carrying a mention-only note promotes it into the timeline');
+  st[0].kind = 'post';
+  await intake22b.onAnnounce({ type: 'Announce', object: NOTE }, GROUP, NOTE);
+  check(st[0].kind === 'post', 'our own post is never demoted by a carry');
+}
+
+// --- 23. the human profile page: published beside the actor, escaped, followable ---
+{
+  const wire23 = await import(path.join(root, 'lib/wire.mjs'));
+  const page = wire23.profilePageHtml({
+    name: 'Solid <script>alert(1)</script> Group',
+    address: '@group@activitypub.example',
+    summary: '<p>a group about pods</p>',
+    icon: 'https://pod.example/ap/media/icon.png',
+    kind: 'group',
+  });
+  check(!page.includes('<script>alert') && page.includes('&lt;script&gt;'),
+    'the display name is escaped, not interpreted');
+  check(page.includes('@group@activitypub.example') && page.includes('authorize_interaction')
+    && page.includes('a group on the fediverse'),
+    'the page shows the address, says what it is, and carries the remote-follow control');
+}
+
 child.kill('SIGTERM');
 fs.rmSync(HOME, { recursive: true, force: true });
 console.log(failures ? `\n${failures} FAILURE(S)` : '\nall green');
