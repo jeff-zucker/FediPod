@@ -26,16 +26,11 @@ body { background: var(--surface); }
 #bar { flex: 0 0 auto; display: flex; align-items: center; gap: .6rem; flex-wrap: wrap;
   width: 100%; max-width: none; margin: 0; box-sizing: border-box;
   padding: .5rem max(1rem, calc((100% - 960px) / 2 + 1rem));
-  background: var(--raised); position: relative; }
-/* The actor's fediverse handle, centred on the WINDOW — absolute, so the title
-   and the destinations don't tug it off-centre. A narrow bar has no room in
-   the middle, so it rejoins the row there as a full-width second line. */
-#bar-handle { position: absolute; left: 50%; transform: translateX(-50%);
-  color: var(--heading); font-size: .95rem; }
+  background: var(--raised); }
+/* The actor's fediverse handle, in the row between the title and the
+   destinations. */
+#bar-handle { color: var(--heading); font-size: .95rem; margin-right: .6rem; }
 #bar-handle:empty { display: none; }
-@media (max-width: 860px) {
-  #bar-handle { position: static; transform: none; order: 9; flex-basis: 100%; text-align: center; }
-}
 /* The app title, in px rather than rem: it is chrome, the same on every page,
    not something that should move when a page changes its base size. */
 #bar .name { flex: 1 1 auto; font-weight: 600; font-size: 24px; color: var(--heading); }
