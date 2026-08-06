@@ -7118,6 +7118,20 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   const gentry = ghome.find(x => x.uri === bskyNote.noteId);
   check(gentry && gentry.url === bskyNote.link && gentry.account.username === 'alice.test',
     'the home timeline serves the mirror with its Bluesky page as the link');
+
+  // A mentioned group must arrive as a mention ENTITY, so the client opens its
+  // profile in-app instead of navigating to the raw actor document.
+  statuses21.unshift({
+    noteId: 'https://f.example/notes/withmention', actor: 'https://pod.example/ap/actor',
+    kind: 'timeline', published: '2026-08-06T00:00:00.000Z',
+    content: '<p>hello <a href="https://activitypub.example/ap/actor">@group</a></p>',
+    mentions: [{ href: 'https://activitypub.example/ap/actor', name: '@group' }],
+  });
+  const ghome2 = await (await fetch(`${gbase}/api/v1/timelines/home`, { headers: ghdr })).json();
+  const gm = ghome2.find(x => x.uri.endsWith('/withmention'))?.mentions?.[0];
+  check(gm && gm.url === 'https://activitypub.example/ap/actor'
+    && gm.username === 'group' && gm.acct === 'group@activitypub.example',
+    'a stored mention serves as a Mastodon mention entity with username and acct');
   gsrv.close();
 }
 
