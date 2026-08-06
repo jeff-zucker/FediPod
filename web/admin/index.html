@@ -267,6 +267,11 @@ pre { overflow-x: auto; background: #0001; padding: .6rem; border-radius: .3rem;
     <button type="button" id="bsky-open" class="inline" title="   Connect a Bluesky account this identity also posts as">Connect Bluesky account</button>
   </span>
   <span id="bsky-ctl" hidden>
+    <label for="bsky-crosspost">cross-post</label>
+    <select id="bsky-crosspost" title="   Whether your public posts also go to the Bluesky account">
+      <option value="on">on</option>
+      <option value="off">off</option>
+    </select>
     <button type="button" id="bsky-disconnect" class="inline danger" title="   Forget the Bluesky session and remove the stored credential">Disconnect</button>
   </span>
 </section>
