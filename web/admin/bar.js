@@ -19,5 +19,10 @@
   // 409s the other, which logged a failed request on every setup page.
   fetch('/status').then(r => (r.ok ? r.json() : null)).then((s) => {
     if (s?.handle) document.title = `Solid ActivityPub — ${s.handle}`;
+    // The full fediverse handle, centred in the bar on every page.
+    const el = document.getElementById('bar-handle');
+    if (el && s?.handle && s?.actor) {
+      try { el.textContent = `@${s.handle}@${new URL(s.actor).host}`; } catch { /* odd actor url */ }
+    }
   }).catch(() => { /* not up yet; the bar still works */ });
 })();
