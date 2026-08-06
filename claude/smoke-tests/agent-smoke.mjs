@@ -7377,7 +7377,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   const actor23 = wire23.actorDoc({
     urls: wire23.apUrls('https://p.example/'), handle: 'p', name: 'P', publicKeyPem: 'K',
   });
-  check(actor23.url === 'https://p.example/ap/profile.html',
+  check(actor23.url === 'https://p.example/activitypods-js/ap/profile.html',
     'the actor url is the human page, not machine data');
   const html23 = wire23.contentHtml('hi @friend', [
     { handle: 'friend', actor: 'https://m.example/users/friend', page: 'https://m.example/@friend' }]);
