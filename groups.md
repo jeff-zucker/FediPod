@@ -8,6 +8,12 @@ need no pod of their own.
 
 A group needs a pod of its own. Run it like any other identity — `start`, `stop`, `status`, `park`, `retire` — on its own port.
 
+Being in a group also connects you to the people in it: posts from fellow
+members reach your timeline even when you do not follow them individually,
+so a reply in the room is something you see rather than something filed
+among strangers' mail. Who counts is the group's own membership, so its
+moderation settings decide who reaches you.
+
 As with persons, a group display name and bio should be handled on the client.
 
 ## Managing a group
