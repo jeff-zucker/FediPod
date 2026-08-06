@@ -23,6 +23,18 @@ Open `http://localhost:8030/` while any agent is running to reach it, then choos
 The handle, the pod and person-vs-group are permanent. The display name, bio
 and pictures are edited in the client, not here.
 
+## Bluesky
+
+Connecting a Bluesky account makes this identity also post as that account:
+your **public** posts mirror to Bluesky (never followers-only or direct
+ones), deleting a post deletes its Bluesky copy, and the account's timeline
+and notifications appear in your home feed — read-only; interacting with a
+Bluesky post means opening it on Bluesky. The **crosspost** control stops the
+mirroring without disconnecting. Disconnecting forgets the login but removes
+nothing already posted. For a group, the connected account is the group's
+presence on Bluesky — joining and posting through it follow the group's own
+moderation settings; see [Groups](groups.md).
+
 ## Handling follow requests
 
 New followers appear under **Follow requests** with **Accept** and **Refuse**

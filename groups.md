@@ -23,3 +23,18 @@ The group passes along posts from its own members only. This stops spam from out
 A group can be handed on rather than abandoned using the `Transfer identity` button. This tells every follower to migrate, so the membership survives a change of host.
 
 
+
+## Bluesky members
+
+A group with a connected Bluesky account is joinable from Bluesky: following
+the group's Bluesky account is a join, and mentioning its handle submits a
+post. Both pass through the same moderation settings as fediverse members —
+join review, post review, and muting all apply, and an approved post is
+carried to the group's Bluesky followers as a repost.
+
+A Bluesky member's posts reach the fediverse side only if their account is
+bridged (it follows @ap.brid.gy on Bluesky). Unbridged members are welcomed
+with a single reply explaining that, and everything else about their
+membership still works; bridging later upgrades them in place. Ejecting a
+Bluesky member blocks their account, since their server cannot be told any
+other way.

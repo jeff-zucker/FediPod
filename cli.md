@@ -42,6 +42,19 @@ node bin/solid-activitypub.mjs tokens                         # list client logi
 node bin/solid-activitypub.mjs revoke-credential --email EMAIL   # cut this machine off from the pod account
 ```
 
+## Bluesky
+
+```
+node bin/solid-activitypub.mjs bsky connect HANDLE APP-PASSWORD   # drive an existing Bluesky account
+node bin/solid-activitypub.mjs bsky status                        # which account, and any last error
+node bin/solid-activitypub.mjs bsky crosspost off                 # your public posts stay off Bluesky (on: they mirror)
+node bin/solid-activitypub.mjs bsky disconnect                    # forget the session and the stored credential
+```
+HANDLE and APP-PASSWORD come from the Bluesky account: make the app password
+under its Settings → Privacy and security → App Passwords. Add
+`--service URL` when the account lives on a PDS other than bsky.social.
+Disconnecting does not remove anything already posted to Bluesky.
+
 ## Moving the install
 
 ```
