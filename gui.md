@@ -23,6 +23,15 @@ Open `http://localhost:8030/` while any agent is running to reach it, then choos
 The handle, the pod and person-vs-group are permanent. The display name, bio
 and pictures are edited in the client, not here.
 
+## Sharing an account
+
+Each identity has a page anyone can open, at `ap/profile.html` under its pod
+— for example `https://your-pod.example/activitypods-js/ap/profile.html`. It
+shows the name, bio and address, and offers a Follow box: a visitor types
+their own server and lands on that server's follow screen. Hand out that
+link, or the `@name@host` address itself, which works in the search box of
+any fediverse app.
+
 ## Bluesky
 
 Connecting a Bluesky account makes this identity also post as that account:

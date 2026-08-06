@@ -18,6 +18,14 @@ The group passes along posts from its own members only. This stops spam from out
 * owner may choose to moderate posts - nothing gets posted without review
 * owner may mute users (refuse to rebroadcast their posts)
 
+## Inviting people
+
+A group has a page anyone can open, at `ap/profile.html` under its pod. It
+carries the group's address and a Follow box that sends a visitor to their
+own server's follow screen, so it is the link to put where people will find
+it. Posts the group carries appear in members' timelines as the group
+boosting the author.
+
 ## Transferring group ownership
 
 A group can be handed on rather than abandoned using the `Transfer identity` button. This tells every follower to migrate, so the membership survives a change of host.
