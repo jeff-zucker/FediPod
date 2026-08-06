@@ -7023,7 +7023,10 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   const AUTHOR = { did: 'did:plc:alice', handle: 'alice.test', displayName: 'Alice', avatar: 'https://cdn.test/a.jpg' };
   const feedFixture = {
     feed: [
-      { post: { uri: 'at://did:plc:me/app.bsky.feed.post/own', author: { did: 'did:plc:me', handle: 'me' }, record: { text: 'me', createdAt: '2026-08-05T01:00:00.000Z' } } },
+      // Our own cross-post (its uri is a known mirror) versus our own
+      // native-on-Bluesky reply: the first must not echo, the second must show.
+      { post: { uri: 'at://did:plc:me/app.bsky.feed.post/mine1', author: { did: 'did:plc:me', handle: 'me' }, record: { text: 'echo', createdAt: '2026-08-05T01:00:00.000Z' } } },
+      { post: { uri: 'at://did:plc:me/app.bsky.feed.post/own', author: { did: 'did:plc:me', handle: 'me' }, record: { text: 'my native reply', createdAt: '2026-08-05T01:00:00.000Z' } } },
       { post: { uri: 'at://did:plc:alice/app.bsky.feed.post/p1', author: AUTHOR,
         record: { text: '<script>hi</script> from bsky', createdAt: '2026-08-05T02:00:00.000Z' },
         embed: { images: [{ fullsize: 'https://cdn.test/full.jpg', alt: 'a cat' }] } } },
@@ -7051,8 +7054,9 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   await feed21.sweep();
 
   const mirrored = statuses21.filter(s => s.kind === 'bsky');
-  check(mirrored.length === 3 && !statuses21.some(s => s.noteId.endsWith('/own')),
-    'the timeline mirrors others’ posts and never our own');
+  check(mirrored.length === 4 && !statuses21.some(s => s.noteId.endsWith('/mine1'))
+    && statuses21.some(s => s.noteId.endsWith('/own')),
+    'our cross-posts never echo back, but our native Bluesky replies DO show');
   const p1 = statuses21.find(s => s.noteId.endsWith('/p1'));
   check(p1.content.includes('&lt;script&gt;') && p1.link === 'https://bsky.app/profile/did:plc:alice/post/p1'
     && p1.attachments?.[0]?.description === 'a cat',
