@@ -7338,6 +7338,56 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   }
 }
 
+// --- 22a. a co-member of a group we are in is not a stranger ---
+{
+  const { Intake } = await import(path.join(root, 'lib/intake.mjs'));
+  const GROUP = 'https://g.example/ap/actor';
+  const MEMBER = 'https://f.example/users/vincent';
+  const docs = {};
+  let fetches = 0;
+  const mkIntake = (following, actors) => {
+    const it = new Intake({
+      config: { handle: 'me', kind: 'person' },
+      urls: { actor: 'https://me.example/ap/actor', inbox: 'https://me.example/ap/inbox/' },
+      store: {
+        read: (n, d) => (n in docs ? docs[n] : d), write: (n, v) => { docs[n] = v; },
+        getContacts: () => ({ followers: [], following }),
+        getActors: () => actors,
+      },
+      remote: {}, local: {}, deliverer: {}, publisher: {}, log: () => {},
+    });
+    it.fetchAP = async (u) => {
+      fetches++;
+      if (u === GROUP) return { id: GROUP, type: 'Group', followers: GROUP + '/followers' };
+      if (u === GROUP + '/followers') return { orderedItems: [MEMBER, 'https://f.example/users/other'] };
+      return null;
+    };
+    return it;
+  };
+  const followingGroup = [{ actor: GROUP, accepted: true }];
+  const asGroupActor = { [GROUP]: { type: 'Group' } };
+
+  const it22a = mkIntake(followingGroup, asGroupActor);
+  check(await it22a.isCoMember(MEMBER) === true,
+    'someone listed in a followed group’s membership counts as known');
+  check(await it22a.isCoMember('https://f.example/users/stranger') === false,
+    'someone not in it does not');
+  const spent = fetches;
+  await it22a.isCoMember(MEMBER);
+  check(fetches === spent, 'the membership is cached — arriving mail does not re-read it');
+
+  // Only GROUP actors, and only when we follow them.
+  const it22aP = mkIntake([{ actor: 'https://f.example/users/person', accepted: true }], {});
+  check(await it22aP.isCoMember(MEMBER) === false,
+    'following a person opens no such door');
+  // A group whose list cannot be read keeps the members we already had.
+  const it22aFail = mkIntake(followingGroup, asGroupActor);
+  it22aFail.fetchAP = async () => null;
+  docs['comembers.json'] = { [GROUP]: { at: '2020-01-01T00:00:00.000Z', members: [MEMBER] } };
+  check(await it22aFail.isCoMember(MEMBER) === true,
+    'a failed refresh keeps the last known membership rather than demoting everyone');
+}
+
 // --- 22b. a group's carry promotes a note we only held as a mention ---
 {
   const { Intake } = await import(path.join(root, 'lib/intake.mjs'));
