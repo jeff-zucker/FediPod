@@ -3993,8 +3993,11 @@ const afterSecond = store2.getStatuses().filter(s => s.kind === 'tag').length;
 check(afterFirst === 1 && afterSecond === 1, `tag sweep ingests once, dedupes (got ${afterFirst}/${afterSecond})`);
 
 const homeWithTag = await call('/api/v1/timelines/home');
-check(homeWithTag.json.some(s => s.uri === 'https://m.example/n/t1')
-  && homeWithTag.json.some(s => s.uri === 'https://m.example/n/boost1'),
+// Boosted content arrives in the boost shape — the carrier on the outside,
+// the post itself in `reblog` — so it is found either place.
+const uriOf = (s) => [s.uri, s.reblog?.uri];
+check(homeWithTag.json.some(s => uriOf(s).includes('https://m.example/n/t1'))
+  && homeWithTag.json.some(s => uriOf(s).includes('https://m.example/n/boost1')),
   'home timeline includes tag-feed + boosted content');
 const localAgain = await call('/api/v1/timelines/public?local=true');
 check(localAgain.json.every(s => s.account.acct.startsWith('jeff@')), 'public?local still own posts only');
@@ -7118,6 +7121,10 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   const gentry = ghome.find(x => x.uri === bskyNote.noteId);
   check(gentry && gentry.url === bskyNote.link && gentry.account.username === 'alice.test',
     'the home timeline serves the mirror with its Bluesky page as the link');
+  const gboost = ghome.find(x => x.reblog?.uri?.endsWith('/p2'));
+  check(gboost && gboost.account.username === 'bob.test' && gboost.reblog.account.username === 'alice.test'
+    && gboost.content === '',
+    'a carried post renders as the carrier boosting the inner post');
 
   // A mentioned group must arrive as a mention ENTITY, so the client opens its
   // profile in-app instead of navigating to the raw actor document.
