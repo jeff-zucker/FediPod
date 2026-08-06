@@ -169,7 +169,7 @@ function render() {
         dd.append(a, ' ', BSKY_CTL);
         BSKY_CTL.hidden = false;
         BSKY_CONNECT_CTL.hidden = true;
-        BSKY_CROSSPOST.textContent = `crosspost ${config.atproto.crossPost ? 'on' : 'off'}`;
+        BSKY_CROSSPOST.value = config.atproto.crossPost ? 'on' : 'off';
       } else {
         dd.append(BSKY_CONNECT_CTL);
         BSKY_CONNECT_CTL.hidden = false;
@@ -375,17 +375,15 @@ $('bsky-disconnect').addEventListener('click', async () => {
     if (await write('/atproto/disconnect', {}, 'bluesky account disconnected')) await load();
   } finally { bskyBusy = false; }
 });
-$('bsky-crosspost').addEventListener('click', async () => {
-  if (bskyBusy) return;
+// Silent on success — the select already shows the new state.
+const setCrossPost = async (on) => {
+  if (bskyBusy || on === !!config.atproto?.crossPost) return;
   bskyBusy = true;
   try {
-    const on = !config.atproto?.crossPost;
-    if (await write('/atproto', { crossPost: on }, on ? 'public posts will cross-post' : 'cross-posting off')) {
-      config.atproto.crossPost = on;
-    }
-    BSKY_CROSSPOST.textContent = `crosspost ${config.atproto?.crossPost ? 'on' : 'off'}`;
+    if (await write('/atproto', { crossPost: on }, '')) config.atproto.crossPost = on;
+    BSKY_CROSSPOST.value = config.atproto?.crossPost ? 'on' : 'off';
   } finally { bskyBusy = false; }
-});
+};
 
 // ---- group ----
 
@@ -479,6 +477,8 @@ function onPick(el, apply, repaint = renderGroupToggles) {
 onPick($('joins-mod'), (v) => setJoins(v === MOD.on));
 onPick($('review-mod'), (v) => setReview(v === MOD.on));
 onPick(STATUS_PICK, (v) => setStatus(v === 'parked'), renderStatus);
+onPick(BSKY_CROSSPOST, (v) => setCrossPost(v === 'on'),
+  () => { BSKY_CROSSPOST.value = config?.atproto?.crossPost ? 'on' : 'off'; });
 
 // One row: what it is, then what can be done to it.
 function row(text, sub, actions) {

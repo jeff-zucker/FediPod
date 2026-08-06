@@ -132,8 +132,9 @@ dd { margin: 0; word-break: break-all; }
 .others { font-size: 1.15rem; margin: .5rem 0 0; display: flex; flex-wrap: wrap;
   align-items: baseline; gap: .5rem .6rem; }
 .others-label { color: var(--heading); font-weight: 600; font-size: 1.15rem; margin: 0; }
-#actor-pick { font: inherit; padding: .2rem .4rem; border-radius: .3rem;
+#actor-pick, #bsky-crosspost { font: inherit; padding: .2rem .4rem; border-radius: .3rem;
   border: 1px solid var(--btn-edge); background: var(--btn-bg); color: var(--link); }
+#bsky-ctl { display: inline-flex; gap: .6rem; align-items: baseline; margin-left: .6rem; }
 /* Small buttons that sit in a line of text. */
 button.inline { font-size: .9rem; padding: .15rem .6rem; font-weight: 400; }
 /* Radios read as one line each: label { display: block } alone drops the text
@@ -267,7 +268,10 @@ pre { overflow-x: auto; background: #0001; padding: .6rem; border-radius: .3rem;
     <button type="button" id="bsky-open" class="inline" title="   Connect a Bluesky account this identity also posts as">Connect Bluesky account</button>
   </span>
   <span id="bsky-ctl" hidden>
-    <button type="button" id="bsky-crosspost" class="inline" title="   Whether your public posts also go to the Bluesky account — click to switch">crosspost</button>
+    <select id="bsky-crosspost" title="   Whether your public posts also go to the Bluesky account">
+      <option value="on">crosspost on</option>
+      <option value="off">crosspost off</option>
+    </select>
     <button type="button" id="bsky-disconnect" class="inline danger" title="   Forget the Bluesky session and remove the stored credential">Disconnect</button>
   </span>
 </section>
