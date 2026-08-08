@@ -1,18 +1,18 @@
 {
-  "name": "solid-activitypub",
-  "version": "0.4.1",
+  "name": "fedipod",
+  "version": "0.5.0",
   "description": "Standalone single-actor ActivityPub agent whose wire face, RDF truth and state all live on a Solid pod (CSS). Bundles a Phanpy UI and a Mastodon client-API facade.",
   "type": "module",
   "license": "MIT",
   "author": "Jeff Zucker",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/jeff-zucker/solid-activitypub.git"
+    "url": "git+https://github.com/jeff-zucker/FediPod.git"
   },
-  "homepage": "https://github.com/jeff-zucker/solid-activitypub#readme",
-  "bugs": "https://github.com/jeff-zucker/solid-activitypub/issues",
+  "homepage": "https://github.com/jeff-zucker/FediPod#readme",
+  "bugs": "https://github.com/jeff-zucker/FediPod/issues",
   "bin": {
-    "solid-activitypub": "bin/solid-activitypub.mjs"
+    "fedipod": "bin/fedipod.mjs"
   },
   "files": [
     "bin",
@@ -30,9 +30,9 @@
     "architecture.svg"
   ],
   "scripts": {
-    "start": "node bin/solid-activitypub.mjs up",
-    "install-service": "node bin/solid-activitypub.mjs install-service",
-    "uninstall-service": "node bin/solid-activitypub.mjs uninstall-service",
+    "start": "node bin/fedipod.mjs up",
+    "install-service": "node bin/fedipod.mjs install-service",
+    "uninstall-service": "node bin/fedipod.mjs uninstall-service",
     "prepublishOnly": "npm test",
     "test": "node claude/smoke-tests/agent-smoke.mjs && node scripts/verify-ui.mjs",
     "verify-ui": "node scripts/verify-ui.mjs",
