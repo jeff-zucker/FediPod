@@ -5,7 +5,7 @@
 // form that never mentions a field cannot delete it; and anything on the wire is
 // not real until the actor is republished, which POST /config does for itself.
 //
-// The UI password is deliberately not here — `solid-activitypub passwd` sets it. It
+// The UI password is deliberately not here — `fedipod passwd` sets it. It
 // only gates /oauth/authorize, so it does nothing for a loopback-only agent.
 
 const $ = (id) => document.getElementById(id);
@@ -97,7 +97,7 @@ document.getElementById('win').addEventListener('win:closed', () => {
 function render() {
   // The bar names the actor, the same way on every page. Only the tab title is
   // this page's own business.
-  document.title = `Solid ActivityPub — ${config.handle}`;
+  document.title = `FediPod — ${config.handle}`;
   const facts = $('facts');
   facts.textContent = '';
   // What this actor IS comes first. The handle is already in the address beside

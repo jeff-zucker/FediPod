@@ -102,7 +102,7 @@ function makeGate(token, { allowOrigins = [], publicEndpoints = false } = {}) {
     if (publicEndpoints && isPublicEndpoint(req)) return false;   // public WebID / OIDC endpoints
 
     res.writeHead(401, { 'content-type': 'text/plain' });
-    res.end('solid-activitypub: missing or bad token\n');
+    res.end('fedipod: missing or bad token\n');
     return true;
   }
 

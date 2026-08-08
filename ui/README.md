@@ -17,6 +17,6 @@ when building API URLs. Replace those construction sites with
 `${location.protocol}//${instance}` so the client works over the agent's
 http origin.
 
-After adding a client, watch `~/.solid-activitypub/profiles/<name>/agent.log` while using it:
+After adding a client, watch `~/.fedipod/profiles/<name>/agent.log` while using it:
 every API endpoint it needs that the facade lacks is logged as an
 `unhandled` line — that list is the to-do for full support.

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-// solid-activitypub.mjs — CLI for the standalone pod-stored ActivityPub actor.
+// fedipod.mjs — CLI for the standalone pod-stored ActivityPub actor.
 //
-//   npm start   (= solid-activitypub up)
+//   npm start   (= fedipod up)
 //     The one command. Finds a port that BINDS — starting from the recorded
 //     one, or 8030 — puts the agent behind it detached (logging to
 //     AP_HOME/agent.log, stoppable by pidfile), and opens the browser where
@@ -9,7 +9,7 @@
 //     the client when there is. Already running? It says so and opens that.
 //     --no-open leaves the browser alone; --port names a starting port.
 //
-//   solid-activitypub setup
+//   fedipod setup
 //     Asks two things at the terminal — the handle, which is permanent and
 //     names the agent's own origin, and the port — then starts serving and
 //     opens http://<handle>.localhost:<port>/, where the rest is asked:
@@ -18,8 +18,8 @@
 //     is created until you say so there, and the address you are about to
 //     take is shown before you do.
 //
-//   solid-activitypub setup --new-account --email you@example.org --handle you
-//   solid-activitypub setup --pod https://you.solidcommunity.net/ \
+//   fedipod setup --new-account --email you@example.org --handle you
+//   fedipod setup --pod https://you.solidcommunity.net/ \
 //       --issuer https://solidcommunity.net --email you@example.org --handle you
 //     Any identity flag (--new-account, --pod, --issuer, --email, --name,
 //     --pod-name, --group, --summary, --icon, --root, --keys) keeps setup
@@ -31,21 +31,21 @@
 //     --keys pod stores them in pod state instead, so several devices can
 //     sign as the same actor without copying files.
 //
-//   solid-activitypub start     start the agent (UI + API on http://localhost:8030/
+//   fedipod start     start the agent (UI + API on http://localhost:8030/
 //                         and http://<handle>.localhost:8030/ — one origin per
 //                         identity, so two agents stop sharing one login).
 //                         Prints both URLs; --open also opens a browser.
 //                         --name "Your Name" sets the display name other
 //                         servers show, and republishes the actor
 //                         ('run' is kept as an alias)
-//   solid-activitypub stop      stop the running agent (graceful: flush + lease release)
-//   solid-activitypub status    show the running agent's status
-//   solid-activitypub state     where the private half lives — your timeline, contacts,
+//   fedipod stop      stop the running agent (graceful: flush + lease release)
+//   fedipod status    show the running agent's status
+//   fedipod state     where the private half lives — your timeline, contacts,
 //                         blocklist and notifications. `--to <container-url>`
 //                         moves it to a pod on this machine, `--to pod` moves it
 //                         back. Copies and verifies before repointing; the old
 //                         copy is left behind. Stop the agent first.
-//   solid-activitypub rebuild   put back the posts a restored or replaced machine no
+//   fedipod rebuild   put back the posts a restored or replaced machine no
 //                         longer knows about, from what the pod still serves.
 //                         Adds only — a post this machine already has keeps its
 //                         local facts. `--from-notes` also walks ap/notes/,
@@ -55,7 +55,7 @@
 //                         profiles/<name>/, and the root records the last one
 //                         used, so `--profile x start` today is what plain
 //                         `start` gives you tomorrow. Nothing to configure.
-//   solid-activitypub home      which directory every identity on this machine lives
+//   fedipod home      which directory every identity on this machine lives
 //                         in. `--to <dir>` moves the whole root, rewrites any
 //                         privateRoot that pointed inside it, and refuses while
 //                         an agent is answering. `--restructure` is the one-time
@@ -63,17 +63,17 @@
 //                         profiles/: it takes the identity at the top level down
 //                         into profiles/<its handle>/. Installs made before the
 //                         2026-07-30 rename keep ~/.activitypod until they run
-//                         `--to`; new ones get ~/.solid-activitypub.
-//   solid-activitypub passwd    set/change the UI password (REQUIRED before any
+//                         `--to`; new ones get ~/.fedipod.
+//   fedipod passwd    set/change the UI password (REQUIRED before any
 //                         non-loopback exposure — it turns the instant
 //                         OAuth redirect into a real login form)
-//   solid-activitypub tokens    list client tokens; --revoke <prefix> / --revoke-all
-//   solid-activitypub revoke-credential --email you@example.org
+//   fedipod tokens    list client tokens; --revoke <prefix> / --revoke-all
+//   fedipod revoke-credential --email you@example.org
 //                         kill this machine's pod credential server-side and
 //                         delete it locally (the answer to a suspected leak)
-//   solid-activitypub install-service    start at boot + restart on crash
+//   fedipod install-service    start at boot + restart on crash
 //                                  (systemd --user on Linux, launchd on mac)
-//   solid-activitypub uninstall-service  remove that registration
+//   fedipod uninstall-service  remove that registration
 
 import fs from 'node:fs';
 import os from 'node:os';
@@ -297,12 +297,12 @@ function refuseExistingIdentity() {
   let held = '(unreadable)';
   try { held = JSON.parse(fs.readFileSync(credPath, 'utf8')).remotePod; } catch {}
   console.error(`${HOME} already holds an identity: ${held}`);
-  console.error('For another identity:  bin/solid-activitypub.mjs setup --profile <name>');
-  console.error('To list what exists:   bin/solid-activitypub.mjs profiles');
+  console.error('For another identity:  bin/fedipod.mjs setup --profile <name>');
+  console.error('To list what exists:   bin/fedipod.mjs profiles');
   console.error('To replace this one:   add --force (the old credential is lost)');
   console.error('');
   console.error('If a setup died half-way, do NOT re-run it — the credential it already');
-  console.error('minted cannot be minted twice. Run `bin/solid-activitypub.mjs start` and');
+  console.error('minted cannot be minted twice. Run `bin/fedipod.mjs start` and');
   console.error('finish at /admin/setup/ in the browser.');
   process.exit(2);
 }
@@ -369,7 +369,7 @@ if (cmd === 'up') {
   // one `setup` opens with — `npm start` stays the single command it was.
   if (DEFAULT_ISSUE && !identityHomes(AP_ROOT).some(h => fs.existsSync(path.join(h.dir, 'credential.json')))) {
     if (!process.stdin.isTTY) {
-      console.error('no identities yet — bin/solid-activitypub.mjs setup');
+      console.error('no identities yet — bin/fedipod.mjs setup');
       process.exit(2);
     }
     const first = await ask('handle (the name in your address; permanent)');
@@ -438,8 +438,8 @@ if (cmd === 'up') {
     if (port !== preferred) console.log(`port ${preferred} was taken, so it moved to ${port}`);
   }
   console.log(`\n  ${url}\n`);
-  console.log(configured ? 'stop it with:  bin/solid-activitypub.mjs stop'
-    : 'setup continues in the browser. Stop it with:  bin/solid-activitypub.mjs stop');
+  console.log(configured ? 'stop it with:  bin/fedipod.mjs stop'
+    : 'setup continues in the browser. Stop it with:  bin/fedipod.mjs stop');
   if (!has('no-open')) openBrowser(url);
   process.exit(0);
 } else if (cmd === 'setup' && PROFILE && (useProfile(PROFILE), refuseExistingIdentity(), false)) {
@@ -522,7 +522,7 @@ if (cmd === 'up') {
   if (kind === 'group' && !newAccount && !wfHost) {
     console.error(`${pod} is a path on ${new URL(pod).host}, not the root of its own host.`);
     console.error('WebFinger is answered only at a host root, so nobody could find this group.');
-    console.error('Give the group a pod of its own:  bin/solid-activitypub.mjs setup --group --new-account');
+    console.error('Give the group a pod of its own:  bin/fedipod.mjs setup --group --new-account');
     process.exit(2);
   }
   console.log(kind === 'group' ? '\nThe group will be:\n' : '\nYou will be:\n');
@@ -571,7 +571,7 @@ if (cmd === 'up') {
   const { mintCredential } = await import(new URL('../lib/remote.mjs', import.meta.url));
   // New credentials only: one already registered keeps the name it was minted
   // under, so existing pods stay as they are unless they are set up again.
-  const credential = await mintCredential({ origin: issuer, email, password, name: 'solid-activitypub' });
+  const credential = await mintCredential({ origin: issuer, email, password, name: 'fedipod' });
   const rec = {
     ...credential,
     remotePod: pod.endsWith('/') ? pod : pod + '/',
@@ -629,7 +629,7 @@ if (cmd === 'up') {
   const authority = `${label ? label + '.' : ''}localhost:${PORT}`;
   const url = `http://${authority}/`;
   if (kind === 'group') {
-    console.log(`group running on ${url} — see \`solid-activitypub members\``);
+    console.log(`group running on ${url} — see \`fedipod members\``);
   } else {
     console.log(`agent running — opening ${url} (log in with instance ${authority})`);
     openBrowser(url);
@@ -643,7 +643,7 @@ if (cmd === 'up') {
   // This flag is read only by setup; it silently did nothing here, while the
   // key guard's own error message told people to use it.
   if (has('rotate-key')) {
-    console.error('start does not rotate keys — use:  bin/solid-activitypub.mjs rotate-key');
+    console.error('start does not rotate keys — use:  bin/fedipod.mjs rotate-key');
     process.exit(2);
   }
   if (portFlag()) recordAgent({ port: PORT });   // `start --port N` (or bare N) moves it for good
@@ -659,7 +659,7 @@ if (cmd === 'up') {
     const who = pid ? `pid ${pid}` : 'started elsewhere';
     if (!has('replace') && !process.stdin.isTTY) {
       console.error(`an agent is already running on port ${PORT} (${who}).`);
-      console.error('Stop it with `solid-activitypub stop`, or start this one with --replace.');
+      console.error('Stop it with `fedipod stop`, or start this one with --replace.');
       process.exit(1);
     }
     const ans = has('replace')
@@ -870,13 +870,13 @@ if (cmd === 'up') {
   if (!to) {
     console.log(`private data: ${where(cred)}`);
     console.log(`public face:  ${apUrls(cred.remotePod, cred.root).home}`);
-    console.log('\nTo move it:  bin/solid-activitypub.mjs state --to ~/somewhere/private/');
-    console.log('             bin/solid-activitypub.mjs state --to <container-url>');
-    console.log('             bin/solid-activitypub.mjs state --to pod');
+    console.log('\nTo move it:  bin/fedipod.mjs state --to ~/somewhere/private/');
+    console.log('             bin/fedipod.mjs state --to <container-url>');
+    console.log('             bin/fedipod.mjs state --to pod');
     process.exit(0);
   }
   if (await fetch(`http://localhost:${PORT}/status`).then(() => true).catch(() => false)) {
-    console.error(`an agent is running on port ${PORT} — stop it first:  bin/solid-activitypub.mjs stop`);
+    console.error(`an agent is running on port ${PORT} — stop it first:  bin/fedipod.mjs stop`);
     process.exit(1);
   }
   // A path or a URL. `state` prints the path form, so refusing it here would
@@ -975,7 +975,7 @@ if (cmd === 'up') {
   // resolveKeys refuses to mint over a key the actor already publishes, which
   // is the right default — minting silently would invalidate every signature
   // the other device can still make. It did leave the advice that refusal
-  // prints ("run solid-activitypub rotate-key") a dead end, though, because this
+  // prints ("run fedipod rotate-key") a dead end, though, because this
   // command connects first and meets the same refusal. --force arms the
   // one-shot rotation in the credential so the connect can get past it.
   const forced = has('force');
@@ -1036,7 +1036,7 @@ if (cmd === 'up') {
   // Which one answers with no --profile. A property of the ROOT, not of any
   // identity — which is the whole point of it being a pointer.
   const theDefault = (() => { const d = defaultProfile(AP_ROOT); return typeof d === 'string' ? d : null; })();
-  if (!rows.length) console.log('no identities yet — bin/solid-activitypub.mjs setup');
+  if (!rows.length) console.log('no identities yet — bin/fedipod.mjs setup');
   else {
     const w = (k, min) => Math.max(min, ...rows.map(r => String(r[k]).length));
     const [wn, wp, wo, wk] = [w('name', 7), w('pod', 3), w('port', 4), w('kind', 4)];
@@ -1256,7 +1256,7 @@ if (cmd === 'up') {
     console.log(`  · ${contacts.followers.length} follower(s) keep following you — nothing is told you left`);
     console.log('  · the handle keeps resolving; posts and RDF stay where they are');
     console.log('  · a parked agent that gets started will not drain or poll\n');
-    console.log('Quietest state short of retiring. Undo with:  solid-activitypub revive\n');
+    console.log('Quietest state short of retiring. Undo with:  fedipod revive\n');
     const ans = has('yes') ? 'y' : await ask('park this actor? (y/n)', 'n');
     endAsking();
     if (!/^y/i.test(ans)) { console.log('nothing changed'); process.exit(0); }
@@ -1315,7 +1315,7 @@ if (cmd === 'up') {
   // revive() opens the inbox first and only then replays parked.json, which a
   // stand-down never wrote — so it is the right undo here, minus the re-follows.
   console.log(keep
-    ? '\nReversible: solid-activitypub revive re-opens the inbox. Standing down keeps no snapshot\n'
+    ? '\nReversible: fedipod revive re-opens the inbox. Standing down keeps no snapshot\n'
       + 'of the follow graph, unlike park, so following people again is on you.\n'
     : '\nYour posts and RDF stay on the pod; the identity does not come back.\n');
 
@@ -1333,7 +1333,7 @@ if (cmd === 'up') {
   } else if (keep) {
     const r = await agent.park();                 // same thing, and revivable
     console.log(`stood down ${r.quiescedAt}: unfollowed ${r.unfollowed}/${r.following}, inbox closed`);
-    console.log('undo with:  solid-activitypub revive');
+    console.log('undo with:  fedipod revive');
   } else {
     const r = await agent.publisher.retireActor();
     console.log(`retired ${r.deletedAt}: Delete delivered to ${r.inboxes} inbox(es)`);
@@ -1391,7 +1391,7 @@ if (cmd === 'up') {
       const age = r.createdAt ? `${Math.round((Date.now() - r.createdAt) / 86400000)}d old` : 'undated';
       console.log(`${r.token.slice(0, 8)}…  ${age}`);
     }
-    console.log('\nrevoke with: solid-activitypub tokens --revoke <prefix>   (or --revoke-all)');
+    console.log('\nrevoke with: fedipod tokens --revoke <prefix>   (or --revoke-all)');
   }
 } else if (cmd === 'stop') {
   requireIdentity();
@@ -1407,7 +1407,7 @@ if (cmd === 'up') {
     if (asked) { console.log(`agent on port ${PORT} asked to stop`); process.exit(0); }
     console.error(`no agent found: no pidfile at ${pidFile}, nothing answering on port ${PORT}.`);
     console.error('If it is on another port, add --port N; a service install stops with:');
-    console.error('  systemctl --user stop solid-activitypub');
+    console.error('  systemctl --user stop fedipod-<name>');
     process.exit(1);
   }
   try { process.kill(pid, 'SIGTERM'); } catch {
@@ -1479,14 +1479,14 @@ if (cmd === 'up') {
 
   if (process.platform === 'linux') {
     const unitDir = path.join(os.homedir(), '.config/systemd/user');
-    const unitOf = (name) => `solid-activitypub-${name}.service`;
-    // Old shapes are cleared on both paths: the pre-rename activitypod.service,
-    // the single-identity solid-activitypub.service, and any per-identity unit
-    // for an identity that no longer exists here.
+    const unitOf = (name) => `fedipod-${name}.service`;
+    // Old shapes are cleared on both paths: units under the pre-rename names
+    // (activitypod, solid-activitypub), single-identity units, and any
+    // per-identity unit for an identity that no longer exists here.
     const dropOld = () => {
       const keep = new Set(cmd === 'install-service' ? identities.map(i => unitOf(i.name)) : []);
       let units = [];
-      try { units = fs.readdirSync(unitDir).filter(u => /^(activitypod|solid-activitypub)(-.+)?\.service$/.test(u)); } catch { /* no unit dir */ }
+      try { units = fs.readdirSync(unitDir).filter(u => /^(activitypod|solid-activitypub|fedipod)(-.+)?\.service$/.test(u)); } catch { /* no unit dir */ }
       for (const u of units) {
         if (keep.has(u)) continue;
         sh('systemctl', ['--user', 'disable', '--now', u]);
@@ -1503,7 +1503,7 @@ if (cmd === 'up') {
       dropOld();
       for (const id of identities) {
         fs.writeFileSync(path.join(unitDir, unitOf(id.name)), `[Unit]
-Description=Solid ActivityPub agent — ${id.handle}
+Description=FediPod agent — ${id.handle}
 After=network-online.target
 
 [Service]
@@ -1532,20 +1532,20 @@ WantedBy=default.target
           console.log(`${id.handle}: installed + enabled (starts at next boot). Port ${id.port} is held by something that is not ours — free it, then: systemctl --user start ${unitOf(id.name)}`);
         }
       }
-      console.log('logs: journalctl --user -u solid-activitypub-<name> -f');
+      console.log('logs: journalctl --user -u fedipod-<name> -f');
     }
   } else if (process.platform === 'darwin') {
     const agents = path.join(os.homedir(), 'Library/LaunchAgents');
-    const plistOf = (name) => path.join(agents, `net.solid-activitypub.${name}.agent.plist`);
-    // Old shapes are cleared on both paths: pre-rename net.activitypod.agent,
-    // the single-identity net.solid-activitypub.agent, and any per-identity
-    // plist for an identity that no longer exists here.
+    const plistOf = (name) => path.join(agents, `net.fedipod.${name}.agent.plist`);
+    // Old shapes are cleared on both paths: plists under the pre-rename names
+    // (net.activitypod, net.solid-activitypub), single-identity plists, and any
+    // per-identity plist for an identity that no longer exists here.
     const dropOld = () => {
       const keep = new Set(cmd === 'install-service' ? identities.map(i => plistOf(i.name)) : []);
       let plists = [];
       try {
         plists = fs.readdirSync(agents)
-          .filter(f => /^net\.(activitypod|solid-activitypub)(\..+)?\.agent\.plist$/.test(f))
+          .filter(f => /^net\.(activitypod|solid-activitypub|fedipod)(\..+)?\.agent\.plist$/.test(f))
           .map(f => path.join(agents, f));
       } catch { /* no LaunchAgents dir */ }
       for (const p of plists) {
@@ -1567,7 +1567,7 @@ WantedBy=default.target
         fs.writeFileSync(plist, `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
-  <key>Label</key><string>net.solid-activitypub.${id.name}.agent</string>
+  <key>Label</key><string>net.fedipod.${id.name}.agent</string>
   <key>ProgramArguments</key><array>
     <string>${process.execPath}</string><string>${runAgentPath}</string>
   </array>
@@ -1589,15 +1589,19 @@ WantedBy=default.target
     // schtasks is scriptable, but this path is UNTESTED here (no Windows
     // machine); the equivalent command is printed either way so a failure
     // is actionable rather than mysterious.
-    const taskOf = (name) => `solid-activitypub-${name}`;
+    const taskOf = (name) => `fedipod-${name}`;
+    // Pre-rename names, single-identity and per-identity, cleared on both paths.
+    const dropOld = () => {
+      sh('schtasks', ['/delete', '/tn', 'activitypod', '/f']);
+      sh('schtasks', ['/delete', '/tn', 'solid-activitypub', '/f']);
+      for (const id of identities) sh('schtasks', ['/delete', '/tn', `solid-activitypub-${id.name}`, '/f']);
+    };
     if (cmd === 'uninstall-service') {
-      sh('schtasks', ['/delete', '/tn', 'activitypod', '/f']);        // pre-rename name
-      sh('schtasks', ['/delete', '/tn', 'solid-activitypub', '/f']);  // single-identity name
+      dropOld();
       for (const id of identities) sh('schtasks', ['/delete', '/tn', taskOf(id.name), '/f']);
       console.log('scheduled task(s) removed');
     } else {
-      sh('schtasks', ['/delete', '/tn', 'activitypod', '/f']);        // pre-rename name
-      sh('schtasks', ['/delete', '/tn', 'solid-activitypub', '/f']);  // single-identity name
+      dropOld();
       for (const id of identities) {
         const tr = `"${process.execPath}" "${runAgentPath}"`;
         const made = sh('schtasks', ['/create', '/tn', taskOf(id.name), '/tr', tr, '/sc', 'onlogon', '/rl', 'limited', '/f']);
@@ -1618,18 +1622,18 @@ WantedBy=default.target
     // The agent is designed for this: whatever Android kills, the pod
     // buffered, and the next start catches up.
     if (cmd === 'uninstall-service') {
-      console.log('Termux: remove ~/.termux/boot/solid-activitypub.sh (activitypod.sh on an older install, and `sv-disable` the matching service if you used termux-services).');
+      console.log('Termux: remove ~/.termux/boot/fedipod.sh (solid-activitypub.sh or activitypod.sh on an older install, and `sv-disable` the matching service if you used termux-services).');
     } else {
       const boot = path.join(os.homedir(), '.termux/boot');
       console.log('Android/Termux has no service manager. To start at boot:');
       console.log('  1. install the Termux:Boot app (F-Droid), open it once');
-      console.log(`  2. mkdir -p ${boot} && cat > ${boot}/solid-activitypub.sh <<'EOF'`);
+      console.log(`  2. mkdir -p ${boot} && cat > ${boot}/fedipod.sh <<'EOF'`);
       console.log('#!/data/data/com.termux/files/usr/bin/sh');
       console.log('termux-wake-lock');
       for (const id of identities) console.log(`AP_HOME=${id.dir} AP_PORT=${id.port} ${process.execPath} ${runAgentPath} &`);
       console.log('EOF');
-      console.log(`  3. chmod +x ${boot}/solid-activitypub.sh`);
-      console.log('\nWithout Termux:Boot, run `termux-wake-lock` then `solid-activitypub run` —');
+      console.log(`  3. chmod +x ${boot}/fedipod.sh`);
+      console.log('\nWithout Termux:Boot, run `termux-wake-lock` then `fedipod run` —');
       console.log('anything Android kills is buffered on the pod and catches up next start.');
     }
   } else {
@@ -1639,7 +1643,7 @@ WantedBy=default.target
 } else if (cmd === 'describe') {
   // The bio and the avatar. Both live in the actor document, so this republishes.
   if (!flag('summary') && !flag('icon')) {
-    console.error('usage: solid-activitypub describe --summary "what this is" --icon <url>');
+    console.error('usage: fedipod describe --summary "what this is" --icon <url>');
     process.exit(2);
   }
   const payload = {};
@@ -1698,11 +1702,11 @@ WantedBy=default.target
   const post = !GETS.includes(cmd);
   const arg = post ? (flag('actor') || flag('note') || args[1]) : null;
   if (post && !TOGGLES[cmd] && !arg) {
-    console.error(`usage: solid-activitypub ${cmd} <${BY_ACTOR.includes(cmd) ? 'actor' : 'note'}-url>`);
+    console.error(`usage: fedipod ${cmd} <${BY_ACTOR.includes(cmd) ? 'actor' : 'note'}-url>`);
     process.exit(2);
   }
   if (TOGGLES[cmd] && !TOGGLES[cmd].includes(arg)) {
-    console.error(`usage: solid-activitypub ${cmd} <${TOGGLES[cmd].join('|')}>`);
+    console.error(`usage: fedipod ${cmd} <${TOGGLES[cmd].join('|')}>`);
     process.exit(2);
   }
   const payload = cmd === 'review' ? { on: arg === 'on' }
@@ -1726,22 +1730,22 @@ WantedBy=default.target
   if (cmd === 'members') {
     if (!body.members.length) console.log('no members yet — nobody has followed this group');
     for (const m of body.members) console.log(`${m.muted ? 'muted ' : '      '}${m.actor}`);
-    console.log('\nstop carrying someone: solid-activitypub mute <actor-url>   (undo: unmute)');
-    console.log('remove them entirely:  solid-activitypub eject <actor-url>');
+    console.log('\nstop carrying someone: fedipod mute <actor-url>   (undo: unmute)');
+    console.log('remove them entirely:  fedipod eject <actor-url>');
   } else if (cmd === 'announced') {
     if (!body.announced.length) console.log('nothing carried yet');
     for (const a of body.announced) console.log(`${a.announcedAt}  ${a.actor}  ${a.noteId}`);
-    console.log('\nunsay one: solid-activitypub retract <note-url>');
+    console.log('\nunsay one: fedipod retract <note-url>');
   } else if (cmd === 'pending') {
     console.log(`review is ${body.review ? 'ON' : 'off'}`);
     if (!body.pending.length) console.log('nothing held');
     for (const q of body.pending) console.log(`${q.at}  ${q.actor}  ${q.noteId}`);
-    if (body.pending.length) console.log('\nsolid-activitypub approve <note-url>   (or decline)');
+    if (body.pending.length) console.log('\nfedipod approve <note-url>   (or decline)');
   } else if (cmd === 'requests') {
     console.log(`joins ${body.approveJoins ? 'need approval' : 'are open — anyone can join'}`);
     if (!body.requests.length) console.log('nobody waiting');
     for (const q of body.requests) console.log(`${q.at}  ${q.actor}`);
-    if (body.requests.length) console.log('\nsolid-activitypub admit <actor-url>   (or refuse)');
+    if (body.requests.length) console.log('\nfedipod admit <actor-url>   (or refuse)');
   } else if (cmd === 'joins') {
     console.log(body.approveJoins
       ? 'joins now need approval — the actor advertises manuallyApprovesFollowers and was republished'
@@ -1769,7 +1773,7 @@ WantedBy=default.target
       const identifier = flag('handle') || args[2];
       const appPassword = flag('app-password') || args[3];
       if (!identifier || !appPassword) {
-        console.error('usage: solid-activitypub bsky connect <handle> <app-password> [--service https://bsky.social]');
+        console.error('usage: fedipod bsky connect <handle> <app-password> [--service https://bsky.social]');
         process.exit(2);
       }
       const res = await fetch(`http://localhost:${PORT}/atproto/connect`, {
@@ -1779,7 +1783,7 @@ WantedBy=default.target
       out = await res.json();
       if (res.status >= 400) { console.error(out.error || `HTTP ${res.status}`); process.exit(1); }
       console.log(`connected: @${out.handle} on ${out.service}`);
-      console.log('public posts will cross-post; turn off: solid-activitypub bsky crosspost off');
+      console.log('public posts will cross-post; turn off: fedipod bsky crosspost off');
     } else if (sub === 'disconnect') {
       const res = await fetch(`http://localhost:${PORT}/atproto/disconnect`, {
         method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}',
@@ -1789,7 +1793,7 @@ WantedBy=default.target
       console.log('disconnected — the local credential is gone');
     } else if (sub === 'crosspost') {
       if (!['on', 'off'].includes(args[2])) {
-        console.error('usage: solid-activitypub bsky crosspost <on|off>');
+        console.error('usage: fedipod bsky crosspost <on|off>');
         process.exit(2);
       }
       const res = await fetch(`http://localhost:${PORT}/atproto`, {
@@ -1803,7 +1807,7 @@ WantedBy=default.target
       const res = await fetch(`http://localhost:${PORT}/status`);
       out = await res.json();
       const a = out.atproto;
-      if (!a?.connected) console.log('no bluesky account connected — solid-activitypub bsky connect <handle> <app-password>');
+      if (!a?.connected) console.log('no bluesky account connected — fedipod bsky connect <handle> <app-password>');
       else console.log(`@${a.handle} (${a.did}) on ${a.service}${a.lastError ? `\nlast error: ${a.lastError}` : ''}`);
     }
   } catch (e) {
@@ -1811,7 +1815,7 @@ WantedBy=default.target
     process.exit(1);
   }
 } else {
-  console.log('usage: solid-activitypub <setup|start|stop|status|state|upgrade|rebuild|home|passwd'
+  console.log('usage: fedipod <setup|start|stop|status|state|upgrade|rebuild|home|passwd'
     + '|tokens|revoke-credential|install-service> [--flags]');
   console.log('  state: --to <path|url|pod>   move THIS identity\'s private half');
   console.log('         --all [--apply]       move every identity\'s onto this machine');

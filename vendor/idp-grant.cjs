@@ -155,7 +155,7 @@ const { version: AGENT_VERSION } = require('../package.json');
 // This is the one on the token grants, so it is the one scn actually logged.
 // Renamed 2026-07-31 in lockstep with lib/ua.mjs — changing only that leaves
 // the grants still announcing the old name.
-const USER_AGENT = `solid-activitypub/${AGENT_VERSION} (+https://github.com/jeff-zucker/solid-activitypub)`;
+const USER_AGENT = `fedipod/${AGENT_VERSION} (+https://github.com/jeff-zucker/FediPod)`;
 
 // A ceiling no timer, retry or future bug can exceed. Steady state is ~3
 // requests/minute, so the default sits 20x above normal use and only engages

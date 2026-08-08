@@ -18,7 +18,7 @@
   // /status, not /config: an agent that is not set up yet answers this one and
   // 409s the other, which logged a failed request on every setup page.
   fetch('/status').then(r => (r.ok ? r.json() : null)).then((s) => {
-    if (s?.handle) document.title = `Solid ActivityPub — ${s.handle}`;
+    if (s?.handle) document.title = `FediPod — ${s.handle}`;
     // The full fediverse handle, centred in the bar on every page.
     const el = document.getElementById('bar-handle');
     if (el && s?.handle && s?.actor) {
