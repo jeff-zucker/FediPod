@@ -1,8 +1,8 @@
-# Solid ActivityPub
+# FediPod
 
 - access the fediverse from a Solid pod
 
-`Solid ActivityPub` is a standalone, single-user ActivityPub agent that stores your public data on almost any subdomained Solid Pod and runs on any device that supports node >20. The agent can be moved from one device to another without any change to your account. There is support for fediverse group formation and management, see [Groups](groups.md).
+`FediPod` is a standalone, single-user ActivityPub and ATProto agent that stores your public data on almost any subdomained Solid Pod and runs on any device that supports node >20. The agent can be moved from one device to another without any change to your account. There is support for fediverse group formation and management, see [Groups](groups.md).
 
 This project is inspired by the fantastic [ActivityPods project](https://github.com/activitypods) and is meant to be a lightweight alternative rather than a replacement.
 
@@ -22,14 +22,14 @@ Note : if you don't have a pod account, setup will easily create one for you.
 In a terminal :
 
 ```
-git clone https://github.com/jeff-zucker/solid-activitypub;
-cd solid-activitypub;
+git clone https://github.com/jeff-zucker/FediPod;
+cd FediPod;
 npm install
 ```
 
 ## Setup
 
-You only have to do setup once per device. Just run `npm start` from the project folder. From nothing — no fediverse account, no pod — one command creates the account, the pod, the actor, and leaves you in the client looking at your fediverse home with a pre-stocked home feed. Setup will prompt you for needed information. If you already have a pod, you'll be offered the opportunity to either create a new pod for your ActivityPub data or to store it on your existing pod.
+You only have to do setup once per device. Just run `npm start` from the project folder. From nothing — no fediverse account, no pod — one command creates the account, the pod, the actor, and leaves you in the client looking at your fediverse home with a pre-stocked home feed. Setup will prompt you for needed information. If you already have a pod, you'll be offered the opportunity to either create a new pod for your FediPod data or to store it on your existing pod.
 
 ### Running the agent
 
@@ -47,7 +47,7 @@ It registers every identity on this machine, one service each, so all of your ac
 
 `npm run uninstall-service` reverses it. 
 
-## Managing your Solid-ActivityPub install
+## Managing your FediPod install
 
 You can manage your posts, see logs, park, move, transfer your account and perform other actions. See the [GUI admin](gui.md) and [CLI admin](cli.md) pages.
 
@@ -80,12 +80,16 @@ notifications that reach you while the client is closed.
 - **Streaming**: the agent serves the Mastodon streaming API
   (`/api/v1/streaming`, WebSocket) so clients update live instead of polling.
 
+## Bluesky and ATProto
+
+`FediPod` includes experimental support for ATProto. A Bluesky connection lets your `FediPod` agent drive an existing Bluesky (or other ATProto) account alongside your fediverse identity. When you post a public post from `FediPod`, it will be cross-posted to Bluesky as a mirror (a toggle you can turn off). Private DMs from `FediPod` to Bluesky are not currently supported.  Bluesky replies and activity flow into your timeline so you see, for example, a combined Bluesky and Mastodon feed.  You can like, boost, and reply to Bluesky posts from within `FediPod`.  None of these features require `Bridgy Fed`, however, fully joining a `FediPod` group from a Bluesky client other than `FediPod` does require a bridge.
+
 
 ## Architecture
 
-`Activitypods` requires a server which provides both an ActivityPub server and a Solid server and thus requires a specific server setup.  `Solid ActivityPub`, on the other hand, can be installed on any subdomained https-served pod.  It does this by splitting the ActivityPub server into two parts.  The pod part provides discovery (webfinger) and stores public data while the local server provides the ActivityPub actions and storage for private data.
+`Activitypods` requires a server which provides both an ActivityPub server and a Solid server and thus requires a specific server setup.  `FediPod`, on the other hand, can be installed on any subdomained https-served pod.  It does this by splitting the ActivityPub server into two parts.  The pod part provides discovery (webfinger) and stores mostly public data while the local server provides the ActivityPub actions and storage for most private data. The exception is private direct messages which are stored on the pod protected by ACL resources.
 
-![Solid ActivityPub flow](architecture.svg)
+![FediPod flow](architecture.svg)
 
 
 ## Transparency

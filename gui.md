@@ -37,8 +37,11 @@ any fediverse app.
 Connecting a Bluesky account makes this identity also post as that account:
 your **public** posts mirror to Bluesky (never followers-only or direct
 ones), deleting a post deletes its Bluesky copy, and the account's timeline
-and notifications appear in your home feed — read-only; interacting with a
-Bluesky post means opening it on Bluesky. The **crosspost** control stops the
+and notifications appear in your home feed. Replying to, favouriting and
+boosting a Bluesky post act as the connected account. A reply lives on
+Bluesky only — it is always public and fits Bluesky's 300-character limit —
+because your fediverse followers cannot see the post it answers. The
+**crosspost** control stops the
 mirroring without disconnecting. Disconnecting forgets the login but removes
 nothing already posted. For a group, the connected account is the group's
 presence on Bluesky — joining and posting through it follow the group's own
@@ -53,7 +56,7 @@ follows the group's own moderation settings; see [Groups](groups.md).
 ## Protecting & recovering your data
 
 Your posts, timeline, contacts, blocklist and notifications are kept locally,
-in `~/.solid-activitypub`. This is the only copy, which means you should back
+in `~/.fedipod`. This is the only copy, which means you should back
 it up regularly. It contains credentials, so back it up securely.
 
 With a backup, restoring is copying the folder back and starting the agent —

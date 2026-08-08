@@ -1,4 +1,4 @@
-// agent-smoke.mjs — offline smoke for solid-activitypub. No network; no pod.
+// agent-smoke.mjs — offline smoke for fedipod. No network; no pod.
 // From project root:  node claude/smoke-tests/agent-smoke.mjs
 //
 // 1. boots run-agent.mjs unconfigured (no credential) on a scratch AP_HOME
@@ -23,7 +23,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 // door on 8030 — every child spawned below inherits this.
 process.env.AP_DIRECTORY = '0';
 let bootLog = '';
-const HOME = fs.mkdtempSync('/tmp/solid-activitypub-smoke-');
+const HOME = fs.mkdtempSync('/tmp/fedipod-smoke-');
 const PORT = 18621;
 const TOKEN = 'smoke-token';
 
@@ -150,7 +150,7 @@ if (up) {
   const niDoc = await fetch(`http://127.0.0.1:${PORT}/nodeinfo/2.0`, { headers: gh });
   const niDocBody = await niDoc.json();
   check(niPtr.status === 200 && /\/nodeinfo\/2\.0$/.test(niPtrBody.links?.[0]?.href)
-    && niDoc.status === 200 && niDocBody.software?.name === 'solid-activitypub'
+    && niDoc.status === 200 && niDocBody.software?.name === 'fedipod'
     && niDocBody.protocols?.includes('activitypub'),
     'nodeinfo pointer + document served');
 
@@ -179,7 +179,7 @@ if (up) {
   // --- 3. facade basics ---
   const inst = await fetch(`http://127.0.0.1:${PORT}/api/v1/instance`, { headers: gh });
   const instBody = await inst.json();
-  check(inst.status === 200 && /solid-activitypub/.test(instBody.version), `/api/v1/instance → 200 (got ${inst.status})`);
+  check(inst.status === 200 && /fedipod/.test(instBody.version), `/api/v1/instance → 200 (got ${inst.status})`);
 
   const apps = await fetch(`http://127.0.0.1:${PORT}/api/v1/apps`, {
     method: 'POST', headers: { ...gh, 'content-type': 'application/json' },
@@ -984,7 +984,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     json: async () => body, text: async () => JSON.stringify(body),
   });
 
-  check(/^solid-activitypub\/\d+\.\d+\.\d+ \(\+https?:\/\/\S+\)$/.test(USER_AGENT),
+  check(/^fedipod\/\d+\.\d+\.\d+ \(\+https?:\/\/\S+\)$/.test(USER_AGENT),
     `the User-Agent names the software and where to complain (${USER_AGENT})`);
 
   // Both the token endpoint and resource requests must carry it.
@@ -1366,7 +1366,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
 // --- 5a-nonies. both setup paths produce the same install ---
 {
-  const bin = fs.readFileSync(path.join(root, 'bin/solid-activitypub.mjs'), 'utf8');
+  const bin = fs.readFileSync(path.join(root, 'bin/fedipod.mjs'), 'utf8');
   const setupJs = fs.readFileSync(path.join(root, 'lib/setup.mjs'), 'utf8');
 
   // They diverged: the browser path defaulted privateRoot to a local file: URL
@@ -1564,7 +1564,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
   // portFree/freePortFrom lived twice and had already drifted — one returned
   // null on exhaustion, the other threw, and both spawn agents.
-  for (const f of ['lib/admin.mjs', 'bin/solid-activitypub.mjs']) {
+  for (const f of ['lib/admin.mjs', 'bin/fedipod.mjs']) {
     const src = fs.readFileSync(path.join(root, f), 'utf8');
     check(!/^(async )?function (portFree|freePortFrom)/m.test(src),
       `${f} no longer carries its own copy`);
@@ -1577,7 +1577,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   check(/REBUILD_MAX_PER_RUN/.test(fs.readFileSync(path.join(root, 'lib/publisher.mjs'), 'utf8')),
     'rebuild is capped per run and says so when it stops');
   // and an empty state migration used to report success
-  check(/NOTHING WAS COPIED/.test(fs.readFileSync(path.join(root, 'bin/solid-activitypub.mjs'), 'utf8')),
+  check(/NOTHING WAS COPIED/.test(fs.readFileSync(path.join(root, 'bin/fedipod.mjs'), 'utf8')),
     '`state --to` says when it moved nothing rather than reporting a move');
 }
 
@@ -2255,7 +2255,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     privateRoot: 'http://192.168.1.50/private/' }),
     'but an http one off this machine is refused');
 
-  const bin = fs.readFileSync(path.join(root, 'bin/solid-activitypub.mjs'), 'utf8');
+  const bin = fs.readFileSync(path.join(root, 'bin/fedipod.mjs'), 'utf8');
   check((bin.match(/insecureUrlReason/g) || []).length >= 2,
     'the CLI checks it too — setup and `state --to` both take these addresses');
 }
@@ -2631,7 +2631,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
 // --- 5g-bis. a command you decline should not have acted already ---
 {
-  const bin = fs.readFileSync(path.join(root, 'bin/solid-activitypub.mjs'), 'utf8');
+  const bin = fs.readFileSync(path.join(root, 'bin/fedipod.mjs'), 'utf8');
   const ra = fs.readFileSync(path.join(root, 'run-agent.mjs'), 'utf8');
 
   check(/async connect\(\{ name = null, repair = true, act = true \} = \{\}\)/.test(ra)
@@ -2717,7 +2717,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   fs.rmSync(dir, { recursive: true, force: true });
 
   // No irreplaceable file is still written with a truncating writeFileSync.
-  for (const f of ['lib/keys.mjs', 'lib/setup.mjs', 'lib/home.mjs', 'run-agent.mjs', 'bin/solid-activitypub.mjs']) {
+  for (const f of ['lib/keys.mjs', 'lib/setup.mjs', 'lib/home.mjs', 'run-agent.mjs', 'bin/fedipod.mjs']) {
     const src = fs.readFileSync(path.join(root, f), 'utf8');
     const bad = src.split('\n').filter(l => /writeFileSync/.test(l) && /JSON\.stringify/.test(l));
     check(bad.length === 0, `${f} writes no JSON state non-atomically${bad.length ? ': ' + bad[0].trim() : ''}`);
@@ -2728,7 +2728,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   // refusal that sent you there.
   const keysSrc = fs.readFileSync(path.join(root, 'lib/keys.mjs'), 'utf8');
   check(/rotate-key --force/.test(keysSrc), 'the no-key error points at a command that works');
-  const binSrc = fs.readFileSync(path.join(root, 'bin/solid-activitypub.mjs'), 'utf8');
+  const binSrc = fs.readFileSync(path.join(root, 'bin/fedipod.mjs'), 'utf8');
   check(/const forced = has\('force'\)/.test(binSrc) && /rotateKeyOnce: true/.test(binSrc),
     'and rotate-key --force arms the one-shot rotation so connect can get past it');
 }
@@ -3442,7 +3442,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 // --- 5u. one identity per home: profiles, and no silent clobbering ---
 {
   const { execFileSync } = await import('node:child_process');
-  const cli = path.join(root, 'bin/solid-activitypub.mjs');
+  const cli = path.join(root, 'bin/fedipod.mjs');
   const fake = fs.mkdtempSync('/tmp/dk-ap-ids-');
   const mk = (dir, pod, port) => {
     fs.mkdirSync(dir, { recursive: true });
@@ -3513,9 +3513,10 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
 // --- 5v-bis. the home root: an old install keeps its name until it is moved ---
 {
-  const { apRoot, CURRENT_ROOT, LEGACY_ROOT } = await import(path.join(root, 'lib/home.mjs'));
+  const { apRoot, CURRENT_ROOT, LEGACY_ROOTS } = await import(path.join(root, 'lib/home.mjs'));
+  const LEGACY_ROOT = LEGACY_ROOTS.at(-1);   // the oldest name, for the end-to-end move below
   const { execFileSync } = await import('node:child_process');
-  const cli = path.join(root, 'bin/solid-activitypub.mjs');
+  const cli = path.join(root, 'bin/fedipod.mjs');
 
   // Resolution is the whole feature: an install that already exists is never
   // moved by an upgrade, and a fresh one never lands on the retired name.
@@ -3525,13 +3526,20 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   check(apRoot(fresh) === path.join(fresh, CURRENT_ROOT),
     'a machine with neither directory gets the current name');
 
-  const old = path.join(box, 'old');
-  fs.mkdirSync(path.join(old, LEGACY_ROOT), { recursive: true });
-  check(apRoot(old) === path.join(old, LEGACY_ROOT),
-    'an install from before the rename keeps the directory holding its keys');
+  for (const name of LEGACY_ROOTS) {
+    const old = path.join(box, `old-${name}`);
+    fs.mkdirSync(path.join(old, name), { recursive: true });
+    check(apRoot(old) === path.join(old, name),
+      `an install from before the rename keeps the directory holding its keys (${name})`);
+  }
+
+  const twoOld = path.join(box, 'two-old');
+  for (const name of LEGACY_ROOTS) fs.mkdirSync(path.join(twoOld, name), { recursive: true });
+  check(apRoot(twoOld) === path.join(twoOld, LEGACY_ROOTS[0]),
+    'with two retired names present, the more recent one wins');
 
   const both = path.join(box, 'both');
-  fs.mkdirSync(path.join(both, LEGACY_ROOT), { recursive: true });
+  for (const name of LEGACY_ROOTS) fs.mkdirSync(path.join(both, name), { recursive: true });
   fs.mkdirSync(path.join(both, CURRENT_ROOT), { recursive: true });
   check(apRoot(both) === path.join(both, CURRENT_ROOT),
     'and once the new one exists it wins, so a half-finished move resolves forward');
@@ -4361,7 +4369,7 @@ if (up) {
 {
   const { execFileSync } = await import('node:child_process');
   const home = fs.mkdtempSync('/tmp/dk-ap-kill-');
-  const cli = path.join(root, 'bin/solid-activitypub.mjs');
+  const cli = path.join(root, 'bin/fedipod.mjs');
   const child3 = spawn(process.execPath, [cli, 'start', '--port', '18791'], {
     cwd: root, env: { ...process.env, AP_HOME: home }, stdio: 'ignore',
   });
@@ -4399,7 +4407,7 @@ if (up) {
 {
   const { execFileSync } = await import('node:child_process');
   const home = fs.mkdtempSync('/tmp/dk-ap-replace-');
-  const cli = path.join(root, 'bin/solid-activitypub.mjs');
+  const cli = path.join(root, 'bin/fedipod.mjs');
   const first = spawn(process.execPath, [cli, 'start', '--port', '18796'], {
     cwd: root, env: { ...process.env, AP_HOME: home }, stdio: 'ignore',
   });
@@ -4441,7 +4449,7 @@ if (up) {
 {
   const { execFileSync } = await import('node:child_process');
   const home = fs.mkdtempSync('/tmp/dk-ap-port-');
-  const cli = path.join(root, 'bin/solid-activitypub.mjs');
+  const cli = path.join(root, 'bin/fedipod.mjs');
   const child2 = spawn(process.execPath, [cli, 'start', '--port', '18778'], {
     cwd: root, env: { ...process.env, AP_HOME: home }, stdio: 'ignore', detached: false,
   });
@@ -4469,8 +4477,8 @@ if (up) {
   const { execFileSync } = await import('node:child_process');
   const say = (plat) => execFileSync(process.execPath, ['-e', `
     Object.defineProperty(process, 'platform', { value: '${plat}' });
-    process.argv = [process.argv[0], 'bin/solid-activitypub.mjs', 'install-service'];
-    await import('${path.join(root, 'bin/solid-activitypub.mjs')}');
+    process.argv = [process.argv[0], 'bin/fedipod.mjs', 'install-service'];
+    await import('${path.join(root, 'bin/fedipod.mjs')}');
   `, '--input-type=module'], { cwd: root }).toString();
   const android = say('android');
   const other = say('freebsd');
@@ -5083,7 +5091,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
 {
   const { startAdmin } = await import(path.join(root, 'lib/admin.mjs'));
   const GPORT = 18624;
-  const GHOME = fs.mkdtempSync('/tmp/solid-activitypub-group-');
+  const GHOME = fs.mkdtempSync('/tmp/fedipod-group-');
   // A set-up group: without the credential FILE the bare URL is a trip to
   // setup, which is right and is not what the checks below are about.
   fs.writeFileSync(path.join(GHOME, 'credential.json'),
@@ -5471,7 +5479,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
     };
   };
   const slog13 = [];
-  const SHOME = fs.mkdtempSync('/tmp/solid-activitypub-setup-');
+  const SHOME = fs.mkdtempSync('/tmp/fedipod-setup-');
   const sagent = makeAgent(SHOME);
   startAdmin({ port: SPORT, gateToken: '', agent: sagent, log: (...a) => slog13.push(a.join(' ')) });
   await new Promise(r => setTimeout(r, 150));
@@ -5554,7 +5562,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   check(/^HTTP\/1\.1 200/.test(named), 'and the agent now answers at its own name');
 
   // --- resuming a setup that died after the mint ---
-  const RHOME = fs.mkdtempSync('/tmp/solid-activitypub-resume-');
+  const RHOME = fs.mkdtempSync('/tmp/fedipod-resume-');
   fs.copyFileSync(credFile, path.join(RHOME, 'credential.json'));
   const mintsBefore = mints;
   const ragent = makeAgent(RHOME);
@@ -5589,7 +5597,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
 {
   const { startAdmin } = await import(path.join(root, 'lib/admin.mjs'));
   const CPORT = 18628;
-  const CHOME = fs.mkdtempSync('/tmp/solid-activitypub-config-');
+  const CHOME = fs.mkdtempSync('/tmp/fedipod-config-');
   // CHOME is the ROOT; the identity itself is a profile under it. /new-actor
   // builds sibling directories as rootOf(agent.home)/profiles/<handle>, so the
   // root has to stay the root or those refusals stop being about anything.
@@ -6327,7 +6335,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
 
   // --- privateRoot moves both private trees, and never the lease ---
   const { Agent } = await import(path.join(root, 'run-agent.mjs'));
-  const a15 = new Agent({ home: '/tmp/solid-activitypub-private-probe', log: () => {} });
+  const a15 = new Agent({ home: '/tmp/fedipod-private-probe', log: () => {} });
   a15.urls = wire.apUrls('https://pod.example/');
   const onPod = a15.privateUrls({ remotePod: 'https://pod.example/' });
   check(onPod.state === a15.urls.state && onPod.fediverse === a15.urls.fediverse
@@ -6343,7 +6351,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   check(podFetch.elsewhere === false, 'the default configuration is unchanged');
 
   // --- the same store over a directory: no server, no round-trip ---
-  const FDIR = fs.mkdtempSync('/tmp/solid-activitypub-files-');
+  const FDIR = fs.mkdtempSync('/tmp/fedipod-files-');
   const fstore = new PodStore({ log: () => {} });
   fstore.attach(new FileStorage(FDIR + '/ap-state/'));
   fstore.setConfig({ handle: 'onfiles', name: 'On Files' });
@@ -6387,8 +6395,8 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
     `a path may not climb out of its container (${escaped})`);
   fs.rmSync(FDIR, { recursive: true, force: true });
 
-  // --- `solid-activitypub state --to` copies and verifies before it repoints ---
-  const SHOME15 = fs.mkdtempSync('/tmp/solid-activitypub-move-');
+  // --- `fedipod state --to` copies and verifies before it repoints ---
+  const SHOME15 = fs.mkdtempSync('/tmp/fedipod-move-');
   const SRC = `http://127.0.0.1:${PPORT}/moveA/`;
   const DST = `http://127.0.0.1:${PPORT}/moveB/`;
   fs.writeFileSync(path.join(SHOME15, 'credential.json'), JSON.stringify({
@@ -6407,7 +6415,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   // process, so a synchronous exec would deadlock waiting on itself.
   const { execFile } = await import('node:child_process');
   const runCli = (args) => new Promise((resolve) => {
-    execFile(process.execPath, [path.join(root, 'bin/solid-activitypub.mjs'), ...args],
+    execFile(process.execPath, [path.join(root, 'bin/fedipod.mjs'), ...args],
       { env: { ...process.env, AP_HOME: SHOME15, AP_PORT: '18632' } },
       (err, stdout, stderr) => resolve({ ok: !err, out: String(stdout) + String(stderr) }));
   });
@@ -6500,8 +6508,8 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
 
   {
     // A scratch ROOT, so the sweep has more than one identity to walk.
-    const RHOME = fs.mkdtempSync('/tmp/solid-activitypub-root-');
-    const profiles = path.join(RHOME, '.solid-activitypub', 'profiles');
+    const RHOME = fs.mkdtempSync('/tmp/fedipod-root-');
+    const profiles = path.join(RHOME, '.fedipod', 'profiles');
     const mkIdentity = (name, cred, agentJson = null) => {
       const dir = path.join(profiles, name);
       fs.mkdirSync(dir, { recursive: true });
@@ -6514,7 +6522,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
     mkIdentity('new', { ...POD, privateRoot: 'file:///tmp/newprivate/' });   // already right
 
     const runRoot = (args) => new Promise((resolve) => {
-      execFile(process.execPath, [path.join(root, 'bin/solid-activitypub.mjs'), ...args],
+      execFile(process.execPath, [path.join(root, 'bin/fedipod.mjs'), ...args],
         { env: { ...process.env, HOME: RHOME, AP_HOME: '', AP_PROFILE: '' } },
         (err, stdout, stderr) => resolve({ ok: !err, out: String(stdout) + String(stderr) }));
     });
@@ -6568,9 +6576,9 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   const { execFile } = await import('node:child_process');
   const { default: net16 } = await import('node:net');
   const homes = [];
-  const mkHome = (tag) => { const h = fs.mkdtempSync(`/tmp/solid-activitypub-up-${tag}-`); homes.push(h); return h; };
+  const mkHome = (tag) => { const h = fs.mkdtempSync(`/tmp/fedipod-up-${tag}-`); homes.push(h); return h; };
   const run = (home, args) => new Promise((resolve) => {
-    execFile(process.execPath, [path.join(root, 'bin/solid-activitypub.mjs'), ...args],
+    execFile(process.execPath, [path.join(root, 'bin/fedipod.mjs'), ...args],
       { env: { ...process.env, AP_HOME: home } },
       (err, stdout, stderr) => resolve({ ok: !err, out: String(stdout) + String(stderr) }));
   });
@@ -6690,7 +6698,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
 // --- 18. copyPrivateHalf between directories, and the page's /state-move route ---
 {
   const { copyPrivateHalf, CURRENT_LAYOUT } = await import(path.join(root, 'lib/migrate.mjs'));
-  const MDIR = fs.mkdtempSync('/tmp/solid-activitypub-statemove-');
+  const MDIR = fs.mkdtempSync('/tmp/fedipod-statemove-');
   const SRC18 = path.join(MDIR, 'src');
   const DST18 = path.join(MDIR, 'dst');
 
@@ -7104,6 +7112,14 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
           return made;
         },
         urlFor: (id) => ids21.get(id) || null,
+        addStatus: (s) => statuses21.unshift(s),
+        updateStatus: (id, patch) => {
+          const i = statuses21.findIndex(x => x.noteId === id);
+          if (i < 0) return null;
+          statuses21[i] = { ...statuses21[i], ...patch };
+          return statuses21[i];
+        },
+        cacheActor: (u, doc) => { actors21[u] = doc; },
         getMedia: () => ({}), getMuted: () => ({ actors: [] }),
         read: (n, d) => (n === 'masto-tokens.json' ? [{ token: 'T21', createdAt: Date.now() }] : (docs21[n] ?? d)),
         write: (n, v) => { docs21[n] = v; },        // the instance doc mints a VAPID key
@@ -7122,12 +7138,54 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
 
   const gfav = await fetch(`${gbase}/api/v1/statuses/b1/favourite`, { method: 'POST', headers: ghdr, body: '{}' });
   check(gfav.status === 422 && /Bluesky/.test((await gfav.json()).error),
-    'favouriting a mirrored Bluesky post answers 422, not a broken Like');
+    'favouriting a mirrored Bluesky post with no account connected answers 422, not a broken Like');
   const grep = await fetch(`${gbase}/api/v1/statuses`, {
     method: 'POST', headers: ghdr, body: JSON.stringify({ status: 'hi', in_reply_to_id: 'b1' }),
   });
   check(grep.status === 422 && /Bluesky/.test((await grep.json()).error),
-    'replying to one answers 422 the same way');
+    'replying to one with no account connected answers 422 the same way');
+
+  // With an account connected, the same taps become native Bluesky records.
+  const minted21 = [];
+  gapi.agent.atproto = {
+    connected: () => true,
+    read: () => ({ did: 'did:plc:me', handle: 'me.test' }),
+    like: async (uri, cid) => { minted21.push(['like', uri, cid]); return { uri: 'at://did:plc:me/app.bsky.feed.like/l1' }; },
+    repost: async (uri, cid) => { minted21.push(['repost', uri, cid]); return { uri: 'at://did:plc:me/app.bsky.feed.repost/r1' }; },
+    reply: async (text, parentUri) => { minted21.push(['reply', text, parentUri]); return { uri: 'at://did:plc:me/app.bsky.feed.post/re1', cid: 'cidre1' }; },
+    deleteCrossPost: async (uri) => { minted21.push(['delete', uri]); },
+  };
+  const gfav2 = await (await fetch(`${gbase}/api/v1/statuses/b1/favourite`, { method: 'POST', headers: ghdr, body: '{}' })).json();
+  check(gfav2.favourited === true && minted21.some(m => m[0] === 'like' && m[1] === bskyNote.noteId),
+    'with an account connected, favourite writes a native like and the row remembers it');
+  const gunfav = await (await fetch(`${gbase}/api/v1/statuses/b1/unfavourite`, { method: 'POST', headers: ghdr, body: '{}' })).json();
+  check(gunfav.favourited === false && minted21.some(m => m[0] === 'delete' && m[1] === 'at://did:plc:me/app.bsky.feed.like/l1'),
+    'unfavourite deletes the very like it minted');
+  const greb = await (await fetch(`${gbase}/api/v1/statuses/b1/reblog`, { method: 'POST', headers: ghdr, body: '{}' })).json();
+  check(greb.reblogged === true && minted21.some(m => m[0] === 'repost' && m[1] === bskyNote.noteId),
+    'reblog writes a native repost');
+  const gunreb = await (await fetch(`${gbase}/api/v1/statuses/b1/unreblog`, { method: 'POST', headers: ghdr, body: '{}' })).json();
+  check(gunreb.reblogged === false && minted21.some(m => m[0] === 'delete' && m[1] === 'at://did:plc:me/app.bsky.feed.repost/r1'),
+    'unreblog deletes the repost');
+  const grep2res = await fetch(`${gbase}/api/v1/statuses`, {
+    method: 'POST', headers: ghdr, body: JSON.stringify({ status: 'hi <from> fp', in_reply_to_id: 'b1' }),
+  });
+  const grep2 = await grep2res.json();
+  check(grep2res.status === 200 && grep2.in_reply_to_id === 'b1'
+    && minted21.some(m => m[0] === 'reply' && m[1] === 'hi <from> fp' && m[2] === bskyNote.noteId),
+    'a reply to a Bluesky post goes out as a native Bluesky reply');
+  const replyRow = statuses21.find(s => s.noteId.endsWith('/re1'));
+  check(replyRow && replyRow.inReplyTo === bskyNote.noteId && replyRow.kind === 'bsky'
+    && replyRow.content.includes('&lt;from&gt;')
+    && replyRow.actor === 'https://bsky.app/profile/did:plc:me'
+    && replyRow.link === 'https://bsky.app/profile/did:plc:me/post/re1',
+    'the reply mirrors locally: threaded under the parent, escaped, as our Bluesky self');
+  const gpriv = await fetch(`${gbase}/api/v1/statuses`, {
+    method: 'POST', headers: ghdr,
+    body: JSON.stringify({ status: 'secret', in_reply_to_id: 'b1', visibility: 'private' }),
+  });
+  check(gpriv.status === 422 && /public/.test((await gpriv.json()).error),
+    'a followers-only reply to a Bluesky post is refused with the reason');
   const ghome = await (await fetch(`${gbase}/api/v1/timelines/home`, { headers: ghdr })).json();
   const gentry = ghome.find(x => x.uri === bskyNote.noteId);
   check(gentry && gentry.url === bskyNote.link && gentry.account.username === 'alice.test',
@@ -7169,6 +7227,52 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
     && gm.username === 'group' && gm.acct === 'group@activitypub.example',
     'a stored mention serves as a Mastodon mention entity with username and acct');
   gsrv.close();
+}
+
+// --- 21b. the Atproto records behind those taps: like, repost, threaded reply ---
+{
+  const { Atproto } = await import(path.join(root, 'lib/atproto.mjs'));
+  const dir21b = fs.mkdtempSync('/tmp/fedipod-bsky-actions-');
+  const PARENT = 'at://did:plc:alice/app.bsky.feed.post/p9';
+  const ROOT21B = { uri: 'at://did:plc:root/app.bsky.feed.post/r0', cid: 'cidRoot' };
+  const calls21b = [];
+  const jres = (status, obj) => new Response(JSON.stringify(obj), { status, headers: { 'content-type': 'application/json' } });
+  const at21b = new Atproto({
+    localDir: dir21b, log: () => {},
+    fetcher: async (url, init) => {
+      calls21b.push({ url, body: init?.body ? JSON.parse(init.body) : null });
+      if (url.includes('app.bsky.feed.getPosts')) {
+        return jres(200, { posts: [{ uri: PARENT, cid: 'cidP', record: { reply: { root: ROOT21B } } }] });
+      }
+      if (url.includes('createRecord')) return jres(200, { uri: 'at://did:plc:me/x/rk1', cid: 'cidNew' });
+      return jres(404, {});
+    },
+  });
+  at21b.write({ service: 'https://pds.test', did: 'did:plc:me', handle: 'me.test', accessJwt: 'A', refreshJwt: 'R' });
+
+  await at21b.like(PARENT, 'cidP');
+  const likeCall = calls21b.find(c => c.body?.collection === 'app.bsky.feed.like');
+  check(likeCall && likeCall.body.record.subject.uri === PARENT && likeCall.body.record.subject.cid === 'cidP'
+    && !calls21b.some(c => c.url.includes('getPosts')),
+    'a like with a stored cid writes the record without asking Bluesky anything first');
+
+  await at21b.repost(PARENT);
+  const repostCall = calls21b.find(c => c.body?.collection === 'app.bsky.feed.repost');
+  check(repostCall && repostCall.body.record.subject.cid === 'cidP'
+    && calls21b.some(c => c.url.includes('getPosts')),
+    'a repost with no stored cid fetches the post once to get it');
+
+  await at21b.reply('hello up there', PARENT);
+  const replyCall = calls21b.find(c => c.body?.collection === 'app.bsky.feed.post');
+  check(replyCall && replyCall.body.record.reply.parent.uri === PARENT
+    && replyCall.body.record.reply.root.uri === ROOT21B.uri,
+    'a reply to a mid-thread post threads at the ROOT the parent hangs from, not at the parent');
+
+  let refused21b = null;
+  await at21b.reply('x'.repeat(301), PARENT).catch(e => { refused21b = e.message; });
+  check(/300/.test(refused21b || ''), 'a reply over 300 characters is refused with the limit named');
+
+  fs.rmSync(dir21b, { recursive: true, force: true });
 }
 
 // --- 22. bluesky members in a group: bridged-first, degrade to unbridged ---
