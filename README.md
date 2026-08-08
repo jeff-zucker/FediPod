@@ -6,6 +6,8 @@
 
 This project is inspired by the fantastic [ActivityPods project](https://github.com/activitypods) and is meant to be a lightweight alternative rather than a replacement.
 
+**Important** if you use `FediPod` to create a pod-based Fediverse account, posts will be sent to your pod until you use the park, retire, or transfer options to temporarily or permanently close your account.  If you are following lots of people, you'll need to start your local agent at least every few days to keep your pod from accumlating mail which is pulled off the pod while your agent is running.
+
 ## Requirements
 
 * a web browser
