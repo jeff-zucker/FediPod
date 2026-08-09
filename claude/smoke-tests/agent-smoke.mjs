@@ -3820,7 +3820,7 @@ const fakeAgent = {
     deliver: async (inbox, a) => delivered.push({ inbox, a }),
     deliverToAll: async (inboxes, a) => delivered.push({ inboxes, a }),
   },
-  remote: { put: async (u, b, ct) => puts.push({ u, ct, len: b.length }), putJson: async () => {}, delete: async () => true },
+  remote: { put: async (u, b, ct) => puts.push({ u, ct, len: b.length }), putJson: async () => {}, setAcl: async () => {}, delete: async () => true },
   local: { fedi: urls2.fediverse, delete: async () => {} },
   intake: { fetchAP: async (u) => ({ id: u, type: 'Person', inbox: u + '/inbox', preferredUsername: 'who' }) },
 };
@@ -3948,22 +3948,31 @@ check(del.status === 200 && delivered.some(d => d.a?.type === 'Delete' && d.a.ob
   && !store2.getStatuses().some(s => s.noteId === OWN2),
   'DELETE status federates Delete + removes from mirror');
 
-// A pod that refuses the delete used to be invisible: the three deletes were
+// A pod that refuses the delete used to be invisible: the writes were
 // unchecked, so the post came off this machine and stayed publicly readable,
 // with nothing to show for it and nothing left to try again with.
 {
+  const wasPut = fakeAgent.remote.putJson;
   const wasDelete = fakeAgent.remote.delete;
-  const tried = [];
-  fakeAgent.remote.delete = async (u) => { tried.push(u); return false; };
+
+  // The pod will not accept the note's Tombstone → the post is still published.
+  fakeAgent.remote.putJson = async () => { throw new Error('refused'); };
   const refused = await call(`/api/v1/statuses/${store2.idFor(OWN)}`, { method: 'DELETE' });
   check(refused.status === 502 && /still published/.test(refused.json?.error || ''),
-    `a pod that will not remove the note is reported, not reported as deleted (${refused.status})`);
+    `a pod that will not tombstone the note is reported, not reported as deleted (${refused.status})`);
   check(store2.getStatuses().some(s => s.noteId === OWN),
     'and the post is kept here, because otherwise there is nothing to try again with');
-  check(tried.includes(OWN) && tried.includes(OWN + '-create'),
+  fakeAgent.remote.putJson = wasPut;
+
+  // The -create embeds the whole note, so a -create that will not delete keeps
+  // the post too.
+  const tried = [];
+  fakeAgent.remote.delete = async (u) => { tried.push(u); return !u.endsWith('-create'); };
+  const refusedCreate = await call(`/api/v1/statuses/${store2.idFor(OWN)}`, { method: 'DELETE' });
+  check(refusedCreate.status === 502 && tried.includes(OWN + '-create'),
     'the -create is checked too: it embeds the whole note, so leaving it behind republishes the post');
 
-  // Only the note and its -create are worth failing on.
+  // An empty replies collection that will not go is not a reason to keep the post.
   fakeAgent.remote.delete = async (u) => !u.endsWith('-replies');
   const anyway = await call(`/api/v1/statuses/${store2.idFor(OWN)}`, { method: 'DELETE' });
   check(anyway.status === 200 && !store2.getStatuses().some(s => s.noteId === OWN),
@@ -7021,10 +7030,11 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
 
   // Delete propagation, through the real deleteNote.
   const removed = [];
+  const tombs = [];
   const agent20 = {
     publisher: Object.assign(pub20, { unrecordOutbox: async () => {} }),
     deliverer: { deliverToAll: async () => {} },
-    remote: { delete: async () => true },
+    remote: { delete: async () => true, putJson: async (u, doc) => tombs.push([u, doc]), setAcl: async () => {} },
     local: { fedi: 'x/', delete: async () => {} },
     store: { getContacts: () => ({ followers: [], following: [] }), removeStatus: (id) => removed.push(id) },
     atproto: bsky20,
@@ -7035,6 +7045,10 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   });
   check(del.ok && deletes.length === 1 && deletes[0].rkey === 'rkey1',
     'deleting the post deletes its Bluesky mirror too');
+  const tomb20 = tombs.find(([u]) => u === 'https://pod.example/ap/notes/x')?.[1];
+  check(tomb20?.type === 'Tombstone' && tomb20.formerType === 'Note'
+    && tomb20.id === 'https://pod.example/ap/notes/x' && !!tomb20.deleted,
+    'a deleted note is left as a Tombstone at its own url, not a bare 404 (§7.4)');
 
   srv20.close();
   fs.rmSync(BDIR20, { recursive: true, force: true });
