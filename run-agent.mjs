@@ -70,10 +70,10 @@ export class Agent {
   // existing install is untouched.
   privateUrls(cred, urls = this.urls) {
     if (!cred.privateRoot) {
-      return { state: urls.state, fediverse: urls.fediverse, elsewhere: false };
+      return { state: urls.state, fediverse: urls.fediverse, archive: urls.home + 'inbox-archive/', elsewhere: false };
     }
     const base = cred.privateRoot.endsWith('/') ? cred.privateRoot : cred.privateRoot + '/';
-    return { state: base + 'ap-state/', fediverse: base + 'fediverse/', elsewhere: true };
+    return { state: base + 'ap-state/', fediverse: base + 'fediverse/', archive: base + 'inbox-archive/', elsewhere: true };
   }
 
   // A container to keep the private half in. On the pod it is reached with the
@@ -322,6 +322,7 @@ export class Agent {
     this.intake = new Intake({
       config, urls: this.urls, remote: this.remote, local: this.local, store: this.store,
       deliverer: this.deliverer, publisher: this.publisher, log: this.log, lease: this.lease,
+      archive: this.privateStorage(cred, 'archive'),
     });
     // The Bluesky connection, when one exists. Stamped to this actor; a
     // credential connected for another identity is treated as absent.

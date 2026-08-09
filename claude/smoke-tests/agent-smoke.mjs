@@ -7275,6 +7275,157 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   fs.rmSync(dir21b, { recursive: true, force: true });
 }
 
+// --- 21c. drained mail keeps its original bytes; export emits the paged-collection layout ---
+{
+  const { Intake } = await import(path.join(root, 'lib/intake.mjs'));
+  const { storageFor } = await import(path.join(root, 'lib/storage.mjs'));
+  const { exportCollections, DIR_BASE } = await import(path.join(root, 'lib/export-collections.mjs'));
+  const { createHash } = await import('node:crypto');
+  const $rdf21c = await import('rdflib');
+  const AS21C = 'https://www.w3.org/ns/activitystreams#';
+
+  const RAW = JSON.stringify({
+    id: 'https://f.example/act/1', type: 'Create', actor: 'https://f.example/u/alice',
+    to: ['https://www.w3.org/ns/activitystreams#Public'],
+    published: '2026-08-01T00:00:00.000Z',
+    object: { id: 'https://f.example/notes/1', type: 'Note', content: 'hi there',
+      attributedTo: 'https://f.example/u/alice', published: '2026-08-01T00:00:00.000Z' },
+  });
+  const HASH = createHash('sha256').update(RAW).digest('hex').slice(0, 16);
+
+  const mkDrain = (archive, cfg = {}) => {
+    const deleted = [];
+    const state = {};
+    const store = {
+      read: (n, d) => (n in state ? JSON.parse(JSON.stringify(state[n])) : d),
+      write: (n, v) => { state[n] = v; },
+      commit: async () => true,
+      addDeadLetter: (e) => { (state.dead ||= []).push(e); },
+      getDeadLetters: () => state.dead || [],
+      getConfig: () => cfg,
+    };
+    const intake = new Intake({
+      config: {}, urls: { inbox: 'https://p.example/in/', base: 'https://p.example/' },
+      remote: {
+        listContainer: async () => [{ url: 'https://p.example/in/m1', size: RAW.length, modified: '2026-08-01' }],
+        fetch: async () => new Response(RAW, { status: 200 }),
+        delete: async (u) => { deleted.push(u); return true; },
+      },
+      local: {}, store, deliverer: {}, publisher: {}, log: () => {}, archive,
+    });
+    intake.handle = async () => null;   // accepted — verification has its own tests
+    return { intake, deleted };
+  };
+
+  const ARCH = fs.mkdtempSync('/tmp/fedipod-inbox-archive-');
+  const on = mkDrain(storageFor(ARCH));
+  await on.intake.drain();
+  const monthDir = path.join(ARCH, '2026-08');
+  const archived = fs.existsSync(monthDir) ? fs.readdirSync(monthDir) : [];
+  check(on.deleted.length === 1 && archived.length === 1 && archived[0] === `${HASH}.json`,
+    'a drained item leaves its original bytes behind, named by their own hash, and is still deleted');
+  const rec = JSON.parse(fs.readFileSync(path.join(monthDir, archived[0]), 'utf8'));
+  check(rec.raw === RAW && rec.actor === 'https://f.example/u/alice'
+    && rec.source === 'https://p.example/in/m1' && !!rec.receivedAt,
+    'the record holds the raw bytes untouched, plus who, whence and when');
+
+  // The same file is JSON-LD: an RDF reader gets the receipt as a graph.
+  const recIri = 'https://archive.example/2026-08/item.json';
+  const recG = $rdf21c.graph();
+  await new Promise((resolve, reject) => $rdf21c.parse(
+    fs.readFileSync(path.join(monthDir, archived[0]), 'utf8'), recG, recIri,
+    'application/ld+json', (e) => (e ? reject(e) : resolve())));
+  const recSym = $rdf21c.sym(recIri);
+  check(recG.any(recSym, $rdf21c.sym('http://www.w3.org/2011/content#chars'))?.value === RAW
+    && recG.any(recSym, $rdf21c.sym('http://www.w3.org/ns/prov#generatedAtTime'))?.value === rec.receivedAt
+    && recG.any(recSym, $rdf21c.sym('http://www.w3.org/ns/prov#wasDerivedFrom'))?.value === 'https://p.example/in/m1'
+    && recG.any(recSym, $rdf21c.sym(AS21C + 'actor'))?.value === 'https://f.example/u/alice',
+    'and the same file parses as RDF: cnt:chars, prov:generatedAtTime, prov:wasDerivedFrom, as:actor');
+
+  await on.intake.drain();   // the same delivery again
+  check(fs.readdirSync(monthDir).length === 1, 're-delivery lands on the same file — no duplicates');
+
+  const OFFDIR = fs.mkdtempSync('/tmp/fedipod-archive-off-');
+  const off = mkDrain(storageFor(OFFDIR), { archiveInbox: false });
+  await off.intake.drain();
+  check(off.deleted.length === 1 && fs.readdirSync(OFFDIR).length === 0,
+    'with the archive off, mail drains exactly as before and nothing is written');
+
+  const broken = mkDrain({ write: async () => ({ ok: false, why: 'disk says no' }) });
+  await broken.intake.drain();
+  check(broken.deleted.length === 1, 'an archive that cannot be written never stalls the mail');
+
+  // --- the export: their layout, traversable, from plain inputs ---
+  const acts = Array.from({ length: 45 }, (_, i) => ({
+    id: `https://pod.example/ap/outbox-acts/${i}`, type: 'Create', actor: 'https://pod.example/ap/actor',
+    published: new Date(Date.UTC(2026, 0, 1 + i)).toISOString(),
+    object: { id: `https://pod.example/ap/notes/${i}`, type: 'Note', content: `post ${i}`,
+      attributedTo: 'https://pod.example/ap/actor', published: new Date(Date.UTC(2026, 0, 1 + i)).toISOString() },
+  }));
+  const EXP = fs.mkdtempSync('/tmp/fedipod-collections-export-');
+  const out = await exportCollections({
+    outboxItems: acts,
+    followers: ['https://f.example/u/alice', 'https://f.example/u/bob'],
+    inboxEntries: [{ receivedAt: rec.receivedAt, raw: RAW }],
+    storage: storageFor(EXP), base: DIR_BASE, log: () => {},
+  });
+  check(out.outbox.items === 45 && out.outbox.pages === 3 && out.followers.items === 2 && out.inbox.items === 1,
+    `export counts what it carried (${JSON.stringify({ o: out.outbox, f: out.followers, i: out.inbox })})`);
+
+  // Traverse it the way a reader would: head → as:first → as:next chain.
+  const loadDoc = (iri) => {
+    const g = $rdf21c.graph();
+    const file = path.join(EXP, iri.slice(DIR_BASE.length));
+    $rdf21c.parse(fs.readFileSync(file, 'utf8'), g, iri, 'text/turtle');
+    return g;
+  };
+  const headIri = `${DIR_BASE}outbox/collection.ttl`;
+  const hg = loadDoc(headIri);
+  const first = hg.any($rdf21c.sym(headIri), $rdf21c.sym(AS21C + 'first'))?.value;
+  check(!!first, 'the outbox head names as:first');
+  let cursor = first, pages21c = 0, items21c = 0, sawTriples = false;
+  while (cursor && pages21c < 10) {
+    const g = loadDoc(cursor);
+    const page = $rdf21c.sym(cursor);
+    const ids = g.each(page, $rdf21c.sym(AS21C + 'items'));
+    items21c += ids.length;
+    if (ids.length && g.any(ids[0], $rdf21c.sym(AS21C + 'actor'))) sawTriples = true;
+    pages21c++;
+    cursor = g.any(page, $rdf21c.sym(AS21C + 'next'))?.value || null;
+  }
+  check(pages21c === 3 && items21c === 45 && sawTriples,
+    'the as:next chain walks 3 pages, 45 items, with the activities’ own triples beside them');
+  const fg = loadDoc(`${DIR_BASE}followers/collection.ttl`);
+  const fFirst = fg.any($rdf21c.sym(`${DIR_BASE}followers/collection.ttl`), $rdf21c.sym(AS21C + 'first'))?.value;
+  const fPage = loadDoc(fFirst);
+  const fItems = fPage.each($rdf21c.sym(fFirst), $rdf21c.sym(AS21C + 'items')).map(n => n.value).sort();
+  check(fItems.join(',') === 'https://f.example/u/alice,https://f.example/u/bob',
+    'the followers page lists exactly the actors it was given');
+
+  // A published outbox may name bare note IRIs; a resolver embeds their triples.
+  const RES = fs.mkdtempSync('/tmp/fedipod-collections-resolve-');
+  await exportCollections({
+    outboxItems: ['https://pod.example/ap/notes/solo'],
+    storage: storageFor(RES), base: DIR_BASE, log: () => {},
+    resolve: async (u) => ({ id: u, type: 'Note', content: 'resolved body',
+      attributedTo: 'https://pod.example/ap/actor', published: '2026-08-07T00:00:00.000Z' }),
+  });
+  const rg = $rdf21c.graph();
+  const rPagePath = path.join(RES, 'outbox/pages');
+  const rPageFile = fs.readdirSync(rPagePath)[0];
+  const rIri = `${DIR_BASE}outbox/pages/${rPageFile}`;
+  $rdf21c.parse(fs.readFileSync(path.join(rPagePath, rPageFile), 'utf8'), rg, rIri, 'text/turtle');
+  const solo = $rdf21c.sym('https://pod.example/ap/notes/solo');
+  check(rg.any(solo, $rdf21c.sym(AS21C + 'content'))?.value === 'resolved body'
+    && rg.holds($rdf21c.sym(rIri), $rdf21c.sym(AS21C + 'items'), solo),
+    'a bare note IRI in the outbox is resolved and its triples travel in the page');
+
+  let refused21c = null;
+  await exportCollections({ outboxItems: acts.slice(0, 1), storage: { write: async () => ({ ok: false, why: 'refused' }) }, log: () => {} })
+    .catch(e => { refused21c = e.message; });
+  check(/refused/.test(refused21c || ''), 'a target that will not take the writes fails loudly, not half-written');
+}
+
 // --- 22. bluesky members in a group: bridged-first, degrade to unbridged ---
 {
   const { BskyGroup } = await import('../../lib/bskygroup.mjs');

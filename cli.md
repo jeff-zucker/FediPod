@@ -55,6 +55,17 @@ under its Settings → Privacy and security → App Passwords. Add
 `--service URL` when the account lives on a PDS other than bsky.social.
 Disconnecting does not remove anything already posted to Bluesky.
 
+## Inbox history
+
+```
+node bin/fedipod.mjs archive off        # stop keeping drained mail (on: keep it, the default)
+```
+The archive keeps each incoming activity's original bytes in the private
+half's `inbox-archive/` after it is verified and applied (JSON-LD, so the
+receipts read as RDF too) — receipts you can re-verify, and the inbound half
+of an account move. It lives only in the private half; the pod cannot
+rebuild it.
+
 ## Moving the install
 
 ```

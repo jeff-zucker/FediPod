@@ -1764,6 +1764,84 @@ WantedBy=default.target
   } else {
     console.log(`${cmd}d ${arg} — ${body.pending} still held`);
   }
+} else if (cmd === 'archive') {
+  // Whether drained mail's original bytes are kept in the private half's
+  // inbox-archive/. On by default; served by the running agent.
+  requireIdentity();
+  if (!['on', 'off'].includes(args[1])) {
+    console.error('usage: fedipod archive <on|off>');
+    process.exit(2);
+  }
+  try {
+    const res = await fetch(`http://localhost:${PORT}/archive`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ on: args[1] === 'on' }),
+    });
+    const body = await res.json();
+    if (res.status >= 400) { console.error(body.error || `HTTP ${res.status}`); process.exit(1); }
+    console.log(body.archiveInbox
+      ? 'inbox archive is on — drained mail keeps its original bytes in the private half'
+      : 'inbox archive is off — drained mail leaves no copy behind');
+  } catch (e) {
+    console.error(`agent not reachable on :${PORT} (${e.message})`);
+    process.exit(1);
+  }
+} else if (cmd === 'export') {
+  // The account's collections as paged Turtle AS2 collections,
+  // produced on demand: outbox and followers from the pod, inbox from the
+  // local archive. See lib/export-collections.mjs.
+  requireIdentity();
+  const format = flag('format') || args[1];
+  const to = flag('to');
+  if (format !== 'as-collections' || !to) {
+    console.error('usage: fedipod export --format as-collections --to <directory-or-container-url>');
+    process.exit(2);
+  }
+  const { Agent } = await import(new URL('../run-agent.mjs', import.meta.url));
+  const { RemotePod } = await import(new URL('../lib/remote.mjs', import.meta.url));
+  const { apUrls } = await import(new URL('../lib/wire.mjs', import.meta.url));
+  const { exportCollections, DIR_BASE } = await import(new URL('../lib/export-collections.mjs', import.meta.url));
+  const { storageFor } = await import(new URL('../lib/storage.mjs', import.meta.url));
+  const agent = new Agent({ home: HOME, log: () => {} });
+  const cred = agent.readCredential();
+  if (!cred) { console.error('no credential — run setup first'); process.exit(2); }
+  agent.remote = new RemotePod(cred);
+  await agent.remote.warmup();
+  agent.urls = apUrls(cred.remotePod, cred.root);
+  agent.store.attach(agent.privateStorage(cred, 'state'));
+  await agent.store.load();
+  const { Publisher } = await import(new URL('../lib/publisher.mjs', import.meta.url));
+  const outboxItems = (await Publisher.prototype.readPublishedOutbox.call(
+    { remote: agent.remote, urls: agent.urls })) || [];
+  // Only real AP actors, like the published followers collection.
+  const contacts = agent.store.getContacts();
+  const followers = contacts.followers.filter(f => !f.bsky).map(f => f.actor);
+  const archive = agent.privateStorage(cred, 'archive');
+  const inboxEntries = [];
+  const months = (await archive.list('').catch(() => ({ names: [] }))).names || [];
+  for (const m of months.filter(n => n.endsWith('/'))) {
+    const files = (await archive.list(m).catch(() => ({ names: [] }))).names || [];
+    for (const f of files) {
+      const r = await archive.read(m + f);
+      if (!r.ok) continue;
+      try { inboxEntries.push(JSON.parse(r.body)); } catch { /* not an archive record */ }
+    }
+  }
+  const isUrl = /^https?:/i.test(to);
+  const storage = storageFor(to, (u, i) => agent.remote.fetch(u, i));
+  const base = isUrl ? (to.endsWith('/') ? to : to + '/') : DIR_BASE;
+  try {
+    const out = await exportCollections({
+      outboxItems, followers, inboxEntries, storage, base, log: console.log,
+      resolve: (u) => agent.remote.getJson(u),
+    });
+    console.log(`outbox: ${out.outbox.items} item(s) in ${out.outbox.pages} page(s); `
+      + `followers: ${out.followers.items}; inbox: ${out.inbox.items} archived item(s) in ${out.inbox.pages} page(s)`);
+    console.log(`${out.written} Turtle document(s) written to ${to}`);
+  } catch (e) {
+    console.error(`export failed: ${e.message}`);
+    process.exit(1);
+  }
 } else if (cmd === 'bsky') {
   // Bluesky account commands, served by the running agent's admin API.
   const sub = args[1];
@@ -1816,7 +1894,7 @@ WantedBy=default.target
   }
 } else {
   console.log('usage: fedipod <setup|start|stop|status|state|upgrade|rebuild|home|passwd'
-    + '|tokens|revoke-credential|install-service> [--flags]');
+    + '|tokens|revoke-credential|install-service|archive> [--flags]');
   console.log('  state: --to <path|url|pod>   move THIS identity\'s private half');
   console.log('         --all [--apply]       move every identity\'s onto this machine');
   console.log('         --drop-remote [--apply]  remove the pod\'s copy afterwards');
