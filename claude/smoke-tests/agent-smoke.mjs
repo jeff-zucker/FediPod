@@ -7734,6 +7734,26 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   }
 }
 
+// --- 21g. Add/Remove are acknowledged, never dead-lettered (§7.6/§7.9) ---
+{
+  const { Intake } = await import(path.join(root, 'lib/intake.mjs'));
+  const it = new Intake({
+    config: { handle: 'me', kind: 'person' },
+    urls: { actor: 'https://me.example/ap/actor', inbox: 'https://me.example/ap/inbox/',
+      followers: 'https://me.example/ap/followers', featured: 'https://me.example/ap/featured' },
+    store: { isBlocked: () => false },
+    remote: {}, local: {}, deliverer: {}, publisher: {}, log: () => {},
+  });
+  const add = { type: 'Add', actor: 'https://c.example/u/a', object: 'https://x/1',
+    target: 'https://me.example/ap/featured' };            // one of our own collections
+  const rem = { type: 'Remove', actor: 'https://c.example/u/a', object: 'https://x/1',
+    target: 'https://c.example/their/collection' };        // not ours
+  const rAdd = await it.handle(add);
+  const rRem = await it.handle(rem);
+  check(!rAdd && !rRem,
+    'an inbound Add or Remove is acknowledged, not dead-lettered — no remote may modify our collections');
+}
+
 // --- 22a. a co-member of a group we are in is not a stranger ---
 {
   const { Intake } = await import(path.join(root, 'lib/intake.mjs'));
