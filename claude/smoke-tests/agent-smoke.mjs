@@ -388,7 +388,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
       remote: {
         putJson: async (u) => { seen.push(`PUT ${u.replace('https://pod.example/', '')}`); },
         setAcl: async (u) => { seen.push(`ACL ${u.replace('https://pod.example/', '')}`); },
-        // reconcileFollowers reads through fetch; reconcileOutbox through getJson
+        // both reconcile paths read through getJson now (followers walks pages)
         fetch: async (u) => { seen.push(`GET ${u.replace('https://pod.example/', '')}`); return { ok: false }; },
         getJson: async (u) => { seen.push(`GET ${u.replace('https://pod.example/', '')}`); return null; },
       },
@@ -405,19 +405,19 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
   const all = mk();
   await all.pub.publishCollections();
-  check(all.seen.length === 10,
-    `an unnarrowed publish is still the whole surface — the outbox is a page + a head now (saw ${all.seen.length})`);
+  check(all.seen.length === 12,
+    `an unnarrowed publish is still the whole surface — followers and the outbox are each a page + a head now (saw ${all.seen.length})`);
 
   // One new follower changes the follower list. It does not change what this
   // actor follows, it does not change the outbox, and it cannot change an ACL
   // whose body is a pure function of the WebID.
   const one = mk();
   await one.pub.publishCollections({ followers: true });
-  check(one.seen.length === 2 && one.seen[0].endsWith('ap/followers') && one.seen[0].startsWith('GET')
-    && one.seen[1].endsWith('ap/followers') && one.seen[1].startsWith('PUT'),
-    `a follower event costs one read and one PUT (saw ${one.seen.join(', ') || 'nothing'})`);
-  check(!one.seen.some(s => s.startsWith('ACL')),
-    'and rewrites no ACL — those are written once, by publishProfile');
+  // Paged like the outbox: a page document and a small head, not one document
+  // that grows without limit.
+  check(one.seen.some(s => s.startsWith('PUT') && /ap\/followers-\d+$/.test(s))
+    && one.seen.some(s => s.startsWith('PUT') && s.endsWith('ap/followers')),
+    `a follower event writes a page and the head (saw ${one.seen.join(', ') || 'nothing'})`);
   check(!one.seen.some(s => s.includes('outbox') || s.includes('following')),
     'and touches neither the outbox nor the following collection');
 
@@ -1405,6 +1405,33 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     '`next` walks backwards in time and stops at the oldest page');
   check(!wireM.outboxPage('https://p/ap/outbox', 2, []).prev,
     'and a sealed page carries no prev, so it never needs rewriting');
+
+  // --- followers, paged the same way ---
+  const FB = 'https://p/ap/followers';
+  const mkActors = (n) => Array.from({ length: n }, (_, i) => `https://a.example/u/${i}`);
+  const fHead = wireM.followersHead(FB, 45, 3);
+  check(fHead.type === 'OrderedCollection' && fHead.totalItems === 45
+    && fHead.first === `${FB}-1` && fHead.last === `${FB}-3`,
+    'a followers head carries the count and points at its first and last page');
+  check(wireM.followersPage(FB, 1, [], 3).next === `${FB}-2`
+    && !wireM.followersPage(FB, 3, [], 3).next,
+    '`next` walks forward and the last page has none');
+
+  const fp = wireM.followersPaging(mkActors(45));
+  check(fp.pages.length === 3 && fp.pages[0].length === 20 && fp.pages[2].length === 5
+    && fp.pages.flat().length === 45,
+    '45 followers page into 20 + 20 + 5, every one placed');
+  // A follow extends the newest page; existing full pages are untouched.
+  const grown = wireM.followersPaging(mkActors(46), fp.index);
+  check(JSON.stringify(grown.pages[0]) === JSON.stringify(fp.pages[0])
+    && grown.pages[2].length === 6,
+    'a new follower extends the newest page and leaves the sealed ones alone');
+  // An unfollow leaves its page one short rather than re-slicing everything.
+  const without = mkActors(45).filter(a => a !== 'https://a.example/u/5');
+  const shrunk = wireM.followersPaging(without, fp.index);
+  check(shrunk.pages[0].length === 19 && shrunk.pages[1].length === 20
+    && !shrunk.pages.flat().includes('https://a.example/u/5'),
+    'an unfollow leaves its page one short, not a re-slice of the rest');
 
   // The cost that used to grow with everything you had ever said.
   const seen = [];
@@ -5951,9 +5978,11 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
       config: { remotePod: 'https://me.example/', handle: 'me' },
       store: rstore, log: () => {},
       remote: {
-        fetch: async () => ({ ok: true, json: async () => ({ orderedItems: [
+        // reconcileFollowers now reads the collection through readPublishedFollowers
+        // (getJson, walking pages) — this flat head stands in for a small one.
+        getJson: async () => ({ orderedItems: [
           'https://a.example/u', 'https://back.example/u', 'https://gone.example/u',
-        ] }) }),
+        ] }),
       },
       deliverer: {
         signedFetch: async (u) => ({ ok: true, json: async () => ({ id: u, inbox: u + '/inbox' }) }),
@@ -7618,9 +7647,10 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
     });
     store.state.contacts.followers.push({ actor: 'https://bsky.app/profile/did:plc:zed', bsky: { did: 'did:plc:zed', handle: 'z' } });
     await pub22.publishCollections({ followers: true });
-    const fdoc = puts.find(([u]) => u.endsWith('ap/followers'))?.[1];
-    check(fdoc && !JSON.stringify(fdoc).includes('bsky.app')
-      && fdoc.orderedItems.includes('https://f.example/u/m'),
+    // Paged now: the actors live on the page, the head only counts and points.
+    const fpage = puts.find(([u]) => /ap\/followers-\d+$/.test(u))?.[1];
+    check(fpage && fpage.orderedItems.includes('https://f.example/u/m')
+      && !puts.some(([, doc]) => JSON.stringify(doc).includes('bsky.app')),
       'the published AP followers collection lists only dereferenceable actors');
   }
 }
