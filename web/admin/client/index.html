@@ -5,16 +5,16 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>FediPod — client</title>
 <style>
-:root { color-scheme: light dark; font-size: 18px; --link: #1a4f8a; --heading: #5b3a8e;
-  --btn-bg: #f4efe6; --btn-edge: #b9ad99; }
+:root { color-scheme: light dark; font-size: 112.5%; --link: #1a4f8a; --heading: #5b3a8e; }
 /* The bar is fixed height, the client takes the rest — the page never scrolls,
    the frame does. */
 html { height: 100%; }
 body { font: 1rem/1.5 system-ui, sans-serif; margin: 0; height: 100dvh;
   display: flex; flex-direction: column; overflow: hidden; }
+main { flex: 1 1 auto; min-height: 0; display: flex; }
 #client { flex: 1 1 auto; min-height: 0; width: 100%; border: 0; }
 @media (prefers-color-scheme: dark) {
-  :root { --link: #7fb3e8; --heading: #b9a3e3; --btn-bg: #35302a; --btn-edge: #6b6154; }
+  :root { --link: #7fb3e8; --heading: #b9a3e3; }
 }
 </style>
 <link rel="stylesheet" href="/admin/bar.css">
@@ -24,15 +24,17 @@ body { font: 1rem/1.5 system-ui, sans-serif; margin: 0; height: 100dvh;
 <!-- The same bar the record carries, so the two surfaces are one thing with two
      views. The client below is this agent's own, at its own root: same origin,
      which is why framing it needs nothing opened beyond frame-ancestors 'self'. -->
-<nav id="bar">
-  <span class="name">FediPod</span>
+<nav id="bar" aria-label="Site">
+  <h1 class="name">FediPod</h1>
   <span id="bar-handle"></span>
   <a id="bar-fediverse" href="/admin/client/" title="   Open the client and read your timeline" aria-current="page">visit account</a>
   <a id="bar-manage" href="/admin/" title="   The record: what this actor is, and what you can do to it">manage account</a>
   <a id="bar-add" href="/admin/?new=1" title="   Set up another actor on this machine, with its own pod">add new account</a>
 </nav>
 
+<main>
 <iframe id="client" src="/" title="fediverse client"></iframe>
+</main>
 
 <script src="/admin/bar.js"></script>
 <script src="client.js"></script>

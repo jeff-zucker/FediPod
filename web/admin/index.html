@@ -9,7 +9,7 @@
    Two accents, kept apart on purpose: --link is anything you can act on,
    --heading is structure. Using one colour for both made the headings
    look clickable. */
-:root { color-scheme: light dark; font-size: 18px; --link: #1a4f8a; --heading: #5b3a8e;
+:root { color-scheme: light dark; font-size: 112.5%; --link: #1a4f8a; --heading: #5b3a8e;
   /* Warm, so it sits against the blue label rather than under it — and
      nowhere near the purple the headings use. */
   /* 3.54:1 against the fill and 3.61:1 against the page. At #b9ad99 it was
@@ -123,11 +123,11 @@ button.danger { border-color: #b00020; color: #b00020; }
 button:disabled { opacity: .5; cursor: default; }
 dl { margin: .5rem 0; }        /* grid only above 34rem — see the media query above */
 dt { color: #666; }
-dd { margin: 0; word-break: break-all; }
+dd { margin: 0; overflow-wrap: anywhere; }
 .rows { list-style: none; padding: 0; margin: .3rem 0; }
 .rows li { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center;
   padding: .4rem 0; border-top: 1px solid #ddd; }
-.rows li span { flex: 1 1 18rem; word-break: break-all; }
+.rows li span { flex: 1 1 18rem; overflow-wrap: anywhere; }
 .muted { color: #666; }
 .others { font-size: 1.15rem; margin: .5rem 0 0; display: flex; flex-wrap: wrap;
   align-items: baseline; gap: .5rem .6rem; }
@@ -159,7 +159,7 @@ pre { overflow-x: auto; background: #0001; padding: .6rem; border-radius: .3rem;
 
 <!-- The same bar the client view carries: one thing, two views. -->
 <nav id="bar" aria-label="Site">
-  <span class="name">FediPod</span>
+  <h1 class="name">FediPod</h1>
   <span id="bar-handle"></span>
   <a id="bar-fediverse" href="/admin/client/" title="   Open the client and read your timeline">visit account</a>
   <a id="bar-manage" href="/admin/" title="   The record: what this actor is, and what you can do to it" aria-current="page">manage account</a>
@@ -172,7 +172,7 @@ pre { overflow-x: auto; background: #0001; padding: .6rem; border-radius: .3rem;
 <!-- Every actor running on this machine. A stopped one is left out: there is
      no page there to open. Plain links — a top-level navigation sends no
      Origin, so each agent's own firewall lets it through. -->
-<nav id="pane-others" aria-label="Actors on this machine" hidden>
+<section id="pane-others" aria-label="Actors on this machine" hidden>
   <p class="others" id="others-line">
     <label class="others-label hlabel" for="actor-pick">Local Actors:</label>
     <select id="actor-pick"></select>
@@ -238,7 +238,7 @@ pre { overflow-x: auto; background: #0001; padding: .6rem; border-radius: .3rem;
     </p>
   </form>
 
-</nav>
+</section>
 
 <section id="pane-identity" hidden>
   <h2><span class="hlabel">Identity</span></h2>
@@ -260,7 +260,7 @@ pre { overflow-x: auto; background: #0001; padding: .6rem; border-radius: .3rem;
     </select>
   </span>
   <span id="status-ctl" hidden>
-    <select id="status-pick" title="   Whether this actor is receiving mail — parking stops it and keeps the handle; active re-follows the saved graph">
+    <select id="status-pick" aria-label="Actor status" title="   Whether this actor is receiving mail — parking stops it and keeps the handle; active re-follows the saved graph">
       <option value="active">active</option>
       <option value="parked">parked</option>
     </select>
@@ -269,7 +269,7 @@ pre { overflow-x: auto; background: #0001; padding: .6rem; border-radius: .3rem;
     <button type="button" id="bsky-open" class="inline" title="   Connect a Bluesky account this identity also posts as">Connect Bluesky account</button>
   </span>
   <span id="bsky-ctl" hidden>
-    <select id="bsky-crosspost" title="   Whether your public posts also go to the Bluesky account">
+    <select id="bsky-crosspost" aria-label="Bluesky crossposting" title="   Whether your public posts also go to the Bluesky account">
       <option value="on">crosspost on</option>
       <option value="off">crosspost off</option>
     </select>
@@ -349,7 +349,7 @@ pre { overflow-x: auto; background: #0001; padding: .6rem; border-radius: .3rem;
 <div id="win" hidden>
   <div id="win-bar"><span id="win-title"></span><button type="button" id="win-close" title="   Close this panel" aria-label="Close panel">✕</button></div>
   <div id="win-body">
-<pre id="output" hidden></pre>
+<pre id="output" tabindex="0" role="region" aria-label="Output" hidden></pre>
 <form id="bsky-form" hidden>
   <ol class="hint">
     <li>Get an account on Bluesky or another ATProto server.</li>

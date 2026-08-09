@@ -33,7 +33,11 @@ const BSKY_CROSSPOST = $('bsky-crosspost');   // held: it rides BSKY_CTL into a 
 function say(text, cls = 'ok') {
   const el = $('say');
   el.className = cls;
-  el.textContent = text;
+  // Clear first, then set on the next task: a live region that is handed the
+  // same text it already holds announces nothing, so two identical messages in
+  // a row ("nothing changed", "nothing changed") would be silent the second time.
+  el.textContent = '';
+  setTimeout(() => { el.textContent = text; }, 30);
 }
 
 // Every write goes through here, so nothing silently half-succeeds.
@@ -237,21 +241,27 @@ async function renderOthers() {
   }
 }
 
-// Choosing one and GOING to it are separate, because they have to be. Arrowing
-// through a closed <select> fires `change` on every keypress on Windows and
-// Linux, so navigating from the event meant a keyboard user was taken to the
-// first actor they arrowed past — and, for a stopped one, started its pod on
-// the way. Choosing is now free; the button commits.
+// Going to an actor commits a navigation and, for a stopped one, a POST that
+// boots its pod — so it must run once per choice. Pressing Enter on the select
+// fires BOTH a keydown (handled below) and a native `change`, so without a
+// guard a keyboard commit would start the actor twice.
+let goingToActor = false;
 const goToActor = async () => {
+  if (goingToActor) return;
   const r = actors[Number($('actor-pick').value)];
   if (!r || r.current) return;
-  if (r.mode) { location.href = r.admin; return; }
-  $('actor-pick').disabled = true;
-  say(`starting ${r.name}`);
-  const started = await write('/start-actor', { name: r.name }, `${r.name} is up`);
-  $('actor-pick').disabled = false;
-  if (started?.url) location.href = `${started.url}admin/`;
-  else renderOthers();            // put the picker back on the current actor
+  goingToActor = true;
+  try {
+    if (r.mode) { location.href = r.admin; return; }
+    $('actor-pick').disabled = true;
+    say(`starting ${r.name}`);
+    const started = await write('/start-actor', { name: r.name }, `${r.name} is up`);
+    $('actor-pick').disabled = false;
+    if (started?.url) location.href = `${started.url}admin/`;
+    else renderOthers();            // put the picker back on the current actor
+  } finally {
+    goingToActor = false;
+  }
 };
 // Choosing one goes to its record, as it always has.
 //
@@ -496,6 +506,9 @@ function row(text, sub, actions) {
     const b = document.createElement('button');
     b.className = 'inline';           // sized like the page's other buttons
     b.textContent = label;
+    // A list of fifteen buttons all reading "Mute" tells a screen-reader user
+    // browsing by button nothing; name each one for the row it acts on.
+    b.setAttribute('aria-label', `${label} ${text}`);
     // Three leading spaces: the tooltip appears under the pointer, and without
     // them the first word sits behind the cursor.
     if (hint) b.title = `   ${hint}`;
@@ -532,7 +545,11 @@ function fill(listId, countId, items, make) {
   const rows = [...ul.children];
   const li = rows[Math.min(index, rows.length - 1)];
   const same = li && [...li.querySelectorAll('button')].find(x => x.textContent === label);
-  (same || li?.querySelector('button') || $(countId).closest('h3'))?.focus?.();
+  const heading = $(countId).closest('h3');
+  // A bare <h3> is not focusable, so the "nothing left" fallback would silently
+  // drop focus to <body> — give it a programmatic-only tab stop first.
+  if (heading && !heading.hasAttribute('tabindex')) heading.setAttribute('tabindex', '-1');
+  (same || li?.querySelector('button') || heading)?.focus?.();
 }
 
 // The request rows, shared: a group calls them joins, a person calls them

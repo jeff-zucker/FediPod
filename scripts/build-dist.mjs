@@ -21,7 +21,8 @@ const out = path.join(root, 'dist', `fedipod-${pkg.version}.tar.gz`);
 fs.rmSync(path.join(root, 'dist', 'stage'), { recursive: true, force: true });
 fs.mkdirSync(stage, { recursive: true });
 
-for (const item of ['bin', 'lib', 'vendor', 'phanpy', 'ui', 'web', 'run-agent.mjs', 'package.json', 'package-lock.json', 'README.md']) {
+for (const item of ['bin', 'lib', 'vendor', 'phanpy', 'ui', 'web', 'run-agent.mjs', 'package.json', 'package-lock.json',
+  'README.md', 'gui.md', 'cli.md', 'groups.md', 'architecture.svg']) {
   fs.cpSync(path.join(root, item), path.join(stage, item), { recursive: true });
 }
 

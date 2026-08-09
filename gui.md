@@ -23,6 +23,13 @@ Open `http://localhost:8030/` while any agent is running to reach it, then choos
 The handle, the pod and person-vs-group are permanent. The display name, bio
 and pictures are edited in the client, not here.
 
+<!-- CLAUDE 2026-08-09 — the panel behaviour isn't obvious to a keyboard user;
+     added so it's written down. Reword or drop; delete these markers when done. -->
+Each of these opens a small window that floats over the page. You can drag it by
+its title bar, resize it from its corner, and close it with its ✕ or by pressing
+Escape.
+<!-- /CLAUDE -->
+
 ## Sharing an account
 
 Each identity has a page anyone can open, at `ap/profile.html` under its pod

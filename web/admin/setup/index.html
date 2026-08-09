@@ -6,7 +6,7 @@
 <title>FediPod — setup</title>
 <style>
 /* 20px on the root, not on body, so every rem below scales with it. */
-:root { color-scheme: light dark; font-size: 18px; --heading: #1a4f8a; }
+:root { color-scheme: light dark; font-size: 112.5%; --heading: #1a4f8a; }
 body { font: 1rem/1.5 system-ui, sans-serif; margin: 0; }
 /* The bar spans the window; the form stays in a centred column under it. */
 /* The same 960 column the bar and the record use, so the three pages line up. */
@@ -54,14 +54,14 @@ button:disabled { opacity: .5; cursor: default; }
 </head>
 <body>
 
-<nav id="bar">
-  <span class="name">FediPod</span>
+<nav id="bar" aria-label="Site">
+  <h1 class="name">FediPod</h1>
   <span id="bar-handle"></span>
   <a id="bar-fediverse" href="/admin/client/" title="   Open the client and read your timeline">visit account</a>
   <a id="bar-manage" href="/admin/" title="   The record: what this actor is, and what you can do to it">manage account</a>
   <a id="bar-add" href="/admin/?new=1" title="   Set up another actor on this machine, with its own pod" aria-current="page">add new account</a>
 </nav>
-<div id="page">
+<main id="page">
 <p class="sub" id="strap">setting up…</p>
 
 <!-- Nothing here is wired up by hand: setup.js reads /setup/state and shows
@@ -112,8 +112,8 @@ button:disabled { opacity: .5; cursor: default; }
       <legend>Actor's Handle</legend>
       <input type="text" id="handle" name="handle" autocomplete="off" autofocus
         placeholder="handle part of fediverse address: @HANDLE@server"
-        aria-label="Actor's Handle">
-      <p class="hint">The name in your fediverse address. This is permanent. Letters, digits,
+        aria-label="Actor's Handle" aria-describedby="handle-hint">
+      <p class="hint" id="handle-hint">The name in your fediverse address. This is permanent. Letters, digits,
         hyphens, and underscores only.</p>
     </fieldset>
 
@@ -132,16 +132,18 @@ button:disabled { opacity: .5; cursor: default; }
 
       <div id="row-password">
         <label for="password">Solid Account password</label>
-        <input type="password" id="password" name="password" autocomplete="current-password">
-        <p class="hint">Password is sent once in return for a credential which is stored locally.
+        <input type="password" id="password" name="password" autocomplete="current-password"
+          aria-describedby="password-hint">
+        <p class="hint" id="password-hint">Password is sent once in return for a credential which is stored locally.
           The password itself is never stored. You may revoke the credential without changing the
           password.</p>
       </div>
 
       <div id="row-podname">
         <label for="podName">Pod name</label>
-        <input type="text" id="podName" name="podName" autocomplete="off">
-        <p class="hint">The subdomain of your pod address, it will become
+        <input type="text" id="podName" name="podName" autocomplete="off"
+          aria-describedby="podname-hint">
+        <p class="hint" id="podname-hint">The subdomain of your pod address, it will become
           https://YOUR-POD-NAME.your-identity-provider</p>
       </div>
 
@@ -162,7 +164,7 @@ button:disabled { opacity: .5; cursor: default; }
   </form>
 </section>
 
-</div>
+</main>
 
 <script src="/admin/bar.js"></script>
 <script src="setup.js"></script>

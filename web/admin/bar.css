@@ -33,7 +33,8 @@ body { background: var(--surface); }
 #bar-handle:empty { display: none; }
 /* The app title, in px rather than rem: it is chrome, the same on every page,
    not something that should move when a page changes its base size. */
-#bar .name { flex: 1 1 auto; font-weight: 600; font-size: 24px; color: var(--heading); }
+#bar .name { flex: 1 1 auto; font-weight: 600; font-size: 24px; color: var(--heading);
+  margin: 0; line-height: 1.1; }
 /* Plain text, not chrome: three destinations in a row read better without a
    box round each. */
 #bar button, #bar a { font: inherit; font-size: .95rem; padding: .15rem .2rem;

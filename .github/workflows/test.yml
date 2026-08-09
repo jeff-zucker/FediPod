@@ -1,0 +1,18 @@
+# Runs the offline smoke and the UI check on every push and pull request.
+# Test only — no publish, no secrets, no deploy.
+name: test
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm ci
+      - run: npm test

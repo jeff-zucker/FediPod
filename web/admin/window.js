@@ -33,12 +33,27 @@
   win.setAttribute('aria-modal', 'false');       // the page behind stays usable
   win.setAttribute('aria-labelledby', 'win-title');
 
+  // The first focusable that is actually SHOWING. A plain querySelector matches
+  // elements inside hidden sub-blocks (a confirm panel has one warning block per
+  // action, all but one hidden), and .focus() on a display:none element is a
+  // silent no-op — so a dialog whose first match is hidden would open with focus
+  // still outside it. offsetParent is null for anything display:none.
   const focusFirst = () => {
     const panel = panels().find(p => !p.hidden);
-    const target = panel?.querySelector(
+    if (!panel) { document.getElementById('win-close')?.focus(); return; }
+    const candidates = panel.querySelectorAll(
       'input:not([type=hidden]), select, textarea, button, [href], [tabindex]:not([tabindex="-1"])',
     );
-    (target || document.getElementById('win-close'))?.focus();
+    // Prefer a non-committing control: never open a destructive dialog with a
+    // submit/confirm button pre-focused where a stray Enter would fire it.
+    let firstVisible = null;
+    for (const el of candidates) {
+      if (el.offsetParent === null && el !== document.body) continue;   // hidden
+      if (!firstVisible) firstVisible = el;
+      const commits = el.type === 'submit' || /\bconfirm-go\b/.test(el.id);
+      if (!commits) { el.focus(); return; }
+    }
+    (firstVisible || document.getElementById('win-close'))?.focus();
   };
 
   const close = () => {

@@ -62,6 +62,9 @@ function paneForm() {
     $('row-password').hidden = true;      // AP_PASSWORD is set in the environment
   }
   show('pane-form');
+  // The markup's autofocus was set while this pane was still hidden, so it
+  // never fired — move focus to the first field now that the pane is showing.
+  $('handle').focus();
   for (const el of $('form').elements) {
     el.addEventListener('input', onEdit);
     el.addEventListener('change', onEdit);
