@@ -2493,8 +2493,11 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
       `${label} .err in dark ${m?.[1]} = ${m ? ratio(m[1], SURFACE_DARK).toFixed(2) : '?'}:1`);
   }
 
-  // --- the author's own 16px floor, which only holds because the root is 18px ---
-  const rootPx = Number(/:root\s*\{[^}]*font-size:\s*(\d+)px/.exec(record)?.[1]);
+  // --- the author's own 16px floor, which holds because the root is 18px
+  // (112.5% of the browser's 16px default — a percentage so it respects a
+  // user's own font-size preference) ---
+  const rootDecl = /:root\s*\{[^}]*font-size:\s*([\d.]+)(px|%)/.exec(record);
+  const rootPx = rootDecl ? (rootDecl[2] === '%' ? Number(rootDecl[1]) / 100 * 16 : Number(rootDecl[1])) : NaN;
   check(rootPx === 18, `the record page root is ${rootPx}px`);
   const smallest = Math.min(...[...record.matchAll(/font-size:\s*([\d.]+)rem/g)].map(m => Number(m[1])));
   check(smallest * rootPx >= 16,
@@ -2520,7 +2523,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   check(/id="fatal" role="alert"/.test(record), 'the record page announces a fatal error');
   check((setup.match(/class="err" id="[a-z-]+" role="alert"/g) || []).length === 2,
     'and setup announces both of its errors');
-  check(/class="err" role="alert"/.test(masto), 'as does the login form');
+  check(/class="err"(?: id="[a-z-]+")? role="alert"/.test(masto), 'as does the login form');
   check(/<label for="password">/.test(masto),
     'whose password field has a real label, not just a placeholder');
 
@@ -2573,8 +2576,8 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   // --- semantics ---
   check(/<main id="page">/.test(record), 'the record page wraps its content in a main landmark');
   check(/<nav id="bar" aria-label="Site">/.test(record)
-    && /<nav id="pane-others" aria-label="[^"]+"/.test(record),
-    'and both nav landmarks are named, so they can be told apart');
+    && /<section id="pane-others" aria-label="[^"]+"/.test(record),
+    'the site nav and the actors region are both named, so they can be told apart');
   // The buttons used to sit INSIDE the headings, so heading navigation read
   // "Upkeep Drain the inbox Recover posts Show the log Show dead letters".
   check(/<h2><span class="hlabel">Upkeep<\/span><\/h2>/.test(record)
