@@ -50,3 +50,6 @@ backoff.json
 # Claude working notes stay local; only the smoke suite ships
 /claude/*
 !/claude/smoke-tests/
+
+# scratch
+tmp/
