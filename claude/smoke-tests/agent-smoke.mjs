@@ -7655,6 +7655,71 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   }
 }
 
+// --- 21f. inbox forwarding (§7.1.2): a reply into our thread reaches followers ---
+{
+  const { Intake } = await import(path.join(root, 'lib/intake.mjs'));
+  const OURS = 'https://me.example/ap/notes/';
+  const FOLLOWERS = 'https://me.example/ap/followers';
+  const PUBLIC = 'https://www.w3.org/ns/activitystreams#Public';
+  const mkFwd = (followers) => {
+    const state = {};
+    const sent = [];
+    const it = new Intake({
+      config: { handle: 'me', kind: 'person' },
+      urls: { actor: 'https://me.example/ap/actor', inbox: 'https://me.example/ap/inbox/',
+        notes: OURS, followers: FOLLOWERS },
+      store: {
+        read: (n, d) => (n in state ? state[n] : d), write: (n, v) => { state[n] = v; },
+        getContacts: () => ({ followers, following: [] }),
+        getStatuses: () => [],
+      },
+      deliverer: { deliverToAll: async (inboxes, act) => sent.push({ inboxes, act }) },
+      remote: {}, local: {}, publisher: {}, log: () => {},
+    });
+    return { it, sent };
+  };
+  const followers = [
+    { actor: 'https://c.example/u/a', inbox: 'https://c.example/inbox' },
+    { actor: 'https://d.example/u/b', sharedInbox: 'https://d.example/shared' },
+    { actor: 'https://bsky.app/profile/did:x', bsky: { did: 'x' }, inbox: 'https://ignore' },
+  ];
+  const reply = (audience, parent) => ({
+    id: 'https://c.example/act/1', type: 'Create', actor: 'https://c.example/u/a',
+    to: audience, object: { type: 'Note', inReplyTo: parent, content: 'hi' },
+  });
+
+  // Public reply into our thread, addressed to our followers → forwarded to
+  // real follower inboxes (shared inbox coalesced, Bluesky member skipped).
+  {
+    const { it, sent } = mkFwd(followers);
+    await it._maybeForward(reply([PUBLIC, FOLLOWERS], OURS + 'x'));
+    check(sent.length === 1 && sent[0].inboxes.length === 2
+      && sent[0].inboxes.includes('https://c.example/inbox')
+      && sent[0].inboxes.includes('https://d.example/shared'),
+      'a reply into our thread addressed to our followers is forwarded to their inboxes');
+    await it._maybeForward(reply([PUBLIC, FOLLOWERS], OURS + 'x'));
+    check(sent.length === 1, 'and forwarding the same activity again is a no-op');
+  }
+  // A direct message (addressed to a person, not the collection) is never carried.
+  {
+    const { it, sent } = mkFwd(followers);
+    await it._maybeForward(reply(['https://me.example/ap/actor'], OURS + 'x'));
+    check(sent.length === 0, 'a direct message is never rebroadcast');
+  }
+  // Addressed to our followers, but replying to someone else's note → not ours.
+  {
+    const { it, sent } = mkFwd(followers);
+    await it._maybeForward(reply([PUBLIC, FOLLOWERS], 'https://elsewhere.example/n/9'));
+    check(sent.length === 0, 'a reply that is not into one of our threads is not forwarded');
+  }
+  // Into our thread, but not addressed to our followers → §7.1.2 does not trigger.
+  {
+    const { it, sent } = mkFwd(followers);
+    await it._maybeForward(reply([PUBLIC], OURS + 'x'));
+    check(sent.length === 0, 'a reply not addressed to our followers is not forwarded');
+  }
+}
+
 // --- 22a. a co-member of a group we are in is not a stranger ---
 {
   const { Intake } = await import(path.join(root, 'lib/intake.mjs'));

@@ -17,6 +17,7 @@ contacts.json
 config.json
 queue.json
 deadletter.json
+forwarded.json
 blocklist.json
 requests.json
 muted.json
