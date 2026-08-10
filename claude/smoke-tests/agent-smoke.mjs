@@ -399,14 +399,18 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
         setContacts: () => {},
       },
       deliverer: { deliverToAll: async () => {} }, publicKeyPem: 'x', log: () => {},
+      // Answers the privateReady canary as world-readable: the FEP pending and
+      // blocked collections are then (correctly) withheld, and the probe never
+      // leaves the fixture. Their own coverage is section 25.
+      probeFetch: async () => ({ status: 200 }),
     });
     return { pub, seen };
   };
 
   const all = mk();
   await all.pub.publishCollections();
-  check(all.seen.length === 12,
-    `an unnarrowed publish is still the whole surface — followers and the outbox are each a page + a head now (saw ${all.seen.length})`);
+  check(all.seen.length === 14,
+    `an unnarrowed publish is still the whole surface — pages + heads, plus the private container the pending/blocked probe ensures (saw ${all.seen.length})`);
 
   // One new follower changes the follower list. It does not change what this
   // actor follows, it does not change the outbox, and it cannot change an ACL
@@ -1906,6 +1910,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
         read: (n, d) => (n in state ? JSON.parse(JSON.stringify(state[n])) : d),
         write: (n, v) => { state[n] = v; },
         getStatuses: () => [], getContacts: () => ({ followers: [], following: [] }), setContacts: () => {},
+        getRequests: () => [], getBlocklist: () => ({ domains: [], actors: [] }),
       },
       deliverer: { deliverToAll: async () => {} }, publicKeyPem: 'x', log: () => {},
       probeFetch: async () => ({ ok: readable, status: readable ? 200 : 403 }),
@@ -8045,6 +8050,117 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   });
   const viewer = await ask24(apiViewer, blockBody);
   check(viewer.status === 503, `a viewer that cannot take the lease → 503 (got ${viewer.status})`);
+}
+
+// --- 25. FEP conformance: moderators (1b12), pending (4ccd), blocked (c648), audience, announced Delete ---
+{
+  const wire25 = await import(path.join(root, 'lib/wire.mjs'));
+  const urls25 = wire25.apUrls('https://pod.example/');
+
+  // The actor advertises the collections only when they are real.
+  const plain = wire25.actorDoc({ urls: urls25, handle: 'p', name: 'P', publicKeyPem: 'K' });
+  check(!plain.attributedTo && !plain.pendingFollowers && !plain.blocked,
+    'an actor with none of the FEP collections advertises none of them');
+  const full = wire25.actorDoc({
+    urls: urls25, handle: 'p', name: 'P', publicKeyPem: 'K',
+    moderators: urls25.moderators,
+    pendingFollowers: urls25.pendingFollowers, pendingFollowing: urls25.pendingFollowing,
+    blocked: urls25.blocked,
+  });
+  check(full.attributedTo === urls25.moderators
+    && full.pendingFollowers === urls25.pendingFollowers
+    && full.pendingFollowing === urls25.pendingFollowing
+    && full.blocked === urls25.blocked,
+    'moderators ride as attributedTo; the FEP collections ride under their own names');
+  const ctx = JSON.stringify(full['@context']);
+  check(ctx.includes('https://purl.archive.org/socialweb/pending#')
+    && ctx.includes('https://purl.archive.org/socialweb/blocked#'),
+    "the FEP terms are declared with the FEPs' own IRIs")
+  check(!JSON.stringify(plain['@context']).includes('socialweb/pending'),
+    'and not declared when nothing uses them');
+
+  // A group's carry names the group as its audience (FEP-1b12).
+  const carry = wire25.announceActivity({ urls: urls25, object: 'https://m.example/n/1', serial: 1,
+    audience: urls25.actor });
+  check(carry.audience === urls25.actor, "the group's Announce carries audience");
+  const boost = wire25.announceActivity({ urls: urls25, object: 'https://m.example/n/1', serial: 2 });
+  check(!('audience' in boost), 'a personal boost carries none');
+
+  // Pending + blocked collections publish only where owner-only is REAL.
+  const { Publisher } = await import(path.join(root, 'lib/publisher.mjs'));
+  const mkPub = (probeStatus) => {
+    const puts = [];
+    const pub = new Publisher({
+      config: { remotePod: 'https://pod.example/', handle: 'p' },
+      remote: { putJson: async (u, doc) => puts.push({ u, doc }), setAcl: async () => {} },
+      local: {},
+      store: {
+        getRequests: () => [
+          { actor: 'https://m.example/u/a', activity: { id: 'f-a', type: 'Follow' } },
+          { actor: 'https://m.example/u/b', bsky: { did: 'x' } },   // no AP Follow to list
+        ],
+        getContacts: () => ({
+          followers: [],
+          following: [
+            { actor: 'https://m.example/u/c', accepted: false, followActivity: { id: 'f-c', type: 'Follow' } },
+            { actor: 'https://m.example/u/d', accepted: true, followActivity: { id: 'f-d', type: 'Follow' } },
+          ],
+        }),
+        getBlocklist: () => ({ domains: ['bad.example'], actors: ['https://m.example/u/troll'] }),
+        getStatuses: () => [], read: () => ({}),
+      },
+      deliverer: {}, publicKeyPem: 'K', log: () => {},
+      probeFetch: async () => ({ status: probeStatus }),
+    });
+    return { pub, puts };
+  };
+  const enforcing = mkPub(401);
+  await enforcing.pub.publishPending();
+  await enforcing.pub.publishBlocked();
+  const pf = enforcing.puts.find(p => p.u === enforcing.pub.urls.pendingFollowers);
+  const pg = enforcing.puts.find(p => p.u === enforcing.pub.urls.pendingFollowing);
+  const bl = enforcing.puts.find(p => p.u === enforcing.pub.urls.blocked);
+  check(pf?.doc.orderedItems.length === 1 && pf.doc.orderedItems[0].id === 'f-a',
+    'pendingFollowers holds the held Follow activities — and no Bluesky ghost');
+  check(pg?.doc.orderedItems.length === 1 && pg.doc.orderedItems[0].id === 'f-c',
+    'pendingFollowing holds only the unanswered outgoing Follow');
+  check(bl?.doc.orderedItems.length === 1 && bl.doc.orderedItems[0] === 'https://m.example/u/troll',
+    'blocked lists actor IRIs only — domain blocks stay ours');
+  const leaky = mkPub(200);
+  await leaky.pub.publishPending();
+  await leaky.pub.publishBlocked();
+  const fepUrls = [leaky.pub.urls.pendingFollowers, leaky.pub.urls.pendingFollowing, leaky.pub.urls.blocked];
+  check(leaky.puts.filter(p => fepUrls.includes(p.u)).length === 0,
+    'a pod that serves private documents to strangers gets NO pending/blocked collections');
+
+  // A followed group announcing a Delete moderates away only what it carried.
+  const { Intake } = await import(path.join(root, 'lib/intake.mjs'));
+  const GROUP25 = 'https://g.example/u/group';
+  const removed = [];
+  const st25 = {
+    getContacts: () => ({ followers: [], following: [{ actor: GROUP25, accepted: true }] }),
+    getStatuses: () => [
+      { noteId: 'https://m.example/n/carried', kind: 'timeline', via: GROUP25, slug: 'c1' },
+      { noteId: 'https://m.example/n/elsewhere', kind: 'timeline', via: 'https://other.example/u/x', slug: 'c2' },
+      { noteId: 'https://pod.example/activitypods-js/ap/notes/mine', kind: 'post', via: GROUP25 },
+    ],
+    removeStatus: (id) => removed.push(id),
+    isBlocked: () => false,
+  };
+  const intake25 = new Intake({
+    config: { remotePod: 'https://pod.example/', handle: 'p' },
+    urls: urls25, remote: {}, store: st25, deliverer: {}, publisher: {},
+    local: { fedi: 'x/', delete: async () => {} }, log: () => {},
+  });
+  await intake25.onAnnouncedDelete(GROUP25, { type: 'Delete', object: 'https://m.example/n/carried' });
+  check(removed.length === 1 && removed[0] === 'https://m.example/n/carried',
+    'the group moderates away the post it carried to us');
+  await intake25.onAnnouncedDelete(GROUP25, { type: 'Delete', object: 'https://m.example/n/elsewhere' });
+  check(removed.length === 1, "a post another carrier brought is not the group's to remove");
+  await intake25.onAnnouncedDelete(GROUP25, { type: 'Delete', object: 'https://pod.example/activitypods-js/ap/notes/mine' });
+  check(removed.length === 1, 'our own post is never removed by moderation');
+  await intake25.onAnnouncedDelete('https://stranger.example/u/s', { type: 'Delete', object: 'https://m.example/n/carried' });
+  check(removed.length === 1, "a stranger's announced Delete is nothing to us");
 }
 
 child.kill('SIGTERM');
