@@ -42,6 +42,10 @@ node bin/fedipod.mjs tokens                         # list client logins; --revo
 node bin/fedipod.mjs revoke-credential --email EMAIL   # cut this machine off from the pod account
 ```
 
+An optional **inbox gateway** — an always-on box that verifies deliveries'
+signatures before they reach your pod — has no CLI verbs; it is set up and
+driven from the admin page's Inbox gateway panel. See `netlify/README.md`.
+
 ## Bluesky
 
 ```

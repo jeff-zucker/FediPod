@@ -60,6 +60,30 @@ New followers appear under **Follow requests** with **Accept** and **Refuse**
 beside them; nothing is accepted without you. Groups are different — joining
 follows the group's own moderation settings; see [Groups](groups.md).
 
+## The inbox gateway (optional)
+
+By default, other servers deliver straight to your pod's inbox, which holds
+the mail until your agent reads it. If you run an **always-on, internet-facing
+gateway** (any box — a VPS, a serverless host; see `netlify/README.md` for a
+ready-made adapter and setup steps), it can check each delivery's signature
+before your pod ever sees it, dropping forgeries and spam at the door.
+
+The **Inbox gateway** panel under Upkeep is where you connect one. Paste the
+gateway's URL and WebID and click **Save & get secret** — the agent mints a
+shared secret, shown once, that you copy into the gateway's environment; it is
+how your agent knows a "verified" receipt really came from your gateway. Then
+the **Mode** control walks the stages, each reversible:
+
+- **off** — deliveries go to the pod inbox, as always.
+- **shadow** — the gateway is advertised and the panel counts how much of your
+  real traffic verifies, but nothing is trusted or changed yet.
+- **trust** — a delivery the gateway verified is believed: verified follows
+  accept without waiting in the request queue.
+- **locked** — the pod inbox accepts writes only from the gateway, so spam
+  never reaches your pod at all.
+
+**Forget gateway** undoes everything and restores the plain pod inbox.
+
 ## Protecting & recovering your data
 
 Your posts, timeline, contacts, blocklist and notifications are kept locally,
