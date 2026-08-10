@@ -78,26 +78,26 @@
   <p class="hint" id="next-note" hidden></p>
 </form>
 
-<!-- server-host: the two responsibility tiers -->
+<!-- server-host: two gateway flavors; a front never hosts pods -->
 <section id="host-form" hidden>
   <h2>Run your own front</h2>
-  <p>You leave this namespace and stand up your own front on <strong>your own box</strong>. The installer sets it up;
-    everything it installs is yours from that moment. Pick the tier that matches what you're willing to carry:</p>
+  <p>You leave this namespace and stand up your own front on <strong>your own box</strong>. A front is only a
+    <strong>doorway</strong>: a directory, name lookups, verify-and-forward. It stores no user content and dictates
+    nobody's pod. The one choice you make is what your users do about pods:</p>
   <div class="tier">
-    <h3>Light host — a doorway</h3>
-    <p class="hint">Run the front only: a directory, name lookups, verify-and-forward. You store <strong>no user content</strong> —
-      every post and message lives on pods your users control. Duties: keep the box up, keep names honest, handle detach
-      requests and the complaints that reach the visible domain. If your box dies, names go dark but no data is lost.</p>
+    <h3>Bring-your-pod, mandatory</h3>
+    <p class="hint">Every user supplies a pod they already control, hosted wherever they like. You run the doorway
+      and nothing else. Duties: keep the box up, keep names honest, handle detach requests and the complaints that
+      reach the visible domain. If your box dies, names go dark but nobody's data is lost.</p>
   </div>
   <div class="tier">
-    <h3>Full host — a doorway and a vault</h3>
-    <p class="hint">All of the above, plus you supply pods, so you're the custodian of users' actual data on your disk.
-      Adds: backups, growing storage, account recovery, data-protection duties, retention/deletion, and moderating what you
-      <em>store</em>. Mastodon-admin-grade. A user who brings their own pod still keeps custody — the heavy duties apply only
-      to pods you supply.</p>
+    <h3>Bring-your-pod, optional</h3>
+    <p class="hint">Same doorway — but users who have no pod may take one from a pod service you also happen to run
+      or recommend. That pod hosting is a <em>separate</em> thing (its own server, its own duties as a data
+      custodian); the front never provides pods itself, and a user who brings their own always keeps full custody.</p>
   </div>
-  <p class="hint">The offer-pods switch is a tier declaration, not a checkbox. Setup and installer:
-    see <code>netlify/README.md</code> in the FediPod repo.</p>
+  <p class="hint">Setup and installer: see <code>netlify/README.md</code> in the FediPod repo. If you host pods on a
+    Community Solid Server, the gateway can also run there as a component instead of on a separate box.</p>
 </section>
 
 <script>

@@ -21,9 +21,18 @@ Two things live here, sharing the same verify-at-the-door core
   of their pod via Solid-OIDC, picks a free handle, and the host records
   `handle → their pod`. See `functions/front.mjs` for the directory record shape
   and env, and `claude/plans/parked-multi-user-front.md` for the full design.
-  (The agent-side "publish and sign under the fronted actor id" step — so a
-  user's own posts carry the `@name@fedipod.net` identity — is the one piece
-  still to build; the front's serving/verifying/routing half is done.)
+  The agent-side "publish and sign under the fronted actor id" (so a user's own
+  posts carry `@name@fedipod.net`) and the signup/attach flow are built too —
+  see `functions/front.mjs`, `web/front/new-account.html`, and `fedipod front`.
+
+  **A front never hosts pods.** It is only a doorway (directory + WebFinger +
+  verify-and-forward). A host who wants to offer pods to users with none runs
+  their own Community Solid Server separately — that pod hosting is its own
+  server with its own data-custodian duties, not part of the front, and users
+  may always bring their own pod instead. The gateway can be deployed
+  standalone (this Netlify function, or any always-on box) OR — planned — as a
+  **CSS component**, so a host already running a CSS for pods can add the
+  gateway there instead of running a second box.
 
 A gateway is an **always-on, internet-facing box** that becomes your advertised
 inbox. It verifies each delivery's HTTP signature at the door (where the
