@@ -8163,6 +8163,118 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   check(removed.length === 1, "a stranger's announced Delete is nothing to us");
 }
 
+// --- 26. FEP-1b12 moderation: announced bans, the moderator ask queue, apply ---
+{
+  const wire26 = await import(path.join(root, 'lib/wire.mjs'));
+  const social26 = await import(path.join(root, 'lib/social.mjs'));
+  const { PodStore: PodStore26 } = await import(path.join(root, 'lib/store.mjs'));
+  const { Intake } = await import(path.join(root, 'lib/intake.mjs'));
+  const urls26 = wire26.apUrls('https://pod.example/');
+  const MOD = 'https://m.example/u/mod';
+  const MEMBER = 'https://m.example/u/member';
+
+  const block = wire26.blockActivity({ urls: urls26, targetActor: MEMBER, serial: 7 });
+  check(block.type === 'Block' && block.actor === urls26.actor && block.object === MEMBER,
+    'a ban is a Block by the group on the member');
+  const add = wire26.addRemoveActivity({ urls: urls26, type: 'Add', object: MOD,
+    target: urls26.moderators, serial: 8 });
+  check(add.type === 'Add' && add.object === MOD && add.target === urls26.moderators,
+    'a roster change is an Add/Remove targeting the moderators collection');
+
+  const mkGroup = () => {
+    const st = new PodStore26({ log: () => {} });
+    st.setConfig({ remotePod: 'https://pod.example/', handle: 'g', kind: 'group', moderators: [MOD] });
+    st.setContacts({
+      followers: [
+        { actor: MEMBER, inbox: MEMBER + '/inbox', followId: 'f-m' },
+        { actor: 'https://m.example/u/other', inbox: 'https://m.example/u/other/inbox', followId: 'f-o' },
+      ],
+      following: [],
+    });
+    const delivered = [];
+    const outbox = [];
+    return {
+      st, delivered, outbox,
+      agent: {
+        store: st,
+        publisher: {
+          urls: urls26, publishCollections: async () => {}, publishProfile: async () => ({ unreachable: [] }),
+          recordOutbox: async (a) => outbox.push(a), config: {},
+        },
+        deliverer: {
+          deliver: async (inbox, a) => delivered.push({ inbox, a }),
+          deliverToAll: async (inboxes, a) => delivered.push({ inboxes, a }),
+        },
+        intake: { retract: async (id) => { delivered.push({ retracted: id }); return { ok: true }; } },
+        log: () => {},
+      },
+    };
+  };
+
+  // Ejecting a member broadcasts the ban to the membership — and only a group does.
+  const g = mkGroup();
+  await social26.ejectFollower(g.agent, MEMBER);
+  const announce = g.delivered.find(d => d.a?.type === 'Announce' && d.a.object?.type === 'Block');
+  check(!!announce && announce.a.object.object === MEMBER && announce.a.audience === urls26.actor,
+    'an ejection announces the Block to the members, audience-stamped');
+  check(g.outbox.some(a => a.type === 'Announce' && a.object?.type === 'Block'),
+    'and the ban is on the public record');
+  check(!g.delivered.some(d => d.inbox === MEMBER + '/inbox' && d.a?.type === 'Announce'),
+    'the ejected member gets the Reject, never the ban broadcast');
+
+  const person = mkGroup();
+  person.st.setConfig({ remotePod: 'https://pod.example/', handle: 'p', kind: 'person' });
+  await social26.blockActor(person.agent, 'https://m.example/u/troll');
+  check(!person.delivered.some(d => d.a?.type === 'Announce'),
+    "a PERSON's block never goes on the wire");
+
+  // A listed moderator's ask is queued, not run; a stranger's is not queued.
+  const q = mkGroup();
+  const intake26 = new Intake({
+    config: q.st.getConfig(), urls: urls26, remote: {}, store: q.st,
+    deliverer: q.agent.deliverer, publisher: q.agent.publisher, local: {}, log: () => {},
+  });
+  await intake26.handle({ type: 'Block', actor: MOD, object: MEMBER });
+  let queue = q.st.read('modqueue.json', []);
+  check(queue.length === 1 && queue[0].type === 'Block' && queue[0].moderator === MOD,
+    "a listed moderator's Block waits in the queue");
+  check(q.st.getContacts().followers.some(f => f.actor === MEMBER),
+    'and nothing has been applied yet');
+  await intake26.handle({ type: 'Block', actor: MOD, object: MEMBER });
+  check(q.st.read('modqueue.json', []).length === 1, 'the same ask is not queued twice');
+  await intake26.handle({ type: 'Block', actor: 'https://m.example/u/rando', object: MEMBER });
+  check(q.st.read('modqueue.json', []).length === 1, "a stranger's Block is not moderation");
+  check(intake26.isModerationAsk({ type: 'Create', object: { type: 'Note' } }) === false,
+    "a moderator's ordinary post is not a moderation ask");
+  check(intake26.isModerationAsk({ type: 'Add', object: MOD, target: urls26.moderators }) === true
+    && intake26.isModerationAsk({ type: 'Add', object: MOD, target: urls26.featured }) === false,
+    'Add is an ask only when it names the moderators collection');
+
+  // Applying the queued Block ejects the member and broadcasts the ban.
+  queue = q.st.read('modqueue.json', []);
+  await social26.applyModeration(q.agent, queue[0]);
+  check(!q.st.getContacts().followers.some(f => f.actor === MEMBER)
+    && q.delivered.some(d => d.a?.type === 'Announce' && d.a.object?.type === 'Block'),
+    'applying the queued Block ejects and announces');
+
+  // A queued Delete of a carried post applies as the retract.
+  await social26.applyModeration(q.agent, {
+    type: 'Delete', activity: { type: 'Delete', object: 'https://m.example/n/carried' },
+  });
+  check(q.delivered.some(d => d.retracted === 'https://m.example/n/carried'),
+    'a queued Delete unsays the carry');
+
+  // A queued Add grows the roster, republishes, and announces the change.
+  await social26.applyModeration(q.agent, {
+    type: 'Add', activity: { type: 'Add', object: 'https://m.example/u/mod2', target: urls26.moderators },
+  });
+  check((q.st.getConfig().moderators || []).includes('https://m.example/u/mod2'),
+    'a queued Add seats the new moderator');
+  check(q.delivered.some(d => d.a?.type === 'Announce' && d.a.object?.type === 'Add'
+    && d.a.object.object === 'https://m.example/u/mod2'),
+    'and the seating is announced');
+}
+
 child.kill('SIGTERM');
 fs.rmSync(HOME, { recursive: true, force: true });
 console.log(failures ? `\n${failures} FAILURE(S)` : '\nall green');
