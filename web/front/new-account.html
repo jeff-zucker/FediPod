@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Join — FediPod front</title>
+<style>
+  :root { color-scheme: light dark; --line:#d9d4c7; --dim:#5f5e57; --accent:#6a8a5a; }
+  body { font: 17px/1.6 system-ui, sans-serif; max-width: 44rem; margin: 2rem auto; padding: 0 1.1rem; }
+  h1 { font-size: 1.7rem; margin: 0 0 .2rem; }
+  h2 { font-size: 1.2rem; margin: 0 0 .4rem; }
+  p.lede { color: var(--dim); margin-top: 0; }
+  fieldset { border: 1px solid var(--line); border-radius: 12px; padding: 1rem 1.1rem; margin: 1rem 0; }
+  legend { font-weight: 600; padding: 0 .4rem; }
+  .choices { display: flex; flex-wrap: wrap; gap: .5rem; }
+  .choices button { flex: 1 1 9rem; padding: .7rem .6rem; border: 1px solid var(--line); border-radius: 10px;
+    background: transparent; font: inherit; cursor: pointer; text-align: left; }
+  .choices button[aria-pressed="true"] { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+  .choices button b { display: block; }
+  .choices button span { color: var(--dim); font-size: .9rem; }
+  label { display: block; font-weight: 600; margin: .8rem 0 .2rem; }
+  input[type=text], input[type=url] { width: 100%; padding: .5rem .6rem; font: inherit;
+    border: 1px solid var(--line); border-radius: 8px; box-sizing: border-box; }
+  .handle-row { display: flex; align-items: center; gap: .4rem; }
+  .handle-row .suffix { color: var(--dim); white-space: nowrap; }
+  .msg { min-height: 1.3em; font-size: .95rem; margin-top: .3rem; }
+  .msg.ok { color: var(--accent); } .msg.no { color: #a4433a; }
+  .hint { color: var(--dim); font-size: .92rem; }
+  .primary { background: var(--accent); color: #fff; border: none; border-radius: 9px;
+    padding: .6rem 1.1rem; font: inherit; cursor: pointer; }
+  .primary[disabled] { opacity: .5; cursor: not-allowed; }
+  [hidden] { display: none !important; }
+  .tier { border-left: 3px solid var(--line); padding-left: .9rem; margin: .8rem 0; }
+  .tier h3 { margin: 0 0 .2rem; font-size: 1.02rem; }
+  code { background: rgba(120,120,120,.12); padding: .05em .35em; border-radius: 4px; }
+</style>
+</head>
+<body>
+<h1>Join this FediPod front</h1>
+<p class="lede">A shared handle on this domain, backed by a pod and an agent that stay <strong>yours</strong>.
+  This box only answers name lookups and verifies the mail your pod receives — it never holds your key or your data.</p>
+
+<fieldset>
+  <legend>What are you here to create?</legend>
+  <div class="choices" role="group" aria-label="Account type">
+    <button type="button" id="pick-person" aria-pressed="false"><b>A person</b><span>an individual account, @you@host</span></button>
+    <button type="button" id="pick-group" aria-pressed="false"><b>A group</b><span>a community others can join</span></button>
+    <button type="button" id="pick-host" aria-pressed="false"><b>Your own front</b><span>run a host like this one</span></button>
+  </div>
+</fieldset>
+
+<!-- person / group: pick a name, say where your pod is -->
+<form id="user-form" hidden>
+  <label for="handle">Choose your name</label>
+  <div class="handle-row">
+    <input type="text" id="handle" autocomplete="off" autocapitalize="off" spellcheck="false"
+      inputmode="latin" placeholder="you" aria-describedby="handle-msg">
+    <span class="suffix" id="handle-suffix">@this-host</span>
+  </div>
+  <p class="msg" id="handle-msg" aria-live="polite"></p>
+
+  <label>Your pod</label>
+  <div class="choices" role="group" aria-label="Pod choice">
+    <button type="button" id="pod-bring" aria-pressed="true"><b>Bring my own</b><span>a pod you already control</span></button>
+    <button type="button" id="pod-take" aria-pressed="false" hidden><b>Give me one</b><span>this host provides it</span></button>
+  </div>
+  <div id="pod-bring-row">
+    <label for="pod-url">Your pod address</label>
+    <input type="url" id="pod-url" autocomplete="off" placeholder="https://you.solidcommunity.net/">
+    <p class="hint">You'll prove it's yours in the next step by signing in with it — no password reaches this host.</p>
+  </div>
+  <p id="pod-take-row" class="hint" hidden>This host will provision a pod for you at the next step. Your data lives on it,
+    and it's exportable, so you can leave with everything.</p>
+
+  <p style="margin-top:1.1rem">
+    <button type="button" id="continue" class="primary" disabled>Continue</button>
+  </p>
+  <p class="hint" id="next-note" hidden></p>
+</form>
+
+<!-- server-host: the two responsibility tiers -->
+<section id="host-form" hidden>
+  <h2>Run your own front</h2>
+  <p>You leave this namespace and stand up your own front on <strong>your own box</strong>. The installer sets it up;
+    everything it installs is yours from that moment. Pick the tier that matches what you're willing to carry:</p>
+  <div class="tier">
+    <h3>Light host — a doorway</h3>
+    <p class="hint">Run the front only: a directory, name lookups, verify-and-forward. You store <strong>no user content</strong> —
+      every post and message lives on pods your users control. Duties: keep the box up, keep names honest, handle detach
+      requests and the complaints that reach the visible domain. If your box dies, names go dark but no data is lost.</p>
+  </div>
+  <div class="tier">
+    <h3>Full host — a doorway and a vault</h3>
+    <p class="hint">All of the above, plus you supply pods, so you're the custodian of users' actual data on your disk.
+      Adds: backups, growing storage, account recovery, data-protection duties, retention/deletion, and moderating what you
+      <em>store</em>. Mastodon-admin-grade. A user who brings their own pod still keeps custody — the heavy duties apply only
+      to pods you supply.</p>
+  </div>
+  <p class="hint">The offer-pods switch is a tier declaration, not a checkbox. Setup and installer:
+    see <code>netlify/README.md</code> in the FediPod repo.</p>
+</section>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  let type = null, pod = 'bring', host = 'this-host', offersPods = false, nameOk = false;
+
+  fetch('/api/handle?handle=__probe__').then(r => r.json()).then(d => {
+    // Any response tells us offersPods and the host suffix comes from the page's own origin.
+    offersPods = !!d.offersPods;
+    $('pod-take').hidden = !offersPods;
+  }).catch(() => {});
+  host = location.host;
+  $('handle-suffix').textContent = '@' + host;
+
+  function press(group, id) {
+    for (const b of group) b.setAttribute('aria-pressed', String(b.id === id));
+  }
+  const typeButtons = [$('pick-person'), $('pick-group'), $('pick-host')];
+  function chooseType(t, id) {
+    type = t; press(typeButtons, id);
+    $('user-form').hidden = (t === 'host');
+    $('host-form').hidden = (t !== 'host');
+    refresh();
+  }
+  $('pick-person').onclick = () => chooseType('person', 'pick-person');
+  $('pick-group').onclick = () => chooseType('group', 'pick-group');
+  $('pick-host').onclick = () => chooseType('host', 'pick-host');
+
+  const podButtons = [$('pod-bring'), $('pod-take')];
+  $('pod-bring').onclick = () => { pod = 'bring'; press(podButtons, 'pod-bring');
+    $('pod-bring-row').hidden = false; $('pod-take-row').hidden = true; refresh(); };
+  $('pod-take').onclick = () => { pod = 'take'; press(podButtons, 'pod-take');
+    $('pod-bring-row').hidden = true; $('pod-take-row').hidden = false; refresh(); };
+
+  let t = null;
+  $('handle').addEventListener('input', () => {
+    nameOk = false; $('handle-msg').textContent = ''; $('handle-msg').className = 'msg';
+    clearTimeout(t);
+    const h = $('handle').value.trim().toLowerCase();
+    if (!h) { refresh(); return; }
+    t = setTimeout(async () => {
+      try {
+        const d = await (await fetch('/api/handle?handle=' + encodeURIComponent(h))).json();
+        nameOk = d.available;
+        $('handle-msg').textContent = d.available ? '@' + h + '@' + host + ' is available' : (d.reason || 'unavailable');
+        $('handle-msg').className = 'msg ' + (d.available ? 'ok' : 'no');
+      } catch { $('handle-msg').textContent = 'could not check the name'; $('handle-msg').className = 'msg no'; }
+      refresh();
+    }, 250);
+  });
+
+  function refresh() {
+    const podOk = pod === 'take' ? offersPods : /^https:\/\/\S+/.test($('pod-url').value.trim());
+    $('continue').disabled = !((type === 'person' || type === 'group') && nameOk && podOk);
+  }
+  $('pod-url').addEventListener('input', refresh);
+
+  $('continue').onclick = () => {
+    const intent = { type, handle: $('handle').value.trim().toLowerCase(),
+      pod: pod === 'take' ? '(host-provided)' : $('pod-url').value.trim() };
+    // The account is not made here: the next step is proving the pod is yours,
+    // via Solid-OIDC. That step is the attach flow (not wired in this build).
+    const n = $('next-note');
+    n.hidden = false;
+    n.innerHTML = 'Next you would <strong>sign in with your pod</strong> to prove it is yours, then this host records '
+      + '<code>@' + intent.handle + '@' + host + '</code> → your pod. '
+      + '(The prove-your-pod step is the attach flow, coming next.)';
+    $('continue').disabled = true;
+  };
+</script>
+</body>
+</html>

@@ -8519,6 +8519,30 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   check(youActor.status === 404, "a user whose pod GET 404s the actor is simply not served (bob's pod is a stub here)");
   const unknownUser = await front.routeFront(R('GET', '/u/ghost/ap/actor'), ctx);
   check(unknownUser.status === 404, 'a handle not in the directory has no front presence');
+
+  // The new-account page + handle-availability API.
+  const ctx2 = { ...ctx, signupPage: '<!doctype html><title>join</title>', offersPods: true };
+  const page = await front.routeFront(R('GET', '/'), ctx2);
+  check(page.status === 200 && /text\/html/.test(page.headers['content-type']) && page.body.includes('join'),
+    'the front root serves the new-account page');
+  const signup = await front.routeFront(R('GET', '/signup'), ctx2);
+  check(signup.status === 200, '/signup serves it too');
+  const noPage = await front.routeFront(R('GET', '/'), ctx);
+  check(noPage.status === 404, 'a front with no page configured 404s the root rather than inventing one');
+
+  const free = JSON.parse((await front.routeFront(R('GET', '/api/handle?handle=alice'), ctx2)).body);
+  check(free.available === true && free.offersPods === true,
+    'a free, valid handle is available and the page learns the host offers pods');
+  const taken = JSON.parse((await front.routeFront(R('GET', '/api/handle?handle=me'), ctx2)).body);
+  check(taken.available === false && /taken/.test(taken.reason),
+    'a handle already in the directory is not available');
+  const bad = JSON.parse((await front.routeFront(R('GET', '/api/handle?handle=Bad_Name'), ctx2)).body);
+  check(bad.available === false && /letters/.test(bad.reason), 'an ill-formed handle is rejected with the rule');
+  const reserved = JSON.parse((await front.routeFront(R('GET', '/api/handle?handle=admin'), ctx2)).body);
+  check(reserved.available === false && /reserved/.test(reserved.reason),
+    'a reserved route name cannot be taken as a handle');
+  const noPods = JSON.parse((await front.routeFront(R('GET', '/api/handle?handle=alice'), ctx)).body);
+  check(noPods.offersPods === false, 'a host that does not offer pods says so, so the page hides that option');
 }
 
 // --- 30. fronted identity: apUrls publicBase split + agent publishes under it ---

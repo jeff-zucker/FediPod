@@ -22,7 +22,16 @@
 //   FEDIPOD_DIRECTORY_URL  a JSON map { handle: record, … } (public policy fields only;
 //                          keep appendToken/hmacSecret out of anything world-readable)
 
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { routeFront } from '../../lib/front-core.mjs';
+
+// The new-account page, read once at cold start.
+let signupPage = '';
+try {
+  signupPage = readFileSync(
+    fileURLToPath(new URL('../../web/front/new-account.html', import.meta.url)), 'utf8');
+} catch { /* the page is optional; the front still routes federation without it */ }
 
 let dir = null, dirAt = 0;
 const DIR_TTL_MS = 60_000;
@@ -43,6 +52,8 @@ export default async function handler(request) {
   const out = await routeFront(request, {
     host: process.env.FEDIPOD_FRONT_HOST,
     frontOrigin: process.env.FEDIPOD_FRONT_ORIGIN,
+    signupPage,
+    offersPods: process.env.FEDIPOD_OFFERS_PODS === '1',
     lookup: (handle) => map[handle] || null,
     // Per-user Append to that user's pod inbox, with that user's credential.
     podPut: async (handle, url, body, ct) => {
