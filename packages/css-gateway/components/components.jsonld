@@ -1,0 +1,39 @@
+{
+  "@context": [
+    "https://linkedsoftwaredependencies.org/bundles/npm/componentsjs/^6.0.0/components/context.jsonld",
+    "https://linkedsoftwaredependencies.org/bundles/npm/fedipod-css-gateway/^0.0.0/components/context.jsonld"
+  ],
+  "@id": "npmd:fedipod-css-gateway",
+  "components": [
+    {
+      "@id": "fpg:FediPodGatewayHandler",
+      "@type": "Class",
+      "requireElement": "FediPodGatewayHandler",
+      "extends": "css:HttpHandler",
+      "comment": "Verifies inbound ActivityPub deliveries at the door and writes them into pod inboxes through the server's own store; also serves the front (WebFinger, actor, signup/attach). Claims only the front host's routes; all other traffic falls through to CSS.",
+      "parameters": [
+        { "@id": "fpg:FediPodGatewayHandler#resourceStore", "comment": "The server's ResourceStore, so the handler reads pods and writes inbox items and the directory directly — no HTTP, no credential.", "required": true, "unique": true },
+        { "@id": "fpg:FediPodGatewayHandler#frontHost", "comment": "The apex host the front answers on, e.g. fedipod.net. Requests to pod subdomains are never claimed.", "required": true, "unique": true },
+        { "@id": "fpg:FediPodGatewayHandler#frontOrigin", "comment": "The front's origin, e.g. https://fedipod.net.", "required": true, "unique": true },
+        { "@id": "fpg:FediPodGatewayHandler#gatewayWebId", "comment": "The WebID stamped on verification receipts.", "required": false, "unique": true },
+        { "@id": "fpg:FediPodGatewayHandler#offersPods", "comment": "Whether this host also offers pods (the signup page shows the take-one option). The front never hosts pods itself.", "required": false, "unique": true },
+        { "@id": "fpg:FediPodGatewayHandler#directoryContainer", "comment": "An internal container URL where the handle->pod directory rows live.", "required": true, "unique": true },
+        { "@id": "fpg:FediPodGatewayHandler#signupPage", "comment": "The new-account page HTML served at the root.", "required": false, "unique": true }
+      ],
+      "constructorArguments": [
+        {
+          "@id": "fpg:FediPodGatewayHandler#constructor",
+          "fields": [
+            { "keyRaw": "resourceStore", "value": { "@id": "fpg:FediPodGatewayHandler#resourceStore" } },
+            { "keyRaw": "frontHost", "value": { "@id": "fpg:FediPodGatewayHandler#frontHost" } },
+            { "keyRaw": "frontOrigin", "value": { "@id": "fpg:FediPodGatewayHandler#frontOrigin" } },
+            { "keyRaw": "gatewayWebId", "value": { "@id": "fpg:FediPodGatewayHandler#gatewayWebId" } },
+            { "keyRaw": "offersPods", "value": { "@id": "fpg:FediPodGatewayHandler#offersPods" } },
+            { "keyRaw": "directoryContainer", "value": { "@id": "fpg:FediPodGatewayHandler#directoryContainer" } },
+            { "keyRaw": "signupPage", "value": { "@id": "fpg:FediPodGatewayHandler#signupPage" } }
+          ]
+        }
+      ]
+    }
+  ]
+}

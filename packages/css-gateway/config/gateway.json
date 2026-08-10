@@ -1,0 +1,33 @@
+{
+  "@context": [
+    "https://linkedsoftwaredependencies.org/bundles/npm/@solid/community-server/^7.0.0/components/context.jsonld",
+    "https://linkedsoftwaredependencies.org/bundles/npm/fedipod-css-gateway/^0.0.0/components/context.jsonld"
+  ],
+  "@graph": [
+    {
+      "comment": "The FediPod gateway/front handler. Reads the operator's values from CSS variables so one config works everywhere. Set frontHost/frontOrigin to the apex the front answers on; pod subdomains fall through untouched.",
+      "@id": "urn:fedipod:gateway:Handler",
+      "@type": "FediPodGatewayHandler",
+      "resourceStore": { "@id": "urn:solid-server:default:ResourceStore" },
+      "frontHost": { "@id": "urn:solid-server:default:variable:baseUrlHost" },
+      "frontOrigin": { "@id": "urn:solid-server:default:variable:baseUrl" },
+      "gatewayWebId": null,
+      "offersPods": false,
+      "directoryContainer": "/.internal/fedipod/directory/",
+      "signupPage": null
+    },
+    {
+      "comment": "Insert the handler into the routing waterfall just before the LDP catch-all, so it claims only the front routes and everything else stays normal CSS.",
+      "@type": "Override",
+      "overrideInstance": { "@id": "urn:solid-server:default:BaseHttpHandler" },
+      "overrideSteps": [
+        {
+          "@type": "OverrideListInsertBefore",
+          "overrideParameter": { "@id": "urn:solid-server:default:BaseHttpHandler#handlers" },
+          "overrideTarget": { "@id": "urn:solid-server:default:LdpHandler" },
+          "overrideValue": { "@id": "urn:fedipod:gateway:Handler" }
+        }
+      ]
+    }
+  ]
+}

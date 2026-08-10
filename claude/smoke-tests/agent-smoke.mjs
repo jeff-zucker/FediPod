@@ -8665,6 +8665,51 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
     'the note is PUT under its advertised id — RemotePod maps it to the pod at write time');
 }
 
+// --- 31. the CSS-gateway component's CSS-free pieces (adapter, claims, store dir) ---
+{
+  const PKG = path.join(root, 'packages/css-gateway/src');
+  const { claims } = await import(path.join(PKG, 'claims.mjs'));
+  const { nodeToWhatwg, applyToNode } = await import(path.join(PKG, 'adapt.mjs'));
+  const { makeDirectory, makeStorePodPut } = await import(path.join(PKG, 'directory.mjs'));
+
+  check(claims({ host: 'fedipod.net', pathname: '/u/alice/ap/inbox/' }, 'fedipod.net') === true
+    && claims({ host: 'alice.fedipod.net', pathname: '/.well-known/webfinger' }, 'fedipod.net') === false
+    && claims({ host: 'fedipod.net', pathname: '/some/pod/doc' }, 'fedipod.net') === false,
+    'the component claims only the front host and only its routes — pods and other paths fall through to CSS');
+
+  const nreq = Readable.from([Buffer.from('{"type":"Follow"}')]);
+  nreq.method = 'POST'; nreq.url = '/u/alice/ap/inbox/';
+  nreq.headers = { host: 'fedipod.net', 'content-type': 'application/activity+json', signature: 's' };
+  const w = await nodeToWhatwg(nreq, 'https://fedipod.net');
+  check(w.method === 'POST' && w.url === 'https://fedipod.net/u/alice/ap/inbox/'
+    && w.headers.get('signature') === 's' && (await w.text()) === '{"type":"Follow"}',
+    'the Node→WHATWG adapter carries method, absolute url, headers and body');
+
+  const nres = { s: 0, h: null, b: null, writeHead(s, h) { this.s = s; this.h = h; }, end(b) { this.b = b; } };
+  await applyToNode(nres, { status: 201, headers: { 'content-type': 'application/json' }, body: '{"ok":true}' });
+  check(nres.s === 201 && nres.b === '{"ok":true}', 'and writes a core result back onto the Node response');
+
+  // Wire the component's store-backed lookup/putDirectory/podPut into the real
+  // routeFront: a delivery to a fronted inbox lands in the pod via the store.
+  const front31 = await import(path.join(root, 'lib/front-core.mjs'));
+  const disk = new Map();
+  const io = { read: async (u) => (disk.has(u) ? disk.get(u) : null), write: async (u, b) => { disk.set(u, b); } };
+  const dir = makeDirectory(io, 'http://pod.local/.internal/fedipod/directory/');
+  await dir.putDirectory('me', { handle: 'me', podHome: 'https://alice.pod/solid/',
+    actorUrl: 'https://fedipod.net/u/me/ap/actor', kind: 'person', hmacSecret: 's', gatewayWebId: 'https://fedipod.net/gw#me' });
+  const podPut = makeStorePodPut(io);
+  process.env.AP_ALLOW_PRIVATE_TARGETS = '1';
+  const del = await front31.routeFront(
+    new Request('https://fedipod.net/u/me/ap/inbox/', { method: 'POST',
+      headers: { 'content-type': 'application/activity+json' },
+      body: JSON.stringify({ type: 'Follow', actor: 'https://x.example/u/a', object: 'https://fedipod.net/u/me/ap/actor' }) }),
+    { host: 'fedipod.net', frontOrigin: 'https://fedipod.net',
+      lookup: (h) => dir.lookup(h), podPut: (_h, u, b, ct) => podPut(u, b, ct) });
+  delete process.env.AP_ALLOW_PRIVATE_TARGETS;
+  check(del.status === 202 && [...disk.keys()].some(k => k.startsWith('https://alice.pod/solid/ap/inbox/')),
+    'a delivery through the component writes the verified item into the pod inbox via the store — no credential, no HTTP');
+}
+
 child.kill('SIGTERM');
 fs.rmSync(HOME, { recursive: true, force: true });
 console.log(failures ? `\n${failures} FAILURE(S)` : '\nall green');
