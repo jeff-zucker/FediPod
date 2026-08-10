@@ -8521,6 +8521,80 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   check(unknownUser.status === 404, 'a handle not in the directory has no front presence');
 }
 
+// --- 30. fronted identity: apUrls publicBase split + agent publishes under it ---
+{
+  const wire30 = await import(path.join(root, 'lib/wire.mjs'));
+  const POD = 'https://alice.pod/solid/';
+  const FRONT = 'https://fedipod.net/u/me/';
+
+  // Regression pin: with no publicBase the object is exactly as before.
+  const plain = wire30.apUrls('https://alice.pod/solid/');
+  check(plain.actor === 'https://alice.pod/solid/activitypods-js/ap/actor'
+    && plain.toPod === undefined && plain.publicHome === undefined,
+    'apUrls with no publicBase is byte-identical to before (no map, pod-native ids)');
+
+  const u = wire30.apUrls(POD, 'activitypods-js/', { publicBase: FRONT });
+  check(u.actor === 'https://fedipod.net/u/me/ap/actor'
+    && u.outbox === 'https://fedipod.net/u/me/ap/outbox'
+    && u.notes === 'https://fedipod.net/u/me/ap/notes/'
+    && u.followers === 'https://fedipod.net/u/me/ap/followers',
+    'a fronted identity advertises actor and every collection on the shared domain');
+  check(u.media === 'https://alice.pod/solid/activitypods-js/ap/media/'
+    && u.state === 'https://alice.pod/solid/activitypods-js/ap-state/'
+    && u.fediverse === 'https://alice.pod/solid/activitypods-js/fediverse/',
+    'but media, state and the fediverse tree stay on the pod');
+  check(u.toPod('https://fedipod.net/u/me/ap/notes/x') === 'https://alice.pod/solid/activitypods-js/ap/notes/x'
+    && u.toPublic('https://alice.pod/solid/activitypods-js/ap/actor') === 'https://fedipod.net/u/me/ap/actor'
+    && u.toPod('https://elsewhere.example/z') === 'https://elsewhere.example/z',
+    'toPod/toPublic round-trip advertised↔pod ids and leave foreign ids alone');
+
+  // RemotePod applies the map at its one choke point, so a write built from an
+  // advertised id lands on the pod.
+  const { RemotePod } = await import(path.join(root, 'lib/remote.mjs'));
+  const seen = [];
+  const rp = Object.create(RemotePod.prototype);
+  rp.pausedUntil = 0; rp.session = { fetch: async (url) => { seen.push(url); return { status: 201 }; } };
+  rp.toPod = null;
+  await rp.fetch('https://fedipod.net/u/me/ap/notes/n1');
+  check(seen[0] === 'https://fedipod.net/u/me/ap/notes/n1', 'with no map RemotePod writes the url as given');
+  rp.setUrlMap(u.toPod);
+  await rp.fetch('https://fedipod.net/u/me/ap/notes/n1');
+  check(seen[1] === 'https://alice.pod/solid/activitypods-js/ap/notes/n1',
+    'with the map installed the same advertised url is written to the pod');
+
+  // A Publisher built for a fronted identity: its urls are fronted, it installs
+  // the map on its remote, and a published note gets a fronted id.
+  const { Publisher } = await import(path.join(root, 'lib/publisher.mjs'));
+  const podWrites = [];
+  let mapInstalled = null;
+  const remote30 = {
+    setUrlMap: (fn) => { mapInstalled = fn; },
+    putJson: async (url) => { podWrites.push(url); },
+    setAcl: async () => {}, delete: async () => true,
+    probe: async () => ({ status: 401 }),
+  };
+  const pub = new Publisher({
+    config: { remotePod: POD, handle: 'me', name: 'Me',
+      gateway: { frontActor: 'https://fedipod.net/u/me/ap/actor', mode: 'trust' } },
+    remote: remote30, local: { writeNote: async () => {} },
+    store: {
+      getStatuses: () => [], getContacts: () => ({ followers: [], following: [] }),
+      addStatus: () => {}, read: (n, d) => (d !== undefined ? d : {}), write: () => {},
+      getConfig: () => ({ handle: 'me' }),
+    },
+    deliverer: { deliverToAll: async () => {} }, publicKeyPem: 'K', log: () => {},
+  });
+  check(pub.urls.actor === 'https://fedipod.net/u/me/ap/actor' && typeof mapInstalled === 'function',
+    'the Publisher advertises the fronted actor and installs the pod map on its remote');
+  check(mapInstalled('https://fedipod.net/u/me/ap/notes/x') === 'https://alice.pod/solid/activitypods-js/ap/notes/x',
+    'and the installed map is the fronted→pod one');
+  const note = await pub.publishNote('hello from the fronted identity', { visibility: 'public' });
+  check(note.id.startsWith('https://fedipod.net/u/me/ap/notes/') && note.attributedTo === 'https://fedipod.net/u/me/ap/actor',
+    'a published note carries a fronted id and a fronted author');
+  check(podWrites.some(w => w.startsWith('https://fedipod.net/u/me/ap/notes/')),
+    'the note is PUT under its advertised id — RemotePod maps it to the pod at write time');
+}
+
 child.kill('SIGTERM');
 fs.rmSync(HOME, { recursive: true, force: true });
 console.log(failures ? `\n${failures} FAILURE(S)` : '\nall green');

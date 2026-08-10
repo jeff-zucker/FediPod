@@ -795,6 +795,7 @@ async function renderGateway() {
   $('gw-mode-badge').textContent = json.configured ? `— ${mode}` : '— not set up';
   if (json.url) $('gw-url').value = json.url;
   if (json.webId) $('gw-webid').value = json.webId;
+  if (json.frontActor) $('gw-frontactor').value = json.frontActor;
   $('gw-lifecycle').hidden = !json.configured;
   $('gw-mode').value = mode;
   const s = json.stats || {};
@@ -805,7 +806,8 @@ async function renderGateway() {
 
 $('gw-configure').addEventListener('click', async () => {
   const r = await write('/gateway',
-    { action: 'configure', url: $('gw-url').value.trim(), webId: $('gw-webid').value.trim() },
+    { action: 'configure', url: $('gw-url').value.trim(), webId: $('gw-webid').value.trim(),
+      frontActor: $('gw-frontactor').value.trim() },
     'gateway saved');
   if (r?.hmacSecret) {
     const el = $('gw-secret');

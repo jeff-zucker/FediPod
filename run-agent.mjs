@@ -232,7 +232,12 @@ export class Agent {
       this.renamed = true;                   // republish the actor once connected
       this.log(`display name set to "${name}"`);
     }
-    this.urls = apUrls(config.remotePod, config.root);
+    // A fronted identity (config.gateway.frontActor) advertises its ids on a
+    // shared domain; RemotePod gets the map so writes still land on the pod.
+    const publicBase = config.gateway?.frontActor
+      ? config.gateway.frontActor.replace(/ap\/actor\/?$/, '') : null;
+    this.urls = apUrls(config.remotePod, config.root, { publicBase });
+    if (this.urls.toPod) this.remote.setUrlMap(this.urls.toPod);
     // The agent answers at <handle>.localhost too, so each identity on a
     // machine gets a browser origin of its own. Known only now: the admin
     // server was listening before any of this was read.

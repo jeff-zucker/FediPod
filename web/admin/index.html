@@ -306,6 +306,9 @@ pre { overflow-x: auto; background: #0001; padding: .6rem; border-radius: .3rem;
       <input type="url" id="gw-url" placeholder="https://your-gateway.netlify.app/inbox" autocomplete="off" style="min-width:22em">
       <label for="gw-webid">Gateway WebID</label>
       <input type="url" id="gw-webid" placeholder="https://…/gateway/profile/card#me" autocomplete="off" style="min-width:22em">
+      <label for="gw-frontactor">Fronted actor <span class="hint">(optional)</span></label>
+      <input type="url" id="gw-frontactor" placeholder="https://fedipod.net/u/me/ap/actor" autocomplete="off" style="min-width:22em"
+        title="   For a multi-user front: the @name@front actor this identity publishes and signs under. Set at setup — changing it later is a move.">
       <button type="button" id="gw-configure" class="inline" title="   Save the gateway's URL and WebID, and reveal the shared secret to paste into its env">Save &amp; get secret</button>
     </div>
     <p class="hint" id="gw-secret" hidden></p>
