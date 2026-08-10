@@ -54,7 +54,12 @@ export default async function handler(request) {
     frontOrigin: process.env.FEDIPOD_FRONT_ORIGIN,
     signupPage,
     offersPods: process.env.FEDIPOD_OFFERS_PODS === '1',
+    gatewayWebId: process.env.FEDIPOD_GATEWAY_WEBID || null,
     lookup: (handle) => map[handle] || null,
+    // Open signup requires a WRITABLE directory (a KV/blob store this deploy
+    // provides). Left unset here, so /api/attach answers 501 ("no signups") for
+    // a static roster. Wire putDirectory(handle, record) to persist a new row.
+    putDirectory: null,
     // Per-user Append to that user's pod inbox, with that user's credential.
     podPut: async (handle, url, body, ct) => {
       const rec = map[handle];

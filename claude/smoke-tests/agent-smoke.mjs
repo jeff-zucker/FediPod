@@ -8543,6 +8543,50 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
     'a reserved route name cannot be taken as a handle');
   const noPods = JSON.parse((await front.routeFront(R('GET', '/api/handle?handle=alice'), ctx)).body);
   check(noPods.offersPods === false, 'a host that does not offer pods says so, so the page hides that option');
+
+  // Attach: prove the pod with a Solid-OIDC token, get a directory row.
+  const written = {};
+  const mutableDir = { ...dir };
+  const attachCtx = {
+    host: HOST, frontOrigin: ORIGIN, gatewayWebId: 'https://fedipod.net/gw#me',
+    lookup: (h) => mutableDir[h] || null,
+    putDirectory: (h, rec) => { mutableDir[h] = rec; written[h] = rec; },
+    // Stub verifier: the token string IS the webid it proves (test shorthand).
+    verifier: async (authz) => ({ webid: authz.replace(/^DPoP /, '') }),
+    podGet, podPut: async () => true,
+  };
+  const attach = (body, webid) => {
+    const req = new Request(ORIGIN + '/api/attach', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', ...(webid ? { authorization: 'DPoP ' + webid, dpop: 'x' } : {}) },
+      body: JSON.stringify(body),
+    });
+    return front.routeFront(req, attachCtx);
+  };
+
+  const noTok = await attach({ handle: 'alice', podHome: 'https://alice.pod/solid/' });
+  check(noTok.status === 401, 'attach with no Solid-OIDC token is refused');
+  const wrongPod = await attach({ handle: 'alice', podHome: 'https://alice.pod/solid/' },
+    'https://mallory.pod/profile#me');
+  check(wrongPod.status === 403, 'a token proving a DIFFERENT pod than the one listed is refused');
+  const ok = await attach({ handle: 'alice', podHome: 'https://alice.pod/solid/' },
+    'https://alice.pod/profile/card#me');
+  const okDoc = JSON.parse(ok.body);
+  check(ok.status === 201 && okDoc.frontActor === 'https://fedipod.net/u/alice/ap/actor'
+    && okDoc.address === '@alice@fedipod.net' && typeof okDoc.hmacSecret === 'string',
+    'a valid token proving the pod creates the account and returns the fronted actor + a secret');
+  check(written.alice?.podHome === 'https://alice.pod/solid/' && written.alice?.webId === 'https://alice.pod/profile/card#me',
+    'the directory row records the pod and the proven WebID');
+  const dup = await attach({ handle: 'alice', podHome: 'https://alice.pod/solid/' },
+    'https://alice.pod/profile/card#me');
+  check(dup.status === 409, 'the name cannot be attached twice');
+  const badName = await attach({ handle: 'Bad Name', podHome: 'https://alice.pod/solid/' },
+    'https://alice.pod/profile/card#me');
+  check(badName.status === 400, 'attach rejects an ill-formed handle');
+  const noSignup = await front.routeFront(
+    new Request(ORIGIN + '/api/attach', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' }),
+    ctx2);
+  check(noSignup.status === 501, 'a front with no writable directory answers 501 — signups are off, by design');
 }
 
 // --- 30. fronted identity: apUrls publicBase split + agent publishes under it ---
