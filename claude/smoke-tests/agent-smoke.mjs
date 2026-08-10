@@ -7858,6 +7858,195 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
     'a mention anchor sends people to the page; without one it falls back to the id');
 }
 
+// --- 24. C2S (ActivityPub §6): auth, dispatch, addressing — offline, stub verifier ---
+{
+  const { C2S } = await import(path.join(root, 'lib/c2s.mjs'));
+  const { makeC2sAuth } = await import(path.join(root, 'lib/oidc-auth.mjs'));
+  const { PodStore: PodStore24 } = await import(path.join(root, 'lib/store.mjs'));
+  const wire24 = await import(path.join(root, 'lib/wire.mjs'));
+
+  const OWNER = 'https://pod.example/profile/card#me';
+  const urls24 = wire24.apUrls('https://pod.example/');
+  const ALICE24 = 'https://m.example/u/alice';
+  const THEIRS = 'https://m.example/n/r9';
+  const OURS = urls24.notes + 'p9';
+  const st24 = new PodStore24({ log: () => {} });
+  st24.setConfig({ remotePod: 'https://pod.example/', handle: 'jeff' });
+  st24.write('statuses.json', [
+    { noteId: THEIRS, actor: ALICE24, content: '<p>theirs</p>', published: '2026-08-09T01:00:00Z', kind: 'timeline' },
+    { noteId: OURS, actor: urls24.actor, content: '<p>ours</p>', published: '2026-08-09T02:00:00Z', kind: 'post', slug: 'p9' },
+  ]);
+
+  const delivered24 = [];
+  const published24 = [];
+  let featured24 = 0;
+  const agent24 = {
+    store: st24,
+    configured: () => true,
+    viewer: false,
+    remote: { webId: OWNER, putJson: async () => {}, setAcl: async () => {}, delete: async () => true },
+    local: { fedi: urls24.fediverse, delete: async () => {}, writeNote: async () => {} },
+    deliverer: {
+      deliver: async (inbox, a) => delivered24.push({ inbox, a }),
+      deliverToAll: async (inboxes, a) => delivered24.push({ inboxes, a }),
+    },
+    intake: { fetchAP: async (u) => ({ id: u, type: 'Person', inbox: u + '/inbox' }) },
+    publisher: {
+      urls: urls24,
+      publishNote: async (content, opts) => {
+        published24.push({ content, ...opts });
+        return { id: urls24.notes + 'c2s-' + published24.length };
+      },
+      updateNote: async (s, opts) => ({ ...s, ...opts }),
+      publishFeatured: async () => { featured24++; },
+      publishProfile: async () => {},
+      publishCollections: async () => {},
+      recordOutbox: async () => {},
+      unrecordOutbox: async () => {},
+    },
+    log: () => {},
+  };
+
+  const okAuth = async () => ({ ok: true, webid: OWNER, via: 'stub' });
+  const api24 = new C2S({ agent: agent24, log: () => {}, auth: okAuth });
+  const ask24 = async (api, body, { method = 'POST', pathname = '/ap/outbox', headers = {} } = {}) => {
+    const res = { status: 0, headers: null, body: null,
+      writeHead(s, h) { this.status = s; this.headers = h; }, end(b) { this.body = b; } };
+    const req = Readable.from(body === null ? [] : [Buffer.from(JSON.stringify(body))]);
+    req.method = method;
+    req.headers = { host: `localhost:${PORT}`, ...headers };
+    await api.handle(req, res, pathname, new URL('http://localhost' + pathname));
+    let json = null;
+    try { json = res.body ? JSON.parse(res.body) : null; } catch { /* redirects have no body */ }
+    return { status: res.status, headers: res.headers || {}, json };
+  };
+
+  // The auth path, through the real wrapper with an injected verifier.
+  const authReal = makeC2sAuth({
+    agent: agent24,
+    masto: { authed: (req) => req.headers.authorization === 'Bearer smoke-ok' },
+    verifier: async (authz) => {
+      if (authz === 'DPoP good') return { webid: OWNER };
+      if (authz === 'DPoP other') return { webid: 'https://other.example/profile#me' };
+      throw new Error('bad token');
+    },
+  });
+  const apiAuth = new C2S({ agent: agent24, log: () => {}, auth: authReal });
+  const blockBody = { type: 'Block', object: 'https://bad.example/u/troll' };
+  const noAuth = await ask24(apiAuth, blockBody);
+  check(noAuth.status === 401, `no credentials → 401 (got ${noAuth.status})`);
+  const wrongWho = await ask24(apiAuth, blockBody, { headers: { authorization: 'DPoP other' } });
+  check(wrongWho.status === 403, `a valid token for a DIFFERENT WebID → 403, not a post (got ${wrongWho.status})`);
+  const badTok = await ask24(apiAuth, blockBody, { headers: { authorization: 'DPoP junk' } });
+  check(badTok.status === 401, `an unverifiable token → 401 (got ${badTok.status})`);
+  const asOwner = await ask24(apiAuth, blockBody, { headers: { authorization: 'DPoP good' } });
+  check(asOwner.status === 200, `the owner's own WebID → acts (got ${asOwner.status})`);
+  const asBearer = await ask24(apiAuth, { type: 'Block', object: 'https://bad.example/u/troll2' },
+    { headers: { authorization: 'Bearer smoke-ok' } });
+  check(asBearer.status === 200, `the facade bearer drives C2S too (got ${asBearer.status})`);
+  const b24 = st24.getBlocklist();
+  check(b24.actors.includes('https://bad.example/u/troll') && b24.actors.includes('https://bad.example/u/troll2'),
+    'both blocks landed in the blocklist');
+  check(!delivered24.some(d => d.a?.type === 'Block'),
+    'and nothing was DELIVERED for a Block — the blocked party is not notified');
+
+  // A bare Note is wrapped in a Create (§6.2.1); the response is 201 with the
+  // new activity's dereferenceable id in Location.
+  const bare = await ask24(api24, { type: 'Note', content: 'hello c2s', to: [wire24.PUBLIC] });
+  check(bare.status === 201 && String(bare.headers.location || '').endsWith('-create'),
+    `a bare Note → 201 + Location of the -create doc (got ${bare.status} ${bare.headers.location})`);
+  check(published24[0]?.content === 'hello c2s' && published24[0]?.visibility === 'public',
+    'the wrap kept the text and read as:Public as public');
+
+  // The addressing table, inverted: each shape lands the facade visibility.
+  await ask24(api24, { type: 'Create', object: { type: 'Note', content: 'u' },
+    to: [urls24.followers], cc: [wire24.PUBLIC] });
+  await ask24(api24, { type: 'Create', object: { type: 'Note', content: 'p' }, to: [urls24.followers] });
+  await ask24(api24, { type: 'Create', object: { type: 'Note', content: 'd' }, to: [ALICE24] });
+  check(published24.map(x => x.visibility).join(',') === 'public,unlisted,private,direct',
+    `four addressings → the four visibilities (got ${published24.map(x => x.visibility).join(',')})`);
+  const unaddressed = await ask24(api24, { type: 'Create', object: { type: 'Note', content: 'x' } });
+  check(unaddressed.status === 400, `a post with NO stated audience is refused, not guessed (got ${unaddressed.status})`);
+  const cw = await ask24(api24, { type: 'Create',
+    object: { type: 'Note', content: 'spoiled', summary: 'CW: test' }, to: [wire24.PUBLIC] });
+  check(cw.status === 201 && published24.at(-1)?.spoilerText === 'CW: test',
+    'summary rides through as the content warning');
+
+  // Someone else's note is not ours to edit or delete.
+  const foreignEdit = await ask24(api24, { type: 'Update', object: { id: THEIRS, content: 'hijack' } });
+  check(foreignEdit.status === 403, `editing someone else's note → 403 (got ${foreignEdit.status})`);
+  const foreignDel = await ask24(api24, { type: 'Delete', object: THEIRS });
+  check(foreignDel.status === 403, `deleting someone else's note → 403 (got ${foreignDel.status})`);
+  const ownEdit = await ask24(api24, { type: 'Update', object: { id: OURS, content: 'edited' } });
+  check(ownEdit.status === 200, `editing our own → 200 (got ${ownEdit.status})`);
+
+  // Like, then Undo by the stored activity's id.
+  const like = await ask24(api24, { type: 'Like', object: THEIRS });
+  const likeId = like.json?.id;
+  check(like.status === 201 && /#like-/.test(likeId || ''),
+    `Like → 201 naming the like activity (got ${like.status} ${likeId})`);
+  check(st24.getStatuses().find(s => s.noteId === THEIRS)?.favourited === true, 'the status is favourited');
+  const unlike = await ask24(api24, { type: 'Undo', object: likeId });
+  check(unlike.status === 200 && st24.getStatuses().find(s => s.noteId === THEIRS)?.favourited === false,
+    'Undo by the like id unfavourites');
+
+  // Announce, then Undo by re-stating the inner activity instead of its id.
+  const boost = await ask24(api24, { type: 'Announce', object: THEIRS });
+  check(boost.status === 201 && st24.getStatuses().find(s => s.noteId === THEIRS)?.reblogged === true,
+    `Announce → 201 and the status is boosted (got ${boost.status})`);
+  const unboost = await ask24(api24, { type: 'Undo', object: { type: 'Announce', object: THEIRS } });
+  check(unboost.status === 200 && st24.getStatuses().find(s => s.noteId === THEIRS)?.reblogged === false,
+    'Undo restating Announce+object unboosts');
+
+  // Follow an actor by IRI; the response names the Follow a later Undo needs.
+  const follow = await ask24(api24, { type: 'Follow', object: 'https://m.example/u/zed' });
+  check(follow.status === 201 && /#follow-/.test(follow.json?.id || ''),
+    `Follow → 201 naming the follow activity (got ${follow.status})`);
+  check(st24.getContacts().following.some(f => f.actor === 'https://m.example/u/zed'),
+    'the following record exists');
+  const unfollow = await ask24(api24, { type: 'Undo', object: { type: 'Follow', object: 'https://m.example/u/zed' } });
+  check(unfollow.status === 200 && !st24.getContacts().following.some(f => f.actor === 'https://m.example/u/zed'),
+    'Undo of the Follow unfollows');
+
+  // Pinning is Add/Remove on the featured collection, and only that collection.
+  const pin = await ask24(api24, { type: 'Add', object: OURS, target: urls24.featured });
+  check(pin.status === 200 && pin.json?.pinned === true && featured24 > 0,
+    `Add to featured pins and republishes the collection (got ${pin.status})`);
+  const unpin = await ask24(api24, { type: 'Remove', object: OURS, target: urls24.featured });
+  check(unpin.status === 200 && unpin.json?.pinned === false, 'Remove unpins');
+  const wrongTarget = await ask24(api24, { type: 'Add', object: OURS, target: urls24.outbox });
+  check(wrongTarget.status === 422, `Add to any OTHER collection → 422 (got ${wrongTarget.status})`);
+
+  // The deliberate exclusions and the unknowns.
+  const move = await ask24(api24, { type: 'Move', object: urls24.actor });
+  check(move.status === 422, `Move → 422, pointed at the admin surface (got ${move.status})`);
+  const retire = await ask24(api24, { type: 'Delete', object: urls24.actor });
+  check(retire.status === 422, `Delete of the actor → 422, same (got ${retire.status})`);
+  const poll = await ask24(api24, { type: 'Question', content: 'which?' });
+  check(poll.status === 422, `a non-Note object → 422 (got ${poll.status})`);
+  const badBody = await ask24(api24, null);
+  check(badBody.status === 400, `an empty body → 400 (got ${badBody.status})`);
+
+  // GETs redirect to the pod's canonical documents.
+  const getOutbox = await ask24(api24, null, { method: 'GET' });
+  check(getOutbox.status === 303 && getOutbox.headers.location === urls24.outbox,
+    `GET outbox → 303 to the pod copy (got ${getOutbox.status} ${getOutbox.headers.location})`);
+  const getActor = await ask24(api24, null, { method: 'GET', pathname: '/ap/actor' });
+  check(getActor.status === 303 && getActor.headers.location === urls24.actor,
+    'GET actor → 303 to the pod copy');
+
+  // Unconfigured and viewer-mode agents refuse rather than half-act.
+  const apiUnconf = new C2S({ agent: { ...agent24, configured: () => false }, log: () => {}, auth: okAuth });
+  const unconf = await ask24(apiUnconf, blockBody);
+  check(unconf.status === 409, `unconfigured → 409 (got ${unconf.status})`);
+  const apiViewer = new C2S({
+    agent: { ...agent24, viewer: true, requestTakeover: async () => false },
+    log: () => {}, auth: okAuth,
+  });
+  const viewer = await ask24(apiViewer, blockBody);
+  check(viewer.status === 503, `a viewer that cannot take the lease → 503 (got ${viewer.status})`);
+}
+
 child.kill('SIGTERM');
 fs.rmSync(HOME, { recursive: true, force: true });
 console.log(failures ? `\n${failures} FAILURE(S)` : '\nall green');
