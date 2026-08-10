@@ -162,9 +162,10 @@
     // via Solid-OIDC. That step is the attach flow (not wired in this build).
     const n = $('next-note');
     n.hidden = false;
-    n.innerHTML = 'Next you would <strong>sign in with your pod</strong> to prove it is yours, then this host records '
-      + '<code>@' + intent.handle + '@' + host + '</code> → your pod. '
-      + '(The prove-your-pod step is the attach flow, coming next.)';
+    n.innerHTML = 'Next you would <strong>sign in with your pod</strong> to prove it is yours. This host then records '
+      + '<code>@' + intent.handle + '@' + host + '</code> → your pod and hands you one command to run on your machine — '
+      + '<code>fedipod front …</code> — which points your agent at this front. '
+      + '(The prove-your-pod sign-in is the last unwired step.)';
     $('continue').disabled = true;
   };
 </script>

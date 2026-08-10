@@ -8575,6 +8575,8 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   check(ok.status === 201 && okDoc.frontActor === 'https://fedipod.net/u/alice/ap/actor'
     && okDoc.address === '@alice@fedipod.net' && typeof okDoc.hmacSecret === 'string',
     'a valid token proving the pod creates the account and returns the fronted actor + a secret');
+  check(okDoc.command === `fedipod front https://fedipod.net/u/alice/ap/actor --secret ${okDoc.hmacSecret}`,
+    'and the one command the user runs to point their agent at the front');
   check(written.alice?.podHome === 'https://alice.pod/solid/' && written.alice?.webId === 'https://alice.pod/profile/card#me',
     'the directory row records the pod and the proven WebID');
   const dup = await attach({ handle: 'alice', podHome: 'https://alice.pod/solid/' },

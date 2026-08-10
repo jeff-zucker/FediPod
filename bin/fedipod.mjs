@@ -1446,6 +1446,43 @@ if (cmd === 'up') {
   agent.store.setConfig({ ...config, uiPassword: hashPassword(pw) });
   await agent.store.flush();
   console.log('UI password set — /oauth/authorize now shows a login form (restart a running agent to pick it up)');
+} else if (cmd === 'front') {
+  // Attach this identity to a multi-user front: it publishes and signs under
+  // the fronted actor, and trusts the receipts the front writes. The values
+  // come from the front's signup (POST /api/attach). One command, run once.
+  requireIdentity();
+  const frontActor = args[1];
+  const secret = flag('secret');
+  if (!/^https:\/\/\S+\/ap\/actor$/.test(String(frontActor || ''))) {
+    console.error('usage: fedipod front <https://host/u/<name>/ap/actor> --secret <hmac>');
+    console.error('  (the fronted actor URL and secret come from the front\'s signup page)');
+    process.exit(2);
+  }
+  const { Agent } = await import(new URL('../run-agent.mjs', import.meta.url));
+  const { RemotePod } = await import(new URL('../lib/remote.mjs', import.meta.url));
+  const { apUrls } = await import(new URL('../lib/wire.mjs', import.meta.url));
+  const agent = new Agent({ home: HOME, log: () => {} });
+  const cred = agent.readCredential();
+  if (!cred) { console.error('no credential — run setup first'); process.exit(2); }
+  agent.remote = new RemotePod(cred);
+  await agent.remote.warmup();
+  agent.urls = apUrls(cred.remotePod, cred.root);
+  agent.store.attach(agent.privateStorage(cred, 'state'));
+  await agent.store.load();
+  const config = agent.store.getConfig();
+  if (!config) { console.error('pod state empty — run setup first'); process.exit(2); }
+  if (config.gateway?.frontActor && config.gateway.frontActor !== frontActor) {
+    console.error(`this identity already fronts through ${config.gateway.frontActor}.`);
+    console.error('Changing a published front renames every id — that is a move, not an edit. Detach first if you mean it.');
+    process.exit(2);
+  }
+  const gateway = { ...(config.gateway || {}), url: frontActor.replace(/ap\/actor$/, 'ap/inbox/'),
+    frontActor, mode: 'trust', ...(secret ? { hmacSecret: secret } : {}) };
+  agent.store.setConfig({ ...config, gateway });
+  await agent.store.flush();
+  console.log(`attached to the front — this identity now publishes as ${frontActor}`);
+  console.log('Restart the agent (or `fedipod up`) to republish under the fronted identity.');
+  if (!secret) console.log('No --secret given: pass the front\'s receipt secret to trust its verification.');
 } else if (cmd === 'install-service' || cmd === 'uninstall-service') {
   const { execFileSync } = await import('node:child_process');
   const runAgentPath = new URL('../run-agent.mjs', import.meta.url).pathname;
