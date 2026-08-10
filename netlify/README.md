@@ -1,8 +1,29 @@
-# The inbox gateway (optional, opt-in)
+# The inbox gateway & multi-user front (optional, opt-in)
 
 This directory is an **un-deployed artifact**. Nothing in FediPod runs it. A
 FediPod install works exactly as before without it — deliveries go straight to
 your pod inbox, which buffers them whether your agent is up or not.
+
+Two things live here, sharing the same verify-at-the-door core
+(`lib/gateway-core.mjs`):
+
+- **`functions/inbox.mjs`** — a single-user gateway for identities one operator
+  already controls (below).
+- **`functions/front.mjs`** — a **multi-user front** (`lib/front-core.mjs`): one
+  box a HOST runs to offer `@name@fedipod.net` accounts to many independent
+  FediPod users, each keeping their own pod, agent and signing key. It answers
+  WebFinger for every user, serves each user's public face by rewriting their
+  pod's ids onto the shared domain (so `@me@fedipod.net` is a real handle whose
+  data still lives on the user's own pod), and is the verifying inbox for all of
+  them — routing each verified delivery into the right user's pod inbox. It holds
+  no user key and no user data, only a directory (handle → that user's pod +
+  public key) and the per-user Append credentials. Signup: a user proves control
+  of their pod via Solid-OIDC, picks a free handle, and the host records
+  `handle → their pod`. See `functions/front.mjs` for the directory record shape
+  and env, and `claude/plans/parked-multi-user-front.md` for the full design.
+  (The agent-side "publish and sign under the fronted actor id" step — so a
+  user's own posts carry the `@name@fedipod.net` identity — is the one piece
+  still to build; the front's serving/verifying/routing half is done.)
 
 A gateway is an **always-on, internet-facing box** that becomes your advertised
 inbox. It verifies each delivery's HTTP signature at the door (where the

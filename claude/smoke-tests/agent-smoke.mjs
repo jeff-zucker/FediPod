@@ -8441,6 +8441,86 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
     'a verified Undo drops the follower even with no stored follow id');
 }
 
+// --- 29. multi-user front: WebFinger, per-user actor rewrite, inbox routing ---
+{
+  const front = await import(path.join(root, 'lib/front-core.mjs'));
+  const HOST = 'fedipod.net';
+  const ORIGIN = 'https://fedipod.net';
+  // Two users, each on their own pod, fronted under one domain.
+  const dir = {
+    me: { handle: 'me', podHome: 'https://alice.pod/solid/',
+      actorUrl: 'https://fedipod.net/u/me/ap/actor', kind: 'person',
+      gatewayWebId: 'https://fedipod.net/gw#me', hmacSecret: 'secret-me' },
+    you: { handle: 'you', podHome: 'https://bob.pod/s/',
+      actorUrl: 'https://fedipod.net/u/you/ap/actor', kind: 'person',
+      gatewayWebId: 'https://fedipod.net/gw#me', hmacSecret: 'secret-you' },
+  };
+  // A fake pod: the actor doc served from alice.pod, ids on alice.pod.
+  const podActor = JSON.stringify({
+    '@context': 'https://www.w3.org/ns/activitystreams',
+    id: 'https://alice.pod/solid/ap/actor', type: 'Person', preferredUsername: 'alice',
+    inbox: 'https://alice.pod/solid/ap/inbox/', outbox: 'https://alice.pod/solid/ap/outbox',
+    followers: 'https://alice.pod/solid/ap/followers',
+    publicKey: { id: 'https://alice.pod/solid/ap/actor#main-key',
+      owner: 'https://alice.pod/solid/ap/actor', publicKeyPem: keys.rsaPublicPem },
+  });
+  const podGet = async (u) => u === 'https://alice.pod/solid/ap/actor'
+    ? { status: 200, text: async () => podActor, headers: { get: () => null } }
+    : { status: 404, text: async () => '', headers: { get: () => null } };
+  const puts = [];
+  const ctx = {
+    host: HOST, frontOrigin: ORIGIN, lookup: (h) => dir[h] || null, podGet,
+    podPut: async (h, u, b) => { puts.push({ h, u }); return true; },
+  };
+  const R = (method, p, body) => new Request(ORIGIN + p, body !== undefined
+    ? { method, headers: { 'content-type': 'application/activity+json' }, body }
+    : { method });
+
+  // WebFinger resolves each handle to its fronted actor.
+  const wf = await front.routeFront(R('GET', '/.well-known/webfinger?resource=acct:me@fedipod.net'), ctx);
+  const wfDoc = JSON.parse(wf.body);
+  check(wf.status === 200 && wfDoc.subject === 'acct:me@fedipod.net'
+    && wfDoc.links[0].href === 'https://fedipod.net/u/me/ap/actor',
+    'WebFinger maps @me@fedipod.net to the fronted actor');
+  const wfMiss = await front.routeFront(R('GET', '/.well-known/webfinger?resource=acct:nobody@fedipod.net'), ctx);
+  check(wfMiss.status === 404, 'an unknown handle 404s');
+  const wfWrong = await front.routeFront(R('GET', '/.well-known/webfinger?resource=acct:me@other.net'), ctx);
+  check(wfWrong.status === 404, 'a handle on another host is not ours to answer');
+
+  // The fronted actor: id and all ids rewritten to the front, handle and inbox
+  // fixed so a consumer cross-checks it consistently — the key is unchanged.
+  const actorRes = await front.routeFront(R('GET', '/u/me/ap/actor'), ctx);
+  const actor = JSON.parse(actorRes.body);
+  check(actor.id === 'https://fedipod.net/u/me/ap/actor'
+    && actor.outbox === 'https://fedipod.net/u/me/ap/outbox'
+    && actor.followers === 'https://fedipod.net/u/me/ap/followers',
+    'the fronted actor and every id under it live on the shared domain');
+  check(actor.preferredUsername === 'me'
+    && actor.inbox === 'https://fedipod.net/u/me/ap/inbox/'
+    && actor.endpoints.sharedInbox === 'https://fedipod.net/u/me/ap/inbox/',
+    'its handle is the fronted one and its inbox is the front (so deliveries are verified)');
+  check(actor.publicKey.id === 'https://fedipod.net/u/me/ap/actor#main-key'
+    && actor.publicKey.publicKeyPem === keys.rsaPublicPem,
+    "the key id moves to the front but the key itself is the user's own");
+
+  // A delivery to a user's fronted inbox is verified and forwarded to THAT
+  // user's pod inbox — not the other user's.
+  process.env.AP_ALLOW_PRIVATE_TARGETS = '1';
+  const del = await front.routeFront(
+    R('POST', '/u/me/ap/inbox/', JSON.stringify({ type: 'Follow', actor: 'https://x.example/u/a', object: dir.me.actorUrl })),
+    ctx);
+  delete process.env.AP_ALLOW_PRIVATE_TARGETS;
+  check(del.status === 202 && puts.every(p => p.h === 'me' && p.u.startsWith('https://alice.pod/solid/ap/inbox/')),
+    "a Follow to @me is forwarded to alice's pod inbox, addressed by her handle");
+  check(puts.length === 2, 'the activity and its receipt both land');
+
+  // Routing is per-user: nothing about @me leaks into @you.
+  const youActor = await front.routeFront(R('GET', '/u/you/ap/actor'), ctx);
+  check(youActor.status === 404, "a user whose pod GET 404s the actor is simply not served (bob's pod is a stub here)");
+  const unknownUser = await front.routeFront(R('GET', '/u/ghost/ap/actor'), ctx);
+  check(unknownUser.status === 404, 'a handle not in the directory has no front presence');
+}
+
 child.kill('SIGTERM');
 fs.rmSync(HOME, { recursive: true, force: true });
 console.log(failures ? `\n${failures} FAILURE(S)` : '\nall green');
