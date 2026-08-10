@@ -8275,6 +8275,172 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
     'and the seating is announced');
 }
 
+// --- 27. httpsig: door verification, SSRF-safe key fetch, HMAC receipt ---
+{
+  const { signRequest: sign27 } = await import(req.resolve('@fedify/fedify/sig'));
+  const httpsig = await import(path.join(root, 'lib/httpsig.mjs'));
+  const KID = 'https://pod.example/activitypods-js/ap/actor#main-key';
+  const AID = 'https://pod.example/activitypods-js/ap/actor';
+  const actorDoc27 = {
+    '@context': ['https://www.w3.org/ns/activitystreams', 'https://w3id.org/security/v1'],
+    id: AID, type: 'Person', publicKey: { id: KID, owner: AID, publicKeyPem: keys.rsaPublicPem },
+  };
+  const mkReq = (body = '{"type":"Follow"}') => new Request('https://gw.example/u/me/inbox', {
+    method: 'POST', headers: { 'content-type': 'application/activity+json' }, body,
+  });
+  const loaderFor = (doc) => async (url) => ({ document: doc, documentUrl: url, contextUrl: null });
+
+  const good = await httpsig.verifyHttpSignature(await sign27(mkReq(), keys.rsaPrivate, new URL(KID)),
+    { documentLoader: loaderFor(actorDoc27) });
+  check(good.verified === true && good.method === 'draft-cavage' && good.keyId === KID && good.actor === AID,
+    'a correctly-signed delivery verifies at the door and names the actor');
+
+  // Tamper the body after signing → the Digest no longer matches.
+  const signedGood = await sign27(mkReq(), keys.rsaPrivate, new URL(KID));
+  const tampered = new Request(signedGood.url, { method: 'POST', headers: signedGood.headers, body: '{"type":"Delete"}' });
+  const bad = await httpsig.verifyHttpSignature(tampered, { documentLoader: loaderFor(actorDoc27) });
+  check(bad.verified === false && bad.reason === 'bad-signature-or-key-unfetchable',
+    'a body swapped after signing fails, and says why (a forgery, dropped at the edge)');
+
+  // No signature at all → unverified, distinguished as such.
+  const none = await httpsig.verifyHttpSignature(mkReq(), { documentLoader: loaderFor(actorDoc27) });
+  check(none.verified === false && none.reason === 'no-signature',
+    'an unsigned delivery is unverified with reason no-signature (buffered, not dropped)');
+
+  // The wrong key → fails; the right key on a second try → passes (rotation).
+  const nodeCrypto = await import('node:crypto');
+  const otherPub = nodeCrypto.generateKeyPairSync('rsa', { modulusLength: 2048 })
+    .publicKey.export({ type: 'spki', format: 'pem' });
+  const wrongDoc = { ...actorDoc27, publicKey: { ...actorDoc27.publicKey, publicKeyPem: otherPub } };
+  const missed = await httpsig.verifyHttpSignature(
+    await sign27(mkReq(), keys.rsaPrivate, new URL(KID)), { documentLoader: loaderFor(wrongDoc) });
+  check(missed.verified === false, 'a signature checked against a rotated-away key fails');
+  const refetched = await httpsig.verifyHttpSignature(
+    await sign27(mkReq(), keys.rsaPrivate, new URL(KID)), { documentLoader: loaderFor(actorDoc27) });
+  check(refetched.verified === true, 'and the same signature verifies once the current key is loaded');
+
+  // The SSRF-safe loader refuses a private-address keyId before any fetch.
+  process.env.AP_ALLOW_PRIVATE_TARGETS = '';
+  const loader = httpsig.makeSafeLoader({});
+  let threw = false;
+  try { await loader('http://169.254.169.254/latest/meta-data/'); } catch { threw = true; }
+  check(threw, 'the key loader refuses a cloud-metadata address before fetching it');
+  const cached = httpsig.makeSafeLoader({ getActors: () => ({ [AID]: actorDoc27 }) });
+  const hit = await cached(AID);
+  check(hit.document?.id === AID, 'a cached actor short-circuits the network entirely');
+
+  // The receipt: HMAC makes it tamper-evident with the shared secret.
+  const SECRET = 'gateway-hmac-secret';
+  const receipt = httpsig.signReceipt(httpsig.makeReceipt(good, { gateway: 'https://gw.example/#me' }), SECRET);
+  check(httpsig.verifyReceipt(receipt, SECRET) === true, 'a receipt verifies under its shared secret');
+  check(httpsig.verifyReceipt(receipt, 'wrong-secret') === false, 'and not under any other');
+  check(httpsig.verifyReceipt({ ...receipt, verified: false }, SECRET) === false,
+    'flipping verified after signing breaks the HMAC — a forged receipt is rejected');
+  check(httpsig.verifyReceipt(good, SECRET) === false, 'an unsigned receipt is not trusted');
+}
+
+// --- 28. gateway-core edge decisions + drain trusts a receipt only in trust mode ---
+{
+  const { signRequest: sign28 } = await import(req.resolve('@fedify/fedify/sig'));
+  const gw = await import(path.join(root, 'lib/gateway-core.mjs'));
+  const httpsig28 = await import(path.join(root, 'lib/httpsig.mjs'));
+  const KID = 'https://pod.example/activitypods-js/ap/actor#main-key';
+  const AID = 'https://pod.example/activitypods-js/ap/actor';
+  const actorDoc28 = {
+    '@context': ['https://www.w3.org/ns/activitystreams', 'https://w3id.org/security/v1'],
+    id: AID, type: 'Person', publicKey: { id: KID, owner: AID, publicKeyPem: keys.rsaPublicPem },
+  };
+  const ident = {
+    inboxUrl: 'https://pod.example/activitypods-js/ap/inbox/',
+    actorUrl: 'https://me.example/actor', followersUrl: 'https://me.example/followers',
+    notesPrefix: 'https://me.example/notes/', following: ['https://friend.example/actor'],
+    blocklist: { domains: ['spam.example'], actors: [] }, kind: 'person',
+    gatewayWebId: 'https://gw.example/#me', hmacSecret: 'shhh',
+  };
+  const mkPut = () => { const puts = []; return { puts, put: async (u, b) => { puts.push({ u, b }); return true; } }; }; // eslint-disable-line
+  // The signer's own actor doc satisfies the door's key fetch via the loader —
+  // but handleDelivery builds its OWN loader, so we let key fetches fail
+  // (verified:false, buffered) and instead assert the EDGE decisions, which do
+  // not depend on a reachable key. Signature-verify itself is covered in §27.
+  process.env.AP_ALLOW_PRIVATE_TARGETS = '1';
+  const mkReq28 = (body) => new Request('https://gw.example/u/me/inbox', {
+    method: 'POST', headers: { 'content-type': 'application/activity+json' }, body: JSON.stringify(body),
+  });
+
+  const blocked = mkPut();
+  let r = await gw.handleDelivery(mkReq28({ type: 'Create', actor: 'https://spam.example/u/x', object: {} }),
+    ident, { podPut: blocked.put });
+  check(r.status === 202 && blocked.puts.length === 0, 'a blocked-domain delivery is dropped at the edge, no pod write');
+
+  const unrelated = mkPut();
+  r = await gw.handleDelivery(mkReq28({ type: 'Create', actor: 'https://stranger.example/u/y',
+    object: { type: 'Note', to: ['https://elsewhere.example/actor'] } }), ident, { podPut: unrelated.put });
+  check(r.status === 202 && unrelated.puts.length === 0, 'content that does not concern us never reaches the pod');
+
+  const control = mkPut();
+  r = await gw.handleDelivery(mkReq28({ type: 'Follow', actor: 'https://stranger.example/u/y', object: ident.actorUrl }),
+    ident, { podPut: control.put });
+  check(r.status === 202 && control.puts.length === 2,
+    'a Follow from a stranger always passes (two puts: activity + receipt)');
+  const rcpt = JSON.parse(control.puts.find(p => p.u.endsWith('.receipt.json')).b);
+  check(httpsig28.verifyReceipt(rcpt, ident.hmacSecret) === true && rcpt.verified === false,
+    'the receipt is HMAC-valid and honestly records unverified (no reachable key here)');
+
+  const failPod = { put: async () => false };
+  r = await gw.handleDelivery(mkReq28({ type: 'Follow', actor: 'https://s.example/u', object: ident.actorUrl }),
+    ident, { podPut: failPod.put });
+  check(r.status === 502, 'a pod-write failure returns 5xx so the sender retries — the buffer is preserved');
+  delete process.env.AP_ALLOW_PRIVATE_TARGETS;
+
+  // The drain acts on a receipt ONLY in trust mode.
+  const { PodStore: PS28 } = await import(path.join(root, 'lib/store.mjs'));
+  const { Intake: IK28 } = await import(path.join(root, 'lib/intake.mjs'));
+  const wire28 = await import(path.join(root, 'lib/wire.mjs'));
+  const urls28 = wire28.apUrls('https://pod.example/');
+  const FOLLOWER = 'https://m.example/u/joiner';
+  const mkIntake = (mode) => {
+    const st = new PS28({ log: () => {} });
+    st.setConfig({ remotePod: 'https://pod.example/', handle: 'p', kind: 'person',
+      ...(mode ? { gateway: { url: 'https://gw.example/in', webId: 'https://gw.example/#me', hmacSecret: 's', mode } } : {}) });
+    const accepts = [];
+    const ik = new IK28({ config: st.getConfig(), urls: urls28, remote: {}, store: st,
+      deliverer: { deliver: async (i, a) => accepts.push(a), deliverToAll: async () => {} },
+      publisher: { urls: urls28, publishCollections: async () => {}, publishProfile: async () => {} },
+      local: {}, log: () => {} });
+    ik.fetchAP = async (u) => ({ id: u, type: 'Person', inbox: u + '/inbox' });
+    ik.republish = async () => {};
+    return { st, ik, accepts };
+  };
+  const follow = { type: 'Follow', id: 'https://m.example/f/1', actor: FOLLOWER, object: urls28.actor };
+
+  const shadow = mkIntake('shadow');
+  await shadow.ik.handle(follow, { verified: true });
+  check(shadow.st.getRequests().some(rq => rq.actor === FOLLOWER)
+    && !shadow.st.getContacts().followers.some(f => f.actor === FOLLOWER),
+    'in SHADOW mode a verified Follow still only QUEUES — receipts are measured, not trusted');
+
+  const trust = mkIntake('trust');
+  await trust.ik.handle(follow, { verified: true });
+  check(trust.st.getContacts().followers.some(f => f.actor === FOLLOWER)
+    && !trust.st.getRequests().some(rq => rq.actor === FOLLOWER)
+    && trust.accepts.some(a => a.type === 'Accept'),
+    'in TRUST mode a verified Follow auto-accepts — no queue, Accept sent');
+
+  const trustUnverified = mkIntake('trust');
+  await trustUnverified.ik.handle(follow, { verified: false });
+  check(trustUnverified.st.getRequests().some(rq => rq.actor === FOLLOWER),
+    'an UNVERIFIED follow in trust mode still queues (nothing proved the sender)');
+
+  // A gateway-verified Undo is honored without the followId match an
+  // unverified one needs.
+  const u = mkIntake('trust');
+  u.st.setContacts({ followers: [{ actor: FOLLOWER, inbox: FOLLOWER + '/inbox' /* no followId */ }], following: [] });
+  await u.ik.handle({ type: 'Undo', actor: FOLLOWER, object: { type: 'Follow', actor: FOLLOWER, object: urls28.actor } },
+    { verified: true });
+  check(!u.st.getContacts().followers.some(f => f.actor === FOLLOWER),
+    'a verified Undo drops the follower even with no stored follow id');
+}
+
 child.kill('SIGTERM');
 fs.rmSync(HOME, { recursive: true, force: true });
 console.log(failures ? `\n${failures} FAILURE(S)` : '\nall green');

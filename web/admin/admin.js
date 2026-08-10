@@ -195,6 +195,7 @@ function render() {
   for (const id of ['pane-others', 'pane-identity', 'pane-upkeep']) $(id).hidden = false;
   renderOthers();
   renderInbox();
+  renderGateway();
   if (config.kind === 'group') {
     // Its lists have no bound, so this page scrolls — see body.group in the CSS.
     document.body.classList.add('group');
@@ -783,6 +784,50 @@ async function renderInbox() {
     : '';
   panel.hidden = false;
 }
+
+// The inbox gateway panel (opt-in, collapsed). Reflects /gateway; every button
+// is one route call, and the mode dropdown IS the lifecycle.
+async function renderGateway() {
+  const { status, json } = await api('/gateway');
+  if (status >= 400 || !json) { $('gw-details').hidden = true; return; }
+  $('gw-details').hidden = false;
+  const mode = json.mode || 'off';
+  $('gw-mode-badge').textContent = json.configured ? `— ${mode}` : '— not set up';
+  if (json.url) $('gw-url').value = json.url;
+  if (json.webId) $('gw-webid').value = json.webId;
+  $('gw-lifecycle').hidden = !json.configured;
+  $('gw-mode').value = mode;
+  const s = json.stats || {};
+  $('gw-stats').textContent = json.configured && (s.verified || s.unverified)
+    ? `${s.verified} verified · ${s.unverified} unverified since it was advertised`
+    : '';
+}
+
+$('gw-configure').addEventListener('click', async () => {
+  const r = await write('/gateway',
+    { action: 'configure', url: $('gw-url').value.trim(), webId: $('gw-webid').value.trim() },
+    'gateway saved');
+  if (r?.hmacSecret) {
+    const el = $('gw-secret');
+    el.hidden = false;
+    el.textContent = `Shared secret (paste into the gateway's FEDIPOD_HMAC_SECRET env, shown once): ${r.hmacSecret}`;
+  }
+  renderGateway();
+});
+
+$('gw-mode').addEventListener('change', async () => {
+  const mode = $('gw-mode').value;
+  const done = mode === 'locked' ? 'inbox locked to the gateway'
+    : mode === 'off' ? 'back to the pod inbox' : `gateway ${mode}`;
+  if (await write('/gateway', { action: 'mode', mode }, done)) renderGateway();
+});
+
+$('gw-forget').addEventListener('click', async () => {
+  if (await write('/gateway', { action: 'forget' }, 'gateway forgotten — pod inbox restored')) {
+    $('gw-secret').hidden = true;
+    renderGateway();
+  }
+});
 
 $('inbox-keep').addEventListener('click', () => {
   dismissed = true;

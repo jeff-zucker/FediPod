@@ -1,0 +1,7 @@
+# Optional inbox gateway (see netlify/README.md). Un-deployed by default —
+# nothing in FediPod publishes this; an operator deploys it themselves.
+[build]
+  functions = "netlify/functions"
+
+[functions]
+  node_bundler = "esbuild"

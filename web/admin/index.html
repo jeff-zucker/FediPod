@@ -293,6 +293,35 @@ pre { overflow-x: auto; background: #0001; padding: .6rem; border-radius: .3rem;
     <button id="do-retire" title="   End this identity for good — a Delete, then a Tombstone" class="inline danger" data-confirm="retire">Retire identity</button>
   </div>
 
+  <!-- Inbox gateway: advanced, opt-in, collapsed. Only meaningful once someone
+       has deployed a gateway (see netlify/README.md); by default deliveries go
+       straight to the pod inbox and this stays closed. -->
+  <details id="gw-details">
+    <summary>Inbox gateway <span id="gw-mode-badge" class="hint"></span></summary>
+    <p class="hint" id="gw-intro">A gateway verifies each delivery's signature before it reaches your pod,
+      and drops forgeries and spam at the edge. Optional: without one, mail goes straight to your pod inbox,
+      which buffers it whether this agent is up or not. Deploy one from <code>netlify/README.md</code>, then point at it here.</p>
+    <div class="headrow">
+      <label for="gw-url">Gateway URL</label>
+      <input type="url" id="gw-url" placeholder="https://your-gateway.netlify.app/inbox" autocomplete="off" style="min-width:22em">
+      <label for="gw-webid">Gateway WebID</label>
+      <input type="url" id="gw-webid" placeholder="https://…/gateway/profile/card#me" autocomplete="off" style="min-width:22em">
+      <button type="button" id="gw-configure" class="inline" title="   Save the gateway's URL and WebID, and reveal the shared secret to paste into its env">Save &amp; get secret</button>
+    </div>
+    <p class="hint" id="gw-secret" hidden></p>
+    <div class="headrow" id="gw-lifecycle" hidden>
+      <label for="gw-mode">Mode</label>
+      <select id="gw-mode" title="   off: pod inbox · shadow: advertise + measure, no trust · trust: verified follows auto-accept · locked: only the gateway may deliver">
+        <option value="off">off — deliveries go to the pod inbox</option>
+        <option value="shadow">shadow — advertise the gateway, measure, trust nothing</option>
+        <option value="trust">trust — act on verified receipts</option>
+        <option value="locked">locked — only the gateway may deliver</option>
+      </select>
+      <span id="gw-stats" class="hint"></span>
+      <button type="button" id="gw-forget" class="inline danger" title="   Stop using the gateway and restore the pod inbox">Forget gateway</button>
+    </div>
+  </details>
+
 </section>
 
 <section id="pane-group" hidden>
