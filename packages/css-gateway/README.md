@@ -61,13 +61,25 @@ host/origin from the server's `baseUrl` variables. Override `offersPods`,
 
 ## Status & tests
 
-- `node --test` covers the CSS-free pieces: route claiming, the adapter, the
-  store-backed directory and podPut. These also run inside FediPod's own suite.
-- The CSS-coupled shell (`handler.mjs`, `store-css.mjs`) and the Components.js
-  JSON-LD in `components/` are **authored to the documented CSS 7.x shapes and
-  must be validated against a running CSS instance** (or regenerated with
-  `componentsjs-generator` from the sources) before production use — the same
-  posture as an un-deployed artifact. The instantiation wiring has not yet been
-  run inside a live server.
+- **CSS-free pieces — validated.** `node --test` (and FediPod's own suite) cover
+  route claiming, the adapter, and the store-backed directory/podPut.
+- **The HttpHandler shell — validated against real CSS 7.1.9.** `test/live-css.mjs`
+  instantiates `FediPodGatewayHandler` (extending the real `HttpHandler`) with a
+  `ResourceStore` built from real CSS `BasicRepresentation`/`readableToString`,
+  and drives requests through it: `canHandle` claims the front routes and rejects
+  pod subdomains, and `handle` serves the page, answers WebFinger, and **writes a
+  delivery into the pod inbox through the store** — 10/10. (Run it where
+  `@solid/community-server` resolves.)
+- **The Components.js packaging in `components/` — NOT yet valid; provisional.**
+  Loading it under the installed componentsjs (**5.5.1**) fails: it was drafted
+  to the wrong context version and the wrong `@id`/prefix structure, and the
+  component is not registered. CSS generates this metadata **from TypeScript
+  sources with `componentsjs-generator`** (the `css:dist/…File.jsonld#Class`,
+  `@prefix: true` shape) — hand-authoring it is the wrong approach. The correct
+  fix is a small TypeScript rewrite of the handler + glue, then generate the
+  JSON-LD the way CSS itself does. Until then this component's LOGIC is proven in
+  a live server but it cannot yet be wired via config. `config/gateway.json` is
+  likewise provisional.
 - Monorepo for now, under FediPod's `packages/`. The eventual home is the CSS
-  project's own component ecosystem, contributed upstream when ready.
+  project's own component ecosystem, contributed upstream when ready (which is
+  itself why matching their TS + generator toolchain is the right path).
