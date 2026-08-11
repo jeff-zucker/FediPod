@@ -6,7 +6,7 @@
 // suite — this is the live-CSS validation of the HttpHandler shell.
 import { Readable } from 'node:stream';
 import { BasicRepresentation, readableToString, NotFoundHttpError } from '@solid/community-server';
-import { FediPodGatewayHandler } from './src/index.mjs';
+import { FediPodGatewayHandler } from '../dist/index.js';
 
 let fails = 0;
 const check = (ok, label) => { console.log(`${ok ? 'PASS' : 'FAIL'}  ${label}`); if (!ok) fails++; };

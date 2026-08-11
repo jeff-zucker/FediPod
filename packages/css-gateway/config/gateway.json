@@ -5,25 +5,23 @@
   ],
   "@graph": [
     {
-      "comment": "The FediPod gateway/front handler. Reads the operator's values from CSS variables so one config works everywhere. Set frontHost/frontOrigin to the apex the front answers on; pod subdomains fall through untouched.",
+      "comment": "The FediPod gateway/front handler. Set args_frontHost to the apex the front answers on (e.g. fedipod.net) and args_frontOrigin to its origin; pod subdomains fall through to CSS untouched. Field names carry the args_ prefix the generator produced from the constructor's options object.",
       "@id": "urn:fedipod:gateway:Handler",
       "@type": "FediPodGatewayHandler",
-      "resourceStore": { "@id": "urn:solid-server:default:ResourceStore" },
-      "frontHost": { "@id": "urn:solid-server:default:variable:baseUrlHost" },
-      "frontOrigin": { "@id": "urn:solid-server:default:variable:baseUrl" },
-      "gatewayWebId": null,
-      "offersPods": false,
-      "directoryContainer": "/.internal/fedipod/directory/",
-      "signupPage": null
+      "args_resourceStore": { "@id": "urn:solid-server:default:ResourceStore" },
+      "args_frontHost": "fedipod.net",
+      "args_frontOrigin": { "@id": "urn:solid-server:default:variable:baseUrl" },
+      "args_directoryContainer": "/.internal/fedipod/directory/",
+      "args_offersPods": false
     },
     {
-      "comment": "Insert the handler into the routing waterfall just before the LDP catch-all, so it claims only the front routes and everything else stays normal CSS.",
+      "comment": "Insert the handler into the routing waterfall just before the LDP catch-all, so it claims only the front routes and everything else stays normal CSS. OverrideListInsertBefore is available in componentsjs 5.x (which CSS 7 uses).",
       "@type": "Override",
       "overrideInstance": { "@id": "urn:solid-server:default:BaseHttpHandler" },
       "overrideSteps": [
         {
           "@type": "OverrideListInsertBefore",
-          "overrideParameter": { "@id": "urn:solid-server:default:BaseHttpHandler#handlers" },
+          "overrideParameter": { "@id": "https://linkedsoftwaredependencies.org/bundles/npm/@solid/community-server/^7.0.0/dist/util/handlers/WaterfallHandler.jsonld#WaterfallHandler_handlers" },
           "overrideTarget": { "@id": "urn:solid-server:default:LdpHandler" },
           "overrideValue": { "@id": "urn:fedipod:gateway:Handler" }
         }

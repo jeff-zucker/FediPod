@@ -8,9 +8,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Readable } from 'node:stream';
-import { claims } from '../src/claims.mjs';
-import { nodeToWhatwg, applyToNode } from '../src/adapt.mjs';
-import { makeDirectory, makeStorePodPut } from '../src/directory.mjs';
+import { claims } from '../dist/claims.js';
+import { nodeToWhatwg, applyToNode } from '../dist/adapt.js';
+import { makeDirectory, makeStorePodPut } from '../dist/directory.js';
 
 test('claims only the front host, only its routes', () => {
   const F = 'fedipod.net';
