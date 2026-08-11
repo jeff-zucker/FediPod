@@ -88,12 +88,17 @@ are the sources.
   `config/gateway.json` snippet uses `OverrideListInsertBefore` (confirmed present
   in componentsjs 5.5.1) to insert the handler before the LDP catch-all in
   `BaseHttpHandler`'s waterfall.
-- **The one step not yet run**: booting a full CSS server with `config/gateway.json`
-  imported, to see the Override land in the live handler chain. Every piece it
-  depends on is verified (metadata loads, the handler runs, the override step and
-  target exist), but the end-to-end boot is the remaining deploy check —
-  `args_frontHost`/origin and the exact chain target may need tuning per
-  distribution (stock CSS vs pivot).
+- **Full live boot — validated.** A real CSS 7.1.9 server booted with
+  `config/gateway.json` imported alongside CSS's `config/default.json` (via
+  `AppRunner`): a front route reached the handler while pod traffic fell through.
+  `GET /api/handle?handle=x` with `Host: fedipod.net` returned the handler's JSON
+  (`{ handle, available, offersPods }` — which CSS itself never produces),
+  confirming the `OverrideListInsertBefore` landed the handler in the running
+  waterfall; `GET /` with `Host: localhost` returned CSS's pod root (200),
+  confirming a non-front request is untouched. So the component installs and
+  routes correctly in a live server. (`args_frontHost` and the chain target may
+  still want per-distribution tuning — the pivot's http-handler override could
+  reshape the chain — but the mechanism is proven on stock default config.)
 - Monorepo for now under FediPod's `packages/`. The eventual home is the CSS
   project's own component ecosystem, contributed upstream when ready — which is
   why matching their TS + generator toolchain was the right path.
