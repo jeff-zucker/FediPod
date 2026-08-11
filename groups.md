@@ -24,6 +24,16 @@ The group passes along posts from its own members only. This stops spam from out
 * owner may choose to moderate posts - nothing gets posted without review
 * owner may mute users (refuse to rebroadcast their posts)
 
+<!-- CLAUDE 2026-08-11 — new since the last groups.md; rework/trim as you like, delete these markers when done -->
+The group now follows more of FEP-1b12: a carried post names the group as its
+`audience`, and when you ban or eject someone (or change the moderator roster),
+the group announces that moderation to its members so their servers can mirror
+it. A moderator list can be set on the group's config; those actors' moderation
+requests arriving over federation are held in a review queue rather than acted
+on automatically, since a delivery alone does not prove who sent it. A
+followed group's own announced deletion of a post it carried to you is honoured.
+<!-- /CLAUDE -->
+
 ## Inviting people
 
 A group has a page anyone can open, at `ap/profile.html` under its pod. It

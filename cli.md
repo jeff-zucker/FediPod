@@ -42,23 +42,6 @@ node bin/fedipod.mjs tokens                         # list client logins; --revo
 node bin/fedipod.mjs revoke-credential --email EMAIL   # cut this machine off from the pod account
 ```
 
-An optional **inbox gateway** — an always-on box that verifies deliveries'
-signatures before they reach your pod — has no CLI verbs; it is set up and
-driven from the admin page's Inbox gateway panel. See `netlify/README.md`.
-
-## Joining a front
-
-To take a `@name@front` handle from a multi-user front, sign up on the front's
-page (it proves you own your pod), then run the one command it hands you:
-
-```
-node bin/fedipod.mjs front <https://host/u/<name>/ap/actor> --secret <hmac>
-```
-
-This points the current identity at the front: it publishes and signs under the
-fronted actor, and trusts the receipts the front writes. Restart the agent to
-republish. Your pod, agent and key stay yours — the front only fronts your name.
-
 ## Bluesky
 
 ```
