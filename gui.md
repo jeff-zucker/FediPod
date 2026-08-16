@@ -60,6 +60,21 @@ New followers appear under **Follow requests** with **Accept** and **Refuse**
 beside them; nothing is accepted without you. Groups are different — joining
 follows the group's own moderation settings; see [Groups](groups.md).
 
+<!-- CLAUDE 2026-08-16 — new: Accept all, new-followers control, migration aliases; delete markers when done -->
+**Accept all** answers the whole queue at once, and the identity pane's
+**new followers** control switches between waiting for your approval and
+accepting automatically.
+
+## Moving here from another server
+
+Add your old account in the identity pane's **migration aliases** row, set
+**new followers** to *accepted automatically*, then trigger the move on the
+old server; your followers arrive by themselves. Removing an alias asks
+twice — servers still processing the move check it while they retry. The CSV
+files from the old server's export are imported with the CLI; see
+[CLI admin](cli.md).
+<!-- /CLAUDE -->
+
 ## Protecting & recovering your data
 
 Your posts, timeline, contacts, blocklist and notifications are kept locally,

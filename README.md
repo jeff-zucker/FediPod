@@ -6,6 +6,11 @@
 
 This project is inspired by the fantastic [ActivityPods project](https://github.com/activitypods) and is meant to be a lightweight alternative rather than a replacement.
 
+<!-- CLAUDE 2026-08-16 — jg10 acknowledgement, as approved; delete these markers when done -->
+The client-to-server authentication approach and the fronted-identity idea — advertising an actor on one domain while its documents live on a pod — are borrowed from jg10's [solid-activitypub-netlify](https://github.com/jg10-mastodon-social/solid-activitypub-netlify), which showed that a pod-backed ActivityPub account could run serverless.
+<!-- /CLAUDE -->
+
+
 **Important** if you use `FediPod` to create a pod-based Fediverse account, posts will be sent to your pod until you use the park, retire, or transfer options to temporarily or permanently close your account.  If you are following lots of people, you'll need to start your local agent at least every few days to keep your pod from accumlating mail which is pulled off the pod while your agent is running.
 
 ## Requirements
@@ -54,6 +59,31 @@ It registers every identity on this machine, one service each, so all of your ac
 You can manage your posts, see logs, park, move, transfer your account and perform other actions. See the [GUI admin](gui.md) and [CLI admin](cli.md) pages.
 
 You can also use the admin tools to create other actors, either groups or persons.  You may have as many as you want on the local machine, but each one needs a separate pod.
+
+<!-- CLAUDE 2026-08-16 — new: account migration into FediPod; rework/trim as you like, delete these markers when done -->
+## Moving an existing fediverse account here
+
+A Mastodon (or Pleroma, Akkoma, GoToSocial, Firefish, Misskey) account can be
+moved to a FediPod identity with the fediverse's standard migration:
+
+1. Set up your FediPod account, and on the admin page set **new followers** to
+   *accepted automatically*.
+2. Add your old account as a migration alias:
+   `fedipod alias --add @you@old.server` (or the admin page's alias field).
+3. On the old server, use its move-account option (on Mastodon: Preferences →
+   Account → *Move to a different account*), naming your new address.
+
+Your followers transfer by themselves. Your posts stay on the old server, and
+the old profile redirects to the new one. The rest of the account comes over
+from the old server's CSV export files:
+
+```
+fedipod import following_accounts.csv blocked_accounts.csv muted_accounts.csv lists.csv
+```
+
+which restores who you follow, your blocks, mutes and lists at a polite pace
+and reports anything it could not resolve.
+<!-- /CLAUDE -->
 
 ## Fediverse Clients
 

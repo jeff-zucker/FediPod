@@ -265,6 +265,12 @@ pre { overflow-x: auto; background: #0001; padding: .6rem; border-radius: .3rem;
       <option value="parked">parked</option>
     </select>
   </span>
+  <span id="follows-ctl" hidden>
+    <select id="follows-pick" aria-label="New followers" title="   Whether each new follower waits for you — switch to accepted automatically before moving an old account here, so the whole wave lands">
+      <option value="approve">wait for approval</option>
+      <option value="auto">accepted automatically</option>
+    </select>
+  </span>
   <span id="bsky-connect-ctl" hidden>
     <button type="button" id="bsky-open" class="inline" title="   Connect a Bluesky account this identity also posts as">Connect Bluesky account</button>
   </span>
@@ -274,6 +280,12 @@ pre { overflow-x: auto; background: #0001; padding: .6rem; border-radius: .3rem;
       <option value="off">crosspost off</option>
     </select>
     <button type="button" id="bsky-disconnect" class="inline danger" title="   Forget the Bluesky session and remove the stored credential">Disconnect</button>
+  </span>
+  <span id="alias-ctl" hidden>
+    <input type="text" id="alias-input" placeholder="@you@old.server" autocomplete="off"
+      title="   The account you are moving here from; its server checks this list before it will send the Move">
+    <button type="button" id="alias-add" class="inline"
+      title="   Resolve the old account, list it in alsoKnownAs, and republish the actor">Add alias</button>
   </span>
 </section>
 
@@ -305,7 +317,8 @@ pre { overflow-x: auto; background: #0001; padding: .6rem; border-radius: .3rem;
        promise of a list that cannot fill. Shown only when the setting is on AND
        something is waiting. -->
   <div id="block-requests" hidden>
-    <h3>Follow requests <span class="muted" id="requests-count"></span></h3>
+    <h3>Follow requests <span class="muted" id="requests-count"></span>
+      <button id="admit-all" class="inline" title="   Accept everyone waiting, in one go">Accept all</button></h3>
     <ul class="rows" role="list" id="requests"></ul>
   </div>
 

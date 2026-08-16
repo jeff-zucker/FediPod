@@ -74,3 +74,34 @@ node bin/fedipod.mjs home --to DIR       # move them all somewhere else
 ```
 Stop the agents first. If you use the boot services, run
 `npm run install-service` again afterwards.
+
+<!-- CLAUDE 2026-08-16 — new commands: alias, import, admit --all; delete markers when done -->
+## Moving here from another server
+
+```
+node bin/fedipod.mjs alias --add @you@old.server   # list the old account on your actor
+node bin/fedipod.mjs alias                         # show the aliases
+node bin/fedipod.mjs alias --remove URL --yes      # take one off
+```
+The alias is what the old account's server checks before it will send the
+move. Add it, then trigger the move on the old server. Leave the alias in
+place until the migration has settled — servers keep checking it while they
+retry.
+
+```
+node bin/fedipod.mjs admit --all                   # accept every waiting follow request
+```
+Turning on automatic acceptance first (the admin page's **new followers**
+control) means the incoming wave never queues at all.
+
+```
+node bin/fedipod.mjs import following_accounts.csv blocked_accounts.csv
+```
+Takes the CSV files from the old server's export — follows, blocks, mutes,
+lists and domain blocks; the file names say which is which, or pass
+`--kind follow|block|mute|list|domain` with a single file. Rows are applied
+slowly on purpose and the command shows progress; `import` with no files
+shows where a run stands, and `--clear` drops the finished record. Bookmarks
+are not imported.
+<!-- /CLAUDE -->
+

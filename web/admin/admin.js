@@ -25,6 +25,9 @@ const STATUS = $('status-ctl');
 const STATUS_PICK = $('status-pick');   // held: getElementById can't see it mid-render
 const BSKY_CTL = $('bsky-ctl');
 const BSKY_CONNECT_CTL = $('bsky-connect-ctl');
+const ALIAS_CTL = $('alias-ctl');
+const FOLLOWS_CTL = $('follows-ctl');
+const FOLLOWS_PICK = $('follows-pick');
 const BSKY_CROSSPOST = $('bsky-crosspost');   // held: it rides BSKY_CTL into a generated row
 
 // #say and #fatal live in the accessibility tree from load and hide by being
@@ -119,6 +122,7 @@ function render() {
     ['Fediverse identity', config.address || `@${config.handle} — no resolvable address`,
       config.accountId && config.address ? { href: `/admin/client/#/a/${config.accountId}` } : null],
     ['Solid identity', config.webId, config.remotePod ? { href: config.remotePod, blank: true } : null],
+    ['migration aliases', 'ctl'],
     ['Bluesky identity', 'ctl'],
     ['local store', config.home],
     // The address you actually open, not the bare number — the named origin when
@@ -128,6 +132,9 @@ function render() {
   ];
   if (config.quiescedAt) rows.push(['parked since', config.quiescedAt]);
   if (config.movedTo) rows.push(['moved to', config.movedTo]);
+  // A person gates followers here; a group's gate is the joins control on its
+  // kind row, so the row would be a second switch for the same thing.
+  if (config.kind !== 'group') rows.splice(2, 0, ['new followers', 'ctl']);
   for (const [k, v, link] of rows) {
     if (!v) continue;
     const dt = document.createElement('dt');
@@ -159,6 +166,41 @@ function render() {
       dd.append(STATUS);
       STATUS.hidden = false;
       renderStatus();
+    }
+    if (k === 'new followers') {
+      dd.textContent = '';
+      dd.append(FOLLOWS_CTL);
+      FOLLOWS_CTL.hidden = false;
+      FOLLOWS_PICK.value = config.autoAcceptFollows ? 'auto' : 'approve';
+    }
+    // The accounts elsewhere this one may receive a Move from. Each entry is
+    // removable, behind a second click — servers still retrying a Move check
+    // the list, so removal is not a tidy-up.
+    if (k === 'migration aliases') {
+      dd.textContent = '';
+      for (const alias of config.aliases || []) {
+        let armed = false;
+        const rm = document.createElement('button');
+        rm.type = 'button';
+        rm.className = 'inline danger';
+        rm.textContent = '✕';
+        rm.title = '   Remove this alias';
+        rm.addEventListener('click', async () => {
+          if (!armed) {
+            armed = true;
+            rm.textContent = 'confirm ✕';
+            rm.title = '   Servers still retrying the Move check this alias — click again to remove it anyway';
+            return;
+          }
+          const r = await write('/alias', { remove: alias, confirm: true }, 'alias removed and the actor republished');
+          if (r) { config.aliases = r.aliases; render(); }
+        });
+        const chip = document.createElement('span');
+        chip.append(alias, ' ', rm);
+        dd.append(chip, ' ');
+      }
+      dd.append(ALIAS_CTL);
+      ALIAS_CTL.hidden = false;
     }
     // Connected: the account itself, then the way out. Not: a form on the page.
     if (k === 'Bluesky identity') {
@@ -385,6 +427,20 @@ $('bsky-disconnect').addEventListener('click', async () => {
     if (await write('/atproto/disconnect', {}, 'bluesky account disconnected')) await load();
   } finally { bskyBusy = false; }
 });
+// Adding resolves the old account on the agent side, so what lands in
+// alsoKnownAs is its canonical id, not the string typed here.
+let aliasBusy = false;
+$('alias-add').addEventListener('click', async () => {
+  if (aliasBusy) return;
+  const v = $('alias-input').value.trim();
+  if (!v) { say('enter the old account first — @you@old.server', 'err'); return; }
+  aliasBusy = true;
+  try {
+    const r = await write('/alias', { add: v }, 'alias added and the actor republished');
+    if (r) { $('alias-input').value = ''; config.aliases = r.aliases; render(); }
+  } finally { aliasBusy = false; }
+});
+
 // Silent on success — the select already shows the new state.
 const setCrossPost = async (on) => {
   if (bskyBusy || on === !!config.atproto?.crossPost) return;
@@ -490,6 +546,23 @@ onPick(STATUS_PICK, (v) => setStatus(v === 'parked'), renderStatus);
 onPick(BSKY_CROSSPOST, (v) => setCrossPost(v === 'on'),
   () => { BSKY_CROSSPOST.value = config?.atproto?.crossPost ? 'on' : 'off'; });
 
+// A person's follower gate. Automatic is what a migration wave needs: every
+// follower's server re-follows at once, and the waiting queue caps at 500.
+let followsBusy = false;
+const setAutoAccept = async (auto) => {
+  if (followsBusy || auto === !!config.autoAcceptFollows) return;
+  followsBusy = true;
+  try {
+    if (await write('/config', { autoAcceptFollows: auto },
+      auto ? 'new followers are accepted automatically' : 'new followers will wait for you')) {
+      config.autoAcceptFollows = auto;
+    }
+    FOLLOWS_PICK.value = config.autoAcceptFollows ? 'auto' : 'approve';
+  } finally { followsBusy = false; }
+};
+onPick(FOLLOWS_PICK, (v) => setAutoAccept(v === 'auto'),
+  () => { FOLLOWS_PICK.value = config?.autoAcceptFollows ? 'auto' : 'approve'; });
+
 // One row: what it is, then what can be done to it.
 function row(text, sub, actions) {
   const li = document.createElement('li');
@@ -560,6 +633,13 @@ function fillRequests(list) {
     ['Refuse', () => write('/refuse', { actor: r.actor }, 'refused'), 'Turn this down; they may ask again'],
   ]));
 }
+
+// The whole queue in one action — the shape a migration wave arrives in.
+$('admit-all').addEventListener('click', async () => {
+  if (await write('/admit', { all: true }, 'accepted everyone waiting')) {
+    if (config.kind === 'group') refreshGroup(); else refreshRequests();
+  }
+});
 
 // A person's whole group pane is this one block, and only when it has something
 // in it — an empty heading promising a list is what the group console avoids too.

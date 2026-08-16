@@ -38,6 +38,7 @@ import { Deliverer } from './lib/deliver.mjs';
 import { Publisher } from './lib/publisher.mjs';
 import { Intake } from './lib/intake.mjs';
 import { TagFeed } from './lib/tagfeed.mjs';
+import { ImportWorker } from './lib/import.mjs';
 import { Atproto } from './lib/atproto.mjs';
 import { BskyFeed } from './lib/bskyfeed.mjs';
 import { BskyGroup } from './lib/bskygroup.mjs';
@@ -329,6 +330,9 @@ export class Agent {
       deliverer: this.deliverer, publisher: this.publisher, log: this.log, lease: this.lease,
       archive: this.privateStorage(cred, 'archive'),
     });
+    // The CSV-import worker: paced, resumable, armed only while active.
+    this.importer?.stop();
+    this.importer = new ImportWorker({ agent: this, log: this.log });
     // The Bluesky connection, when one exists. Stamped to this actor; a
     // credential connected for another identity is treated as absent.
     this.atproto = new Atproto({ localDir: this.home, actorId: this.urls.actor, log: this.log });
@@ -504,6 +508,8 @@ export class Agent {
       }
     }, 30_000);
     this.schedTimer.unref();
+    // A CSV import interrupted by a restart or a handoff picks back up here.
+    this.importer?.resume();
     this.log(`federating as @${this.store.getConfig()?.handle}@${new URL(this.urls.base).host}`);
     if (this.renamed) {
       // The display name lives in the actor document, so a rename only
@@ -578,6 +584,7 @@ export class Agent {
     this.tagfeed?.stop();
     this.bskyfeed?.stop();
     this.deliverer?.stop();
+    this.importer?.stop();
     clearInterval(this.schedTimer);
     // The lease too: standing down means standing down. Left renewing, a viewer
     // keeps writing to the pod on the active agent's behalf and can win the
@@ -607,6 +614,9 @@ export class Agent {
         this.tagfeed ||= new TagFeed({ store: this.store, intake: this.intake, log: this.log });
         this.tagfeed.start();
         this.startBsky();
+        // A stranded CSV import resumes here too — startActive is not on the
+        // takeover path, so without this the rows sat pending until a restart.
+        this.importer?.resume();
         this.log('takeover complete — draining resumed on this device');
       } catch (e) { this.log(`takeover drain start: ${e.message}`); }
     }, 35_000).unref?.();                      // > one renewal interval: old agent has demoted

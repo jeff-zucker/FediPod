@@ -1697,6 +1697,150 @@ WantedBy=default.target
     console.error(`agent not reachable on :${PORT} (${e.message})`);
     process.exit(1);
   }
+} else if (cmd === 'alias') {
+  // The migration landing pad: old accounts listed in alsoKnownAs, which their
+  // servers check before sending a Move here. Served by the running agent
+  // because adding one resolves the old account and republishes the actor.
+  requireIdentity();
+  try {
+    if (flag('add')) {
+      const res = await fetch(`http://localhost:${PORT}/alias`, {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ add: flag('add') }),
+      });
+      const body = await res.json();
+      if (res.status >= 400) { console.error(body.error || `HTTP ${res.status}`); process.exit(1); }
+      console.log('alias added and the actor republished — aliases now:');
+      for (const a of body.aliases) console.log(`  ${a}`);
+      console.log('on the old server, Account → Move to a different account will now accept this one');
+    } else if (flag('remove')) {
+      const res = await fetch(`http://localhost:${PORT}/alias`, {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ remove: flag('remove'), ...(has('yes') ? { confirm: true } : {}) }),
+      });
+      const body = await res.json();
+      if (res.status === 409) { console.error(body.error); console.error('add --yes to remove it anyway'); process.exit(1); }
+      if (res.status >= 400) { console.error(body.error || `HTTP ${res.status}`); process.exit(1); }
+      console.log(body.aliases.length ? 'removed — aliases now:' : 'removed — no aliases left');
+      for (const a of body.aliases) console.log(`  ${a}`);
+    } else {
+      const res = await fetch(`http://localhost:${PORT}/config`);
+      const body = await res.json();
+      if (res.status >= 400) { console.error(body.error || `HTTP ${res.status}`); process.exit(1); }
+      const aliases = body.aliases || [];
+      if (!aliases.length) console.log('no aliases — fedipod alias --add @you@old.server');
+      for (const a of aliases) console.log(a);
+    }
+  } catch (e) {
+    console.error(`agent not reachable on :${PORT} (${e.message})`);
+    process.exit(1);
+  }
+} else if (cmd === 'import') {
+  // The CSV exports the old account's server hands its leaver, staged with the
+  // running agent and applied by its paced worker. File names tell the kinds —
+  // the names Mastodon's export uses, which the rest of the family copies.
+  requireIdentity();
+  const NOVAL = new Set(['--clear', '--status']);
+  const files = [];
+  for (let i = 1; i < args.length; i++) {
+    const a = args[i];
+    if (a.startsWith('--')) { if (!NOVAL.has(a)) i++; continue; }
+    files.push(a);
+  }
+  const jpost = (body) => fetch(`http://localhost:${PORT}/import`, {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
+  }).then(async r => ({ status: r.status, json: await r.json().catch(() => null) }));
+  const jget = () => fetch(`http://localhost:${PORT}/import`)
+    .then(async r => ({ status: r.status, json: await r.json().catch(() => null) }));
+  const showProgress = (p) => {
+    const parts = Object.entries(p.byKind || {}).map(([k, c]) =>
+      `${k} ${c.done}/${c.done + c.pending + c.failed}${c.failed ? ` (${c.failed} failed)` : ''}`);
+    console.log(parts.join(', ') || 'nothing staged');
+  };
+  const kindOf = (file) => {
+    const b = path.basename(file).toLowerCase();
+    if (b.includes('following')) return 'follow';
+    if (b.includes('domain')) return 'domain';
+    if (b.includes('block')) return 'block';
+    if (b.includes('mute')) return 'mute';
+    if (b.includes('list')) return 'list';
+    if (b.includes('bookmark')) return 'bookmark';
+    return null;
+  };
+  try {
+    if (has('clear')) {
+      const r = await jpost({ clear: true });
+      if (r.status >= 400) { console.error(r.json?.error || `HTTP ${r.status}`); process.exit(1); }
+      console.log('import record cleared');
+    } else if (!files.length) {
+      const r = await jget();
+      if (r.status >= 400) { console.error(r.json?.error || `HTTP ${r.status}`); process.exit(1); }
+      if (!r.json.rows) {
+        console.log('nothing imported yet — usage: fedipod import <csv-file…> [--kind follow|block|mute|list|domain]');
+      } else {
+        showProgress(r.json);
+        for (const f of r.json.failures || []) console.log(`  failed ${f.kind} ${f.value}: ${f.reason}`);
+      }
+    } else {
+      for (const file of files) {
+        const kind = flag('kind') || kindOf(file);
+        if (kind === 'bookmark') { console.log(`${file}: bookmarks are not imported — skipped`); continue; }
+        if (!['follow', 'block', 'mute', 'list', 'domain'].includes(kind)) {
+          console.error(`${file}: cannot tell what this is from its name — pass --kind follow|block|mute|list|domain`);
+          process.exit(2);
+        }
+        let text;
+        try { text = fs.readFileSync(file, 'utf8'); }
+        catch (e) { console.error(`${file}: ${e.message}`); process.exit(2); }
+        // Stay under the agent's request cap, splitting on line boundaries —
+        // but never inside a quoted field, where a newline is field content:
+        // a boundary is only taken while the quotes seen so far are balanced.
+        const chunks = [];
+        let chunk = [], size = 0, quotes = 0;
+        for (const line of text.split('\n')) {
+          if (size + line.length > 800_000 && chunk.length && quotes % 2 === 0) {
+            chunks.push(chunk.join('\n')); chunk = []; size = 0;
+          }
+          chunk.push(line);
+          size += line.length + 1;
+          quotes += (line.match(/"/g) || []).length;
+        }
+        if (chunk.length) chunks.push(chunk.join('\n'));
+        let staged = 0, duplicate = 0, already = 0, invalid = 0;
+        for (const c of chunks) {
+          const r = await jpost({ kind, text: c });
+          if (r.status >= 400) { console.error(`${file}: ${r.json?.error || `HTTP ${r.status}`}`); process.exit(1); }
+          staged += r.json.staged; duplicate += r.json.duplicate;
+          already += r.json.already; invalid += r.json.invalid;
+        }
+        console.log(`${file}: staged ${staged} ${kind} row(s)`
+          + (already ? `, ${already} already applied` : '')
+          + (duplicate ? `, ${duplicate} already staged` : '')
+          + (invalid ? `, ${invalid} unreadable` : ''));
+      }
+      // Watch it run. The worker paces itself, so a big list takes a while;
+      // ctrl-c leaves it running and `fedipod import` shows where it is.
+      let last = '';
+      for (;;) {
+        await new Promise(r => setTimeout(r, 2000));
+        const r = await jget();
+        if (r.status >= 400) break;
+        const p = r.json;
+        const line = `applied ${p.done} of ${p.rows}${p.failed ? ` (${p.failed} failed)` : ''}`;
+        if (line !== last) { console.log(line); last = line; }
+        if (!p.pending) {
+          for (const f of (p.failures || []).slice(0, 20)) console.log(`  failed ${f.kind} ${f.value}: ${f.reason}`);
+          if ((p.failures || []).length > 20) {
+            console.log(`  … and ${p.failures.length - 20} more — \`fedipod import\` lists them`);
+          }
+          break;
+        }
+      }
+    }
+  } catch (e) {
+    console.error(`agent not reachable on :${PORT} (${e.message})`);
+    process.exit(1);
+  }
 } else if (cmd === 'rebuild') {
   requireIdentity();
   // Served by the running agent because it needs the lease: it writes the
@@ -1737,9 +1881,11 @@ WantedBy=default.target
   const BY_ACTOR = ['mute', 'unmute', 'eject', 'admit', 'refuse'];
   const TOGGLES = { review: ['on', 'off'], joins: ['open', 'approve'] };
   const post = !GETS.includes(cmd);
+  const admitAll = cmd === 'admit' && has('all');
   const arg = post ? (flag('actor') || flag('note') || args[1]) : null;
-  if (post && !TOGGLES[cmd] && !arg) {
-    console.error(`usage: fedipod ${cmd} <${BY_ACTOR.includes(cmd) ? 'actor' : 'note'}-url>`);
+  if (post && !TOGGLES[cmd] && !arg && !admitAll) {
+    console.error(`usage: fedipod ${cmd} <${BY_ACTOR.includes(cmd) ? 'actor' : 'note'}-url>`
+      + (cmd === 'admit' ? '   (or: fedipod admit --all)' : ''));
     process.exit(2);
   }
   if (TOGGLES[cmd] && !TOGGLES[cmd].includes(arg)) {
@@ -1748,6 +1894,7 @@ WantedBy=default.target
   }
   const payload = cmd === 'review' ? { on: arg === 'on' }
     : cmd === 'joins' ? { approve: arg === 'approve' }
+    : admitAll ? { all: true }
     : BY_ACTOR.includes(cmd) ? { actor: arg } : { noteId: arg };
   let body;
   try {
@@ -1788,7 +1935,8 @@ WantedBy=default.target
       ? 'joins now need approval — the actor advertises manuallyApprovesFollowers and was republished'
       : 'joins are now open — anyone who follows is admitted at once');
   } else if (cmd === 'admit' || cmd === 'refuse') {
-    console.log(`${cmd === 'admit' ? 'admitted' : 'refused'} ${arg} — ${body.requests} still waiting`);
+    if (admitAll) console.log(`admitted ${body.admitted} — ${body.requests} still waiting`);
+    else console.log(`${cmd === 'admit' ? 'admitted' : 'refused'} ${arg} — ${body.requests} still waiting`);
   } else if (cmd === 'mute' || cmd === 'unmute') {
     console.log(`${cmd}d ${arg} — ${body.actors.length} muted member(s)`);
   } else if (cmd === 'eject') {
@@ -1931,7 +2079,10 @@ WantedBy=default.target
   }
 } else {
   console.log('usage: fedipod <setup|start|stop|status|state|upgrade|rebuild|home|passwd'
-    + '|tokens|revoke-credential|install-service|archive> [--flags]');
+    + '|tokens|revoke-credential|install-service|archive|alias|import> [--flags]');
+  console.log('  alias: --add <@you@old.server|url> | --remove <url> [--yes]   migration aliases (alsoKnownAs)');
+  console.log('  import: <csv-file…> from the old account\'s export (follows, blocks, mutes, lists,');
+  console.log('          domain blocks); no files = progress; --clear drops the record');
   console.log('  state: --to <path|url|pod>   move THIS identity\'s private half');
   console.log('         --all [--apply]       move every identity\'s onto this machine');
   console.log('         --drop-remote [--apply]  remove the pod\'s copy afterwards');

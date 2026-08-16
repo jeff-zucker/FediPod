@@ -6285,6 +6285,375 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   fs.rmSync(CHOME, { recursive: true, force: true });
 }
 
+// --- 14b. migration aliases: alsoKnownAs carries them, and the /alias route ---
+{
+  // The wire half: the WebID first, then every alias, and the term declared
+  // whenever either is present.
+  const au = wire.apUrls('https://you.example/');
+  const both = wire.actorDoc({
+    urls: au, handle: 'you', publicKeyPem: 'K',
+    webId: 'https://you.example/profile/card#me', aliases: ['https://old.example/users/you'],
+  });
+  check(JSON.stringify(both.alsoKnownAs)
+    === JSON.stringify(['https://you.example/profile/card#me', 'https://old.example/users/you']),
+    'alsoKnownAs lists the WebID first, then the alias');
+  const aliasOnly = wire.actorDoc({
+    urls: au, handle: 'you', publicKeyPem: 'K', aliases: ['https://old.example/users/you'],
+  });
+  check(JSON.stringify(aliasOnly.alsoKnownAs) === JSON.stringify(['https://old.example/users/you'])
+    && aliasOnly['@context'].some(c => typeof c === 'object' && c.alsoKnownAs),
+    'an alias with no WebID still declares and carries alsoKnownAs');
+  const neither = wire.actorDoc({ urls: au, handle: 'you', publicKeyPem: 'K' });
+  check(neither.alsoKnownAs === undefined
+    && !neither['@context'].some(c => typeof c === 'object' && c.alsoKnownAs),
+    'no WebID and no aliases → no alsoKnownAs and no stray term declaration');
+
+  // publishMove builds its own actor doc, so an alias has to survive the move.
+  const { Publisher: PubM } = await import(path.join(root, 'lib/publisher.mjs'));
+  const putDocs = {};
+  const mpub = new PubM({
+    config: { remotePod: 'https://you.example/', handle: 'you', name: 'You',
+      aliases: ['https://old.example/users/you'] },
+    remote: {
+      webId: 'https://you.example/profile/card#me',
+      putJson: async (u, doc) => { putDocs[u] = doc; },
+      setAcl: async () => {},
+    },
+    local: {},
+    store: {
+      getContacts: () => ({ followers: [{ actor: 'https://a.example/u/x', inbox: 'https://a.example/i' }], following: [] }),
+      getConfig: () => ({}), setConfig: () => {}, flush: async () => true,
+    },
+    deliverer: { deliverToAll: async () => {} }, publicKeyPem: 'K', log: () => {},
+  });
+  await mpub.publishMove('https://new.example/users/you');
+  const movedActor = putDocs[mpub.urls.actor];
+  check(movedActor?.movedTo === 'https://new.example/users/you'
+    && movedActor.alsoKnownAs?.includes('https://old.example/users/you'),
+    'publishMove keeps the aliases on the actor it leaves behind');
+
+  // The route half: resolve to the canonical id, dedup, republish; removal
+  // asks first; a pod nobody can WebFinger is refused as a Move target.
+  const { startAdmin: startAdminA } = await import(path.join(root, 'lib/admin.mjs'));
+  const APORT = 18661;
+  const astore = new PodStore({ log: () => {} });
+  astore.setConfig({ remotePod: 'https://solo.example/', handle: 'solo', name: 'solo',
+    issuer: 'https://example', kind: 'person' });
+  const aurls = wire.apUrls('https://solo.example/');
+  const republishedA = [];
+  const aagent = {
+    home: '/tmp/nowhere-aliases', store: astore, urls: aurls,
+    configured: () => true, logLines: () => [],
+    status: () => ({ configured: true, mode: 'active', kind: 'person', handle: 'solo', actor: aurls.actor }),
+    readCredential: () => ({ webId: 'https://solo.example/profile/card#me' }),
+    requestTakeover: async () => true,
+    intake: {
+      // The profile URL answers with the canonical id, and the canonical id
+      // vouches for itself — the second fetch the route makes before storing.
+      fetchAP: async (u) => (
+        u === 'https://old.example/@you' ? { id: 'https://old.example/users/you', type: 'Person' }
+        : u === 'https://old.example/users/you' ? { id: 'https://old.example/users/you', type: 'Person' }
+        : u === aurls.actor ? { id: aurls.actor, type: 'Person' }
+        : null),
+    },
+    publisher: {
+      urls: aurls, config: {},
+      publishProfile: async () => { republishedA.push(1); return { unreachable: [] }; },
+    },
+  };
+  startAdminA({ port: APORT, gateToken: '', agent: aagent, handle: 'solo', log: () => {} });
+  await new Promise(r => setTimeout(r, 150));
+  const apost = (body) => fetch(`http://localhost:${APORT}/alias`, {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
+  }).then(async r => ({ status: r.status, json: await r.json().catch(() => null) }));
+
+  const added = await apost({ add: 'https://old.example/@you' });
+  check(added.status === 200
+    && JSON.stringify(added.json?.aliases) === JSON.stringify(['https://old.example/users/you'])
+    && astore.getConfig().aliases?.[0] === 'https://old.example/users/you'
+    && aagent.publisher.config.aliases?.[0] === 'https://old.example/users/you'
+    && republishedA.length === 1,
+    'adding an alias stores the canonical id, patches the live config, and republishes');
+
+  const again = await apost({ add: 'https://old.example/@you' });
+  check(again.status === 200 && again.json?.aliases.length === 1,
+    'adding the same account twice keeps one entry');
+
+  const unresolved = await apost({ add: 'https://gone.example/users/x' });
+  check(unresolved.status === 400 && /could not fetch/.test(unresolved.json?.error || ''),
+    'an old account that does not answer is refused, never stored as typed');
+
+  // A URL whose answer names an id that does not vouch for itself is refused:
+  // the stub answers the liar's URL but the claimed id dereferences to nothing.
+  aagent.intake.fetchAP = ((orig) => async (u) => (
+    u === 'https://liar.example/thing' ? { id: 'https://victim.example/users/x', type: 'Person' } : orig(u)
+  ))(aagent.intake.fetchAP);
+  const liar = await apost({ add: 'https://liar.example/thing' });
+  check(liar.status === 400 && astore.getConfig().aliases.length === 1,
+    'an id one host claims for another is not stored until it vouches for itself');
+
+  const self = await apost({ add: aurls.actor });
+  check(self.status === 400 && /this account/.test(self.json?.error || ''),
+    'the actor cannot be its own alias');
+
+  const rmAsk = await apost({ remove: 'https://old.example/users/you' });
+  check(rmAsk.status === 409 && astore.getConfig().aliases.length === 1,
+    'removal without confirm is a warning, and nothing changes');
+  const rmYes = await apost({ remove: 'https://old.example/users/you', confirm: true });
+  check(rmYes.status === 200 && rmYes.json?.aliases.length === 0
+    && astore.getConfig().aliases.length === 0,
+    'confirmed removal takes the alias off and republishes');
+
+  aagent.publisher.urls = wire.apUrls('https://shared.example/people/solo/');
+  const dark = await apost({ add: 'https://old.example/@you' });
+  check(dark.status === 400 && /WebFinger/.test(dark.json?.error || ''),
+    'a path-hosted pod is refused as a Move target, and told why');
+  aagent.publisher.urls = aurls;
+
+  const cfgGet = await fetch(`http://localhost:${APORT}/config`).then(r => r.json());
+  check(Array.isArray(cfgGet.aliases), 'GET /config reports the aliases list for the page');
+
+  // ---- the follower landing pad: auto-accept is a setting, the queue answers as one ----
+  const cpostA = (path2, body) => fetch(`http://localhost:${APORT}${path2}`, {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
+  }).then(async r => ({ status: r.status, json: await r.json().catch(() => null) }));
+
+  const auto = await cpostA('/config', { autoAcceptFollows: true });
+  check(auto.status === 200 && auto.json.published === false
+    && astore.getConfig().autoAcceptFollows === true
+    && aagent.publisher.config.autoAcceptFollows === true
+    && auto.json.config.autoAcceptFollows === true,
+    'autoAcceptFollows is a setting: stored, patched into the LIVE config, not republished');
+
+  const delivered = [];
+  const published = [];
+  astore.setRequests([
+    { actor: 'https://a.example/u/1', inbox: 'https://a.example/i1', activity: { id: 'f1' }, at: 'T' },
+    { actor: 'https://a.example/u/2', inbox: 'https://a.example/i2', activity: { id: 'f2' }, at: 'T' },
+    { actor: 'https://b.example/u/3', inbox: 'https://b.example/i3', activity: { id: 'f3' }, at: 'T' },
+  ]);
+  aagent.deliverer = { deliver: async (inbox, act) => { delivered.push([inbox, act.type]); } };
+  aagent.publisher.publishCollections = async (which) => { published.push(which); };
+  const bulk = await cpostA('/admit', { all: true });
+  check(bulk.status === 200 && bulk.json.admitted === 3 && bulk.json.requests === 0
+    && astore.getContacts().followers.length === 3,
+    'admit --all answers the whole queue and every follower lands in contacts');
+  check(delivered.length === 3 && delivered.every(([, t]) => t === 'Accept'),
+    'each of them still gets its own Accept');
+  check(published.length === 1 && published[0].followers === true && published[0].pending === true,
+    'and the collections republish exactly once for the lot');
+}
+
+// --- 14c. CSV import: parsing, staging, and the paced worker ---
+{
+  const { parseCsv, normalizeImport, ImportWorker, IMPORT_STATE_DOC } =
+    await import(path.join(root, 'lib/import.mjs'));
+
+  // ---- parsing ----
+  check(JSON.stringify(parseCsv('a,"b,c",d\r\n"say ""hi""",x\n'))
+    === JSON.stringify([['a', 'b,c', 'd'], ['say "hi"', 'x']]),
+    'CSV parsing survives quoted commas, doubled quotes and CRLF');
+
+  const fol = normalizeImport('follow',
+    'Account address,Show boosts,Notify on new posts,Languages\n'
+    + 'mei@a.example,true,false,\n@kofi@b.example,true,,\nnot-a-handle\n');
+  check(JSON.stringify(fol.values) === JSON.stringify(['mei@a.example', 'kofi@b.example'])
+    && fol.invalid.length === 1,
+    'a following export: header dropped, extra columns ignored, @ stripped, junk counted');
+
+  const lst = normalizeImport('list', 'Birds,mei@a.example\n"Close, personal",kofi@b.example\n');
+  check(JSON.stringify(lst.values) === JSON.stringify([
+    { value: 'mei@a.example', list: 'Birds' }, { value: 'kofi@b.example', list: 'Close, personal' },
+  ]), 'a lists export keeps the list title, commas and all');
+
+  const dom = normalizeImport('domain', 'spam.example\nSub.Bad.example\nnot a domain\n');
+  check(JSON.stringify(dom.values) === JSON.stringify(['spam.example', 'sub.bad.example'])
+    && dom.invalid.length === 1,
+    'a domain export lowercases and keeps only real domains');
+
+  const hashList = normalizeImport('list', '#birds,mei@a.example\n');
+  check(hashList.values.length === 1 && hashList.values[0].list === '#birds',
+    'a list titled with # is a title, not a comment');
+
+  // ---- the worker, offline: a fake agent and a stubbed resolve ----
+  const events = [];
+  const iurls = wire.apUrls('https://you.example/');
+  const istore = new PodStore({ log: () => {} });
+  istore.setContacts({ followers: [], following: [{ actor: 'https://a.example/u/old', inbox: 'https://a.example/i', handle: 'old@a.example', accepted: true }] });
+  const iagent = {
+    store: istore,
+    urls: iurls,
+    publisher: { urls: iurls, publishCollections: async (w) => { events.push(['publish', w]); } },
+    deliverer: { deliver: async (inbox, act) => { events.push(['deliver', act.type, inbox]); } },
+    intake: { fetchAP: async () => null },
+    remote: { pausedUntil: 0 },
+    lease: { stillHeld: () => true },
+  };
+  const w = new ImportWorker({ agent: iagent, log: () => {} });
+
+  const staged = w.stage('follow', ['mei@a.example', 'mei@a.example', 'old@a.example']);
+  w.stop();                                   // driven by hand below
+  check(staged.staged === 1 && staged.duplicate === 1 && staged.already === 1,
+    'staging dedupes: one new row, one duplicate, one already followed');
+
+  w.resolve = async (h) => ({ id: `https://a.example/u/${h.split('@')[0]}`, inbox: 'https://a.example/inbox' });
+  istore.write = ((orig) => function (doc, val) {   // watch the contact write order
+    if (doc === 'contacts.json') events.push(['contacts', val.following.length]);
+    return orig.call(this, doc, val);
+  })(istore.write);
+  await w.tick();
+  const deliverAt = events.findIndex(e => e[0] === 'deliver');
+  const contactsAt = events.findIndex(e => e[0] === 'contacts' && e[1] === 2);
+  check(deliverAt > -1 && contactsAt > -1 && contactsAt < deliverAt,
+    'a follow records the contact BEFORE the Follow leaves, so its Accept can land');
+  check(istore.getContacts().following.find(f => f.handle === 'mei@a.example')?.accepted === false,
+    'the imported follow waits as unaccepted, like any other');
+  check(!events.some(e => e[0] === 'publish'),
+    'no per-row collections republish');
+
+  await w.tick();                             // nothing pending → finish
+  const st1 = istore.read(IMPORT_STATE_DOC, null);
+  check(st1.completedAt && events.filter(e => e[0] === 'publish').length === 1
+    && events.find(e => e[0] === 'publish')[1].following === true,
+    'the run closes with ONE collections republish for all the follows');
+
+  // blocks: domain rows land in one tick; handle rows resolve then apply
+  const w2 = new ImportWorker({ agent: iagent, log: () => {} });
+  w2.resolve = async () => ({ id: 'https://bad.example/u/troll' });
+  w2.stage('domain', ['spam.example', 'worse.example']);
+  w2.stop();
+  await w2.tick();
+  check(JSON.stringify(istore.getBlocklist().domains) === JSON.stringify(['spam.example', 'worse.example']),
+    'domain rows are free and land as one batch');
+  w2.stage('block', ['troll@bad.example']);
+  w2.stop();
+  await w2.tick();
+  check(istore.getBlocklist().actors.includes('https://bad.example/u/troll'),
+    'a blocked handle resolves to its actor before it can match anything');
+  w2.stage('mute', ['troll@bad.example']);
+  w2.stop();
+  await w2.tick();
+  check(istore.getMuted().actors.includes('https://bad.example/u/troll'), 'mutes the same way');
+  // The list row keeps the REAL resolve: a handle already in contacts answers
+  // from the record, so this passes with a fetchAP that returns nothing.
+  const w2b = new ImportWorker({ agent: iagent, log: () => {} });
+  w2b.stage('list', [{ value: 'old@a.example', list: 'Birds' }]);
+  w2b.stop();
+  await w2b.tick();
+  const list1 = istore.getLists().find(l => l.title === 'Birds');
+  check(list1?.members?.[0] === 'https://a.example/u/old',
+    'a list row reuses the contact record — no network for a handle we follow');
+
+  // pauses: the pod's backoff and a lost lease both hold the row, unjudged
+  const w3 = new ImportWorker({ agent: iagent, log: () => {} });
+  w3.resolve = async () => { throw new Error('unreachable'); };
+  w3.stage('follow', ['gone@dead.example']);
+  w3.stop();
+  iagent.remote.pausedUntil = Date.now() + 60_000;
+  await w3.tick();
+  check(istore.read(IMPORT_STATE_DOC, null).rows.find(r => r.value === 'gone@dead.example').status === 'pending',
+    'the pod asking for quiet pauses the run — no row is failed for it');
+  iagent.remote.pausedUntil = 0;
+  iagent.lease = { stillHeld: () => false };
+  await w3.tick();
+  check(istore.read(IMPORT_STATE_DOC, null).rows.find(r => r.value === 'gone@dead.example').status === 'pending',
+    'a lost lease holds the run for whoever took over');
+  iagent.lease = { stillHeld: () => true };
+  w3.lastFollowAt = 0;
+  await w3.tick();
+  check(istore.read(IMPORT_STATE_DOC, null).rows.find(r => r.value === 'gone@dead.example').status === 'failed',
+    'a host that really is dead fails its row and the run moves on');
+
+  await w3.tick();                            // nothing pending → the run closes
+  check(istore.read(IMPORT_STATE_DOC, null).completedAt
+    && events.some(e => e[0] === 'publish' && e[1].blocked === true),
+    'closing a run that blocked anyone republishes the blocked collection once');
+
+  // resume: an unclosed run re-arms; a closed one stays closed
+  const w4 = new ImportWorker({ agent: iagent, log: () => {} });
+  w4.resume();
+  check(w4.timer === null, 'a completed run does not restart the worker');
+
+  // ---- the race the review caught: rows staged or cleared while a row is
+  // in flight survive it — verdicts commit against a FRESH read ----
+  let releaseRow;
+  const w5 = new ImportWorker({ agent: iagent, log: () => {} });
+  w5.resolve = () => new Promise(r => {
+    releaseRow = () => r({ id: 'https://x.example/u/slow', inbox: 'https://x.example/i' });
+  });
+  w5.stage('follow', ['slow@x.example']);
+  w5.stop();
+  const inFlight = w5.tick();                 // holds at the resolve await
+  await new Promise(r => setTimeout(r, 10));
+  w5.stage('follow', ['late@y.example']);     // lands while the row travels
+  w5.stop();
+  releaseRow();
+  await inFlight;
+  const stR = istore.read(IMPORT_STATE_DOC, null);
+  check(stR.rows.find(r => r.value === 'slow@x.example')?.status === 'done'
+    && stR.rows.find(r => r.value === 'late@y.example')?.status === 'pending',
+    'a batch staged while a row is in flight survives the row landing');
+
+  let releaseRow2;
+  const w6 = new ImportWorker({ agent: iagent, log: () => {} });
+  w6.resolve = () => new Promise(r => {
+    releaseRow2 = () => r({ id: 'https://z.example/u/a', inbox: 'https://z.example/i' });
+  });
+  w6.stage('follow', ['a@z.example']);
+  w6.stop();
+  const inFlight2 = w6.tick();
+  await new Promise(r => setTimeout(r, 10));
+  w6.clear();                                 // cancel while the row travels
+  releaseRow2();
+  await inFlight2;
+  check(istore.read(IMPORT_STATE_DOC, null).rows.length === 0,
+    'clear() during an in-flight row stays cleared — nothing resurrects');
+
+  // ---- the route: CSV text in, staged counts out, progress readable ----
+  const { startAdmin: startAdminI } = await import(path.join(root, 'lib/admin.mjs'));
+  const IPORT = 18662;
+  const rstore = new PodStore({ log: () => {} });
+  rstore.setConfig({ remotePod: 'https://imp.example/', handle: 'imp', name: 'imp',
+    issuer: 'https://example', kind: 'person' });
+  const ragent2 = {
+    home: '/tmp/nowhere-import', store: rstore, urls: wire.apUrls('https://imp.example/'),
+    configured: () => true, logLines: () => [],
+    status: () => ({ configured: true, mode: 'active', kind: 'person', handle: 'imp' }),
+    readCredential: () => ({ webId: 'https://imp.example/profile/card#me' }),
+    requestTakeover: async () => true,
+    publisher: { urls: wire.apUrls('https://imp.example/'), config: {} },
+  };
+  ragent2.importer = new ImportWorker({ agent: ragent2, log: () => {} });
+  startAdminI({ port: IPORT, gateToken: '', agent: ragent2, handle: 'imp', log: () => {} });
+  await new Promise(r => setTimeout(r, 150));
+  const ipost = (body) => fetch(`http://localhost:${IPORT}/import`, {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
+  }).then(async r => ({ status: r.status, json: await r.json().catch(() => null) }));
+
+  const badKind = await ipost({ kind: 'bookmarks', text: 'x' });
+  check(badKind.status === 400 && /kind must be/.test(badKind.json?.error || ''),
+    'an unknown kind is refused with the list of real ones');
+  const stagedD = await ipost({ kind: 'domain', text: 'spam.example\nnot a domain\n' });
+  check(stagedD.status === 200 && stagedD.json.staged === 1 && stagedD.json.invalid === 1
+    && stagedD.json.invalidSample?.[0] === 'not a domain',
+    'staging over HTTP counts what it took and quotes what it could not read');
+  ragent2.importer.stop();                    // hand-drive the applier
+  await ragent2.importer.tick();
+  const prog = await fetch(`http://localhost:${IPORT}/import`).then(r => r.json());
+  check(prog.done === 1 && prog.pending === 0
+    && rstore.getBlocklist().domains.includes('spam.example'),
+    'GET /import shows the progress the worker made');
+  const cleared = await ipost({ clear: true });
+  check(cleared.status === 200 && cleared.json.cleared === true
+    && (await fetch(`http://localhost:${IPORT}/import`).then(r => r.json())).rows === 0,
+    'clear drops the record');
+
+  ragent2.requestTakeover = async () => false;
+  const refusedT = await ipost({ kind: 'domain', text: 'x.example\n' });
+  check(refusedT.status === 503 && /another device/.test(refusedT.json?.error || ''),
+    'a device that cannot take the lease is refused — no second worker runs');
+}
+
 // --- 15. the private half in a pod of its own, and the drain that respects it ---
 {
   const PPORT = 18631;
