@@ -6654,6 +6654,44 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
     'a device that cannot take the lease is refused — no second worker runs');
 }
 
+// --- 14d. multi-device keys and the inbox-only front ---
+{
+  const { moveKeysToPod } = await import(path.join(root, 'lib/keys.mjs'));
+  const kdir = fs.mkdtempSync('/tmp/fedipod-keys-');
+  const krec = { rsa: { publicPem: 'PUB', privatePem: 'PRIV' }, ed25519: {}, mintedFor: 'https://a.example/ap/actor' };
+  const kwrite = (dir) => fs.writeFileSync(path.join(dir, 'keys.json'), JSON.stringify(krec));
+
+  kwrite(kdir);
+  const kstore = { docs: {}, write(d, v) { this.docs[d] = v; }, commit: async () => true };
+  await moveKeysToPod(kstore, { localDir: kdir, actorId: 'https://a.example/ap/actor', log: () => {} });
+  check(kstore.docs['keys.json']?.rsa?.privatePem === 'PRIV' && !fs.existsSync(path.join(kdir, 'keys.json')),
+    'a local key moves into pod state and the local file goes');
+
+  kwrite(kdir);
+  let refused = null;
+  await moveKeysToPod(kstore, { localDir: kdir, actorId: 'https://OTHER.example/ap/actor' })
+    .catch(e => { refused = e.message; });
+  check(/belongs to/.test(refused || '') && fs.existsSync(path.join(kdir, 'keys.json')),
+    'a key stamped for another actor is refused, and stays put');
+
+  const badStore = { write() {}, commit: async () => false };
+  let failed = null;
+  await moveKeysToPod(badStore, { localDir: kdir, actorId: 'https://a.example/ap/actor' })
+    .catch(e => { failed = e.message; });
+  check(/did not land/.test(failed || '') && fs.existsSync(path.join(kdir, 'keys.json')),
+    'a pod write that does not land leaves the local key untouched');
+  fs.rmSync(kdir, { recursive: true, force: true });
+
+  // The @me@mypod shape: the actor advertises the shared door as its inbox
+  // while every id stays on the pod — inbox moved, identity not.
+  const mu = wire.apUrls('https://you.example/');
+  const door = 'https://fedipod.example/u/you/ap/inbox/';
+  const muActor = wire.actorDoc({ urls: mu, handle: 'you', publicKeyPem: 'K', inbox: door });
+  check(muActor.inbox === door && muActor.endpoints.sharedInbox === door
+    && muActor.id === mu.actor && muActor.outbox === mu.outbox,
+    'inbox-only fronting: the door is the inbox, every id stays on the pod');
+}
+
 // --- 15. the private half in a pod of its own, and the drain that respects it ---
 {
   const PPORT = 18631;

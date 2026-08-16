@@ -1447,15 +1447,22 @@ if (cmd === 'up') {
   await agent.store.flush();
   console.log('UI password set — /oauth/authorize now shows a login form (restart a running agent to pick it up)');
 } else if (cmd === 'front') {
-  // Attach this identity to a multi-user front: it publishes and signs under
-  // the fronted actor, and trusts the receipts the front writes. The values
-  // come from the front's signup (POST /api/attach). One command, run once.
+  // Attach this identity to a multi-user front. Two shapes:
+  //   fedipod front <.../ap/actor> --secret S                 fronted identity
+  //   fedipod front <.../ap/inbox/> --secret S --inbox-only   @me@mypod: the
+  //     identity stays on the pod; only the advertised inbox moves to the
+  //     shared filter's door. Leaving is one republish with the pod inbox.
   requireIdentity();
-  const frontActor = args[1];
+  const target = args[1];
   const secret = flag('secret');
-  if (!/^https:\/\/\S+\/ap\/actor$/.test(String(frontActor || ''))) {
-    console.error('usage: fedipod front <https://host/u/<name>/ap/actor> --secret <hmac>');
-    console.error('  (the fronted actor URL and secret come from the front\'s signup page)');
+  const inboxOnly = has('inbox-only');
+  const okActor = /^https:\/\/\S+\/ap\/actor$/.test(String(target || ''));
+  const okInbox = /^https:\/\/\S+\/ap\/inbox\/?$/.test(String(target || ''));
+  if (inboxOnly ? !okInbox : !okActor) {
+    console.error(inboxOnly
+      ? 'usage: fedipod front <https://host/u/<name>/ap/inbox/> --secret <hmac> --inbox-only'
+      : 'usage: fedipod front <https://host/u/<name>/ap/actor> --secret <hmac> [--inbox-only]');
+    console.error('  (the URL and secret come from the front\'s signup page)');
     process.exit(2);
   }
   const { Agent } = await import(new URL('../run-agent.mjs', import.meta.url));
@@ -1471,18 +1478,91 @@ if (cmd === 'up') {
   await agent.store.load();
   const config = agent.store.getConfig();
   if (!config) { console.error('pod state empty — run setup first'); process.exit(2); }
-  if (config.gateway?.frontActor && config.gateway.frontActor !== frontActor) {
+  if (config.gateway?.frontActor && (inboxOnly || config.gateway.frontActor !== target)) {
     console.error(`this identity already fronts through ${config.gateway.frontActor}.`);
     console.error('Changing a published front renames every id — that is a move, not an edit. Detach first if you mean it.');
     process.exit(2);
   }
-  const gateway = { ...(config.gateway || {}), url: frontActor.replace(/ap\/actor$/, 'ap/inbox/'),
-    frontActor, mode: 'trust', ...(secret ? { hmacSecret: secret } : {}) };
+  const gateway = inboxOnly
+    ? { ...(config.gateway || {}), url: target.replace(/\/?$/, '/'), mode: 'trust',
+        ...(secret ? { hmacSecret: secret } : {}) }
+    : { ...(config.gateway || {}), url: target.replace(/ap\/actor$/, 'ap/inbox/'),
+        frontActor: target, mode: 'trust', ...(secret ? { hmacSecret: secret } : {}) };
   agent.store.setConfig({ ...config, gateway });
   await agent.store.flush();
-  console.log(`attached to the front — this identity now publishes as ${frontActor}`);
-  console.log('Restart the agent (or `fedipod up`) to republish under the fronted identity.');
+  if (inboxOnly) {
+    console.log('attached to the shared filter — your identity stays on your pod;');
+    console.log(`the actor will advertise ${gateway.url} as its inbox.`);
+  } else {
+    console.log(`attached to the front — this identity now publishes as ${target}`);
+  }
+  console.log('Restart the agent (or `fedipod up`) to republish the actor.');
   if (!secret) console.log('No --secret given: pass the front\'s receipt secret to trust its verification.');
+} else if (cmd === 'keys') {
+  // Where the signing key lives; `--to pod` moves it into pod state — with
+  // the state store on a pod every device reaches, that is what lets them
+  // all sign as one actor. `--to local` flips back: the next start adopts
+  // the pod copy onto this machine and removes it from the pod.
+  requireIdentity();
+  const localKeyFile = path.join(HOME, 'keys.json');
+  const to = flag('to');
+  if (!to) {
+    const cred0 = JSON.parse(fs.readFileSync(path.join(HOME, 'credential.json'), 'utf8'));
+    console.log(fs.existsSync(localKeyFile)
+      ? `signing key: ${tildify(localKeyFile)} (this machine only)`
+      : cred0.keysMode === 'pod'
+        ? 'signing key: pod state (shared by every device that reaches the state store)'
+        : 'signing key: none found here — it mints on the next start');
+    process.exit(0);
+  }
+  if (!['pod', 'local'].includes(to)) {
+    console.error('usage: fedipod keys [--to pod|local]');
+    process.exit(2);
+  }
+  // The running agent holds the key and the config in memory — stop it first.
+  const answering = await fetch(`http://localhost:${PORT}/status`).then(r => r.ok).catch(() => false);
+  if (answering) {
+    console.error(`an agent is answering on :${PORT} — stop it first (fedipod stop), then re-run`);
+    process.exit(2);
+  }
+  const credPath = path.join(HOME, 'credential.json');
+  const cred = JSON.parse(fs.readFileSync(credPath, 'utf8'));
+  if (to === 'local') {
+    if (cred.keysMode !== 'pod') { console.log('keys are already local'); process.exit(0); }
+    delete cred.keysMode;
+    writeJsonAtomic(credPath, cred);
+    console.log('keys set to local — the next start adopts the pod copy onto this machine and removes it from the pod');
+    process.exit(0);
+  }
+  if (cred.keysMode === 'pod' && !fs.existsSync(localKeyFile)) {
+    console.log('keys are already pod-held');
+    process.exit(0);
+  }
+  const { Agent } = await import(new URL('../run-agent.mjs', import.meta.url));
+  const { RemotePod } = await import(new URL('../lib/remote.mjs', import.meta.url));
+  const { apUrls } = await import(new URL('../lib/wire.mjs', import.meta.url));
+  const { moveKeysToPod } = await import(new URL('../lib/keys.mjs', import.meta.url));
+  const agent = new Agent({ home: HOME, log: () => {} });
+  agent.remote = new RemotePod(cred);
+  await agent.remote.warmup();
+  agent.store.attach(agent.privateStorage(cred, 'state'));
+  await agent.store.load();
+  const gwActor = agent.store.getConfig()?.gateway?.frontActor;
+  const urls = apUrls(cred.remotePod, cred.root,
+    gwActor ? { publicBase: gwActor.replace(/ap\/actor\/?$/, '') } : undefined);
+  try {
+    await moveKeysToPod(agent.store, { localDir: HOME, actorId: urls.actor, log: console.log });
+  } catch (e) {
+    console.error(e.message);
+    process.exit(1);
+  }
+  cred.keysMode = 'pod';
+  writeJsonAtomic(credPath, cred);
+  if (cred.privateRoot) {
+    console.log(`note: this identity's state store is ${cred.privateRoot} — devices share the key`);
+    console.log('only when the state store is a pod they can all reach (`fedipod state --to pod`).');
+  }
+  console.log('done — restart the agent');
 } else if (cmd === 'install-service' || cmd === 'uninstall-service') {
   const { execFileSync } = await import('node:child_process');
   const runAgentPath = new URL('../run-agent.mjs', import.meta.url).pathname;
@@ -2079,7 +2159,9 @@ WantedBy=default.target
   }
 } else {
   console.log('usage: fedipod <setup|start|stop|status|state|upgrade|rebuild|home|passwd'
-    + '|tokens|revoke-credential|install-service|archive|alias|import> [--flags]');
+    + '|tokens|revoke-credential|install-service|archive|alias|import|keys|front> [--flags]');
+  console.log('  keys: where the signing key lives; --to pod|local moves it (pod = multi-device signing)');
+  console.log('  front: attach to a front; --inbox-only keeps your identity and moves only the inbox');
   console.log('  alias: --add <@you@old.server|url> | --remove <url> [--yes]   migration aliases (alsoKnownAs)');
   console.log('  import: <csv-file…> from the old account\'s export (follows, blocks, mutes, lists,');
   console.log('          domain blocks); no files = progress; --clear drops the record');
