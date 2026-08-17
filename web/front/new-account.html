@@ -12,8 +12,8 @@
   p.lede { color: var(--dim); margin-top: 0; }
   fieldset { border: 1px solid var(--line); border-radius: 12px; padding: 1rem 1.1rem; margin: 1rem 0; }
   legend { font-weight: 600; padding: 0 .4rem; }
-  .choices { display: flex; flex-wrap: wrap; gap: .5rem; }
-  .choices button { flex: 1 1 12rem; padding: .7rem .6rem; border: 1px solid var(--line); border-radius: 10px;
+  .choices { display: flex; flex-direction: column; gap: .5rem; }
+  .choices button { padding: .7rem .8rem; border: 1px solid var(--line); border-radius: 10px;
     background: transparent; font: inherit; cursor: pointer; text-align: left; }
   .choices button[aria-pressed="true"] { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
   .choices button b { display: block; }
@@ -33,30 +33,52 @@
   code { background: rgba(120,120,120,.12); padding: .05em .35em; border-radius: 4px; }
   pre { background: rgba(120,120,120,.12); padding: .7rem .9rem; border-radius: 8px; overflow-x: auto; }
   ol.steps li { margin: .5rem 0; }
-  details { border: 1px solid var(--line); border-radius: 12px; padding: .6rem 1.1rem; margin: 1.2rem 0; }
-  details summary { font-weight: 600; cursor: pointer; }
 </style>
 </head>
 <body>
 <h1>Keep your name. Lose the noise.</h1>
-<p class="lede">This host is a <strong>mail filter</strong> for FediPod accounts. Your name, your key and your
-  data stay on <strong>your own pod</strong> — this box only receives your fediverse mail, verifies each
-  delivery, drops the junk, and passes the rest to your pod. Leaving takes one command; nothing of yours
-  is ever here.</p>
+<p class="lede">This is a FediPod <strong>gateway</strong> — a mail filter for accounts that stay
+  <strong>yours</strong>. Your name, your key and your data live on your own pod; this box only receives your
+  fediverse mail, verifies each delivery, drops the junk, and passes the rest to your pod. Leaving takes one
+  command; nothing of yours is ever here.</p>
 
 <fieldset>
   <legend>What are you here to do?</legend>
   <div class="choices" role="group" aria-label="Path">
-    <button type="button" id="pick-attach" aria-pressed="false"><b>Attach my FediPod</b><span>I already run one — filter my mail</span></button>
-    <button type="button" id="pick-create" aria-pressed="false"><b>Create a FediPod</b><span>I'm new — pod, agent, then attach</span></button>
+    <button type="button" id="pick-create" aria-pressed="false"><b>Create a new FediPod account</b><span>pod, agent, then attach</span></button>
+    <button type="button" id="pick-attach" aria-pressed="false"><b>Attach an existing FediPod account</b><span>filter my mail through this gateway</span></button>
+    <button type="button" id="pick-detach" aria-pressed="false"><b>Detach an existing FediPod account</b><span>go back to unfiltered delivery</span></button>
+    <button type="button" id="pick-transfer" aria-pressed="false"><b>Transfer a fediverse account to FediPod</b><span>move here from Mastodon and friends</span></button>
+    <button type="button" id="pick-host" aria-pressed="false"><b>Run a gateway like this one</b><span>a doorway of your own, for many users</span></button>
   </div>
 </fieldset>
 
+<!-- create: get a pod, run the agent, come back and attach -->
+<section id="create-form" hidden>
+  <h2>Create a new FediPod account</h2>
+  <p class="hint">A FediPod is two things you own: a <strong>pod</strong> (always-on storage with your name on
+    it) and an <strong>agent</strong> (the app you read and post from, on any of your machines). A browser
+    cannot install the agent for you — there is exactly one command to run.</p>
+  <ol class="steps">
+    <li><strong>Get a pod</strong>, if you don't have one: any Solid pod host that offers
+      <em>https subdomains</em> works, or a Community Solid Server you run yourself.</li>
+    <li><strong>Install and start the agent</strong> on your own machine:
+      <pre>git clone https://github.com/jeff-zucker/FediPod
+cd FediPod
+npm install
+npm start</pre>
+      Setup opens in your browser and can also create the pod account for you.</li>
+    <li><strong>Come back here and attach</strong>, so this gateway starts filtering your mail.</li>
+  </ol>
+  <p id="create-pods" class="hint" hidden>This host also offers pods — you can take one at step 1 instead of
+    bringing your own; it stays exportable, so you can leave with everything.</p>
+</section>
+
 <!-- attach: an existing FediPod points its inbox here; identity stays put -->
 <form id="attach-form" hidden>
-  <h2>Attach your FediPod</h2>
+  <h2>Attach an existing FediPod account</h2>
   <p class="hint">Your account stays <code>@you@your.pod</code> — other servers keep finding you at your own
-    address. Attaching only changes where your <em>mail</em> arrives: your actor advertises this host's door
+    address. Attaching only changes where your <em>mail</em> arrives: your actor advertises this gateway's door
     as its inbox, and everything that passes verification lands in your pod as before.</p>
 
   <label for="pod-url">Your pod address</label>
@@ -74,31 +96,41 @@
   <p class="hint" id="attach-note" hidden></p>
 </form>
 
-<!-- create: get a pod, run the agent, come back and attach -->
-<section id="create-form" hidden>
-  <h2>Create a FediPod</h2>
-  <p class="hint">A FediPod is two things you own: a <strong>pod</strong> (always-on storage with your name on
-    it) and an <strong>agent</strong> (the app you read and post from, on any of your machines). A browser
-    cannot install the agent for you — there is exactly one command to run.</p>
-  <ol class="steps">
-    <li><strong>Get a pod</strong>, if you don't have one: any Solid pod host that offers
-      <em>https subdomains</em> works, or a Community Solid Server you run yourself.</li>
-    <li><strong>Install and start the agent</strong> on your own machine:
-      <pre>git clone https://github.com/jeff-zucker/FediPod
-cd FediPod
-npm install
-npm start</pre>
-      Setup opens in your browser and can also create the pod account for you.</li>
-    <li><strong>Come back here and attach</strong>, so this host starts filtering your mail.</li>
-  </ol>
-  <p id="create-pods" class="hint" hidden>This host also offers pods — you can take one at step 1 instead of
-    bringing your own; it stays exportable, so you can leave with everything.</p>
+<!-- detach: done on the user's own agent; the gateway cannot reach in -->
+<section id="detach-form" hidden>
+  <h2>Detach an existing FediPod account</h2>
+  <p class="hint">Detaching is yours to do, not this gateway's — your agent republishes your actor with your
+    pod's own inbox, and deliveries go straight there again. On your machine:</p>
+  <pre>node bin/fedipod.mjs gateway --detach</pre>
+  <p class="hint">Your name and data never moved, so nothing else changes. The door you had here goes quiet
+    and its name can be reused.</p>
 </section>
 
-<details>
-  <summary>Run a front like this one</summary>
-  <p>A front is only a <strong>doorway</strong>: a directory, name lookups, verify-and-forward. It stores no
-    user content and dictates nobody's pod. The one choice you make is what your users do about pods:</p>
+<!-- transfer: the standard fediverse move, aimed at a FediPod -->
+<section id="transfer-form" hidden>
+  <h2>Transfer a fediverse account to FediPod</h2>
+  <p class="hint">The fediverse's standard migration works toward a FediPod: your followers move over
+    automatically, and your old profile redirects. Posts stay on the old server — no fediverse migration
+    carries them.</p>
+  <ol class="steps">
+    <li><strong>Have a FediPod</strong> — create one first (the first option above).</li>
+    <li>On your agent's admin page, set <strong>new followers</strong> to <em>accepted automatically</em>,
+      so the wave of arriving followers doesn't queue.</li>
+    <li>Tell your FediPod about the old account:
+      <pre>node bin/fedipod.mjs alias --add @you@old.server</pre></li>
+    <li>On the old server: Preferences → Account → <em>Move to a different account</em>, naming your
+      FediPod address.</li>
+    <li>Bring the rest over from the old server's CSV export:
+      <pre>node bin/fedipod.mjs import following_accounts.csv blocked_accounts.csv muted_accounts.csv lists.csv</pre></li>
+  </ol>
+</section>
+
+<!-- host: run your own gateway; a gateway never hosts pods -->
+<section id="host-form" hidden>
+  <h2>Run a gateway like this one</h2>
+  <p>You stand up your own gateway on <strong>your own box</strong>. A gateway is only a
+    <strong>doorway</strong>: a directory, name lookups, verify-and-forward. It stores no user content and dictates
+    nobody's pod. The one choice you make is what your users do about pods:</p>
   <div class="tier">
     <h3>Bring-your-pod, mandatory</h3>
     <p class="hint">Every user supplies a pod they already control, hosted wherever they like. You run the doorway
@@ -109,11 +141,11 @@ npm start</pre>
     <h3>Bring-your-pod, optional</h3>
     <p class="hint">Same doorway — but users who have no pod may take one from a pod service you also happen to run
       or recommend. That pod hosting is a <em>separate</em> thing (its own server, its own duties as a data
-      custodian); the front never provides pods itself, and a user who brings their own always keeps full custody.</p>
+      custodian); the gateway never provides pods itself, and a user who brings their own always keeps full custody.</p>
   </div>
   <p class="hint">Setup and installer: see <code>netlify/README.md</code> in the FediPod repo. If you host pods on a
     Community Solid Server, the gateway can also run there as a component instead of on a separate box.</p>
-</details>
+</section>
 
 <script>
   const $ = (id) => document.getElementById(id);
@@ -124,14 +156,16 @@ npm start</pre>
     $('create-pods').hidden = !offersPods;
   }).catch(() => {});
 
-  const pickButtons = [$('pick-attach'), $('pick-create')];
+  const picks = ['pick-create', 'pick-attach', 'pick-detach', 'pick-transfer', 'pick-host'];
+  const panels = { 'pick-create': 'create-form', 'pick-attach': 'attach-form',
+    'pick-detach': 'detach-form', 'pick-transfer': 'transfer-form', 'pick-host': 'host-form' };
   function pick(which) {
-    for (const b of pickButtons) b.setAttribute('aria-pressed', String(b.id === which));
-    $('attach-form').hidden = which !== 'pick-attach';
-    $('create-form').hidden = which !== 'pick-create';
+    for (const id of picks) {
+      $(id).setAttribute('aria-pressed', String(id === which));
+      $(panels[id]).hidden = id !== which;
+    }
   }
-  $('pick-attach').onclick = () => pick('pick-attach');
-  $('pick-create').onclick = () => pick('pick-create');
+  for (const id of picks) $(id).onclick = () => pick(id);
 
   // Suggest the door name from the pod's own first label, still editable.
   $('pod-url').addEventListener('input', () => {
@@ -173,9 +207,9 @@ npm start</pre>
     // yours, via Solid-OIDC — the last unwired step of this page.
     const n = $('attach-note');
     n.hidden = false;
-    n.innerHTML = 'Next you would <strong>sign in with your pod</strong> to prove it is yours. This host then '
+    n.innerHTML = 'Next you would <strong>sign in with your pod</strong> to prove it is yours. This gateway then '
       + 'records the door <code>' + slug + '</code> → your pod inbox and hands you one command to run on your '
-      + 'machine — <code>fedipod front … --inbox-only</code> — which makes your actor advertise this door as its '
+      + 'machine — <code>fedipod gateway … --inbox-only</code> — which makes your actor advertise this door as its '
       + 'inbox. Your name never moves, and one republish undoes it. '
       + '(The prove-your-pod sign-in is the last unwired step.)';
     $('attach-continue').disabled = true;

@@ -1446,13 +1446,29 @@ if (cmd === 'up') {
   agent.store.setConfig({ ...config, uiPassword: hashPassword(pw) });
   await agent.store.flush();
   console.log('UI password set — /oauth/authorize now shows a login form (restart a running agent to pick it up)');
-} else if (cmd === 'front') {
-  // Attach this identity to a multi-user front. Two shapes:
-  //   fedipod front <.../ap/actor> --secret S                 fronted identity
-  //   fedipod front <.../ap/inbox/> --secret S --inbox-only   @me@mypod: the
+} else if (cmd === 'gateway' || cmd === 'front') {
+  // Attach this identity to a gateway ('front' kept as an alias). Shapes:
+  //   fedipod gateway <.../ap/inbox/> --secret S --inbox-only   the usual one:
   //     identity stays on the pod; only the advertised inbox moves to the
-  //     shared filter's door. Leaving is one republish with the pod inbox.
+  //     gateway's door. Leaving is one republish with the pod inbox.
+  //   fedipod gateway <.../ap/actor> --secret S                 fronted identity
+  //   fedipod gateway --detach                                  back to the pod inbox
   requireIdentity();
+  if (has('detach')) {
+    try {
+      const res = await fetch(`http://localhost:${PORT}/gateway`, {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ action: 'forget' }),
+      });
+      const body = await res.json();
+      if (res.status >= 400) { console.error(body.error || `HTTP ${res.status}`); process.exit(1); }
+      console.log('detached — the actor was republished advertising your pod\'s own inbox');
+    } catch (e) {
+      console.error(`agent not reachable on :${PORT} (${e.message}) — start it, then detach`);
+      process.exit(1);
+    }
+    process.exit(0);
+  }
   const target = args[1];
   const secret = flag('secret');
   const inboxOnly = has('inbox-only');
@@ -1460,9 +1476,9 @@ if (cmd === 'up') {
   const okInbox = /^https:\/\/\S+\/ap\/inbox\/?$/.test(String(target || ''));
   if (inboxOnly ? !okInbox : !okActor) {
     console.error(inboxOnly
-      ? 'usage: fedipod front <https://host/u/<name>/ap/inbox/> --secret <hmac> --inbox-only'
-      : 'usage: fedipod front <https://host/u/<name>/ap/actor> --secret <hmac> [--inbox-only]');
-    console.error('  (the URL and secret come from the front\'s signup page)');
+      ? 'usage: fedipod gateway <https://host/u/<name>/ap/inbox/> --secret <hmac> --inbox-only'
+      : 'usage: fedipod gateway <https://host/u/<name>/ap/actor> --secret <hmac> [--inbox-only]');
+    console.error('  (the URL and secret come from the gateway\'s signup page)');
     process.exit(2);
   }
   const { Agent } = await import(new URL('../run-agent.mjs', import.meta.url));
@@ -2200,7 +2216,8 @@ WantedBy=default.target
     + '|tokens|revoke-credential|install-service|archive|alias|import|keys|front> [--flags]');
   console.log('  keys: where the signing key lives; --to pod|local moves it (pod = multi-device signing)');
   console.log('  https: the local certificate agents serve TLS with; --trust mints a local CA for strict clients');
-  console.log('  front: attach to a front; --inbox-only keeps your identity and moves only the inbox');
+  console.log('  gateway: attach to a gateway; --inbox-only keeps your identity and moves only the inbox;');
+  console.log('           --detach returns delivery to your pod (\'front\' still works as an alias)');
   console.log('  alias: --add <@you@old.server|url> | --remove <url> [--yes]   migration aliases (alsoKnownAs)');
   console.log('  import: <csv-file…> from the old account\'s export (follows, blocks, mutes, lists,');
   console.log('          domain blocks); no files = progress; --clear drops the record');
