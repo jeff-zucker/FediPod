@@ -38,6 +38,11 @@ try {
   authBundle = readFileSync(
     fileURLToPath(new URL('../../web/front/solid-client-authn.bundle.js', import.meta.url)), 'utf8');
 } catch { /* without it the page's sign-in step is unavailable */ }
+let installScript = '';
+try {
+  installScript = readFileSync(
+    fileURLToPath(new URL('../../web/front/install.sh', import.meta.url)), 'utf8');
+} catch { /* without it /install 404s */ }
 
 let dir = null, dirAt = 0;
 const DIR_TTL_MS = 60_000;
@@ -85,6 +90,7 @@ export default async function handler(request) {
     frontOrigin: process.env.FEDIPOD_FRONT_ORIGIN,
     signupPage,
     authBundle,
+    installScript,
     offersPods: process.env.FEDIPOD_OFFERS_PODS === '1',
     gatewayWebId: process.env.FEDIPOD_GATEWAY_WEBID || null,
     lookup: (handle) => map[handle] || null,

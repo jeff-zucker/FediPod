@@ -1,6 +1,10 @@
 # Changes
 
 ## 2026-08-17
+- One-line install: `curl -fsSL https://fedipod.net/install | sh` — checks
+  git and node 20+, clones or updates `~/FediPod` (`FEDIPOD_DIR` overrides),
+  installs dependencies, and prints the start command. The script is served
+  at `/install` on any gateway deploy and lives at `web/front/install.sh`.
 - https served beside http on every agent (port + 1000), with a certificate
   minted per machine; `fedipod https --trust` adds a local CA for clients
   that refuse self-signed certificates.

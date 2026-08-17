@@ -37,17 +37,14 @@
 </style>
 </head>
 <body>
-<h1>Keep your name. Lose the noise.</h1>
-<p class="lede">This is a FediPod <strong>gateway</strong> — a mail filter for accounts that stay
-  <strong>yours</strong>. Your name, your key and your data live on your own pod; this box only receives your
-  fediverse mail, verifies each delivery, drops the junk, and passes the rest to your pod. Leaving takes one
-  command; nothing of yours is ever here.</p>
+<h1>FediPod - join the fediverse from a Solid pod.</h1>
+<p class="lede">Welcome to the <strong>FediPod.net gateway</strong> — a mail filter for accounts that stay yours. Your name, key and data live on your own pod; this box only receives your fediverse mail, verifies each delivery, drops spam and passes the rest to your pod. Joining and leaving the gateway is simple.</p>
 
 <fieldset>
-  <legend>What are you here to do?</legend>
+  <legend>What do you want to do?</legend>
   <div class="choices" role="group" aria-label="Path">
-    <button type="button" id="pick-create" aria-pressed="false"><b>Create a new FediPod account</b><span>pod, agent, then attach</span></button>
-    <button type="button" id="pick-attach" aria-pressed="false"><b>Attach an existing FediPod account</b><span>filter my mail through this gateway</span></button>
+    <button type="button" id="pick-create" aria-pressed="false"><b>Create a new FediPod account</b><span>get or link a pod and a fediverse handle</span></button>
+    <button type="button" id="pick-attach" aria-pressed="false"><b>Attach an existing FediPod account</b><span>filter my existing pod-based mail through this gateway</span></button>
     <button type="button" id="pick-detach" aria-pressed="false"><b>Detach an existing FediPod account</b><span>go back to unfiltered delivery</span></button>
     <button type="button" id="pick-transfer" aria-pressed="false"><b>Transfer a fediverse account to FediPod</b><span>move here from Mastodon and friends</span></button>
     <button type="button" id="pick-host" aria-pressed="false"><b>Run a gateway like this one</b><span>a doorway of your own, for many users</span></button>
@@ -64,11 +61,12 @@
     <li><strong>Get a pod</strong>, if you don't have one: any Solid pod host that offers
       <em>https subdomains</em> works, or a Community Solid Server you run yourself.</li>
     <li><strong>Install and start the agent</strong> on your own machine:
-      <pre>git clone https://github.com/jeff-zucker/FediPod
-cd FediPod
-npm install
-npm start</pre>
-      Setup opens in your browser and can also create the pod account for you.</li>
+      <pre>curl -fsSL https://fedipod.net/install | sh
+cd ~/FediPod &amp;&amp; npm start</pre>
+      Setup opens in your browser and can also create the pod account for you.
+      (Prefer to see what you run? The installer is plain shell at
+      <a href="/install">/install</a>, or clone
+      <a href="https://github.com/jeff-zucker/FediPod">the repo</a> yourself.)</li>
     <li><strong>Come back here and attach</strong>, so this gateway starts filtering your mail.</li>
   </ol>
   <p id="create-pods" class="hint" hidden>This host also offers pods — you can take one at step 1 instead of
