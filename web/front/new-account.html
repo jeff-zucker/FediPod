@@ -40,6 +40,10 @@
 <h1>FediPod - join the fediverse from a Solid pod.</h1>
 <p class="lede">Welcome to the <strong>FediPod.net gateway</strong> — a mail filter for accounts that stay yours. Your name, key and data live on your own pod; this box only receives your fediverse mail, verifies each delivery, drops spam and passes the rest to your pod. Joining and leaving the gateway is simple.</p>
 
+<p>
+FediPod is experimental and free to use.  See <a href="https://github.com/jeff-zucker/FediPod">the github repository</a> for details.
+</p>
+
 <fieldset>
   <legend>What do you want to do?</legend>
   <div class="choices" role="group" aria-label="Path">
@@ -224,7 +228,7 @@ cd ~/FediPod &amp;&amp; npm start</pre>
     u.search = ''; u.hash = '';
     return u.href;
   }
-
+p
   $('attach-continue').onclick = () => {
     const auth = window.solidClientAuthentication;
     const n = $('attach-note');
@@ -268,5 +272,6 @@ cd ~/FediPod &amp;&amp; npm start</pre>
     }
   })();
 </script>
+<i>(cc) 4.0 By, Jeff Zucker, 2026</i>
 </body>
 </html>
