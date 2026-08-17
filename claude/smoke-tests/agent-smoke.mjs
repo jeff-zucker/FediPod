@@ -6692,6 +6692,75 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
     'inbox-only fronting: the door is the inbox, every id stays on the pod');
 }
 
+// --- 14e. https: a per-machine certificate, minted not packaged ---
+{
+  const { ensureLocalTls, enableTrust } = await import(path.join(root, 'lib/certs.mjs'));
+  const { X509Certificate } = await import('node:crypto');
+  const cdir = fs.mkdtempSync('/tmp/fedipod-certs-');
+
+  const tls1 = ensureLocalTls(cdir, { log: () => {} });
+  const x1 = new X509Certificate(tls1.cert);
+  check(/DNS:localhost/.test(x1.subjectAltName) && /DNS:\*\.localhost/.test(x1.subjectAltName)
+    && /127\.0\.0\.1/.test(x1.subjectAltName),
+    `the certificate covers localhost, *.localhost and loopback (${x1.subjectAltName})`);
+  check(tls1.trust === false && tls1.expiresInDays > 700,
+    'plain mode is self-signed with a long life under Apple\'s 825-day cap');
+  const tls2 = ensureLocalTls(cdir, { log: () => {} });
+  check(tls2.cert === tls1.cert, 'a valid certificate is reused, not re-minted');
+
+  const t = enableTrust(cdir, { log: () => {} });
+  const x2 = new X509Certificate(t.cert);
+  const ca = new X509Certificate(fs.readFileSync(t.caCertPath));
+  check(t.trust === true && x2.checkIssued(ca) && ca.ca === true,
+    'trust mode signs the server certificate with a real local CA');
+  const tls3 = ensureLocalTls(cdir, { log: () => {} });
+  check(tls3.trust === true && tls3.cert === t.cert,
+    'trust mode is sticky — later boots keep the CA-signed certificate');
+
+  // The https listener: same handler, second port, authorities extended.
+  const { startAdmin: startAdminH } = await import(path.join(root, 'lib/admin.mjs'));
+  const HPORT = 18671;
+  const HSPORT = 18672;
+  const hstore = new PodStore({ log: () => {} });
+  hstore.setConfig({ remotePod: 'https://h.example/', handle: 'h', name: 'h',
+    issuer: 'https://example', kind: 'person' });
+  const hagent = {
+    home: '/tmp/nowhere-https', store: hstore, urls: wire.apUrls('https://h.example/'),
+    configured: () => true, logLines: () => [],
+    status: () => ({ configured: true, mode: 'active', kind: 'person', handle: 'h' }),
+    readCredential: () => ({ webId: 'https://h.example/profile/card#me' }),
+    publisher: { urls: wire.apUrls('https://h.example/'), config: {} },
+  };
+  startAdminH({ port: HPORT, gateToken: '', agent: hagent, handle: 'h', log: () => {},
+    httpsPort: HSPORT, tls: { key: tls3.key, cert: tls3.cert, trust: true } });
+  await new Promise(r => setTimeout(r, 200));
+  const { default: httpsMod } = await import('node:https');
+  const hgot = await new Promise((resolve) => {
+    const req = httpsMod.request({
+      host: '127.0.0.1', port: HSPORT, path: '/config',
+      headers: { host: `localhost:${HSPORT}` }, rejectUnauthorized: false,
+    }, (res) => {
+      let buf = '';
+      res.on('data', d => { buf += d; });
+      res.on('end', () => resolve({ status: res.statusCode, body: buf }));
+    });
+    req.on('error', (e) => resolve({ status: 0, body: String(e) }));
+    req.end();
+  });
+  check(hgot.status === 200 && /"handle":"h"/.test(hgot.body),
+    `the same API answers over https on the second port (${hgot.status})`);
+  const hbad = await new Promise((resolve) => {
+    const req = httpsMod.request({
+      host: '127.0.0.1', port: HSPORT, path: '/config',
+      headers: { host: 'evil.example' }, rejectUnauthorized: false,
+    }, (res) => resolve(res.statusCode));
+    req.on('error', () => resolve(0));
+    req.end();
+  });
+  check(hbad === 403, 'the Host firewall holds on the https listener too');
+  fs.rmSync(cdir, { recursive: true, force: true });
+}
+
 // --- 15. the private half in a pod of its own, and the drain that respects it ---
 {
   const PPORT = 18631;

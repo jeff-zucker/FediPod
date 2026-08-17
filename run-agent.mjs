@@ -29,7 +29,8 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { PodStore } from './lib/store.mjs';
-import { apRoot, writeJsonAtomic } from './lib/home.mjs';
+import { apRoot, rootOf, writeJsonAtomic } from './lib/home.mjs';
+import { ensureLocalTls } from './lib/certs.mjs';
 import { storageFor } from './lib/storage.mjs';
 import { resolveKeys } from './lib/keys.mjs';
 import { RemotePod } from './lib/remote.mjs';
@@ -99,6 +100,7 @@ export class Agent {
       mode: !this.configured() ? 'unconfigured' : this.viewer ? 'viewer' : 'active',
       kind: cfg?.kind || 'person',
       handle: cfg?.handle || null,
+      httpsPort: this.httpsPort || null,
       actor: this.urls?.actor || null,
       followers: contacts.followers.length,
       following: contacts.following.length,
@@ -708,7 +710,20 @@ export async function startAgent({
     log(`refusing to start:\n${exposure}`);
     process.exit(2);
   }
-  startAdmin({ port, gateToken, agent, log, handle });
+  // https beside http, for the clients that refuse cleartext: a per-machine
+  // certificate (never packaged — see lib/certs.mjs), one for every identity
+  // on this root, on the mirrored port space (8030 → 9030). A cert problem
+  // degrades to http-only rather than blocking the start.
+  let httpsPort = Number(process.env.AP_HTTPS_PORT) || port + 1000;
+  let tls = null;
+  try {
+    tls = ensureLocalTls(path.join(rootOf(agent.home), 'certs'), { log });
+    agent.httpsPort = httpsPort;
+  } catch (e) {
+    log(`https disabled — certificate setup failed: ${e.message}`);
+    httpsPort = null;
+  }
+  startAdmin({ port, gateToken, agent, log, handle, httpsPort, tls });
 
   // The pod (or its issuer) can be briefly unreachable — a 504 from the
   // token endpoint, or no network yet at boot under install-service. Keep

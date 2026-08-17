@@ -109,6 +109,14 @@ notifications that reach you while the client is closed.
   and it is served at `/<name>/`, same-origin — see `ui/README.md`.
 - **Desktop clients** (Tuba, Whalebird, …): add `http://localhost:8030` (or other port for other agent) as a
   custom instance.
+<!-- CLAUDE 2026-08-17 — https for clients that refuse plain http; rework/trim as you like, delete markers when done -->
+- **Clients that require https** (most phone apps, and any client that
+  rejects a plain-http instance): use `https://localhost:9030` — every agent
+  serves https on its port plus 1000, with a certificate made on your
+  machine at first start. Your client may ask once to trust it; if it
+  refuses self-signed certificates outright, run `fedipod https --trust`
+  and follow the printed step to add the local CA to your trust store.
+<!-- /CLAUDE -->
 - **Streaming**: the agent serves the Mastodon streaming API
   (`/api/v1/streaming`, WebSocket) so clients update live instead of polling.
 

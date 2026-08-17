@@ -1563,6 +1563,44 @@ if (cmd === 'up') {
     console.log('only when the state store is a pod they can all reach (`fedipod state --to pod`).');
   }
   console.log('done — restart the agent');
+} else if (cmd === 'https') {
+  // Agents serve https beside http with a certificate minted on this machine
+  // (never packaged — a shipped key would be one key for every install).
+  // Plain: self-signed, a client may ask once. --trust: a local CA signs it,
+  // and the CA certificate is what a trust store accepts — for clients that
+  // refuse self-signed outright.
+  const { ensureLocalTls, enableTrust, certPaths } = await import(new URL('../lib/certs.mjs', import.meta.url));
+  const certDir = path.join(rootOf(HOME), 'certs');   // same resolution the agent uses
+  if (has('trust')) {
+    const t = enableTrust(certDir, { log: console.log });
+    console.log(`CA certificate: ${t.caCertPath}`);
+    if (process.platform === 'linux') {
+      const { execFileSync } = await import('node:child_process');
+      try {
+        execFileSync('certutil', ['-d', `sql:${path.join(os.homedir(), '.pki/nssdb')}`, '-A',
+          '-t', 'C,,', '-n', 'FediPod Local CA', '-i', t.caCertPath], { stdio: 'pipe' });
+        console.log('installed in your browser trust store (NSS)');
+      } catch {
+        console.log('browser (NSS) trust install skipped — certutil not available');
+      }
+      console.log('for the system store, run:');
+      console.log(`  sudo cp ${t.caCertPath} /usr/local/share/ca-certificates/fedipod-local-ca.crt && sudo update-ca-certificates`);
+    } else if (process.platform === 'darwin') {
+      console.log('to trust it system-wide, run:');
+      console.log(`  sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain ${t.caCertPath}`);
+    } else if (process.platform === 'win32') {
+      console.log('to trust it, run:');
+      console.log(`  certutil -addstore -user Root "${t.caCertPath}"`);
+    }
+    console.log('restart your agents to serve the CA-signed certificate');
+  } else {
+    const tls = ensureLocalTls(certDir, { log: console.log });
+    const paths2 = certPaths(certDir);
+    console.log(`certificate: ${paths2.cert}`);
+    console.log(`  ${tls.trust ? 'signed by the local CA' : 'self-signed'}, ${tls.expiresInDays} days left`);
+    console.log('agents serve https on their port + 1000 (or AP_HTTPS_PORT) — e.g. https://localhost:9030');
+    console.log('strict clients: `fedipod https --trust` mints a local CA your trust store can accept');
+  }
 } else if (cmd === 'install-service' || cmd === 'uninstall-service') {
   const { execFileSync } = await import('node:child_process');
   const runAgentPath = new URL('../run-agent.mjs', import.meta.url).pathname;
@@ -2161,6 +2199,7 @@ WantedBy=default.target
   console.log('usage: fedipod <setup|start|stop|status|state|upgrade|rebuild|home|passwd'
     + '|tokens|revoke-credential|install-service|archive|alias|import|keys|front> [--flags]');
   console.log('  keys: where the signing key lives; --to pod|local moves it (pod = multi-device signing)');
+  console.log('  https: the local certificate agents serve TLS with; --trust mints a local CA for strict clients');
   console.log('  front: attach to a front; --inbox-only keeps your identity and moves only the inbox');
   console.log('  alias: --add <@you@old.server|url> | --remove <url> [--yes]   migration aliases (alsoKnownAs)');
   console.log('  import: <csv-file…> from the old account\'s export (follows, blocks, mutes, lists,');

@@ -5,3 +5,6 @@
 
 [functions]
   node_bundler = "esbuild"
+  # front.mjs serves the signup page from the repo at cold start; the bundler
+  # only ships what is named here.
+  included_files = ["web/front/**"]
