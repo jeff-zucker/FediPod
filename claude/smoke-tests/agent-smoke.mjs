@@ -926,6 +926,67 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     'store.load revalidates: quiet minute = 1 request, and a 304 doc keeps its cache');
 }
 
+// --- 5e1b. an unreachable state store is never mistaken for an empty one ---
+// The distinction connect() rests on: a store that ANSWERS an empty listing
+// means "never set up" (the run-setup conclusion), while one that cannot be
+// read — a network error, or a 404 from a proxy fronting a dead pod — must
+// throw so connectWithRetry keeps retrying. Conflating them left a live agent
+// permanently unconfigured after three network failures (solo, 2026-08-17).
+{
+  const mkRes = (status, headers = {}, body = '') => ({
+    status, headers: { get: (h) => headers[h.toLowerCase()] ?? null },
+    text: async () => body,
+  });
+
+  // Storage level: a 404 on the container list is "could not read", not empty.
+  const s404 = new PodStore({ log: () => {} });
+  attachHttp(s404, 'https://p.example/st/', async () => mkRes(404));
+  const err404 = await s404.load().then(() => null, (e) => e.message);
+  check(/missing|unreachable/.test(err404 || '') && s404.getConfig() === null,
+    'a 404 on the state container throws instead of loading empty');
+
+  // Agent level, with a scratch home so nothing is written outside /tmp.
+  const { Agent } = await import(path.join(root, 'run-agent.mjs'));
+  const connectHome = fs.mkdtempSync('/tmp/fedipod-smoke-connect-');
+  const mkAgent = (fetchImpl) => {
+    const lines = [];
+    const agent = new Agent({ home: connectHome, log: (m) => lines.push(String(m)) });
+    agent.readCredential = () => ({
+      remotePod: 'https://p.example/', root: 'activitypods-js',
+      webId: 'https://p.example/profile/card#me', privateRoot: 'https://p.example/private/',
+    });
+    agent.remote = { warmup: async () => {}, fetch: async () => mkRes(500), setUrlMap: () => {} };
+    attachHttp(agent.store, 'https://p.example/private/ap-state/', fetchImpl);
+    return { agent, lines };
+  };
+
+  // A store that errors on load: connect throws, so the retry loop keeps going —
+  // and once the store answers, the SAME agent connects without a restart.
+  let storeUp = false;
+  const listing = '<https://p.example/private/ap-state/> '
+    + '<http://www.w3.org/ns/ldp#contains> <https://p.example/private/ap-state/config.json>.';
+  const flappy = mkAgent(async (url) => {
+    if (!storeUp) throw new Error('fetch failed');
+    if (url.endsWith('/')) return mkRes(200, {}, listing);
+    return mkRes(200, {}, JSON.stringify({ remotePod: 'https://p.example/', root: 'activitypods-js', handle: 'solo' }));
+  });
+  const errDown = await flappy.agent.connect({ act: false }).then(() => null, (e) => e.message);
+  storeUp = true;
+  const upAfter = await flappy.agent.connect({ act: false });
+  check(errDown === 'fetch failed' && upAfter === true
+    && !flappy.lines.some((l) => /run setup/.test(l)),
+    'an unreadable state store makes connect throw (retry), never conclude unconfigured');
+
+  // A store that answers and IS empty: the run-setup conclusion, no throw.
+  const empty = mkAgent(async (url) => (url.endsWith('/')
+    ? mkRes(200, {}, '') : mkRes(404)));
+  const upEmpty = await empty.agent.connect({ act: false });
+  check(upEmpty === false && empty.lines.some((l) => /pod state empty — run setup/.test(l)),
+    'a store that answers an empty listing still concludes never-set-up');
+
+  fs.rmSync(connectHome, { recursive: true, force: true });
+}
+
 // --- 5e2. retiring an actor tells the fediverse and leaves a Tombstone ---
 {
   const { Publisher } = await import(path.join(root, 'lib/publisher.mjs'));

@@ -6,8 +6,8 @@ gateway, with signup. The usual attachment keeps a user's identity on their
 own pod (`@me@my.pod`) and moves only the advertised inbox to the gateway's
 door: sign up on the page, sign in with your pod to prove it, and run the one
 `fedipod gateway … --inbox-only` command it hands you. Attach rows persist in
-a Netlify Blobs store. The fronted-identity mode described below still exists
-behind an explicit flag; it is no longer the default.
+a Netlify Blobs store. The fronted-identity mode described below sits behind
+an explicit flag.
 <!-- /CLAUDE -->
 
 A FediPod install works exactly as before without any gateway — deliveries go

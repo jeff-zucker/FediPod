@@ -145,20 +145,19 @@ notifications that reach you while the client is closed.
 <!-- CLAUDE 2026-08-11 — new since the last README; rework/trim as you like, delete these markers when done -->
 ### Protocol conformance
 
-FediPod is a full ActivityPub server: it meets every server-to-server (§7) MUST,
-and as of August 2026 it also implements the client-to-server protocol (§6) —
-`POST /ap/outbox` on the agent takes a signed activity (or a bare Note) and does
-the id-minting, side-effects and delivery itself, authenticated by a Solid-OIDC
-token whose WebID is the owner's (or the agent's own bearer). The Mastodon REST
-API remains the everyday client interface; C2S is the spec's own.
+FediPod is a full ActivityPub server, on both of the spec's profiles:
+server-to-server (§7) and client-to-server (§6) — `POST /ap/outbox` on the
+agent takes a signed activity (or a bare Note) and does the id-minting,
+side-effects and delivery, authenticated by a Solid-OIDC token whose WebID is
+the owner's. The Mastodon REST API is the everyday client interface; C2S is
+the spec's own.
 
-Its group actors follow FEP-1b12 more fully now: a carried post names the group
-as its `audience`; a configured moderator roster is published as the actor's
-`attributedTo`; a followed group's announced `Delete` of a post it carried is
-honoured; and the group's own moderation (bans, roster changes) is announced to
-the membership. It also publishes the FEP-4ccd pending-follow collections and
-the FEP-c648 blocked collection as owner-only documents, where the pod enforces
-their ACL. See [Groups](groups.md) and `claude/specs-in-use.md`.
+Group actors follow FEP-1b12: a carried post names the group as its
+`audience`, the moderator roster is published as the actor's `attributedTo`,
+a followed group's announced `Delete` of a post it carried is honoured, and
+the group's own moderation is announced to the membership. The FEP-4ccd
+pending-follow collections and the FEP-c648 blocked collection are published
+as owner-only documents. See [Groups](groups.md).
 <!-- /CLAUDE -->
 
 ## Transparency

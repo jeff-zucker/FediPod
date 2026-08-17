@@ -25,7 +25,7 @@ The group passes along posts from its own members only. This stops spam from out
 * owner may mute users (refuse to rebroadcast their posts)
 
 <!-- CLAUDE 2026-08-11 — new since the last groups.md; rework/trim as you like, delete these markers when done -->
-The group now follows more of FEP-1b12: a carried post names the group as its
+A carried post names the group as its
 `audience`, and when you ban or eject someone (or change the moderator roster),
 the group announces that moderation to its members so their servers can mirror
 it. A moderator list can be set on the group's config; those actors' moderation
