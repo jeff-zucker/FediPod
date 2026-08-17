@@ -105,3 +105,43 @@ shows where a run stands, and `--clear` drops the finished record. Bookmarks
 are not imported.
 <!-- /CLAUDE -->
 
+<!-- CLAUDE 2026-08-17 — gateway, keys, https commands; delete markers when done -->
+## The gateway
+
+```
+node bin/fedipod.mjs gateway <door-inbox-url> --secret <hmac> --inbox-only
+node bin/fedipod.mjs gateway --detach
+```
+Attaching points your actor's advertised inbox at a gateway's door, so
+deliveries are verified and de-junked before they reach your pod; your name,
+key and data stay on your pod. The URL and secret come from the gateway's
+signup page. Detaching republishes your actor with the pod's own inbox.
+(`front` still works as an alias, and the `<…/ap/actor>` form without
+`--inbox-only` takes a fronted identity instead.)
+
+## Keys
+
+```
+node bin/fedipod.mjs keys
+node bin/fedipod.mjs keys --to pod
+node bin/fedipod.mjs keys --to local
+```
+Where the signing key lives. On the pod, every device that reaches your
+state store can sign as the actor — that is what multi-device needs; the
+pod's operator can also read a pod-held key. Local keeps it on this machine
+alone; the next start adopts the pod copy and removes it from the pod. Stop
+the agent before moving keys.
+
+## https
+
+```
+node bin/fedipod.mjs https
+node bin/fedipod.mjs https --trust
+```
+Agents serve https beside http on their port plus 1000 (or `AP_HTTPS_PORT`),
+with a certificate made on your machine at first start — for clients that
+refuse plain http. `--trust` mints a local CA, signs the certificate with
+it, and prints the one step that adds the CA to your system's trust store,
+for clients that refuse self-signed certificates outright.
+<!-- /CLAUDE -->
+

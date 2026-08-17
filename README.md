@@ -83,6 +83,17 @@ fedipod import following_accounts.csv blocked_accounts.csv muted_accounts.csv li
 
 which restores who you follow, your blocks, mutes and lists at a polite pace
 and reports anything it could not resolve.
+
+## A mail gateway (optional)
+
+Most of what a fediverse inbox receives is broadcast noise. A gateway is a
+shared, always-on door that verifies each delivery, drops the junk, and
+passes the rest to your pod — while your name, key and data stay on your own
+pod. Attach at a gateway's signup page (there is one at
+[fedipod.net](https://fedipod.net/)): sign in with your pod to prove it's
+yours, run the one `fedipod gateway … --inbox-only` command it hands you,
+and restart your agent. `fedipod gateway --detach` undoes it with one
+republish.
 <!-- /CLAUDE -->
 
 ## Fediverse Clients

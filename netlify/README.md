@@ -1,8 +1,17 @@
 # The inbox gateway & multi-user front (optional, opt-in)
 
-This directory is an **un-deployed artifact**. Nothing in FediPod runs it. A
-FediPod install works exactly as before without it — deliveries go straight to
-your pod inbox, which buffers them whether your agent is up or not.
+<!-- CLAUDE 2026-08-17 — status + model changed when fedipod.net went live; rework/trim, delete markers when done -->
+A reference deployment runs at **https://fedipod.net/** — the multi-user
+gateway, with signup. The usual attachment keeps a user's identity on their
+own pod (`@me@my.pod`) and moves only the advertised inbox to the gateway's
+door: sign up on the page, sign in with your pod to prove it, and run the one
+`fedipod gateway … --inbox-only` command it hands you. Attach rows persist in
+a Netlify Blobs store. The fronted-identity mode described below still exists
+behind an explicit flag; it is no longer the default.
+<!-- /CLAUDE -->
+
+A FediPod install works exactly as before without any gateway — deliveries go
+straight to your pod inbox, which buffers them whether your agent is up or not.
 
 Two things live here, sharing the same verify-at-the-door core
 (`lib/gateway-core.mjs`):
@@ -58,15 +67,22 @@ verification — but cannot impersonate you, read your private data, or post.
    `handleDelivery` from `lib/gateway-core.mjs`.
 2. **Provision a dedicated low-privilege pod account** for the gateway and
    grant its WebID Append on your inbox. Do NOT use your owner credential.
-3. **Point your agent at it**: on the admin page, open **Inbox gateway**,
-   paste the gateway's URL and WebID, and click **Save & get secret**. Your
-   agent generates the shared HMAC secret and shows it **once** — copy it into
-   the gateway's environment as `FEDIPOD_HMAC_SECRET`, along with the other
-   env vars named in `functions/inbox.mjs`.
-4. **Walk the lifecycle** from the same panel: **shadow** (advertise the
-   gateway and measure how much real traffic verifies — nothing changes yet)
-   → **trust** (verified follows auto-accept) → **locked** (your inbox accepts
-   writes only from the gateway). Every step has a one-click rollback.
+<!-- CLAUDE 2026-08-17 — the credential is optional and the panel is gone; delete markers when done -->
+   (Optional for FediPod's default posture: the pod inbox is public-Append,
+   and the gateway falls back to a plain PUT when no credential is on
+   record.)
+3. **Point your agent at it** with `POST /gateway {action:'configure', url,
+   webId}` on the agent's API — it mints the shared HMAC secret and returns
+   it **once**; copy it into the gateway's environment (or directory row).
+   Users attaching through a multi-user gateway's signup page skip this:
+   the page hands them the finished `fedipod gateway` command instead.
+4. **Walk the lifecycle** with `POST /gateway {action:'mode', mode:…}`:
+   **shadow** (advertise the gateway and measure how much real traffic
+   verifies — nothing else changes) → **trust** (verified follows
+   auto-accept) → **locked** (your inbox accepts writes only from the
+   gateway). Every step is reversible; `fedipod gateway --detach` restores
+   the pod's own inbox.
+<!-- /CLAUDE -->
 
 ## What the HMAC secret is
 
