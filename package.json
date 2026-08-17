@@ -41,6 +41,7 @@
   },
   "dependencies": {
     "@fedify/fedify": "^2.3.4",
+    "@netlify/blobs": "^10.7.13",
     "@solid/access-token-verifier": "^2.1.1",
     "jose": "^6.2.8",
     "node-forge": "^1.4.0",

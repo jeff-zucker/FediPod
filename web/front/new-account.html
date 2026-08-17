@@ -84,6 +84,11 @@ npm start</pre>
 
   <label for="pod-url">Your pod address</label>
   <input type="url" id="pod-url" autocomplete="off" placeholder="https://you.solidcommunity.net/">
+  <p class="hint">If your FediPod uses a custom root, give the full home URL (ending in <code>/</code>);
+    a bare pod address assumes the default <code>activitypods-js/</code>.</p>
+
+  <label for="issuer">Where you log in (your identity provider)</label>
+  <input type="url" id="issuer" autocomplete="off" placeholder="https://solidcommunity.net">
 
   <label for="slug">Your door's name here</label>
   <input type="text" id="slug" autocomplete="off" autocapitalize="off" spellcheck="false"
@@ -92,8 +97,9 @@ npm start</pre>
   <p class="hint">Only the door is named here — it is a routing address for servers, not your handle.</p>
 
   <p style="margin-top:1.1rem">
-    <button type="button" id="attach-continue" class="primary" disabled>Continue</button>
+    <button type="button" id="attach-continue" class="primary" disabled>Sign in with your pod &amp; attach</button>
   </p>
+  <p class="hint">Signing in proves the pod is yours — no password ever reaches this gateway.</p>
   <p class="hint" id="attach-note" hidden></p>
 </form>
 
@@ -148,6 +154,7 @@ npm start</pre>
     Community Solid Server, the gateway can also run there as a component instead of on a separate box.</p>
 </section>
 
+<script src="/solid-client-authn.bundle.js"></script>
 <script>
   const $ = (id) => document.getElementById(id);
   let offersPods = false, slugOk = false;
@@ -168,17 +175,24 @@ npm start</pre>
   }
   for (const id of picks) $(id).onclick = () => pick(id);
 
-  // Suggest the door name from the pod's own first label, still editable.
+  // Suggest the door name from the pod's own first label, and the identity
+  // provider from the pod's apex domain — both still editable.
   $('pod-url').addEventListener('input', () => {
     try {
-      const label = new URL($('pod-url').value.trim()).hostname.split('.')[0];
+      const u = new URL($('pod-url').value.trim());
+      const label = u.hostname.split('.')[0];
       if (!$('slug').value && /^[a-z0-9-]{1,63}$/.test(label)) {
         $('slug').value = label;
         $('slug').dispatchEvent(new Event('input'));
       }
+      if (!$('issuer').value) {
+        const parts = u.hostname.split('.');
+        $('issuer').value = 'https://' + (parts.length > 2 ? parts.slice(1).join('.') : u.hostname);
+      }
     } catch { /* not a URL yet */ }
     refresh();
   });
+  $('issuer').addEventListener('input', refresh);
 
   let t = null;
   $('slug').addEventListener('input', () => {
@@ -199,22 +213,62 @@ npm start</pre>
 
   function refresh() {
     const podOk = /^https:\/\/\S+/.test($('pod-url').value.trim());
-    $('attach-continue').disabled = !(podOk && slugOk);
+    const issuerOk = /^https:\/\/\S+/.test($('issuer').value.trim());
+    $('attach-continue').disabled = !(podOk && slugOk && issuerOk);
+  }
+
+  // The user's pod home: their agent tree on the pod. A bare pod root gets
+  // the default root; anything with a path is taken as given.
+  function podHomeOf(raw) {
+    const u = new URL(raw.trim());
+    if (u.pathname === '/') u.pathname = '/activitypods-js/';
+    else if (!u.pathname.endsWith('/')) u.pathname += '/';
+    u.search = ''; u.hash = '';
+    return u.href;
   }
 
   $('attach-continue').onclick = () => {
-    const slug = $('slug').value.trim().toLowerCase();
-    // The attach is not made here yet: the next step is proving the pod is
-    // yours, via Solid-OIDC — the last unwired step of this page.
+    const auth = window.solidClientAuthentication;
+    const n = $('attach-note');
+    if (!auth) { n.hidden = false; n.textContent = 'the sign-in library did not load — reload and try again'; return; }
+    sessionStorage.setItem('fp-attach', JSON.stringify({
+      slug: $('slug').value.trim().toLowerCase(),
+      podHome: podHomeOf($('pod-url').value),
+      kind: 'person',
+    }));
+    auth.login({
+      oidcIssuer: $('issuer').value.trim(),
+      redirectUrl: location.origin + '/',
+      clientName: 'FediPod gateway',
+    }).catch((e) => { n.hidden = false; n.textContent = 'sign-in failed to start: ' + e.message; });
+  };
+
+  // Back from the identity provider: finish the attach with the proven login.
+  (async () => {
+    const auth = window.solidClientAuthentication;
+    if (!auth) return;
+    const info = await auth.handleIncomingRedirect().catch(() => null);
+    const pending = sessionStorage.getItem('fp-attach');
+    if (!info?.isLoggedIn || !pending) return;
+    sessionStorage.removeItem('fp-attach');
+    const p = JSON.parse(pending);
+    pick('pick-attach');
     const n = $('attach-note');
     n.hidden = false;
-    n.innerHTML = 'Next you would <strong>sign in with your pod</strong> to prove it is yours. This gateway then '
-      + 'records the door <code>' + slug + '</code> → your pod inbox and hands you one command to run on your '
-      + 'machine — <code>fedipod gateway … --inbox-only</code> — which makes your actor advertise this door as its '
-      + 'inbox. Your name never moves, and one republish undoes it. '
-      + '(The prove-your-pod sign-in is the last unwired step.)';
-    $('attach-continue').disabled = true;
-  };
+    n.textContent = 'signed in as ' + info.webId + ' — attaching…';
+    const res = await auth.fetch('/api/attach', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ handle: p.slug, podHome: p.podHome, kind: p.kind }),
+    }).catch(() => null);
+    const d = res ? await res.json().catch(() => ({})) : {};
+    if (res && res.status === 201) {
+      n.innerHTML = 'Attached. Run this on the machine your agent lives on, then restart the agent:'
+        + '<pre>' + d.command + '</pre>'
+        + 'Your mail then arrives through <code>' + d.doorInbox + '</code>, filtered. Your name has not moved.';
+    } else {
+      n.textContent = 'attach failed: ' + (d.error || (res ? 'HTTP ' + res.status : 'no response'));
+    }
+  })();
 </script>
 </body>
 </html>

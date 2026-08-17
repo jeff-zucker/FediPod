@@ -9048,13 +9048,21 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   const ok = await attach({ handle: 'alice', podHome: 'https://alice.pod/solid/' },
     'https://alice.pod/profile/card#me');
   const okDoc = JSON.parse(ok.body);
-  check(ok.status === 201 && okDoc.frontActor === 'https://fedipod.net/u/alice/ap/actor'
-    && okDoc.address === '@alice@fedipod.net' && typeof okDoc.hmacSecret === 'string',
-    'a valid token proving the pod creates the account and returns the fronted actor + a secret');
-  check(okDoc.command === `fedipod front https://fedipod.net/u/alice/ap/actor --secret ${okDoc.hmacSecret}`,
-    'and the one command the user runs to point their agent at the front');
-  check(written.alice?.podHome === 'https://alice.pod/solid/' && written.alice?.webId === 'https://alice.pod/profile/card#me',
-    'the directory row records the pod and the proven WebID');
+  check(ok.status === 201 && okDoc.doorInbox === 'https://fedipod.net/u/alice/ap/inbox/'
+    && typeof okDoc.hmacSecret === 'string' && okDoc.frontActor === undefined,
+    'a valid token proving the pod attaches inbox-only by default: a door and a secret, no fronted actor');
+  check(okDoc.command === `node bin/fedipod.mjs gateway https://fedipod.net/u/alice/ap/inbox/ --secret ${okDoc.hmacSecret} --inbox-only`,
+    'and the one command the user runs to point their agent at the gateway');
+  check(written.alice?.podHome === 'https://alice.pod/solid/' && written.alice?.webId === 'https://alice.pod/profile/card#me'
+    && written.alice?.actorUrl === 'https://alice.pod/solid/ap/actor' && written.alice?.inboxOnly === true,
+    'the directory row records the pod, the proven WebID, and the POD actor as the identity');
+  const okF = await attach({ handle: 'fran', podHome: 'https://fran.pod/solid/', fronted: true },
+    'https://fran.pod/profile/card#me');
+  const okFDoc = JSON.parse(okF.body);
+  check(okF.status === 201 && okFDoc.frontActor === 'https://fedipod.net/u/fran/ap/actor'
+    && okFDoc.address === '@fran@fedipod.net'
+    && /gateway https:\/\/fedipod\.net\/u\/fran\/ap\/actor --secret /.test(okFDoc.command),
+    'fronted identity remains available behind an explicit fronted: true');
   const dup = await attach({ handle: 'alice', podHome: 'https://alice.pod/solid/' },
     'https://alice.pod/profile/card#me');
   check(dup.status === 409, 'the name cannot be attached twice');
