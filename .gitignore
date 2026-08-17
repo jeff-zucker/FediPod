@@ -54,3 +54,6 @@ backoff.json
 
 # scratch
 tmp/
+
+# Local Netlify folder
+.netlify
