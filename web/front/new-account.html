@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Join — FediPod front</title>
+<title>FediPod — keep your name, lose the noise</title>
 <style>
   :root { color-scheme: light dark; --line:#d9d4c7; --dim:#5f5e57; --accent:#6a8a5a; }
   body { font: 17px/1.6 system-ui, sans-serif; max-width: 44rem; margin: 2rem auto; padding: 0 1.1rem; }
@@ -13,7 +13,7 @@
   fieldset { border: 1px solid var(--line); border-radius: 12px; padding: 1rem 1.1rem; margin: 1rem 0; }
   legend { font-weight: 600; padding: 0 .4rem; }
   .choices { display: flex; flex-wrap: wrap; gap: .5rem; }
-  .choices button { flex: 1 1 9rem; padding: .7rem .6rem; border: 1px solid var(--line); border-radius: 10px;
+  .choices button { flex: 1 1 12rem; padding: .7rem .6rem; border: 1px solid var(--line); border-radius: 10px;
     background: transparent; font: inherit; cursor: pointer; text-align: left; }
   .choices button[aria-pressed="true"] { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
   .choices button b { display: block; }
@@ -21,8 +21,6 @@
   label { display: block; font-weight: 600; margin: .8rem 0 .2rem; }
   input[type=text], input[type=url] { width: 100%; padding: .5rem .6rem; font: inherit;
     border: 1px solid var(--line); border-radius: 8px; box-sizing: border-box; }
-  .handle-row { display: flex; align-items: center; gap: .4rem; }
-  .handle-row .suffix { color: var(--dim); white-space: nowrap; }
   .msg { min-height: 1.3em; font-size: .95rem; margin-top: .3rem; }
   .msg.ok { color: var(--accent); } .msg.no { color: #a4433a; }
   .hint { color: var(--dim); font-size: .92rem; }
@@ -33,62 +31,79 @@
   .tier { border-left: 3px solid var(--line); padding-left: .9rem; margin: .8rem 0; }
   .tier h3 { margin: 0 0 .2rem; font-size: 1.02rem; }
   code { background: rgba(120,120,120,.12); padding: .05em .35em; border-radius: 4px; }
+  pre { background: rgba(120,120,120,.12); padding: .7rem .9rem; border-radius: 8px; overflow-x: auto; }
+  ol.steps li { margin: .5rem 0; }
+  details { border: 1px solid var(--line); border-radius: 12px; padding: .6rem 1.1rem; margin: 1.2rem 0; }
+  details summary { font-weight: 600; cursor: pointer; }
 </style>
 </head>
 <body>
-<h1>Join this FediPod front</h1>
-<p class="lede">A shared handle on this domain, backed by a pod and an agent that stay <strong>yours</strong>.
-  This box only answers name lookups and verifies the mail your pod receives — it never holds your key or your data.</p>
+<h1>Keep your name. Lose the noise.</h1>
+<p class="lede">This host is a <strong>mail filter</strong> for FediPod accounts. Your name, your key and your
+  data stay on <strong>your own pod</strong> — this box only receives your fediverse mail, verifies each
+  delivery, drops the junk, and passes the rest to your pod. Leaving takes one command; nothing of yours
+  is ever here.</p>
 
 <fieldset>
-  <legend>What are you here to create?</legend>
-  <div class="choices" role="group" aria-label="Account type">
-    <button type="button" id="pick-person" aria-pressed="false"><b>A person</b><span>an individual account, @you@host</span></button>
-    <button type="button" id="pick-group" aria-pressed="false"><b>A group</b><span>a community others can join</span></button>
-    <button type="button" id="pick-host" aria-pressed="false"><b>Your own front</b><span>run a host like this one</span></button>
+  <legend>What are you here to do?</legend>
+  <div class="choices" role="group" aria-label="Path">
+    <button type="button" id="pick-attach" aria-pressed="false"><b>Attach my FediPod</b><span>I already run one — filter my mail</span></button>
+    <button type="button" id="pick-create" aria-pressed="false"><b>Create a FediPod</b><span>I'm new — pod, agent, then attach</span></button>
   </div>
 </fieldset>
 
-<!-- person / group: pick a name, say where your pod is -->
-<form id="user-form" hidden>
-  <label for="handle">Choose your name</label>
-  <div class="handle-row">
-    <input type="text" id="handle" autocomplete="off" autocapitalize="off" spellcheck="false"
-      inputmode="latin" placeholder="you" aria-describedby="handle-msg">
-    <span class="suffix" id="handle-suffix">@this-host</span>
-  </div>
-  <p class="msg" id="handle-msg" aria-live="polite"></p>
+<!-- attach: an existing FediPod points its inbox here; identity stays put -->
+<form id="attach-form" hidden>
+  <h2>Attach your FediPod</h2>
+  <p class="hint">Your account stays <code>@you@your.pod</code> — other servers keep finding you at your own
+    address. Attaching only changes where your <em>mail</em> arrives: your actor advertises this host's door
+    as its inbox, and everything that passes verification lands in your pod as before.</p>
 
-  <label>Your pod</label>
-  <div class="choices" role="group" aria-label="Pod choice">
-    <button type="button" id="pod-bring" aria-pressed="true"><b>Bring my own</b><span>a pod you already control</span></button>
-    <button type="button" id="pod-take" aria-pressed="false" hidden><b>Give me one</b><span>this host provides it</span></button>
-  </div>
-  <div id="pod-bring-row">
-    <label for="pod-url">Your pod address</label>
-    <input type="url" id="pod-url" autocomplete="off" placeholder="https://you.solidcommunity.net/">
-    <p class="hint">You'll prove it's yours in the next step by signing in with it — no password reaches this host.</p>
-  </div>
-  <p id="pod-take-row" class="hint" hidden>This host will provision a pod for you at the next step. Your data lives on it,
-    and it's exportable, so you can leave with everything.</p>
+  <label for="pod-url">Your pod address</label>
+  <input type="url" id="pod-url" autocomplete="off" placeholder="https://you.solidcommunity.net/">
+
+  <label for="slug">Your door's name here</label>
+  <input type="text" id="slug" autocomplete="off" autocapitalize="off" spellcheck="false"
+    inputmode="latin" placeholder="you" aria-describedby="slug-msg">
+  <p class="msg" id="slug-msg" aria-live="polite"></p>
+  <p class="hint">Only the door is named here — it is a routing address for servers, not your handle.</p>
 
   <p style="margin-top:1.1rem">
-    <button type="button" id="continue" class="primary" disabled>Continue</button>
+    <button type="button" id="attach-continue" class="primary" disabled>Continue</button>
   </p>
-  <p class="hint" id="next-note" hidden></p>
+  <p class="hint" id="attach-note" hidden></p>
 </form>
 
-<!-- server-host: two gateway flavors; a front never hosts pods -->
-<section id="host-form" hidden>
-  <h2>Run your own front</h2>
-  <p>You leave this namespace and stand up your own front on <strong>your own box</strong>. A front is only a
-    <strong>doorway</strong>: a directory, name lookups, verify-and-forward. It stores no user content and dictates
-    nobody's pod. The one choice you make is what your users do about pods:</p>
+<!-- create: get a pod, run the agent, come back and attach -->
+<section id="create-form" hidden>
+  <h2>Create a FediPod</h2>
+  <p class="hint">A FediPod is two things you own: a <strong>pod</strong> (always-on storage with your name on
+    it) and an <strong>agent</strong> (the app you read and post from, on any of your machines). A browser
+    cannot install the agent for you — there is exactly one command to run.</p>
+  <ol class="steps">
+    <li><strong>Get a pod</strong>, if you don't have one: any Solid pod host that offers
+      <em>https subdomains</em> works, or a Community Solid Server you run yourself.</li>
+    <li><strong>Install and start the agent</strong> on your own machine:
+      <pre>git clone https://github.com/jeff-zucker/FediPod
+cd FediPod
+npm install
+npm start</pre>
+      Setup opens in your browser and can also create the pod account for you.</li>
+    <li><strong>Come back here and attach</strong>, so this host starts filtering your mail.</li>
+  </ol>
+  <p id="create-pods" class="hint" hidden>This host also offers pods — you can take one at step 1 instead of
+    bringing your own; it stays exportable, so you can leave with everything.</p>
+</section>
+
+<details>
+  <summary>Run a front like this one</summary>
+  <p>A front is only a <strong>doorway</strong>: a directory, name lookups, verify-and-forward. It stores no
+    user content and dictates nobody's pod. The one choice you make is what your users do about pods:</p>
   <div class="tier">
     <h3>Bring-your-pod, mandatory</h3>
     <p class="hint">Every user supplies a pod they already control, hosted wherever they like. You run the doorway
       and nothing else. Duties: keep the box up, keep names honest, handle detach requests and the complaints that
-      reach the visible domain. If your box dies, names go dark but nobody's data is lost.</p>
+      reach the visible domain. If your box dies, mail routing pauses but nobody's data or name is lost.</p>
   </div>
   <div class="tier">
     <h3>Bring-your-pod, optional</h3>
@@ -98,75 +113,72 @@
   </div>
   <p class="hint">Setup and installer: see <code>netlify/README.md</code> in the FediPod repo. If you host pods on a
     Community Solid Server, the gateway can also run there as a component instead of on a separate box.</p>
-</section>
+</details>
 
 <script>
   const $ = (id) => document.getElementById(id);
-  let type = null, pod = 'bring', host = 'this-host', offersPods = false, nameOk = false;
+  let offersPods = false, slugOk = false;
 
   fetch('/api/handle?handle=__probe__').then(r => r.json()).then(d => {
-    // Any response tells us offersPods and the host suffix comes from the page's own origin.
     offersPods = !!d.offersPods;
-    $('pod-take').hidden = !offersPods;
+    $('create-pods').hidden = !offersPods;
   }).catch(() => {});
-  host = location.host;
-  $('handle-suffix').textContent = '@' + host;
 
-  function press(group, id) {
-    for (const b of group) b.setAttribute('aria-pressed', String(b.id === id));
+  const pickButtons = [$('pick-attach'), $('pick-create')];
+  function pick(which) {
+    for (const b of pickButtons) b.setAttribute('aria-pressed', String(b.id === which));
+    $('attach-form').hidden = which !== 'pick-attach';
+    $('create-form').hidden = which !== 'pick-create';
   }
-  const typeButtons = [$('pick-person'), $('pick-group'), $('pick-host')];
-  function chooseType(t, id) {
-    type = t; press(typeButtons, id);
-    $('user-form').hidden = (t === 'host');
-    $('host-form').hidden = (t !== 'host');
+  $('pick-attach').onclick = () => pick('pick-attach');
+  $('pick-create').onclick = () => pick('pick-create');
+
+  // Suggest the door name from the pod's own first label, still editable.
+  $('pod-url').addEventListener('input', () => {
+    try {
+      const label = new URL($('pod-url').value.trim()).hostname.split('.')[0];
+      if (!$('slug').value && /^[a-z0-9-]{1,63}$/.test(label)) {
+        $('slug').value = label;
+        $('slug').dispatchEvent(new Event('input'));
+      }
+    } catch { /* not a URL yet */ }
     refresh();
-  }
-  $('pick-person').onclick = () => chooseType('person', 'pick-person');
-  $('pick-group').onclick = () => chooseType('group', 'pick-group');
-  $('pick-host').onclick = () => chooseType('host', 'pick-host');
-
-  const podButtons = [$('pod-bring'), $('pod-take')];
-  $('pod-bring').onclick = () => { pod = 'bring'; press(podButtons, 'pod-bring');
-    $('pod-bring-row').hidden = false; $('pod-take-row').hidden = true; refresh(); };
-  $('pod-take').onclick = () => { pod = 'take'; press(podButtons, 'pod-take');
-    $('pod-bring-row').hidden = true; $('pod-take-row').hidden = false; refresh(); };
+  });
 
   let t = null;
-  $('handle').addEventListener('input', () => {
-    nameOk = false; $('handle-msg').textContent = ''; $('handle-msg').className = 'msg';
+  $('slug').addEventListener('input', () => {
+    slugOk = false; $('slug-msg').textContent = ''; $('slug-msg').className = 'msg';
     clearTimeout(t);
-    const h = $('handle').value.trim().toLowerCase();
+    const h = $('slug').value.trim().toLowerCase();
     if (!h) { refresh(); return; }
     t = setTimeout(async () => {
       try {
         const d = await (await fetch('/api/handle?handle=' + encodeURIComponent(h))).json();
-        nameOk = d.available;
-        $('handle-msg').textContent = d.available ? '@' + h + '@' + host + ' is available' : (d.reason || 'unavailable');
-        $('handle-msg').className = 'msg ' + (d.available ? 'ok' : 'no');
-      } catch { $('handle-msg').textContent = 'could not check the name'; $('handle-msg').className = 'msg no'; }
+        slugOk = d.available;
+        $('slug-msg').textContent = d.available ? 'this door is free' : (d.reason || 'taken');
+        $('slug-msg').className = 'msg ' + (d.available ? 'ok' : 'no');
+      } catch { $('slug-msg').textContent = 'could not check'; $('slug-msg').className = 'msg no'; }
       refresh();
     }, 250);
   });
 
   function refresh() {
-    const podOk = pod === 'take' ? offersPods : /^https:\/\/\S+/.test($('pod-url').value.trim());
-    $('continue').disabled = !((type === 'person' || type === 'group') && nameOk && podOk);
+    const podOk = /^https:\/\/\S+/.test($('pod-url').value.trim());
+    $('attach-continue').disabled = !(podOk && slugOk);
   }
-  $('pod-url').addEventListener('input', refresh);
 
-  $('continue').onclick = () => {
-    const intent = { type, handle: $('handle').value.trim().toLowerCase(),
-      pod: pod === 'take' ? '(host-provided)' : $('pod-url').value.trim() };
-    // The account is not made here: the next step is proving the pod is yours,
-    // via Solid-OIDC. That step is the attach flow (not wired in this build).
-    const n = $('next-note');
+  $('attach-continue').onclick = () => {
+    const slug = $('slug').value.trim().toLowerCase();
+    // The attach is not made here yet: the next step is proving the pod is
+    // yours, via Solid-OIDC — the last unwired step of this page.
+    const n = $('attach-note');
     n.hidden = false;
-    n.innerHTML = 'Next you would <strong>sign in with your pod</strong> to prove it is yours. This host then records '
-      + '<code>@' + intent.handle + '@' + host + '</code> → your pod and hands you one command to run on your machine — '
-      + '<code>fedipod front …</code> — which points your agent at this front. '
+    n.innerHTML = 'Next you would <strong>sign in with your pod</strong> to prove it is yours. This host then '
+      + 'records the door <code>' + slug + '</code> → your pod inbox and hands you one command to run on your '
+      + 'machine — <code>fedipod front … --inbox-only</code> — which makes your actor advertise this door as its '
+      + 'inbox. Your name never moves, and one republish undoes it. '
       + '(The prove-your-pod sign-in is the last unwired step.)';
-    $('continue').disabled = true;
+    $('attach-continue').disabled = true;
   };
 </script>
 </body>
