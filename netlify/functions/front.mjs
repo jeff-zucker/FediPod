@@ -37,6 +37,9 @@ let dir = null, dirAt = 0;
 const DIR_TTL_MS = 60_000;
 
 async function directory() {
+  // No directory configured = an empty roster: the signup page and the API
+  // still answer; every handle lookup is simply a miss.
+  if (!process.env.FEDIPOD_DIRECTORY_URL) return {};
   if (dir && Date.now() - dirAt < DIR_TTL_MS) return dir;
   const res = await fetch(process.env.FEDIPOD_DIRECTORY_URL, { headers: { accept: 'application/json' } });
   if (!res.ok) throw new Error(`directory fetch → ${res.status}`);
