@@ -29,8 +29,6 @@
     padding: .6rem 1.1rem; font: inherit; cursor: pointer; }
   .primary[disabled] { opacity: .5; cursor: not-allowed; }
   [hidden] { display: none !important; }
-  .tier { border-left: 3px solid var(--line); padding-left: .9rem; margin: .8rem 0; }
-  .tier h3 { margin: 0 0 .2rem; font-size: 1.02rem; }
   code { background: rgba(120,120,120,.12); padding: .05em .35em; border-radius: 4px; }
   pre { background: rgba(120,120,120,.12); padding: .7rem .9rem; border-radius: 8px; overflow-x: auto; }
   ol.steps li { margin: .5rem 0; }
@@ -38,27 +36,24 @@
 </head>
 <body>
 <h1>FediPod - join the fediverse from a Solid pod.</h1>
-<p class="lede">Welcome to the <strong>FediPod.net gateway</strong> — a mail filter for accounts that stay yours. Your name, key and data live on your own pod; this box only receives your fediverse mail, verifies each delivery, drops spam and passes the rest to your pod. Joining and leaving the gateway is simple.</p>
+<p class="lede">Welcome to the <strong>FediPod.net gateway</strong>.  Here, you can get a free pod and fediverse account or link to your existing pod/account. This gateway is a mail filter for accounts that stay yours. Your name, key and data live on your own pod; this box only receives your fediverse mail, verifies each delivery, drops spam and passes the rest to your pod.</p>
 
 <p>
-FediPod is experimental and free to use.  See <a href="https://github.com/jeff-zucker/FediPod">the github repository</a> for details.
+FediPod is experimental and free to use.  See the <a href="https://github.com/jeff-zucker/FediPod">FediPod repository</a> for details.
 </p>
 
 <fieldset>
   <legend>What do you want to do?</legend>
   <div class="choices" role="group" aria-label="Path">
-    <button type="button" id="pick-create" aria-pressed="false"><b>Create a new FediPod account</b><span>get or link a pod and a fediverse handle</span></button>
-    <button type="button" id="pick-attach" aria-pressed="false"><b>Attach an existing FediPod account</b><span>filter my existing pod-based mail through this gateway</span></button>
-    <button type="button" id="pick-detach" aria-pressed="false"><b>Detach an existing FediPod account</b><span>go back to unfiltered delivery</span></button>
-    <button type="button" id="pick-transfer" aria-pressed="false"><b>Transfer a fediverse account to FediPod</b><span>move here from Mastodon and friends</span></button>
-    <button type="button" id="pick-host" aria-pressed="false"><b>Run a gateway like this one</b><span>a doorway of your own, for many users</span></button>
-    <button type="button" id="pick-run" aria-pressed="false"><b>Run your identity on this server</b><span>if your pod lives here, the server can be your agent</span></button>
+    <button type="button" id="pick-solo" aria-pressed="false"><b>Create a new solo account</b><span>a fediverse account for one person, on a pod you own</span></button>
+    <button type="button" id="pick-group" aria-pressed="false"><b>Create a new group account</b><span>an account people join &mdash; it carries members' posts to the whole group</span></button>
+    <button type="button" id="pick-manage" aria-pressed="false"><b>Manage an existing account</b><span>attach it to this gateway, detach it, or transfer in</span></button>
   </div>
 </fieldset>
 
-<!-- create: get a pod, run the agent, come back and attach -->
+<!-- solo: get a pod, run the agent, come back and attach -->
 <section id="create-form" hidden>
-  <h2>Create a new FediPod account</h2>
+  <h2>Create a new solo account</h2>
   <p class="hint">A FediPod is two things you own: a <strong>pod</strong> (always-on storage with your name on
     it) and an <strong>agent</strong> (the app you read and post from, on any of your machines). A browser
     cannot install the agent for you — there is exactly one command to run.</p>
@@ -76,6 +71,31 @@ cd ~/FediPod &amp;&amp; npm start</pre>
   </ol>
   <p id="create-pods" class="hint" hidden>This host also offers pods — you can take one at step 1 instead of
     bringing your own; it stays exportable, so you can leave with everything.</p>
+</section>
+
+<!-- group: the same install as solo, with the group choice made in setup -->
+<section id="group-form" hidden>
+  <h2>Create a new group account</h2>
+  <p class="hint">A group is an account people join: members post to it, and it carries each member's
+    post to everyone in the group. Mastodon users can join with no pod of their own. A group needs
+    a pod of its own.</p>
+  <ol class="steps">
+    <li><strong>Get a pod for the group</strong>, if you don't have one: any Solid pod host that offers
+      <em>https subdomains</em> works, or a Community Solid Server you run yourself.</li>
+    <li><strong>Install and start the agent</strong> on your own machine, and choose a group account in setup:
+      <pre>curl -fsSL https://fedipod.net/install | sh
+cd ~/FediPod &amp;&amp; npm start</pre></li>
+    <li><strong>Come back here and attach</strong>, so this gateway starts filtering the group's mail.</li>
+  </ol>
+</section>
+
+<!-- manage: the existing-account actions, one panel each -->
+<section id="manage-form" hidden>
+  <div class="choices" role="group" aria-label="Manage">
+    <button type="button" id="pick-attach" aria-pressed="false"><b>Attach to this gateway</b><span>filter your mail through this door &mdash; your address stays yours</span></button>
+    <button type="button" id="pick-detach" aria-pressed="false"><b>Detach from this gateway</b><span>go back to unfiltered delivery</span></button>
+    <button type="button" id="pick-transfer" aria-pressed="false"><b>Transfer a fediverse account to FediPod</b><span>move here from Mastodon and friends</span></button>
+  </div>
 </section>
 
 <!-- attach: an existing FediPod points its inbox here; identity stays put -->
@@ -135,49 +155,6 @@ cd ~/FediPod &amp;&amp; npm start</pre>
   </ol>
 </section>
 
-<!-- host: run your own gateway; a gateway never hosts pods -->
-<section id="host-form" hidden>
-  <h2>Run a gateway like this one</h2>
-  <p>You stand up your own gateway on <strong>your own box</strong>. A gateway is only a
-    <strong>doorway</strong>: a directory, name lookups, verify-and-forward. It stores no user content and dictates
-    nobody's pod. The one choice you make is what your users do about pods:</p>
-  <div class="tier">
-    <h3>Bring-your-pod, mandatory</h3>
-    <p class="hint">Every user supplies a pod they already control, hosted wherever they like. You run the doorway
-      and nothing else. Duties: keep the box up, keep names honest, handle detach requests and the complaints that
-      reach the visible domain. If your box dies, mail routing pauses but nobody's data or name is lost.</p>
-  </div>
-  <div class="tier">
-    <h3>Bring-your-pod, optional</h3>
-    <p class="hint">Same doorway — but users who have no pod may take one from a pod service you also happen to run
-      or recommend. That pod hosting is a <em>separate</em> thing (its own server, its own duties as a data
-      custodian); the gateway never provides pods itself, and a user who brings their own always keeps full custody.</p>
-  </div>
-  <p class="hint">Setup and installer: see <code>netlify/README.md</code> in the FediPod repo. If you host pods on a
-    Community Solid Server, the gateway can also run there as a component instead of on a separate box.</p>
-</section>
-
-<!-- run: the pod lives on this very server; opting in makes it an identity -->
-<form id="run-form" hidden>
-  <p>If your pod is hosted by this server, it can run your fediverse identity
-  for you: your pod accepts follows, delivers your posts and serves your
-  Mastodon app, with nothing for you to keep running. Sign in with your pod to
-  prove it is yours.</p>
-  <p class="field">
-  <label for="run-pod-url">Your pod's address on this server</label>
-  <input type="url" id="run-pod-url" autocomplete="off" placeholder="https://you.this.server/">
-  </p>
-  <p class="field">
-  <label for="run-issuer">Your identity provider</label>
-  <input type="url" id="run-issuer" autocomplete="off" placeholder="https://this.server">
-  </p>
-  <p class="actions">
-    <button type="button" id="run-continue" class="primary" disabled>Sign in with your pod &amp; opt in</button>
-    <button type="button" id="run-leave">Stop running it here</button>
-  </p>
-  <p class="hint" id="run-note" hidden></p>
-</form>
-
 <script src="/solid-client-authn.bundle.js"></script>
 <script>
   const $ = (id) => document.getElementById(id);
@@ -188,17 +165,27 @@ cd ~/FediPod &amp;&amp; npm start</pre>
     $('create-pods').hidden = !offersPods;
   }).catch(() => {});
 
-  const picks = ['pick-create', 'pick-attach', 'pick-detach', 'pick-transfer', 'pick-host', 'pick-run'];
-  const panels = { 'pick-create': 'create-form', 'pick-attach': 'attach-form',
-    'pick-detach': 'detach-form', 'pick-transfer': 'transfer-form', 'pick-host': 'host-form',
-    'pick-run': 'run-form' };
+  const picks = ['pick-solo', 'pick-group', 'pick-manage'];
+  const panels = { 'pick-solo': 'create-form', 'pick-group': 'group-form',
+    'pick-manage': 'manage-form' };
+  const subPicks = ['pick-attach', 'pick-detach', 'pick-transfer'];
+  const subPanels = { 'pick-attach': 'attach-form', 'pick-detach': 'detach-form',
+    'pick-transfer': 'transfer-form' };
+  function subPick(which) {
+    for (const id of subPicks) {
+      $(id).setAttribute('aria-pressed', String(id === which));
+      $(subPanels[id]).hidden = id !== which;
+    }
+  }
   function pick(which) {
     for (const id of picks) {
       $(id).setAttribute('aria-pressed', String(id === which));
       $(panels[id]).hidden = id !== which;
     }
+    if (which !== 'pick-manage') subPick(null);
   }
   for (const id of picks) $(id).onclick = () => pick(id);
+  for (const id of subPicks) $(id).onclick = () => subPick(id);
 
   // Suggest the door name from the pod's own first label, and the identity
   // provider from the pod's apex domain — both still editable.
@@ -268,88 +255,6 @@ cd ~/FediPod &amp;&amp; npm start</pre>
     }).catch((e) => { n.hidden = false; n.textContent = 'sign-in failed to start: ' + e.message; });
   };
 
-  // The run panel: offered only where this server actually runs identities.
-  // An unauthenticated probe tells the two apart: 501 = not offered here,
-  // anything else = offered (a real opt-in still needs the signed-in proof).
-  $('pick-run').addEventListener('click', async () => {
-    const n = $('run-note');
-    const res = await fetch('/api/agent', { method: 'POST',
-      headers: { 'content-type': 'application/json' }, body: '{}' }).catch(() => null);
-    if (!res || res.status === 501) {
-      n.hidden = false;
-      n.textContent = 'This server does not run identities. You can still attach — your agent stays where it is.';
-      $('run-continue').disabled = true;
-      $('run-leave').disabled = true;
-    }
-  }, { once: false });
-  function runFormCheck() {
-    let ok = false;
-    try { ok = /^https?:$/.test(new URL($('run-pod-url').value.trim()).protocol); } catch { /* not yet */ }
-    const issuerOk = /^https?:\/\/\S+/.test($('run-issuer').value.trim());
-    $('run-continue').disabled = !(ok && issuerOk);
-    $('run-leave').disabled = !(ok && issuerOk);
-  }
-  $('run-pod-url').addEventListener('input', () => {
-    runFormCheck();
-    // The identity provider is usually the server itself — still editable.
-    try {
-      const u = new URL($('run-pod-url').value.trim());
-      const apex = u.hostname.split('.').slice(1).join('.');
-      if (!$('run-issuer').value && apex) $('run-issuer').value = `${u.protocol}//${apex}${u.port ? ':' + u.port : ''}`;
-    } catch { /* not a URL yet */ }
-    runFormCheck();
-  });
-  $('run-issuer').addEventListener('input', runFormCheck);
-  const runStart = (action) => {
-    const auth = window.solidClientAuthentication;
-    const n = $('run-note');
-    if (!auth) { n.hidden = false; n.textContent = 'the sign-in library did not load — reload and try again'; return; }
-    const u = new URL($('run-pod-url').value.trim());
-    if (u.pathname === '') u.pathname = '/';
-    if (!u.pathname.endsWith('/')) u.pathname += '/';
-    u.search = ''; u.hash = '';
-    sessionStorage.setItem('fp-run', JSON.stringify({ podBase: u.href, action }));
-    auth.login({
-      oidcIssuer: $('run-issuer').value.trim(),
-      redirectUrl: location.origin + '/',
-      clientName: 'FediPod gateway',
-    }).catch((e) => { n.hidden = false; n.textContent = 'sign-in failed to start: ' + e.message; });
-  };
-  $('run-continue').onclick = () => runStart('opt-in');
-  $('run-leave').onclick = () => runStart('opt-out');
-
-  // Back from the identity provider: finish the opt-in with the proven login.
-  (async () => {
-    const auth = window.solidClientAuthentication;
-    if (!auth) return;
-    const info = await auth.handleIncomingRedirect().catch(() => null);
-    const pending = sessionStorage.getItem('fp-run');
-    if (!info?.isLoggedIn || !pending) return;
-    sessionStorage.removeItem('fp-run');
-    const p2 = JSON.parse(pending);
-    pick('pick-run');
-    const n = $('run-note');
-    n.hidden = false;
-    n.textContent = 'signed in as ' + info.webId + ' — asking the server…';
-    const res = await auth.fetch('/api/agent', {
-      method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ action: p2.action, podBase: p2.podBase }),
-    }).catch(() => null);
-    const d = res ? await res.json().catch(() => ({})) : {};
-    if (res && res.status === 201 && d.doorSecret) {
-      n.innerHTML = 'Your identity runs here now. This is your door secret — <b>save it now</b>, '
-        + 'it is shown only this once. It opens your admin pages at <code>' + p2.podBase.replace(/\/$/, '') + d.doorPath + '</code>:'
-        + '<pre>' + d.doorSecret + '</pre>'
-        + 'To check it works:<pre>' + d.command + '</pre>'
-        + 'Lost it? Opt in again — that mints a fresh one and retires this one.';
-    } else if (res && res.status === 200) {
-      n.textContent = 'Done — this server no longer runs that identity. Your pod and its data are untouched.';
-    } else {
-      n.textContent = (p2.action === 'opt-in' ? 'opt-in' : 'opt-out') + ' failed: '
-        + (d.error || (res ? 'HTTP ' + res.status : 'no response'));
-    }
-  })();
-
   // Back from the identity provider: finish the attach with the proven login.
   (async () => {
     const auth = window.solidClientAuthentication;
@@ -359,7 +264,8 @@ cd ~/FediPod &amp;&amp; npm start</pre>
     if (!info?.isLoggedIn || !pending) return;
     sessionStorage.removeItem('fp-attach');
     const p = JSON.parse(pending);
-    pick('pick-attach');
+    pick('pick-manage');
+    subPick('pick-attach');
     const n = $('attach-note');
     n.hidden = false;
     n.textContent = 'signed in as ' + info.webId + ' — attaching…';

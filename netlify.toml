@@ -2,6 +2,9 @@
 # nothing in FediPod publishes this; an operator deploys it themselves.
 [build]
   functions = "netlify/functions"
+  # Only the front pages are uploaded as statics; every route is answered by
+  # the front function anyway.
+  publish = "web/front"
 
 [functions]
   node_bundler = "esbuild"

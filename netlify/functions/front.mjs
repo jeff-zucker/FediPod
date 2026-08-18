@@ -43,6 +43,11 @@ try {
   installScript = readFileSync(
     fileURLToPath(new URL('../../web/front/install.sh', import.meta.url)), 'utf8');
 } catch { /* without it /install 404s */ }
+let runPage = '';
+try {
+  runPage = readFileSync(
+    fileURLToPath(new URL('../../web/front/run.html', import.meta.url)), 'utf8');
+} catch { /* without it /run 404s */ }
 
 let dir = null, dirAt = 0;
 const DIR_TTL_MS = 60_000;
@@ -89,6 +94,7 @@ export default async function handler(request) {
     host: process.env.FEDIPOD_FRONT_HOST,
     frontOrigin: process.env.FEDIPOD_FRONT_ORIGIN,
     signupPage,
+    runPage,
     authBundle,
     installScript,
     offersPods: process.env.FEDIPOD_OFFERS_PODS === '1',

@@ -35,6 +35,8 @@ export interface FediPodGatewayArgs {
   offersPods?: boolean;
   /** The new-account page HTML served at the root. */
   signupPage?: string;
+  /** The run-your-identity page HTML served at /run. */
+  runPage?: string;
   /** Pod base URLs to run an agent for. Empty or absent means no agent runs. */
   agentPods?: string[];
   /** Directory holding each agent identity's signing key and log. Required when agentPods is set. */
@@ -459,6 +461,7 @@ export class FediPodGatewayHandler extends HttpHandler implements Initializable,
       gatewayWebId: this.args.gatewayWebId,
       offersPods: !!this.args.offersPods,
       signupPage: this.args.signupPage || null,
+      runPage: this.args.runPage || null,
       lookup: (h: string) => this.dir.lookup(h),
       putDirectory: (h: string, rec: never) => this.dir.putDirectory(h, rec),
       podPut: (_handle: string, url: string, body: string, ct: string) => this.podPut(url, body, ct),

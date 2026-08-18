@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FediPod — run your identity on this server</title>
+<style>
+  :root { color-scheme: light dark; --line:#d9d4c7; --dim:#45443d; --accent:#6a8a5a; }
+  @media (prefers-color-scheme: dark) { :root { --dim:#c2c0b4; } }
+  body { font: 19px/1.6 system-ui, sans-serif; max-width: 44rem; margin: 2rem auto; padding: 0 1.1rem; }
+  h1 { font-size: 1.7rem; margin: 0 0 .2rem; }
+  p.lede { color: var(--dim); margin-top: 0; }
+  label { display: block; font-weight: 600; margin: .8rem 0 .2rem; }
+  input[type=text], input[type=url] { width: 100%; padding: .5rem .6rem; font: inherit;
+    border: 1px solid var(--line); border-radius: 8px; box-sizing: border-box; }
+  .hint { color: var(--dim); font-size: .95rem; }
+  .primary { background: var(--accent); color: #fff; border: none; border-radius: 9px;
+    padding: .6rem 1.1rem; font: inherit; cursor: pointer; }
+  button { font: inherit; }
+  .primary[disabled], button[disabled] { opacity: .5; cursor: not-allowed; }
+  [hidden] { display: none !important; }
+  code { background: rgba(120,120,120,.12); padding: .05em .35em; border-radius: 4px; }
+  pre { background: rgba(120,120,120,.12); padding: .7rem .9rem; border-radius: 8px; overflow-x: auto; }
+</style>
+</head>
+<body>
+<h1>Run your identity on this server</h1>
+<p class="lede">If your pod is hosted by this server, the server can run your fediverse identity
+for you: it accepts follows, delivers your posts and serves your Mastodon app, with nothing for
+you to keep running. Sign in with your pod to prove it is yours.</p>
+
+<form id="run-form">
+  <p class="field">
+  <label for="run-pod-url">Your pod's address on this server</label>
+  <input type="url" id="run-pod-url" autocomplete="off" placeholder="https://you.this.server/">
+  </p>
+  <p class="field">
+  <label for="run-issuer">Your identity provider</label>
+  <input type="url" id="run-issuer" autocomplete="off" placeholder="https://this.server">
+  </p>
+  <p class="actions">
+    <button type="button" id="run-continue" class="primary" disabled>Sign in with your pod &amp; opt in</button>
+    <button type="button" id="run-leave">Stop running it here</button>
+  </p>
+  <p class="hint" id="run-note" hidden></p>
+</form>
+
+<script src="/solid-client-authn.bundle.js"></script>
+<script>
+  const $ = (id) => document.getElementById(id);
+
+  // Offered only where this server actually runs identities. An
+  // unauthenticated probe tells the two apart: 501 = not offered here,
+  // anything else = offered (a real opt-in still needs the signed-in proof).
+  let offered = true;
+  (async () => {
+    const res = await fetch('/api/agent', { method: 'POST',
+      headers: { 'content-type': 'application/json' }, body: '{}' }).catch(() => null);
+    if (!res || res.status === 501) {
+      offered = false;
+      const n = $('run-note');
+      n.hidden = false;
+      n.textContent = 'This server does not run identities. Your agent stays where it is.';
+      runFormCheck();
+    }
+  })();
+
+  function runFormCheck() {
+    let ok = false;
+    try { ok = /^https?:$/.test(new URL($('run-pod-url').value.trim()).protocol); } catch { /* not yet */ }
+    const issuerOk = /^https?:\/\/\S+/.test($('run-issuer').value.trim());
+    $('run-continue').disabled = !(offered && ok && issuerOk);
+    $('run-leave').disabled = !(offered && ok && issuerOk);
+  }
+  $('run-pod-url').addEventListener('input', () => {
+    runFormCheck();
+    // The identity provider is usually the server itself — still editable.
+    try {
+      const u = new URL($('run-pod-url').value.trim());
+      const apex = u.hostname.split('.').slice(1).join('.');
+      if (!$('run-issuer').value && apex) $('run-issuer').value = `${u.protocol}//${apex}${u.port ? ':' + u.port : ''}`;
+    } catch { /* not a URL yet */ }
+    runFormCheck();
+  });
+  $('run-issuer').addEventListener('input', runFormCheck);
+
+  const runStart = (action) => {
+    const auth = window.solidClientAuthentication;
+    const n = $('run-note');
+    if (!auth) { n.hidden = false; n.textContent = 'the sign-in library did not load — reload and try again'; return; }
+    const u = new URL($('run-pod-url').value.trim());
+    if (u.pathname === '') u.pathname = '/';
+    if (!u.pathname.endsWith('/')) u.pathname += '/';
+    u.search = ''; u.hash = '';
+    sessionStorage.setItem('fp-run', JSON.stringify({ podBase: u.href, action }));
+    auth.login({
+      oidcIssuer: $('run-issuer').value.trim(),
+      redirectUrl: location.origin + '/run',
+      clientName: 'FediPod gateway',
+    }).catch((e) => { n.hidden = false; n.textContent = 'sign-in failed to start: ' + e.message; });
+  };
+  $('run-continue').onclick = () => runStart('opt-in');
+  $('run-leave').onclick = () => runStart('opt-out');
+
+  // Back from the identity provider: finish the opt-in with the proven login.
+  (async () => {
+    const auth = window.solidClientAuthentication;
+    if (!auth) return;
+    const info = await auth.handleIncomingRedirect().catch(() => null);
+    const pending = sessionStorage.getItem('fp-run');
+    if (!info?.isLoggedIn || !pending) return;
+    sessionStorage.removeItem('fp-run');
+    const p = JSON.parse(pending);
+    const n = $('run-note');
+    n.hidden = false;
+    n.textContent = 'signed in as ' + info.webId + ' — asking the server…';
+    const res = await auth.fetch('/api/agent', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action: p.action, podBase: p.podBase }),
+    }).catch(() => null);
+    const d = res ? await res.json().catch(() => ({})) : {};
+    if (res && res.status === 201 && d.doorSecret) {
+      n.innerHTML = 'Your identity runs here now. This is your door secret — <b>save it now</b>, '
+        + 'it is shown only this once. It opens your admin pages at <code>' + p.podBase.replace(/\/$/, '') + d.doorPath + '</code>:'
+        + '<pre>' + d.doorSecret + '</pre>'
+        + 'To check it works:<pre>' + d.command + '</pre>'
+        + 'Lost it? Opt in again — that mints a fresh one and retires this one.';
+    } else if (res && res.status === 200) {
+      n.textContent = 'Done — this server no longer runs that identity. Your pod and its data are untouched.';
+    } else {
+      n.textContent = (p.action === 'opt-in' ? 'opt-in' : 'opt-out') + ' failed: '
+        + (d.error || (res ? 'HTTP ' + res.status : 'no response'));
+    }
+  })();
+</script>
+<i>(cc) 4.0 By, Jeff Zucker, 2026</i>
+</body>
+</html>
