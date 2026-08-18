@@ -9,6 +9,33 @@
   their pod and the server starts (or stops) an identity for it while
   running — `POST /api/agent`, or "Run your identity on this server" on the
   signup page. Opted-in pods survive a server restart.
+- Browser-based Mastodon clients can now sign in, the way any Mastodon server
+  serves them: the client API answers any origin, an app registers for its own
+  id and secret, and the sign-in screen names what is asking and where the code
+  will be sent before you approve it with the password. The authorization code
+  is bound to that client's registered address and is not usable until the
+  client exchanges it with its secret.
+- `agentAutoFront`: when one server runs both the door and its identities,
+  each identity gets a `@handle@<frontHost>` address on startup automatically,
+  resolving to the identity on its own pod. Off by default.
+- Clearing a clogged inbox keeps what matters: `POST /inbox/prune` with
+  `keepConcerning` discards the firehose but keeps posts addressed to you,
+  mentions, replies to your posts, and people you follow. Follows are applied
+  as always.
+- Opting a pod in to run on a server accepts only a pod origin root, so on a
+  server that hosts several pods on one domain no owner can claim another's.
+- Hardening from a security and server-load review: the store transport is
+  confined to the pod it acts for, inbound bodies and the inbox listing read
+  are size-capped, the live feed caps its connections, the delivery queue has a
+  ceiling, and a busy inbox no longer sweeps unpaced. None changes how the
+  component is used.
+- Stopping the server flushes each identity's state and releases its lease
+  before exiting, even under a plain `systemctl stop`.
+- The `fedipod-css-gateway` package installs standalone from npm — it ships the
+  agent tree it needs and declares its dependencies.
+- Opening `http://localhost:8030/` always reaches a configured identity's
+  record page (which lists every identity), never an unconfigured agent's
+  setup form.
 
 ## 2026-08-17
 - FediPod runs inside a Community Solid Server, as a component of it. A server
