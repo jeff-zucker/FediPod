@@ -74,7 +74,7 @@ function cookieValue(header, name) {
 // provider, so on it they exempt three paths that only ever 404 — and would
 // silently un-gate any future route underneath them. An agent exposed by
 // AP_ALLOWED_HOSTS has nothing but this token, so the gate has to be total.
-function makeGate(token, { allowOrigins = [], publicEndpoints = false } = {}) {
+function makeGate(token, { allowOrigins = [], publicEndpoints = false, secureCookie = false } = {}) {
   // gate(req, res) → true when the gate handled the response (caller stops).
   function gate(req, res) {
     if (!token) return false;
@@ -89,7 +89,8 @@ function makeGate(token, { allowOrigins = [], publicEndpoints = false } = {}) {
       url.searchParams.delete(COOKIE);
       url.searchParams.delete('dk-bless');
       res.writeHead(302, {
-        'set-cookie': `${COOKIE}=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=31536000`,
+        'set-cookie': `${COOKIE}=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=31536000`
+          + (secureCookie ? '; Secure' : ''),
         'location': url.pathname + url.search,
       });
       res.end();

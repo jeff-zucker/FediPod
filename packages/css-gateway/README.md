@@ -59,18 +59,100 @@ host/origin from the server's `baseUrl` variables. Override `offersPods`,
 `gatewayWebId`, `directoryContainer`, or `signupPage` on the
 `urn:fedipod:gateway:Handler` node as needed. Restart CSS.
 
+<!-- CLAUDE 2026-08-17 — new section: the agent option. Rework freely. -->
+## Running the agent
+
+The gateway receives; the agent acts. Set `agentPods` and this same component
+also runs FediPod's agent inside the server, for the pods you name — so a pod
+here is a fediverse identity that accepts follows, delivers posts and drains its
+inbox with no separate process to keep alive:
+
+```json
+{
+  "@id": "urn:fedipod:gateway:Handler",
+  "@type": "FediPodGatewayHandler",
+  "args_agentPods": [ "https://alice.example.org/" ],
+  "args_agentDataDir": "/var/lib/css/fedipod-agent/"
+}
+```
+
+An identity that does not exist yet is provisioned on first start: its name is
+the pod's subdomain label (or last path segment), and it publishes an actor, a
+signing key and WebFinger on the pod itself. Its state lives on the pod; its
+signing key lives in `agentDataDir`, one directory per identity.
+
+| Setting | What it is |
+|---|---|
+| `agentPods` | Pod base URLs to run an identity for. Listing a pod is how you turn the agent on; with none, nothing runs. |
+| `agentDataDir` | Where each identity keeps its signing key and log. Required whenever `agentPods` is set. |
+| `agentWebIdSuffix` | Path from a pod's base to its owner's WebID. Defaults to `profile/card#me`. |
+| `agentPollSeconds` | How often the inbox is swept. Deliveries also wake the sweep as they land, so this is the fallback. |
+| `agentAutoAcceptFollows` | Whether a newly provisioned identity accepts follows without review. On by default. |
+| `agentGateToken` | The secret guarding the owner's pages and admin routes. Required whenever `agentPods` is set. |
+| `agentUiPath` | Where those pages live on the pod's origin. `/app/` by default; empty serves no pages. |
+
+Two things to know before turning it on. The signing keys are held by the
+server process, so whoever runs the server can act as those identities. And a
+delivery is picked up the moment it lands only in a single-worker server; with
+`--workers` above one the inbox is swept on the timer instead.
+
+### The identity's own origin
+
+Each identity answers on its pod's origin, so the pod is the instance a client
+connects to. Point a Mastodon app at `https://alice.example.org/` and it finds
+everything it expects: nodeinfo, the client API under `/api/`, sign-in under
+`/oauth/`, the live feed at `/api/v1/streaming`, and the ActivityPub write API
+at `/ap/outbox`. The owner's own pages — the record, the setup screens and the
+bundled web client — sit behind `agentUiPath`, which the gate secret guards.
+
+Because a client API is rooted at an origin, each identity needs an origin of
+its own: subdomain pods, one per identity. Two entries on one host, or an entry
+on the front's own host, are refused at startup rather than half-working.
+
+**Sign-in needs a password.** These routes face the whole internet, so
+`/oauth/authorize` refuses until the identity has one. Set it once through the
+door, with the gate secret:
+
+```
+curl -X POST https://alice.example.org/app/config \
+  -H 'x-dk-token: YOUR_GATE_SECRET' -H 'content-type: application/json' \
+  -d '{"password":"the one you will type into your phone"}'
+```
+
+**What the identity takes over.** On that origin the paths above belong to the
+identity, so pod resources at those names — a container called `api`, `oauth`
+or `app`, or documents at `ap/actor`, `ap/outbox`, `.well-known/nodeinfo` and
+`nodeinfo/2.0` — are not served over HTTP there. They remain in the pod and in
+its listings. Every other path is the pod, exactly as before. The server logs
+the list for each identity when it starts.
+<!-- /CLAUDE -->
+
 ## Build
 
 TypeScript, built the way CSS builds its own components:
 
+<!-- CLAUDE 2026-08-17 — corrected: CSS is now a devDependency of this package
+     (fresh from npm), so there is no symlink step. -->
 ```
-npm install         # + a peer @solid/community-server resolvable (dev: symlink it in)
+npm install         # installs @solid/community-server too
 npm run build       # tsc → dist, then componentsjs-generator → dist/components
 ```
+<!-- /CLAUDE -->
 
 `dist/` and `node_modules/` are gitignored; `src/`, `config/`, and this README
 are the sources.
 
+<!-- CLAUDE 2026-08-17 — the section below is stale: it is written against CSS
+     7.1.9 and quotes check counts that have moved. The package now builds and
+     is validated against 7.2.0, and there are three suites:
+       npm test          unit + test/live-css.mjs (the transport, against a real
+                         CSS store stack: ETags, If-Match, container listings,
+                         the lease, the deletion deny-list)
+       npm run test:e2e  boots a real CSS, two seeded pods become two fediverse
+                         identities, a Follow delivered over HTTP is answered
+                         with a signed Accept, clean shutdown
+     Whether the prose below is rewritten or simply deleted is yours to say —
+     it reads as a validation diary rather than a description of the package. -->
 ## Status & tests — validated against real CSS 7.1.9
 
 - **Pure pieces** (route claiming, the adapter, the store-backed directory/podPut):

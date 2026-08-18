@@ -19,7 +19,8 @@
   "devDependencies": {
     "typescript": "^5.5.3",
     "componentsjs-generator": "^3.1.2",
-    "@types/node": "^20.0.0"
+    "@types/node": "^20.0.0",
+    "@solid/community-server": "^7.2.0"
   },
   "lsd:module": "https://linkedsoftwaredependencies.org/bundles/npm/fedipod-css-gateway",
   "lsd:components": "dist/components/components.jsonld",
@@ -34,6 +35,7 @@
   "scripts": {
     "build": "tsc && npm run build:components",
     "build:components": "componentsjs-generator -s src -c dist/components -r fpg",
-    "test": "npm run build && node --test test/*.mjs"
+    "test": "npm run build && node --test test/*.mjs",
+    "test:e2e": "node test/e2e/live-agent.mjs"
   }
 }

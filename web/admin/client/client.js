@@ -26,7 +26,8 @@
   // URI on the pod. Matching on that rather than on the origin is deliberate —
   // "which account logged in here" is a different question, and it is the one
   // that goes wrong when the two origins get mixed.
-  const status = await fetch('/status').then(r => (r.ok ? r.json() : null)).catch(() => null);
+  const base = location.pathname.replace(/\/admin\/.*$/u, '');
+  const status = await fetch(base + '/status').then(r => (r.ok ? r.json() : null)).catch(() => null);
   if (!status?.actor) return;                 // not set up yet; setup owns that
 
   // A deep link into the client — the record links an actor's own page this way

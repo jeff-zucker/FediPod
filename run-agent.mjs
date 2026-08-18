@@ -130,8 +130,10 @@ export class Agent {
   async bootstrap({ handle, name, root, kind, approveJoins = false, summary, icon }) {
     const cred = this.readCredential();
     if (!cred) throw new Error('no credential — run setup first');
-    this.remote = new RemotePod(cred, { log: this.log, home: this.home });
-    await this.remote.warmup();
+    if (!this.remote) {
+      this.remote = new RemotePod(cred, { log: this.log, home: this.home });
+      await this.remote.warmup();
+    }
     this.urls = apUrls(cred.remotePod, root);
     const priv = this.privateUrls(cred);
     const stateStore = this.privateStorage(cred, 'state');
@@ -331,6 +333,7 @@ export class Agent {
       config, urls: this.urls, remote: this.remote, local: this.local, store: this.store,
       deliverer: this.deliverer, publisher: this.publisher, log: this.log, lease: this.lease,
       archive: this.privateStorage(cred, 'archive'),
+      push: !this.embedded, pollSeconds: this.pollSeconds || null,
     });
     // The CSV-import worker: paced, resumable, armed only while active.
     this.importer?.stop();

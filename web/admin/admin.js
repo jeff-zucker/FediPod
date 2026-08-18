@@ -9,8 +9,12 @@
 // only gates /oauth/authorize, so it does nothing for a loopback-only agent.
 
 const $ = (id) => document.getElementById(id);
+// The door this page is served behind: nothing when the agent runs on this
+// machine, `/app` when the identity is hosted by its own pod server. Read from
+// the page's own address, so one build serves both.
+const BASE = location.pathname.replace(/\/admin\/.*$/u, '');
 const api = async (path, init) => {
-  const res = await fetch(path, init);
+  const res = await fetch(BASE + path, init);
   return { status: res.status, json: await res.json().catch(() => null) };
 };
 const postJson = (path, body) => api(path, {

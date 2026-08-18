@@ -8,7 +8,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Readable } from 'node:stream';
-import { claims } from '../dist/claims.js';
+import { claims, agentClaims } from '../dist/claims.js';
 import { nodeToWhatwg, applyToNode } from '../dist/adapt.js';
 import { makeDirectory, makeStorePodPut } from '../dist/directory.js';
 
@@ -21,6 +21,26 @@ test('claims only the front host, only its routes', () => {
   assert.equal(claims({ host: 'alice.fedipod.net', pathname: '/.well-known/webfinger' }, F), false,
     'a pod subdomain is never claimed');
   assert.equal(claims({ host: '', pathname: '/' }, F), false);
+});
+
+test('an identity claims its protocol routes and its door, and nothing else', () => {
+  const hosts = new Set(['alice.example.org']);
+  const owns = (pathname, host = 'alice.example.org') => agentClaims({ host, pathname }, hosts);
+  assert.equal(owns('/api/v1/instance'), true);
+  assert.equal(owns('/oauth/authorize'), true);
+  assert.equal(owns('/ap/actor'), true);
+  assert.equal(owns('/ap/outbox'), true);
+  assert.equal(owns('/.well-known/nodeinfo'), true);
+  assert.equal(owns('/nodeinfo/2.0'), true);
+  assert.equal(owns('/app/'), true, 'the door');
+  assert.equal(owns('/app'), true, 'and the door without its slash');
+  assert.equal(owns('/profile/card'), false, 'a pod resource is the pod\'s');
+  assert.equal(owns('/ap/inbox/x.json'), false, 'inbox items are pod resources, read and written as such');
+  assert.equal(owns('/api/v1/instance', 'carol.example.org'), false, 'another host is not this identity');
+  assert.equal(agentClaims({ host: 'alice.example.org', pathname: '/app/' }, hosts, ''), false,
+    'with no door configured there are no pages to claim');
+  assert.equal(agentClaims({ host: 'alice.example.org', pathname: '/api/' }, new Set()), false,
+    'and with no identities nothing is claimed at all');
 });
 
 test('nodeToWhatwg carries method, absolute url, headers and body', async () => {

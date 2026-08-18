@@ -17,7 +17,7 @@ main { flex: 1 1 auto; min-height: 0; display: flex; }
   :root { --link: #7fb3e8; --heading: #b9a3e3; }
 }
 </style>
-<link rel="stylesheet" href="/admin/bar.css">
+<link rel="stylesheet" href="../bar.css">
 </head>
 <body>
 
@@ -27,16 +27,16 @@ main { flex: 1 1 auto; min-height: 0; display: flex; }
 <nav id="bar" aria-label="Site">
   <h1 class="name">FediPod</h1>
   <span id="bar-handle"></span>
-  <a id="bar-fediverse" href="/admin/client/" title="   Open the client and read your timeline" aria-current="page">visit account</a>
-  <a id="bar-manage" href="/admin/" title="   The record: what this actor is, and what you can do to it">manage account</a>
-  <a id="bar-add" href="/admin/?new=1" title="   Set up another actor on this machine, with its own pod">add new account</a>
+  <a id="bar-fediverse" href="./" title="   Open the client and read your timeline" aria-current="page">visit account</a>
+  <a id="bar-manage" href="../" title="   The record: what this actor is, and what you can do to it">manage account</a>
+  <a id="bar-add" href="../?new=1" title="   Set up another actor on this machine, with its own pod">add new account</a>
 </nav>
 
 <main>
-<iframe id="client" src="/" title="fediverse client"></iframe>
+<iframe id="client" src="../../" title="fediverse client"></iframe>
 </main>
 
-<script src="/admin/bar.js"></script>
+<script src="../bar.js"></script>
 <script src="client.js"></script>
 </body>
 </html>

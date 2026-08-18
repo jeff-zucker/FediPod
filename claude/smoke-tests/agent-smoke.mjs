@@ -5269,8 +5269,10 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   // it — client.js only navigates the loaded app to its own login route when the
   // stored account is not this agent's actor, which is the whole fix for a
   // leftover login from another identity showing up on this one's page.
+  // Relative, so the same markup finds the app whether the pages are at the
+  // origin root or behind a path on a pod that hosts the identity.
   const wrapper = await g('/admin/client/').then(r => r.text());
-  check(/<iframe[^>]+id="client"[^>]+src="\/"/.test(wrapper),
+  check(/<iframe[^>]+id="client"[^>]+src="\.\.\/\.\.\/"/.test(wrapper),
     'the client wrapper names its own source in the markup, not from script');
   check(/<script src="client\.js">/.test(wrapper),
     'and loads the script that pins it to this agent\'s actor');
@@ -9208,6 +9210,139 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
     'a published note carries a fronted id and a fronted author');
   check(podWrites.some(w => w.startsWith('https://fedipod.net/u/me/ap/notes/')),
     'the note is PUT under its advertised id — RemotePod maps it to the pod at write time');
+}
+
+// --- 31. embedded agent: the same Agent, reached through an injected session ---
+// The transport itself is proven against a real CSS store in the component's
+// own test/live-css.mjs; here the pod is a map, so what this covers is what
+// embed.mjs decides — the identity's name, the credential it writes, when it
+// provisions, and what it stops.
+{
+  const $rdf = await import('rdflib');
+  const { startEmbeddedAgent, handleFor } = await import(path.join(root, 'lib/embed.mjs'));
+
+  check(handleFor('http://alice.localhost:4000/') === 'alice', 'a subdomain pod is named by its label');
+  check(handleFor('http://localhost:4000/bob/') === 'bob', 'a path pod by its last segment');
+
+  // A pod that is a map. Containers answer the Turtle listing the drain reads,
+  // built with rdflib rather than assembled as text.
+  const POD = 'http://alice.localhost:4555/';
+  const disk = new Map();
+  const LDP = $rdf.Namespace('http://www.w3.org/ns/ldp#');
+  const DC = $rdf.Namespace('http://purl.org/dc/terms/');
+  const listing = (url) => {
+    const g = $rdf.graph();
+    const here = $rdf.sym(url);
+    for (const k of disk.keys()) {
+      if (!k.startsWith(url) || k === url || k.slice(url.length).includes('/')) continue;
+      g.add(here, LDP('contains'), $rdf.sym(k), here);
+      g.add($rdf.sym(k), DC('modified'), $rdf.literal(new Date(disk.get(k).at).toISOString()), here);
+    }
+    return $rdf.serialize(here, g, url, 'text/turtle');
+  };
+  let version = 0;
+  const podFetch = async (url, init = {}) => {
+    const method = (init.method || 'GET').toUpperCase();
+    const h = Object.fromEntries(Object.entries(init.headers || {}).map(([ k, v ]) => [ k.toLowerCase(), v ]));
+    if (method === 'PUT') {
+      disk.set(url, { body: String(init.body ?? ''), at: Date.now(), etag: `"v${++version}"` });
+      return new Response(null, { status: 205 });
+    }
+    if (method === 'DELETE') return new Response(null, { status: disk.delete(url) ? 205 : 404 });
+    if (url.endsWith('/')) return new Response(listing(url), { status: 200, headers: { 'content-type': 'text/turtle' } });
+    const rec = disk.get(url);
+    if (!rec) return new Response('', { status: 404 });
+    if (h['if-none-match'] === rec.etag) return new Response(null, { status: 304, headers: { etag: rec.etag } });
+    return new Response(rec.body, { status: 200, headers: { etag: rec.etag } });
+  };
+  const session = { fetch: podFetch, warmup: async () => {}, stats: () => ({ reads: 0 }) };
+  // The pod exists: it has an owner. Without this the agent refuses to
+  // provision, which is the guard against building a tree in a pod that is
+  // only about to be created.
+  disk.set(POD + 'profile/card', { body: '', at: Date.now(), etag: '"p"' });
+
+  // A store that only emits: enough to prove which writes wake the drain.
+  const listeners = [];
+  const resourceStore = {
+    on: (_e, fn) => listeners.push(fn),
+    off: (_e, fn) => listeners.splice(listeners.indexOf(fn), 1),
+  };
+
+  const dataDir = fs.mkdtempSync('/tmp/fedipod-embed-');
+  const embedded = await startEmbeddedAgent({
+    podBase: POD, dataDir, session, resourceStore, log: () => {},
+    gateToken: 'embed-secret',
+  });
+  const { agent } = embedded;
+
+  const cred = JSON.parse(fs.readFileSync(path.join(dataDir, 'alice', 'credential.json'), 'utf8'));
+  check(cred.remotePod === POD && cred.webId === POD + 'profile/card#me',
+    'the synthesized credential names the pod and its owner');
+  check(!cred.clientId && !cred.secret && !cred.privateRoot,
+    'and holds no client credentials, because there is nobody to authenticate to');
+  check(agent.store.getConfig()?.handle === 'alice',
+    'a pod with no identity on it is provisioned on first start');
+  check([ ...disk.keys() ].some(k => k.startsWith(POD + 'activitypods-js/ap-state/')),
+    'and its state is written to the pod, through the injected session');
+  check(agent.intake?.push === false && agent.intake?.wsState === 'in-process',
+    'the notification socket is not used in-process');
+
+  // The drain wakes on an inbox write, and on nothing else.
+  let drains = 0;
+  agent.intake.drain = async () => { drains++; };
+  const inbox = POD + 'activitypods-js/ap/inbox/';
+  const emit = (target, activity) => listeners.forEach(fn => fn({ path: target },
+    { value: `https://www.w3.org/ns/activitystreams#${activity}` }));
+  emit(inbox + 'a.json', 'Create');
+  emit(inbox + 'b.json', 'Create');
+  await new Promise(r => setTimeout(r, 400));
+  check(drains === 1, 'two deliveries at once cost one sweep, not two');
+  emit(inbox + 'a.json', 'Delete');
+  emit(POD + 'activitypods-js/ap/notes/x.json', 'Create');
+  await new Promise(r => setTimeout(r, 400));
+  check(drains === 1, "the drain's own deletes, and writes elsewhere, do not wake it");
+
+  // The client surface, driven the way the pod server drives it.
+  const ask = async (method, url, headers = {}) => {
+    const req = Readable.from([]);
+    req.method = method;
+    req.url = url;
+    req.headers = { host: 'alice.localhost:4555', ...headers };
+    let status = 0; let body = '';
+    const res = {
+      writeHead(s_) { status = s_; return res; },
+      setHeader() {},
+      end(b) { body = b || ''; },
+    };
+    await embedded.surface.handler(req, res);
+    return { status, body };
+  };
+  const secret = { 'x-dk-token': 'embed-secret' };
+  check((await ask('GET', '/api/v1/instance')).status === 200,
+    'the instance document answers a stranger — that is what makes the pod an instance');
+  check((await ask('GET', '/status', secret)).status === 404,
+    "the operator's routes are not at the origin root");
+  check((await ask('GET', '/app/status')).status === 401,
+    'and behind the door they need the secret');
+  const statusRes = await ask('GET', '/app/status', secret);
+  check(statusRes.status === 200 && JSON.parse(statusRes.body).handle === 'alice',
+    'with it, the door answers for this identity');
+  check((await ask('POST', '/app/new-actor', secret)).status === 404,
+    'routes that spawn local agents are gone, not merely refused');
+  check((await ask('GET', '/api/v1/accounts/verify_credentials')).status === 401,
+    'and the client API still turns away a caller with no token');
+
+  await embedded.stop();
+  check(agent.intake.stopped === true, 'stopping the server stops the identity');
+  check(JSON.parse(disk.get(POD + 'activitypods-js/ap-state/lease.json').body).expiresAt <= Date.now(),
+    'and hands back the lease, so the next agent need not wait out its term');
+
+  // Restarting reads the identity that is already there.
+  const again = await startEmbeddedAgent({ podBase: POD, dataDir, session, log: () => {} });
+  check(again.agent.store.getConfig()?.handle === 'alice',
+    'a restart adopts the identity already on the pod rather than provisioning a second');
+  await again.stop();
+  fs.rmSync(dataDir, { recursive: true, force: true });
 }
 
 // The CSS-gateway component (packages/css-gateway) is a TypeScript package with

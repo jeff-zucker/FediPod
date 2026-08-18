@@ -12,7 +12,42 @@
       "args_frontHost": "fedipod.net",
       "args_frontOrigin": { "@id": "urn:solid-server:default:variable:baseUrl" },
       "args_directoryContainer": "/.internal/fedipod/directory/",
-      "args_offersPods": false
+      "args_offersPods": false,
+      "args_clusterManager": { "@id": "urn:solid-server:default:ClusterManager" }
+    },
+    {
+      "comment": "The live feed for a pod-hosted identity. A websocket upgrade never enters the request waterfall — CSS routes it through a handler list of its own — so this is a second class holding the same handler instance. Appending to the list here unions with whichever notification configuration the deployment loads.",
+      "@id": "urn:fedipod:gateway:StreamingHandler",
+      "@type": "FediPodStreamingHandler",
+      "args_gateway": { "@id": "urn:fedipod:gateway:Handler" }
+    },
+    {
+      "@id": "urn:solid-server:default:WebSocketHandler",
+      "@type": "WaterfallHandler",
+      "handlers": [
+        { "@id": "urn:fedipod:gateway:StreamingHandler" }
+      ]
+    },
+    {
+      "comment": "Starting each configured identity when the server starts, and stopping it cleanly when the server stops. The same handler instance does both, which is what InitializableHandler and FinalizableHandler are for. With args_agentPods unset both are no-ops.",
+      "@id": "urn:solid-server:default:PrimaryParallelInitializer",
+      "@type": "ParallelHandler",
+      "handlers": [
+        {
+          "@type": "InitializableHandler",
+          "initializable": { "@id": "urn:fedipod:gateway:Handler" }
+        }
+      ]
+    },
+    {
+      "@id": "urn:solid-server:default:Finalizer",
+      "@type": "ParallelHandler",
+      "handlers": [
+        {
+          "@type": "FinalizableHandler",
+          "finalizable": { "@id": "urn:fedipod:gateway:Handler" }
+        }
+      ]
     },
     {
       "comment": "Insert the handler into the routing waterfall just before the LDP catch-all, so it claims only the front routes and everything else stays normal CSS. OverrideListInsertBefore is available in componentsjs 5.x (which CSS 7 uses).",

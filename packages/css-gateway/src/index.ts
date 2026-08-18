@@ -4,3 +4,5 @@
 // try to treat the helper functions as components.
 export { FediPodGatewayHandler } from './handler';
 export type { FediPodGatewayArgs } from './handler';
+export { FediPodStreamingHandler } from './streaming-handler';
+export type { FediPodStreamingArgs } from './streaming-handler';
