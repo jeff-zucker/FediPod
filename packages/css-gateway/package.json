@@ -1,6 +1,6 @@
 {
   "name": "fedipod-css-gateway",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "FediPod inbox gateway / multi-user front as a Community Solid Server component: verifies inbound ActivityPub deliveries at the door and writes them straight into pod inboxes through the server's own store.",
   "license": "MIT",
   "main": "dist/index.js",
