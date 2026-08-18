@@ -13,6 +13,17 @@ The client-to-server authentication approach and the fronted-identity idea — a
 
 **Important** if you use `FediPod` to create a pod-based Fediverse account, posts will be sent to your pod until you use the park, retire, or transfer options to temporarily or permanently close your account.  If you are following lots of people, you'll need to start your local agent at least every few days to keep your pod from accumlating mail which is pulled off the pod while your agent is running.
 
+<!-- CLAUDE 2026-08-18 — account-kinds table (your data); delete markers when done -->
+## Kinds of Account
+
+| Kind of Account | Description | User requirements | Host requirements |
+|---|---|---|---|
+| FediPod Solo | Browse & interact with the fediverse and ATProto from a Solid pod | an always-on pod, a usually on local agent | — |
+| FediPod Group | Host a discussion group of fediverse/ATProto users from a Solid pod | an always-on pod, a usually on local agent | — |
+| FediPod Gateway | Solo or Group with spam filtering & optional community identity | same + gateway pass-through account | a Netlify account |
+| FediPod Server | Full ActivityPub server as a CSS component | a pod on a CSS server implementing the FediPod component | a CSS server implementing the FediPod component |
+<!-- /CLAUDE -->
+
 ## Requirements
 
 * a web browser
@@ -95,16 +106,16 @@ command, and one to undo.
 [gateway.md](gateway.md) covers attaching, and running a gateway yourself on
 any always-on box.
 
-## Inside a Solid server (optional)
+## FediPod Server — inside a Solid server (optional)
 
-If you already run a Community Solid Server for pods, FediPod can run inside
-it, as a component of that server. It takes delivery for the pods it hosts,
-and — for pods you name — it runs the agent too, so a pod accepts follows,
-delivers posts and serves its owner's Mastodon client on its own address with
-no agent process anywhere. Everything reaches the pods through the server's
-own store, so there is no credential and no second box.
+If you already run a Community Solid Server for pods, the FediPod Server
+component turns the pods it hosts into full ActivityPub servers: name a pod and
+it runs the agent for that pod, so the pod accepts follows, delivers posts and
+serves its owner's Mastodon client on its own address, with no agent process
+anywhere. Everything reaches the pods through the server's own store, so there
+is no credential and no second box.
 
-![FediPod as a component of a Solid server](css-component.svg)
+![FediPod Server as a component of a Solid server](css-component.svg)
 
 [packages/css-gateway](packages/css-gateway/README.md) is the component: what
 to install, what to set, and what to know before turning it on.

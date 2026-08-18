@@ -80,14 +80,10 @@ Any always-on box will do — a VPS, a home server behind a tunnel, a serverless
 host. The logic is plain Node in `lib/gateway-core.mjs`, and a host needs only
 a thin adapter that calls `handleDelivery`.
 
-Three ways are ready to use:
+Two ways are ready to use:
 
 - **On Netlify**, with the adapter in `netlify/functions/inbox.mjs`. See
   [netlify/README.md](netlify/README.md) for the deployment specifics.
-- **Inside a Community Solid Server**, if you already run one for pods. The
-  gateway becomes a component of that server and writes deliveries straight
-  into pod inboxes through its store — no second box, no credential. See
-  [packages/css-gateway/README.md](packages/css-gateway/README.md).
 - **On any box of your own**, with your own adapter around the same core.
 
 ### Offering accounts to other people

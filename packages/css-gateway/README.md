@@ -1,22 +1,17 @@
 # fedipod-css-gateway
 
-Run a fediverse presence inside a Community Solid Server.
+The FediPod Server: run the pods a Community Solid Server hosts as full
+ActivityPub servers.
 
 This is a CSS component. Install it in a server you already run for pods, and
-that server can do two things it could not before:
+name a pod: the component runs the whole FediPod agent for it, so the pod
+accepts follows, delivers posts, drains its inbox and serves its owner's
+Mastodon client on the pod's own origin. There is no agent process to keep
+alive, and everything reaches the pod through the server's own store — no
+credential, no second box, no loopback request.
 
-- **Take delivery for pods it hosts.** It checks each inbound ActivityPub
-  delivery's signature at the door, drops forgeries and junk, and writes the
-  rest straight into the right pod's inbox through the server's own store —
-  no credential, no second box, no loopback request.
-- **Act for pods it hosts.** Name a pod and the component runs the whole
-  FediPod agent for it: the pod accepts follows, delivers posts, drains its
-  inbox and serves its owner's Mastodon client on the pod's own origin. There
-  is no agent process to keep alive.
-
-Either half can be used without the other. With nothing configured beyond the
-defaults, installing the component changes nothing about how the server serves
-pods.
+With nothing configured beyond the defaults, installing the component changes
+nothing about how the server serves pods.
 
 ![FediPod as a component of a Solid server](../../css-component.svg)
 
