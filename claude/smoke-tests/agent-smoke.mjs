@@ -3154,8 +3154,8 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   const fallback = Number((body.match(/const POLL_MS = (\d+) \* 60_000/) || [])[1]);
   const pushOk = Number((body.match(/const POLL_PUSH_OK_MS = (\d+) \* 60_000/) || [])[1]);
   check(fallback === 2 && pushOk === 10
-    && /wsState === 'open' \? POLL_PUSH_OK_MS : POLL_MS/.test(body),
-    `poll is ${fallback}min without push and ${pushOk}min with it`);
+    && /wsState === 'open' \|\| this\.wsState === 'in-process' \? POLL_PUSH_OK_MS : POLL_MS/.test(body),
+    `poll is ${fallback}min without a push channel and ${pushOk}min with one (socket or in-process)`);
 }
 
 // --- 5q. a dropped socket reuses its channel instead of making another ---
@@ -7259,6 +7259,21 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   check(out2.dropped === 1 && !dropped.includes('Create'),
     'a small Create is read, recognised as content and dropped rather than applied');
 
+  // keepConcerning: nothing is discarded unread — every item is read and routed
+  // through handle(), which keeps a Create only when it concerns us (returns
+  // undefined) and drops the rest (returns a reason).
+  const seen17 = [];
+  intake17.remote.fetch = async (u) => {
+    seen17.push(u);
+    return { status: 200, json: async () => ({ type: 'Create', _concerns: u.endsWith('big-old') }) };
+  };
+  intake17.handle = async (a) => (a._concerns ? undefined : 'not addressed to us');
+  const out3 = await intake17.prune({ before: '2026-07-02T00:00:00.000Z', keepConcerning: true });
+  check(seen17.includes(INBOX + 'big-old'),
+    'keepConcerning reads even a large item — a post that concerns us cannot be judged unread');
+  check(out3.discarded === 0 && out3.applied === 1 && out3.dropped === 1,
+    `keepConcerning keeps what concerns us and drops the rest (applied ${out3.applied}, dropped ${out3.dropped}, discarded ${out3.discarded})`);
+
   // The listing itself: metadata carried, oldest first, auxiliaries excluded.
   const ttl = `<${INBOX}> a <http://www.w3.org/ns/ldp#Container> ;`
     + ` <http://www.w3.org/ns/ldp#contains> <${INBOX}b>, <${INBOX}a>.`
@@ -7690,6 +7705,8 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
       publisher: { urls: purls21, config: {}, privateReady: async () => true },
       store: {
         getConfig: () => ({ handle: 'you' }), getStatuses: () => statuses21,
+        countStatuses: (kind = null) => (kind === null ? statuses21.length
+          : statuses21.filter(s => s.kind === kind).length),
         getActors: () => actors21, getContacts: () => ({ followers: [], following: [] }),
         // Mints on first sight, like the real store — the carry envelope asks
         // for an id that has never been seen before.
@@ -9165,6 +9182,11 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   check(noProofIn.status === 401, 'no proof, no opt-in');
   check((await agentPost({ action: 'opt-in', podBase: 'https://tamara.host/' }, ctxAgent)).status === 403,
     "a token for one pod cannot opt in another — even one sharing the origin's shape");
+  const pathCtx = { ...ctxAgent, verifier: async () => ({ webid: 'https://shared.host/pods/mei/profile/card#me' }) };
+  check((await agentPost({ action: 'opt-in', podBase: 'https://shared.host/pods/mei/' }, pathCtx)).status === 403,
+    'a path pod cannot opt in — an identity needs an origin of its own');
+  check((await agentPost({ action: 'opt-in', podBase: 'https://shared.host/pods/' }, pathCtx)).status === 403,
+    'nor can its owner claim an ancestor of a sibling pod on the shared origin');
   const okIn = await agentPost({ action: 'opt-in', podBase: 'https://mei.host/' }, ctxAgent);
   const okInBody = await okIn.clone?.().json?.() ?? JSON.parse(okIn.body);
   check(okIn.status === 201 && okInBody.doorSecret === 's3' && /x-dk-token: s3/.test(okInBody.command || ''),

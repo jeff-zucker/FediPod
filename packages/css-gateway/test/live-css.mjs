@@ -164,6 +164,21 @@ check((await sf(podBase + 'doc.json', {
 check((await sf(podBase + 'doc.json', { method: 'DELETE' })).status < 300, 'DELETE removes it');
 check((await sf(podBase + 'doc.json')).status === 404, 'and it is gone');
 
+// Confinement: the store serves every pod on the server; a base-scoped session
+// must not. Anything outside the base is refused before the store is asked.
+const confined = makeStoreSession(realStore, podBase);
+check((await confined.fetch(podBase + 'doc2.json', {
+  method: 'PUT', headers: { 'content-type': 'application/json' }, body: '{}',
+})).status < 300, 'a confined session still writes under its own base');
+check((await confined.fetch('http://mei.localhost:4000/doc.json')).status === 403,
+  'and refuses a read on another origin');
+check((await confined.fetch('http://mei.localhost:4000/doc.json', {
+  method: 'PUT', headers: { 'content-type': 'application/json' }, body: '{}',
+})).status === 403, 'and a write there the same way');
+const subtree = makeStoreSession(realStore, podBase + 'pods/mei/');
+check((await subtree.fetch(podBase + 'doc2.json')).status === 403,
+  'a subtree-scoped session cannot reach above its base');
+
 // RemotePod itself, unmodified, over that transport.
 const remote = new RemotePod({ webId: podBase + 'profile/card#me' }, { session });
 await remote.warmup();

@@ -10,13 +10,34 @@ type NodeRes = { writeHead(status: number, headers?: Record<string, string>): vo
   end(body?: string | null): void };
 type CoreResult = Response | { status: number; headers?: Record<string, string>; body?: string | null };
 
+// The same ceiling the agent surface's own readBody has. Everything the front
+// accepts is far smaller; without this a stranger's POST buffers unbounded.
+const MAX_BODY_BYTES = 1024 * 1024;
+
 function readBody(req: NodeReq): Promise<Buffer | null> {
   return new Promise((resolve, reject) => {
     if (req.method === 'GET' || req.method === 'HEAD') { resolve(null); return; }
     const chunks: Buffer[] = [];
-    req.on('data', (c) => chunks.push(c as Buffer));
-    req.on('end', () => resolve(chunks.length ? Buffer.concat(chunks) : null));
-    req.on('error', reject);
+    let total = 0;
+    let done = false;
+    const fail = (err: Error & { statusCode?: number }): void => {
+      if (done) return;
+      done = true;
+      reject(err);
+    };
+    req.on('data', (c) => {
+      if (done) return;
+      total += (c as Buffer).length;
+      if (total > MAX_BODY_BYTES) {
+        const err = new Error('request body too large') as Error & { statusCode?: number };
+        err.statusCode = 413;
+        fail(err);
+        return;
+      }
+      chunks.push(c as Buffer);
+    });
+    req.on('end', () => { if (!done) resolve(chunks.length ? Buffer.concat(chunks) : null); });
+    req.on('error', (e) => fail(e as Error));
   });
 }
 

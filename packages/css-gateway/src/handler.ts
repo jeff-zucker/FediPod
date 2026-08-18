@@ -228,7 +228,7 @@ export class FediPodGatewayHandler extends HttpHandler implements Initializable,
     if (this.starting.has(podBase) || this.identities.has(podBase)) return;
     this.starting.add(podBase);
     this.startCancelled.delete(podBase);
-    const session = makeStoreSession(this.args.resourceStore);
+    const session = makeStoreSession(this.args.resourceStore, podBase);
     try {
       for (let attempt = 0; !this.stopping && !this.startCancelled.has(podBase); attempt++) {
         try {
@@ -388,7 +388,15 @@ export class FediPodGatewayHandler extends HttpHandler implements Initializable,
       return;
     }
     const { routeFront } = await esmImport(FRONT_CORE);
-    const whatwg = await nodeToWhatwg(request as never, this.args.frontOrigin);
+    let whatwg: Request;
+    try {
+      whatwg = await nodeToWhatwg(request as never, this.args.frontOrigin);
+    } catch (e: unknown) {
+      const status = (e as { statusCode?: number }).statusCode === 413 ? 413 : 400;
+      response.writeHead(status, { 'content-type': 'application/json' });
+      response.end(JSON.stringify({ error: (e as Error).message }));
+      return;
+    }
     const out = await routeFront(whatwg, {
       host: this.args.frontHost,
       frontOrigin: this.args.frontOrigin,

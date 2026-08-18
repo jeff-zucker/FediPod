@@ -8,7 +8,9 @@
 // conditional-PUT protocol working unchanged.
 //
 // Writing here bypasses WAC by design, exactly as store-css.ts does: the agent
-// acts as the pod's owner, and the server operator put it there.
+// acts as the pod's owner, and the server operator put it there. `podBase`
+// confines the transport to that pod's own subtree — the store serves every
+// pod on the server, and an identity's reach must not.
 
 import {
   BasicRepresentation, BasicConditions, BasicETagHandler, readableToString,
@@ -60,9 +62,10 @@ async function discard(rep: Representation): Promise<void> {
   rep.data.destroy();
 }
 
-export function makeStoreFetch(resourceStore: ResourceStore): StoreFetch {
+export function makeStoreFetch(resourceStore: ResourceStore, podBase?: string): StoreFetch {
   const stats: StoreFetchStats = { reads: 0, writes: 0, deletes: 0 };
   const etags = new BasicETagHandler();
+  const base = podBase ? new URL(podBase).href : null;
 
   const respond = (status: number, body: string | null, etag?: string, contentType?: string): Response => {
     const headers: Record<string, string> = {};
@@ -75,6 +78,10 @@ export function makeStoreFetch(resourceStore: ResourceStore): StoreFetch {
     const method = (init.method ?? 'GET').toUpperCase();
     const header = headerReader(init);
     const identifier = { path: pathOf(url) };
+    // Confinement, not access control: every legitimate target is under the
+    // pod's own base, so anything else is a bug or an escape — refused here
+    // rather than answered with another pod's resource.
+    if (base && !identifier.path.startsWith(base)) return respond(403, 'outside this pod');
 
     if (method === 'GET' || method === 'HEAD') {
       stats.reads++;
@@ -145,12 +152,12 @@ export function makeStoreFetch(resourceStore: ResourceStore): StoreFetch {
  * The session shape RemotePod consumes — the same three members its
  * credential-backed session has, so the class itself needs no other change.
  */
-export function makeStoreSession(resourceStore: ResourceStore): {
+export function makeStoreSession(resourceStore: ResourceStore, podBase?: string): {
   fetch: StoreFetch;
   warmup: () => Promise<void>;
   stats: () => StoreFetchStats;
 } {
-  const storeFetch = makeStoreFetch(resourceStore);
+  const storeFetch = makeStoreFetch(resourceStore, podBase);
   return {
     fetch: storeFetch,
     warmup: async (): Promise<void> => undefined,   // nothing to mint

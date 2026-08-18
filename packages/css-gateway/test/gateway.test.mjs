@@ -85,6 +85,16 @@ test('nodeToWhatwg carries method, absolute url, headers and body', async () => 
   assert.equal(await w.text(), '{"type":"Follow"}');
 });
 
+test('nodeToWhatwg refuses a body over the cap with a 413-marked error', async () => {
+  const chunk = Buffer.alloc(600 * 1024);
+  const req = Readable.from([ chunk, chunk ]);   // 1.2 MB in two chunks
+  req.method = 'POST';
+  req.url = '/api/attach';
+  req.headers = { host: 'fedipod.net' };
+  await assert.rejects(nodeToWhatwg(req, 'https://fedipod.net'),
+    (e) => e.statusCode === 413);
+});
+
 test('nodeToWhatwg reads no body for GET', async () => {
   const req = Readable.from([]);
   req.method = 'GET'; req.url = '/'; req.headers = { host: 'fedipod.net' };
