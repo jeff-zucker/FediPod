@@ -14,8 +14,8 @@ import { claims, agentClaims } from './claims';
 import { nodeToWhatwg, applyToNode } from './adapt';
 import { makeStoreIO } from './store-css';
 import { makeStoreSession } from './store-pod';
-import { makeDirectory, makeStorePodPut } from './directory';
-import type { IO, Directory } from './directory';
+import { makeDirectory, makeStorePodPut, makeAgentRegistry } from './directory';
+import type { IO, Directory, AgentRegistry } from './directory';
 
 export interface FediPodGatewayArgs {
   /** The server's ResourceStore: the handler reads pods and writes inbox items and directory rows directly through it — no HTTP, no credential. */
@@ -44,10 +44,12 @@ export interface FediPodGatewayArgs {
   agentAutoAcceptFollows?: boolean;
   /** The server's cluster manager, so the agent can say when it is running blind to other workers' writes. */
   clusterManager?: ClusterManager;
-  /** The secret guarding an identity's owner pages and admin routes. Required when agentPods is set. */
-  agentGateToken?: string;
   /** Path on a pod's origin where its owner's pages live. Empty serves no pages at all. */
   agentUiPath?: string;
+  /** Whether a pod owner may opt in at runtime by proving control of their pod. Off unless the host chooses it. */
+  agentRuntimeOptIn?: boolean;
+  /** An internal container URL where the runtime opt-in rows live. */
+  agentRegistryContainer?: string;
 }
 
 /** One running identity, and the call that stops it. */
@@ -70,6 +72,13 @@ const esmImport = new Function('s', 'return import(s)') as (s: string) => Promis
 // server that is booting. Keep asking, slower each time, up to a few minutes.
 const START_RETRY_MS = [ 2_000, 5_000, 15_000, 60_000, 300_000 ];
 
+/** The identity's name, from its pod URL. Mirrors handleFor in lib/embed.mjs. */
+function deriveHandle(podBase: string): string {
+  const u = new URL(podBase);
+  const segments = u.pathname.split('/').filter((seg) => seg.length > 0);
+  return segments.length > 0 ? segments[segments.length - 1] : u.hostname.split('.')[0];
+}
+
 /** A door path always has both slashes, so claiming and stripping agree. */
 function normalizeUiPath(raw?: string): string {
   if (raw === '') return '';
@@ -85,44 +94,41 @@ export class FediPodGatewayHandler extends HttpHandler implements Initializable,
   private readonly logger = getLoggerFor(this);
   private readonly agentPods: string[];
   private readonly agentHosts = new Set<string>();
+  private readonly agentHandles = new Map<string, string>();   // handle → pod base
   private readonly uiPath: string;
   private readonly identities = new Map<string, EmbeddedIdentity>();
   private readonly surfaces = new Map<string, EmbeddedIdentity>();
+  private readonly registry: AgentRegistry | null;
+  private readonly doorSecrets = new Map<string, string>();    // pod base → its door secret
+  private readonly starting = new Set<string>();
+  private readonly startCancelled = new Set<string>();
   private stopping = false;
 
   public constructor(args: FediPodGatewayArgs) {
     super();
     this.args = args;
     this.io = makeStoreIO(args.resourceStore);
-    this.dir = makeDirectory(this.io, args.directoryContainer);
+    // The internal containers are configured as paths; the store speaks
+    // absolute identifiers, rooted at the server's own origin.
+    const absolute = (container: string): string =>
+      (container.startsWith('/') ? new URL(container, args.frontOrigin).href : container);
+    this.dir = makeDirectory(this.io, absolute(args.directoryContainer));
     this.podPut = makeStorePodPut(this.io);
-    this.agentPods = (args.agentPods ?? []).filter((p) => p.trim().length > 0);
+    this.agentPods = (args.agentPods ?? []).filter((p) => p.trim().length > 0)
+      .map((p) => (p.endsWith('/') ? p : `${p}/`));
     // Fail at construction, not at first use: a server told to run an agent
     // and unable to should not boot into a state where it silently runs none.
-    if (this.agentPods.length > 0 && !args.agentDataDir) {
-      throw new Error('agentPods is set but agentDataDir is not — the agent has nowhere to keep its signing key');
-    }
-    if (this.agentPods.length > 0 && !args.agentGateToken) {
-      throw new Error('agentPods is set but agentGateToken is not — the identity\'s own pages and admin '
-        + 'routes would answer anyone who found them');
+    if ((this.agentPods.length > 0 || args.agentRuntimeOptIn) && !args.agentDataDir) {
+      throw new Error('an agent is enabled but agentDataDir is not set — identities have nowhere to keep their signing keys');
     }
     this.uiPath = normalizeUiPath(args.agentUiPath);
+    this.registry = args.agentRuntimeOptIn
+      ? makeAgentRegistry(this.io, absolute(args.agentRegistryContainer ?? '/.internal/fedipod/agents/'))
+      : null;
     for (const pod of this.agentPods) {
-      let host: string;
-      try {
-        host = new URL(pod).host.toLowerCase();
-      } catch {
-        throw new Error(`agentPods entry is not a URL: ${pod}`);
-      }
-      // The Mastodon client API is rooted at an origin, so two identities
-      // cannot share one — and an identity cannot share the front's origin.
-      if (this.agentHosts.has(host)) {
-        throw new Error(`two agentPods entries share the host ${host} — an identity needs an origin of its own`);
-      }
-      if (host.split(':')[0] === String(args.frontHost).toLowerCase()) {
-        throw new Error(`agentPods entry ${pod} is on the front's own host — give the identity its own origin`);
-      }
+      const host = this.validateAgentHost(pod);
       this.agentHosts.add(host);
+      this.agentHandles.set(deriveHandle(pod), pod);
     }
     for (const pod of this.agentPods) {
       this.logger.info(`FediPod agent on ${pod} answers ${this.uiPath || '(no pages)'} `
@@ -131,11 +137,39 @@ export class FediPodGatewayHandler extends HttpHandler implements Initializable,
   }
 
   /**
+   * Whether this pod may become an identity here: a real URL, an origin of its
+   * own, not the front's host, and a handle no other identity already uses —
+   * two pods must never share <agentDataDir>/<handle>/.
+   */
+  private validateAgentHost(podBase: string): string {
+    let host: string;
+    try {
+      host = new URL(podBase).host.toLowerCase();
+    } catch {
+      throw new Error(`not a pod URL: ${podBase}`);
+    }
+    // The Mastodon client API is rooted at an origin, so two identities
+    // cannot share one — and an identity cannot share the front's origin.
+    if (this.agentHosts.has(host)) {
+      throw new Error(`the host ${host} already carries an identity — an identity needs an origin of its own`);
+    }
+    if (host.split(':')[0] === String(this.args.frontHost).toLowerCase()) {
+      throw new Error(`${podBase} is on the front's own host — give the identity its own origin`);
+    }
+    const handle = deriveHandle(podBase);
+    const holder = this.agentHandles.get(handle);
+    if (holder && holder !== podBase) {
+      throw new Error(`the name ${handle} already belongs to ${holder} — two identities cannot share it`);
+    }
+    return host;
+  }
+
+  /**
    * Start an agent for each configured pod. Runs before the server listens, so
    * the identities come up in the background and boot is never held on a pod.
    */
   public async initialize(): Promise<void> {
-    if (this.agentPods.length === 0) return;
+    if (this.agentPods.length === 0 && !this.registry) return;
     // The agent runs in the primary process, and a write made by a worker
     // raises its change event there — so with workers the inbox is swept on the
     // timer rather than the moment a delivery lands. Everything still works; it
@@ -144,8 +178,36 @@ export class FediPodGatewayHandler extends HttpHandler implements Initializable,
       this.logger.warn('FediPod agent is running in a multi-worker server: deliveries are picked up by the '
         + 'inbox sweep instead of as they arrive. Run with --workers 1 for immediate delivery.');
     }
-    this.logger.info(`FediPod agent enabled for ${this.agentPods.length} pod(s)`);
-    for (const pod of this.agentPods) void this.startIdentity(pod);
+    // Awaited, and BEFORE the server listens: a pod whose owner opted in must
+    // have its routes claimed from the first request after a restart, never
+    // served briefly by LDP. A failed load must not fail the boot — the rows
+    // persist, and the next start recovers them.
+    const pods = [ ...this.agentPods ];
+    if (this.registry) {
+      try {
+        const hosts = await this.registry.listHosts();
+        for (const host of hosts) {
+          const row = await this.registry.get(host);
+          if (!row) continue;
+          if (this.agentHosts.has(row.host) || this.identities.has(row.podBase)) continue;   // config wins
+          try {
+            this.validateAgentHost(row.podBase);
+          } catch (e: unknown) {
+            this.logger.error(`opted-in pod ${row.podBase} no longer valid: ${(e as Error).message}`);
+            continue;
+          }
+          this.agentHosts.add(row.host);
+          this.agentHandles.set(row.handle, row.podBase);
+          pods.push(row.podBase);
+        }
+        this.logger.info(`FediPod agent registry: ${pods.length - this.agentPods.length} opted-in pod(s)`);
+      } catch (e: unknown) {
+        this.logger.error(`could not read the opt-in registry — opted-in identities are absent this boot: ${
+          (e as Error).message}`);
+      }
+    }
+    if (pods.length > 0) this.logger.info(`FediPod agent enabled for ${pods.length} pod(s)`);
+    for (const pod of pods) void this.startIdentity(pod);
   }
 
   /** Stop every identity: timers cleared, state written, lease let go. */
@@ -154,6 +216,8 @@ export class FediPodGatewayHandler extends HttpHandler implements Initializable,
     const running = [ ...this.identities.values() ];
     this.identities.clear();
     this.surfaces.clear();
+    this.doorSecrets.clear();
+    this.starting.clear();
     await Promise.allSettled(running.map(async (identity) => {
       await identity.stop();
       this.logger.info(`FediPod agent @${identity.handle} stopped`);
@@ -161,42 +225,59 @@ export class FediPodGatewayHandler extends HttpHandler implements Initializable,
   }
 
   private async startIdentity(podBase: string): Promise<void> {
+    if (this.starting.has(podBase) || this.identities.has(podBase)) return;
+    this.starting.add(podBase);
+    this.startCancelled.delete(podBase);
     const session = makeStoreSession(this.args.resourceStore);
-    for (let attempt = 0; !this.stopping; attempt++) {
-      try {
-        const { startEmbeddedAgent } = await esmImport(EMBED) as
-          { startEmbeddedAgent: (opts: Record<string, unknown>) => Promise<EmbeddedIdentity> };
-        const identity = await startEmbeddedAgent({
-          podBase,
-          dataDir: this.args.agentDataDir,
-          session,
-          resourceStore: this.args.resourceStore,
-          webIdSuffix: this.args.agentWebIdSuffix ?? 'profile/card#me',
-          pollSeconds: this.args.agentPollSeconds ?? null,
-          autoAcceptFollows: this.args.agentAutoAcceptFollows !== false,
-          gateToken: this.args.agentGateToken,
-          uiPath: this.uiPath,
-          log: (message: string): void => {
-            this.logger.info(message);
-          },
-        });
-        // Stopped while this one was still coming up.
-        if (this.stopping) {
-          await identity.stop();
+    try {
+      for (let attempt = 0; !this.stopping && !this.startCancelled.has(podBase); attempt++) {
+        try {
+          const { startEmbeddedAgent, ensureDoorSecret } = await esmImport(EMBED) as {
+            startEmbeddedAgent: (opts: Record<string, unknown>) => Promise<EmbeddedIdentity>;
+            ensureDoorSecret: (dataDir: string, handle: string, opts?: { rotate?: boolean }) =>
+            { secret: string; path: string; rotated: boolean };
+          };
+          // The secret is in the map BEFORE the surface can exist, so the
+          // gate's resolver never comes up empty — empty would mean gate-off.
+          if (!this.doorSecrets.has(podBase)) {
+            const door = ensureDoorSecret(this.args.agentDataDir!, deriveHandle(podBase));
+            this.doorSecrets.set(podBase, door.secret);
+            this.logger.info(`door secret for @${deriveHandle(podBase)} is at ${door.path}`);
+          }
+          const identity = await startEmbeddedAgent({
+            podBase,
+            dataDir: this.args.agentDataDir,
+            session,
+            resourceStore: this.args.resourceStore,
+            webIdSuffix: this.args.agentWebIdSuffix ?? 'profile/card#me',
+            pollSeconds: this.args.agentPollSeconds ?? null,
+            autoAcceptFollows: this.args.agentAutoAcceptFollows !== false,
+            gateToken: (): string | undefined => this.doorSecrets.get(podBase),
+            uiPath: this.uiPath,
+            log: (message: string): void => {
+              this.logger.info(message);
+            },
+          });
+          // Stopped, or opted out, while this one was still coming up.
+          if (this.stopping || this.startCancelled.has(podBase)) {
+            await identity.stop();
+            return;
+          }
+          this.identities.set(podBase, identity);
+          this.surfaces.set(identity.host, identity);
+          this.logger.info(`FediPod agent @${identity.handle} running on ${podBase}`);
           return;
+        } catch (e: unknown) {
+          const wait = START_RETRY_MS[Math.min(attempt, START_RETRY_MS.length - 1)];
+          this.logger.warn(`FediPod agent for ${podBase} did not start: ${(e as Error).message
+          } — retrying in ${Math.round(wait / 1000)}s`);
+          await new Promise((resolve) => {
+            setTimeout(resolve, wait).unref?.();
+          });
         }
-        this.identities.set(podBase, identity);
-        this.surfaces.set(identity.host, identity);
-        this.logger.info(`FediPod agent @${identity.handle} running on ${podBase}`);
-        return;
-      } catch (e: unknown) {
-        const wait = START_RETRY_MS[Math.min(attempt, START_RETRY_MS.length - 1)];
-        this.logger.warn(`FediPod agent for ${podBase} did not start: ${(e as Error).message
-        } — retrying in ${Math.round(wait / 1000)}s`);
-        await new Promise((resolve) => {
-          setTimeout(resolve, wait).unref?.();
-        });
       }
+    } finally {
+      this.starting.delete(podBase);
     }
   }
 
@@ -214,6 +295,82 @@ export class FediPodGatewayHandler extends HttpHandler implements Initializable,
   /** The running identity answering on a host, if it has finished starting. */
   public surfaceFor(host?: string): EmbeddedIdentity | undefined {
     return this.surfaces.get(String(host ?? '').toLowerCase());
+  }
+
+  /**
+   * A pod owner, already proven to control podBase, asks this server to run
+   * their identity. Returns { httpStatus, ...body }; the secret appears in the
+   * reply and nowhere else. Re-opting-in rotates the secret — that is how a
+   * lost one is recovered.
+   */
+  public async optInPod({ podBase, webId }: { podBase: string; webId: string }):
+  Promise<Record<string, unknown> & { httpStatus: number }> {
+    if (!this.registry) return { httpStatus: 501, error: 'this server does not offer runtime opt-in' };
+    if (this.args.clusterManager && !this.args.clusterManager.isSingleThreaded()) {
+      return { httpStatus: 503, error: 'runtime opt-in needs a single-worker server (--workers 1)' };
+    }
+    const base = podBase.endsWith('/') ? podBase : `${podBase}/`;
+    const handle = deriveHandle(base);
+    const { ensureDoorSecret } = await esmImport(EMBED) as {
+      ensureDoorSecret: (dataDir: string, handle: string, opts?: { rotate?: boolean }) =>
+      { secret: string; path: string; rotated: boolean };
+    };
+
+    // Already running here — from config or an earlier opt-in: proving pod
+    // control again buys a fresh secret, nothing else.
+    if (this.agentHandles.get(handle) === base) {
+      const door = ensureDoorSecret(this.args.agentDataDir!, handle, { rotate: true });
+      this.doorSecrets.set(base, door.secret);
+      return { httpStatus: 201, ok: true, handle, host: new URL(base).host.toLowerCase(),
+        doorSecret: door.secret, doorPath: this.uiPath, status: 'rotated' };
+    }
+
+    let host: string;
+    try {
+      host = this.validateAgentHost(base);
+    } catch (e: unknown) {
+      return { httpStatus: 409, error: (e as Error).message };
+    }
+    try {
+      await this.registry.add({ podBase: base, handle, host, webId, optedInAt: new Date().toISOString() });
+    } catch (e: unknown) {
+      this.logger.error(`opt-in row for ${base} could not be written: ${(e as Error).message}`);
+      return { httpStatus: 500, error: 'could not record the opt-in' };
+    }
+    // From this instant the pod's identity routes answer 503 instead of LDP,
+    // until the agent registers its surface.
+    this.agentHosts.add(host);
+    this.agentHandles.set(handle, base);
+    const door = ensureDoorSecret(this.args.agentDataDir!, handle, { rotate: true });
+    this.doorSecrets.set(base, door.secret);
+    void this.startIdentity(base);
+    this.logger.info(`runtime opt-in: @${handle} on ${base} (door secret at ${door.path})`);
+    return { httpStatus: 201, ok: true, handle, host,
+      doorSecret: door.secret, doorPath: this.uiPath, status: 'starting' };
+  }
+
+  /** The reverse: stop the identity and let the pod be plain LDP again. */
+  public async optOutPod({ podBase }: { podBase: string }):
+  Promise<Record<string, unknown> & { httpStatus: number }> {
+    if (!this.registry) return { httpStatus: 501, error: 'this server does not offer runtime opt-in' };
+    const base = podBase.endsWith('/') ? podBase : `${podBase}/`;
+    if (this.agentPods.includes(base)) {
+      return { httpStatus: 409, error: 'this pod is in the server configuration — it would come back at restart. Remove it there.' };
+    }
+    const host = new URL(base).host.toLowerCase();
+    const row = await this.registry.get(host);
+    if (!row || row.podBase !== base) return { httpStatus: 404, error: 'this pod has not opted in' };
+    this.agentHosts.delete(host);                     // routes fall to LDP now
+    this.startCancelled.add(base);                    // a pending start stands down
+    const identity = this.identities.get(base);
+    this.identities.delete(base);
+    this.surfaces.delete(host);
+    this.agentHandles.delete(row.handle);
+    this.doorSecrets.delete(base);
+    if (identity) await identity.stop();
+    await this.registry.remove(host);
+    this.logger.info(`runtime opt-out: @${row.handle} on ${base} — the pod serves plain LDP again`);
+    return { httpStatus: 200, ok: true, stopped: Boolean(identity) };
   }
 
   public async handle({ request, response }: HttpHandlerInput): Promise<void> {
@@ -247,6 +404,12 @@ export class FediPodGatewayHandler extends HttpHandler implements Initializable,
           ? { status: 404, text: async () => '', headers: { get: () => null } }
           : { status: 200, text: async () => raw, headers: { get: () => null } };
       },
+      agentControl: this.registry
+        ? {
+          optIn: (a: { podBase: string; webId: string }) => this.optInPod(a),
+          optOut: (a: { podBase: string }) => this.optOutPod(a),
+        }
+        : undefined,
     });
     await applyToNode(response as never, out);
   }

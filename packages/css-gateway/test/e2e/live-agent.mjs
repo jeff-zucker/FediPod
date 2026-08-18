@@ -37,7 +37,6 @@ const BASE = `http://localhost:${PORT}/`;
 const ALICE = `alice.localhost:${PORT}`;
 const POD = `http://${ALICE}/`;
 const POD2 = `http://carol.localhost:${PORT}/`;
-const GATE = 'e2e-operator-secret';
 const PASSWORD = 'correct horse battery staple';
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'fedipod-e2e-'));
@@ -46,6 +45,7 @@ const seedPath = path.join(tmp, 'seed.json');
 fs.writeFileSync(seedPath, JSON.stringify([
   { email: 'alice@example.com', password: 'sekrit', pods: [{ name: 'alice' }] },
   { email: 'carol@example.com', password: 'sekrit', pods: [{ name: 'carol' }] },
+  { email: 'dana@example.com', password: 'sekrit', pods: [{ name: 'dana' }] },
 ]));
 
 // Deliveries in this test go to a mock instance on the loopback address.
@@ -60,12 +60,22 @@ fs.writeFileSync(config, JSON.stringify({
   import: [ 'css:config/memory-subdomains.json', 'fpg:config/gateway.json' ],
   '@graph': [
     {
-      '@id': 'urn:fedipod:gateway:Handler',
-      '@type': 'FediPodGatewayHandler',
-      args_agentPods: [ POD, POD2 ],
-      args_agentDataDir: dataDir,
-      args_agentGateToken: GATE,
-      args_agentPollSeconds: 2,
+      comment: 'The front answers on the server root here, so /api/agent is reachable in the test.',
+      '@type': 'Override',
+      overrideInstance: { '@id': 'urn:fedipod:gateway:Handler' },
+      overrideParameters: {
+        '@type': 'FediPodGatewayHandler',
+        args_resourceStore: { '@id': 'urn:solid-server:default:ResourceStore' },
+        args_clusterManager: { '@id': 'urn:solid-server:default:ClusterManager' },
+        args_frontHost: 'localhost',
+        args_frontOrigin: BASE.replace(/\/$/, ''),
+        args_directoryContainer: '/.internal/fedipod/directory/',
+        args_agentRegistryContainer: '/.internal/fedipod/agents/',
+        args_agentRuntimeOptIn: true,
+        args_agentPods: [ POD, POD2 ],
+        args_agentDataDir: dataDir,
+        args_agentPollSeconds: 2,
+      },
     },
   ],
 }, null, 2));
@@ -106,6 +116,9 @@ const until = async (label, predicate, timeoutMs = 45_000) => {
     await new Promise((r) => setTimeout(r, 500));
   }
 };
+
+const doorSecret = (handle) => JSON.parse(fs.readFileSync(
+  path.join(dataDir, handle, 'door-secret.json'), 'utf8')).secret;
 
 const app = await new AppRunner().create({
   config,
@@ -178,7 +191,7 @@ try {
   check(noGate.status === 401 || noGate.status === 403, "the operator's door is shut without the secret");
   const setPassword = await fetch(`${POD}app/config`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json', 'x-dk-token': GATE },
+    headers: { 'content-type': 'application/json', 'x-dk-token': doorSecret('alice') },
     body: JSON.stringify({ password: PASSWORD }),
   });
   check(setPassword.status === 200, 'and open with it, to set the password');
@@ -253,20 +266,22 @@ try {
 
   // ---- the operator's door -------------------------------------------------
   check((await fetch(`${POD}app/status`)).status === 401, "the operator's own routes need the secret");
-  const status = await fetch(`${POD}app/status`, { headers: { 'x-dk-token': GATE }});
+  check((await fetch(`${POD}app/status`, { headers: { 'x-dk-token': doorSecret('carol') }})).status === 401,
+    "one identity's secret does not open another identity's door");
+  const status = await fetch(`${POD}app/status`, { headers: { 'x-dk-token': doorSecret('alice') }});
   check(status.status === 200 && (await status.json()).handle === 'alice', 'and answer with it');
-  check((await fetch(`${POD}app/shutdown`, { method: 'POST', headers: { 'x-dk-token': GATE }})).status === 404,
+  check((await fetch(`${POD}app/shutdown`, { method: 'POST', headers: { 'x-dk-token': doorSecret('alice') }})).status === 404,
     'routes that manage a local process are not there to be found');
-  const page = await fetch(`${POD}app/`, { headers: { 'x-dk-token': GATE }});
+  const page = await fetch(`${POD}app/`, { headers: { 'x-dk-token': doorSecret('alice') }});
   check(page.status === 200 && (await page.text()).toLowerCase().includes('<!doctype html'),
     'the web client is served behind the door');
-  const record = await fetch(`${POD}app/admin/`, { headers: { 'x-dk-token': GATE }});
+  const record = await fetch(`${POD}app/admin/`, { headers: { 'x-dk-token': doorSecret('alice') }});
   check(record.status === 200, "the operator's own pages are served behind it too");
   // The pages ask for their assets and their API relative to where they are
   // served, so the same build works at an origin root and behind a door.
-  check((await fetch(`${POD}app/admin/bar.css`, { headers: { 'x-dk-token': GATE }})).status === 200,
+  check((await fetch(`${POD}app/admin/bar.css`, { headers: { 'x-dk-token': doorSecret('alice') }})).status === 200,
     'and their stylesheets resolve from there');
-  check((await fetch(`${POD}app/admin/client/`, { headers: { 'x-dk-token': GATE }})).status === 200,
+  check((await fetch(`${POD}app/admin/client/`, { headers: { 'x-dk-token': doorSecret('alice') }})).status === 200,
     'as does the client wrapper');
 
   // ---- CORS ----------------------------------------------------------------
@@ -276,6 +291,81 @@ try {
   });
   check(preflight.status === 204 || preflight.status === 200,
     'the server answers a browser preflight itself');
+  // ---- runtime opt-in: dana's pod is NOT configured anywhere ---------------
+  const DANA = `http://dana.localhost:${PORT}/`;
+  const bare = (await fetch(`${DANA}api/v1/instance`)).status;
+  check(bare === 401 || bare === 404,
+    `an unconfigured pod has no client API — it is just a pod (${bare})`);
+
+  // The owner proves control with a real token from this very server's IdP.
+  const { createRequire } = await import('node:module');
+  const req_ = createRequire(import.meta.url);
+  const { mintCredential, createGrantSession } = req_(path.resolve(pkg, '../../vendor/idp-grant.cjs'));
+  const danaCred = await mintCredential({
+    origin: BASE.replace(/\/$/, ''), email: 'dana@example.com', password: 'sekrit',
+    podUrl: DANA, name: 'e2e-optin',
+  });
+  const danaSession = createGrantSession(danaCred);
+
+  const noProof = await fetch(`${BASE}api/agent`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ action: 'opt-in', podBase: DANA }),
+  });
+  check(noProof.status === 401, 'opt-in without proof of the pod is refused');
+
+  const optIn = await danaSession.fetch(`${BASE}api/agent`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ action: 'opt-in', podBase: DANA }),
+  });
+  const optInBody = await optIn.json();
+  check(optIn.status === 201 && Boolean(optInBody.doorSecret),
+    'proving pod control buys an identity: 201, with the door secret, once');
+
+  const danaUp = await until("dana's identity comes up", async () =>
+    (await fetch(`${DANA}activitypods-js/ap/actor`, { headers: { accept: 'application/activity+json' }})).status === 200);
+  if (danaUp) {
+    const dana = await (await fetch(`${DANA}activitypods-js/ap/actor`,
+      { headers: { accept: 'application/activity+json' }})).json();
+    check(dana.preferredUsername === 'dana', 'provisioned as @dana, from the opt-in alone');
+  }
+  check((await fetch(`${DANA}app/status`)).status === 401, "dana's door needs a secret");
+  const danaStatus = await fetch(`${DANA}app/status`, { headers: { 'x-dk-token': optInBody.doorSecret }});
+  check(danaStatus.status === 200, 'the returned secret opens it');
+  check((await fetch(`${DANA}app/status`, { headers: { 'x-dk-token': doorSecret('alice') }})).status === 401,
+    "alice's secret does not open dana's door");
+
+  const reOptIn = await danaSession.fetch(`${BASE}api/agent`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ action: 'opt-in', podBase: DANA }),
+  });
+  const rotated = await reOptIn.json();
+  check(reOptIn.status === 201 && rotated.status === 'rotated' && rotated.doorSecret !== optInBody.doorSecret,
+    'opting in again rotates the secret — that is lost-secret recovery');
+  check((await fetch(`${DANA}app/status`, { headers: { 'x-dk-token': optInBody.doorSecret }})).status === 401,
+    'the old secret stops working at once');
+  check((await fetch(`${DANA}app/status`, { headers: { 'x-dk-token': rotated.doorSecret }})).status === 200,
+    'and the new one works, with no restart');
+
+  const optOut = await danaSession.fetch(`${BASE}api/agent`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ action: 'opt-out', podBase: DANA }),
+  });
+  check(optOut.status === 200, 'opt-out answers 200');
+  check(await until("dana's pod serves plain LDP again", async () => {
+    const st = (await fetch(`${DANA}api/v1/instance`)).status;
+    return st === 401 || st === 404;
+  }, 15_000), 'the client API is gone from that origin');
+  const pileUp = await fetch(`${DANA}activitypods-js/ap/inbox/after-optout.json`, {
+    method: 'PUT', headers: { 'content-type': 'application/activity+json' },
+    body: JSON.stringify({ type: 'Like', id: 'urn:e2e:late' }),
+  });
+  check(pileUp.status < 300, 'deliveries still land in the pod inbox, waiting');
+
+  const carolRefused = await danaSession.fetch(`${BASE}api/agent`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ action: 'opt-in', podBase: POD2 }),
+  });
+  check(carolRefused.status === 403, "dana's token cannot opt in carol's pod");
 } finally {
   await app.stop();
   remote.close();

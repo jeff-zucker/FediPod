@@ -61,6 +61,15 @@ function isPublicEndpoint(req) {
   return false;
 }
 
+// Fixed-width digest compare: neither the token's value nor its length leaks
+// through timing. (Ported from data-kitchen's copy of this file.)
+function tokenOk(given, token) {
+  if (typeof given !== 'string' || given === '') return false;
+  const a = crypto.createHash('sha256').update(given).digest();
+  const b = crypto.createHash('sha256').update(String(token)).digest();
+  return crypto.timingSafeEqual(a, b);
+}
+
 function cookieValue(header, name) {
   for (const part of String(header || '').split(';')) {
     const i = part.indexOf('=');
@@ -74,22 +83,26 @@ function cookieValue(header, name) {
 // provider, so on it they exempt three paths that only ever 404 — and would
 // silently un-gate any future route underneath them. An agent exposed by
 // AP_ALLOWED_HOSTS has nothing but this token, so the gate has to be total.
+// `token` may be a function, resolved per request: an identity's secret can
+// rotate while the server runs, and the very next request sees the new one.
 function makeGate(token, { allowOrigins = [], publicEndpoints = false, secureCookie = false } = {}) {
+  const tokenNow = () => (typeof token === 'function' ? token() : token);
   // gate(req, res) → true when the gate handled the response (caller stops).
   function gate(req, res) {
-    if (!token) return false;
-    if (req.headers[HEADER] === token) return false;
-    if (cookieValue(req.headers.cookie, COOKIE) === token) return false;
+    const t = tokenNow();
+    if (!t) return false;
+    if (tokenOk(req.headers[HEADER], t)) return false;
+    if (tokenOk(cookieValue(req.headers.cookie, COOKIE), t)) return false;
 
     const url = new URL(req.url, 'http://localhost');
     // Bless a browser via ?dk-token=<secret> (legacy) or the leak-free
     // ?dk-bless=<nonce> — either way, answer with the cookie and strip the param.
     const blessParam = url.searchParams.get('dk-bless');
-    if (url.searchParams.get(COOKIE) === token || validBless(token, blessParam)) {
+    if (tokenOk(url.searchParams.get(COOKIE), t) || validBless(t, blessParam)) {
       url.searchParams.delete(COOKIE);
       url.searchParams.delete('dk-bless');
       res.writeHead(302, {
-        'set-cookie': `${COOKIE}=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=31536000`
+        'set-cookie': `${COOKIE}=${t}; Path=/; HttpOnly; SameSite=Strict; Max-Age=31536000`
           + (secureCookie ? '; Secure' : ''),
         'location': url.pathname + url.search,
       });
@@ -108,9 +121,10 @@ function makeGate(token, { allowOrigins = [], publicEndpoints = false, secureCoo
   }
 
   // Websocket upgrades have no res to answer with — just allowed or not.
-  gate.upgradeOk = (req) => !token
-    || req.headers[HEADER] === token
-    || cookieValue(req.headers.cookie, COOKIE) === token;
+  gate.upgradeOk = (req) => {
+    const t = tokenNow();
+    return !t || tokenOk(req.headers[HEADER], t) || tokenOk(cookieValue(req.headers.cookie, COOKIE), t);
+  };
 
   return gate;
 }

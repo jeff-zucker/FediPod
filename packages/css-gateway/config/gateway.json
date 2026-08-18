@@ -13,7 +13,8 @@
       "args_frontOrigin": { "@id": "urn:solid-server:default:variable:baseUrl" },
       "args_directoryContainer": "/.internal/fedipod/directory/",
       "args_offersPods": false,
-      "args_clusterManager": { "@id": "urn:solid-server:default:ClusterManager" }
+      "args_clusterManager": { "@id": "urn:solid-server:default:ClusterManager" },
+      "args_agentRegistryContainer": "/.internal/fedipod/agents/"
     },
     {
       "comment": "The live feed for a pod-hosted identity. A websocket upgrade never enters the request waterfall — CSS routes it through a handler list of its own — so this is a second class holding the same handler instance. Appending to the list here unions with whichever notification configuration the deployment loads.",

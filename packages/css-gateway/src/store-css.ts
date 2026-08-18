@@ -26,5 +26,13 @@ export function makeStoreIO(resourceStore: ResourceStore): IO {
       const rep = new BasicRepresentation(body, { path: url }, contentType);
       await resourceStore.setRepresentation({ path: url }, rep);
     },
+    async remove(url: string): Promise<void> {
+      try {
+        await resourceStore.deleteResource({ path: url });
+      } catch (e: unknown) {
+        if (NotFoundHttpError.isInstance?.(e) || (e as { statusCode?: number })?.statusCode === 404) return;
+        throw e;
+      }
+    },
   };
 }

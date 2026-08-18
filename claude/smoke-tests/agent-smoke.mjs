@@ -9136,6 +9136,45 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
     new Request(ORIGIN + '/api/attach', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' }),
     ctx2);
   check(noSignup.status === 501, 'a front with no writable directory answers 501 — signups are off, by design');
+
+  // Runtime opt-in (/api/agent): the front answers only where a pod server
+  // wired agentControl in; the ownership check is stricter than attach's.
+  const agentPost = (body, ctx_) => front.routeFront(
+    new Request(ORIGIN + '/api/agent', { method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: 'DPoP stub' },
+      body: JSON.stringify(body) }), ctx_);
+  check((await agentPost({ action: 'opt-in', podBase: 'https://mei.host/' }, ctx)).status === 501,
+    'a front with no pod server behind it answers 501 to opt-in');
+
+  const calls = [];
+  const ctxAgent = {
+    ...ctx,
+    verifier: async () => ({ webid: 'https://mei.host/profile/card#me' }),
+    agentControl: {
+      optIn: async (a) => { calls.push([ 'in', a ]); return { httpStatus: 201, ok: true, handle: 'mei', doorSecret: 's3', doorPath: '/app/' }; },
+      optOut: async (a) => { calls.push([ 'out', a ]); return { httpStatus: 200, ok: true, stopped: true }; },
+    },
+  };
+  check((await agentPost({ action: 'opt-in', podBase: 'not-a-url' }, ctxAgent)).status === 400,
+    'a pod base that is not a URL is refused');
+  const noProofIn = await front.routeFront(
+    new Request(ORIGIN + '/api/agent', { method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'opt-in', podBase: 'https://mei.host/' }) }),
+    { ...ctxAgent, verifier: async () => { throw new Error('no token'); } });
+  check(noProofIn.status === 401, 'no proof, no opt-in');
+  check((await agentPost({ action: 'opt-in', podBase: 'https://tamara.host/' }, ctxAgent)).status === 403,
+    "a token for one pod cannot opt in another — even one sharing the origin's shape");
+  const okIn = await agentPost({ action: 'opt-in', podBase: 'https://mei.host/' }, ctxAgent);
+  const okInBody = await okIn.clone?.().json?.() ?? JSON.parse(okIn.body);
+  check(okIn.status === 201 && okInBody.doorSecret === 's3' && /x-dk-token: s3/.test(okInBody.command || ''),
+    'a proven owner gets the secret once, with the command that uses it');
+  check((await agentPost({ action: 'opt-out', podBase: 'https://mei.host/' }, ctxAgent)).status === 200,
+    'and can opt out the same way');
+  check((await agentPost({ action: 'sideways', podBase: 'https://mei.host/' }, ctxAgent)).status === 400,
+    'an unknown action is refused');
+  check(calls.length === 2 && calls[0][1].webId === 'https://mei.host/profile/card#me',
+    'the pod server was handed the proven WebID, not the claimed one');
 }
 
 // --- 30. fronted identity: apUrls publicBase split + agent publishes under it ---
@@ -9336,6 +9375,23 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   check(agent.intake.stopped === true, 'stopping the server stops the identity');
   check(JSON.parse(disk.get(POD + 'activitypods-js/ap-state/lease.json').body).expiresAt <= Date.now(),
     'and hands back the lease, so the next agent need not wait out its term');
+
+  // The door takes a resolver, so a rotated secret bites on the next request.
+  {
+    const { createRequire } = await import('node:module');
+    const { makeGate } = createRequire(import.meta.url)(path.join(root, 'vendor/gate.cjs'));
+    let current = 'first-secret';
+    const gate = makeGate(() => current);
+    const tryToken = (t) => {
+      const res = { s: 0, writeHead(st) { this.s = st; return this; }, end() {} };
+      const handled = gate({ headers: { 'x-dk-token': t }, url: '/x' }, res);
+      return handled ? res.s : 200;
+    };
+    check(tryToken('first-secret') === 200, 'the gate takes a resolver and honours its value');
+    current = 'second-secret';
+    check(tryToken('first-secret') === 401 && tryToken('second-secret') === 200,
+      'rotating the secret bites on the very next request — no restart');
+  }
 
   // Restarting reads the identity that is already there.
   const again = await startEmbeddedAgent({ podBase: POD, dataDir, session, log: () => {} });

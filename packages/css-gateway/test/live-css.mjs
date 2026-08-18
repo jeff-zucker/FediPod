@@ -100,16 +100,19 @@ const built = (args) => {
     frontOrigin: 'https://fedipod.net', directoryContainer: DIRC, ...args }) && null; }
   catch (e) { return e.message; }
 };
-const withAgent = (extra) => built({ agentDataDir: '/tmp/x', agentGateToken: 't', ...extra });
+const withAgent = (extra) => built({ agentDataDir: '/tmp/x', ...extra });
 check(/agentDataDir/.test(built({ agentPods: [ 'http://alice.localhost:4000/' ] }) || ''),
   'a server told to run an agent with nowhere to keep its key refuses to start');
-check(/agentGateToken/.test(built({ agentPods: [ 'http://alice.localhost:4000/' ], agentDataDir: '/tmp/x' }) || ''),
-  'and refuses to serve an identity whose owner pages nothing guards');
-check(/not a URL/.test(withAgent({ agentPods: [ 'alice' ] }) || ''),
+check(/agentDataDir/.test(built({ agentRuntimeOptIn: true }) || ''),
+  'and the same refusal covers runtime opt-in');
+check(/not a pod URL/.test(withAgent({ agentPods: [ 'alice' ] }) || ''),
   'and refuses a pod that is not an address');
 check(/origin of its own/.test(withAgent({
   agentPods: [ 'http://alice.localhost:4000/', 'http://alice.localhost:4000/two/' ] }) || ''),
 'and refuses two identities on one origin — a client API is rooted at one');
+check(/cannot share/.test(withAgent({
+  agentPods: [ 'http://alice.a.example/', 'http://alice.b.example/' ] }) || ''),
+"and refuses two pods that would share one identity directory");
 check(/front/.test(withAgent({ agentPods: [ 'https://fedipod.net/alice/' ] }) || ''),
   'and refuses an identity on the front\'s own host');
 check(withAgent({ agentPods: [ 'http://alice.localhost:4000/' ] }) === null,
@@ -192,6 +195,70 @@ check(await second.acquire() === false, 'a second agent on the same pod is refus
 check(await first.renewOnce() === true, 'the holder renews — the conditional PUT protocol works unchanged');
 await first.release();
 check(await second.acquire() === true, 'and once released the other agent may act');
+
+// ---------------------------------------------------------------------------
+// Runtime opt-in: rows through the real store, claims flipping live, and a
+// fresh handler over the same store re-claiming at initialize() — the restart
+// property, pinned without booting a server.
+// ---------------------------------------------------------------------------
+import fs from 'node:fs';
+import os from 'node:os';
+import pathMod from 'node:path';
+
+const optDataDir = fs.mkdtempSync(pathMod.join(os.tmpdir(), 'fpg-optin-'));
+const OPT_POD = 'http://dana.localhost:4000/';
+const optHandler = new FediPodGatewayHandler({
+  resourceStore: realStore, frontHost: 'fedipod.net', frontOrigin: 'https://fedipod.net',
+  directoryContainer: podBase + '.internal/fedipod/directory/',
+  agentRuntimeOptIn: true, agentDataDir: optDataDir,
+  agentRegistryContainer: podBase + '.internal/fedipod/agents/',
+});
+const claimsFor = async (host, path_) =>
+  optHandler.canHandle({ request: { headers: { host }, url: path_ } }).then(() => true).catch(() => false);
+
+check(await claimsFor('dana.localhost:4000', '/api/v1/instance') === false,
+  'before opt-in a pod origin is not claimed');
+const optReply = await optHandler.optInPod({ podBase: OPT_POD, webId: OPT_POD + 'profile/card#me' });
+check(optReply.httpStatus === 201 && optReply.status === 'starting' && Boolean(optReply.doorSecret),
+  'opt-in answers 201 with a door secret, once');
+check(await claimsFor('dana.localhost:4000', '/api/v1/instance') === true,
+  'and the pod origin is claimed from that instant');
+const optRes = { s: 0, writeHead(st) { this.s = st; return this; }, end() {} };
+await optHandler.handle({ request: { headers: { host: 'dana.localhost:4000' }, url: '/api/v1/instance' }, response: optRes });
+check(optRes.s === 503, 'the surface answers 503 while the identity is still coming up');
+const secretFile = pathMod.join(optDataDir, 'dana', 'door-secret.json');
+check(fs.existsSync(secretFile) && (fs.statSync(secretFile).mode & 0o777) === 0o600,
+  'the secret file sits in the identity directory, owner-readable only');
+check(JSON.parse(fs.readFileSync(secretFile, 'utf8')).secret === optReply.doorSecret,
+  'and holds exactly the secret the reply carried');
+
+const again = await optHandler.optInPod({ podBase: OPT_POD, webId: OPT_POD + 'profile/card#me' });
+check(again.httpStatus === 201 && again.status === 'rotated' && again.doorSecret !== optReply.doorSecret,
+  'a second opt-in rotates the secret — proving pod control again is the recovery');
+
+// A different handler over the SAME store: the restart. Claims must be back
+// before any request is answered.
+const rebooted = new FediPodGatewayHandler({
+  resourceStore: realStore, frontHost: 'fedipod.net', frontOrigin: 'https://fedipod.net',
+  directoryContainer: podBase + '.internal/fedipod/directory/',
+  agentRuntimeOptIn: true, agentDataDir: optDataDir,
+  agentRegistryContainer: podBase + '.internal/fedipod/agents/',
+});
+await rebooted.initialize();
+check(await rebooted.canHandle({ request: { headers: { host: 'dana.localhost:4000' }, url: '/ap/actor' } })
+  .then(() => true).catch(() => false),
+'after a restart the opted-in pod is claimed again, from the registry alone');
+await rebooted.finalize();
+
+const out = await optHandler.optOutPod({ podBase: OPT_POD });
+check(out.httpStatus === 200, 'opt-out answers 200');
+check(await claimsFor('dana.localhost:4000', '/api/v1/instance') === false,
+  'and the pod origin falls back to plain pod serving');
+check(fs.existsSync(secretFile), "the identity's directory stays for a later return");
+const gone = await optHandler.optOutPod({ podBase: OPT_POD });
+check(gone.httpStatus === 404, 'opting out twice says the pod is not opted in');
+await optHandler.finalize();
+fs.rmSync(optDataDir, { recursive: true, force: true });
 
 console.log(fails ? `\n${fails} FAILURE(S)` : '\nall green');
 process.exit(fails ? 1 : 0);

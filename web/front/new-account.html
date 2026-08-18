@@ -52,6 +52,7 @@ FediPod is experimental and free to use.  See <a href="https://github.com/jeff-z
     <button type="button" id="pick-detach" aria-pressed="false"><b>Detach an existing FediPod account</b><span>go back to unfiltered delivery</span></button>
     <button type="button" id="pick-transfer" aria-pressed="false"><b>Transfer a fediverse account to FediPod</b><span>move here from Mastodon and friends</span></button>
     <button type="button" id="pick-host" aria-pressed="false"><b>Run a gateway like this one</b><span>a doorway of your own, for many users</span></button>
+    <button type="button" id="pick-run" aria-pressed="false"><b>Run your identity on this server</b><span>if your pod lives here, the server can be your agent</span></button>
   </div>
 </fieldset>
 
@@ -156,6 +157,27 @@ cd ~/FediPod &amp;&amp; npm start</pre>
     Community Solid Server, the gateway can also run there as a component instead of on a separate box.</p>
 </section>
 
+<!-- run: the pod lives on this very server; opting in makes it an identity -->
+<form id="run-form" hidden>
+  <p>If your pod is hosted by this server, it can run your fediverse identity
+  for you: your pod accepts follows, delivers your posts and serves your
+  Mastodon app, with nothing for you to keep running. Sign in with your pod to
+  prove it is yours.</p>
+  <p class="field">
+  <label for="run-pod-url">Your pod's address on this server</label>
+  <input type="url" id="run-pod-url" autocomplete="off" placeholder="https://you.this.server/">
+  </p>
+  <p class="field">
+  <label for="run-issuer">Your identity provider</label>
+  <input type="url" id="run-issuer" autocomplete="off" placeholder="https://this.server">
+  </p>
+  <p class="actions">
+    <button type="button" id="run-continue" class="primary" disabled>Sign in with your pod &amp; opt in</button>
+    <button type="button" id="run-leave">Stop running it here</button>
+  </p>
+  <p class="hint" id="run-note" hidden></p>
+</form>
+
 <script src="/solid-client-authn.bundle.js"></script>
 <script>
   const $ = (id) => document.getElementById(id);
@@ -166,9 +188,10 @@ cd ~/FediPod &amp;&amp; npm start</pre>
     $('create-pods').hidden = !offersPods;
   }).catch(() => {});
 
-  const picks = ['pick-create', 'pick-attach', 'pick-detach', 'pick-transfer', 'pick-host'];
+  const picks = ['pick-create', 'pick-attach', 'pick-detach', 'pick-transfer', 'pick-host', 'pick-run'];
   const panels = { 'pick-create': 'create-form', 'pick-attach': 'attach-form',
-    'pick-detach': 'detach-form', 'pick-transfer': 'transfer-form', 'pick-host': 'host-form' };
+    'pick-detach': 'detach-form', 'pick-transfer': 'transfer-form', 'pick-host': 'host-form',
+    'pick-run': 'run-form' };
   function pick(which) {
     for (const id of picks) {
       $(id).setAttribute('aria-pressed', String(id === which));
@@ -228,7 +251,7 @@ cd ~/FediPod &amp;&amp; npm start</pre>
     u.search = ''; u.hash = '';
     return u.href;
   }
-p
+
   $('attach-continue').onclick = () => {
     const auth = window.solidClientAuthentication;
     const n = $('attach-note');
@@ -244,6 +267,88 @@ p
       clientName: 'FediPod gateway',
     }).catch((e) => { n.hidden = false; n.textContent = 'sign-in failed to start: ' + e.message; });
   };
+
+  // The run panel: offered only where this server actually runs identities.
+  // An unauthenticated probe tells the two apart: 501 = not offered here,
+  // anything else = offered (a real opt-in still needs the signed-in proof).
+  $('pick-run').addEventListener('click', async () => {
+    const n = $('run-note');
+    const res = await fetch('/api/agent', { method: 'POST',
+      headers: { 'content-type': 'application/json' }, body: '{}' }).catch(() => null);
+    if (!res || res.status === 501) {
+      n.hidden = false;
+      n.textContent = 'This server does not run identities. You can still attach — your agent stays where it is.';
+      $('run-continue').disabled = true;
+      $('run-leave').disabled = true;
+    }
+  }, { once: false });
+  function runFormCheck() {
+    let ok = false;
+    try { ok = /^https?:$/.test(new URL($('run-pod-url').value.trim()).protocol); } catch { /* not yet */ }
+    const issuerOk = /^https?:\/\/\S+/.test($('run-issuer').value.trim());
+    $('run-continue').disabled = !(ok && issuerOk);
+    $('run-leave').disabled = !(ok && issuerOk);
+  }
+  $('run-pod-url').addEventListener('input', () => {
+    runFormCheck();
+    // The identity provider is usually the server itself — still editable.
+    try {
+      const u = new URL($('run-pod-url').value.trim());
+      const apex = u.hostname.split('.').slice(1).join('.');
+      if (!$('run-issuer').value && apex) $('run-issuer').value = `${u.protocol}//${apex}${u.port ? ':' + u.port : ''}`;
+    } catch { /* not a URL yet */ }
+    runFormCheck();
+  });
+  $('run-issuer').addEventListener('input', runFormCheck);
+  const runStart = (action) => {
+    const auth = window.solidClientAuthentication;
+    const n = $('run-note');
+    if (!auth) { n.hidden = false; n.textContent = 'the sign-in library did not load — reload and try again'; return; }
+    const u = new URL($('run-pod-url').value.trim());
+    if (u.pathname === '') u.pathname = '/';
+    if (!u.pathname.endsWith('/')) u.pathname += '/';
+    u.search = ''; u.hash = '';
+    sessionStorage.setItem('fp-run', JSON.stringify({ podBase: u.href, action }));
+    auth.login({
+      oidcIssuer: $('run-issuer').value.trim(),
+      redirectUrl: location.origin + '/',
+      clientName: 'FediPod gateway',
+    }).catch((e) => { n.hidden = false; n.textContent = 'sign-in failed to start: ' + e.message; });
+  };
+  $('run-continue').onclick = () => runStart('opt-in');
+  $('run-leave').onclick = () => runStart('opt-out');
+
+  // Back from the identity provider: finish the opt-in with the proven login.
+  (async () => {
+    const auth = window.solidClientAuthentication;
+    if (!auth) return;
+    const info = await auth.handleIncomingRedirect().catch(() => null);
+    const pending = sessionStorage.getItem('fp-run');
+    if (!info?.isLoggedIn || !pending) return;
+    sessionStorage.removeItem('fp-run');
+    const p2 = JSON.parse(pending);
+    pick('pick-run');
+    const n = $('run-note');
+    n.hidden = false;
+    n.textContent = 'signed in as ' + info.webId + ' — asking the server…';
+    const res = await auth.fetch('/api/agent', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action: p2.action, podBase: p2.podBase }),
+    }).catch(() => null);
+    const d = res ? await res.json().catch(() => ({})) : {};
+    if (res && res.status === 201 && d.doorSecret) {
+      n.innerHTML = 'Your identity runs here now. This is your door secret — <b>save it now</b>, '
+        + 'it is shown only this once. It opens your admin pages at <code>' + p2.podBase.replace(/\/$/, '') + d.doorPath + '</code>:'
+        + '<pre>' + d.doorSecret + '</pre>'
+        + 'To check it works:<pre>' + d.command + '</pre>'
+        + 'Lost it? Opt in again — that mints a fresh one and retires this one.';
+    } else if (res && res.status === 200) {
+      n.textContent = 'Done — this server no longer runs that identity. Your pod and its data are untouched.';
+    } else {
+      n.textContent = (p2.action === 'opt-in' ? 'opt-in' : 'opt-out') + ' failed: '
+        + (d.error || (res ? 'HTTP ' + res.status : 'no response'));
+    }
+  })();
 
   // Back from the identity provider: finish the attach with the proven login.
   (async () => {

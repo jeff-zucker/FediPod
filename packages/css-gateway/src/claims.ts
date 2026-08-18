@@ -4,7 +4,7 @@
 // real Solid pod and is never claimed.
 
 const FRONT_PATHS = new Set(['/', '/signup', '/new-account',
-  '/.well-known/webfinger', '/api/handle', '/api/attach']);
+  '/.well-known/webfinger', '/api/handle', '/api/attach', '/api/agent']);
 
 export function claims(input: { host?: string; pathname: string }, frontHost: string): boolean {
   if (!input.host || !frontHost) return false;

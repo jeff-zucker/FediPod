@@ -79,22 +79,26 @@ Name the pods, and each becomes a fediverse identity:
   "@id": "urn:fedipod:gateway:Handler",
   "@type": "FediPodGatewayHandler",
   "args_agentPods": [ "https://mei.example.org/" ],
-  "args_agentDataDir": "/var/lib/css/fedipod-agent/",
-  "args_agentGateToken": "a long random secret"
+  "args_agentDataDir": "/var/lib/css/fedipod-agent/"
 }
 ```
 
 An identity that does not exist yet is provisioned when the server starts: its
 name is the pod's subdomain label, and it publishes an actor, a signing key and
 WebFinger on the pod itself. Its state lives on the pod. Its signing key lives
-in `agentDataDir`, one directory per identity.
+in `agentDataDir`, one directory per identity — and beside it,
+`door-secret.json`: the secret guarding that identity's own pages. Each
+identity has its own; one owner's secret opens nobody else's door. The boot
+log names each file, and reading it is how the operator learns a secret. The
+log never contains the secret itself.
 
 | Setting | What it is |
 |---|---|
 | `agentPods` | Pod base URLs to run an identity for. Listing a pod is how you turn this on; with none, nothing runs. |
-| `agentDataDir` | Where each identity keeps its signing key and log. Required whenever `agentPods` is set. |
-| `agentGateToken` | The secret guarding the owner's pages and admin routes. Required whenever `agentPods` is set. |
-| `agentUiPath` | Where those pages live on the pod's origin. `/app/` by default; empty serves no pages. |
+| `agentDataDir` | Where each identity keeps its signing key, log, and door secret. Required whenever an agent is enabled. |
+| `agentUiPath` | Where the owner's pages live on the pod's origin. `/app/` by default; empty serves no pages. |
+| `agentRuntimeOptIn` | Whether a pod owner may opt in at runtime by proving control of their pod. Off unless the host chooses it. |
+| `agentRegistryContainer` | The internal container holding runtime opt-in rows. |
 | `agentWebIdSuffix` | Path from a pod's base to its owner's WebID. Defaults to `profile/card#me`. |
 | `agentPollSeconds` | How often the inbox is swept. Deliveries also wake the sweep as they land, so this is the fallback. |
 | `agentAutoAcceptFollows` | Whether a newly provisioned identity accepts follows without review. On by default. |
@@ -121,11 +125,11 @@ for anyone hosting other people, it is a promise being made to them.
 
 **Sign-in needs a password.** These routes face the whole internet, so
 `/oauth/authorize` refuses until the identity has one. Set it once through the
-owner's door:
+owner's door, with that identity's own door secret:
 
 ```
 curl -X POST https://mei.example.org/app/config \
-  -H 'x-dk-token: YOUR_GATE_SECRET' -H 'content-type: application/json' \
+  -H 'x-dk-token: THE_DOOR_SECRET_FROM_door-secret.json' -H 'content-type: application/json' \
   -d '{"password":"the one you will type into your phone"}'
 ```
 
@@ -138,7 +142,34 @@ as before. The server logs the list for each identity when it starts.
 
 **Run one worker.** A delivery is picked up the moment it lands only in a
 single-worker server. With `--workers` above one the inbox is swept on the
-timer instead, and the server says so at startup.
+timer instead, and the server says so at startup. Runtime opt-in requires a
+single worker outright, and says so when refused.
+
+## Letting pod owners opt in themselves
+
+With `agentRuntimeOptIn` on, a pod owner can ask the server to run their
+identity without the operator touching the configuration. The signup page
+offers it as "Run your identity on this server", and underneath it is one
+endpoint on the front host:
+
+```
+POST /api/agent
+{"action": "opt-in", "podBase": "https://mei.example.org/"}
+```
+
+The request carries a Solid-OIDC token; the WebID it proves must live under
+the pod being claimed. The reply carries the identity's door secret, shown
+that once and never again — losing it is not fatal, because opting in again
+mints a fresh one and retires the old, with no restart and no dropped
+connections. `{"action": "opt-out"}` stops the identity and returns the pod
+to plain pod serving; deliveries keep landing in its inbox and simply wait.
+Opted-in pods are recorded in the registry container and come back after a
+server restart — which is also why runtime opt-in wants a persistent storage
+backend: rows kept in a memory backend vanish when the server stops.
+
+Pods listed in `agentPods` cannot opt out over the wire (the configuration
+would bring them back), but their owners may opt in to rotate a lost door
+secret.
 
 ## What is in the package
 
