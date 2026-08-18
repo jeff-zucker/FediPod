@@ -1,5 +1,15 @@
 # Changes
 
+## 2026-08-18
+- Each server-hosted identity's owner door has its own secret, minted beside
+  its signing key; the shared `agentGateToken` setting is gone. Proving pod
+  control again mints a fresh secret and retires the old — lost-secret
+  recovery with no restart.
+- Runtime opt-in: with `agentRuntimeOptIn` on, a pod owner can sign in with
+  their pod and the server starts (or stops) an identity for it while
+  running — `POST /api/agent`, or "Run your identity on this server" on the
+  signup page. Opted-in pods survive a server restart.
+
 ## 2026-08-17
 - FediPod runs inside a Community Solid Server, as a component of it. A server
   that already hosts pods can take delivery for them at its own door, and — for
