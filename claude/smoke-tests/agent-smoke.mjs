@@ -128,10 +128,13 @@ if (up) {
   check(/^HTTP\/1\.1 200/.test(goodHost), 'expected Host still served');
   const xorigin = await fetch(`http://127.0.0.1:${PORT}/status`, { headers: { ...gh, origin: 'https://evil.example' } });
   check(xorigin.status === 403, `cross-origin request refused (got ${xorigin.status})`);
+  // Cross-site navigation is no longer blanket-refused — a browser client logs
+  // in exactly by navigating here — so the redirect policy is what governs: an
+  // off-origin redirect that no client registered is refused all the same.
   const xsite = await fetch(`http://127.0.0.1:${PORT}/oauth/authorize?redirect_uri=https%3A%2F%2Fevil.example%2Fcb`, {
-    headers: { ...gh, 'sec-fetch-site': 'cross-site' },
+    headers: { ...gh, 'sec-fetch-site': 'cross-site' }, redirect: 'manual',
   });
-  check(xsite.status === 403, `cross-site authorize refused (got ${xsite.status})`);
+  check(xsite.status === 400, `an unregistered off-origin redirect is refused regardless of navigation (got ${xsite.status})`);
   const badRedirect = await fetch(`http://127.0.0.1:${PORT}/oauth/authorize?redirect_uri=https%3A%2F%2Fevil.example%2Fcb`, {
     headers: gh, redirect: 'manual',
   });
@@ -185,7 +188,9 @@ if (up) {
     method: 'POST', headers: { ...gh, 'content-type': 'application/json' },
     body: JSON.stringify({ client_name: 'smoke', redirect_uris: 'urn:ietf:wg:oauth:2.0:oob' }),
   });
-  check((await apps.json()).client_id === 'dk-ap-client', 'POST /api/v1/apps returns client');
+  const appRec = await apps.json();
+  check(!!appRec.client_id && !!appRec.client_secret && appRec.client_id !== 'dk-ap-client',
+    'POST /api/v1/apps registers a client with its own id and secret');
 
   const authz = await fetch(`http://127.0.0.1:${PORT}/oauth/authorize?redirect_uri=urn:ietf:wg:oauth:2.0:oob&client_id=dk-ap-client`, { headers: gh });
   const { code } = await authz.json();
@@ -215,6 +220,46 @@ if (up) {
   });
   check((await reuse.json()).access_token === tokBody.access_token,
     'a live token still exchanges for itself');
+
+  // Mastodon-style third-party client: registers with its OWN redirect origin,
+  // is sent a bound code there, and exchanges it with its secret for a bearer.
+  const EXT = 'http://elk.example/cb';
+  const reg = await (await fetch(`http://127.0.0.1:${PORT}/api/v1/apps`, {
+    method: 'POST', headers: { ...gh, 'content-type': 'application/json' },
+    body: JSON.stringify({ client_name: 'Elk', redirect_uris: EXT }),
+  })).json();
+  const extAuthz = await fetch(`http://127.0.0.1:${PORT}/oauth/authorize?response_type=code`
+    + `&client_id=${reg.client_id}&redirect_uri=${encodeURIComponent(EXT)}&scope=read`,
+    { headers: gh, redirect: 'manual' });
+  const extCode = extAuthz.headers.get('location')
+    ? new URL(extAuthz.headers.get('location')).searchParams.get('code') : null;
+  check(extAuthz.status === 302 && !!extCode,
+    'a registered client is redirected to its own origin carrying a code');
+  const preExchange = await fetch(`http://127.0.0.1:${PORT}/api/v1/accounts/verify_credentials`,
+    { headers: { ...gh, authorization: `Bearer ${extCode}` } });
+  check(preExchange.status === 401, 'the bound code is not itself a bearer');
+  const exch = (secret) => fetch(`http://127.0.0.1:${PORT}/oauth/token`, {
+    method: 'POST', headers: { ...gh, 'content-type': 'application/json' },
+    body: JSON.stringify({ grant_type: 'authorization_code', code: extCode,
+      client_id: reg.client_id, client_secret: secret, redirect_uri: EXT }),
+  });
+  check((await exch('wrong-secret')).status === 401,
+    'the code cannot be exchanged without the client secret');
+  const extTok = await exch(reg.client_secret);
+  check(extTok.status === 200 && !!(await extTok.json()).access_token,
+    'the secret-holding client exchanges its code for a bearer');
+  check((await exch(reg.client_secret)).status === 400, 'and a bound code is single-use');
+
+  // CORS: the API answers a foreign origin the way any Mastodon server does.
+  const preflight = await fetch(`http://127.0.0.1:${PORT}/api/v1/instance`, {
+    method: 'OPTIONS', headers: { ...gh, origin: 'http://elk.example',
+      'access-control-request-method': 'GET', 'access-control-request-headers': 'authorization' } });
+  check(preflight.status === 204 && preflight.headers.get('access-control-allow-origin') === '*',
+    'the API answers a CORS preflight');
+  const crossGet = await fetch(`http://127.0.0.1:${PORT}/api/v1/instance`,
+    { headers: { ...gh, origin: 'http://elk.example' } });
+  check(crossGet.status === 200 && crossGet.headers.get('access-control-allow-origin') === '*',
+    'and a cross-origin GET carries access-control-allow-origin');
 
   // --- the admin body must say it is JSON ---
   // A cross-origin form POST needs no preflight, and JSON.parse never cared
@@ -3156,6 +3201,16 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   check(fallback === 2 && pushOk === 10
     && /wsState === 'open' \|\| this\.wsState === 'in-process' \? POLL_PUSH_OK_MS : POLL_MS/.test(body),
     `poll is ${fallback}min without a push channel and ${pushOk}min with one (socket or in-process)`);
+}
+
+// --- 5p2. the directory door belongs to a configured agent ---
+{
+  const door = fs.readFileSync(path.join(root, 'lib/directory.mjs'), 'utf8');
+  const admin5p2 = fs.readFileSync(path.join(root, 'lib/admin.mjs'), 'utf8');
+  check(/if \(held \|\| !eligible\(\) \|\| Date\.now\(\) < pausedUntil\) return;/.test(door),
+    'the door is only claimed while eligible');
+  check(/eligible: \(\) => agent\.configured\(\)/.test(admin5p2),
+    'and an agent is eligible only once it is configured');
 }
 
 // --- 5q. a dropped socket reuses its channel instead of making another ---
