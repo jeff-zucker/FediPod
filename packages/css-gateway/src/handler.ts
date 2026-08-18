@@ -6,6 +6,9 @@
 // componentsjs-generator reads FediPodGatewayArgs to emit one component
 // parameter per field, so the config injects each by name.
 
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
+import { randomBytes } from 'node:crypto';
 import { HttpHandler, getLoggerFor } from '@solid/community-server';
 import type {
   HttpHandlerInput, ResourceStore, Initializable, Finalizable, ClusterManager,
@@ -48,6 +51,8 @@ export interface FediPodGatewayArgs {
   agentUiPath?: string;
   /** Whether a pod owner may opt in at runtime by proving control of their pod. Off unless the host chooses it. */
   agentRuntimeOptIn?: boolean;
+  /** When this server also runs the door, give each identity a @handle@frontHost address on startup — an inbox-only directory row, written once. The actor keeps its own ids on the pod. Off by default. */
+  agentAutoFront?: boolean;
   /** An internal container URL where the runtime opt-in rows live. */
   agentRegistryContainer?: string;
 }
@@ -58,14 +63,20 @@ interface EmbeddedIdentity {
   host: string;
   surface: { handler: (req: unknown, res: unknown) => Promise<void>; streaming?: unknown };
   stop: () => Promise<void>;
+  agent?: { store?: { getConfig?: () => { kind?: string } | null | undefined } };
 }
 
 // The JS front-core is FediPod's own ESM tree, reached at runtime. A real
 // dynamic import() built via Function keeps tsc from downleveling it to
 // require() — which cannot load an ESM module with top-level await under a
 // CommonJS build.
-const FRONT_CORE = '../../../lib/front-core.mjs';
-const EMBED = '../../../lib/embed.mjs';
+//
+// Two layouts carry that tree: the published package ships its own copy of
+// lib/ beside dist/ (prepack puts it there), and a repo checkout reaches the
+// repo's lib/ three levels up. Prefer the package's own copy when it exists.
+const LIB_ROOT = existsSync(join(__dirname, '../lib/embed.mjs')) ? '../lib' : '../../../lib';
+const FRONT_CORE = `${LIB_ROOT}/front-core.mjs`;
+const EMBED = `${LIB_ROOT}/embed.mjs`;
 const esmImport = new Function('s', 'return import(s)') as (s: string) => Promise<Record<string, Function>>;
 
 // A pod that will not come up yet is usually a pod still being created by the
@@ -103,6 +114,7 @@ export class FediPodGatewayHandler extends HttpHandler implements Initializable,
   private readonly starting = new Set<string>();
   private readonly startCancelled = new Set<string>();
   private stopping = false;
+  private onSignal: ((signal: NodeJS.Signals) => void) | null = null;
 
   public constructor(args: FediPodGatewayArgs) {
     super();
@@ -170,6 +182,20 @@ export class FediPodGatewayHandler extends HttpHandler implements Initializable,
    */
   public async initialize(): Promise<void> {
     if (this.agentPods.length === 0 && !this.registry) return;
+    // The stock CSS CLI installs no signal handlers, so a SIGTERM (systemd
+    // stop, docker stop, Ctrl+C) killed the process with agent state
+    // unflushed and the lease held for its whole TTL. Flush first, bounded,
+    // then re-raise so the process still dies the way it was asked to.
+    if (!this.onSignal) {
+      this.onSignal = (signal: NodeJS.Signals): void => {
+        const timeout = new Promise((resolve) => { setTimeout(resolve, 5_000).unref?.(); });
+        void Promise.race([ this.finalize(), timeout ]).then(() => {
+          process.kill(process.pid, signal);
+        });
+      };
+      process.once('SIGTERM', this.onSignal);
+      process.once('SIGINT', this.onSignal);
+    }
     // The agent runs in the primary process, and a write made by a worker
     // raises its change event there — so with workers the inbox is swept on the
     // timer rather than the moment a delivery lands. Everything still works; it
@@ -213,6 +239,11 @@ export class FediPodGatewayHandler extends HttpHandler implements Initializable,
   /** Stop every identity: timers cleared, state written, lease let go. */
   public async finalize(): Promise<void> {
     this.stopping = true;
+    if (this.onSignal) {
+      process.removeListener('SIGTERM', this.onSignal);
+      process.removeListener('SIGINT', this.onSignal);
+      this.onSignal = null;
+    }
     const running = [ ...this.identities.values() ];
     this.identities.clear();
     this.surfaces.clear();
@@ -266,6 +297,7 @@ export class FediPodGatewayHandler extends HttpHandler implements Initializable,
           this.identities.set(podBase, identity);
           this.surfaces.set(identity.host, identity);
           this.logger.info(`FediPod agent @${identity.handle} running on ${podBase}`);
+          if (this.args.agentAutoFront) await this.frontIdentity(podBase, identity);
           return;
         } catch (e: unknown) {
           const wait = START_RETRY_MS[Math.min(attempt, START_RETRY_MS.length - 1)];
@@ -278,6 +310,30 @@ export class FediPodGatewayHandler extends HttpHandler implements Initializable,
       }
     } finally {
       this.starting.delete(podBase);
+    }
+  }
+
+  /**
+   * When this server is also the door, give a running identity a
+   * @handle@<frontHost> address: one inbox-only directory row so the
+   * shared-domain handle resolves and the door can take verified delivery for
+   * it. Written once — a manual attach or an earlier boot wins. The identity
+   * keeps its own actor ids on the pod; nothing is moved.
+   */
+  private async frontIdentity(podBase: string, identity: EmbeddedIdentity): Promise<void> {
+    const { handle } = identity;
+    try {
+      if (await this.dir.lookup(handle)) return;
+      const kind = identity.agent?.store?.getConfig?.()?.kind === 'group' ? 'group' : 'person';
+      await this.dir.putDirectory(handle, {
+        handle, podHome: podBase, actorUrl: `${podBase}ap/actor`, kind,
+        gatewayWebId: this.args.gatewayWebId ?? null,
+        hmacSecret: randomBytes(32).toString('base64'),
+        inboxOnly: true,
+      });
+      this.logger.info(`FediPod: @${handle}@${this.args.frontHost} now resolves to ${podBase}`);
+    } catch (e: unknown) {
+      this.logger.warn(`FediPod: could not front @${handle}: ${(e as Error).message}`);
     }
   }
 

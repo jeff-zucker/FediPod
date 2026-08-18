@@ -95,6 +95,24 @@ await handler.initialize();
 await handler.finalize();
 check(true, 'and with no agent configured they do nothing');
 
+// SIGTERM/SIGINT: when the component runs an agent it installs a bounded
+// clean-shutdown handler (the stock CSS CLI installs none, so a stop killed
+// state unflushed and held the lease for its TTL) and takes it off at finalize.
+{
+  const sigHandler = new FediPodGatewayHandler({
+    resourceStore: store, frontHost: 'fedipod.net', frontOrigin: 'https://fedipod.net',
+    directoryContainer: DIRC, agentRuntimeOptIn: true,
+    agentDataDir: fs.mkdtempSync('/tmp/fedipod-sig-'), agentRegistryContainer: '/reg/',
+  });
+  const before = process.listenerCount('SIGTERM');
+  await sigHandler.initialize();
+  check(process.listenerCount('SIGTERM') === before + 1 && process.listenerCount('SIGINT') >= 1,
+    'initialize installs a SIGTERM/SIGINT clean-shutdown handler');
+  await sigHandler.finalize();
+  check(process.listenerCount('SIGTERM') === before,
+    'and finalize removes it, leaving no listener behind');
+}
+
 const built = (args) => {
   try { return new FediPodGatewayHandler({ resourceStore: store, frontHost: 'fedipod.net',
     frontOrigin: 'https://fedipod.net', directoryContainer: DIRC, ...args }) && null; }

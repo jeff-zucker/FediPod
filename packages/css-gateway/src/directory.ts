@@ -32,6 +32,8 @@ function jsonTable<T>(io: IO, containerUrl: string) {
 export interface DirectoryRecord {
   handle: string; podHome: string; actorUrl: string; kind: string;
   webId?: string; hmacSecret?: string; gatewayWebId?: string | null;
+  /** Inbox-only fronting: the row exists to resolve @handle@front and take verified delivery; the actor keeps its own ids on the pod. */
+  inboxOnly?: boolean;
 }
 
 export interface Directory {

@@ -72,6 +72,7 @@ fs.writeFileSync(config, JSON.stringify({
         args_directoryContainer: '/.internal/fedipod/directory/',
         args_agentRegistryContainer: '/.internal/fedipod/agents/',
         args_agentRuntimeOptIn: true,
+        args_agentAutoFront: true,
         args_agentPods: [ POD, POD2 ],
         args_agentDataDir: dataDir,
         args_agentPollSeconds: 2,
@@ -144,6 +145,16 @@ try {
   }
   check((await fetch(`${POD}.well-known/webfinger?resource=acct:alice@${ALICE}`)).status === 200,
     'the pod answers WebFinger for it');
+
+  // Auto-fronting: because this one server also runs the door, @alice@localhost
+  // resolves through the front to alice's own actor — no manual attach.
+  const fronted = await until('the door fronts the identity as @alice@localhost', async () => {
+    const wf = await fetch(`${BASE}.well-known/webfinger?resource=acct:alice@localhost`);
+    if (wf.status !== 200) return false;
+    const href = (await wf.json()).links?.[0]?.href;
+    return href === `${POD}ap/actor`;
+  });
+  check(fronted, 'the front resolves @alice@localhost to the identity on its pod');
   const stateRes = await fetch(`${POD}activitypods-js/ap-state/`, { headers: { accept: 'text/turtle' }});
   check(stateRes.status === 401 || stateRes.status === 403,
     'the agent state tree is not readable by a stranger');

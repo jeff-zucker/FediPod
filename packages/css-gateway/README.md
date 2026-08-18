@@ -99,6 +99,7 @@ log never contains the secret itself.
 | `agentUiPath` | Where the owner's pages live on the pod's origin. `/app/` by default; empty serves no pages. |
 | `agentRuntimeOptIn` | Whether a pod owner may opt in at runtime by proving control of their pod. Off unless the host chooses it. |
 | `agentRegistryContainer` | The internal container holding runtime opt-in rows. |
+| `agentAutoFront` | When this server also runs the door, give each identity a `@handle@<frontHost>` address on startup by writing its directory row. The identity keeps its own actor ids on the pod. Off by default. |
 | `agentWebIdSuffix` | Path from a pod's base to its owner's WebID. Defaults to `profile/card#me`. |
 | `agentPollSeconds` | How often the inbox is swept. Deliveries also wake the sweep as they land, so this is the fallback. |
 | `agentAutoAcceptFollows` | Whether a newly provisioned identity accepts follows without review. On by default. |
@@ -111,6 +112,13 @@ what it expects: nodeinfo, the client API under `/api/`, sign-in under
 `/oauth/`, the live feed at `/api/v1/streaming`, and the ActivityPub write API
 at `/ap/outbox`. The owner's own pages — the record, the setup screens and the
 bundled web client — are behind `agentUiPath`, which the gate secret guards.
+
+The client API answers any origin, the way any Mastodon server does, so a
+browser client works too: it registers an app, and the authorize screen names
+what is asking and where the code will be sent before the owner approves it
+with the password. The authorization code is bound to the client's registered
+redirect, and only that client, holding its secret, can exchange it for a
+token.
 
 A client API is rooted at an origin, so each identity needs an origin of its
 own: subdomain pods, one per identity. Two entries on one host, or an entry on

@@ -8,13 +8,24 @@
   "files": [
     "dist",
     "config",
+    "lib",
+    "vendor",
+    "web",
+    "run-agent.mjs",
     "README.md"
   ],
   "peerDependencies": {
     "@solid/community-server": "^7.0.0"
   },
   "dependencies": {
-    "@solid/access-token-verifier": "^2.1.1"
+    "@fedify/fedify": "^2.3.4",
+    "@solid/access-token-verifier": "^2.1.1",
+    "jose": "^6.2.8",
+    "node-forge": "^1.4.0",
+    "rdflib": "^2.4.0",
+    "sanitize-html": "^2.17.6",
+    "undici": "^6.28.0",
+    "web-push": "^3.6.7"
   },
   "devDependencies": {
     "typescript": "^5.5.3",
@@ -36,6 +47,8 @@
     "build": "tsc && npm run build:components",
     "build:components": "componentsjs-generator -s src -c dist/components -r fpg",
     "test": "npm run build && node --test test/*.mjs",
-    "test:e2e": "node test/e2e/live-agent.mjs"
+    "test:e2e": "node test/e2e/live-agent.mjs",
+    "prepack": "node scripts/pack-tree.mjs copy",
+    "postpack": "node scripts/pack-tree.mjs clean"
   }
 }
