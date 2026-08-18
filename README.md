@@ -89,11 +89,25 @@ and reports anything it could not resolve.
 Most of what a fediverse inbox receives is broadcast noise. A gateway is a
 shared, always-on door that verifies each delivery, drops the junk, and
 passes the rest to your pod — while your name, key and data stay on your own
-pod. Attach at a gateway's signup page (there is one at
-[fedipod.net](https://fedipod.net/)): sign in with your pod to prove it's
-yours, run the one `fedipod gateway … --inbox-only` command it hands you,
-and restart your agent. `fedipod gateway --detach` undoes it with one
-republish.
+pod. There is one at [fedipod.net](https://fedipod.net/); attaching takes one
+command, and one to undo.
+
+[gateway.md](gateway.md) covers attaching, and running a gateway yourself on
+any always-on box.
+
+## Inside a Solid server (optional)
+
+If you already run a Community Solid Server for pods, FediPod can run inside
+it, as a component of that server. It takes delivery for the pods it hosts,
+and — for pods you name — it runs the agent too, so a pod accepts follows,
+delivers posts and serves its owner's Mastodon client on its own address with
+no agent process anywhere. Everything reaches the pods through the server's
+own store, so there is no credential and no second box.
+
+![FediPod as a component of a Solid server](css-component.svg)
+
+[packages/css-gateway](packages/css-gateway/README.md) is the component: what
+to install, what to set, and what to know before turning it on.
 <!-- /CLAUDE -->
 
 ## Fediverse Clients

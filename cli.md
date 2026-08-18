@@ -119,6 +119,8 @@ signup page. Detaching republishes your actor with the pod's own inbox.
 (`front` still works as an alias, and the `<…/ap/actor>` form without
 `--inbox-only` takes a fronted identity instead.)
 
+What a gateway is, easing into one, and running your own: [gateway.md](gateway.md).
+
 ## Keys
 
 ```

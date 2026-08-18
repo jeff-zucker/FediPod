@@ -1,98 +1,57 @@
-# The inbox gateway & multi-user front (optional, opt-in)
+# Running the gateway on Netlify
 
-<!-- CLAUDE 2026-08-17 — status + model changed when fedipod.net went live; rework/trim, delete markers when done -->
-A reference deployment runs at **https://fedipod.net/** — the multi-user
-gateway, with signup. The usual attachment keeps a user's identity on their
-own pod (`@me@my.pod`) and moves only the advertised inbox to the gateway's
-door: sign up on the page, sign in with your pod to prove it, and run the one
-`fedipod gateway … --inbox-only` command it hands you. Attach rows persist in
-a Netlify Blobs store. The fronted-identity mode described below sits behind
-an explicit flag.
-<!-- /CLAUDE -->
+What a gateway is, and how someone attaches their pod to one, is in
+[gateway.md](../gateway.md). This is the deployment: what is here, and what a
+host has to set.
 
-A FediPod install works exactly as before without any gateway — deliveries go
-straight to your pod inbox, which buffers them whether your agent is up or not.
+A reference deployment runs at **https://fedipod.net/**.
 
-Two things live here, sharing the same verify-at-the-door core
-(`lib/gateway-core.mjs`):
+## What is here
 
-- **`functions/inbox.mjs`** — a single-user gateway for identities one operator
-  already controls (below).
-- **`functions/front.mjs`** — a **multi-user front** (`lib/front-core.mjs`): one
-  box a HOST runs to offer `@name@fedipod.net` accounts to many independent
-  FediPod users, each keeping their own pod, agent and signing key. It answers
-  WebFinger for every user, serves each user's public face by rewriting their
-  pod's ids onto the shared domain (so `@me@fedipod.net` is a real handle whose
-  data still lives on the user's own pod), and is the verifying inbox for all of
-  them — routing each verified delivery into the right user's pod inbox. It holds
-  no user key and no user data, only a directory (handle → that user's pod +
-  public key) and the per-user Append credentials. Signup: a user proves control
-  of their pod via Solid-OIDC, picks a free handle, and the host records
-  `handle → their pod`. See `functions/front.mjs` for the directory record shape
-  and env, and `claude/plans/parked-multi-user-front.md` for the full design.
-  The agent-side "publish and sign under the fronted actor id" (so a user's own
-  posts carry `@name@fedipod.net`) and the signup/attach flow are built too —
-  see `functions/front.mjs`, `web/front/new-account.html`, and `fedipod front`.
+Both functions are thin adapters around FediPod's own logic, which is plain
+runtime-agnostic Node:
 
-  **A front never hosts pods.** It is only a doorway (directory + WebFinger +
-  verify-and-forward). A host who wants to offer pods to users with none runs
-  their own Community Solid Server separately — that pod hosting is its own
-  server with its own data-custodian duties, not part of the front, and users
-  may always bring their own pod instead. The gateway can be deployed
-  standalone (this Netlify function, or any always-on box) OR — planned — as a
-  **CSS component**, so a host already running a CSS for pods can add the
-  gateway there instead of running a second box.
+| File | What it serves | Around |
+|---|---|---|
+| `functions/inbox.mjs` | One person's door: verify a delivery, forward it to their pod. | `lib/gateway-core.mjs` |
+| `functions/front.mjs` | A door for many people: WebFinger, each public face, per-person delivery routing, and the signup and attach flow. | `lib/front-core.mjs` |
 
-A gateway is an **always-on, internet-facing box** that becomes your advertised
-inbox. It verifies each delivery's HTTP signature at the door (where the
-headers still exist — your pod discards them), drops forgeries and obvious spam
-before they ever touch your pod, and forwards the rest — with a signed
-verification receipt — into your pod inbox for the normal drain.
+Another host needs only its own adapter calling the same `handleDelivery`. A
+Community Solid Server can run the same door as a component of itself instead
+— see [packages/css-gateway](../packages/css-gateway/README.md).
 
-**Any always-on box will do**: a VPS, a home server behind a tunnel, a
-serverless host. The logic lives in `lib/gateway-core.mjs`, which is plain
-runtime-agnostic Node; `functions/inbox.mjs` here is a ~40-line Netlify adapter
-around it, included as the worked example. Another host needs only its own
-thin adapter calling the same `handleDelivery`.
+## Deploying
 
-It is **keyless**: it never holds your RSA signing key. Its only secrets are an
-Append-only credential for your inbox and the HMAC receipt secret (below). A
-compromised gateway can inject inbox items — which still face the drain's own
-verification — but cannot impersonate you, read your private data, or post.
+This repo, with `netlify.toml` as it stands. The functions read these
+environment variables:
 
-## To set one up
+| Variable | What it is |
+|---|---|
+| `FEDIPOD_FRONT_HOST` | The host the door answers on. |
+| `FEDIPOD_FRONT_ORIGIN` | Its origin. |
+| `FEDIPOD_GATEWAY_WEBID` | The WebID stamped on verification receipts. |
+| `FEDIPOD_DIRECTORY_JSON` | The starting directory, as JSON: which handles exist and which pod each belongs to. |
 
-1. **Deploy the function** to your box. On Netlify: this repo, with
-   `netlify.toml` as-is. Elsewhere: any HTTPS endpoint that calls
-   `handleDelivery` from `lib/gateway-core.mjs`.
-2. **Provision a dedicated low-privilege pod account** for the gateway and
-   grant its WebID Append on your inbox. Do NOT use your owner credential.
-<!-- CLAUDE 2026-08-17 — the credential is optional and the panel is gone; delete markers when done -->
-   (Optional for FediPod's default posture: the pod inbox is public-Append,
-   and the gateway falls back to a plain PUT when no credential is on
-   record.)
-3. **Point your agent at it** with `POST /gateway {action:'configure', url,
-   webId}` on the agent's API — it mints the shared HMAC secret and returns
-   it **once**; copy it into the gateway's environment (or directory row).
-   Users attaching through a multi-user gateway's signup page skip this:
-   the page hands them the finished `fedipod gateway` command instead.
-4. **Walk the lifecycle** with `POST /gateway {action:'mode', mode:…}`:
-   **shadow** (advertise the gateway and measure how much real traffic
-   verifies — nothing else changes) → **trust** (verified follows
-   auto-accept) → **locked** (your inbox accepts writes only from the
-   gateway). Every step is reversible; `fedipod gateway --detach` restores
-   the pod's own inbox.
-<!-- /CLAUDE -->
+Attachments people make through the signup page are kept in a Netlify Blobs
+store named `directory`, and take precedence over the rows in
+`FEDIPOD_DIRECTORY_JSON`.
 
-## What the HMAC secret is
+## What the door needs from a pod
 
-A shared password between your agent and your gateway, used to stamp each
-verification receipt. Your agent believes a receipt only when its stamp checks
-out — so nobody else can drop a fake "verified" receipt beside a forged
-delivery. You never obtain it from anywhere: the admin panel mints it when you
-click **Save & get secret**, and you carry it to the gateway yourself.
+Permission to write into that person's inbox, and nothing else. FediPod's
+default inbox is public-Append, in which case the door needs no credential at
+all and writes with a plain PUT. Where an inbox is closed, give the door's own
+low-privilege WebID Append on it — never an owner credential.
 
-The gateway reads only PUBLIC data to decide what concerns you — your published
-followers/following and a small public `ap/gateway-policy.json` your agent
-writes with your blocklist mirror. Nothing private leaves your pod. (That
-mirror does make your blocklist public — a known part of running a gateway.)
+The door holds no signing key, so it cannot post as anyone. It reads only
+public data to decide what concerns a given person: their published followers
+and following, and a small public policy document their agent writes with a
+mirror of their blocklist.
+
+## The two shapes of attachment
+
+Most people keep their identity on their own pod and move only the advertised
+inbox to the door, so they stay `@me@their.pod` and the door is just mail
+handling. A person can instead take a handle on the door's own domain, which
+makes their public addresses read `@name@this-host` while their data stays on
+their pod; that mode is chosen explicitly, per person, at attach time.

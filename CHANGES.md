@@ -1,6 +1,13 @@
 # Changes
 
 ## 2026-08-17
+- FediPod runs inside a Community Solid Server, as a component of it. A server
+  that already hosts pods can take delivery for them at its own door, and — for
+  each pod named in its configuration — run the whole agent: the pod accepts
+  follows, delivers posts, empties its inbox and serves its owner's Mastodon
+  client on the pod's own address, with no agent process anywhere. Signing keys
+  are held by the server, and sign-in needs a password per identity. See
+  `packages/css-gateway`.
 - One-line install: `curl -fsSL https://fedipod.net/install | sh` — checks
   git and node 20+, clones or updates `~/FediPod` (`FEDIPOD_DIR` overrides),
   installs dependencies, and prints the start command. The script is served

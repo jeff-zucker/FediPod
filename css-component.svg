@@ -1,0 +1,116 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1230" height="690" viewBox="0 0 1230 690" role="img" aria-labelledby="ttl dsc">
+<title id="ttl">FediPod as a component of a Solid server</title>
+<desc id="dsc">One Community Solid Server hosting several pods, with the FediPod component installed, and down the right-hand side everyone who talks to it. The fediverse delivers mail and looks things up. Mei uses any mobile Mastodon client and Tamara the built-in web client or a native app; both sign in, read and post. Any authorized Solid app reads and writes the pods directly, with the component not involved. Inside the server, the component is processing in two parts: the endpoints it serves on each pod's own address, which are the door that checks each delivery, the client API an app signs in to, the owner's pages behind a secret, and the live feed a client holds open; and the work it does for each pod, which is accepting a follow, delivering a post, emptying the inbox and holding the lease so only one agent at a time acts. Two kinds of storage sit below. The server's own storage holds each identity's signing key and log on disk, outside every pod, and the handle directory when the server runs a door for other people. Pod storage is one pod per identity, each holding that identity's public face, its inbox and its private state, which the component writes directly with no credential and no second connection, and which are addressable both as ordinary Solid resources and as ActivityPub.</desc>
+<style>
+  text { font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif; }
+  .t  { font-size: 14px; font-weight: 400; }
+  .th { font-size: 14px; font-weight: 500; }
+  .ts { font-size: 12px; font-weight: 400; }
+  .cc { font-size: 11px; font-weight: 400; font-style: italic; }
+  .teal   { fill: #E1F5EE; stroke: #0F6E56; }
+  .purple { fill: #EEEDFE; stroke: #534AB7; }
+  .gray   { fill: #F1EFE8; stroke: #5F5E5A; }
+  .coral  { fill: #FAECE7; stroke: #993C1D; }
+  .box    { fill: #FFFFFF; stroke: #B4B2A9; }
+  .tealtx   { fill: #085041; }
+  .purpletx { fill: #3C3489; }
+  .graytx   { fill: #444441; }
+  .coraltx  { fill: #712B13; }
+  .boxtx    { fill: #2C2C2A; }
+  .arr { stroke: #5F5E5A; stroke-width: 1.5; fill: none; }
+</style>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker></defs>
+
+<rect class="gray" x="40" y="40" width="840" height="616" rx="8" stroke-width="0.5"/>
+<text class="th graytx" x="460" y="66" text-anchor="middle">One Community Solid Server, hosting several pods, with this component installed</text>
+<text class="ts graytx" x="460" y="84" text-anchor="middle">the pods it already served, and a fediverse identity for each user who opts in</text>
+
+<rect class="purple" x="56" y="102" width="758" height="268" rx="8" stroke-width="0.5"/>
+<text class="th purpletx" x="435" y="124" text-anchor="middle">Processing — the component, running in the server's own process</text>
+<text class="ts purpletx" x="237" y="148" text-anchor="middle">the endpoints it serves, on each pod's address</text>
+<text class="ts purpletx" x="629" y="148" text-anchor="middle">the work it does, for each pod it runs</text>
+
+<rect class="box" x="72" y="160" width="330" height="42" rx="4" stroke-width="0.5"/>
+<text class="t boxtx" x="86" y="178">The door</text>
+<text class="ts boxtx" x="86" y="194">checks each delivery, drops forgeries</text>
+<rect class="box" x="464" y="160" width="330" height="42" rx="4" stroke-width="0.5"/>
+<text class="t boxtx" x="478" y="178">Accepts a follow</text>
+<text class="ts boxtx" x="478" y="194">answers as that pod's owner</text>
+
+<rect class="box" x="72" y="210" width="330" height="42" rx="4" stroke-width="0.5"/>
+<text class="t boxtx" x="86" y="228">The client API</text>
+<text class="ts boxtx" x="86" y="244">what a Mastodon app signs in to</text>
+<rect class="box" x="464" y="210" width="330" height="42" rx="4" stroke-width="0.5"/>
+<text class="t boxtx" x="478" y="228">Delivers a post</text>
+<text class="ts boxtx" x="478" y="244">signs it and sends it on</text>
+
+<rect class="box" x="72" y="260" width="330" height="42" rx="4" stroke-width="0.5"/>
+<text class="t boxtx" x="86" y="278">The owner's pages</text>
+<text class="ts boxtx" x="86" y="294">the record and a web client, behind a secret</text>
+<rect class="box" x="464" y="260" width="330" height="42" rx="4" stroke-width="0.5"/>
+<text class="t boxtx" x="478" y="278">Empties the inbox</text>
+<text class="ts boxtx" x="478" y="294">reads what arrived, then clears it</text>
+
+<rect class="box" x="72" y="310" width="330" height="42" rx="4" stroke-width="0.5"/>
+<text class="t boxtx" x="86" y="328">The live feed</text>
+<text class="ts boxtx" x="86" y="344">a socket a client holds open</text>
+<rect class="box" x="464" y="310" width="330" height="42" rx="4" stroke-width="0.5"/>
+<text class="t boxtx" x="478" y="328">Holds the lease</text>
+<text class="ts boxtx" x="478" y="344">so only one agent at a time acts on a pod</text>
+
+<line class="arr" x1="237" y1="370" x2="237" y2="430" marker-end="url(#arrow)"/>
+<text class="ts graytx" x="249" y="404">keeps each identity's key and log</text>
+<line class="arr" x1="629" y1="370" x2="629" y2="430" marker-end="url(#arrow)"/>
+<text class="ts graytx" x="641" y="394">writes directly to each user's pod</text>
+<text class="ts graytx" x="641" y="410">no credential, no second connection</text>
+
+<rect class="coral" x="56" y="432" width="334" height="196" rx="8" stroke-width="0.5"/>
+<text class="th coraltx" x="223" y="454" text-anchor="middle">Server storage</text>
+<text class="ts coraltx" x="223" y="471" text-anchor="middle">on the server, outside every pod</text>
+<rect class="box" x="72" y="482" width="302" height="42" rx="4" stroke-width="0.5"/>
+<text class="t boxtx" x="86" y="500">A signing key per identity</text>
+<text class="ts boxtx" x="86" y="516">what it means to be able to post as them</text>
+<rect class="box" x="72" y="532" width="302" height="42" rx="4" stroke-width="0.5"/>
+<text class="t boxtx" x="86" y="550">A log per identity</text>
+<text class="ts boxtx" x="86" y="566">what its agent did, and when</text>
+<rect class="box" x="72" y="582" width="302" height="30" rx="4" stroke-width="0.5" stroke-dasharray="3 3"/>
+<text class="ts boxtx" x="86" y="601">a handle directory, if it fronts for others</text>
+
+<rect class="teal" x="414" y="432" width="400" height="196" rx="8" stroke-width="0.5"/>
+<text class="th tealtx" x="614" y="454" text-anchor="middle">Pod storage — one pod per identity</text>
+<text class="ts tealtx" x="614" y="471" text-anchor="middle">addressable by Solid and by ActivityPub</text>
+<rect class="box" x="430" y="482" width="368" height="42" rx="4" stroke-width="0.5"/>
+<text class="t boxtx" x="444" y="500">mei.example.org</text>
+<text class="ts boxtx" x="444" y="516">public face, inbox, and their agent's private state</text>
+<rect class="box" x="430" y="532" width="368" height="42" rx="4" stroke-width="0.5"/>
+<text class="t boxtx" x="444" y="550">tamara.example.org</text>
+<text class="ts boxtx" x="444" y="566">the same again, theirs alone</text>
+<rect class="box" x="430" y="582" width="368" height="30" rx="4" stroke-width="0.5" stroke-dasharray="3 3"/>
+<text class="ts boxtx" x="444" y="601">and every other pod this server hosts, untouched</text>
+
+<line class="arr" x1="816" y1="134" x2="918" y2="134" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+<rect class="gray" x="920" y="102" width="290" height="64" rx="4" stroke-width="0.5"/>
+<text class="th graytx" x="936" y="126">The fediverse</text>
+<text class="ts graytx" x="936" y="144">Mastodon, Bluesky, Lemmy, anyone else</text>
+<text class="ts graytx" x="936" y="160">delivers mail, and looks things up</text>
+
+<line class="arr" x1="918" y1="214" x2="816" y2="214" marker-end="url(#arrow)"/>
+<rect class="gray" x="920" y="182" width="290" height="64" rx="4" stroke-width="0.5"/>
+<text class="th graytx" x="936" y="206">Mei's phone</text>
+<text class="ts graytx" x="936" y="224">any mobile Mastodon client</text>
+<text class="ts graytx" x="936" y="240">signs in, reads, posts</text>
+
+<line class="arr" x1="918" y1="294" x2="816" y2="294" marker-end="url(#arrow)"/>
+<rect class="gray" x="920" y="262" width="290" height="64" rx="4" stroke-width="0.5"/>
+<text class="th graytx" x="936" y="286">Tamara's laptop</text>
+<text class="ts graytx" x="936" y="304">the built-in web client, or a native app</text>
+<text class="ts graytx" x="936" y="320">signs in, reads, posts</text>
+
+<line class="arr" x1="918" y1="530" x2="816" y2="530" marker-end="url(#arrow)"/>
+<rect class="gray" x="920" y="498" width="290" height="64" rx="4" stroke-width="0.5"/>
+<text class="th graytx" x="936" y="522">Any authorized Solid app</text>
+<text class="ts graytx" x="936" y="540">reads and writes the pod</text>
+<text class="ts graytx" x="936" y="556">the component not involved</text>
+
+<text class="cc graytx" x="1210" y="656" text-anchor="end">(cc) 4.0 By, Jeff Zucker, 2026</text>
+</svg>
