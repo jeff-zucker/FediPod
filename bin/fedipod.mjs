@@ -416,7 +416,10 @@ if (cmd === 'up') {
   if (already) {
     console.log(`already running on port ${port} — ${url}`);
   } else {
-    recordAgent({ port });
+    // The handle too, not just the port: the agent seeds its allowed hosts
+    // from agent.json, and without it the named origin this command is about
+    // to open would be refused on the very first run.
+    recordAgent(recordedAgent().handle ? { port } : { port, handle: path.basename(HOME) });
     const child = spawn(process.execPath, [new URL('../run-agent.mjs', import.meta.url).pathname], {
       detached: true, stdio: 'ignore',
       env: { ...process.env, AP_HOME: HOME, AP_PORT: String(port) },
