@@ -29,7 +29,6 @@ const STATUS = $('status-ctl');
 const STATUS_PICK = $('status-pick');   // held: getElementById can't see it mid-render
 const BSKY_CTL = $('bsky-ctl');
 const BSKY_CONNECT_CTL = $('bsky-connect-ctl');
-const ALIAS_CTL = $('alias-ctl');
 const FOLLOWS_CTL = $('follows-ctl');
 const FOLLOWS_PICK = $('follows-pick');
 const UPDATE_CTL = $('update-ctl');
@@ -135,7 +134,6 @@ function render() {
     ['Fediverse identity', config.address || `@${config.handle} — no resolvable address`,
       config.accountId && config.address ? { href: `/admin/client/#/a/${config.accountId}` } : null],
     ['Solid identity', config.webId, config.remotePod ? { href: config.remotePod, blank: true } : null],
-    ['migration aliases', 'ctl'],
     ['Bluesky identity', 'ctl'],
     ['local store', config.home],
     // The address you actually open, not the bare number — the named origin when
@@ -198,35 +196,6 @@ function render() {
       UPDATE_WORD.textContent = words.join('; ');
       UPDATE_GO.hidden = !u?.available;
     }
-    // The accounts elsewhere this one may receive a Move from. Each entry is
-    // removable, behind a second click — servers still retrying a Move check
-    // the list, so removal is not a tidy-up.
-    if (k === 'migration aliases') {
-      dd.textContent = '';
-      for (const alias of config.aliases || []) {
-        let armed = false;
-        const rm = document.createElement('button');
-        rm.type = 'button';
-        rm.className = 'inline danger';
-        rm.textContent = '✕';
-        rm.title = '   Remove this alias';
-        rm.addEventListener('click', async () => {
-          if (!armed) {
-            armed = true;
-            rm.textContent = 'confirm ✕';
-            rm.title = '   Servers still retrying the Move check this alias — click again to remove it anyway';
-            return;
-          }
-          const r = await write('/alias', { remove: alias, confirm: true }, 'alias removed and the actor republished');
-          if (r) { config.aliases = r.aliases; render(); }
-        });
-        const chip = document.createElement('span');
-        chip.append(alias, ' ', rm);
-        dd.append(chip, ' ');
-      }
-      dd.append(ALIAS_CTL);
-      ALIAS_CTL.hidden = false;
-    }
     // Connected: the account itself, then the way out. Not: a form on the page.
     if (k === 'Bluesky identity') {
       dd.textContent = '';
@@ -259,7 +228,8 @@ function render() {
 
   // pane-others carries the create control too, so it appears even when this is
   // the only actor and even if /profiles cannot be read.
-  for (const id of ['pane-others', 'pane-identity', 'pane-upkeep']) $(id).hidden = false;
+  for (const id of ['pane-others', 'pane-identity', 'rail']) $(id).hidden = false;
+  renderAliases();
   renderOthers();
   renderInbox();
   if (config.kind === 'group') {
@@ -289,7 +259,6 @@ async function renderOthers() {
   actors = json?.identities || [];
   const sel = $('actor-pick');
   sel.textContent = '';
-  if (!actors.length) return;
   // The fediverse address, which is what the actor IS to everyone else, and the
   // only form that stays distinct: two identities can share a local handle, but
   // never a handle AND a pod. A stopped one has no address to report — nothing
@@ -306,6 +275,11 @@ async function renderOthers() {
     o.textContent = label(r) + (seen[label(r)] > 1 && r.port ? ` :${r.port}` : '');
     sel.appendChild(o);
   }
+  // The way to a NEW actor rides the same dropdown as the existing ones.
+  const add = document.createElement('option');
+  add.value = '__add';
+  add.textContent = '+ add a new account…';
+  sel.appendChild(add);
 }
 
 // Going to an actor commits a navigation and, for a stopped one, a POST that
@@ -315,6 +289,7 @@ async function renderOthers() {
 let goingToActor = false;
 const goToActor = async () => {
   if (goingToActor) return;
+  if ($('actor-pick').value === '__add') { renderOthers(); openNewActor(); return; }
   const r = actors[Number($('actor-pick').value)];
   if (!r || r.current) return;
   goingToActor = true;
@@ -370,13 +345,12 @@ for (const el of document.querySelectorAll('input[name=newMode]')) {
 // the actor you came from goes away, list included. Which panes were showing
 // is remembered rather than recomputed: whether Group and Inbox belong is a
 // decision render() already made.
-const RECORD_PANES = ['pane-identity', 'pane-group', 'pane-inbox', 'pane-upkeep'];
+const RECORD_PANES = ['pane-identity', 'pane-group', 'pane-inbox', 'rail'];
 let putBack = [];
 
 function showNewActor(on) {
   if (on) closePanels();              // nothing of the old actor left open behind it
   document.body.classList.toggle('adding', on);   // see body.adding in the CSS
-  $('others-line').hidden = on;
   $('new-actor-form').hidden = !on;
   if (on) {
     putBack = RECORD_PANES.filter(id => !$(id).hidden);
@@ -387,16 +361,13 @@ function showNewActor(on) {
   }
 }
 
-// `add new account` lives in the bar now. On this page it opens the form in
-// place; on the others it comes back here as ?new.
+// `add a new account` is the last item of the Local Actors dropdown; choosing
+// it opens the form in place. Arriving with ?new does the same.
 function openNewActor() {
   showNewActor(true);
   newActorRows();
   $('new-handle').focus();
 }
-// It is a link to ?new=1 so it behaves like one everywhere else, but on THIS
-// page the form is already here — open it in place rather than reloading.
-$('bar-add').addEventListener('click', (ev) => { ev.preventDefault(); openNewActor(); });
 $('new-actor-cancel').addEventListener('click', () => { showNewActor(false); say('nothing changed'); });
 
 $('new-actor-form').addEventListener('submit', async (ev) => {
@@ -422,6 +393,22 @@ $('new-actor-form').addEventListener('submit', async (ev) => {
 // ---- bluesky ----
 
 // The connect form lives in the floating window, like every other form here.
+// The inbound transfer panel: the aliases live here now, not in the facts.
+$('do-transfer-in').addEventListener('click', () => {
+  solWindow.show('transfer-in-form', 'Transfer an account here');
+});
+
+// The rail: one click hides the actions; on a phone it starts hidden.
+function setRail(closed) {
+  $('rail').classList.toggle('closed', closed);
+  const t = $('rail-toggle');
+  t.setAttribute('aria-expanded', String(!closed));
+  t.querySelector('.rail-arrow').textContent = closed ? '»' : '«';
+  t.title = closed ? '   Show the action panel' : '   Hide the action panel';
+}
+$('rail-toggle').addEventListener('click', () => setRail(!$('rail').classList.contains('closed')));
+if (matchMedia('(max-width: 47rem)').matches) setRail(true);
+
 $('bsky-open').addEventListener('click', () => {
   closePanels();
   solWindow.show('bsky-form', 'Connect Bluesky account');
@@ -454,6 +441,36 @@ $('bsky-disconnect').addEventListener('click', async () => {
 });
 // Adding resolves the old account on the agent side, so what lands in
 // alsoKnownAs is its canonical id, not the string typed here.
+// The accounts elsewhere this one may receive a Move from — the chips in the
+// Transfer-an-account-here panel. Each entry is removable, behind a second
+// click: servers still retrying a Move check the list, so removal is not a
+// tidy-up.
+function renderAliases() {
+  const box = $('alias-chips');
+  box.textContent = '';
+  for (const alias of config.aliases || []) {
+    let armed = false;
+    const rm = document.createElement('button');
+    rm.type = 'button';
+    rm.className = 'inline danger';
+    rm.textContent = '✕';
+    rm.title = '   Remove this alias';
+    rm.addEventListener('click', async () => {
+      if (!armed) {
+        armed = true;
+        rm.textContent = 'confirm ✕';
+        rm.title = '   Servers still retrying the Move check this alias — click again to remove it anyway';
+        return;
+      }
+      const r = await write('/alias', { remove: alias, confirm: true }, 'alias removed and the actor republished');
+      if (r) { config.aliases = r.aliases; render(); }
+    });
+    const chip = document.createElement('span');
+    chip.append(alias, ' ', rm);
+    box.append(chip, ' ');
+  }
+}
+
 let aliasBusy = false;
 $('alias-add').addEventListener('click', async () => {
   if (aliasBusy) return;
@@ -783,7 +800,7 @@ $('do-deadletter').addEventListener('click', async () => {
 const LIFECYCLE = {
   'rotate-key': { path: '/rotate-key', title: 'Rotate the signing key', done: (r) => (r.changed ? 'rotated and republished' : 'no change — the key was already fresh') },
   retire: { path: '/retire', title: 'Retire this identity', go: 'Retire it', danger: true, done: (r) => `retired ${r.deletedAt}: Delete delivered to ${r.inboxes} inbox(es)` },
-  move: { path: '/move', title: 'Transfer this identity', go: 'Transfer it', focus: 'move-target',
+  move: { path: '/move', title: 'Transfer this account away', go: 'Transfer it', focus: 'move-target',
     done: (r) => `transferred to ${r.target}: Move delivered to ${r.inboxes} inbox(es), unfollowed ${r.unfollowed}/${r.following}` },
   'move-state': { path: '/state-move', title: 'Move private data', go: 'Move it', focus: 'state-path',
     done: (r) => (r.unchanged ? 'already there — nothing moved'

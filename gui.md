@@ -8,8 +8,6 @@ Open `https://localhost:9030/` while any agent is running — it forwards you to
 * **Parking** (the status control) stops the mail and unfollows people you follow, but keeps your handle
   alive. Setting it back to active re-follows everyone — as requests, so a
   few may not come back.  If your local machine is going to be off for more than a couple of days, you should park the account because, if you don't, mail will accumulate on the pod possibly causing load issues.
-* **Move data** copies your local data to the new place and checks it before
-  switching over. The old copy is left behind for you to delete.
 * **Transfer identity** hands your followers to the account you name; your
   old handle keeps working as a redirect, and the identity is parked
   afterwards.

@@ -8,9 +8,13 @@
    see behind Phanpy — its --bg-faded-color — and that is the PAGE. --raised is
    Phanpy's --bg-color, and that is the bar sitting on top of it. Declared here
    because bar.css is on all three pages, so they cannot drift. */
-:root { --surface: #f0f2f5; --raised: #fff; }
+:root { --surface: #f0f2f5; --raised: #fff;
+  --ink: #1b1c1e; --field-bg: #ffffff; --field-bg-hover: #f7f4ee; --field-edge: #767676;
+  --chevron: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6'><path d='M1 1l4 4 4-4' fill='none' stroke='%23444444' stroke-width='1.6' stroke-linecap='round'/></svg>"); }
 @media (prefers-color-scheme: dark) {
-  :root { --surface: #18191a; --raised: #242526; }
+  :root { --surface: #18191a; --raised: #242526;
+    --ink: #e8eaed; --field-bg: #383d44; --field-bg-hover: #40464e; --field-edge: #9aa0a6;
+    --chevron: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6'><path d='M1 1l4 4 4-4' fill='none' stroke='%23dddddd' stroke-width='1.6' stroke-linecap='round'/></svg>"); }
 }
 body { background: var(--surface); }
 /* The BAND spans the window; its CONTENTS stay in the 960 column. Constraining
@@ -31,6 +35,18 @@ body { background: var(--surface); }
    destinations. */
 #bar-handle { color: var(--heading); font-size: .95rem; margin-right: .6rem; }
 #bar-handle:empty { display: none; }
+/* The actors dropdown, where a page's bar carries one instead of the static
+   handle. Styled here so every page's bar shows the same control: the same
+   light well and drawn caret every setting on the record page uses. */
+#bar select { font: inherit; font-size: .95rem; max-width: min(24rem, 55vw);
+  margin-right: .6rem; appearance: none; min-width: 0;
+  padding: .15rem 1.7rem .15rem .55rem;
+  border: 1px solid var(--field-edge); border-radius: .3rem;
+  color: var(--ink); cursor: pointer;
+  background-color: var(--field-bg); background-image: var(--chevron);
+  background-repeat: no-repeat; background-position: right .55rem center;
+  background-size: .6rem auto; }
+#bar select:hover { background-color: var(--field-bg-hover); }
 /* The app title, in px rather than rem: it is chrome, the same on every page,
    not something that should move when a page changes its base size. */
 #bar .name { flex: 1 1 auto; font-weight: 600; font-size: 24px; color: var(--heading);

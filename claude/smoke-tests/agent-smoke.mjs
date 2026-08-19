@@ -222,6 +222,27 @@ if (up) {
   check(oobTok.status === 200 && !!(await oobTok.json()).access_token,
     "a registered client's out-of-band code exchanges with its secret");
 
+  // A registered client whose redirect is OUR OWN origin (a web client served
+  // from the agent, Phanpy's exact shape) is still the third-party flow: its
+  // code must bind to it and exchange with its secret. It used to fall into
+  // the local flow and mint a code the exchange could never redeem — which
+  // broke the bundled client's login at any fresh origin.
+  const selfReg = await fetch(`http://127.0.0.1:${PORT}/api/v1/apps`, {
+    method: 'POST', headers: { ...gh, 'content-type': 'application/json' },
+    body: JSON.stringify({ client_name: 'self-origin', redirect_uris: `http://127.0.0.1:${PORT}/` }),
+  }).then(r => r.json());
+  const selfAuthz = await fetch(`http://127.0.0.1:${PORT}/oauth/authorize`
+    + `?client_id=${selfReg.client_id}&response_type=code&redirect_uri=${encodeURIComponent(`http://127.0.0.1:${PORT}/`)}&scope=read`, { headers: gh, redirect: 'manual' });
+  const selfCode = /code=([0-9a-f]+)/.exec(selfAuthz.headers.get('location') || '')?.[1];
+  const selfTok = await fetch(`http://127.0.0.1:${PORT}/oauth/token`, {
+    method: 'POST', headers: { ...gh, 'content-type': 'application/json' },
+    body: JSON.stringify({ grant_type: 'authorization_code', code: selfCode,
+      client_id: selfReg.client_id, client_secret: selfReg.client_secret,
+      redirect_uri: `http://127.0.0.1:${PORT}/` }),
+  });
+  check(selfTok.status === 200 && !!(await selfTok.json()).access_token,
+    "a registered client redirecting to the agent's own origin exchanges with its secret");
+
   // Minting for an unknown code handed a bearer to anyone who could reach the
   // port; a non-browser client sends no Origin, so the firewall never saw it.
   const forged = await fetch(`http://127.0.0.1:${PORT}/oauth/token`, {
@@ -2635,15 +2656,29 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     check(edge && fill && ratio(edge, fill) >= 3,
       `--btn-edge${dark ? ' (dark)' : ''} ${edge} on ${fill} = ${ratio(edge, fill).toFixed(2)}:1, 1.4.11`);
   }
-  for (const [label, css] of [['record', record], ['setup', setup]]) {
-    const m = /border: 1px solid (#[0-9a-f]{3,6});[^\n]*background: Field/.exec(css);
+  // The record page's inputs are token-styled wells; setup still writes the
+  // border hex inline against a white Field.
+  for (const dark of [false, true]) {
+    const fedge = token(record, '--field-edge', dark);
+    const fwell = token(record, '--field-bg', dark);
+    check(fedge && fwell && ratio(fedge, fwell) >= 3,
+      `record --field-edge${dark ? ' (dark)' : ''} ${fedge} on ${fwell} = ${fedge && fwell ? ratio(fedge, fwell).toFixed(2) : '?'}:1, 1.4.11`);
+  }
+  {
+    const m = /border: 1px solid (#[0-9a-f]{3,6});[^\n]*background: Field/.exec(setup);
     check(m && ratio(m[1], '#ffffff') >= 3,
-      `${label} input border ${m?.[1]} on a white Field = ${m ? ratio(m[1], '#ffffff').toFixed(2) : '?'}:1, 1.4.11`);
+      `setup input border ${m?.[1]} on a white Field = ${m ? ratio(m[1], '#ffffff').toFixed(2) : '?'}:1, 1.4.11`);
   }
 
   // Error text in dark mode: #b00020 on a near-black canvas is 2.40:1, and on
-  // both these pages the error IS the message.
-  for (const [label, css] of [['record', record], ['setup', setup], ['login form', masto]]) {
+  // both these pages the error IS the message. The record's .err rides the
+  // --danger token; the other two still write the hex in their dark blocks.
+  {
+    const d = token(record, '--danger', true);
+    check(d && ratio(d, SURFACE_DARK) >= 4.5,
+      `record --danger in dark ${d} = ${d ? ratio(d, SURFACE_DARK).toFixed(2) : '?'}:1`);
+  }
+  for (const [label, css] of [['setup', setup], ['login form', masto]]) {
     // From the LAST dark block: the login form has two, and the earlier one
     // is followed by the light .err, which is the value being corrected.
     const darkFrom = css.lastIndexOf('prefers-color-scheme');
@@ -2663,7 +2698,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     `the smallest rule is ${smallest}rem = ${(smallest * rootPx).toFixed(1)}px, above the 16px floor`);
 
   // --- reflow: the window does not scroll, so the column must ---
-  check(/#page \{[^}]*overflow-y: auto/.test(record),
+  check(/#content \{[^}]*overflow-y: auto/.test(record),
     'the record page has a scroll container, so its lower sections are reachable');
   check(/@media \(min-width: 34rem\)/.test(record),
     'and its two-column grids collapse to one when there is no room');
@@ -2739,18 +2774,21 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     'the site nav and the actors region are both named, so they can be told apart');
   // The buttons used to sit INSIDE the headings, so heading navigation read
   // "Upkeep Drain the inbox Recover posts Show the log Show dead letters".
-  check(/<h2><span class="hlabel">Upkeep<\/span><\/h2>/.test(record)
-    && /class="headrow"/.test(record),
-    'headings end at their own name, with the toolbar beside rather than inside');
-  check(!/\.headrow h2, \.headrow h3 \{ display: contents/.test(record),
-    'and not via display:contents, which drops the heading from the tree in some browsers');
+  // They live in the rail's labeled groups now, under headings that end at
+  // their own name.
+  check(/<nav id="rail"[^>]*aria-label="Actions"/.test(record)
+    && /<section class="rail-group" aria-label="Upkeep">\s*<h2>Upkeep<\/h2>/.test(record)
+    && !/class="headrow"/.test(record),
+    'headings end at their own name, with the buttons in the rail groups beside them');
 
   // Navigations are links: they belong in a links list, and open in a new tab.
-  for (const [label, f] of [['record', 'web/admin/index.html'], ['client', 'web/admin/client/index.html'],
-    ['setup', 'web/admin/setup/index.html']]) {
+  // The record's third destination became an item in the actors dropdown, so
+  // it carries two; the other pages keep all three.
+  for (const [label, f, n] of [['record', 'web/admin/index.html', 2], ['client', 'web/admin/client/index.html', 2],
+    ['setup', 'web/admin/setup/index.html', 3]]) {
     const page = read(f);
-    check((page.match(/<a id="bar-(fediverse|manage|add)" href="/g) || []).length === 3,
-      `${label}'s three destinations are links, not buttons that assign location.href`);
+    check((page.match(/<a id="bar-(fediverse|manage|add)" href="/g) || []).length === n,
+      `${label}'s destinations are links, not buttons that assign location.href`);
   }
   check(!/location\.href = href/.test(read('web/admin/bar.js')),
     'and bar.js no longer drives them by hand');

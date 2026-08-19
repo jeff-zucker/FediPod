@@ -1,6 +1,13 @@
 # Changes
 
 ## 2026-08-19
+- The record page is redesigned: the actions live in a collapsible rail
+  beside the facts; the actor dropdown rides the top bar in place of the
+  static handle, with "add a new account" as its last item; migration
+  aliases moved into a "Transfer an account here" panel beside "Transfer
+  this account away" (the renamed outbound transfer); controls share one
+  style in both color schemes; Move data is off the page for now
+  (`fedipod state --to` still does it).
 - The agent notices when a newer FediPod is published (one GET of the repo's
   package.json, daily; `AP_UPDATE_CHECK=0` turns it off) and offers the
   update: an Update button on the record page's software row, or

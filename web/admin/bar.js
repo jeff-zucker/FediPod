@@ -25,4 +25,37 @@
       try { el.textContent = `@${s.handle}@${new URL(s.actor).host}`; } catch { /* odd actor url */ }
     }
   }).catch(() => { /* not up yet; the bar still works */ });
+
+  // The actors dropdown, on a page whose bar carries one. The record page
+  // wires its own richer version (it can start a stopped actor and open the
+  // new-account form in place), so this one stands down there.
+  const pick = document.getElementById('actor-pick');
+  if (pick && !document.getElementById('new-actor-form')) {
+    const base = location.pathname.replace(/\/admin\/.*$/u, '');
+    fetch(base + '/profiles').then(r => (r.ok ? r.json() : null)).then((j) => {
+      const actors = j?.identities || [];
+      pick.textContent = '';
+      const label = (r) => (r.address || r.handle || r.name)
+        + (r.mode && r.mode !== 'active' ? ` (${r.mode})` : '') + (r.mode ? '' : ' (stopped)');
+      for (const [i, r] of actors.entries()) {
+        const o = document.createElement('option');
+        o.value = String(i);
+        o.selected = !!r.current;
+        o.textContent = label(r);
+        pick.appendChild(o);
+      }
+      const add = document.createElement('option');
+      add.value = '__add';
+      add.textContent = '+ add a new account…';
+      pick.appendChild(add);
+      pick.addEventListener('change', () => {
+        if (pick.value === '__add') { location.href = base + '/admin/?new=1'; return; }
+        const r2 = actors[Number(pick.value)];
+        if (!r2 || r2.current) return;
+        // A running actor's client; a stopped one is started from its record.
+        if (r2.mode && r2.admin) location.href = r2.admin + 'client/';
+        else if (r2.admin) location.href = r2.admin;
+      });
+    }).catch(() => { pick.hidden = true; });
+  }
 })();

@@ -9,34 +9,69 @@
    Two accents, kept apart on purpose: --link is anything you can act on,
    --heading is structure. Using one colour for both made the headings
    look clickable. */
-:root { color-scheme: light dark; font-size: 112.5%; --link: #1a4f8a; --heading: #5b3a8e;
-  /* Warm, so it sits against the blue label rather than under it — and
-     nowhere near the purple the headings use. */
-  /* 3.54:1 against the fill and 3.61:1 against the page. At #b9ad99 it was
-     1.93:1 and 2.21:1 — under the 3:1 a control boundary needs, and the fill
-     alone is 1.15:1, so there was no second way to see where a button was. */
-  --btn-bg: #f4efe6; --btn-edge: #8a7a61; }
-/* The page itself never scrolls: the body is exactly the window, and the open
-   panel takes whatever height is left over rather than pushing past the fold. */
+/* One control chassis, one selector per element kind so nothing can fall
+   through unstyled: every control sits in the same light well; a select
+   carries a drawn chevron, a button carries the action-blue text. */
+:root { color-scheme: light dark; font-size: 112.5%;
+  --link: #1a4f8a; --heading: #5b3a8e;
+  --ink: #1b1c1e; --muted: #5f6368;
+  --btn-bg: #f4efe6; --btn-bg-hover: #ece3d2; --btn-bg-active: #e2d5bd; --btn-edge: #8a7a61;
+  --field-bg: #ffffff; --field-bg-hover: #f7f4ee; --field-edge: #767676;
+  --danger: #b00020; --ring: var(--link);
+  --chevron: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6'><path d='M1 1l4 4 4-4' fill='none' stroke='%23444444' stroke-width='1.6' stroke-linecap='round'/></svg>"); }
+@media (prefers-color-scheme: dark) {
+  :root { --link: #7fb3e8; --heading: #b9a3e3;
+    --ink: #e8eaed; --muted: #a5a9ad;
+    --btn-bg: #35302a; --btn-bg-hover: #423b31; --btn-bg-active: #4d4436; --btn-edge: #9a8d7a;
+    --field-bg: #383d44; --field-bg-hover: #40464e; --field-edge: #9aa0a6;
+    --danger: #ff8a8a;
+    --chevron: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6'><path d='M1 1l4 4 4-4' fill='none' stroke='%23dddddd' stroke-width='1.6' stroke-linecap='round'/></svg>"); }
+}
+/* The page itself never scrolls: the body is exactly the window; the content
+   column beside the rail is the scroll container. */
 html { height: 100%; }
 body { font: 1rem/1.5 system-ui, sans-serif; margin: 0; height: 100dvh;
   box-sizing: border-box; display: flex; flex-direction: column; overflow: hidden; }
-/* The bar spans the window; everything under it stays in a centred column. */
-/* 960, matching the bar above it, and wide enough for the longest control line
-   — Upkeep's label plus its four buttons — to stay on one line. */
-/* The WINDOW never scrolls; the column does. Without an overflow here the
-   page had no scroll container anywhere, so at zoom — or just a short window —
-   Upkeep and Lifecycle were cut off with no way to reach them. The two escape
-   hatches below only ever covered adding an account and a group console. */
+/* The bar spans the window; the rail and the content column share the same
+   centred 960 underneath it. */
 #page { flex: 1 1 auto; min-height: 0; width: 100%; max-width: 960px; margin: 0 auto;
-  padding: 1.75rem 1rem 1rem; box-sizing: border-box;
-  display: flex; flex-direction: column; overflow-y: auto; }
-#page > section, #page > nav, #page > p { flex: 0 0 auto; }
+  padding: 1.25rem 1rem 1rem; box-sizing: border-box;
+  display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 1.25rem; }
+#content { min-width: 0; min-height: 0; overflow-y: auto; }
 /* Two cases where the page may grow past the window: the new-account form, and
-   a group console, whose members / requests / review / carried lists have no
-   bound. Both scroll on the window rather than inside a box. */
+   a group console, whose lists have no bound. Both scroll on the window. */
 body.adding, body.group { height: auto; min-height: 100dvh; overflow: auto; }
-body.adding #page, body.group #page { flex: 0 0 auto; }
+body.adding #page { display: block; }
+body.adding #content, body.group #content { overflow: visible; min-height: auto; }
+body.group #page { min-height: auto; }
+body.adding #rail { display: none; }
+/* The action rail: a raised card of everything you can DO, so the facts keep
+   the page. Collapsed it is a slim strip holding only the toggle arrow. */
+#rail { width: 14.5rem; box-sizing: border-box; padding: .6rem .8rem .9rem;
+  align-self: start; max-height: 100%; overflow-y: auto;
+  background: var(--raised); border-radius: .5rem; }
+#rail.closed { width: auto; padding: .4rem; }
+#rail.closed .rail-groups { display: none; }
+#rail-toggle { display: flex; align-items: center; justify-content: flex-end;
+  width: 100%; margin: 0; padding: .2rem .3rem; border: 0;
+  background: none; font: inherit; font-weight: 600; color: var(--heading);
+  cursor: pointer; border-radius: .3rem; }
+#rail-toggle:hover, #rail-toggle:active { background: none; }
+.rail-arrow { color: var(--link); }
+.rail-group h2 { display: block; font-size: .9rem; font-weight: 600;
+  text-transform: uppercase; letter-spacing: .06em; margin: .9rem 0 .35rem; }
+.rail-group button { display: block; width: 100%; text-align: left;
+  margin: .35rem 0; font-size: .95rem; padding: .35rem .7rem; font-weight: 400; }
+.rail-group .apart { margin-top: 1rem; }
+/* One column on a phone: the rail becomes a strip of pills above the facts. */
+@media (max-width: 47rem) {
+  #page { display: flex; flex-direction: column; gap: .9rem; }
+  #rail { width: auto; max-height: none; overflow: visible; }
+  .rail-group { display: flex; flex-wrap: wrap; align-items: baseline; gap: .1rem .45rem; }
+  .rail-group h2 { flex: 0 0 100%; margin: .5rem 0 .1rem; }
+  .rail-group button { display: inline-block; width: auto; margin: .2rem 0; }
+  #content { flex: 1 1 auto; }
+}
 /* `hidden` is a UA rule, so ANY author `display` beats it — `dl { display: grid }`
    left the facts on screen with the attribute set. Everything here toggles with
    `hidden`, so it has to outrank them all. */
@@ -47,109 +82,80 @@ body.adding #page, body.group #page { flex: 0 0 auto; }
 #say:empty, #fatal:empty { display: none; }
 h1, h2, h3 { color: var(--heading); }
 a { color: var(--link); }
-/* Every heading below the title is the same: h2 and h3 differ in structure,
-   not in appearance. Flex rows, so the whitespace between the label and the
-   first button is not a text node of its own width — that is what left the
-   Actors select 3px out from the buttons below it. */
 h2, h3 { font-size: 1.15rem; font-weight: 600; display: flex; flex-wrap: wrap;
   align-items: baseline; gap: .6rem; }
-/* The buttons used to live INSIDE these headings, so heading navigation — the
-   way a screen-reader user surveys a page — announced "Upkeep Drain the inbox
-   Recover posts Show the log Show dead letters", and every label twice. The row
-   carries the layout now and the heading carries only its own name.
-   Deliberately NOT `display: contents` on the heading: it drops the element
-   from the accessibility tree in some browsers, which is the very thing this
-   change is trying to protect. */
-.headrow { display: flex; flex-wrap: wrap; align-items: baseline; gap: .6rem;
-  margin: 1.25rem 0 .5rem; }
-.headrow h2, .headrow h3 { display: block; margin: 0; }
-h2 { margin: 2rem 0 .5rem; }
-/* Identity is the first section, right under the Actors line — it does not need
-   the separation the later headings do. */
-#pane-identity h2 { margin-top: .75rem; }
-/* Upkeep sits evenly between what is above it and the Lifecycle line below it:
-   the same gap on both sides, which is h3's top margin. The sections are flex
-   items, so their margins do NOT collapse — the facts list has to give up its
-   bottom margin or it adds to the one above. */
-#pane-upkeep h2 { margin-top: 1.25rem; }
-/* Identity is a two-column row like the others: the heading in the label
-   column, the facts beside it — so the first fact sits on the heading's own
-   line rather than under it. Baseline, not top: the heading is 23px and the
-   rows are 20px, and aligning their boxes would leave them visibly off. */
-/* One column when there is no room for two, in the same spirit as the
-   flex-wrap on the headings above: at 320px the two tracks together outrun
-   #page and the value column collapsed to about one character wide. */
-#pane-identity { display: block; }
-@media (min-width: 34rem) {
-  #pane-identity { display: grid; grid-template-columns: calc(8.5rem + .6rem) 1fr;
-    align-items: baseline; }
-  dl { display: grid; grid-template-columns: max-content 1fr; gap: .2rem .9rem; }
-}
-#pane-identity h2 { margin: 1.25rem 0 .5rem; }
-#facts { margin: 1.25rem 0 0; }
+h2 { margin: 1.5rem 0 .5rem; }
+h3 { margin: 1.25rem 0 .35rem; }
+#facts { margin: .75rem 0 0; }
 /* They sit after the kind, on that row, so they need a gap from the word and
    must not stretch the row's line height. */
-/* break-all is for the long identifiers in the other rows; these are words. */
 #moderation { margin-left: .6rem; word-break: normal; }
-/* Muted like the dt column: these qualify the kind, they don't compete with it. */
-#moderation label { display: inline; margin: 0 .3rem 0 .5rem; font-weight: normal; color: #666; }
-/* Font up to the page's — a default select is under 16px — and padding down to
-   nothing tall, so the kind row keeps its line height. Bordered like the text
-   inputs above: the border is what makes a control distinct from the page. */
-#moderation select, #status-ctl select { font: inherit; padding: 0 .1rem;
-  border: 1px solid #767676; border-radius: .3rem; background: Field; color: FieldText; }
-#pane-identity > p { grid-column: 1 / -1; }
-h3 { margin: 1.25rem 0 .35rem; }
-/* The heading word sits in a column of its own, so the control that follows it
-   — a select on one row, a button on the next — lines up down the page. */
-.hlabel { display: inline-block; min-width: 8.5rem; }
+#moderation label { display: inline; margin: 0 .3rem 0 .5rem; font-weight: normal; color: var(--muted); }
 p { margin: .5rem 0; }
-.sub { color: #666; margin-top: 0; }
+.sub { color: var(--muted); margin-top: 0; }
 fieldset { border: 1px solid #bbb; border-radius: .4rem; margin: 1rem 0; padding: .75rem 1rem 1rem; }
 legend { padding: 0 .3rem; font-weight: 600; color: var(--heading); }
 label { display: block; margin: .75rem 0 .2rem; }
-.hint { color: #666; font-size: .9rem; margin: .15rem 0 0; }
+.hint { color: var(--muted); font-size: .9rem; margin: .15rem 0 0; }
+/* SETTINGS: light wells, unmistakably fields, in both schemes. */
 input[type=text], input[type=email], input[type=url], input[type=password], textarea {
   font: inherit; width: 100%; padding: .5rem; box-sizing: border-box;
-  /* 4.54:1 against a white Field; #999 was 2.85:1, under the 3:1 a control
-     boundary needs — and this border is the whole of what makes an input
-     distinct from the page. */
-  border: 1px solid #767676; border-radius: .3rem; background: Field; color: FieldText;
-}
-button { font: inherit; padding: .45rem 1rem; border-radius: .3rem; border: 1px solid var(--btn-edge);
-  background: var(--btn-bg); color: var(--link); cursor: pointer; }
+  border: 1px solid var(--field-edge); border-radius: .3rem;
+  background: var(--field-bg); color: var(--ink); }
+input::placeholder { color: var(--muted); opacity: 1; }
+select { font: inherit; appearance: none; max-width: 100%; min-width: 0;
+  padding: .15rem 1.7rem .15rem .55rem;
+  border: 1px solid var(--field-edge); border-radius: .3rem;
+  color: var(--ink); cursor: pointer;
+  background-color: var(--field-bg); background-image: var(--chevron);
+  background-repeat: no-repeat; background-position: right .55rem center;
+  background-size: .6rem auto; }
+select:hover { background-color: var(--field-bg-hover); }
+/* ACTIONS: the same light well every setting sits in — one control chassis
+   for the whole page; the blue text is what says a button DOES something. */
+button { font: inherit; padding: .45rem 1rem; border-radius: .3rem; border: 1px solid var(--field-edge);
+  background: var(--field-bg); color: var(--link); cursor: pointer; }
+button:hover { background: var(--field-bg-hover); }
+button:active { background: var(--field-bg-hover); }
 button.primary { font-weight: 600; }
-button.danger { border-color: #b00020; color: #b00020; }
-button:disabled { opacity: .5; cursor: default; }
-dl { margin: .5rem 0; }        /* grid only above 34rem — see the media query above */
-dt { color: #666; }
-dd { margin: 0; overflow-wrap: anywhere; }
+button.danger { border-color: var(--danger); color: var(--danger); }
+button:disabled { opacity: .55; cursor: default; }
+/* Small buttons that sit in a line of text. */
+button.inline { font-size: .9rem; padding: .15rem .6rem; font-weight: 400; }
+/* One visible ring for everything focusable. */
+:is(button, select, input, textarea, a):focus-visible {
+  outline: 2px solid var(--ring); outline-offset: 2px; }
+dl { margin: .5rem 0; }        /* grid only above 34rem — see the media query below */
+@media (min-width: 34rem) {
+  dl { display: grid; grid-template-columns: max-content minmax(0, 1fr);
+    gap: .6rem .9rem; align-items: baseline; }
+}
+dt { color: var(--muted); }
+dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
 .rows { list-style: none; padding: 0; margin: .3rem 0; }
 .rows li { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center;
   padding: .4rem 0; border-top: 1px solid #ddd; }
 .rows li span { flex: 1 1 18rem; overflow-wrap: anywhere; }
-.muted { color: #666; }
-.others { font-size: 1.15rem; margin: .5rem 0 0; display: flex; flex-wrap: wrap;
-  align-items: baseline; gap: .5rem .6rem; }
-.others-label { color: var(--heading); font-weight: 600; font-size: 1.15rem; margin: 0; }
-#actor-pick, #bsky-crosspost { font: inherit; padding: .2rem .4rem; border-radius: .3rem;
-  border: 1px solid var(--btn-edge); background: var(--btn-bg); color: var(--link); }
+.muted { color: var(--muted); }
+/* The actors dropdown rides the bar, at the bar's own text scale. */
+#bar select { font-size: .95rem; }
 #bsky-ctl { display: inline-flex; gap: .6rem; align-items: baseline; margin-left: .6rem; }
-/* Small buttons that sit in a line of text. */
-button.inline { font-size: .9rem; padding: .15rem .6rem; font-weight: 400; }
+/* The alias row inside the Transfer-an-account-here panel. */
+#alias-ctl { display: flex; gap: .5rem; align-items: center; margin-top: .3rem; }
+#alias-ctl input { flex: 1 1 12rem; width: auto; }
+#alias-chips span { display: inline-flex; align-items: center; gap: .35rem;
+  border: 1px solid var(--btn-edge); border-radius: 999px;
+  padding: .05rem .25rem .05rem .75rem; margin: 0 .3rem .3rem 0; }
 /* Radios read as one line each: label { display: block } alone drops the text
    below the control. */
 .choice { display: block; margin: .35rem 0; font-weight: normal; }
 .choice input { width: auto; margin-right: .4rem; }
 .warn { border-left: .25rem solid #c60; padding-left: .75rem; }
-.err { border-left: .25rem solid #b00020; padding-left: .75rem; color: #b00020; }
+.err { border-left: .25rem solid var(--danger); padding-left: .75rem; color: var(--danger); }
 .ok { border-left: .25rem solid #2a7; padding-left: .75rem; }
 pre { overflow-x: auto; background: #0001; padding: .6rem; border-radius: .3rem; font-size: .9rem; }
 @media (prefers-color-scheme: dark) {
-  :root { --link: #7fb3e8; --heading: #b9a3e3; --btn-bg: #35302a; --btn-edge: #9a8d7a; }
-  .sub, .hint, dt, .muted, #moderation label { color: #aaa; } fieldset { border-color: #555; } .rows li { border-color: #444; }
-  .err { color: #ff8a8a; border-left-color: #ff8a8a; }
-  button.danger { border-color: #ff8a8a; color: #ff8a8a; }
+  fieldset { border-color: #555; } .rows li { border-color: #444; }
 }
 </style>
 <link rel="stylesheet" href="bar.css">
@@ -160,12 +166,38 @@ pre { overflow-x: auto; background: #0001; padding: .6rem; border-radius: .3rem;
 <!-- The same bar the client view carries: one thing, two views. -->
 <nav id="bar" aria-label="Site">
   <h1 class="name">FediPod</h1>
-  <span id="bar-handle"></span>
+  <select id="actor-pick" aria-label="Local actors"
+    title="   Every actor on this machine; choosing one goes to its record"></select>
   <a id="bar-fediverse" href="client/" title="   Open the client and read your timeline">visit account</a>
   <a id="bar-manage" href="./" title="   The record: what this actor is, and what you can do to it" aria-current="page">manage account</a>
-  <a id="bar-add" href="./?new=1" title="   Set up another actor on this machine, with its own pod">add new account</a>
 </nav>
 <main id="page">
+
+<!-- Everything you can DO, in one collapsible card; the facts keep the page.
+     The buttons are the same ones the two action rows used to hold — same
+     ids, same floating panels. -->
+<nav id="rail" hidden aria-label="Actions">
+  <button type="button" id="rail-toggle" aria-expanded="true" aria-label="Actions"
+    title="   Hide the action panel"><span class="rail-arrow" aria-hidden="true">«</span></button>
+  <div class="rail-groups">
+    <section class="rail-group" aria-label="Upkeep">
+      <h2>Upkeep</h2>
+      <button id="do-drain" title="   Fetch and handle whatever is waiting in the inbox now">Drain the inbox</button>
+      <button id="do-rebuild" title="   Put back posts this machine lost, from what the pod still holds">Recover posts</button>
+      <button id="do-log" title="   This agent's recent log lines">Show the log</button>
+      <button id="do-deadletter" title="   Deliveries that failed for good and were set aside">Show dead letters</button>
+    </section>
+    <section class="rail-group" aria-label="Lifecycle">
+      <h2>Lifecycle</h2>
+      <button id="do-rotate-key" title="   Replace the signing key and tell other servers the new one" data-confirm="rotate-key">Rotate signing key</button>
+      <button id="do-transfer-in" title="   List an old account as an alias, so its server sends its followers here">Transfer an account here</button>
+      <button id="do-move" title="   Your followers go to the account you name; this handle keeps resolving as a redirect" data-confirm="move">Transfer this account away</button>
+      <button id="do-retire" title="   End this identity for good — a Delete, then a Tombstone" class="danger apart" data-confirm="retire">Retire identity</button>
+    </section>
+  </div>
+</nav>
+
+<div id="content">
 <p class="err" id="fatal" role="alert"></p>
 <p aria-live="polite" id="say"></p>
 
@@ -173,11 +205,6 @@ pre { overflow-x: auto; background: #0001; padding: .6rem; border-radius: .3rem;
      no page there to open. Plain links — a top-level navigation sends no
      Origin, so each agent's own firewall lets it through. -->
 <section id="pane-others" aria-label="Actors on this machine" hidden>
-  <p class="others" id="others-line">
-    <label class="others-label hlabel" for="actor-pick">Local Actors:</label>
-    <select id="actor-pick"></select>
-  </p>
-
   <!-- Everything setup cannot work without. The bio, avatar and UI password it
        also offers are all changeable afterwards, so they are not asked here —
        the fuller form is what the new actor opens on. -->
@@ -241,7 +268,6 @@ pre { overflow-x: auto; background: #0001; padding: .6rem; border-radius: .3rem;
 </section>
 
 <section id="pane-identity" hidden>
-  <h2><span class="hlabel">Identity</span></h2>
   <dl id="facts"></dl>
   <!-- Declared here, and render() puts these on the kind row — the row they
        belong to is generated, so this is the only place they can be written
@@ -285,35 +311,11 @@ pre { overflow-x: auto; background: #0001; padding: .6rem; border-radius: .3rem;
     </select>
     <button type="button" id="bsky-disconnect" class="inline danger" title="   Forget the Bluesky session and remove the stored credential">Disconnect</button>
   </span>
-  <span id="alias-ctl" hidden>
-    <input type="text" id="alias-input" placeholder="@you@old.server" autocomplete="off"
-      title="   The account you are moving here from; its server checks this list before it will send the Move">
-    <button type="button" id="alias-add" class="inline"
-      title="   Resolve the old account, list it in alsoKnownAs, and republish the actor">Add alias</button>
-  </span>
 </section>
 
-<section id="pane-upkeep" hidden>
-  <div class="headrow">
-    <h2><span class="hlabel">Upkeep</span></h2>
-    <button id="do-drain" title="   Fetch and handle whatever is waiting in the inbox now" class="inline">Drain the inbox</button>
-    <button id="do-rebuild" title="   Put back posts this machine lost, from what the pod still holds" class="inline">Recover posts</button>
-    <button id="do-log" title="   This agent's recent log lines" class="inline">Show the log</button>
-    <button id="do-deadletter" title="   Deliveries that failed for good and were set aside" class="inline">Show dead letters</button>
-  </div>
-  <div class="headrow">
-    <h3><span class="hlabel">Lifecycle</span></h3>
-    <button id="do-rotate-key" title="   Replace the signing key and tell other servers the new one" class="inline" data-confirm="rotate-key">Rotate signing key</button>
-    <button id="do-move-state" title="   Move where this identity's private data is kept" class="inline" data-confirm="move-state">Move data</button>
-    <button id="do-move" title="   Transfer this identity: your followers go to another account" class="inline" data-confirm="move">Transfer identity</button>
-    <button id="do-retire" title="   End this identity for good — a Delete, then a Tombstone" class="inline danger" data-confirm="retire">Retire identity</button>
-  </div>
-
-  <!-- The inbox-gateway / multi-user-front controls are deliberately not shown
-       in the UI yet. The backend routes (GET/POST /gateway) exist and work; the
-       operator surface is parked until the feature is ready to expose. -->
-
-</section>
+<!-- The inbox-gateway / multi-user-front controls are deliberately not shown
+     in the UI yet. The backend routes (GET/POST /gateway) exist and work; the
+     operator surface is parked until the feature is ready to expose. -->
 
 <section id="pane-group" hidden>
   <!-- Both queues are consequences of a moderation setting: with the setting off
@@ -371,6 +373,22 @@ pre { overflow-x: auto; background: #0001; padding: .6rem; border-radius: .3rem;
   <div id="win-bar"><span id="win-title"></span><button type="button" id="win-close" title="   Close this panel" aria-label="Close panel">✕</button></div>
   <div id="win-body">
 <pre id="output" tabindex="0" role="region" aria-label="Output" hidden></pre>
+<!-- The inbound half of transferring: the aliases its old server checks before
+     it will send the Move. The outbound half is its own panel (confirm-form,
+     warn-move) — additive and reversible here, followers handed away there,
+     so the two directions never share a door. -->
+<div id="transfer-in-form" hidden>
+  <p class="hint">List the old account here first — its server checks this list before it
+    will send the move. Then start the transfer from the old account's own settings, and
+    set new followers to "accepted automatically" so the whole wave lands.</p>
+  <p id="alias-chips"></p>
+  <span id="alias-ctl">
+    <input type="text" id="alias-input" placeholder="@you@old.server" autocomplete="off"
+      title="   The account you are moving here from; its server checks this list before it will send the Move">
+    <button type="button" id="alias-add" class="inline"
+      title="   Resolve the old account, list it in alsoKnownAs, and republish the actor">Add alias</button>
+  </span>
+</div>
 <form id="bsky-form" hidden>
   <ol class="hint">
     <li>Get an account on Bluesky or another ATProto server.</li>
@@ -454,6 +472,7 @@ pre { overflow-x: auto; background: #0001; padding: .6rem; border-radius: .3rem;
   </div>
 </div>
 
+</div>
 </main>
 
 <script src="bar.js"></script>

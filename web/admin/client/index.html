@@ -26,10 +26,10 @@ main { flex: 1 1 auto; min-height: 0; display: flex; }
      which is why framing it needs nothing opened beyond frame-ancestors 'self'. -->
 <nav id="bar" aria-label="Site">
   <h1 class="name">FediPod</h1>
-  <span id="bar-handle"></span>
+  <select id="actor-pick" aria-label="Local actors"
+    title="   Every actor on this machine; choosing one opens its client"></select>
   <a id="bar-fediverse" href="./" title="   Open the client and read your timeline" aria-current="page">visit account</a>
   <a id="bar-manage" href="../" title="   The record: what this actor is, and what you can do to it">manage account</a>
-  <a id="bar-add" href="../?new=1" title="   Set up another actor on this machine, with its own pod">add new account</a>
 </nav>
 
 <main>
