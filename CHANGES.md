@@ -1,6 +1,11 @@
 # Changes
 
 ## 2026-08-19
+- Whalebird (and other megalodon-based clients) can sign in. Two changes:
+  nodeinfo names the software `hometown` — a Mastodon fork those clients'
+  server detection accepts; FediPod's own name was refused before sign-in
+  could start — and a registered client using the out-of-band authorization
+  flow now gets a code its secret can actually redeem.
 - Agent addresses are https: `https://<handle>.localhost:<port+1000>`
   everywhere an address is printed, opened or linked, and the well-known door
   answers at `https://localhost:9030/`. Run `fedipod https --trust` once to

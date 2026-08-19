@@ -153,7 +153,7 @@ if (up) {
   const niDoc = await fetch(`http://127.0.0.1:${PORT}/nodeinfo/2.0`, { headers: gh });
   const niDocBody = await niDoc.json();
   check(niPtr.status === 200 && /\/nodeinfo\/2\.0$/.test(niPtrBody.links?.[0]?.href)
-    && niDoc.status === 200 && niDocBody.software?.name === 'fedipod'
+    && niDoc.status === 200 && niDocBody.software?.name === 'hometown'
     && niDocBody.protocols?.includes('activitypub'),
     'nodeinfo pointer + document served');
 
@@ -200,6 +200,22 @@ if (up) {
   });
   const tokBody = await tok.json();
   check(!!tokBody.access_token, 'oauth authorize → token round-trip');
+
+  // A REGISTERED client using the out-of-band urn is the third-party flow:
+  // its code must be bound to it and exchangeable with its secret (this is
+  // how Whalebird signs in). It used to fall into the local flow and mint a
+  // code the exchange could never redeem.
+  const oobAuthz = await fetch(`http://127.0.0.1:${PORT}/oauth/authorize`
+    + `?redirect_uri=urn:ietf:wg:oauth:2.0:oob&client_id=${appRec.client_id}&response_type=code&scope=read`, { headers: gh });
+  const oobCode = (await oobAuthz.json()).code;
+  const oobTok = await fetch(`http://127.0.0.1:${PORT}/oauth/token`, {
+    method: 'POST', headers: { ...gh, 'content-type': 'application/json' },
+    body: JSON.stringify({ grant_type: 'authorization_code', code: oobCode,
+      client_id: appRec.client_id, client_secret: appRec.client_secret,
+      redirect_uri: 'urn:ietf:wg:oauth:2.0:oob' }),
+  });
+  check(oobTok.status === 200 && !!(await oobTok.json()).access_token,
+    "a registered client's out-of-band code exchanges with its secret");
 
   // Minting for an unknown code handed a bearer to anyone who could reach the
   // port; a non-browser client sends no Origin, so the firewall never saw it.
