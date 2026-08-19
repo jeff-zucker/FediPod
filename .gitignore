@@ -4,6 +4,10 @@ node_modules/
 /dist/
 *.log
 
+# the signup carry-over the installer writes into the checkout — it holds the
+# gateway receipt secret and is deleted when the first setup consumes it.
+first-run.json
+
 # agent state, in case someone runs with AP_HOME pointing into the checkout —
 # these hold the pod credential, the signing key and client tokens.
 credential.json

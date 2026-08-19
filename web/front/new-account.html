@@ -51,43 +51,44 @@ FediPod is experimental and free to use.  See the <a href="https://github.com/je
   </div>
 </fieldset>
 
-<!-- solo: get a pod, run the agent, come back and attach -->
-<section id="create-form" hidden>
-  <h2>Create a new solo account</h2>
-  <p class="hint">A FediPod is two things you own: a <strong>pod</strong> (always-on storage with your name on
-    it) and an <strong>agent</strong> (the app you read and post from, on any of your machines). A browser
-    cannot install the agent for you — there is exactly one command to run.</p>
-  <ol class="steps">
-    <li><strong>Get a pod</strong>, if you don't have one: any Solid pod host that offers
-      <em>https subdomains</em> works, or a Community Solid Server you run yourself.</li>
-    <li><strong>Install and start the agent</strong> on your own machine:
-      <pre>curl -fsSL https://fedipod.net/install | sh
-cd ~/FediPod &amp;&amp; npm start</pre>
-      Setup opens in your browser and can also create the pod account for you.
-      (Prefer to see what you run? The installer is plain shell at
-      <a href="/install">/install</a>, or clone
-      <a href="https://github.com/jeff-zucker/FediPod">the repo</a> yourself.)</li>
-    <li><strong>Come back here and attach</strong>, so this gateway starts filtering your mail.</li>
-  </ol>
-  <p id="create-pods" class="hint" hidden>This host also offers pods — you can take one at step 1 instead of
-    bringing your own; it stays exportable, so you can leave with everything.</p>
-</section>
+<!-- create: the signup itself — prove the pod, take the name, then install -->
+<form id="create-form" hidden>
+  <h2 id="create-title">Create a new solo account</h2>
+  <p class="hint" id="create-group-hint" hidden>A group is an account people join: members post to it, and it
+    carries each member's post to everyone in the group. Mastodon users can join with no pod of their own.
+    A group needs a pod of its own.</p>
+  <p class="hint">Your account lives on a pod you own; this gateway filters its mail.</p>
 
-<!-- group: the same install as solo, with the group choice made in setup -->
-<section id="group-form" hidden>
-  <h2>Create a new group account</h2>
-  <p class="hint">A group is an account people join: members post to it, and it carries each member's
-    post to everyone in the group. Mastodon users can join with no pod of their own. A group needs
-    a pod of its own.</p>
-  <ol class="steps">
-    <li><strong>Get a pod for the group</strong>, if you don't have one: any Solid pod host that offers
-      <em>https subdomains</em> works, or a Community Solid Server you run yourself.</li>
-    <li><strong>Install and start the agent</strong> on your own machine, and choose a group account in setup:
-      <pre>curl -fsSL https://fedipod.net/install | sh
-cd ~/FediPod &amp;&amp; npm start</pre></li>
-    <li><strong>Come back here and attach</strong>, so this gateway starts filtering the group's mail.</li>
-  </ol>
-</section>
+  <label for="create-pod">Your pod address</label>
+  <input type="url" id="create-pod" autocomplete="off" placeholder="https://you.solidcommunity.net/">
+  <p class="hint">No pod yet? Any Solid pod host that offers <em>https subdomains</em> works, or a Community
+    Solid Server you run yourself. Get the pod, then come back here.</p>
+  <p id="create-pods" class="hint" hidden>This host also offers pods — you can take one instead of bringing
+    your own; it stays exportable, so you can leave with everything.</p>
+
+  <label for="create-issuer">Where you log in (your identity provider)</label>
+  <input type="url" id="create-issuer" autocomplete="off" placeholder="https://solidcommunity.net">
+
+  <label for="create-handle">Your handle (the name in your address; permanent)</label>
+  <input type="text" id="create-handle" autocomplete="off" autocapitalize="off" spellcheck="false"
+    inputmode="latin" placeholder="you" aria-describedby="create-handle-msg">
+  <p class="msg" id="create-handle-msg" aria-live="polite"></p>
+
+  <label>Your fediverse address</label>
+  <div class="choices" role="group" aria-label="Address">
+    <button type="button" id="addr-pod" aria-pressed="false"><b id="addr-pod-name">@you@your.pod</b><span>your handle is tied to your pod &mdash; you can drop the gateway and keep everything</span></button>
+    <button type="button" id="addr-front" aria-pressed="false"><b id="addr-front-name">@you@this.host</b><span>your handle is tied to the gateway &mdash; you can move pods and keep your handle</span></button>
+  </div>
+
+  <p style="margin-top:1.1rem">
+    <button type="button" id="create-continue" class="primary" disabled>Sign in with your pod &amp; create</button>
+  </p>
+  <p class="hint">Signing in proves the pod is yours — no password ever reaches this gateway.</p>
+  <p class="hint" id="create-note" hidden></p>
+</form>
+
+<!-- what a finished signup hands over: the one install command -->
+<section id="create-done" hidden></section>
 
 <!-- manage: the existing-account actions, one panel each -->
 <section id="manage-form" hidden>
@@ -166,11 +167,12 @@ cd ~/FediPod &amp;&amp; npm start</pre></li>
   }).catch(() => {});
 
   const picks = ['pick-solo', 'pick-group', 'pick-manage'];
-  const panels = { 'pick-solo': 'create-form', 'pick-group': 'group-form',
+  const panels = { 'pick-solo': 'create-form', 'pick-group': 'create-form',
     'pick-manage': 'manage-form' };
   const subPicks = ['pick-attach', 'pick-detach', 'pick-transfer'];
   const subPanels = { 'pick-attach': 'attach-form', 'pick-detach': 'detach-form',
     'pick-transfer': 'transfer-form' };
+  let createKind = 'person';
   function subPick(which) {
     for (const id of subPicks) {
       $(id).setAttribute('aria-pressed', String(id === which));
@@ -178,11 +180,16 @@ cd ~/FediPod &amp;&amp; npm start</pre></li>
     }
   }
   function pick(which) {
-    for (const id of picks) {
-      $(id).setAttribute('aria-pressed', String(id === which));
-      $(panels[id]).hidden = id !== which;
-    }
+    for (const id of picks) $(id).setAttribute('aria-pressed', String(id === which));
+    for (const panel of new Set(Object.values(panels))) $(panel).hidden = panels[which] !== panel;
+    $('create-done').hidden = true;
     if (which !== 'pick-manage') subPick(null);
+    if (panels[which] === 'create-form') {
+      createKind = which === 'pick-group' ? 'group' : 'person';
+      $('create-title').textContent = createKind === 'group'
+        ? 'Create a new group account' : 'Create a new solo account';
+      $('create-group-hint').hidden = createKind !== 'group';
+    }
   }
   for (const id of picks) $(id).onclick = () => pick(id);
   for (const id of subPicks) $(id).onclick = () => subPick(id);
@@ -254,6 +261,127 @@ cd ~/FediPod &amp;&amp; npm start</pre></li>
       clientName: 'FediPod gateway',
     }).catch((e) => { n.hidden = false; n.textContent = 'sign-in failed to start: ' + e.message; });
   };
+
+  // ---- the create (signup) form ----
+  let createSlugOk = false, addrShape = null;
+  const esc = (s) => String(s).replace(/[&<>"']/g, (c) =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+  // The two address previews follow the handle and pod as they are typed.
+  function addrPreview() {
+    const h = $('create-handle').value.trim().toLowerCase() || 'you';
+    let podHost = 'your.pod';
+    try { podHost = new URL($('create-pod').value.trim()).hostname; } catch { /* not a URL yet */ }
+    $('addr-pod-name').textContent = `@${h}@${podHost}`;
+    $('addr-front-name').textContent = `@${h}@${location.host}`;
+  }
+  function createRefresh() {
+    const podOk = /^https:\/\/\S+/.test($('create-pod').value.trim());
+    const issuerOk = /^https:\/\/\S+/.test($('create-issuer').value.trim());
+    $('create-continue').disabled = !(podOk && issuerOk && createSlugOk && addrShape);
+  }
+  $('addr-pod').onclick = () => { addrShape = 'pod';
+    $('addr-pod').setAttribute('aria-pressed', 'true');
+    $('addr-front').setAttribute('aria-pressed', 'false'); createRefresh(); };
+  $('addr-front').onclick = () => { addrShape = 'front';
+    $('addr-front').setAttribute('aria-pressed', 'true');
+    $('addr-pod').setAttribute('aria-pressed', 'false'); createRefresh(); };
+
+  $('create-pod').addEventListener('input', () => {
+    try {
+      const u = new URL($('create-pod').value.trim());
+      const label = u.hostname.split('.')[0];
+      if (!$('create-handle').value && /^[a-z0-9-]{1,63}$/.test(label)) {
+        $('create-handle').value = label;
+        $('create-handle').dispatchEvent(new Event('input'));
+      }
+      if (!$('create-issuer').value) {
+        const parts = u.hostname.split('.');
+        $('create-issuer').value = 'https://' + (parts.length > 2 ? parts.slice(1).join('.') : u.hostname);
+      }
+    } catch { /* not a URL yet */ }
+    addrPreview(); createRefresh();
+  });
+  $('create-issuer').addEventListener('input', createRefresh);
+
+  let ct = null;
+  $('create-handle').addEventListener('input', () => {
+    createSlugOk = false; $('create-handle-msg').textContent = ''; $('create-handle-msg').className = 'msg';
+    addrPreview();
+    clearTimeout(ct);
+    const h = $('create-handle').value.trim().toLowerCase();
+    if (!h) { createRefresh(); return; }
+    ct = setTimeout(async () => {
+      try {
+        const d = await (await fetch('/api/handle?handle=' + encodeURIComponent(h))).json();
+        createSlugOk = d.available;
+        $('create-handle-msg').textContent = d.available ? 'this name is free' : (d.reason || 'taken');
+        $('create-handle-msg').className = 'msg ' + (d.available ? 'ok' : 'no');
+      } catch { $('create-handle-msg').textContent = 'could not check'; $('create-handle-msg').className = 'msg no'; }
+      createRefresh();
+    }, 250);
+  });
+
+  $('create-continue').onclick = () => {
+    const auth = window.solidClientAuthentication;
+    const n = $('create-note');
+    if (!auth) { n.hidden = false; n.textContent = 'the sign-in library did not load — reload and try again'; return; }
+    sessionStorage.setItem('fp-create', JSON.stringify({
+      slug: $('create-handle').value.trim().toLowerCase(),
+      podHome: podHomeOf($('create-pod').value),
+      issuer: $('create-issuer').value.trim(),
+      kind: createKind,
+      fronted: addrShape === 'front',
+    }));
+    auth.login({
+      oidcIssuer: $('create-issuer').value.trim(),
+      redirectUrl: location.origin + '/',
+      clientName: 'FediPod gateway',
+    }).catch((e) => { n.hidden = false; n.textContent = 'sign-in failed to start: ' + e.message; });
+  };
+
+  // Back from the identity provider: finish the signup with the proven login.
+  (async () => {
+    const auth = window.solidClientAuthentication;
+    if (!auth) return;
+    const info = await auth.handleIncomingRedirect().catch(() => null);
+    const pending = sessionStorage.getItem('fp-create');
+    if (!info?.isLoggedIn || !pending) return;
+    sessionStorage.removeItem('fp-create');
+    const p = JSON.parse(pending);
+    pick(p.kind === 'group' ? 'pick-group' : 'pick-solo');
+    const n = $('create-note');
+    n.hidden = false;
+    n.textContent = 'signed in as ' + info.webId + ' — creating…';
+    const res = await auth.fetch('/api/attach', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ handle: p.slug, podHome: p.podHome, kind: p.kind, fronted: p.fronted }),
+    }).catch(() => null);
+    const d = res ? await res.json().catch(() => ({})) : {};
+    if (res && res.status === 201) {
+      const address = p.fronted ? d.address : `@${p.slug}@${new URL(p.podHome).hostname}`;
+      const flags = [
+        `--gateway ${d.frontActor || d.doorInbox}`,
+        `--secret ${d.hmacSecret}`,
+        `--pod ${p.podHome}`,
+        `--issuer ${p.issuer}`,
+        `--handle ${p.slug}`,
+        `--kind ${p.kind}`,
+        ...(p.fronted ? ['--fronted'] : []),
+      ];
+      const cmd = `curl -fsSL ${location.origin}/install | sh -s -- \\\n  ` + flags.join(' \\\n  ');
+      $('create-form').hidden = true;
+      const done = $('create-done');
+      done.hidden = false;
+      done.innerHTML = '<h2>' + esc(address) + '</h2>'
+        + '<p>Created. Now install your agent on the machine it will live on — one command, then start it:</p>'
+        + '<pre>' + esc(cmd) + '\n\ncd ~/FediPod &amp;&amp; npm start</pre>'
+        + '<p>Setup opens in your browser with everything already filled in. When it finishes, your '
+        + 'account is live and your mail arrives through this gateway, filtered.</p>';
+    } else {
+      n.textContent = 'signup failed: ' + (d.error || (res ? 'HTTP ' + res.status : 'no response'));
+    }
+  })();
 
   // Back from the identity provider: finish the attach with the proven login.
   (async () => {

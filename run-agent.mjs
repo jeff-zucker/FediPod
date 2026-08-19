@@ -127,7 +127,7 @@ export class Agent {
   // First-run provisioning, called by the setup CLI after the credential file
   // is written: containers, owner-only ACLs on the private trees, config into
   // pod state. publishProfile (via connect) handles the public wire ACLs.
-  async bootstrap({ handle, name, root, kind, approveJoins = false, summary, icon }) {
+  async bootstrap({ handle, name, root, kind, approveJoins = false, summary, icon, gateway }) {
     const cred = this.readCredential();
     if (!cred) throw new Error('no credential — run setup first');
     if (!this.remote) {
@@ -165,6 +165,9 @@ export class Agent {
       ...(kind ? { kind } : {}),
       ...(approveJoins ? { approveJoins: true } : {}),
       ...(summary ? { summary } : {}), ...(icon ? { icon } : {}),
+      // Set before the first publish, so the actor never advertises the pod
+      // inbox only to rename it a moment later.
+      ...(gateway ? { gateway } : {}),
     });
     await this.store.flush();
   }

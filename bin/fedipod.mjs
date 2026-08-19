@@ -368,15 +368,26 @@ if (cmd === 'up') {
   // so there is no home to start in until that is asked. One question, the same
   // one `setup` opens with — `npm start` stays the single command it was.
   if (DEFAULT_ISSUE && !identityHomes(AP_ROOT).some(h => fs.existsSync(path.join(h.dir, 'credential.json')))) {
-    if (!process.stdin.isTTY) {
+    // A signup page may have answered the question already: the installer
+    // records its parameters in first-run.json beside this script's package,
+    // and the agent's setup reads the rest of it (AP_FIRST_RUN).
+    const firstRunFile = new URL('../first-run.json', import.meta.url).pathname;
+    let firstRun = null;
+    try { firstRun = JSON.parse(fs.readFileSync(firstRunFile, 'utf8')); } catch { /* none */ }
+    if (firstRun?.handle) {
+      requireHandle(String(firstRun.handle));
+      useProfile(String(firstRun.handle));
+      process.env.AP_FIRST_RUN = firstRunFile;
+    } else if (!process.stdin.isTTY) {
       console.error('no identities yet — bin/fedipod.mjs setup');
       process.exit(2);
+    } else {
+      const first = await ask('handle (the name in your address; permanent)');
+      endAsking();
+      if (!first) { console.error('a handle is required'); process.exit(2); }
+      requireHandle(first);
+      useProfile(first);
     }
-    const first = await ask('handle (the name in your address; permanent)');
-    endAsking();
-    if (!first) { console.error('a handle is required'); process.exit(2); }
-    requireHandle(first);
-    useProfile(first);
   } else {
     requireIdentity();
   }

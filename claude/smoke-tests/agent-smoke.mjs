@@ -6299,6 +6299,34 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
     fs.rmSync(whome, { recursive: true, force: true });
   }
 
+  // ---- a signup's gateway carry-over reaches bootstrap before first publish ----
+  {
+    const { runSetup, newRun, setupInputError } = await import(path.join(root, 'lib/setup.mjs'));
+    const ghome = fs.mkdtempSync('/tmp/dk-ap-gwsetup-');
+    let booted = null;
+    const fakeAgent = {
+      urls: { actor: 'https://x.example/ap/actor' },
+      store: { getConfig: () => ({}), setConfig: () => {}, flush: async () => {} },
+      publisher: { publishProfile: async () => ({ unreachable: [] }) },
+      bootstrap: async (o) => { booted = o; }, connect: async () => {},
+    };
+    const gateway = { url: 'https://front.example/u/mei/ap/inbox/', mode: 'trust', hmacSecret: 'S' };
+    await runSetup({
+      home: ghome, agent: fakeAgent, run: newRun(), log: () => {},
+      answers: { mode: 'existing', issuer: 'https://i.example', email: 'a@b.c', password: 'pw',
+        handle: 'mei', pod: 'https://mei.i.example/', kind: 'person', gateway },
+      deps: { mintCredential: async () => ({ clientId: 'C', secret: 'S',
+        webId: 'https://mei.i.example/profile/card#me' }) },
+    });
+    check(booted?.gateway?.url === gateway.url && booted?.gateway?.hmacSecret === 'S',
+      'a signup-carried gateway reaches bootstrap, so the first publish advertises the door');
+    check(!!setupInputError({ handle: 'mei', gateway: { url: 'http://front.example/' },
+      mode: 'existing', issuer: 'https://i.example', email: 'a@b.c', password: 'pw',
+      pod: 'https://mei.i.example/' }),
+      'a cleartext gateway address is refused');
+    fs.rmSync(ghome, { recursive: true, force: true });
+  }
+
   // ---- the profile editor, as a Mastodon client drives it ----
   // Everything Phanpy's modal sends: both text fields, both pictures as file
   // uploads, and the extra-field rows. The pictures must end up in the pod's

@@ -54,6 +54,15 @@ function paneForm() {
   // A fresh run needs no strap at all; a resumed one has something to say.
   strap(state.resumable ? 'finishing a setup that did not complete' : '');
   if (state.handle) $('handle').value = state.handle;
+  // A signup page's carry-over: the form opens with its answers already in.
+  const fr = state.firstRun;
+  if (fr && !state.resumable) {
+    if (fr.kind) $('form').elements.kind.value = fr.kind;
+    if (fr.handle) $('handle').value = fr.handle;
+    if (fr.pod) { $('form').elements.mode.value = 'existing'; $('pod').value = fr.pod; }
+    if (fr.issuer) $('issuer').value = fr.issuer;
+    if (fr.gatewayHost) strap(`finishing your ${fr.gatewayHost} signup — enter your Solid account details`);
+  }
   // Resuming: the account exists and the credential is minted. Asking for a
   // password again would mint a second one and orphan the first, which cannot
   // be recovered.
