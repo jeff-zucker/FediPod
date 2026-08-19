@@ -3,10 +3,11 @@
 -- a full ActivityPub server deployed as a Community Solid Server component
 
 This is a CSS component. Install it in a fresh server instance or an instance
-you already run for pods. Each pod you list in the configuration becomes a
-full fediverse account: it accepts follows, delivers its owner's posts, and
-serves their Mastodon client at the pod's own address. Pod owners can also
-opt in themselves, without the operator touching the configuration.
+you already run for pods, and turn sign-up on. A pod owner signs in at the
+server's `/run` page and opts in; from then on their pod is a full fediverse
+account: it accepts follows, delivers their posts, and serves their Mastodon
+client at the pod's own address. Signing up is the only way an account is
+made, and opting out is the only way one ends.
 
 With nothing configured beyond the defaults, installing the component changes
 nothing about how the server serves pods.
@@ -39,35 +40,30 @@ the server. The snippet places the component in the routing waterfall ahead of
 the LDP catch-all, on the initializer and finalizer lists so identities start
 and stop with the server, and on the websocket handler list for the live feed.
 
-## Acting for pods you host
-
-List the pods in the configuration; each becomes a fediverse identity:
+## Turning sign-up on
 
 ```json
 {
   "@id": "urn:fedipod:server:Handler",
   "@type": "FediPodServerHandler",
-  "args_agentPods": [ "https://mei.example.org/" ],
+  "args_agentRuntimeOptIn": true,
   "args_agentDataDir": "/var/lib/css/fedipod-agent/"
 }
 ```
 
-An identity that does not exist yet is provisioned when the server starts: its
-name is the pod's subdomain label, and it publishes an actor, a signing key and
-WebFinger on the pod itself. Its state lives on the pod. Its signing key lives
-in `agentDataDir`, one directory per identity — and beside it,
+An identity is provisioned when its owner opts in: its name is the pod's
+subdomain label, and it publishes an actor, a signing key and WebFinger on the
+pod itself. Its state lives on the pod. Its signing key lives in
+`agentDataDir`, one directory per identity — and beside it,
 `door-secret.json`: the secret guarding that identity's own pages. Each
-identity has its own; one owner's secret opens nobody else's door. The boot
-log names each file, and reading it is how the operator learns a secret. The
-log never contains the secret itself.
+identity has its own; one owner's secret opens nobody else's door.
 
 | Setting | What it is |
 |---|---|
-| `agentPods` | Pod base URLs to run an identity for. Listing a pod is how you turn this on; with none, nothing runs. |
-| `agentDataDir` | Where each identity keeps its signing key, log, and door secret. Required whenever an agent is enabled. |
+| `agentRuntimeOptIn` | Whether pod owners can sign up. With it off, nothing runs. |
+| `agentDataDir` | Where each identity keeps its signing key, log, and door secret. Required whenever sign-up is on. |
 | `agentUiPath` | Where the owner's pages live on the pod's origin. `/app/` by default; empty serves no pages. |
-| `agentRuntimeOptIn` | Whether a pod owner may opt in at runtime by proving control of their pod. Off unless the host chooses it. |
-| `agentRegistryContainer` | The internal container holding runtime opt-in rows. |
+| `agentRegistryContainer` | The internal container holding the sign-up rows. |
 | `runPage` | The HTML served at `/run`: the page where a pod owner opts in or out. The repo ships one at `web/front/run.html`. |
 | `agentWebIdSuffix` | Path from a pod's base to its owner's WebID. Defaults to `profile/card#me`. |
 | `agentPollSeconds` | How often the inbox is swept. Deliveries also wake the sweep as they land, so this is the fallback. |
@@ -118,15 +114,13 @@ as before. The server logs the list for each identity when it starts.
 
 **Run one worker.** A delivery is picked up the moment it lands only in a
 single-worker server. With `--workers` above one the inbox is swept on the
-timer instead, and the server says so at startup. Runtime opt-in requires a
+timer instead, and the server says so at startup. Sign-up requires a
 single worker outright, and says so when refused.
 
-## Letting pod owners opt in themselves
+## How sign-up works
 
-With `agentRuntimeOptIn` on, a pod owner can ask the server to run their
-identity without the operator touching the configuration. Point owners at the
-`/run` page (supply `runPage`): they sign in with their pod there and opt in
-or out. Underneath it is one endpoint:
+A pod owner opens the `/run` page (supply `runPage`), signs in with their pod,
+and opts in or out. Underneath it is one endpoint:
 
 ```
 POST /api/agent
@@ -140,12 +134,8 @@ mints a fresh one and retires the old, with no restart and no dropped
 connections. `{"action": "opt-out"}` stops the identity and returns the pod
 to plain pod serving; deliveries keep landing in its inbox and simply wait.
 Opted-in pods are recorded in the registry container and come back after a
-server restart — which is also why runtime opt-in wants a persistent storage
+server restart — which is also why sign-up wants a persistent storage
 backend: rows kept in a memory backend vanish when the server stops.
-
-Pods listed in `agentPods` cannot opt out over the wire (the configuration
-would bring them back), but their owners may opt in to rotate a lost door
-secret.
 
 ## What is in the package
 

@@ -1,6 +1,11 @@
 # Changes
 
 ## 2026-08-19
+- On a FediPod Server, sign-up is the only way an account is made: a pod
+  becomes an identity when its owner opts in at `/run` (or `POST /api/agent`)
+  and stops when they opt out. The `agentPods` setting — operator-listed pods
+  provisioned at boot — is gone; existing configs using it must drop it and
+  have each owner sign up.
 - The CSS component is renamed `fedipod-server` (was `fedipod-css-gateway`):
   the folder is `packages/fedipod-server`, the npm package `fedipod-server`,
   the config type `FediPodServerHandler` on `urn:fedipod:server:Handler`, and

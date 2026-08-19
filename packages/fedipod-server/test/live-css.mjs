@@ -118,22 +118,9 @@ const built = (args) => {
     frontOrigin: 'https://fedipod.net', directoryContainer: DIRC, ...args }) && null; }
   catch (e) { return e.message; }
 };
-const withAgent = (extra) => built({ agentDataDir: '/tmp/x', ...extra });
-check(/agentDataDir/.test(built({ agentPods: [ 'http://alice.localhost:4000/' ] }) || ''),
-  'a server told to run an agent with nowhere to keep its key refuses to start');
 check(/agentDataDir/.test(built({ agentRuntimeOptIn: true }) || ''),
-  'and the same refusal covers runtime opt-in');
-check(/not a pod URL/.test(withAgent({ agentPods: [ 'alice' ] }) || ''),
-  'and refuses a pod that is not an address');
-check(/origin of its own/.test(withAgent({
-  agentPods: [ 'http://alice.localhost:4000/', 'http://alice.localhost:4000/two/' ] }) || ''),
-'and refuses two identities on one origin — a client API is rooted at one');
-check(/cannot share/.test(withAgent({
-  agentPods: [ 'http://alice.a.example/', 'http://alice.b.example/' ] }) || ''),
-"and refuses two pods that would share one identity directory");
-check(/front/.test(withAgent({ agentPods: [ 'https://fedipod.net/alice/' ] }) || ''),
-  'and refuses an identity on the front\'s own host');
-check(withAgent({ agentPods: [ 'http://alice.localhost:4000/' ] }) === null,
+  'a server offering sign-up with nowhere to keep signing keys refuses to start');
+check(built({ agentRuntimeOptIn: true, agentDataDir: '/tmp/x' }) === null,
   'a complete agent configuration constructs');
 
 // ---------------------------------------------------------------------------
@@ -268,6 +255,20 @@ check(JSON.parse(fs.readFileSync(secretFile, 'utf8')).secret === optReply.doorSe
 const again = await optHandler.optInPod({ podBase: OPT_POD, webId: OPT_POD + 'profile/card#me' });
 check(again.httpStatus === 201 && again.status === 'rotated' && again.doorSecret !== optReply.doorSecret,
   'a second opt-in rotates the secret — proving pod control again is the recovery');
+
+// Sign-up is the only account path, so its refusals are the wire's refusals.
+const onFront = await optHandler.optInPod({
+  podBase: 'https://fedipod.net/alice/', webId: 'https://fedipod.net/alice/profile/card#me' });
+check(onFront.httpStatus === 409 && /front/.test(String(onFront.error)),
+  "a pod on the front's own host is refused");
+const sameOrigin = await optHandler.optInPod({
+  podBase: OPT_POD + 'two/', webId: OPT_POD + 'two/profile/card#me' });
+check(sameOrigin.httpStatus === 409 && /origin of its own/.test(String(sameOrigin.error)),
+  'a second identity on an origin already carrying one is refused');
+const sameName = await optHandler.optInPod({
+  podBase: 'http://dana.example/', webId: 'http://dana.example/profile/card#me' });
+check(sameName.httpStatus === 409 && /cannot share/.test(String(sameName.error)),
+  'two pods that would share one identity directory are refused');
 
 // A different handler over the SAME store: the restart. Claims must be back
 // before any request is answered.

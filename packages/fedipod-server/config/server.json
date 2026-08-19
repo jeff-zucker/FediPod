@@ -30,7 +30,7 @@
       ]
     },
     {
-      "comment": "Starting each configured identity when the server starts, and stopping it cleanly when the server stops. The same handler instance does both, which is what InitializableHandler and FinalizableHandler are for. With args_agentPods unset both are no-ops.",
+      "comment": "Starting each opted-in identity when the server starts, and stopping it cleanly when the server stops. The same handler instance does both, which is what InitializableHandler and FinalizableHandler are for. With sign-up off both are no-ops.",
       "@id": "urn:solid-server:default:PrimaryParallelInitializer",
       "@type": "ParallelHandler",
       "handlers": [

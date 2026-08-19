@@ -1,9 +1,9 @@
-// End-to-end: boot a real Community Solid Server with this component's config
-// and two identities configured, then use one of them the way a phone app would
-// — sign in, post, watch the live feed — while the other proves that identities
-// on one server stay separate. No agent process exists anywhere in this test.
+// End-to-end: boot a real Community Solid Server with this component's config,
+// opt two pods in as their owners would, then use one identity the way a phone
+// app would — sign in, post, watch the live feed — while the other proves that
+// identities on one server stay separate. No agent process exists anywhere.
 //
-//   npm run test:e2e     (from packages/css-gateway)
+//   npm run test:e2e     (from packages/fedipod-server)
 //
 // Deliberately outside the `node --test test/*.mjs` glob: it starts a server
 // and takes a while. Everything it asserts is read back over plain HTTP, the
@@ -73,7 +73,6 @@ fs.writeFileSync(config, JSON.stringify({
         args_agentRegistryContainer: '/.internal/fedipod/agents/',
         args_agentRuntimeOptIn: true,
         args_agentAutoFront: true,
-        args_agentPods: [ POD, POD2 ],
         args_agentDataDir: dataDir,
         args_agentPollSeconds: 2,
       },
@@ -132,7 +131,25 @@ const app = await new AppRunner().create({
 });
 await app.start();
 
+// Sign-up is the only way a pod becomes an identity: each owner proves
+// control with a real token from this very server's IdP and opts in.
+const { createRequire } = await import('node:module');
+const req_ = createRequire(import.meta.url);
+const { mintCredential, createGrantSession } = req_(path.resolve(pkg, '../../vendor/idp-grant.cjs'));
+const sessionFor = async (email, podUrl) => createGrantSession(await mintCredential({
+  origin: BASE.replace(/\/$/, ''), email, password: 'sekrit', podUrl, name: 'e2e-optin',
+}));
+const optIn = (session, podBase) => session.fetch(`${BASE}api/agent`, {
+  method: 'POST', headers: { 'content-type': 'application/json' },
+  body: JSON.stringify({ action: 'opt-in', podBase }),
+});
+
 try {
+  const aliceIn = await optIn(await sessionFor('alice@example.com', POD), POD);
+  check(aliceIn.status === 201, "alice's opt-in is accepted — sign-up is how an account is made");
+  const carolIn = await optIn(await sessionFor('carol@example.com', POD2), POD2);
+  check(carolIn.status === 201, "carol's too, on her own origin");
+
   // ---- the identity provisions itself -------------------------------------
   const actorUrl = `${POD}activitypods-js/ap/actor`;
   const gotActor = await until('the agent publishes its actor document', async () =>
@@ -140,7 +157,7 @@ try {
   if (gotActor) {
     const actor = await (await fetch(actorUrl, { headers: { accept: 'application/activity+json' }})).json();
     check(actor.type === 'Person' && actor.preferredUsername === 'alice',
-      'the identity is @alice, provisioned from the pod URL alone');
+      'the identity is @alice, provisioned from the opt-in alone');
     check(Boolean(actor.publicKey?.publicKeyPem), 'it publishes a signing key');
   }
   check((await fetch(`${POD}.well-known/webfinger?resource=acct:alice@${ALICE}`)).status === 200,
@@ -159,7 +176,7 @@ try {
   check(stateRes.status === 401 || stateRes.status === 403,
     'the agent state tree is not readable by a stranger');
 
-  const gotSecond = await until('a second configured pod gets its own identity', async () =>
+  const gotSecond = await until('a second opted-in pod gets its own identity', async () =>
     (await fetch(`${POD2}activitypods-js/ap/actor`,
       { headers: { accept: 'application/activity+json' }})).status === 200);
   if (gotSecond) {
@@ -308,15 +325,7 @@ try {
   check(bare === 401 || bare === 404,
     `an unconfigured pod has no client API — it is just a pod (${bare})`);
 
-  // The owner proves control with a real token from this very server's IdP.
-  const { createRequire } = await import('node:module');
-  const req_ = createRequire(import.meta.url);
-  const { mintCredential, createGrantSession } = req_(path.resolve(pkg, '../../vendor/idp-grant.cjs'));
-  const danaCred = await mintCredential({
-    origin: BASE.replace(/\/$/, ''), email: 'dana@example.com', password: 'sekrit',
-    podUrl: DANA, name: 'e2e-optin',
-  });
-  const danaSession = createGrantSession(danaCred);
+  const danaSession = await sessionFor('dana@example.com', DANA);
 
   const noProof = await fetch(`${BASE}api/agent`, {
     method: 'POST', headers: { 'content-type': 'application/json' },
@@ -324,12 +333,9 @@ try {
   });
   check(noProof.status === 401, 'opt-in without proof of the pod is refused');
 
-  const optIn = await danaSession.fetch(`${BASE}api/agent`, {
-    method: 'POST', headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ action: 'opt-in', podBase: DANA }),
-  });
-  const optInBody = await optIn.json();
-  check(optIn.status === 201 && Boolean(optInBody.doorSecret),
+  const danaIn = await optIn(danaSession, DANA);
+  const optInBody = await danaIn.json();
+  check(danaIn.status === 201 && Boolean(optInBody.doorSecret),
     'proving pod control buys an identity: 201, with the door secret, once');
 
   const danaUp = await until("dana's identity comes up", async () =>

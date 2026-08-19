@@ -37,9 +37,7 @@ export interface FediPodServerArgs {
   signupPage?: string;
   /** The run-your-identity page HTML served at /run. */
   runPage?: string;
-  /** Pod base URLs to run an agent for. Empty or absent means no agent runs. */
-  agentPods?: string[];
-  /** Directory holding each agent identity's signing key and log. Required when agentPods is set. */
+  /** Directory holding each agent identity's signing key and log. Required when runtime opt-in is on. */
   agentDataDir?: string;
   /** Path from a pod's base to the owner's WebID. */
   agentWebIdSuffix?: string;
@@ -53,7 +51,7 @@ export interface FediPodServerArgs {
   agentUiPath?: string;
   /** Whether a pod owner may opt in at runtime by proving control of their pod. Off unless the host chooses it. */
   agentRuntimeOptIn?: boolean;
-  /** When this server also runs the door, give each identity a @handle@frontHost address on startup — an inbox-only directory row, written once. The actor keeps its own ids on the pod. Off by default. */
+  /** When this server also runs the door, give each identity a @handle@frontHost address as it starts — an inbox-only directory row, written once. The actor keeps its own ids on the pod. Off by default. */
   agentAutoFront?: boolean;
   /** An internal container URL where the runtime opt-in rows live. */
   agentRegistryContainer?: string;
@@ -105,7 +103,6 @@ export class FediPodServerHandler extends HttpHandler implements Initializable, 
   public readonly dir: Directory;
   private readonly podPut: (url: string, body: string, contentType: string) => Promise<boolean>;
   private readonly logger = getLoggerFor(this);
-  private readonly agentPods: string[];
   private readonly agentHosts = new Set<string>();
   private readonly agentHandles = new Map<string, string>();   // handle → pod base
   private readonly uiPath: string;
@@ -128,26 +125,15 @@ export class FediPodServerHandler extends HttpHandler implements Initializable, 
       (container.startsWith('/') ? new URL(container, args.frontOrigin).href : container);
     this.dir = makeDirectory(this.io, absolute(args.directoryContainer));
     this.podPut = makeStorePodPut(this.io);
-    this.agentPods = (args.agentPods ?? []).filter((p) => p.trim().length > 0)
-      .map((p) => (p.endsWith('/') ? p : `${p}/`));
-    // Fail at construction, not at first use: a server told to run an agent
+    // Fail at construction, not at first use: a server told to run agents
     // and unable to should not boot into a state where it silently runs none.
-    if ((this.agentPods.length > 0 || args.agentRuntimeOptIn) && !args.agentDataDir) {
-      throw new Error('an agent is enabled but agentDataDir is not set — identities have nowhere to keep their signing keys');
+    if (args.agentRuntimeOptIn && !args.agentDataDir) {
+      throw new Error('runtime opt-in is enabled but agentDataDir is not set — identities have nowhere to keep their signing keys');
     }
     this.uiPath = normalizeUiPath(args.agentUiPath);
     this.registry = args.agentRuntimeOptIn
       ? makeAgentRegistry(this.io, absolute(args.agentRegistryContainer ?? '/.internal/fedipod/agents/'))
       : null;
-    for (const pod of this.agentPods) {
-      const host = this.validateAgentHost(pod);
-      this.agentHosts.add(host);
-      this.agentHandles.set(deriveHandle(pod), pod);
-    }
-    for (const pod of this.agentPods) {
-      this.logger.info(`FediPod agent on ${pod} answers ${this.uiPath || '(no pages)'} `
-        + `plus /api, /oauth, /ap/actor, /ap/outbox and nodeinfo — pod resources at those paths are not served`);
-    }
   }
 
   /**
@@ -179,11 +165,11 @@ export class FediPodServerHandler extends HttpHandler implements Initializable, 
   }
 
   /**
-   * Start an agent for each configured pod. Runs before the server listens, so
+   * Start an agent for each opted-in pod. Runs before the server listens, so
    * the identities come up in the background and boot is never held on a pod.
    */
   public async initialize(): Promise<void> {
-    if (this.agentPods.length === 0 && !this.registry) return;
+    if (!this.registry) return;
     // The stock CSS CLI installs no signal handlers, so a SIGTERM (systemd
     // stop, docker stop, Ctrl+C) killed the process with agent state
     // unflushed and the lease held for its whole TTL. Flush first, bounded,
@@ -210,31 +196,28 @@ export class FediPodServerHandler extends HttpHandler implements Initializable, 
     // have its routes claimed from the first request after a restart, never
     // served briefly by LDP. A failed load must not fail the boot — the rows
     // persist, and the next start recovers them.
-    const pods = [ ...this.agentPods ];
-    if (this.registry) {
-      try {
-        const hosts = await this.registry.listHosts();
-        for (const host of hosts) {
-          const row = await this.registry.get(host);
-          if (!row) continue;
-          if (this.agentHosts.has(row.host) || this.identities.has(row.podBase)) continue;   // config wins
-          try {
-            this.validateAgentHost(row.podBase);
-          } catch (e: unknown) {
-            this.logger.error(`opted-in pod ${row.podBase} no longer valid: ${(e as Error).message}`);
-            continue;
-          }
-          this.agentHosts.add(row.host);
-          this.agentHandles.set(row.handle, row.podBase);
-          pods.push(row.podBase);
+    const pods: string[] = [];
+    try {
+      const hosts = await this.registry.listHosts();
+      for (const host of hosts) {
+        const row = await this.registry.get(host);
+        if (!row) continue;
+        if (this.agentHosts.has(row.host) || this.identities.has(row.podBase)) continue;   // already claimed
+        try {
+          this.validateAgentHost(row.podBase);
+        } catch (e: unknown) {
+          this.logger.error(`opted-in pod ${row.podBase} no longer valid: ${(e as Error).message}`);
+          continue;
         }
-        this.logger.info(`FediPod agent registry: ${pods.length - this.agentPods.length} opted-in pod(s)`);
-      } catch (e: unknown) {
-        this.logger.error(`could not read the opt-in registry — opted-in identities are absent this boot: ${
-          (e as Error).message}`);
+        this.agentHosts.add(row.host);
+        this.agentHandles.set(row.handle, row.podBase);
+        pods.push(row.podBase);
       }
+    } catch (e: unknown) {
+      this.logger.error(`could not read the opt-in registry — opted-in identities are absent this boot: ${
+        (e as Error).message}`);
     }
-    if (pods.length > 0) this.logger.info(`FediPod agent enabled for ${pods.length} pod(s)`);
+    if (pods.length > 0) this.logger.info(`FediPod agent enabled for ${pods.length} opted-in pod(s)`);
     for (const pod of pods) void this.startIdentity(pod);
   }
 
@@ -342,7 +325,7 @@ export class FediPodServerHandler extends HttpHandler implements Initializable, 
   public async canHandle({ request }: HttpHandlerInput): Promise<void> {
     const host = request.headers.host as string | undefined;
     const pathname = new URL(request.url ?? '/', `https://${host}`).pathname;
-    // Claimed from configuration, never from what is running: a pod resource
+    // Claimed from the opt-in roster, never from what is running: a pod resource
     // must not be served by CSS for the seconds before an identity finishes
     // starting, and then stop being served once it has.
     if (claims({ host, pathname }, this.args.frontHost)) return;
@@ -374,7 +357,7 @@ export class FediPodServerHandler extends HttpHandler implements Initializable, 
       { secret: string; path: string; rotated: boolean };
     };
 
-    // Already running here — from config or an earlier opt-in: proving pod
+    // Already running here from an earlier opt-in: proving pod
     // control again buys a fresh secret, nothing else.
     if (this.agentHandles.get(handle) === base) {
       const door = ensureDoorSecret(this.args.agentDataDir!, handle, { rotate: true });
@@ -412,9 +395,6 @@ export class FediPodServerHandler extends HttpHandler implements Initializable, 
   Promise<Record<string, unknown> & { httpStatus: number }> {
     if (!this.registry) return { httpStatus: 501, error: 'this server does not offer runtime opt-in' };
     const base = podBase.endsWith('/') ? podBase : `${podBase}/`;
-    if (this.agentPods.includes(base)) {
-      return { httpStatus: 409, error: 'this pod is in the server configuration — it would come back at restart. Remove it there.' };
-    }
     const host = new URL(base).host.toLowerCase();
     const row = await this.registry.get(host);
     if (!row || row.podBase !== base) return { httpStatus: 404, error: 'this pod has not opted in' };
