@@ -29,7 +29,9 @@ body { background: var(--surface); }
    document scrolled sideways whatever was under it. */
 #bar { flex: 0 0 auto; display: flex; align-items: center; gap: .6rem; flex-wrap: wrap;
   width: 100%; max-width: none; margin: 0; box-sizing: border-box;
-  padding: .5rem max(1rem, calc((100% - 960px) / 2 + 1rem));
+  /* The column width is the page's to declare (--bar-col); 960 stands where a
+     page says nothing. */
+  padding: .5rem max(1rem, calc((100% - var(--bar-col, 960px)) / 2 + 1rem));
   background: var(--raised); }
 /* The actor's fediverse handle, in the row between the title and the
    destinations. */

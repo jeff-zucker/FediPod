@@ -13,6 +13,7 @@
    through unstyled: every control sits in the same light well; a select
    carries a drawn chevron, a button carries the action-blue text. */
 :root { color-scheme: light dark; font-size: 112.5%;
+  --bar-col: 1280px;                 /* the bar centres on the same column */
   --link: #1a4f8a; --heading: #5b3a8e;
   --ink: #1b1c1e; --muted: #5f6368;
   --btn-bg: #f4efe6; --btn-bg-hover: #ece3d2; --btn-bg-active: #e2d5bd; --btn-edge: #8a7a61;
@@ -32,9 +33,10 @@
 html { height: 100%; }
 body { font: 1rem/1.5 system-ui, sans-serif; margin: 0; height: 100dvh;
   box-sizing: border-box; display: flex; flex-direction: column; overflow: hidden; }
-/* The bar spans the window; the rail and the content column share the same
-   centred 960 underneath it. */
-#page { flex: 1 1 auto; min-height: 0; width: 100%; max-width: 960px; margin: 0 auto;
+/* The bar spans the window; the rail and the content column share one centred
+   column underneath it — wide enough that the content keeps 960 of its own
+   beside the expanded rail. */
+#page { flex: 1 1 auto; min-height: 0; width: 100%; max-width: 1280px; margin: 0 auto;
   padding: 1.25rem 1rem 1rem; box-sizing: border-box;
   display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 1.25rem; }
 #content { min-width: 0; min-height: 0; overflow-y: auto; }
