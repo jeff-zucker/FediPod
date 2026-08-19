@@ -32,6 +32,9 @@ const BSKY_CONNECT_CTL = $('bsky-connect-ctl');
 const ALIAS_CTL = $('alias-ctl');
 const FOLLOWS_CTL = $('follows-ctl');
 const FOLLOWS_PICK = $('follows-pick');
+const UPDATE_CTL = $('update-ctl');
+const UPDATE_WORD = $('update-word');
+const UPDATE_GO = $('update-go');
 const BSKY_CROSSPOST = $('bsky-crosspost');   // held: it rides BSKY_CTL into a generated row
 
 // #say and #fatal live in the accessibility tree from load and hide by being
@@ -54,6 +57,12 @@ async function write(path, body, done) {
   say(done);
   return json;
 }
+
+UPDATE_GO.onclick = async () => {
+  UPDATE_GO.disabled = true;
+  const r = await write('/update', {}, 'updating — the agents restart when it finishes; reload in a moment');
+  if (!r) UPDATE_GO.disabled = false;
+};
 
 async function load() {
   const { status, json } = await api('/config');
@@ -134,6 +143,7 @@ function render() {
     ['local host', (origins.named || origins.loopback || `http://localhost:${config.port}`)
       .replace(/\/$/, '')],
   ];
+  if (config.update) rows.push(['software', 'ctl']);
   if (config.quiescedAt) rows.push(['parked since', config.quiescedAt]);
   if (config.movedTo) rows.push(['moved to', config.movedTo]);
   // A person gates followers here; a group's gate is the joins control on its
@@ -176,6 +186,15 @@ function render() {
       dd.append(FOLLOWS_CTL);
       FOLLOWS_CTL.hidden = false;
       FOLLOWS_PICK.value = config.autoAcceptFollows ? 'auto' : 'approve';
+    }
+    if (k === 'software') {
+      dd.textContent = '';
+      dd.append(UPDATE_CTL);
+      UPDATE_CTL.hidden = false;
+      const u = config.update;
+      UPDATE_WORD.textContent = u.available
+        ? `FediPod ${u.current} — ${u.latest} available` : `FediPod ${u.current}`;
+      UPDATE_GO.hidden = !u.available;
     }
     // The accounts elsewhere this one may receive a Move from. Each entry is
     // removable, behind a second click — servers still retrying a Move check

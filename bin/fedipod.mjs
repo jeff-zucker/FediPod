@@ -1601,6 +1601,19 @@ if (cmd === 'up') {
     console.log('only when the state store is a pod they can all reach (`fedipod state --to pod`).');
   }
   console.log('done — restart the agent');
+} else if (cmd === 'update') {
+  // Pull the latest published FediPod into this checkout and restart the
+  // agents — what re-running the installer does, as one command.
+  const { checkLatest, runUpdate, restartAgents } = await import(new URL('../lib/update.mjs', import.meta.url));
+  const u = await checkLatest();
+  if (u && !u.available) console.log(`already current: ${u.current}`);
+  const r = runUpdate({ log: console.log });
+  if (!r.ok) { console.error(r.note); process.exit(1); }
+  console.log(r.note);
+  if (restartAgents({ log: console.log }) === 'self') {
+    console.log('no managed agents found — restart any running agent to serve the new version');
+  }
+  process.exit(0);
 } else if (cmd === 'https') {
   // Agents serve https beside http with a certificate minted on this machine
   // (never packaged — a shipped key would be one key for every install).

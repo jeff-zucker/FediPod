@@ -134,6 +134,16 @@ pod's operator can also read a pod-held key. Local keeps it on this machine
 alone; the next start adopts the pod copy and removes it from the pod. Stop
 the agent before moving keys.
 
+## update
+
+```
+node bin/fedipod.mjs update
+```
+Pulls the latest published FediPod into this install and restarts the
+agents. The record page offers the same thing when a newer version exists —
+every agent checks once a day. A checkout with local changes is refused
+rather than overwritten. `AP_UPDATE_CHECK=0` turns the daily check off.
+
 ## https
 
 ```

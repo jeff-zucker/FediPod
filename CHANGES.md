@@ -1,6 +1,11 @@
 # Changes
 
 ## 2026-08-19
+- The agent notices when a newer FediPod is published (one GET of the repo's
+  package.json, daily; `AP_UPDATE_CHECK=0` turns it off) and offers the
+  update: an Update button on the record page's software row, or
+  `fedipod update`. Either pulls the latest into the checkout and restarts
+  every agent; local changes are refused rather than overwritten.
 - Whalebird (and other megalodon-based clients) can sign in. Two changes:
   nodeinfo names the software `hometown` — a Mastodon fork those clients'
   server detection accepts; FediPod's own name was refused before sign-in

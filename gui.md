@@ -2,6 +2,8 @@
 
 Open `https://localhost:9030/` while any agent is running — it forwards you to the agent — then choose `manage account` and select the actor you want from the local actors dropdown.
 
+`Update`, shown on the software row when a newer FediPod exists, pulls the latest version and restarts every agent on the machine.
+
 
 * **Parking** (the status control) stops the mail and unfollows people you follow, but keeps your handle
   alive. Setting it back to active re-follows everyone — as requests, so a

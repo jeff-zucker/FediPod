@@ -25,6 +25,8 @@ process.env.AP_DIRECTORY = '0';
 // Throwaway agents must never write into the real profile's browser trust
 // store; the cert machinery honours this the way AP_DIRECTORY is honoured.
 process.env.AP_TRUST_INSTALL = '0';
+// Nor phone GitHub for the latest version.
+process.env.AP_UPDATE_CHECK = '0';
 let bootLog = '';
 const HOME = fs.mkdtempSync('/tmp/fedipod-smoke-');
 const PORT = 18621;
@@ -6316,6 +6318,18 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
     check(minted?.podUrl === 'https://activitypub.i.example/',
       'and the pod goes along too, so an existing-pod run can pick the matching WebID');
     fs.rmSync(whome, { recursive: true, force: true });
+  }
+
+  // ---- the update check: ordering, and refusal outside a checkout ----
+  {
+    const { newerThan, runUpdate, checkLatest } = await import(path.join(root, 'lib/update.mjs'));
+    check(newerThan('0.8.0', '0.7.9') && newerThan('1.0.0', '0.9.9')
+      && !newerThan('0.7.0', '0.7.0') && !newerThan('0.9.9', '1.0.0'),
+    'version comparison orders dotted versions numerically');
+    const utmp = fs.mkdtempSync('/tmp/dk-ap-upd-');
+    check(runUpdate({ root: utmp }).ok === false, 'an update refuses outside a git checkout');
+    fs.rmSync(utmp, { recursive: true, force: true });
+    check(await checkLatest() === null, 'AP_UPDATE_CHECK=0 keeps the check entirely offline');
   }
 
   // ---- trusted https: the boot path mints a name-constrained local CA ----

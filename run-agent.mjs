@@ -119,6 +119,7 @@ export class Agent {
       // Anyone asking whether this agent is hammering their server can read the
       // answer here instead of in their access log.
       podRequests: this.remote?.stats?.() || null,
+      update: this.updateInfo || null,
       inboxCooldownFor: this.intake?.drainCooldownUntil
         ? Math.max(0, Math.round((this.intake.drainCooldownUntil - Date.now()) / 1000)) : 0,
     };
@@ -743,6 +744,19 @@ export async function startAgent({
     }
   } catch { /* the agent still runs; it is just advertised as http */ }
   startAdmin({ port, gateToken, agent, log, handle, httpsPort, tls });
+
+  // Is a newer FediPod published? Once at boot and daily after; the answer
+  // rides /status and the record page offers the update.
+  const updateTick = async () => {
+    const { checkLatest } = await import('./lib/update.mjs');
+    const u = await checkLatest();
+    if (u) {
+      agent.updateInfo = u;
+      if (u.available) log(`FediPod ${u.latest} is available (running ${u.current}) — update from the record page or \`fedipod update\``);
+    }
+  };
+  void updateTick();
+  setInterval(updateTick, 24 * 3600e3).unref?.();
 
   // The pod (or its issuer) can be briefly unreachable — a 504 from the
   // token endpoint, or no network yet at boot under install-service. Keep
