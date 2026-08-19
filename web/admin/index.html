@@ -111,14 +111,13 @@ select { font: inherit; appearance: none; max-width: 100%; min-width: 0;
   background-repeat: no-repeat; background-position: right .55rem center;
   background-size: .6rem auto; }
 select:hover { background-color: var(--field-bg-hover); }
-/* ACTIONS: the same light well every setting sits in — one control chassis
-   for the whole page; the blue text is what says a button DOES something. */
+/* ACTIONS: identical to the settings — same well, same border, same ink,
+   Retire included. One control look for the whole page. */
 button { font: inherit; padding: .45rem 1rem; border-radius: .3rem; border: 1px solid var(--field-edge);
-  background: var(--field-bg); color: var(--link); cursor: pointer; }
+  background: var(--field-bg); color: var(--ink); cursor: pointer; }
 button:hover { background: var(--field-bg-hover); }
 button:active { background: var(--field-bg-hover); }
 button.primary { font-weight: 600; }
-button.danger { border-color: var(--danger); color: var(--danger); }
 button:disabled { opacity: .55; cursor: default; }
 /* Small buttons that sit in a line of text. */
 button.inline { font-size: .9rem; padding: .15rem .6rem; font-weight: 400; }
