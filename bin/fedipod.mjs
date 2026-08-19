@@ -1610,17 +1610,9 @@ if (cmd === 'up') {
   const { ensureLocalTls, enableTrust, certPaths } = await import(new URL('../lib/certs.mjs', import.meta.url));
   const certDir = path.join(rootOf(HOME), 'certs');   // same resolution the agent uses
   if (has('trust')) {
-    const t = enableTrust(certDir, { log: console.log });
+    const t = enableTrust(certDir, { log: console.log });   // mints, signs, installs in NSS
     console.log(`CA certificate: ${t.caCertPath}`);
     if (process.platform === 'linux') {
-      const { execFileSync } = await import('node:child_process');
-      try {
-        execFileSync('certutil', ['-d', `sql:${path.join(os.homedir(), '.pki/nssdb')}`, '-A',
-          '-t', 'C,,', '-n', 'FediPod Local CA', '-i', t.caCertPath], { stdio: 'pipe' });
-        console.log('installed in your browser trust store (NSS)');
-      } catch {
-        console.log('browser (NSS) trust install skipped — certutil not available');
-      }
       console.log('for the system store, run:');
       console.log(`  sudo cp ${t.caCertPath} /usr/local/share/ca-certificates/fedipod-local-ca.crt && sudo update-ca-certificates`);
     } else if (process.platform === 'darwin') {

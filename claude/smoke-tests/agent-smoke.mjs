@@ -22,6 +22,9 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 // Throwaway agents must not claim (or yield) the real machine's directory
 // door on 8030 — every child spawned below inherits this.
 process.env.AP_DIRECTORY = '0';
+// Throwaway agents must never write into the real profile's browser trust
+// store; the cert machinery honours this the way AP_DIRECTORY is honoured.
+process.env.AP_TRUST_INSTALL = '0';
 let bootLog = '';
 const HOME = fs.mkdtempSync('/tmp/fedipod-smoke-');
 const PORT = 18621;
@@ -6313,6 +6316,24 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
     check(minted?.podUrl === 'https://activitypub.i.example/',
       'and the pod goes along too, so an existing-pod run can pick the matching WebID');
     fs.rmSync(whome, { recursive: true, force: true });
+  }
+
+  // ---- trusted https: the boot path mints a name-constrained local CA ----
+  {
+    const { ensureTrustedTls, certPaths } = await import(path.join(root, 'lib/certs.mjs'));
+    const cdir = fs.mkdtempSync('/tmp/dk-ap-certs-');
+    const tls = ensureTrustedTls(cdir, { log: () => {} });
+    check(tls.trust && fs.existsSync(certPaths(cdir).caCert),
+      'first boot mints the local CA and serves a certificate signed by it');
+    const { createRequire } = await import('node:module');
+    const forge = createRequire(path.join(root, 'package.json'))('node-forge');
+    const ca = forge.pki.certificateFromPem(fs.readFileSync(certPaths(cdir).caCert, 'utf8'));
+    const nc = ca.extensions.find(e => e.id === '2.5.29.30');
+    check(!!nc && nc.critical === true,
+      'the CA carries a critical name constraint, so it can only vouch for localhost');
+    const again = ensureTrustedTls(cdir, { log: () => {} });
+    check(again.cert === tls.cert, 'a restart reuses the same certificate — trust is once per machine');
+    fs.rmSync(cdir, { recursive: true, force: true });
   }
 
   // ---- a signup's gateway carry-over reaches bootstrap before first publish ----

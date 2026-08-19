@@ -30,7 +30,7 @@ import { pathToFileURL } from 'node:url';
 
 import { PodStore } from './lib/store.mjs';
 import { apRoot, rootOf, writeJsonAtomic } from './lib/home.mjs';
-import { ensureLocalTls } from './lib/certs.mjs';
+import { ensureTrustedTls } from './lib/certs.mjs';
 import { storageFor } from './lib/storage.mjs';
 import { resolveKeys } from './lib/keys.mjs';
 import { RemotePod } from './lib/remote.mjs';
@@ -723,7 +723,7 @@ export async function startAgent({
   let httpsPort = Number(process.env.AP_HTTPS_PORT) || port + 1000;
   let tls = null;
   try {
-    tls = ensureLocalTls(path.join(rootOf(agent.home), 'certs'), { log });
+    tls = ensureTrustedTls(path.join(rootOf(agent.home), 'certs'), { log });
     agent.httpsPort = httpsPort;
   } catch (e) {
     log(`https disabled — certificate setup failed: ${e.message}`);

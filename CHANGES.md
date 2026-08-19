@@ -8,9 +8,14 @@
   flow now gets a code its secret can actually redeem.
 - Agent addresses are https: `https://<handle>.localhost:<port+1000>`
   everywhere an address is printed, opened or linked, and the well-known door
-  answers at `https://localhost:9030/`. Run `fedipod https --trust` once to
-  add the machine's certificate authority to your trust store. The plain
-  listeners remain for compatibility.
+  answers at `https://localhost:9030/`. The plain listeners remain for
+  compatibility.
+- The certificate is trusted automatically: the first agent start mints a
+  local certificate authority carrying a critical name constraint — it can
+  only ever vouch for localhost names and loopback addresses — signs the
+  server certificate with it, and installs the authority in the browser
+  trust store (NSS). `fedipod https --trust` remains for the system-wide
+  store and odd setups; `AP_TRUST_INSTALL=0` disables the automatic step.
 - On a FediPod Server, sign-up is the only way an account is made: a pod
   becomes an identity when its owner opts in at `/run` (or `POST /api/agent`)
   and stops when they opt out. The `agentPods` setting — operator-listed pods
