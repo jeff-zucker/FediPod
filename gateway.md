@@ -50,7 +50,7 @@ mode says how far you trust the door, and every step is reversible:
 Set it from the agent's own API:
 
 ```
-curl -X POST http://localhost:8030/gateway -H 'content-type: application/json' \
+curl -k -X POST https://localhost:9030/gateway -H 'content-type: application/json' \
   -d '{"action":"mode","mode":"shadow"}'
 ```
 
@@ -110,7 +110,7 @@ If you are not using a signup page:
 3. Point your agent at it, which mints the shared secret and returns it once:
 
    ```
-   curl -X POST http://localhost:8030/gateway -H 'content-type: application/json' \
+   curl -k -X POST https://localhost:9030/gateway -H 'content-type: application/json' \
      -d '{"action":"configure","url":"<door-inbox-url>","webId":"<door-webid>"}'
    ```
 

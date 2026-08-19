@@ -140,10 +140,10 @@ the agent before moving keys.
 node bin/fedipod.mjs https
 node bin/fedipod.mjs https --trust
 ```
-Agents serve https beside http on their port plus 1000 (or `AP_HTTPS_PORT`),
-with a certificate made on your machine at first start — for clients that
-refuse plain http. `--trust` mints a local CA, signs the certificate with
-it, and prints the one step that adds the CA to your system's trust store,
-for clients that refuse self-signed certificates outright.
+Every agent's address is https, on its port plus 1000 (or `AP_HTTPS_PORT`),
+with a certificate made on your machine at first start. Run `--trust` once
+so your browser and apps accept it without asking: it mints a local CA,
+signs the certificate with it, adds the CA to your browser's trust store,
+and prints the one optional step for the system-wide store.
 <!-- /CLAUDE -->
 

@@ -1,6 +1,6 @@
 # The Admin interface
 
-Open `http://localhost:8030/` while any agent is running — it forwards you to the agent's own `https` address (self-signed; your browser may ask once to trust it) — then choose `manage account` and select the actor you want from the local actors dropdown.
+Open `https://localhost:9030/` while any agent is running — it forwards you to the agent — then choose `manage account` and select the actor you want from the local actors dropdown. If your browser warns about the certificate, run `fedipod https --trust` once and it won't again.
 
 
 * **Parking** (the status control) stops the mail and unfollows people you follow, but keeps your handle
