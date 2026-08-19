@@ -2,12 +2,11 @@
 
 -- a full ActivityPub server deployed as a Community Solid Server component
 
-This is a CSS component. Install it in a server you already run for pods, and
-name a pod: the component runs the whole FediPod agent for it, so the pod
-accepts follows, delivers posts, drains its inbox and serves its owner's
-Mastodon client on the pod's own origin. There is no agent process to keep
-alive, and everything reaches the pod through the server's own store — no
-credential, no second box, no loopback request.
+This is a CSS component. Install it in a fresh server instance or an instance
+you already run for pods. Each pod you list in the configuration becomes a
+full fediverse account: it accepts follows, delivers its owner's posts, and
+serves their Mastodon client at the pod's own address. Pod owners can also
+opt in themselves, without the operator touching the configuration.
 
 With nothing configured beyond the defaults, installing the component changes
 nothing about how the server serves pods.
@@ -42,7 +41,7 @@ and stop with the server, and on the websocket handler list for the live feed.
 
 ## Acting for pods you host
 
-Name the pods, and each becomes a fediverse identity:
+List the pods in the configuration; each becomes a fediverse identity:
 
 ```json
 {
