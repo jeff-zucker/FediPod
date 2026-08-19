@@ -143,7 +143,7 @@ function render() {
     ['local host', (origins.named || origins.loopback || `http://localhost:${config.port}`)
       .replace(/\/$/, '')],
   ];
-  if (config.update) rows.push(['software', 'ctl']);
+  if (config.update || config.pendingUpgrade?.length) rows.push(['software', 'ctl']);
   if (config.quiescedAt) rows.push(['parked since', config.quiescedAt]);
   if (config.movedTo) rows.push(['moved to', config.movedTo]);
   // A person gates followers here; a group's gate is the joins control on its
@@ -192,9 +192,11 @@ function render() {
       dd.append(UPDATE_CTL);
       UPDATE_CTL.hidden = false;
       const u = config.update;
-      UPDATE_WORD.textContent = u.available
-        ? `FediPod ${u.current} — ${u.latest} available` : `FediPod ${u.current}`;
-      UPDATE_GO.hidden = !u.available;
+      const words = [];
+      if (u) words.push(u.available ? `FediPod ${u.current} — ${u.latest} available` : `FediPod ${u.current}`);
+      if (config.pendingUpgrade?.length) words.push('older data layout — run `fedipod upgrade` in a terminal');
+      UPDATE_WORD.textContent = words.join('; ');
+      UPDATE_GO.hidden = !u?.available;
     }
     // The accounts elsewhere this one may receive a Move from. Each entry is
     // removable, behind a second click — servers still retrying a Move check

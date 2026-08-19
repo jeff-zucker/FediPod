@@ -48,6 +48,12 @@ try {
   runPage = readFileSync(
     fileURLToPath(new URL('../../web/front/run.html', import.meta.url)), 'utf8');
 } catch { /* without it /run 404s */ }
+// The deploy's own version: what the signup page shows as current.
+let frontVersion = null;
+try {
+  frontVersion = JSON.parse(readFileSync(
+    fileURLToPath(new URL('../../package.json', import.meta.url)), 'utf8')).version || null;
+} catch { /* the page just omits the line */ }
 
 let dir = null, dirAt = 0;
 const DIR_TTL_MS = 60_000;
@@ -97,6 +103,7 @@ export default async function handler(request) {
     runPage,
     authBundle,
     installScript,
+    version: frontVersion,
     offersPods: process.env.FEDIPOD_OFFERS_PODS === '1',
     gatewayWebId: process.env.FEDIPOD_GATEWAY_WEBID || null,
     lookup: (handle) => map[handle] || null,

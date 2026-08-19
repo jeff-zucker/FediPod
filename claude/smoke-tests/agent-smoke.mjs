@@ -9241,6 +9241,10 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   const runReserved = JSON.parse((await front.routeFront(R('GET', '/api/handle?handle=run'), ctx2)).body);
   check(runReserved.available === false && /reserved/.test(runReserved.reason),
     "the handle 'run' is reserved so it never shadows the route");
+  const verProbe = JSON.parse((await front.routeFront(
+    R('GET', '/api/handle?handle=__probe__'), { ...ctx2, version: '9.9.9' })).body);
+  check(verProbe.version === '9.9.9' && verProbe.available === false,
+    "the probe carries the front's version, so the page can say what current is");
 
   const free = JSON.parse((await front.routeFront(R('GET', '/api/handle?handle=alice'), ctx2)).body);
   check(free.available === true && free.offersPods === true,

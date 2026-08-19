@@ -42,6 +42,9 @@
 FediPod is experimental and free to use.  See the <a href="https://github.com/jeff-zucker/FediPod">FediPod repository</a> for details.
 </p>
 
+<p class="hint" id="current-version" hidden>Current FediPod: <strong id="current-version-num"></strong>
+ — update an existing install with <code id="current-version-cmd"></code></p>
+
 <fieldset>
   <legend>What do you want to do?</legend>
   <div class="choices" role="group" aria-label="Path">
@@ -164,6 +167,11 @@ FediPod is experimental and free to use.  See the <a href="https://github.com/je
   fetch('/api/handle?handle=__probe__').then(r => r.json()).then(d => {
     offersPods = !!d.offersPods;
     $('create-pods').hidden = !offersPods;
+    if (d.version) {
+      $('current-version-num').textContent = d.version;
+      $('current-version-cmd').textContent = `curl -fsSL ${location.origin}/install | sh`;
+      $('current-version').hidden = false;
+    }
   }).catch(() => {});
 
   const picks = ['pick-solo', 'pick-group', 'pick-manage'];

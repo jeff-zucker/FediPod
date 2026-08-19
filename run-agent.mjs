@@ -267,10 +267,14 @@ export class Agent {
     // nothing here refuses — but it should not go on SILENTLY. The whole reason
     // this is said out loud is that bbba587 changed a default and every install
     // that already existed kept the old layout with nothing to show for it.
-    for (const step of pendingSteps(cred)) {
+    const pending = pendingSteps(cred);
+    for (const step of pending) {
       this.log(`this identity is on an older layout: ${step.what} (${step.why}). `
         + 'Run `fedipod upgrade` to see what is pending.');
     }
+    // The record page says the same thing on its software row — the log is
+    // read by nobody who lives in the GUI.
+    this.pendingUpgrade = pending.map(s => s.what);
 
     if (process.env.AP_ALLOWED_HOSTS && !config.uiPassword) {
       this.log('WARNING: AP_ALLOWED_HOSTS is set and no UI password is — anyone holding '
