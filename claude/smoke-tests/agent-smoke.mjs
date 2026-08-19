@@ -6333,6 +6333,16 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
       'the CA carries a critical name constraint, so it can only vouch for localhost');
     const again = ensureTrustedTls(cdir, { log: () => {} });
     check(again.cert === tls.cert, 'a restart reuses the same certificate — trust is once per machine');
+    // Strict validators refuse *.localhost as a wildcard, so each agent's own
+    // name must be listed — and a re-mint for one keeps the others' names.
+    const mei = ensureTrustedTls(cdir, { log: () => {}, names: ['mei.localhost'] });
+    const wren = ensureTrustedTls(cdir, { log: () => {}, names: ['wren.localhost'] });
+    const { X509Certificate } = await import('node:crypto');
+    const sans = new X509Certificate(wren.cert).subjectAltName || '';
+    check(sans.includes('DNS:mei.localhost') && sans.includes('DNS:wren.localhost'),
+      "an agent's name joins the certificate without evicting its siblings'");
+    check(mei.cert !== tls.cert && wren.cert !== mei.cert,
+      'each new name re-mints once, then rides');
     fs.rmSync(cdir, { recursive: true, force: true });
   }
 

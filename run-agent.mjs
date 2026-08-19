@@ -45,7 +45,7 @@ import { BskyFeed } from './lib/bskyfeed.mjs';
 import { BskyGroup } from './lib/bskygroup.mjs';
 import { Lease } from './lib/lease.mjs';
 import { startAdmin } from './lib/admin.mjs';
-import { exposureProblem } from './lib/guard.mjs';
+import { exposureProblem, hostLabel } from './lib/guard.mjs';
 import { pendingSteps } from './lib/migrate.mjs';
 import { apUrls } from './lib/wire.mjs';
 import { followActor, unfollowActor, resolveHandle } from './lib/social.mjs';
@@ -723,7 +723,8 @@ export async function startAgent({
   let httpsPort = Number(process.env.AP_HTTPS_PORT) || port + 1000;
   let tls = null;
   try {
-    tls = ensureTrustedTls(path.join(rootOf(agent.home), 'certs'), { log });
+    tls = ensureTrustedTls(path.join(rootOf(agent.home), 'certs'),
+      { log, names: hostLabel(handle) ? [`${hostLabel(handle)}.localhost`] : [] });
     agent.httpsPort = httpsPort;
   } catch (e) {
     log(`https disabled — certificate setup failed: ${e.message}`);
