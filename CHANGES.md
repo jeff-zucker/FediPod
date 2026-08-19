@@ -31,6 +31,11 @@
   the config type `FediPodServerHandler` on `urn:fedipod:server:Handler`, and
   the shipped snippet `fps:config/server.json`. Existing configs need those
   four names updated.
+- A signup carry-over now works on a machine that already has identities:
+  `npm start` after the installer brings the new identity up beside the
+  existing ones, on its own port, with setup pre-filled. A carried name that
+  already exists locally is refused rather than adopted. An explicitly named
+  profile or home is never overridden.
 - Signup-first onboarding: fedipod.net's create panels sign you up before
   anything is installed — sign in with your pod, pick your handle and your
   address shape (`@you@your.pod` or `@you@fedipod.net`), and the success

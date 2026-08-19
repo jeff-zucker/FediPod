@@ -364,30 +364,44 @@ async function runBrowserSetup() {
 // when there is. Detached, because you asked for an agent, not a terminal
 // that is now busy: it logs to AP_HOME/agent.log and `stop` finds it by pidfile.
 if (cmd === 'up') {
-  // A fresh machine has no identity, and an identity is named after its handle,
-  // so there is no home to start in until that is asked. One question, the same
-  // one `setup` opens with — `npm start` stays the single command it was.
-  if (DEFAULT_ISSUE && !identityHomes(AP_ROOT).some(h => fs.existsSync(path.join(h.dir, 'credential.json')))) {
-    // A signup page may have answered the question already: the installer
-    // records its parameters in first-run.json beside this script's package,
-    // and the agent's setup reads the rest of it (AP_FIRST_RUN).
-    const firstRunFile = new URL('../first-run.json', import.meta.url).pathname;
-    let firstRun = null;
+  // A signup page may have arranged an identity already: the installer records
+  // its parameters in first-run.json beside this script's package, and the
+  // carry-over outranks the last-used identity — whether this machine is fresh
+  // or already full of accounts, `npm start` right after the installer brings
+  // up the identity the signup arranged, beside any that exist. An explicitly
+  // named profile or home still means exactly what it says.
+  const firstRunFile = process.env.AP_FIRST_RUN
+    || new URL('../first-run.json', import.meta.url).pathname;
+  const explicitHome = !!(PROFILE || flag('home', null) || process.env.AP_HOME);
+  let firstRun = null;
+  if (!explicitHome) {
     try { firstRun = JSON.parse(fs.readFileSync(firstRunFile, 'utf8')); } catch { /* none */ }
-    if (firstRun?.handle) {
-      requireHandle(String(firstRun.handle));
-      useProfile(String(firstRun.handle));
-      process.env.AP_FIRST_RUN = firstRunFile;
-    } else if (!process.stdin.isTTY) {
+  }
+  if (firstRun?.handle) {
+    const carried = String(firstRun.handle);
+    requireHandle(carried);
+    if (fs.existsSync(path.join(profileHome(AP_ROOT, carried), 'credential.json'))) {
+      console.error(`the signup carried the name "${carried}", but an identity with that name already exists here.`);
+      console.error('To attach the existing identity instead, use the signup page\'s Manage → Attach —');
+      console.error(`then remove ${firstRunFile} and run this again.`);
+      process.exit(2);
+    }
+    useProfile(carried);
+    process.env.AP_FIRST_RUN = firstRunFile;
+  } else if (DEFAULT_ISSUE && !identityHomes(AP_ROOT).some(h => fs.existsSync(path.join(h.dir, 'credential.json')))) {
+    // A fresh machine has no identity, and an identity is named after its
+    // handle, so there is no home to start in until that is asked. One
+    // question, the same one `setup` opens with — `npm start` stays the
+    // single command it was.
+    if (!process.stdin.isTTY) {
       console.error('no identities yet — bin/fedipod.mjs setup');
       process.exit(2);
-    } else {
-      const first = await ask('handle (the name in your address; permanent)');
-      endAsking();
-      if (!first) { console.error('a handle is required'); process.exit(2); }
-      requireHandle(first);
-      useProfile(first);
     }
+    const first = await ask('handle (the name in your address; permanent)');
+    endAsking();
+    if (!first) { console.error('a handle is required'); process.exit(2); }
+    requireHandle(first);
+    useProfile(first);
   } else {
     requireIdentity();
   }

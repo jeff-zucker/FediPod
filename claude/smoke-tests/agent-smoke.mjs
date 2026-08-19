@@ -7345,6 +7345,41 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
     // origin is the https one, on the mirrored port.
     check(up4.ok && /https:\/\/wren\.localhost:19805\/admin\/client\//.test(up4.out) && !/admin\/setup/.test(up4.out),
       'an agent that has an identity opens its own https client, not bare Phanpy or the form');
+
+    // A signup carry-over on a machine that already has identities: the new
+    // profile comes up beside them, never instead of them — and a carried
+    // name that already exists here is refused, not adopted.
+    const { CURRENT_ROOT: ROOT16 } = await import(path.join(root, 'lib/home.mjs'));
+    const FROOT = fs.mkdtempSync('/tmp/fedipod-up-carry-');
+    const runRoot = (args, extra = {}) => new Promise((resolve) => {
+      execFile(process.execPath, [path.join(root, 'bin/fedipod.mjs'), ...args],
+        { env: { ...process.env, HOME: FROOT, AP_HOME: '', ...extra } },
+        (err, stdout, stderr) => resolve({ ok: !err, out: String(stdout) + String(stderr) }));
+    });
+    const heldHome = path.join(FROOT, ROOT16, 'profiles', 'held');
+    fs.mkdirSync(heldHome, { recursive: true });
+    fs.writeFileSync(path.join(heldHome, 'credential.json'), JSON.stringify({
+      remotePod: 'https://held.example/', clientId: 'c', secret: 's', issuerOrigin: 'https://held.example',
+    }));
+    fs.writeFileSync(path.join(heldHome, 'agent.json'), JSON.stringify({ port: 18808, handle: 'held' }));
+    const frDir = fs.mkdtempSync('/tmp/fedipod-fr-');
+    const frFile = path.join(frDir, 'first-run.json');
+    fs.writeFileSync(frFile, JSON.stringify({ handle: 'nova', kind: 'person',
+      pod: 'https://nova.example/', issuer: 'https://example.org',
+      gateway: 'https://front.example/u/nova/ap/inbox/', secret: 'S' }));
+    const novaHome = path.join(FROOT, ROOT16, 'profiles', 'nova');
+    const up6 = await runRoot(['up', '--no-open', '--port', '18809'], { AP_FIRST_RUN: frFile });
+    check(up6.ok && /nova\.localhost/.test(up6.out) && /admin\/setup\//.test(up6.out)
+      && fs.existsSync(path.join(novaHome, 'agent.pid')),
+    'a signup carry-over comes up as a NEW identity beside the existing ones');
+    check(fs.existsSync(frFile), 'the carry-over file survives until setup consumes it');
+    await run(novaHome, ['stop']);
+    fs.writeFileSync(frFile, JSON.stringify({ handle: 'held', pod: 'https://x.example/' }));
+    const up7 = await runRoot(['up', '--no-open'], { AP_FIRST_RUN: frFile });
+    check(!up7.ok && /already exists here/.test(up7.out),
+      'a carried name that is already an identity here is refused, not adopted');
+    fs.rmSync(frDir, { recursive: true, force: true });
+    fs.rmSync(FROOT, { recursive: true, force: true });
   } finally {
     for (const h of homes) await run(h, ['stop']);
     for (const h of homes) fs.rmSync(h, { recursive: true, force: true });
