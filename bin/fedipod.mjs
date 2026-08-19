@@ -419,13 +419,18 @@ if (cmd === 'up') {
   // bought — so the named origin works on the very first run, before anything
   // has been recorded.
   const label = hostLabel(recordedAgent().handle || path.basename(HOME));
-  const origin = `http://${label ? label + '.' : ''}localhost:${port}`;
-  // The client pinned to this actor, not the bare root — root serves vendored
-  // Phanpy with no account bound, which reads as the wrong app entirely.
-  const url = configured ? `${origin}/admin/client/` : `${origin}/admin/setup/`;
+  // https when the agent records its https listener (the default), http when
+  // certificates failed on this machine. Read after the agent is up, because
+  // the agent itself records which it serves.
+  const originNow = () => {
+    const rec = recordedAgent();
+    return rec.httpsPort
+      ? `https://${label ? label + '.' : ''}localhost:${rec.httpsPort}`
+      : `http://${label ? label + '.' : ''}localhost:${port}`;
+  };
 
   if (already) {
-    console.log(`already running on port ${port} — ${url}`);
+    console.log(`already running on port ${port}`);
   } else {
     // The handle too, not just the port: the agent seeds its allowed hosts
     // from agent.json, and without it the named origin this command is about
@@ -451,6 +456,9 @@ if (cmd === 'up') {
     console.log(`agent running on port ${port} (pid in ${path.join(HOME, 'agent.pid')})`);
     if (port !== preferred) console.log(`port ${preferred} was taken, so it moved to ${port}`);
   }
+  // The client pinned to this actor, not the bare root — root serves vendored
+  // Phanpy with no account bound, which reads as the wrong app entirely.
+  const url = configured ? `${originNow()}/admin/client/` : `${originNow()}/admin/setup/`;
   console.log(`\n  ${url}\n`);
   console.log(configured ? 'stop it with:  bin/fedipod.mjs stop'
     : 'setup continues in the browser. Stop it with:  bin/fedipod.mjs stop');

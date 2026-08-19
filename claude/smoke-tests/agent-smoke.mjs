@@ -7280,9 +7280,10 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
     const up4 = await run(CHOME, ['up', '--no-open']);
     // The client pinned to the actor, not the bare root — root is vendored
     // Phanpy with no account bound. The old `${origin}/` also matched the
-    // origin regex alone, so the path is asserted explicitly.
-    check(up4.ok && /http:\/\/wren\.localhost:18805\/admin\/client\//.test(up4.out) && !/admin\/setup/.test(up4.out),
-      'an agent that has an identity opens its own client, not bare Phanpy or the form');
+    // origin regex alone, so the path is asserted explicitly. The advertised
+    // origin is the https one, on the mirrored port.
+    check(up4.ok && /https:\/\/wren\.localhost:19805\/admin\/client\//.test(up4.out) && !/admin\/setup/.test(up4.out),
+      'an agent that has an identity opens its own https client, not bare Phanpy or the form');
   } finally {
     for (const h of homes) await run(h, ['stop']);
     for (const h of homes) fs.rmSync(h, { recursive: true, force: true });

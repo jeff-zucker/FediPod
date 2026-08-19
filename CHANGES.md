@@ -1,6 +1,12 @@
 # Changes
 
 ## 2026-08-19
+- https is the advertised default for every agent: `up`, the record page's
+  actor links, the directory door on 8030 and the boot log all point at
+  `https://<handle>.localhost:<port+1000>` (self-signed; a browser asks once
+  to trust it). The http listener stays served beside it, so existing
+  bookmarks and curl examples keep working; where certificates cannot be
+  minted the agent advertises http as before.
 - On a FediPod Server, sign-up is the only way an account is made: a pod
   becomes an identity when its owner opts in at `/run` (or `POST /api/agent`)
   and stops when they opt out. The `agentPods` setting — operator-listed pods

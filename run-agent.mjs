@@ -729,6 +729,18 @@ export async function startAgent({
     log(`https disabled — certificate setup failed: ${e.message}`);
     httpsPort = null;
   }
+  // Record the https port beside the http one: it is the advertised origin,
+  // and `up`, the actors list and sibling spawns read it from here. Stripped
+  // when certificates failed, so nothing links to a listener that is not there.
+  try {
+    const rec2 = JSON.parse(fs.readFileSync(agentJson, 'utf8')) || {};
+    if (tls && httpsPort && rec2.httpsPort !== httpsPort) {
+      writeJsonAtomic(agentJson, { ...rec2, httpsPort }, { mode: 0o644 });
+    } else if (!tls && rec2.httpsPort) {
+      const { httpsPort: gone, ...rest } = rec2;
+      writeJsonAtomic(agentJson, rest, { mode: 0o644 });
+    }
+  } catch { /* the agent still runs; it is just advertised as http */ }
   startAdmin({ port, gateToken, agent, log, handle, httpsPort, tls });
 
   // The pod (or its issuer) can be briefly unreachable — a 504 from the
