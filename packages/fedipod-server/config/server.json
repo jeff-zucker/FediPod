@@ -1,13 +1,13 @@
 {
   "@context": [
     "https://linkedsoftwaredependencies.org/bundles/npm/@solid/community-server/^7.0.0/components/context.jsonld",
-    "https://linkedsoftwaredependencies.org/bundles/npm/fedipod-css-gateway/^0.0.0/components/context.jsonld"
+    "https://linkedsoftwaredependencies.org/bundles/npm/fedipod-server/^0.0.0/components/context.jsonld"
   ],
   "@graph": [
     {
-      "comment": "The FediPod gateway/front handler. Set args_frontHost to the apex the front answers on (e.g. fedipod.net) and args_frontOrigin to its origin; pod subdomains fall through to CSS untouched. Field names carry the args_ prefix the generator produced from the constructor's options object.",
-      "@id": "urn:fedipod:gateway:Handler",
-      "@type": "FediPodGatewayHandler",
+      "comment": "The FediPod server handler. Set args_frontHost to the apex the front answers on (e.g. fedipod.net) and args_frontOrigin to its origin; pod subdomains fall through to CSS untouched. Field names carry the args_ prefix the generator produced from the constructor's options object.",
+      "@id": "urn:fedipod:server:Handler",
+      "@type": "FediPodServerHandler",
       "args_resourceStore": { "@id": "urn:solid-server:default:ResourceStore" },
       "args_frontHost": "fedipod.net",
       "args_frontOrigin": { "@id": "urn:solid-server:default:variable:baseUrl" },
@@ -18,15 +18,15 @@
     },
     {
       "comment": "The live feed for a pod-hosted identity. A websocket upgrade never enters the request waterfall — CSS routes it through a handler list of its own — so this is a second class holding the same handler instance. Appending to the list here unions with whichever notification configuration the deployment loads.",
-      "@id": "urn:fedipod:gateway:StreamingHandler",
+      "@id": "urn:fedipod:server:StreamingHandler",
       "@type": "FediPodStreamingHandler",
-      "args_gateway": { "@id": "urn:fedipod:gateway:Handler" }
+      "args_server": { "@id": "urn:fedipod:server:Handler" }
     },
     {
       "@id": "urn:solid-server:default:WebSocketHandler",
       "@type": "WaterfallHandler",
       "handlers": [
-        { "@id": "urn:fedipod:gateway:StreamingHandler" }
+        { "@id": "urn:fedipod:server:StreamingHandler" }
       ]
     },
     {
@@ -36,7 +36,7 @@
       "handlers": [
         {
           "@type": "InitializableHandler",
-          "initializable": { "@id": "urn:fedipod:gateway:Handler" }
+          "initializable": { "@id": "urn:fedipod:server:Handler" }
         }
       ]
     },
@@ -46,7 +46,7 @@
       "handlers": [
         {
           "@type": "FinalizableHandler",
-          "finalizable": { "@id": "urn:fedipod:gateway:Handler" }
+          "finalizable": { "@id": "urn:fedipod:server:Handler" }
         }
       ]
     },
@@ -59,7 +59,7 @@
           "@type": "OverrideListInsertBefore",
           "overrideParameter": { "@id": "https://linkedsoftwaredependencies.org/bundles/npm/@solid/community-server/^7.0.0/dist/util/handlers/WaterfallHandler.jsonld#WaterfallHandler_handlers" },
           "overrideTarget": { "@id": "urn:solid-server:default:LdpHandler" },
-          "overrideValue": { "@id": "urn:fedipod:gateway:Handler" }
+          "overrideValue": { "@id": "urn:fedipod:server:Handler" }
         }
       ]
     }

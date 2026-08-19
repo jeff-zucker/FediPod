@@ -25,9 +25,9 @@ let fails = 0;
 const check = (ok, label) => { console.log(`${ok ? 'PASS' : 'FAIL'}  ${label}`); if (!ok) fails++; };
 
 // Components.js loads a component by package name, so the package has to be
-// resolvable as one — the same link `npm install fedipod-css-gateway` would
+// resolvable as one — the same link `npm install fedipod-server` would
 // leave behind. Made here so this test runs straight after a plain install.
-const selfLink = path.join(pkg, 'node_modules', 'fedipod-css-gateway');
+const selfLink = path.join(pkg, 'node_modules', 'fedipod-server');
 if (!fs.existsSync(selfLink)) fs.symlinkSync(pkg, selfLink, 'dir');
 
 // Subdomain pods: the Mastodon client API is rooted at an origin, so an
@@ -55,16 +55,16 @@ const config = path.join(tmp, 'agent-e2e.json');
 fs.writeFileSync(config, JSON.stringify({
   '@context': [
     'https://linkedsoftwaredependencies.org/bundles/npm/@solid/community-server/^7.0.0/components/context.jsonld',
-    'https://linkedsoftwaredependencies.org/bundles/npm/fedipod-css-gateway/^0.0.0/components/context.jsonld',
+    'https://linkedsoftwaredependencies.org/bundles/npm/fedipod-server/^0.0.0/components/context.jsonld',
   ],
-  import: [ 'css:config/memory-subdomains.json', 'fpg:config/gateway.json' ],
+  import: [ 'css:config/memory-subdomains.json', 'fps:config/server.json' ],
   '@graph': [
     {
       comment: 'The front answers on the server root here, so /api/agent is reachable in the test.',
       '@type': 'Override',
-      overrideInstance: { '@id': 'urn:fedipod:gateway:Handler' },
+      overrideInstance: { '@id': 'urn:fedipod:server:Handler' },
       overrideParameters: {
-        '@type': 'FediPodGatewayHandler',
+        '@type': 'FediPodServerHandler',
         args_resourceStore: { '@id': 'urn:solid-server:default:ResourceStore' },
         args_clusterManager: { '@id': 'urn:solid-server:default:ClusterManager' },
         args_frontHost: 'localhost',

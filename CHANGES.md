@@ -1,5 +1,23 @@
 # Changes
 
+## 2026-08-19
+- The CSS component is renamed `fedipod-server` (was `fedipod-css-gateway`):
+  the folder is `packages/fedipod-server`, the npm package `fedipod-server`,
+  the config type `FediPodServerHandler` on `urn:fedipod:server:Handler`, and
+  the shipped snippet `fps:config/server.json`. Existing configs need those
+  four names updated.
+- Signup-first onboarding: fedipod.net's create panels sign you up before
+  anything is installed — sign in with your pod, pick your handle and your
+  address shape (`@you@your.pod` or `@you@fedipod.net`), and the success
+  screen hands one install command carrying the gateway, secret, pod, issuer,
+  handle and kind. The installer saves them; the first `npm start` skips the
+  terminal question, opens setup pre-filled, and attaching happens at first
+  publish. The plain no-flag installer is unchanged.
+- The "Run your identity on this server" flow moved off the signup page to its
+  own page at `/run`, served only where a host supplies it (`runPage`).
+- First run of `up` records the handle before spawning the agent, so the
+  `<handle>.localhost` setup page answers instead of refusing.
+
 ## 2026-08-18
 - Each server-hosted identity's owner door has its own secret, minted beside
   its signing key; the shared `agentGateToken` setting is gone. Proving pod

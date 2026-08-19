@@ -3,7 +3,7 @@
 // the standalone gateway runs (routeFront). All the logic lives elsewhere and
 // tests without CSS; this file is the wiring CSS needs.
 //
-// componentsjs-generator reads FediPodGatewayArgs to emit one component
+// componentsjs-generator reads FediPodServerArgs to emit one component
 // parameter per field, so the config injects each by name.
 
 import { existsSync } from 'node:fs';
@@ -20,7 +20,7 @@ import { makeStoreSession } from './store-pod';
 import { makeDirectory, makeStorePodPut, makeAgentRegistry } from './directory';
 import type { IO, Directory, AgentRegistry } from './directory';
 
-export interface FediPodGatewayArgs {
+export interface FediPodServerArgs {
   /** The server's ResourceStore: the handler reads pods and writes inbox items and directory rows directly through it — no HTTP, no credential. */
   resourceStore: ResourceStore;
   /** The apex host the front answers on, e.g. fedipod.net. Pod subdomains are never claimed. */
@@ -99,8 +99,8 @@ function normalizeUiPath(raw?: string): string {
   return `/${path.replace(/^\/+|\/+$/gu, '')}/`;
 }
 
-export class FediPodGatewayHandler extends HttpHandler implements Initializable, Finalizable {
-  private readonly args: FediPodGatewayArgs;
+export class FediPodServerHandler extends HttpHandler implements Initializable, Finalizable {
+  private readonly args: FediPodServerArgs;
   private readonly io: IO;
   public readonly dir: Directory;
   private readonly podPut: (url: string, body: string, contentType: string) => Promise<boolean>;
@@ -118,7 +118,7 @@ export class FediPodGatewayHandler extends HttpHandler implements Initializable,
   private stopping = false;
   private onSignal: ((signal: NodeJS.Signals) => void) | null = null;
 
-  public constructor(args: FediPodGatewayArgs) {
+  public constructor(args: FediPodServerArgs) {
     super();
     this.args = args;
     this.io = makeStoreIO(args.resourceStore);

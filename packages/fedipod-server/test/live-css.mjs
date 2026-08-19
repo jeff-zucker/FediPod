@@ -11,7 +11,7 @@ import {
   ComposedAuxiliaryStrategy, SuffixAuxiliaryIdentifierStrategy, MonitoringStore,
   RepresentationConvertingStore, ChainedConverter, RdfToQuadConverter, QuadToRdfConverter,
 } from '@solid/community-server';
-import { FediPodGatewayHandler } from '../dist/index.js';
+import { FediPodServerHandler } from '../dist/index.js';
 import { makeStoreSession } from '../dist/store-pod.js';
 import { RemotePod } from '../../../lib/remote.mjs';
 import { Lease } from '../../../lib/lease.mjs';
@@ -30,7 +30,7 @@ const store = {
 };
 
 const DIRC = 'http://localhost:4000/.internal/fedipod/directory/';
-const handler = new FediPodGatewayHandler({
+const handler = new FediPodServerHandler({
   resourceStore: store, frontHost: 'fedipod.net', frontOrigin: 'https://fedipod.net',
   gatewayWebId: 'https://fedipod.net/gw#me', offersPods: true,
   directoryContainer: DIRC, signupPage: '<!doctype html><title>join</title>',
@@ -99,7 +99,7 @@ check(true, 'and with no agent configured they do nothing');
 // clean-shutdown handler (the stock CSS CLI installs none, so a stop killed
 // state unflushed and held the lease for its TTL) and takes it off at finalize.
 {
-  const sigHandler = new FediPodGatewayHandler({
+  const sigHandler = new FediPodServerHandler({
     resourceStore: store, frontHost: 'fedipod.net', frontOrigin: 'https://fedipod.net',
     directoryContainer: DIRC, agentRuntimeOptIn: true,
     agentDataDir: fs.mkdtempSync('/tmp/fedipod-sig-'), agentRegistryContainer: '/reg/',
@@ -114,7 +114,7 @@ check(true, 'and with no agent configured they do nothing');
 }
 
 const built = (args) => {
-  try { return new FediPodGatewayHandler({ resourceStore: store, frontHost: 'fedipod.net',
+  try { return new FediPodServerHandler({ resourceStore: store, frontHost: 'fedipod.net',
     frontOrigin: 'https://fedipod.net', directoryContainer: DIRC, ...args }) && null; }
   catch (e) { return e.message; }
 };
@@ -240,7 +240,7 @@ import pathMod from 'node:path';
 
 const optDataDir = fs.mkdtempSync(pathMod.join(os.tmpdir(), 'fpg-optin-'));
 const OPT_POD = 'http://dana.localhost:4000/';
-const optHandler = new FediPodGatewayHandler({
+const optHandler = new FediPodServerHandler({
   resourceStore: realStore, frontHost: 'fedipod.net', frontOrigin: 'https://fedipod.net',
   directoryContainer: podBase + '.internal/fedipod/directory/',
   agentRuntimeOptIn: true, agentDataDir: optDataDir,
@@ -271,7 +271,7 @@ check(again.httpStatus === 201 && again.status === 'rotated' && again.doorSecret
 
 // A different handler over the SAME store: the restart. Claims must be back
 // before any request is answered.
-const rebooted = new FediPodGatewayHandler({
+const rebooted = new FediPodServerHandler({
   resourceStore: realStore, frontHost: 'fedipod.net', frontOrigin: 'https://fedipod.net',
   directoryContainer: podBase + '.internal/fedipod/directory/',
   agentRuntimeOptIn: true, agentDataDir: optDataDir,

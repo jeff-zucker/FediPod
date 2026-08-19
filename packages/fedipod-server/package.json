@@ -1,7 +1,7 @@
 {
-  "name": "fedipod-css-gateway",
+  "name": "fedipod-server",
   "version": "0.3.0",
-  "description": "FediPod inbox gateway / multi-user front as a Community Solid Server component: verifies inbound ActivityPub deliveries at the door and writes them straight into pod inboxes through the server's own store.",
+  "description": "The FediPod Server: a full ActivityPub server as a Community Solid Server component.",
   "license": "MIT",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -33,19 +33,19 @@
     "@types/node": "^20.0.0",
     "@solid/community-server": "^7.2.0"
   },
-  "lsd:module": "https://linkedsoftwaredependencies.org/bundles/npm/fedipod-css-gateway",
+  "lsd:module": "https://linkedsoftwaredependencies.org/bundles/npm/fedipod-server",
   "lsd:components": "dist/components/components.jsonld",
   "lsd:contexts": {
-    "https://linkedsoftwaredependencies.org/bundles/npm/fedipod-css-gateway/^0.0.0/components/context.jsonld": "dist/components/context.jsonld"
+    "https://linkedsoftwaredependencies.org/bundles/npm/fedipod-server/^0.0.0/components/context.jsonld": "dist/components/context.jsonld"
   },
   "lsd:importPaths": {
-    "https://linkedsoftwaredependencies.org/bundles/npm/fedipod-css-gateway/^0.0.0/components/": "dist/components/",
-    "https://linkedsoftwaredependencies.org/bundles/npm/fedipod-css-gateway/^0.0.0/config/": "config/",
-    "https://linkedsoftwaredependencies.org/bundles/npm/fedipod-css-gateway/^0.0.0/dist/": "dist/"
+    "https://linkedsoftwaredependencies.org/bundles/npm/fedipod-server/^0.0.0/components/": "dist/components/",
+    "https://linkedsoftwaredependencies.org/bundles/npm/fedipod-server/^0.0.0/config/": "config/",
+    "https://linkedsoftwaredependencies.org/bundles/npm/fedipod-server/^0.0.0/dist/": "dist/"
   },
   "scripts": {
     "build": "tsc && npm run build:components",
-    "build:components": "componentsjs-generator -s src -c dist/components -r fpg",
+    "build:components": "componentsjs-generator -s src -c dist/components -r fps",
     "test": "npm run build && node --test test/*.mjs",
     "test:e2e": "node test/e2e/live-agent.mjs",
     "prepack": "node scripts/pack-tree.mjs copy",

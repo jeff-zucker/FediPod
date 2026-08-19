@@ -18,7 +18,7 @@ runtime-agnostic Node:
 
 Another host needs only its own adapter calling the same `handleDelivery`. A
 Community Solid Server can run the same door as a component of itself instead
-— see [packages/css-gateway](../packages/css-gateway/README.md).
+— see [packages/fedipod-server](../packages/fedipod-server/README.md).
 
 ## Deploying
 

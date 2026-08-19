@@ -1,7 +1,6 @@
-# fedipod-css-gateway
+# FediPod Server
 
-The FediPod Server: run the pods a Community Solid Server hosts as full
-ActivityPub servers.
+-- a full ActivityPub server deployed as a Community Solid Server component
 
 This is a CSS component. Install it in a server you already run for pods, and
 name a pod: the component runs the whole FediPod agent for it, so the pod
@@ -18,7 +17,7 @@ nothing about how the server serves pods.
 ## Install
 
 ```
-npm install fedipod-css-gateway
+npm install fedipod-server
 ```
 
 Add the package context to your CSS config and import the shipped snippet:
@@ -27,43 +26,19 @@ Add the package context to your CSS config and import the shipped snippet:
 {
   "@context": [
     "...your CSS context...",
-    "https://linkedsoftwaredependencies.org/bundles/npm/fedipod-css-gateway/^0.0.0/components/context.jsonld"
+    "https://linkedsoftwaredependencies.org/bundles/npm/fedipod-server/^0.0.0/components/context.jsonld"
   ],
   "import": [
     "css:config/default.json",
-    "fpg:config/gateway.json"
+    "fps:config/server.json"
   ]
 }
 ```
 
-Then set what you need on the `urn:fedipod:gateway:Handler` node and restart
+Then set what you need on the `urn:fedipod:server:Handler` node and restart
 the server. The snippet places the component in the routing waterfall ahead of
 the LDP catch-all, on the initializer and finalizer lists so identities start
 and stop with the server, and on the websocket handler list for the live feed.
-
-## Taking delivery for other people's pods
-
-Set the host the door answers on. Requests to any other host — a pod
-subdomain, anything else the server serves — are untouched.
-
-| Setting | What it is |
-|---|---|
-| `frontHost` | The host this door answers on, e.g. `fedipod.net`. |
-| `frontOrigin` | Its origin. Defaults to the server's own base URL. |
-| `directoryContainer` | An internal container holding one row per handle: which pod it belongs to. |
-| `gatewayWebId` | The WebID stamped on verification receipts. |
-| `offersPods` | Whether the signup page offers a pod to people who have none. |
-| `signupPage` | The HTML served at the door's root. |
-
-On that host the component answers WebFinger for every handle in the
-directory, serves each person's public face by rewriting their own pod's
-addresses onto the shared domain, takes their deliveries, and runs the signup
-and attach flow.
-
-**A door is only a doorway.** It never hosts pods and never dictates where they
-live. If you also want to offer pods to people who have none, that is your CSS
-doing its ordinary job, with the duties that carries — and anyone may bring a
-pod of their own instead.
 
 ## Acting for pods you host
 
@@ -71,8 +46,8 @@ Name the pods, and each becomes a fediverse identity:
 
 ```json
 {
-  "@id": "urn:fedipod:gateway:Handler",
-  "@type": "FediPodGatewayHandler",
+  "@id": "urn:fedipod:server:Handler",
+  "@type": "FediPodServerHandler",
   "args_agentPods": [ "https://mei.example.org/" ],
   "args_agentDataDir": "/var/lib/css/fedipod-agent/"
 }
@@ -94,7 +69,7 @@ log never contains the secret itself.
 | `agentUiPath` | Where the owner's pages live on the pod's origin. `/app/` by default; empty serves no pages. |
 | `agentRuntimeOptIn` | Whether a pod owner may opt in at runtime by proving control of their pod. Off unless the host chooses it. |
 | `agentRegistryContainer` | The internal container holding runtime opt-in rows. |
-| `agentAutoFront` | When this server also runs the door, give each identity a `@handle@<frontHost>` address on startup by writing its directory row. The identity keeps its own actor ids on the pod. Off by default. |
+| `runPage` | The HTML served at `/run`: the page where a pod owner opts in or out. The repo ships one at `web/front/run.html`. |
 | `agentWebIdSuffix` | Path from a pod's base to its owner's WebID. Defaults to `profile/card#me`. |
 | `agentPollSeconds` | How often the inbox is swept. Deliveries also wake the sweep as they land, so this is the fallback. |
 | `agentAutoAcceptFollows` | Whether a newly provisioned identity accepts follows without review. On by default. |
@@ -106,7 +81,7 @@ connects to. Point a Mastodon app at `https://mei.example.org/` and it finds
 what it expects: nodeinfo, the client API under `/api/`, sign-in under
 `/oauth/`, the live feed at `/api/v1/streaming`, and the ActivityPub write API
 at `/ap/outbox`. The owner's own pages — the record, the setup screens and the
-bundled web client — are behind `agentUiPath`, which the gate secret guards.
+bundled web client — are behind `agentUiPath`, which the door secret guards.
 
 The client API answers any origin, the way any Mastodon server does, so a
 browser client works too: it registers an app, and the authorize screen names
@@ -116,9 +91,8 @@ redirect, and only that client, holding its secret, can exchange it for a
 token.
 
 A client API is rooted at an origin, so each identity needs an origin of its
-own: subdomain pods, one per identity. Two entries on one host, or an entry on
-the door's own host, are refused when the server starts rather than
-half-working.
+own: subdomain pods, one per identity. Two entries on one host are refused
+when the server starts rather than half-working.
 
 ### Before you turn it on
 
@@ -151,9 +125,9 @@ single worker outright, and says so when refused.
 ## Letting pod owners opt in themselves
 
 With `agentRuntimeOptIn` on, a pod owner can ask the server to run their
-identity without the operator touching the configuration. The signup page
-offers it as "Run your identity on this server", and underneath it is one
-endpoint on the front host:
+identity without the operator touching the configuration. Point owners at the
+`/run` page (supply `runPage`): they sign in with their pod there and opt in
+or out. Underneath it is one endpoint:
 
 ```
 POST /api/agent
@@ -178,11 +152,11 @@ secret.
 
 | File | What it does |
 |---|---|
-| `src/handler.ts` | The HTTP handler, and the identities' lifecycle. Claims the door's routes and each identity's routes; everything else falls through to the server. |
+| `src/handler.ts` | The HTTP handler, and the identities' lifecycle. Claims each identity's routes; everything else falls through to the server. |
 | `src/streaming-handler.ts` | The live feed. Websocket upgrades never enter the request waterfall, so they arrive here. |
-| `src/claims.ts` | Which paths belong to the door and to an identity. |
+| `src/claims.ts` | Which paths belong to an identity. |
 | `src/store-pod.ts` | An identity's whole conversation with its pod, carried by the server's store instead of the network. |
-| `src/store-css.ts` | The door's reads and writes, likewise. |
+| `src/store-css.ts` | The component's own reads and writes, likewise. |
 | `src/directory.ts` | The handle-to-pod directory, one document per handle. |
 | `src/adapt.ts` | Node request and response to the WHATWG pair the shared core speaks. |
 
@@ -190,8 +164,8 @@ Writing through the store bypasses access control by design: the component is
 the thing that decided the write is legitimate — a verified delivery, or an
 identity acting on its own pod.
 
-The door and the agent are FediPod's own, unchanged: this package is the part
-that knows about CSS.
+The agent is FediPod's own, unchanged: this package is the part that knows
+about CSS.
 
 ## Build and test
 
