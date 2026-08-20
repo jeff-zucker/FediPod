@@ -26,9 +26,8 @@ Picking an actor marked "(stopped)" starts its agent, then opens its page.
   longer act as this identity.
 * **Recover posts** re-reads your own posts from the pod after a restore. It
   only ever adds; nothing local is overwritten.
-* Discarding a backlog drops everything waiting that is larger than a couple
-  of kilobytes, whatever it is — a big follow or deletion goes with the
-  content. Smaller items are still read and applied.
+* Discarding a backlog drops old content only — its follows, unfollows and
+  deletions are still applied, whatever their size.
 
 The handle, the pod and person-vs-group are permanent. The display name, bio
 and pictures are edited in the client, not here.

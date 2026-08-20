@@ -1,6 +1,10 @@
 # Changes
 
 ## 2026-08-20
+- Discarding a backlog keeps its promise: every item the drain could handle is
+  read, so a follow, unfollow or deletion is applied whatever its size, and
+  only content is dropped. Items past the drain's own byte cap are still
+  removed unread — reading them could not help.
 - Attaching to a gateway now starts in **shadow**, not trust: the door filters
   from the first delivery, and the agent measures how much verifies before it
   believes any receipt. Move to trust when you are ready.
