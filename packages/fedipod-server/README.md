@@ -12,7 +12,7 @@ made, and opting out is the only way one ends.
 With nothing configured beyond the defaults, installing the component changes
 nothing about how the server serves pods.
 
-![FediPod as a component of a Solid server](fedipod-server.svg)
+![A pod and its agent, both inside one Solid server](fedipod-server.svg)
 
 ## Install
 

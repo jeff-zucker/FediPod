@@ -1,134 +1,82 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1620 1140" width="1620" height="1140" font-family="system-ui, sans-serif" role="img" aria-labelledby="ttl dsc">
-<title id="ttl">FediPod Server, a Community Solid Server component</title>
-<desc id="dsc">One Community Solid Server hosting many pods, with the FediPod component installed, and down the right-hand side everyone who talks to it. The open social web delivers mail and looks things up: some of that reaches the component, and the rest reaches pod storage directly, because a pod's public record and its inbox are ordinary pod resources the server already serves. Mei's phone and Tamara's laptop sign in, read and post; any authorized Solid app reads and writes the pods directly, except the paths the component claims. Inside, the component is the same FediPod Agent running in the server's own process, in two parts. The endpoints it serves are, on each pod's own address, the client API an app signs in to, the owner's pages behind that owner's own secret, and the live feed; and on the shared address, the front, and the door that verifies deliveries for the handles it fronts. The work it does for each pod is accepting a follow, delivering a post, emptying the inbox, and holding the lease so only one agent at a time acts. Below, server storage holds, outside every pod, each identity's signing key and door secret, plus a handle directory and the opt-in list when the server serves other people; an identity's log goes to the server's own log. Pod storage is one pod per identity, each holding that identity's public face, its inbox and its private state, written directly with no credential and no second connection, and a pod owner opts in from there.</desc>
-<style>
-  .t    { font-size: 18px; font-weight: 600; fill: #1a1a19; }
-  .d    { font-size: 16px; fill: #333; }
-  .sub  { font-size: 15px; fill: #666; }
-  .lbl  { font-size: 15px; fill: #555; }
-  .cc   { font-size: 11px; font-weight: 400; font-style: italic; fill: #555; }
-  .arrow  { stroke: #555; stroke-width: 2; fill: none; marker-end: url(#arr); }
-  .arrow2 { stroke: #555; stroke-width: 2; fill: none; marker-end: url(#arr); marker-start: url(#arr); }
-</style>
-<defs>
-  <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-    <path d="M0,0 L10,5 L0,10 z" fill="#555"/>
-  </marker>
-</defs>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1290 800" width="1290" height="800" font-family="system-ui, sans-serif">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#555"/>
+    </marker>
+  </defs>
+  <style>
+    .t   { font-size: 18px; font-weight: 600; fill: #1a1a19; }
+    .d   { font-size: 16px; fill: #333; }
+    .sub { font-size: 15px; fill: #666; }
+    .lbl { font-size: 15px; fill: #555; }
+    .cc  { font-size: 11px; font-weight: 400; font-style: italic; fill: #555; }
+    .arrow  { stroke: #555; stroke-width: 2; fill: none; marker-end: url(#arr); }
+    .arrow2 { stroke: #555; stroke-width: 2; fill: none; marker-end: url(#arr); marker-start: url(#arr); }
+  </style>
 
-<rect width="1620" height="1140" fill="#ffffff"/>
+  <rect width="1290" height="800" fill="#ffffff"/>
 
-<!-- ===== the server ===== -->
-<rect x="40" y="40" width="1060" height="1050" rx="12" fill="#f7f6f2" stroke="#9a988f"/>
-<text class="t" x="570" y="80" text-anchor="middle">One Community Solid Server, hosting many pods, with the FediPod component installed</text>
-<text class="sub" x="570" y="104" text-anchor="middle">the pods it already served, and a fediverse identity for each user who opts in</text>
+  <!-- The open social web -->
+  <rect x="210" y="30" width="870" height="92" rx="12" fill="#eef1f8" stroke="#7a88b8"/>
+  <text class="t" x="645" y="64" text-anchor="middle">The open social web</text>
+  <text class="d" x="645" y="94" text-anchor="middle">other servers: deliver mail to us, read what we publish</text>
 
-<!-- ===== processing ===== -->
-<rect x="64" y="128" width="1012" height="518" rx="12" fill="#fdeeee" stroke="#b87a7a"/>
-<text class="t" x="570" y="164" text-anchor="middle">Processing — the same FediPod Agent, running inside the server</text>
+  <!-- The server holding both -->
+  <rect x="180" y="200" width="930" height="301" rx="12" fill="#f7f6f2" stroke="#9a988f"/>
+  <text class="t" x="645" y="234" text-anchor="middle">FediPod Server (CSS + FediPod component)</text>
+  <text class="sub" x="645" y="258" text-anchor="middle">the pods it already served, and a fediverse identity for each user who opts in</text>
 
-<text class="sub" x="88" y="196">the endpoints it serves, on each pod's own address</text>
-<rect x="88" y="206" width="468" height="68" rx="10" fill="#ffffff" stroke="#c9c7bf"/>
-<text class="d" x="106" y="234">The client API</text>
-<text class="sub" x="106" y="256">what a Mastodon app signs in to</text>
-<rect x="88" y="286" width="468" height="68" rx="10" fill="#ffffff" stroke="#c9c7bf"/>
-<text class="d" x="106" y="314">The owner's pages</text>
-<text class="sub" x="106" y="336">the record and a web client, behind their own secret</text>
-<rect x="88" y="366" width="468" height="68" rx="10" fill="#ffffff" stroke="#c9c7bf"/>
-<text class="d" x="106" y="394">The live feed</text>
-<text class="sub" x="106" y="416">a socket a client holds open</text>
+  <!-- Pod -->
+  <rect x="210" y="280" width="360" height="197" rx="12" fill="#e7f2e7" stroke="#6a9a6a"/>
+  <text class="t" x="390" y="312" text-anchor="middle">Tamara's pod</text>
+  <text class="sub" x="390" y="336" text-anchor="middle">a subdomain pod on this server</text>
+  <text class="d" x="390" y="364" text-anchor="middle">stores &amp; serves her public</text>
+  <text class="d" x="390" y="386" text-anchor="middle">record in S2S AS2 format —</text>
+  <text class="d" x="390" y="408" text-anchor="middle">actor, posts, collections;</text>
+  <text class="d" x="390" y="430" text-anchor="middle">her inbox buffers mail</text>
+  <text class="d" x="390" y="452" text-anchor="middle">until her agent sweeps it</text>
 
-<text class="sub" x="88" y="464">and on the shared address</text>
-<rect x="88" y="474" width="468" height="68" rx="10" fill="#ffffff" stroke="#c9c7bf"/>
-<text class="d" x="106" y="502">The front</text>
-<text class="sub" x="106" y="524">signup, name lookups and attach</text>
-<rect x="88" y="554" width="468" height="68" rx="10" fill="#ffffff" stroke="#c9c7bf"/>
-<text class="d" x="106" y="582">The door</text>
-<text class="sub" x="106" y="604">verifies deliveries for the handles it fronts</text>
+  <!-- Agent -->
+  <rect x="720" y="280" width="360" height="197" rx="12" fill="#fdeeee" stroke="#b87a7a"/>
+  <text class="t" x="900" y="312" text-anchor="middle">Tamara's FediPod Agent</text>
+  <text class="sub" x="900" y="336" text-anchor="middle">inside the server, no machine of her own</text>
+  <text class="d" x="900" y="364" text-anchor="middle">does the thinking:</text>
+  <text class="d" x="900" y="386" text-anchor="middle">reads the buffered mail,</text>
+  <text class="d" x="900" y="408" text-anchor="middle">accepts follows, builds her</text>
+  <text class="d" x="900" y="430" text-anchor="middle">timeline, signs &amp; delivers</text>
+  <text class="d" x="900" y="452" text-anchor="middle">everything she says</text>
 
-<text class="sub" x="584" y="196">the work it does, for each pod it runs</text>
-<rect x="584" y="206" width="468" height="68" rx="10" fill="#ffffff" stroke="#c9c7bf"/>
-<text class="d" x="602" y="234">Accepts a follow</text>
-<text class="sub" x="602" y="256">answers as that pod's owner</text>
-<rect x="584" y="286" width="468" height="68" rx="10" fill="#ffffff" stroke="#c9c7bf"/>
-<text class="d" x="602" y="314">Delivers a post</text>
-<text class="sub" x="602" y="336">signs it and sends it on</text>
-<rect x="584" y="366" width="468" height="68" rx="10" fill="#ffffff" stroke="#c9c7bf"/>
-<text class="d" x="602" y="394">Empties the inbox</text>
-<text class="sub" x="602" y="416">reads what arrived, then clears it</text>
-<rect x="584" y="446" width="468" height="68" rx="10" fill="#ffffff" stroke="#c9c7bf"/>
-<text class="d" x="602" y="474">Holds the lease</text>
-<text class="sub" x="602" y="496">so only one agent at a time acts on a pod</text>
+  <!-- Client -->
+  <rect x="720" y="560" width="360" height="136" rx="12" fill="#f0e9f5" stroke="#9a7ab0"/>
+  <text class="t" x="900" y="594" text-anchor="middle">Browser or Native App</text>
+  <text class="sub" x="900" y="618" text-anchor="middle">(Phanpy, Whalebird, …)</text>
+  <text class="d" x="900" y="646" text-anchor="middle">where she reads and posts;</text>
+  <text class="d" x="900" y="668" text-anchor="middle">signs in at her pod's address</text>
 
-<!-- ===== processing <-> storage ===== -->
-<path class="arrow" d="M 298 648 L 298 742"/>
-<text class="lbl" x="286" y="678" text-anchor="end">keeps each identity's</text>
-<text class="lbl" x="286" y="700" text-anchor="end">signing key and door secret</text>
+  <!-- open social web -> pod: straight in, there is no door in the way -->
+  <path class="arrow" d="M 390 124 L 390 276"/>
+  <text class="lbl" x="402" y="160">deliveries in</text>
 
-<path class="arrow" d="M 798 648 L 798 742"/>
-<text class="lbl" x="786" y="678" text-anchor="end">writes directly to each user's pod</text>
-<text class="lbl" x="786" y="700" text-anchor="end">no credential, no second connection</text>
+  <!-- pod <-> agent -->
+  <path class="arrow2" d="M 572 378 L 718 378"/>
+  <text class="lbl" x="645" y="360" text-anchor="middle">drains mail,</text>
+  <text class="lbl" x="645" y="402" text-anchor="middle">writes the record</text>
 
-<path class="arrow" d="M 838 742 L 838 648"/>
-<text class="lbl" x="850" y="678">user opts in to have a</text>
-<text class="lbl" x="850" y="700">fediverse account on their pod</text>
+  <!-- agent <-> client -->
+  <path class="arrow2" d="M 900 479 L 900 558"/>
+  <text class="lbl" x="912" y="524">read / post</text>
 
-<!-- ===== server storage ===== -->
-<rect x="64" y="746" width="468" height="320" rx="12" fill="#f2ece0" stroke="#b09a5e"/>
-<text class="t" x="298" y="782" text-anchor="middle">Server storage</text>
-<text class="sub" x="298" y="806" text-anchor="middle">on the server, outside every pod</text>
-<text class="sub" x="298" y="826" text-anchor="middle">an identity's log goes to the server's own log</text>
-<rect x="88" y="852" width="420" height="68" rx="10" fill="#ffffff" stroke="#c9c7bf"/>
-<text class="d" x="106" y="880">A signing key per identity</text>
-<text class="sub" x="106" y="902">what it means to be able to post as them</text>
-<rect x="88" y="932" width="420" height="68" rx="10" fill="#ffffff" stroke="#c9c7bf"/>
-<text class="d" x="106" y="960">A door secret per identity</text>
-<text class="sub" x="106" y="982">opens that identity's pages, nobody else's</text>
-<rect x="88" y="1012" width="420" height="46" rx="10" fill="#ffffff" stroke="#c9c7bf" stroke-dasharray="4 4"/>
-<text class="sub" x="106" y="1040">a handle directory and the opt-in list, if it serves others</text>
+  <!-- pod -> open social web -->
+  <path class="arrow" d="M 208 345 L 70 345 C 45 345, 38 310, 38 260 C 38 190, 88 100, 206 100"/>
+  <text class="lbl" x="188" y="317" text-anchor="end">reads her record</text>
 
-<!-- ===== pod storage ===== -->
-<rect x="584" y="746" width="468" height="320" rx="12" fill="#e7f2e7" stroke="#6a9a6a"/>
-<text class="t" x="818" y="782" text-anchor="middle">Pod storage — one pod per identity</text>
-<text class="sub" x="818" y="806" text-anchor="middle">addressable by Solid and by ActivityPub</text>
-<rect x="608" y="832" width="420" height="68" rx="10" fill="#ffffff" stroke="#c9c7bf"/>
-<text class="d" x="626" y="860">mei.example.org</text>
-<text class="sub" x="626" y="882">public face, inbox, and her agent's private state</text>
-<rect x="608" y="912" width="420" height="68" rx="10" fill="#ffffff" stroke="#c9c7bf"/>
-<text class="d" x="626" y="940">tamara.example.org</text>
-<text class="sub" x="626" y="962">the same again, hers alone</text>
-<rect x="608" y="992" width="420" height="46" rx="10" fill="#ffffff" stroke="#c9c7bf" stroke-dasharray="4 4"/>
-<text class="sub" x="626" y="1020">and every other pod this server hosts, untouched</text>
+  <!-- agent -> open social web -->
+  <path class="arrow" d="M 1082 345 L 1220 345 C 1245 345, 1252 310, 1252 250 C 1252 180, 1202 78, 1084 78"/>
+  <text class="lbl" x="1102" y="317">signed deliveries out</text>
 
-<!-- ===== everyone who talks to it ===== -->
-<rect x="1160" y="170" width="340" height="104" rx="12" fill="#f0e9f5" stroke="#9a7ab0"/>
-<text class="t" x="1330" y="206" text-anchor="middle">Mei's phone</text>
-<text class="d" x="1330" y="234" text-anchor="middle">any mobile Mastodon client</text>
-<text class="d" x="1330" y="256" text-anchor="middle">signs in, reads, posts</text>
-<path class="arrow2" d="M 1158 222 L 1080 222"/>
+  <text class="d" x="45" y="646">A pod becomes an identity when its owner opts in, and stops when they opt out.</text>
+  <text class="d" x="45" y="670">The agent runs inside the server, so there is no second machine and nothing</text>
+  <text class="d" x="45" y="694">to authenticate between them — and the server holds her signing key.</text>
 
-<rect x="1160" y="310" width="340" height="104" rx="12" fill="#f0e9f5" stroke="#9a7ab0"/>
-<text class="t" x="1330" y="346" text-anchor="middle">Tamara's laptop</text>
-<text class="d" x="1330" y="374" text-anchor="middle">browser or native app</text>
-<text class="d" x="1330" y="396" text-anchor="middle">signs in, reads, posts</text>
-<path class="arrow2" d="M 1158 362 L 1080 362"/>
-
-<rect x="1160" y="450" width="340" height="126" rx="12" fill="#eef1f8" stroke="#7a88b8"/>
-<text class="t" x="1330" y="486" text-anchor="middle">The open social web</text>
-<text class="d" x="1330" y="514" text-anchor="middle">Mastodon, Lemmy, PeerTube,</text>
-<text class="d" x="1330" y="536" text-anchor="middle">anyone else</text>
-<text class="d" x="1330" y="558" text-anchor="middle">delivers mail, and looks things up</text>
-<path class="arrow2" d="M 1158 513 L 1080 513"/>
-<path class="arrow2" d="M 1330 578 L 1330 906 L 1058 906"/>
-<text class="lbl" x="1348" y="734">to the pod — mail into its inbox</text>
-<text class="lbl" x="1348" y="756">from the pod — its public record</text>
-
-<rect x="1160" y="940" width="340" height="126" rx="12" fill="#f1efe8" stroke="#9a988f"/>
-<text class="t" x="1330" y="976" text-anchor="middle">Any authorized Solid app</text>
-<text class="d" x="1330" y="1004" text-anchor="middle">reads and writes the pod,</text>
-<text class="d" x="1330" y="1026" text-anchor="middle">except the paths the</text>
-<text class="d" x="1330" y="1048" text-anchor="middle">component claims</text>
-<path class="arrow2" d="M 1158 1003 L 1056 1003"/>
-
-<text class="cc" x="1580" y="1120" text-anchor="end">(cc) 4.0 By, Jeff Zucker, 2026</text>
+  <text class="cc" x="1245" y="764" text-anchor="end">(cc) 4.0 By, Jeff Zucker, 2026</text>
 </svg>
