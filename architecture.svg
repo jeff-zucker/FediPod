@@ -1,0 +1,89 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1290 800" width="1290" height="800" font-family="system-ui, sans-serif">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#555"/>
+    </marker>
+  </defs>
+  <style>
+    .t   { font-size: 18px; font-weight: 600; fill: #1a1a19; }
+    .d   { font-size: 16px; fill: #333; }
+    .sub { font-size: 15px; fill: #666; }
+    .lbl { font-size: 15px; fill: #555; }
+    .cc  { font-size: 11px; font-weight: 400; font-style: italic; fill: #555; }
+    .arrow  { stroke: #555; stroke-width: 2; fill: none; marker-end: url(#arr); }
+    .arrow2 { stroke: #555; stroke-width: 2; fill: none; marker-end: url(#arr); marker-start: url(#arr); }
+  </style>
+
+  <rect width="1290" height="800" fill="#ffffff"/>
+
+  <!-- The open social web -->
+  <rect x="210" y="30" width="870" height="92" rx="12" fill="#eef1f8" stroke="#7a88b8"/>
+  <text class="t" x="645" y="64" text-anchor="middle">The open social web</text>
+  <text class="d" x="645" y="94" text-anchor="middle">other servers: deliver mail to us, read what we publish</text>
+
+  <!-- FediPod gateway -->
+  <rect x="210" y="180" width="870" height="134" rx="12" fill="#f2ece0" stroke="#b09a5e" stroke-dasharray="7 5"/>
+  <text class="t" x="645" y="214" text-anchor="middle">FediPod gateway</text>
+  <text class="d" x="645" y="240" text-anchor="middle">(optional — Netlify or any always on box)</text>
+  <text class="d" x="645" y="266" text-anchor="middle">checks each delivery's signature at the door;</text>
+  <text class="d" x="645" y="288" text-anchor="middle">drops spam and forgeries before the pod</text>
+
+  <!-- Pod -->
+  <rect x="210" y="375" width="360" height="197" rx="12" fill="#e7f2e7" stroke="#6a9a6a"/>
+  <text class="t" x="390" y="407" text-anchor="middle">Tamara's pod</text>
+  <text class="sub" x="390" y="431" text-anchor="middle">any https, sub-domained, always on pod</text>
+  <text class="d" x="390" y="459" text-anchor="middle">stores &amp; serves her public</text>
+  <text class="d" x="390" y="481" text-anchor="middle">record in S2S AS2 format —</text>
+  <text class="d" x="390" y="503" text-anchor="middle">actor, posts, collections;</text>
+  <text class="d" x="390" y="525" text-anchor="middle">her inbox buffers mail</text>
+  <text class="d" x="390" y="547" text-anchor="middle">even when her agent is off</text>
+
+  <!-- Agent -->
+  <rect x="720" y="375" width="360" height="197" rx="12" fill="#fdeeee" stroke="#b87a7a"/>
+  <text class="t" x="900" y="407" text-anchor="middle">Tamara's FediPod Agent</text>
+  <text class="sub" x="900" y="431" text-anchor="middle">on local device</text>
+  <text class="d" x="900" y="459" text-anchor="middle">does the thinking:</text>
+  <text class="d" x="900" y="481" text-anchor="middle">reads the buffered mail,</text>
+  <text class="d" x="900" y="503" text-anchor="middle">accepts follows, builds her</text>
+  <text class="d" x="900" y="525" text-anchor="middle">timeline, signs &amp; delivers</text>
+  <text class="d" x="900" y="547" text-anchor="middle">everything she says</text>
+
+  <!-- Client -->
+  <rect x="720" y="628" width="360" height="136" rx="12" fill="#f0e9f5" stroke="#9a7ab0"/>
+  <text class="t" x="900" y="662" text-anchor="middle">Browser or Native App</text>
+  <text class="sub" x="900" y="686" text-anchor="middle">(Phanpy, Whalebird, …)</text>
+  <text class="d" x="900" y="714" text-anchor="middle">where she reads and posts;</text>
+  <text class="d" x="900" y="736" text-anchor="middle">talks only to her agent</text>
+
+  <!-- open social web -> gateway -->
+  <path class="arrow" d="M 645 124 L 645 176"/>
+  <text class="lbl" x="657" y="155">deliveries in</text>
+
+  <!-- gateway -> pod -->
+  <path class="arrow" d="M 390 316 L 390 371"/>
+  <text class="lbl" x="402" y="336">verified mail</text>
+  <text class="lbl" x="402" y="357">+ receipt</text>
+
+  <!-- pod <-> agent -->
+  <path class="arrow2" d="M 572 473 L 718 473"/>
+  <text class="lbl" x="645" y="455" text-anchor="middle">drains mail,</text>
+  <text class="lbl" x="645" y="497" text-anchor="middle">writes the record</text>
+
+  <!-- agent <-> client -->
+  <path class="arrow2" d="M 900 574 L 900 626"/>
+  <text class="lbl" x="912" y="605">read / post</text>
+
+  <!-- pod -> open social web: read directly, never through the gateway -->
+  <path class="arrow" d="M 208 440 L 70 440 C 45 440, 38 400, 38 330 C 38 210, 88 100, 206 100"/>
+  <text class="lbl" x="188" y="412" text-anchor="end">reads her record</text>
+
+  <!-- agent -> open social web: delivers her own posts, never through the gateway -->
+  <path class="arrow" d="M 1082 440 L 1220 440 C 1245 440, 1252 400, 1252 330 C 1252 210, 1202 78, 1084 78"/>
+  <text class="lbl" x="1102" y="412">signed deliveries out</text>
+
+  <text class="d" x="45" y="716">The gateway stops unwanted mail from reaching the pod.</text>
+  <text class="d" x="45" y="740">The agent prevents mail buildup and does the mail processing.</text>
+  <text class="d" x="45" y="764">This leaves the pod with the minimal possible load.</text>
+
+  <text class="cc" x="1245" y="764" text-anchor="end">(cc) 4.0 By, Jeff Zucker, 2026</text>
+</svg>

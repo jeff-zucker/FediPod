@@ -12,7 +12,8 @@
     "vendor",
     "web",
     "run-agent.mjs",
-    "README.md"
+    "README.md",
+    "fedipod-server.svg"
   ],
   "peerDependencies": {
     "@solid/community-server": "^7.0.0"
