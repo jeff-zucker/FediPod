@@ -1,6 +1,8 @@
 # Changes
 
 ## 2026-08-20
+- The installer puts `fedipod` on your PATH, so a machine set up from a signup
+  page runs the same commands as one installed from npm.
 - **FediPod installs from npm**: `npm install -g fedipod`, and every command is
   `fedipod <something>` rather than a path into a checkout. `fedipod update`
   updates through npm; on a checkout it still fast-forwards. The signup page

@@ -3,7 +3,7 @@
 # Installs into ~/FediPod (or $FEDIPOD_DIR); re-running updates the install.
 #
 # A signup page may append parameters (sh -s -- --gateway ... --secret ...);
-# they are saved for the first `npm start`, whose setup opens pre-filled and
+# they are saved for the first start, whose setup opens pre-filled and
 # attaches to the gateway when it completes.
 set -eu
 
@@ -47,6 +47,16 @@ fi
 cd "$DIR"
 npm install --omit=dev --no-audit --no-fund
 
+# Put `fedipod` on PATH, the same command an `npm install -g fedipod` gives.
+# Everything printed from here on — the docs, the agent's own advice, the
+# command a signup page hands you — names it that way, and a checkout that
+# skipped this step could run none of them.
+if npm link >/dev/null 2>&1; then
+  say "linked: the fedipod command is on your PATH"
+else
+  say "note: could not link the fedipod command — run it as: node $DIR/bin/fedipod.mjs"
+fi
+
 if [ -n "$HANDLE" ]; then
   printf '{"handle":"%s","kind":"%s","pod":"%s","issuer":"%s","gateway":"%s","secret":"%s","fronted":%s}\n' \
     "$HANDLE" "$KIND" "$POD" "$ISSUER" "$GATEWAY" "$SECRET" "$FRONTED" > "$DIR/first-run.json"
@@ -56,4 +66,4 @@ fi
 say ""
 say "Installed. To start (first run opens setup in your browser):"
 say ""
-say "  cd $DIR && npm start"
+say "  fedipod start"
