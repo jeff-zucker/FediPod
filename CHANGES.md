@@ -1,6 +1,18 @@
 # Changes
 
 ## 2026-08-20
+- Attaching to a gateway now starts in **shadow**, not trust: the door filters
+  from the first delivery, and the agent measures how much verifies before it
+  believes any receipt. Move to trust when you are ready.
+- `locked` is refused unless the gateway's WebID is on record, and the pod's
+  access control is written before the mode is, so a failure can no longer
+  leave your config saying locked while the pod still accepts anyone's writes.
+- Declining `rotate-key --force` no longer leaves the rotation armed. It used
+  to say "key unchanged" and then rotate at the next ordinary start, without
+  telling other servers.
+- The single-person Netlify door sends no authorization header when it has no
+  append token, so the documented credential-free deployment against a
+  public-append inbox works.
 - **The agent serves https and nothing else, on the port you name.** `npm start
   8081` means `https://localhost:8081` — there is no second listener and no
   `port + 1000` mirror, and `AP_HTTPS_PORT` is gone. The well-known door

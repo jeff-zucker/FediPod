@@ -1030,7 +1030,20 @@ if (cmd === 'up') {
   console.log('  · ANY OTHER DEVICE holding the old key stops being able to sign\n');
   const ans = has('yes') ? 'y' : await ask('rotate now? (y/n)', 'n');
   endAsking();
-  if (!/^y/i.test(ans)) { console.log('key unchanged'); process.exit(0); }
+  if (!/^y/i.test(ans)) {
+    // --force arms the one-shot rotation before the prompt, so the preview
+    // connect can read past the mint refusal. Declining has to disarm it, or
+    // "key unchanged" would be a lie: the next ordinary start would rotate,
+    // and nothing on that path republishes the actor.
+    if (forced) {
+      try {
+        const { rotateKeyOnce, ...rest } = JSON.parse(fs.readFileSync(rotateCredPath, 'utf8'));
+        writeJsonAtomic(rotateCredPath, rest);
+      } catch { /* the credential moved under us; the flag goes with it */ }
+    }
+    console.log('key unchanged');
+    process.exit(0);
+  }
   await agent.connect();                          // now it may act
   if (forced) {
     // connect() has already minted it; all that is left is telling the
@@ -1531,15 +1544,17 @@ if (cmd === 'up') {
     process.exit(2);
   }
   const gateway = inboxOnly
-    ? { ...(config.gateway || {}), url: target.replace(/\/?$/, '/'), mode: 'trust',
+    ? { ...(config.gateway || {}), url: target.replace(/\/?$/, '/'), mode: 'shadow',
         ...(secret ? { hmacSecret: secret } : {}) }
     : { ...(config.gateway || {}), url: target.replace(/ap\/actor$/, 'ap/inbox/'),
-        frontActor: target, mode: 'trust', ...(secret ? { hmacSecret: secret } : {}) };
+        frontActor: target, mode: 'shadow', ...(secret ? { hmacSecret: secret } : {}) };
   agent.store.setConfig({ ...config, gateway });
   await agent.store.flush();
   if (inboxOnly) {
     console.log('attached to the shared filter — your identity stays on your pod;');
     console.log(`the actor will advertise ${gateway.url} as its inbox.`);
+    console.log('Starting in shadow: the door filters, and the agent measures how much');
+    console.log('verifies before it believes any receipt. Move to trust when you are ready.');
   } else {
     console.log(`attached to the front — this identity now publishes as ${target}`);
   }

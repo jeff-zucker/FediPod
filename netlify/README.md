@@ -75,10 +75,12 @@ The door holds no signing key, so it cannot post as anyone. It reads only
 public data to decide what concerns a given person: their published followers
 and following, and a small public policy document their agent writes with a
 mirror of their blocklist.
-<!-- CLAUDE 2026-08-19 — where the front's copy comes from; delete markers when done -->
+<!-- CLAUDE 2026-08-20 — where the front's copy comes from; delete markers when done -->
 The front decides from its directory row — the `following` and `blocklist`
 fields kept beside the handle — rather than fetching the policy document;
-only the one-person door reads `ap/gateway-policy.json` live.
+only the one-person door reads `ap/gateway-policy.json` live. A row created
+through the signup page carries neither field, so that account's door filters
+on addressing alone until the operator fills them in.
 <!-- /CLAUDE -->
 
 ## The two shapes of attachment

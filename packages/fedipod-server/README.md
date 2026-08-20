@@ -94,8 +94,10 @@ Each identity answers on its pod's origin, so the pod is what a client
 connects to. Point a Mastodon app at `https://mei.example.org/` and it finds
 what it expects: nodeinfo, the client API under `/api/`, sign-in under
 `/oauth/`, the live feed at `/api/v1/streaming`, and the ActivityPub write API
-at `/ap/outbox`. The owner's own pages — the record<!-- CLAUDE 2026-08-19 — dropped "the setup screens": they are not served here; a server-hosted identity provisions itself from the opt-in --> and the
-bundled web client — are behind `agentUiPath`, which the door secret guards.
+at `/ap/outbox`. The owner's own pages — the record<!-- CLAUDE 2026-08-19 — dropped "the setup screens": they are not served here; a server-hosted identity provisions itself from the opt-in --> and, in a repository
+checkout, the bundled web client — are behind `agentUiPath`, which the door
+secret guards.<!-- CLAUDE 2026-08-20 — the published package does not carry phanpy/dist, so the client 404s after `npm install` --> The published package does not carry the web client; point a
+Mastodon app at the pod instead.<!-- /CLAUDE -->
 
 The client API answers any origin, the way any Mastodon server does, so a
 browser client works too: it registers an app, and the authorize screen names

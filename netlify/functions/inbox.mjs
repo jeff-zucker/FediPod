@@ -36,7 +36,10 @@ function podPutter() {
   return async (url, body, contentType) => {
     const res = await fetch(url, {
       method: 'PUT',
-      headers: { 'content-type': contentType, authorization: `Bearer ${token}` },
+      // No token means the pod's inbox is public-Append, which is FediPod's
+      // default: send no authorization at all rather than `Bearer undefined`,
+      // which a pod rejects outright instead of treating as anonymous.
+      headers: { 'content-type': contentType, ...(token ? { authorization: `Bearer ${token}` } : {}) },
       body,
     }).catch(() => null);
     return !!res && res.status < 400;

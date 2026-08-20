@@ -12,8 +12,9 @@ Picking an actor marked "(stopped)" starts its agent, then opens its page.
   alive. Setting it back to active re-follows everyone — as requests, so a
   few may not come back.  If your local machine is going to be off for more than a couple of days, you should park the account because, if you don't, mail will accumulate on the pod possibly causing load issues.
 * <!-- CLAUDE 2026-08-19 — button name, was "Transfer identity" -->**Transfer this account away**<!-- /CLAUDE --> hands your followers to the account you name; your
-  old handle keeps working as a redirect, and the identity is parked
-  afterwards.
+  old handle keeps working as a redirect, and the identity goes quiet
+  afterwards. Unlike parking, it keeps no snapshot of who you followed, so
+  setting the status back to active does not bring them back.
 * **Retire identity** is permanent — every follower's server is told to drop
   the account, and the identity does not come back.
 <!-- CLAUDE 2026-08-19 — the Upkeep group; delete markers when done -->
@@ -25,8 +26,9 @@ Picking an actor marked "(stopped)" starts its agent, then opens its page.
   longer act as this identity.
 * **Recover posts** re-reads your own posts from the pod after a restore. It
   only ever adds; nothing local is overwritten.
-* Discarding a backlog drops old content only — its follows, unfollows and
-  deletions are still applied.
+* Discarding a backlog drops everything waiting that is larger than a couple
+  of kilobytes, whatever it is — a big follow or deletion goes with the
+  content. Smaller items are still read and applied.
 
 The handle, the pod and person-vs-group are permanent. The display name, bio
 and pictures are edited in the client, not here.

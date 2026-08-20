@@ -51,8 +51,8 @@ the group announces that moderation to its members so their servers can mirror
 it. A moderator list can be set on the group's config; those actors' moderation
 requests arriving over federation are held in a review queue rather than acted
 on automatically, since a delivery alone does not prove who sent it. That
-queue is its own list, separate from post review, and is read and answered
-over the agent's API (`/modqueue`). A
+queue is its own list, separate from post review, and has no page or command
+of its own yet — it is read and answered over the agent's API (`/modqueue`). A
 followed group's own announced deletion of a post it carried to you is honoured.
 <!-- /CLAUDE -->
 
@@ -88,6 +88,7 @@ crossposting is on.
 A Bluesky member's posts reach the fediverse side only if their account is
 bridged (it follows @ap.brid.gy on Bluesky). Unbridged members are welcomed
 with a single <!-- CLAUDE 2026-08-19 — was "reply": it is a post mentioning them -->post mentioning them<!-- /CLAUDE --> explaining that, and everything else about their
-membership still works; bridging later upgrades them in place. Ejecting a
-Bluesky member blocks their account, since their server cannot be told any
+membership still works. Bridging later does not merge the two: the bridge's
+follow arrives as a separate member, so the same person is listed twice.
+Ejecting a Bluesky member blocks their account, since their server cannot be told any
 other way.
