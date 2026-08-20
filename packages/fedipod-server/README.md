@@ -189,6 +189,8 @@ npm run test:e2e    # boots a real server and uses it as a client would
 container listings — through the transport an identity uses, and checks the
 lease protocol and the deletion deny-list still hold across it.
 
+`npm test` is also what a publish runs, so a red suite blocks one.
+
 `npm run test:e2e` starts a real Community Solid Server with three pods (two
 become identities up front; the third opts in and out at runtime), then signs in as a phone app does, posts,
 receives a follow from another server, and watches the live feed. It takes
