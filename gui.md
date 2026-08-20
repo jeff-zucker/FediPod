@@ -12,9 +12,8 @@ Picking an actor marked "(stopped)" starts its agent, then opens its page.
   alive. Setting it back to active re-follows everyone — as requests, so a
   few may not come back.  If your local machine is going to be off for more than a couple of days, you should park the account because, if you don't, mail will accumulate on the pod possibly causing load issues.
 * <!-- CLAUDE 2026-08-19 — button name, was "Transfer identity" -->**Transfer this account away**<!-- /CLAUDE --> hands your followers to the account you name; your
-  old handle keeps working as a redirect, and the identity goes quiet
-  afterwards. Unlike parking, it keeps no snapshot of who you followed, so
-  setting the status back to active does not bring them back.
+  old handle keeps working as a redirect, and the identity is parked
+  afterwards.
 * **Retire identity** is permanent — every follower's server is told to drop
   the account, and the identity does not come back.
 <!-- CLAUDE 2026-08-19 — the Upkeep group; delete markers when done -->

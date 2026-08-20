@@ -399,12 +399,7 @@ export class Agent {
   // traffic at source, but it also destroys the only record of who was being
   // followed, and "until I want to revive it" needs that record.
   async park({ unfollow = unfollowActor } = {}) {
-    const following = this.store.getContacts().following;
-    this.store.write('parked.json', {
-      parkedAt: new Date().toISOString(),
-      following: following.map(f => ({ actor: f.actor, handle: f.handle || null })),
-    });
-    await this.store.flush();
+    const following = await this._snapshotFollowing();
     const r = await this.quiesce({ unfollow });
     this.log(`parked: ${r.unfollowed} unfollow(s) recorded for revival, inbox closed`);
     return { ...r, snapshot: following.length };
@@ -425,6 +420,20 @@ export class Agent {
     await this.store.flush();
     this.log(`revived: inbox open, ${refollowed}/${parked?.following?.length || 0} follow(s) re-sent`);
     return { refollowed, of: parked?.following?.length || 0, parkedAt: parked?.parkedAt || null };
+  }
+
+  // The follow graph, written down before it is torn down. Both going quiet
+  // and moving away unfollow everyone, and the record page offers "active"
+  // afterwards for either — so both have to leave something to come back from,
+  // or setting it back re-follows nobody and says so only in a count.
+  async _snapshotFollowing() {
+    const following = this.store.getContacts().following;
+    this.store.write('parked.json', {
+      parkedAt: new Date().toISOString(),
+      following: following.map(f => ({ actor: f.actor, handle: f.handle || null })),
+    });
+    await this.store.flush();
+    return following;
   }
 
   // Keep the handle, take no more mail. Unfollowing is what actually stops the
@@ -448,8 +457,9 @@ export class Agent {
   // target by their own servers, and the old handle keeps resolving.
   async moveTo(target, { unfollow = unfollowActor } = {}) {
     const moved = await this.publisher.publishMove(target);
+    const snapshot = await this._snapshotFollowing();
     const quiesced = await this.quiesce({ unfollow });
-    return { ...moved, ...quiesced };
+    return { ...moved, ...quiesced, snapshot: snapshot.length };
   }
 
   // True when it had to republish. Authenticated read: the question here is

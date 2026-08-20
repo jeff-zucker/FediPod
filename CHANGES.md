@@ -1,6 +1,10 @@
 # Changes
 
 ## 2026-08-20
+- Transferring an account away records the follow graph it tears down, so
+  setting the status back to active re-follows everyone the way parking always
+  has. It used to unfollow everyone and keep no snapshot, leaving a transfer
+  one-way in practice while the page still offered to undo it.
 - A gateway account made through the signup page now filters properly: the
   front reads each person's published policy — their accepted following list
   and their blocklist mirror — from their pod, cached for a few minutes, in
