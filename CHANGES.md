@@ -1,6 +1,15 @@
 # Changes
 
 ## 2026-08-20
+- A gateway account made through the signup page now filters properly: the
+  front reads each person's published policy — their accepted following list
+  and their blocklist mirror — from their pod, cached for a few minutes, in
+  place of the empty fields its directory row carried. Until an agent has
+  published one, the door still filters on addressing alone.
+- A FediPod Server answers on its own address out of the box. The shipped
+  config carried `fedipod.net` as the front's apex, so an operator who
+  installed it unchanged got a server where sign-up silently never routed;
+  `frontHost` now defaults to the server's own base URL.
 - Discarding a backlog keeps its promise: every item the drain could handle is
   read, so a follow, unfollow or deletion is applied whatever its size, and
   only content is dropped. Items past the drain's own byte cap are still

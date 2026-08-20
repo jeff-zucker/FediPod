@@ -23,8 +23,8 @@ import type { IO, Directory, AgentRegistry } from './directory';
 export interface FediPodServerArgs {
   /** The server's ResourceStore: the handler reads pods and writes inbox items and directory rows directly through it — no HTTP, no credential. */
   resourceStore: ResourceStore;
-  /** The apex host the front answers on, e.g. fedipod.net. Pod subdomains are never claimed. */
-  frontHost: string;
+  /** The apex host the front answers on, e.g. fedipod.net. Defaults to the host of frontOrigin, so a server that sets nothing answers on its own address. Pod subdomains are never claimed. */
+  frontHost?: string;
   /** The front's origin, e.g. https://fedipod.net. */
   frontOrigin: string;
   /** An internal container URL where the handle→pod directory rows live. */
@@ -113,6 +113,7 @@ export class FediPodServerHandler extends HttpHandler implements Initializable, 
   private readonly logger = getLoggerFor(this);
   private readonly agentHosts = new Set<string>();
   private readonly agentHandles = new Map<string, string>();   // handle → pod base
+  private readonly frontHost: string;
   private readonly uiPath: string;
   private readonly identities = new Map<string, EmbeddedIdentity>();
   private readonly surfaces = new Map<string, EmbeddedIdentity>();
@@ -138,6 +139,11 @@ export class FediPodServerHandler extends HttpHandler implements Initializable, 
     if (args.agentRuntimeOptIn && !args.agentDataDir) {
       throw new Error('runtime opt-in is enabled but agentDataDir is not set — identities have nowhere to keep their signing keys');
     }
+    // Without this a shipped default apex would silently claim nothing on the
+    // operator's own host, and sign-up would never route.
+    // hostname, not host: the claim check compares bare hostnames, so a port
+    // carried here would stop the front matching its own requests.
+    this.frontHost = args.frontHost || new URL(args.frontOrigin).hostname;
     this.uiPath = normalizeUiPath(args.agentUiPath);
     this.registry = args.agentRuntimeOptIn
       ? makeAgentRegistry(this.io, absolute(args.agentRegistryContainer ?? '/.internal/fedipod/agents/'))
@@ -161,7 +167,7 @@ export class FediPodServerHandler extends HttpHandler implements Initializable, 
     if (this.agentHosts.has(host)) {
       throw new Error(`the host ${host} already carries an identity — an identity needs an origin of its own`);
     }
-    if (host.split(':')[0] === String(this.args.frontHost).toLowerCase()) {
+    if (host.split(':')[0] === String(this.frontHost).toLowerCase()) {
       throw new Error(`${podBase} is on the front's own host — give the identity its own origin`);
     }
     const handle = deriveHandle(podBase);
@@ -324,7 +330,7 @@ export class FediPodServerHandler extends HttpHandler implements Initializable, 
         hmacSecret: randomBytes(32).toString('base64'),
         inboxOnly: true,
       });
-      this.logger.info(`FediPod: @${handle}@${this.args.frontHost} now resolves to ${podBase}`);
+      this.logger.info(`FediPod: @${handle}@${this.frontHost} now resolves to ${podBase}`);
     } catch (e: unknown) {
       this.logger.warn(`FediPod: could not front @${handle}: ${(e as Error).message}`);
     }
@@ -336,7 +342,7 @@ export class FediPodServerHandler extends HttpHandler implements Initializable, 
     // Claimed from the opt-in roster, never from what is running: a pod resource
     // must not be served by CSS for the seconds before an identity finishes
     // starting, and then stop being served once it has.
-    if (claims({ host, pathname }, this.args.frontHost)) return;
+    if (claims({ host, pathname }, this.frontHost)) return;
     if (agentClaims({ host, pathname }, this.agentHosts, this.uiPath)) return;
     throw new Error('not a gateway route');   // reject → CSS's LDP handler takes it
   }
@@ -444,7 +450,7 @@ export class FediPodServerHandler extends HttpHandler implements Initializable, 
       return;
     }
     const out = await routeFront(whatwg, {
-      host: this.args.frontHost,
+      host: this.frontHost,
       frontOrigin: this.args.frontOrigin,
       gatewayWebId: this.args.gatewayWebId,
       offersPods: !!this.args.offersPods,

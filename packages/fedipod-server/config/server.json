@@ -5,11 +5,10 @@
   ],
   "@graph": [
     {
-      "comment": "The FediPod server handler. Set args_frontHost to the apex the front answers on (e.g. fedipod.net) and args_frontOrigin to its origin; pod subdomains fall through to CSS untouched. Field names carry the args_ prefix the generator produced from the constructor's options object.",
+      "comment": "The FediPod server handler. The front answers on this server's own base URL unless args_frontHost names another apex; pod subdomains fall through to CSS untouched. Field names carry the args_ prefix the generator produced from the constructor's options object.",
       "@id": "urn:fedipod:server:Handler",
       "@type": "FediPodServerHandler",
       "args_resourceStore": { "@id": "urn:solid-server:default:ResourceStore" },
-      "args_frontHost": "fedipod.net",
       "args_frontOrigin": { "@id": "urn:solid-server:default:variable:baseUrl" },
       "args_directoryContainer": "/.internal/fedipod/directory/",
       "args_offersPods": false,

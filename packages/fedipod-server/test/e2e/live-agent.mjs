@@ -67,7 +67,6 @@ fs.writeFileSync(config, JSON.stringify({
         '@type': 'FediPodServerHandler',
         args_resourceStore: { '@id': 'urn:solid-server:default:ResourceStore' },
         args_clusterManager: { '@id': 'urn:solid-server:default:ClusterManager' },
-        args_frontHost: 'localhost',
         args_frontOrigin: BASE.replace(/\/$/, ''),
         args_directoryContainer: '/.internal/fedipod/directory/',
         args_agentRegistryContainer: '/.internal/fedipod/agents/',

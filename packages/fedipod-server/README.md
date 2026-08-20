@@ -77,7 +77,7 @@ identity has its own; one owner's secret opens nobody else's door.
 <!-- CLAUDE 2026-08-19 — settings the table above is missing; delete markers when done -->
 | Setting | What it is |
 |---|---|
-| `frontHost` | The apex host the shared front answers on. The shipped snippet carries `fedipod.net`; set your own apex, or sign-up never routes. |
+| `frontHost` | The apex host the shared front answers on. Defaults to this server's own base URL, so a plain install answers on its own address; set it only to front a different apex. |
 | `frontOrigin` | Its origin. |
 | `directoryContainer` | The internal container holding the handle directory. |
 | `agentAutoFront` | Whether every identity that starts also gets a `@handle@frontHost` address — an inbox-only directory row, written once. Off by default. |
