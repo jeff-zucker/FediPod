@@ -4767,11 +4767,27 @@ if (up) {
 // --- 8j. install-service speaks each platform's own language ---
 {
   const { execFileSync } = await import('node:child_process');
+  // An install-service run needs an identity to talk about, and inherits the
+  // real machine's otherwise: on the developer's own it finds theirs and
+  // prints the advice, on a clean CI runner it finds none, says "nothing to
+  // install" and exits 2. Give it one of its own so the answer is the
+  // platform's, not the machine's.
+  // install-service enumerates from the install ROOT, not AP_HOME, so the
+  // identity has to live where that looks: a throwaway home with one profile.
+  const svcRoot = fs.mkdtempSync('/tmp/dk-ap-svc-');
+  const svcProfile = path.join(svcRoot, '.fedipod', 'profiles', 'svc');
+  fs.mkdirSync(svcProfile, { recursive: true });
+  fs.writeFileSync(path.join(svcProfile, 'credential.json'),
+    JSON.stringify({ webId: 'https://svc.example/profile/card#me', remotePod: 'https://svc.example/' }));
+  fs.writeFileSync(path.join(svcProfile, 'agent.json'), JSON.stringify({ port: 18999, handle: 'svc' }));
   const say = (plat) => execFileSync(process.execPath, ['-e', `
     Object.defineProperty(process, 'platform', { value: '${plat}' });
-    process.argv = [process.argv[0], 'bin/fedipod.mjs', 'install-service'];
+    process.argv = [process.argv[0], 'fedipod', 'install-service'];
     await import('${path.join(root, 'bin/fedipod.mjs')}');
-  `, '--input-type=module'], { cwd: root }).toString();
+  `, '--input-type=module'], {
+    cwd: root,
+    env: { ...process.env, HOME: svcRoot, AP_HOME: '', AP_PROFILE: '' },
+  }).toString();
   const android = say('android');
   const other = say('freebsd');
   check(/Termux:Boot/.test(android) && /termux-wake-lock/.test(android) && !/Windows|Scheduled Task/.test(android),
