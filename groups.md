@@ -6,14 +6,13 @@ other without having to follow each other. If they do already follow each other 
 unfollowing, and remote Mastodon users can join exactly as pod owners do — they
 need no pod of their own.
 
-A group needs a pod of its own. Run it like any other identity — `start`, `stop`, `status`, `park`, `retire` — on its own port.
+A group needs a pod of its own, and runs like any other identity on its own
+port — the same status, parking and lifecycle controls on its record page.
 
-<!-- CLAUDE 2026-08-19 — creating one; delete markers when done -->
-A group is made at setup: `node bin/fedipod.mjs setup --group` (add
-`--approve-joins` to start with join review on), or the signup page's group
-path. The group's pod must be the root of its own host, so its handle
-resolves.
-<!-- /CLAUDE -->
+A group is made the same way as any other account: choose "add a new account"
+and pick group rather than person, or take the group path on a signup page.
+You can turn on join review as you create it. The group's pod must be the root
+of its own host, so its handle resolves.
 
 Being in a group also connects you to the people in it: posts from fellow
 members reach your timeline even when you do not follow them individually,
@@ -26,40 +25,33 @@ As with persons, a group display name and bio should be handled on the client.
 ## Managing a group
 
 The group passes along posts from its own members only. This stops spam from outside the group.
-<!-- CLAUDE 2026-08-19 — the other gates; delete markers when done -->
 A carried post must also be public: the group never widens an audience, so a
 followers-only post or a DM to the group is not carried.
-<!-- /CLAUDE -->
 Internal moderation is also possible :
 
 * owner may choose to moderate join requests - no one becomes a member without review
 * owner may choose to moderate posts - nothing gets posted without review
 * owner may mute users (refuse to rebroadcast their posts)
 
-<!-- CLAUDE 2026-08-19 — where the controls are, and what eject does; delete markers when done -->
-The controls live on the group's admin page — members, join requests, held
-posts and carried posts — and as terminal commands ([CLI admin](cli.md)).
-Ejecting also mutes: a re-follow is accepted again, but nothing of theirs is
-carried until unmuted. Refusing a join request is not sticky — they may ask
-again.
-<!-- /CLAUDE -->
+The controls live on the group's admin page: members, join requests, held
+posts and carried posts. Ejecting also mutes: a re-follow is accepted again,
+but nothing of theirs is carried until unmuted. Refusing a join request is not
+sticky — they may ask again.
 
-<!-- CLAUDE 2026-08-11, revised 2026-08-19 — new since the last groups.md; rework/trim as you like, delete these markers when done -->
 A carried post names the group as its
 `audience`, and when you ban or eject someone (or change the moderator roster),
 the group announces that moderation to its members so their servers can mirror
 it. A moderator list can be set on the group's config; those actors' moderation
 requests arriving over federation are held in a review queue rather than acted
 on automatically, since a delivery alone does not prove who sent it. That
-queue is its own list, separate from post review, and has no page or command
-of its own yet — it is read and answered over the agent's API (`/modqueue`). A
-followed group's own announced deletion of a post it carried to you is honoured.
-<!-- /CLAUDE -->
+queue is its own list, separate from post review, and is the one thing with no
+page of its own — it is read and answered from the terminal, with `modqueue`.
+A followed group's own announced deletion of a post it carried to you is honoured.
 
 ## Inviting people
 
-A group has a page anyone can open, at `ap/profile.html` under its pod<!-- CLAUDE 2026-08-19 — the container matters -->'s
-app container — `<pod>/activitypods-js/ap/profile.html`<!-- /CLAUDE -->. It
+A group has a page anyone can open, at `ap/profile.html` under its pod's
+app container — `<pod>/activitypods-js/ap/profile.html`. It
 carries the group's address and a Follow box that sends a visitor to their
 own server's follow screen, so it is the link to put where people will find
 it. Posts the group carries appear in members' timelines as the group
@@ -67,7 +59,7 @@ boosting the author.
 
 ## Transferring group ownership
 
-A group can be handed on rather than abandoned using the <!-- CLAUDE 2026-08-19 — button name, was "Transfer identity" -->`Transfer this account away` button (or `retire --move-to` in the terminal)<!-- /CLAUDE -->. This tells every follower to migrate, so the membership survives a change of host.
+A group can be handed on rather than abandoned using the `Transfer this account away` button. This tells every follower to migrate, so the membership survives a change of host.
 
 
 
@@ -78,17 +70,15 @@ the group's Bluesky account is a join, and mentioning its handle submits a
 post. Both pass through the same moderation settings as fediverse members —
 join review, post review, and muting all apply, and an approved post is
 carried to the group's Bluesky followers as a repost.
-<!-- CLAUDE 2026-08-19 — two conditions; delete markers when done -->
 A follow from an already-bridged Bluesky account is ignored on the Bluesky
 side — its join arrives over ActivityPub from the bridge instead. Carrying
 fediverse posts to the group's Bluesky followers happens only while
 crossposting is on.
-<!-- /CLAUDE -->
 
 A Bluesky member's posts reach the fediverse side only if their account is
 bridged (it follows @ap.brid.gy on Bluesky). Unbridged members are welcomed
-with a single <!-- CLAUDE 2026-08-19 — was "reply": it is a post mentioning them -->post mentioning them<!-- /CLAUDE --> explaining that, and everything else about their
-membership still works. Bridging later does not merge the two: the bridge's
-follow arrives as a separate member, so the same person is listed twice.
-Ejecting a Bluesky member blocks their account, since their server cannot be told any
+with a single post mentioning them explaining that, and everything else about their
+membership still works, and bridging later upgrades them in place: the
+bridge's follow supersedes their Bluesky-only membership rather than adding a
+second one. Ejecting a Bluesky member blocks their account, since their server cannot be told any
 other way.

@@ -29,11 +29,9 @@ three steps:
    ```
 3. Restart your agent, which republishes your actor with the new inbox.
 
-<!-- CLAUDE 2026-08-19 — the brand-new-signup variant; delete markers when done -->
 That is the attach-an-existing-account path. A brand-new signup is handed a
 different one command — the installer, preloaded with the same details — and
 attaching happens during setup.
-<!-- /CLAUDE -->
 
 To undo it:
 
@@ -42,28 +40,23 @@ fedipod gateway --detach
 ```
 
 That republishes your actor with your pod's own inbox. Nothing else moves.
-<!-- CLAUDE 2026-08-19 — detach conditions; delete markers when done -->
 Detach talks to the running agent, so start it first. For a fronted identity,
 detaching also moves every published id back to the pod — a rename other
 servers see, not just a mail change.
-<!-- /CLAUDE -->
 
 ## Easing into it
 
 Attaching does not have to change how deliveries are treated on day one. The
 mode says how far you trust the door, and every step is reversible:
 
-<!-- CLAUDE 2026-08-19 — adds the off mode; delete markers when done -->
 - **off** — configured but not advertised; nothing changes on the wire. This
   is where a by-hand configure starts, and the step back short of forgetting
   the gateway entirely.
-<!-- /CLAUDE -->
 - **shadow** — your actor advertises the gateway and the agent measures how
-  much real traffic verifies.<!-- CLAUDE 2026-08-19 — dropped "Nothing else changes.": the door filters in every advertised mode, see the added paragraph below -->
+  much real traffic verifies.
 - **trust** — verified follows are accepted without review.
 - **locked** — your inbox accepts writes only from the gateway.
 
-<!-- CLAUDE 2026-08-19 — what the door does in every advertised mode, and how to read the shadow numbers; delete markers when done -->
 In every mode past **off**, the door itself is already filtering: blocked
 actors, content that does not concern you, and forged signatures are dropped
 at the door and never reach the pod. The mode says only how far the agent
@@ -76,7 +69,6 @@ curl -k https://localhost:8030/gateway
 ```
 
 which reports the mode and the verified and unverified counts.
-<!-- /CLAUDE -->
 
 Set it from the agent's own API:
 
@@ -85,10 +77,8 @@ curl -k -X POST https://localhost:8030/gateway -H 'content-type: application/jso
   -d '{"action":"mode","mode":"shadow"}'
 ```
 
-<!-- CLAUDE 2026-08-19 — finding the right port; delete markers when done -->
 8030 is the default identity's port; `node bin/fedipod.mjs status`
 prints the right one for each identity.
-<!-- /CLAUDE -->
 
 ## The receipt secret
 
@@ -101,10 +91,8 @@ You never fetch this secret from anywhere. Your agent mints it when you
 configure the gateway and shows it to you once; you carry it to the gateway
 yourself. Attaching through a signup page does this for you — the command it
 hands you already carries the secret.
-<!-- CLAUDE 2026-08-19 — who mints it on the signup path; delete markers when done -->
 On the signup path the direction is reversed: the gateway mints the secret and
 hands it to you inside the command, and your agent records it.
-<!-- /CLAUDE -->
 
 ## What the gateway can see
 
@@ -125,10 +113,8 @@ Two ways are ready to use:
 - **On Netlify**, with the adapter in `netlify/functions/inbox.mjs`. See
   [netlify/README.md](netlify/README.md) for the deployment specifics.
 - **On any box of your own**, with your own adapter around the same core.
-<!-- CLAUDE 2026-08-19 — the third ready-made way; delete markers when done -->
 - **Inside a Community Solid Server**, as the same door run in-process by the
   CSS component — see [packages/fedipod-server](packages/fedipod-server/README.md).
-<!-- /CLAUDE -->
 
 ### Offering accounts to other people
 
@@ -138,7 +124,6 @@ and their own signing key; the front answers WebFinger for all of them, serves
 each public face by rewriting that user's pod ids onto the shared domain, and
 routes every verified delivery into the right pod.
 
-<!-- CLAUDE 2026-08-19 — the user-side command for a fronted identity; delete markers when done -->
 Taking a fronted identity is the same command pointed at the front actor,
 without `--inbox-only`:
 
@@ -148,7 +133,6 @@ fedipod gateway <front-origin>/u/<name>/ap/actor --secret <hmac>
 
 Choose at attach time: changing an existing identity's front later renames
 every published id, and the command refuses it.
-<!-- /CLAUDE -->
 
 **A front is only a doorway.** It never hosts pods and never dictates where
 they live. A host who also wants to offer pods to people who have none runs a

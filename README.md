@@ -50,7 +50,6 @@ pod. There is a free gateway at [fedipod.net](https://fedipod.net/). Attaching t
 
 Users are recommended to associate with a gateway as it reduces the mail load on your pod host.
 
-
 ## Fediverse Clients
 
 The UI is the bundled [Phanpy](https://github.com/cheeaun/phanpy)
@@ -66,7 +65,6 @@ a conversations view for direct messages, bookmarks, favourites, lists,
 keyword filters, scheduled posts, pinned posts (visible from other servers),
 blocking and muting from the client, custom emojis, and web-push
 notifications that reach you while the client is closed.
-
 
 ### Other clients
 
@@ -103,7 +101,6 @@ a followed group's announced `Delete` of a post it carried is honoured, and
 the group's own moderation is announced to the membership. The FEP-4ccd
 pending-follow collections and the FEP-c648 blocked collection are published
 as owner-only documents. See [Groups](https://github.com/jeff-zucker/FediPod/blob/main/groups.md).
-
 
 ## Acknowledgements
 

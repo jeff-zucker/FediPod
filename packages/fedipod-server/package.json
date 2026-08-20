@@ -12,6 +12,7 @@
     "vendor",
     "web",
     "run-agent.mjs",
+    "phanpy",
     "README.md",
     "fedipod-server.svg"
   ],

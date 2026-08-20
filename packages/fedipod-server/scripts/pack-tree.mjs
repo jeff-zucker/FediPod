@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const ITEMS = ['lib', 'vendor', 'web', 'run-agent.mjs'];
+const ITEMS = ['lib', 'vendor', 'web', 'run-agent.mjs', 'phanpy/dist'];
 const pkg = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const repo = path.resolve(pkg, '../..');
 const verb = process.argv[2];
@@ -20,7 +20,8 @@ if (verb === 'copy') {
   }
   console.log(`pack-tree: copied ${ITEMS.join(', ')} into the package`);
 } else if (verb === 'clean') {
-  for (const item of ITEMS) fs.rmSync(path.join(pkg, item), { recursive: true, force: true });
+  // A nested item leaves its parent behind, so remove the top segment.
+  for (const item of ITEMS) fs.rmSync(path.join(pkg, item.split('/')[0]), { recursive: true, force: true });
   console.log('pack-tree: package copies removed');
 } else {
   console.error('usage: node scripts/pack-tree.mjs copy|clean');

@@ -18,7 +18,6 @@ node bin/fedipod.mjs profiles                # every identity on this machine, r
 
 Installing the boot services (see the README) makes starting by hand unnecessary.
 
-<!-- CLAUDE 2026-08-19 — setup, and which identity a command acts on; delete markers when done -->
 ## Creating an identity
 
 ```
@@ -42,7 +41,6 @@ Commands that manage a live identity — `alias`, `admit`, `import`, `archive`,
 `bsky`, `describe`, `status`, `rebuild`, `gateway --detach` and the group
 commands — talk to the running agent and say so when it is not there. `keys`,
 `state`, `home` and attaching a gateway want the agent stopped.
-<!-- /CLAUDE -->
 
 ## Recovery
 
@@ -51,9 +49,8 @@ node bin/fedipod.mjs rotate-key --force
 ```
 When an identity's `keys.json` is lost or damaged the agent refuses to start;
 this mints a replacement and tells other servers.
-<!-- CLAUDE 2026-08-19 — it prompts; delete markers when done -->
 It asks before rotating; `--yes` answers for you.
-<!-- /CLAUDE --> Any other device still
+ Any other device still
 using the old key stops working as this identity.
 
 ```
@@ -70,9 +67,7 @@ node bin/fedipod.mjs passwd                         # require a password when a 
 node bin/fedipod.mjs tokens                         # list client logins; --revoke <prefix> or --revoke-all
 node bin/fedipod.mjs revoke-credential --email EMAIL   # cut this machine off from the pod account
 ```
-<!-- CLAUDE 2026-08-19 — passwd timing; delete markers when done -->
 A new password takes effect when a running agent restarts.
-<!-- /CLAUDE -->
 
 ## Bluesky
 
@@ -107,7 +102,6 @@ node bin/fedipod.mjs home --to DIR       # move them all somewhere else
 Stop the agents first. If you use the boot services, run
 `npm run install-service` again afterwards.
 
-<!-- CLAUDE 2026-08-19 — going quiet, state moves, export, group commands; delete markers when done -->
 ## Going quiet, and leaving
 
 ```
@@ -163,9 +157,7 @@ republishes the actor; `install-service` / `uninstall-service` are the
 service installers the README names, as fedipod subcommands; and
 `home --restructure` is the one-time move of an old top-level identity into
 `profiles/` — commands that need it say so.
-<!-- /CLAUDE -->
 
-<!-- CLAUDE 2026-08-16 — new commands: alias, import, admit --all; delete markers when done -->
 ## Moving here from another server
 
 ```
@@ -193,9 +185,7 @@ lists and domain blocks; the file names say which is which, or pass
 slowly on purpose and the command shows progress; `import` with no files
 shows where a run stands, and `--clear` drops the finished record. Bookmarks
 are not imported.
-<!-- /CLAUDE -->
 
-<!-- CLAUDE 2026-08-17, revised 2026-08-19 — gateway, keys, https commands; delete markers when done -->
 ## The gateway
 
 ```
@@ -250,5 +240,4 @@ certificate authority that can only ever vouch for localhost names. On Linux
 the authority lands in Chrome and Chromium's store by itself; Firefox, macOS
 and Windows run `https --trust` once, which prints any remaining step.
 `https` shows what is minted and when it expires.
-<!-- /CLAUDE -->
 

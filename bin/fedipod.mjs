@@ -2060,13 +2060,16 @@ WantedBy=default.target
     process.exit(1);
   }
 } else if (['members', 'announced', 'pending', 'requests', 'mute', 'unmute', 'eject',
-  'retract', 'approve', 'decline', 'review', 'joins', 'admit', 'refuse'].includes(cmd)) {
+  'retract', 'approve', 'decline', 'review', 'joins', 'admit', 'refuse',
+  'modqueue'].includes(cmd)) {
   // Group operator commands, served by the running agent's admin API.
-  const GETS = ['members', 'announced', 'pending', 'requests'];
+  const GETS = ['members', 'announced', 'pending', 'requests', 'modqueue'];
   const BY_ACTOR = ['mute', 'unmute', 'eject', 'admit', 'refuse'];
   const TOGGLES = { review: ['on', 'off'], joins: ['open', 'approve'] };
   const post = !GETS.includes(cmd);
   const admitAll = cmd === 'admit' && has('all');
+  const modAct = cmd === 'modqueue' ? (flag('apply') || flag('dismiss') || null) : null;
+  const modVerb = cmd === 'modqueue' && flag('dismiss') ? 'dismiss' : 'apply';
   const arg = post ? (flag('actor') || flag('note') || args[1]) : null;
   if (post && !TOGGLES[cmd] && !arg && !admitAll) {
     console.error(`usage: fedipod ${cmd} <${BY_ACTOR.includes(cmd) ? 'actor' : 'note'}-url>`
@@ -2077,13 +2080,15 @@ WantedBy=default.target
     console.error(`usage: fedipod ${cmd} <${TOGGLES[cmd].join('|')}>`);
     process.exit(2);
   }
-  const payload = cmd === 'review' ? { on: arg === 'on' }
+  const payload = modAct ? { id: modAct, action: modVerb }
+    : cmd === 'review' ? { on: arg === 'on' }
     : cmd === 'joins' ? { approve: arg === 'approve' }
     : admitAll ? { all: true }
     : BY_ACTOR.includes(cmd) ? { actor: arg } : { noteId: arg };
   let body;
   try {
-    const res = await localFetch(HOME, PORT, `/${cmd}`, post
+    const asPost = post || !!modAct;
+    const res = await localFetch(HOME, PORT, `/${cmd}`, asPost
       ? { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) }
       : undefined);
     body = await res.json();
@@ -2096,7 +2101,20 @@ WantedBy=default.target
     console.error(`agent not reachable on :${PORT} (${e.message})`);
     process.exit(1);
   }
-  if (cmd === 'members') {
+  if (cmd === 'modqueue' && modAct) {
+    console.log(`${body.action === 'apply' ? 'applied' : 'dismissed'}: ${body.type} from ${body.moderator}`);
+    console.log(`${body.remaining} left in the queue`);
+  } else if (cmd === 'modqueue') {
+    // Moderation asked for over federation. A delivery does not prove who sent
+    // it, so a moderator's request waits here instead of acting on arrival.
+    const q = Array.isArray(body) ? body : (body.queue || []);
+    if (!q.length) console.log('nothing waiting — no moderator has asked for anything');
+    for (const e of q) console.log(`${e.id}  ${e.at}  ${e.type}  from ${e.moderator}`);
+    if (q.length) {
+      console.log('\ncarry one out: fedipod modqueue --apply <id>');
+      console.log('turn one down: fedipod modqueue --dismiss <id>');
+    }
+  } else if (cmd === 'members') {
     if (!body.members.length) console.log('no members yet — nobody has followed this group');
     for (const m of body.members) console.log(`${m.muted ? 'muted ' : '      '}${m.actor}`);
     console.log('\nstop carrying someone: fedipod mute <actor-url>   (undo: unmute)');
@@ -2280,5 +2298,6 @@ WantedBy=default.target
   console.log('  group: members | eject <actor> | mute <actor> | unmute <actor>');
   console.log('         joins <open|approve> | requests | admit <actor> | refuse <actor>');
   console.log('         announced | retract <note> | review <on|off> | pending | approve <note> | decline <note>');
+  console.log('         modqueue | modqueue --apply <id> | modqueue --dismiss <id>');
   process.exit(cmd ? 2 : 0);
 }
