@@ -693,9 +693,21 @@ async function refreshRequests() {
   if (list.length) fillRequests(list);
 }
 
+// What a queued moderation would do, in the words the buttons beside it use.
+function describeModeration(e) {
+  const o = e.activity?.object;
+  const id = typeof o === 'string' ? o : o?.id || '';
+  if (e.type === 'Block') return `block ${id}`;
+  if (e.type === 'Remove') return `eject ${id}`;
+  if (e.type === 'Delete') return `take down ${id}`;
+  if (e.type === 'Add') return `add ${id}`;
+  return id || 'no target named';
+}
+
 async function refreshGroup() {
-  const [members, requests, pending, announced] = await Promise.all(
-    ['/members', '/requests', '/pending', '/announced'].map(p => api(p).then(r => r.json || {})));
+  const [members, requests, pending, announced, modqueue] = await Promise.all(
+    ['/members', '/requests', '/pending', '/announced', '/modqueue']
+      .map(p => api(p).then(r => r.json || {})));
 
   fill('requests', 'requests-count', requests.requests || [], (r) => row(r.actor, r.at, [
     ['Admit', () => write('/admit', { actor: r.actor }, 'admitted'), 'Let them in — they become a member'],
@@ -707,10 +719,23 @@ async function refreshGroup() {
     ['Decline', () => write('/decline', { noteId: p.noteId }, 'declined'), 'Do not carry it — the post stays up on its author\u2019s pod'],
   ]));
 
+  // Moderation another server asked for: apply it, or turn it down. The route
+  // answers with the list itself, not an object wrapping one.
+  const modq = Array.isArray(modqueue) ? modqueue : (modqueue.queue || []);
+  fill('modqueue', 'modqueue-count', modq, (e) => row(
+    `${e.type} — ${describeModeration(e)}`, `asked by ${e.moderator} · ${e.at}`, [
+      ['Carry it out', () => write('/modqueue', { id: e.id, action: 'apply' }, 'applied'),
+        'Do what the moderator asked, as if you had asked it'],
+      ['Turn it down', () => write('/modqueue', { id: e.id, action: 'dismiss' }, 'dismissed'),
+        'Leave things as they are and drop the request'],
+    ]));
+
   // A queue nothing can arrive in is not an empty list, it is a list that does
   // not apply — so the setting has to be on before the heading appears at all.
+  // This one has no setting: it fills only when a moderator has asked.
   $('block-requests').hidden = !(config.approveJoins && (requests.requests || []).length);
   $('block-pending').hidden = !(config.review && (pending.pending || []).length);
+  $('block-modqueue').hidden = !modq.length;
 
   fill('members', 'members-count', members.members || [], (m) => row(
     m.handle || m.actor, m.muted ? 'muted — their posts are not carried' : null,

@@ -1,6 +1,10 @@
 # Changes
 
 ## 2026-08-20
+- Moderation another server asked for has a place on the group's admin page:
+  **Moderation requests**, with carry-out and turn-down beside each one. It
+  appears when something is waiting. `fedipod modqueue` does the same from the
+  terminal.
 - Transferring an account away records the follow graph it tears down, so
   setting the status back to active re-follows everyone the way parking always
   has. It used to unfollow everyone and keep no snapshot, leaving a transfer

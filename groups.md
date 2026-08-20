@@ -44,8 +44,9 @@ the group announces that moderation to its members so their servers can mirror
 it. A moderator list can be set on the group's config; those actors' moderation
 requests arriving over federation are held in a review queue rather than acted
 on automatically, since a delivery alone does not prove who sent it. That
-queue is its own list, separate from post review, and is the one thing with no
-page of its own — it is read and answered from the terminal, with `modqueue`.
+queue is its own list, separate from post review, and appears on the group's
+admin page as **Moderation requests** when something is waiting: carry it out,
+or turn it down.
 A followed group's own announced deletion of a post it carried to you is honoured.
 
 ## Inviting people

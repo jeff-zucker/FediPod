@@ -334,6 +334,16 @@ pre { overflow-x: auto; background: #0001; padding: .6rem; border-radius: .3rem;
     <ul class="rows" role="list" id="pending"></ul>
   </div>
 
+  <!-- Moderation another server asked for. A delivery does not prove who sent
+       it, so a moderator's request waits to be vouched for rather than acting
+       on arrival. Shown only when something is actually waiting. -->
+  <div id="block-modqueue" hidden>
+    <h3>Moderation requests <span class="muted" id="modqueue-count"></span></h3>
+    <p class="hint">Asked for by a moderator over the fediverse. A delivery cannot prove who
+      sent it, so nothing here has been acted on.</p>
+    <ul class="rows" role="list" id="modqueue"></ul>
+  </div>
+
   <h3>Members <span class="muted" id="members-count"></span></h3>
   <p class="hint">A group cannot force an unfollow. Muting is declining to carry; ejecting also
     tells their server it is no longer a member.</p>

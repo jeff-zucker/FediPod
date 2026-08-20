@@ -15,7 +15,72 @@
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
+import httpsMod from 'node:https';
+import { ensureLocalTls } from '../../lib/certs.mjs';
 import { Readable } from 'node:stream';
+
+// Every listener this project starts is https. Every scratch install the suite makes is remembered, so a probe can be
+// offered each one's authority: a spawned agent signs with the certificate of
+// the install it was given, not with the suite's.
+const smokeHomes = new Set();
+const mkdtempReal = fs.mkdtempSync.bind(fs);
+fs.mkdtempSync = (...args) => { const dir = mkdtempReal(...args); smokeHomes.add(dir); return dir; };
+
+const smokeTlsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'fedipod-smoke-tls-'));
+const smokeTls = ensureLocalTls(smokeTlsDir, { names: ['solo.localhost'] });
+
+// The authorities this suite will accept, and no others: its own, plus one
+// per scratch install. An array is what the TLS layer takes.
+function smokeCas() {
+  const out = [];
+  for (const home of smokeHomes) {
+    for (const dir of [home, path.join(home, 'certs'), path.join(path.dirname(path.dirname(home)), 'certs')]) {
+      for (const file of ['ca-cert.pem', 'localhost-cert.pem']) {
+        try { out.push(fs.readFileSync(path.join(dir, file))); } catch { /* not this one */ }
+      }
+    }
+  }
+  return out;
+}
+
+function caOf(home) {
+  for (const dir of [home, path.join(home, 'certs')]) {
+    for (const file of ['ca-cert.pem', 'localhost-cert.pem']) {
+      try { return [fs.readFileSync(path.join(dir, file))]; } catch { /* not this one */ }
+    }
+  }
+  return smokeCas();
+}
+
+async function fetchLocal(url, opts = {}) {
+  const res = await fetchLocalOnce(url, opts);
+  if (opts.redirect === 'manual' || res.status < 300 || res.status >= 400) return res;
+  const to = res.headers.get('location');
+  return to ? fetchLocalOnce(new URL(to, url).href, opts) : res;
+}
+
+function fetchLocalOnce(url, opts = {}) {
+  return new Promise((resolve, reject) => {
+    const u = new URL(url);
+    const req = httpsMod.request({ host: u.hostname, port: u.port, path: u.pathname + u.search,
+      method: opts.method || 'GET', headers: opts.headers || {},
+      ca: opts.home ? caOf(opts.home) : smokeCas(), servername: 'localhost' }, (res) => {
+      const chunks = [];
+      res.on('data', c => chunks.push(c));
+      res.on('end', () => {
+        const text = Buffer.concat(chunks).toString('utf8');
+        resolve({ status: res.statusCode, ok: res.statusCode < 400,
+          headers: new Headers(Object.entries(res.headers).flatMap(
+            ([k, v]) => (Array.isArray(v) ? v.map(one => [k, one]) : [[k, String(v)]]))),
+          text: async () => text, json: async () => JSON.parse(text) });
+      });
+    });
+    req.on('error', reject);
+    if (opts.body) req.write(opts.body);
+    req.end();
+  });
+}
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -47,7 +112,7 @@ const check = (ok, label) => { console.log(`${ok ? 'PASS' : 'FAIL'}  ${label}`);
 // a crash never reaches it. Both halves are fixed: this refuses to start, and
 // the child is reaped on every exit path below.
 async function refusePortInUse(port) {
-  const answered = await fetch(`http://127.0.0.1:${port}/status`, { signal: AbortSignal.timeout(1500) })
+  const answered = await fetchLocal(`https://127.0.0.1:${port}/status`, { home: arguments[1] || null })
     .then(() => true).catch(() => false);
   if (!answered) return;
   console.log(`FAIL  port ${port} is already answering — most likely an agent left over`);
@@ -90,7 +155,7 @@ child.stderr.on('data', d => { bootLog += d; });
 const up = await new Promise(resolve => {
   const t0 = Date.now();
   const tick = async () => {
-    try { await fetch(`http://127.0.0.1:${PORT}/status`); return resolve(true); } catch {}
+    try { await fetchLocal(`https://127.0.0.1:${PORT}/status`); return resolve(true); } catch {}
     if (Date.now() - t0 > 15_000) return resolve(false);
     setTimeout(tick, 300);
   };
@@ -102,14 +167,14 @@ if (up) {
   const gh = { 'x-dk-token': TOKEN };
 
   // --- 2. gate + unconfigured + static ---
-  const anon = await fetch(`http://127.0.0.1:${PORT}/status`);
+  const anon = await fetchLocal(`https://127.0.0.1:${PORT}/status`);
   check(anon.status === 401, `/status without token → 401 (got ${anon.status})`);
-  const authed = await fetch(`http://127.0.0.1:${PORT}/status`, { headers: gh });
+  const authed = await fetchLocal(`https://127.0.0.1:${PORT}/status`, { headers: gh });
   const status = await authed.json();
   check(authed.status === 200 && status.configured === false,
     `/status with token → unconfigured (got ${JSON.stringify(status).slice(0, 80)})`);
 
-  const post = await fetch(`http://127.0.0.1:${PORT}/post`, {
+  const post = await fetchLocal(`https://127.0.0.1:${PORT}/post`, {
     method: 'POST', headers: { ...gh, 'content-type': 'application/json' },
     body: JSON.stringify({ content: 'nope' }),
   });
@@ -117,9 +182,9 @@ if (up) {
 
   // --- security: Host/Origin firewall, headers, cross-site authorize ---
   // fetch() refuses to set Host (forbidden header), so speak HTTP directly.
-  const { default: netMod } = await import('node:net');
+  const { default: netMod } = await import('node:tls');
   const rawGet = (headerLines) => new Promise((resolve) => {
-    const s = netMod.connect(PORT, '127.0.0.1', () => {
+    const s = netMod.connect({ port: PORT, host: '127.0.0.1', ca: smokeCas(), servername: 'localhost' }, () => {
       s.write(`GET /status HTTP/1.1\r\n${headerLines}\r\nConnection: close\r\n\r\n`);
     });
     let buf = '';
@@ -131,20 +196,20 @@ if (up) {
   check(/^HTTP\/1\.1 403/.test(rebind), `rebound Host refused (got ${rebind.slice(9, 12) || 'nothing'})`);
   const goodHost = await rawGet(`Host: localhost:${PORT}\r\nx-dk-token: ${TOKEN}`);
   check(/^HTTP\/1\.1 200/.test(goodHost), 'expected Host still served');
-  const xorigin = await fetch(`http://127.0.0.1:${PORT}/status`, { headers: { ...gh, origin: 'https://evil.example' } });
+  const xorigin = await fetchLocal(`https://127.0.0.1:${PORT}/status`, { headers: { ...gh, origin: 'https://evil.example' } });
   check(xorigin.status === 403, `cross-origin request refused (got ${xorigin.status})`);
   // Cross-site navigation is no longer blanket-refused — a browser client logs
   // in exactly by navigating here — so the redirect policy is what governs: an
   // off-origin redirect that no client registered is refused all the same.
-  const xsite = await fetch(`http://127.0.0.1:${PORT}/oauth/authorize?redirect_uri=https%3A%2F%2Fevil.example%2Fcb`, {
+  const xsite = await fetchLocal(`https://127.0.0.1:${PORT}/oauth/authorize?redirect_uri=https%3A%2F%2Fevil.example%2Fcb`, {
     headers: { ...gh, 'sec-fetch-site': 'cross-site' }, redirect: 'manual',
   });
   check(xsite.status === 400, `an unregistered off-origin redirect is refused regardless of navigation (got ${xsite.status})`);
-  const badRedirect = await fetch(`http://127.0.0.1:${PORT}/oauth/authorize?redirect_uri=https%3A%2F%2Fevil.example%2Fcb`, {
+  const badRedirect = await fetchLocal(`https://127.0.0.1:${PORT}/oauth/authorize?redirect_uri=https%3A%2F%2Fevil.example%2Fcb`, {
     headers: gh, redirect: 'manual',
   });
   check(badRedirect.status === 400, `off-origin redirect_uri refused (got ${badRedirect.status})`);
-  const hdrs = await fetch(`http://127.0.0.1:${PORT}/`, { headers: gh });
+  const hdrs = await fetchLocal(`https://127.0.0.1:${PORT}/`, { headers: gh });
   // 'self', not 'none': /admin/client/ frames the bundled client under a bar of
   // ours. Same origin only — anything wider would let a visited page put the
   // agent in a frame, which is what these two headers exist to stop.
@@ -153,9 +218,9 @@ if (up) {
     && hdrs.headers.get('x-frame-options') === 'SAMEORIGIN',
     'security headers present on HTML, framing limited to our own origin');
 
-  const niPtr = await fetch(`http://127.0.0.1:${PORT}/.well-known/nodeinfo`, { headers: gh });
+  const niPtr = await fetchLocal(`https://127.0.0.1:${PORT}/.well-known/nodeinfo`, { headers: gh });
   const niPtrBody = await niPtr.json();
-  const niDoc = await fetch(`http://127.0.0.1:${PORT}/nodeinfo/2.0`, { headers: gh });
+  const niDoc = await fetchLocal(`https://127.0.0.1:${PORT}/nodeinfo/2.0`, { headers: gh });
   const niDocBody = await niDoc.json();
   check(niPtr.status === 200 && /\/nodeinfo\/2\.0$/.test(niPtrBody.links?.[0]?.href)
     && niDoc.status === 200 && niDocBody.software?.name === 'hometown'
@@ -164,14 +229,14 @@ if (up) {
 
   // Unconfigured, `/` is the setup page, not a client with nothing to show.
   // (A CONFIGURED agent still gets Phanpy at `/` — asserted in §14.)
-  const bare = await fetch(`http://127.0.0.1:${PORT}/`, { headers: gh, redirect: 'manual' });
+  const bare = await fetchLocal(`https://127.0.0.1:${PORT}/`, { headers: gh, redirect: 'manual' });
   check(bare.status === 302 && bare.headers.get('location') === '/admin/setup/',
     `/ sends an unconfigured agent to setup (${bare.status} → ${bare.headers.get('location')})`);
-  const ui = await fetch(`http://127.0.0.1:${PORT}/`, { headers: gh });
+  const ui = await fetchLocal(`https://127.0.0.1:${PORT}/`, { headers: gh });
   const uiBody = await ui.text();
   check(ui.status === 200 && /text\/html/.test(ui.headers.get('content-type')) && /setup\.js/.test(uiBody),
     `and that page is served (got ${ui.status})`);
-  const jail = await fetch(`http://127.0.0.1:${PORT}/..%2f..%2fpackage.json`, { headers: gh });
+  const jail = await fetchLocal(`https://127.0.0.1:${PORT}/..%2f..%2fpackage.json`, { headers: gh });
   check(jail.status === 403 || jail.status === 404, `path traversal blocked (got ${jail.status})`);
 
   // The vendored client must not install a service worker. One that outlives
@@ -185,11 +250,11 @@ if (up) {
     'UI registers no service worker; sw.js is the kill-switch');
 
   // --- 3. facade basics ---
-  const inst = await fetch(`http://127.0.0.1:${PORT}/api/v1/instance`, { headers: gh });
+  const inst = await fetchLocal(`https://127.0.0.1:${PORT}/api/v1/instance`, { headers: gh });
   const instBody = await inst.json();
   check(inst.status === 200 && /fedipod/.test(instBody.version), `/api/v1/instance → 200 (got ${inst.status})`);
 
-  const apps = await fetch(`http://127.0.0.1:${PORT}/api/v1/apps`, {
+  const apps = await fetchLocal(`https://127.0.0.1:${PORT}/api/v1/apps`, {
     method: 'POST', headers: { ...gh, 'content-type': 'application/json' },
     body: JSON.stringify({ client_name: 'smoke', redirect_uris: 'urn:ietf:wg:oauth:2.0:oob' }),
   });
@@ -197,9 +262,9 @@ if (up) {
   check(!!appRec.client_id && !!appRec.client_secret && appRec.client_id !== 'dk-ap-client',
     'POST /api/v1/apps registers a client with its own id and secret');
 
-  const authz = await fetch(`http://127.0.0.1:${PORT}/oauth/authorize?redirect_uri=urn:ietf:wg:oauth:2.0:oob&client_id=dk-ap-client`, { headers: gh });
+  const authz = await fetchLocal(`https://127.0.0.1:${PORT}/oauth/authorize?redirect_uri=urn:ietf:wg:oauth:2.0:oob&client_id=dk-ap-client`, { headers: gh });
   const { code } = await authz.json();
-  const tok = await fetch(`http://127.0.0.1:${PORT}/oauth/token`, {
+  const tok = await fetchLocal(`https://127.0.0.1:${PORT}/oauth/token`, {
     method: 'POST', headers: { ...gh, 'content-type': 'application/x-www-form-urlencoded' },
     body: `grant_type=authorization_code&code=${code}&client_id=dk-ap-client`,
   });
@@ -210,10 +275,10 @@ if (up) {
   // its code must be bound to it and exchangeable with its secret (this is
   // how Whalebird signs in). It used to fall into the local flow and mint a
   // code the exchange could never redeem.
-  const oobAuthz = await fetch(`http://127.0.0.1:${PORT}/oauth/authorize`
+  const oobAuthz = await fetchLocal(`https://127.0.0.1:${PORT}/oauth/authorize`
     + `?redirect_uri=urn:ietf:wg:oauth:2.0:oob&client_id=${appRec.client_id}&response_type=code&scope=read`, { headers: gh });
   const oobCode = (await oobAuthz.json()).code;
-  const oobTok = await fetch(`http://127.0.0.1:${PORT}/oauth/token`, {
+  const oobTok = await fetchLocal(`https://127.0.0.1:${PORT}/oauth/token`, {
     method: 'POST', headers: { ...gh, 'content-type': 'application/json' },
     body: JSON.stringify({ grant_type: 'authorization_code', code: oobCode,
       client_id: appRec.client_id, client_secret: appRec.client_secret,
@@ -227,14 +292,14 @@ if (up) {
   // code must bind to it and exchange with its secret. It used to fall into
   // the local flow and mint a code the exchange could never redeem — which
   // broke the bundled client's login at any fresh origin.
-  const selfReg = await fetch(`http://127.0.0.1:${PORT}/api/v1/apps`, {
+  const selfReg = await fetchLocal(`https://127.0.0.1:${PORT}/api/v1/apps`, {
     method: 'POST', headers: { ...gh, 'content-type': 'application/json' },
     body: JSON.stringify({ client_name: 'self-origin', redirect_uris: `http://127.0.0.1:${PORT}/` }),
   }).then(r => r.json());
-  const selfAuthz = await fetch(`http://127.0.0.1:${PORT}/oauth/authorize`
+  const selfAuthz = await fetchLocal(`https://127.0.0.1:${PORT}/oauth/authorize`
     + `?client_id=${selfReg.client_id}&response_type=code&redirect_uri=${encodeURIComponent(`http://127.0.0.1:${PORT}/`)}&scope=read`, { headers: gh, redirect: 'manual' });
   const selfCode = /code=([0-9a-f]+)/.exec(selfAuthz.headers.get('location') || '')?.[1];
-  const selfTok = await fetch(`http://127.0.0.1:${PORT}/oauth/token`, {
+  const selfTok = await fetchLocal(`https://127.0.0.1:${PORT}/oauth/token`, {
     method: 'POST', headers: { ...gh, 'content-type': 'application/json' },
     body: JSON.stringify({ grant_type: 'authorization_code', code: selfCode,
       client_id: selfReg.client_id, client_secret: selfReg.client_secret,
@@ -245,18 +310,18 @@ if (up) {
 
   // Minting for an unknown code handed a bearer to anyone who could reach the
   // port; a non-browser client sends no Origin, so the firewall never saw it.
-  const forged = await fetch(`http://127.0.0.1:${PORT}/oauth/token`, {
+  const forged = await fetchLocal(`https://127.0.0.1:${PORT}/oauth/token`, {
     method: 'POST', headers: { ...gh, 'content-type': 'application/x-www-form-urlencoded' },
     body: 'grant_type=authorization_code&code=not-a-real-code&client_id=dk-ap-client',
   });
   const forgedBody = await forged.json();
   check(forged.status === 400 && !forgedBody.access_token,
     `/oauth/token refuses an unknown code (got ${forged.status})`);
-  const empty = await fetch(`http://127.0.0.1:${PORT}/oauth/token`, {
+  const empty = await fetchLocal(`https://127.0.0.1:${PORT}/oauth/token`, {
     method: 'POST', headers: { ...gh, 'content-type': 'application/json' }, body: '{}',
   });
   check(empty.status === 400, `/oauth/token refuses a missing code (got ${empty.status})`);
-  const reuse = await fetch(`http://127.0.0.1:${PORT}/oauth/token`, {
+  const reuse = await fetchLocal(`https://127.0.0.1:${PORT}/oauth/token`, {
     method: 'POST', headers: { ...gh, 'content-type': 'application/x-www-form-urlencoded' },
     body: `grant_type=authorization_code&code=${tokBody.access_token}&client_id=dk-ap-client`,
   });
@@ -266,21 +331,21 @@ if (up) {
   // Mastodon-style third-party client: registers with its OWN redirect origin,
   // is sent a bound code there, and exchanges it with its secret for a bearer.
   const EXT = 'http://elk.example/cb';
-  const reg = await (await fetch(`http://127.0.0.1:${PORT}/api/v1/apps`, {
+  const reg = await (await fetchLocal(`https://127.0.0.1:${PORT}/api/v1/apps`, {
     method: 'POST', headers: { ...gh, 'content-type': 'application/json' },
     body: JSON.stringify({ client_name: 'Elk', redirect_uris: EXT }),
   })).json();
-  const extAuthz = await fetch(`http://127.0.0.1:${PORT}/oauth/authorize?response_type=code`
+  const extAuthz = await fetchLocal(`https://127.0.0.1:${PORT}/oauth/authorize?response_type=code`
     + `&client_id=${reg.client_id}&redirect_uri=${encodeURIComponent(EXT)}&scope=read`,
     { headers: gh, redirect: 'manual' });
   const extCode = extAuthz.headers.get('location')
     ? new URL(extAuthz.headers.get('location')).searchParams.get('code') : null;
   check(extAuthz.status === 302 && !!extCode,
     'a registered client is redirected to its own origin carrying a code');
-  const preExchange = await fetch(`http://127.0.0.1:${PORT}/api/v1/accounts/verify_credentials`,
+  const preExchange = await fetchLocal(`https://127.0.0.1:${PORT}/api/v1/accounts/verify_credentials`,
     { headers: { ...gh, authorization: `Bearer ${extCode}` } });
   check(preExchange.status === 401, 'the bound code is not itself a bearer');
-  const exch = (secret) => fetch(`http://127.0.0.1:${PORT}/oauth/token`, {
+  const exch = (secret) => fetchLocal(`https://127.0.0.1:${PORT}/oauth/token`, {
     method: 'POST', headers: { ...gh, 'content-type': 'application/json' },
     body: JSON.stringify({ grant_type: 'authorization_code', code: extCode,
       client_id: reg.client_id, client_secret: secret, redirect_uri: EXT }),
@@ -293,12 +358,12 @@ if (up) {
   check((await exch(reg.client_secret)).status === 400, 'and a bound code is single-use');
 
   // CORS: the API answers a foreign origin the way any Mastodon server does.
-  const preflight = await fetch(`http://127.0.0.1:${PORT}/api/v1/instance`, {
+  const preflight = await fetchLocal(`https://127.0.0.1:${PORT}/api/v1/instance`, {
     method: 'OPTIONS', headers: { ...gh, origin: 'http://elk.example',
       'access-control-request-method': 'GET', 'access-control-request-headers': 'authorization' } });
   check(preflight.status === 204 && preflight.headers.get('access-control-allow-origin') === '*',
     'the API answers a CORS preflight');
-  const crossGet = await fetch(`http://127.0.0.1:${PORT}/api/v1/instance`,
+  const crossGet = await fetchLocal(`https://127.0.0.1:${PORT}/api/v1/instance`,
     { headers: { ...gh, origin: 'http://elk.example' } });
   check(crossGet.status === 200 && crossGet.headers.get('access-control-allow-origin') === '*',
     'and a cross-origin GET carries access-control-allow-origin');
@@ -306,33 +371,33 @@ if (up) {
   // --- the admin body must say it is JSON ---
   // A cross-origin form POST needs no preflight, and JSON.parse never cared
   // what Content-Type claimed, so a visited page could reach every write route.
-  const formish = await fetch(`http://127.0.0.1:${PORT}/block`, {
+  const formish = await fetchLocal(`https://127.0.0.1:${PORT}/block`, {
     method: 'POST', headers: { ...gh, 'content-type': 'text/plain;charset=UTF-8' },
     body: JSON.stringify({ domain: 'evil.example' }),
   });
   check(formish.status === 400 && /application\/json/.test((await formish.json()).error),
     `a form-shaped POST is refused whatever the body says (got ${formish.status})`);
-  const urlencoded = await fetch(`http://127.0.0.1:${PORT}/block`, {
+  const urlencoded = await fetchLocal(`https://127.0.0.1:${PORT}/block`, {
     method: 'POST', headers: { ...gh, 'content-type': 'application/x-www-form-urlencoded' },
     body: '{"domain":"evil.example"}',
   });
   check(urlencoded.status === 400, `and so is the other preflight-free encoding (got ${urlencoded.status})`);
   // `stop` POSTs /shutdown with neither, so an empty body still has to parse.
-  const noType = await fetch(`http://127.0.0.1:${PORT}/block`, { method: 'POST', headers: gh });
+  const noType = await fetchLocal(`https://127.0.0.1:${PORT}/block`, { method: 'POST', headers: gh });
   check(noType.status === 400 && /domain or actor/.test((await noType.json()).error),
     'an empty body with no content-type still reaches the route');
-  const proper = await fetch(`http://127.0.0.1:${PORT}/block`, {
+  const proper = await fetchLocal(`https://127.0.0.1:${PORT}/block`, {
     method: 'POST', headers: { ...gh, 'content-type': 'application/json' },
     body: JSON.stringify({ domain: 'evil.example' }),
   });
   check(proper.status === 200, `a JSON POST is unaffected (got ${proper.status})`);
 
-  const stubs = await fetch(`http://127.0.0.1:${PORT}/api/v1/filters`, { headers: gh });
+  const stubs = await fetchLocal(`https://127.0.0.1:${PORT}/api/v1/filters`, { headers: gh });
   check(stubs.status === 200 && Array.isArray(await stubs.json()), 'stub endpoint returns []');
 
-  const noAuth = await fetch(`http://127.0.0.1:${PORT}/api/v1/timelines/home`, { headers: gh });
+  const noAuth = await fetchLocal(`https://127.0.0.1:${PORT}/api/v1/timelines/home`, { headers: gh });
   check(noAuth.status === 401, `timeline without bearer → 401 (got ${noAuth.status})`);
-  const badCfg = await fetch(`http://127.0.0.1:${PORT}/api/v1/timelines/home`, {
+  const badCfg = await fetchLocal(`https://127.0.0.1:${PORT}/api/v1/timelines/home`, {
     headers: { ...gh, authorization: `Bearer ${tokBody.access_token}` },
   });
   check(badCfg.status === 503, `timeline with bearer but unconfigured → 503 (got ${badCfg.status})`);
@@ -718,7 +783,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 {
   const { wsOrigins } = await import(path.join(root, 'lib/admin.mjs'));
   const plain = wsOrigins(8041);
-  check(plain.includes('ws://localhost:8041') && plain.includes('ws://127.0.0.1:8041'),
+  check(plain.includes('wss://localhost:8041') && plain.includes('wss://127.0.0.1:8041'),
     'the loopback websocket origins are allowed');
   // No IPv6 in either form. Chrome rejects `ws://[::1]:8041` as a CSP source
   // expression and then discards the WHOLE connect-src directive — so listing
@@ -731,7 +796,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   delete process.env.AP_ALLOWED_HOSTS;
   // Pinning connect-src to localhost silently killed streaming for anyone
   // browsing an agent at its own name.
-  check(named.includes('ws://solo.localhost:8041'),
+  check(named.includes('wss://solo.localhost:8041'),
     'a declared extra host may open the streaming socket too');
 
   // --- the agent's own name, without AP_ALLOWED_HOSTS ---
@@ -754,7 +819,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   check(on80.has('localhost') && on80.has('solo.localhost') && on80.has('localhost:80'),
     'on port 80 the port-less authority really is ours');
   const wsNamed = wsOrigins(8041, ['solo']);
-  check(wsNamed.includes('ws://solo.localhost:8041')
+  check(wsNamed.includes('wss://solo.localhost:8041')
     && new Set(wsNamed).size === wsNamed.length,
     `the CSP lets it open the streaming socket, once (${wsNamed.length} origins)`);
 
@@ -2800,7 +2865,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
   check(/#win-close \{[\s\S]*?min-height: 24px/.test(read('web/admin/window.css')),
     'the close button meets the 24px target minimum (2.5.8)');
-  check((record.match(/<ul class="rows" role="list"/g) || []).length === 4,
+  check((record.match(/<ul class="rows" role="list"/g) || []).length === 5,
     'and list-style:none no longer strips the group lists of their list semantics');
 }
 
@@ -3397,6 +3462,12 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   check(actor?.movedTo === target && actor.type === 'Person' && actor.id === m.publisher.urls.actor
     && m.saved().movedTo === target,
     'the actor stays a Person and advertises movedTo, so the old handle still resolves');
+  // A move unfollows everyone, and the record page offers "active" afterwards.
+  // Without a snapshot that setting re-follows nobody and only says so in a
+  // count, which is how a transfer used to become one-way in practice.
+  const moveSnap = m.agent.store.read('parked.json', null);
+  check(mr.snapshot === 2 && moveSnap?.following?.length === 2,
+    `a move records the follow graph it tore down, so reviving can rebuild it (${mr.snapshot})`);
 
   // ---- an edited profile reaches the people looking at it ----
   // Nothing obliges a server to re-fetch an actor it already holds, so a bio or
@@ -4231,7 +4302,7 @@ check(localAgain.json.every(s => s.account.acct.startsWith('jeff@')), 'public?lo
 
 // --- 8b. streaming: health, handshake, live broadcast ---
 if (up) {
-  const health = await fetch(`http://127.0.0.1:${PORT}/api/v1/streaming/health`, { headers: { 'x-dk-token': TOKEN } });
+  const health = await fetchLocal(`https://127.0.0.1:${PORT}/api/v1/streaming/health`, { headers: { 'x-dk-token': TOKEN } });
   check(health.status === 200 && (await health.text()) === 'OK', 'streaming health endpoint');
 }
 {
@@ -4592,11 +4663,13 @@ if (up) {
   const child3 = spawn(process.execPath, [cli, 'start', '--port', '18791'], {
     cwd: root, env: { ...process.env, AP_HOME: home }, stdio: 'ignore',
   });
+  let lastErr = '';
   const listening = await new Promise(resolve => {
     const t0 = Date.now();
     const tick = async () => {
-      try { await fetch('http://127.0.0.1:18791/status'); return resolve(true); } catch {}
-      if (Date.now() - t0 > 10_000) return resolve(false);
+      try { await fetchLocal('https://127.0.0.1:18791/status', { home }); return resolve(true); }
+      catch (e) { lastErr = e.message; }
+      if (Date.now() - t0 > 25_000) return resolve(false);
       setTimeout(tick, 300);
     };
     tick();
@@ -4610,8 +4683,8 @@ if (up) {
   const stopped = await new Promise(resolve => {
     const t0 = Date.now();
     const tick = async () => {
-      try { await fetch('http://127.0.0.1:18791/status'); } catch { return resolve(true); }
-      if (Date.now() - t0 > 8000) return resolve(false);
+      try { await fetchLocal('https://127.0.0.1:18791/status', { home }); } catch { return resolve(true); }
+      if (Date.now() - t0 > 20_000) return resolve(false);
       setTimeout(tick, 300);
     };
     tick();
@@ -4633,8 +4706,8 @@ if (up) {
   const up1 = await new Promise(resolve => {
     const t0 = Date.now();
     const tick = async () => {
-      try { await fetch('http://127.0.0.1:18796/status'); return resolve(true); } catch {}
-      if (Date.now() - t0 > 10_000) return resolve(false);
+      try { await fetchLocal('https://127.0.0.1:18796/status', { home }); return resolve(true); } catch {}
+      if (Date.now() - t0 > 25_000) return resolve(false);
       setTimeout(tick, 300);
     };
     tick();
@@ -4650,7 +4723,7 @@ if (up) {
   const served = await new Promise(resolve => {
     const t0 = Date.now();
     const tick = async () => {
-      const ok = await fetch('http://127.0.0.1:18796/status').then(r => r.ok).catch(() => false);
+      const ok = await fetchLocal('https://127.0.0.1:18796/status', { home }).then(r => r.ok).catch(() => false);
       if (ok && Date.now() - t0 > 4000) return resolve(true);      // survived the handover
       if (Date.now() - t0 > 15_000) return resolve(ok);
       setTimeout(tick, 400);
@@ -4675,8 +4748,8 @@ if (up) {
   const upPort = await new Promise(resolve => {
     const t0 = Date.now();
     const tick = async () => {
-      try { await fetch('http://127.0.0.1:18778/status'); return resolve(true); } catch {}
-      if (Date.now() - t0 > 10_000) return resolve(false);
+      try { await fetchLocal('https://127.0.0.1:18778/status', { home }); return resolve(true); } catch {}
+      if (Date.now() - t0 > 25_000) return resolve(false);
       setTimeout(tick, 300);
     };
     tick();
@@ -5345,9 +5418,10 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
     remote: { getJson: async () => null }, local: { writeNote: async () => {} },
     deliverer: gagent.deliverer, publisher: gagent.publisher,
   });
-  startAdmin({ port: GPORT, gateToken: '', agent: gagent, log: () => {} });
+
+  startAdmin({ port: GPORT, gateToken: '', agent: gagent, log: () => {}, tls: smokeTls });
   await new Promise(r => setTimeout(r, 150));
-  const g = (p, init) => fetch(`http://localhost:${GPORT}${p}`, init);
+  const g = (p, init) => fetchLocal(`https://localhost:${GPORT}${p}`, init);
   const gjson = (p, init) => g(p, init).then(async r => ({ status: r.status, json: await r.json().catch(() => null) }));
 
   const st = await gjson('/status');
@@ -5563,7 +5637,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
 // --- 12. the setup page: served, jailed, and inline-script free ---
 {
   const gh = { 'x-dk-token': TOKEN };
-  const page = await fetch(`http://127.0.0.1:${PORT}/admin/setup/`, { headers: gh });
+  const page = await fetchLocal(`https://127.0.0.1:${PORT}/admin/setup/`, { headers: gh });
   const html = await page.text();
   check(page.status === 200 && /text\/html/.test(page.headers.get('content-type') || ''),
     `/admin/setup/ is served (${page.status})`);
@@ -5576,26 +5650,26 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   check(/<script src=/.test(html) && !/<script(?![^>]*\ssrc=)/.test(html),
     'and the page has none — every script it loads names its source');
 
-  const noSlash = await fetch(`http://127.0.0.1:${PORT}/admin/setup`, { headers: gh, redirect: 'manual' });
+  const noSlash = await fetchLocal(`https://127.0.0.1:${PORT}/admin/setup`, { headers: gh, redirect: 'manual' });
   check(noSlash.status === 302 && noSlash.headers.get('location') === '/admin/setup/',
     `a missing trailing slash is corrected, or relative asset URLs resolve one level up (${noSlash.status})`);
 
-  const st = await fetch(`http://127.0.0.1:${PORT}/setup/state`, { headers: gh }).then(r => r.json());
+  const st = await fetchLocal(`https://127.0.0.1:${PORT}/setup/state`, { headers: gh }).then(r => r.json());
   check(st.hasCredential === false && st.configured === false && st.resumable === false
     && st.phase === 'idle' && st.port === PORT,
     `/setup/state describes an agent with nothing yet (${st.phase})`);
   check(st.identity === null && !/secret|clientId/i.test(JSON.stringify(st)),
     'and reports no credential material');
 
-  const esc = await fetch(`http://127.0.0.1:${PORT}/admin/..%2f..%2fpackage.json`, { headers: gh });
+  const esc = await fetchLocal(`https://127.0.0.1:${PORT}/admin/..%2f..%2fpackage.json`, { headers: gh });
   check(esc.status === 403 || esc.status === 404, `the page directory is jailed (${esc.status})`);
-  const admin = await fetch(`http://127.0.0.1:${PORT}/admin/`, { headers: gh });
+  const admin = await fetchLocal(`https://127.0.0.1:${PORT}/admin/`, { headers: gh });
   check(admin.status === 200, `/admin/ is served from the same place (${admin.status})`);
 }
 
 // --- 12b. the preflight says what the CLI used to print ---
 {
-  const ask = (body) => fetch(`http://127.0.0.1:${PORT}/setup/check`, {
+  const ask = (body) => fetchLocal(`https://127.0.0.1:${PORT}/setup/check`, {
     method: 'POST', headers: { 'x-dk-token': TOKEN, 'content-type': 'application/json' },
     body: JSON.stringify(body),
   }).then(r => r.json());
@@ -5626,7 +5700,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
 // --- 13. setup runs in the server, outlives the page, and leaks no password ---
 {
   const { startAdmin } = await import(path.join(root, 'lib/admin.mjs'));
-  const { default: net13 } = await import('node:net');
+  const { default: net13 } = await import('node:tls');
   const SPORT = 18626;
   const RPORT = 18627;
   const CSS = 18630;
@@ -5702,10 +5776,10 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   const slog13 = [];
   const SHOME = fs.mkdtempSync('/tmp/fedipod-setup-');
   const sagent = makeAgent(SHOME);
-  startAdmin({ port: SPORT, gateToken: '', agent: sagent, log: (...a) => slog13.push(a.join(' ')) });
+  startAdmin({ port: SPORT, gateToken: '', agent: sagent, log: (...a) => slog13.push(a.join(' ')), tls: smokeTls });
   await new Promise(r => setTimeout(r, 150));
 
-  const sjson = (p, init) => fetch(`http://localhost:${SPORT}${p}`, init)
+  const sjson = (p, init) => fetchLocal(`https://localhost:${SPORT}${p}`, init)
     .then(async r => ({ status: r.status, json: await r.json().catch(() => null) }));
   const spost = (p, body) => sjson(p, {
     method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
@@ -5719,7 +5793,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
     return null;
   };
   const rawHost = (port, host) => new Promise((resolve) => {
-    const s = net13.connect(port, '127.0.0.1', () => {
+    const s = net13.connect({ port: port, host: '127.0.0.1', ca: smokeCas(), servername: 'localhost' }, () => {
       s.write(`GET /status HTTP/1.1\r\nHost: ${host}\r\nConnection: close\r\n\r\n`);
     });
     let buf = '';
@@ -5787,19 +5861,19 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   fs.copyFileSync(credFile, path.join(RHOME, 'credential.json'));
   const mintsBefore = mints;
   const ragent = makeAgent(RHOME);
-  startAdmin({ port: RPORT, gateToken: '', agent: ragent, log: () => {} });
+  startAdmin({ port: RPORT, gateToken: '', agent: ragent, log: () => {}, tls: smokeTls });
   await new Promise(r => setTimeout(r, 150));
-  const rstate = await fetch(`http://localhost:${RPORT}/setup/state`).then(r => r.json());
+  const rstate = await fetchLocal(`https://localhost:${RPORT}/setup/state`).then(r => r.json());
   check(rstate.hasCredential === true && rstate.configured === false && rstate.resumable === true
     && rstate.identity?.pod === NEW_POD,
     'a credential with no actor behind it is reported as resumable');
-  const resumed = await fetch(`http://localhost:${RPORT}/setup`, {
+  const resumed = await fetchLocal(`https://localhost:${RPORT}/setup`, {
     method: 'POST', headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ handle: 'wren', name: 'Wren', kind: 'person' }),   // no password, no pod
   }).then(r => r.status);
   let rdone = null;
   for (let i = 0; i < 200 && !rdone; i++) {
-    const j = await fetch(`http://localhost:${RPORT}/setup/progress`).then(r => r.json());
+    const j = await fetchLocal(`https://localhost:${RPORT}/setup/progress`).then(r => r.json());
     if (j.phase !== 'running') rdone = j;
     else await new Promise(r => setTimeout(r, 50));
   }
@@ -5861,9 +5935,9 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
       rebuildStatuses: async (o) => { lifecycle.push('rebuild'); return { indexed: 1, recovered: 1, ...o }; },
     },
   };
-  startAdmin({ port: CPORT, gateToken: '', agent: cagent, handle: 'solo', log: () => {} });
+  startAdmin({ port: CPORT, gateToken: '', agent: cagent, handle: 'solo', log: () => {}, tls: smokeTls });
   await new Promise(r => setTimeout(r, 150));
-  const cjson = (p, init) => fetch(`http://localhost:${CPORT}${p}`, init)
+  const cjson = (p, init) => fetchLocal(`https://localhost:${CPORT}${p}`, init)
     .then(async r => ({ status: r.status, json: await r.json().catch(() => null) }));
   const cpost = (body) => cjson('/config', {
     method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
@@ -6013,7 +6087,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   check((others.json?.identities || []).length === 2,
     `both identities are listed (${(others.json?.identities || []).length})`);
   check(others.status === 200 && byName.solo?.current === true
-    && byName.solo.admin === `http://solo.localhost:${CPORT}/admin/`,
+    && byName.solo.admin === `https://solo.localhost:${CPORT}/admin/`,
     'the page is told which identity it is already looking at, so it can leave it out');
   check(byName.solo?.lastUsed === true && byName.other?.lastUsed === false,
     'and which one a plain command means, which is a different question from which page you are on');
@@ -6021,8 +6095,8 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   // of identities all linked at localhost:<port> files them in one bucket —
   // which is how a client ends up holding one actor's login on another's page.
   check(byName.other?.current === false && byName.other.port === 18999
-    && byName.other.admin === 'http://other.localhost:18999/admin/'
-    && byName.other.app === 'http://other.localhost:18999/' && byName.other.mode === null,
+    && byName.other.admin === 'https://other.localhost:18999/admin/'
+    && byName.other.app === 'https://other.localhost:18999/' && byName.other.mode === null,
     'a sibling carries both addresses — the record and the client — and reports it is not running');
   check(byName.other.handle === 'other',
     'a STOPPED sibling is still named, from the handle agent.json records — it never answers to be asked');
@@ -6499,19 +6573,19 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
     psrv.close();
   }
 
-  const bare = await fetch(`http://localhost:${CPORT}/`, { redirect: 'manual' });
+  const bare = await fetchLocal(`https://localhost:${CPORT}/`, { redirect: 'manual' });
   check(bare.status === 200, `a configured person still gets the client at / (${bare.status})`);
 
   // A tailnet name or reverse-proxy domain may carry the fediverse side. It may
   // not create accounts or edit the record.
-  const { default: net14 } = await import('node:net');
+  const { default: net14 } = await import('node:tls');
   const XPORT = CPORT + 1;
   process.env.AP_ALLOWED_HOSTS = `box.tailnet.example:${XPORT}`;
-  startAdmin({ port: XPORT, gateToken: '', agent: cagent, handle: 'solo', log: () => {} });
+  startAdmin({ port: XPORT, gateToken: '', agent: cagent, handle: 'solo', log: () => {}, tls: smokeTls });
   delete process.env.AP_ALLOWED_HOSTS;
   await new Promise(r => setTimeout(r, 150));
   const rawPost = (host, p, body) => new Promise((resolve) => {
-    const s = net14.connect(XPORT, '127.0.0.1', () => {
+    const s = net14.connect({ port: XPORT, host: '127.0.0.1', ca: smokeCas(), servername: 'localhost' }, () => {
       s.write(`POST ${p} HTTP/1.1\r\nHost: ${host}\r\ncontent-type: application/json\r\n`
         + `content-length: ${Buffer.byteLength(body)}\r\nConnection: close\r\n\r\n${body}`);
     });
@@ -6606,9 +6680,9 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
       publishProfile: async () => { republishedA.push(1); return { unreachable: [] }; },
     },
   };
-  startAdminA({ port: APORT, gateToken: '', agent: aagent, handle: 'solo', log: () => {} });
+  startAdminA({ port: APORT, gateToken: '', agent: aagent, handle: 'solo', log: () => {}, tls: smokeTls });
   await new Promise(r => setTimeout(r, 150));
-  const apost = (body) => fetch(`http://localhost:${APORT}/alias`, {
+  const apost = (body) => fetchLocal(`https://localhost:${APORT}/alias`, {
     method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
   }).then(async r => ({ status: r.status, json: await r.json().catch(() => null) }));
 
@@ -6655,11 +6729,11 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
     'a path-hosted pod is refused as a Move target, and told why');
   aagent.publisher.urls = aurls;
 
-  const cfgGet = await fetch(`http://localhost:${APORT}/config`).then(r => r.json());
+  const cfgGet = await fetchLocal(`https://localhost:${APORT}/config`).then(r => r.json());
   check(Array.isArray(cfgGet.aliases), 'GET /config reports the aliases list for the page');
 
   // ---- the follower landing pad: auto-accept is a setting, the queue answers as one ----
-  const cpostA = (path2, body) => fetch(`http://localhost:${APORT}${path2}`, {
+  const cpostA = (path2, body) => fetchLocal(`https://localhost:${APORT}${path2}`, {
     method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
   }).then(async r => ({ status: r.status, json: await r.json().catch(() => null) }));
 
@@ -6869,9 +6943,9 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
     publisher: { urls: wire.apUrls('https://imp.example/'), config: {} },
   };
   ragent2.importer = new ImportWorker({ agent: ragent2, log: () => {} });
-  startAdminI({ port: IPORT, gateToken: '', agent: ragent2, handle: 'imp', log: () => {} });
+  startAdminI({ port: IPORT, gateToken: '', agent: ragent2, handle: 'imp', log: () => {}, tls: smokeTls });
   await new Promise(r => setTimeout(r, 150));
-  const ipost = (body) => fetch(`http://localhost:${IPORT}/import`, {
+  const ipost = (body) => fetchLocal(`https://localhost:${IPORT}/import`, {
     method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
   }).then(async r => ({ status: r.status, json: await r.json().catch(() => null) }));
 
@@ -6884,13 +6958,13 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
     'staging over HTTP counts what it took and quotes what it could not read');
   ragent2.importer.stop();                    // hand-drive the applier
   await ragent2.importer.tick();
-  const prog = await fetch(`http://localhost:${IPORT}/import`).then(r => r.json());
+  const prog = await fetchLocal(`https://localhost:${IPORT}/import`).then(r => r.json());
   check(prog.done === 1 && prog.pending === 0
     && rstore.getBlocklist().domains.includes('spam.example'),
     'GET /import shows the progress the worker made');
   const cleared = await ipost({ clear: true });
   check(cleared.status === 200 && cleared.json.cleared === true
-    && (await fetch(`http://localhost:${IPORT}/import`).then(r => r.json())).rows === 0,
+    && (await fetchLocal(`https://localhost:${IPORT}/import`).then(r => r.json())).rows === 0,
     'clear drops the record');
 
   ragent2.requestTakeover = async () => false;
@@ -6962,10 +7036,9 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   check(tls3.trust === true && tls3.cert === t.cert,
     'trust mode is sticky — later boots keep the CA-signed certificate');
 
-  // The https listener: same handler, second port, authorities extended.
+  // The listener: one port, https, its authority the machine's own.
   const { startAdmin: startAdminH } = await import(path.join(root, 'lib/admin.mjs'));
   const HPORT = 18671;
-  const HSPORT = 18672;
   const hstore = new PodStore({ log: () => {} });
   hstore.setConfig({ remotePod: 'https://h.example/', handle: 'h', name: 'h',
     issuer: 'https://example', kind: 'person' });
@@ -6977,13 +7050,13 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
     publisher: { urls: wire.apUrls('https://h.example/'), config: {} },
   };
   startAdminH({ port: HPORT, gateToken: '', agent: hagent, handle: 'h', log: () => {},
-    httpsPort: HSPORT, tls: { key: tls3.key, cert: tls3.cert, trust: true } });
+    tls: { key: tls3.key, cert: tls3.cert, trust: true } });
   await new Promise(r => setTimeout(r, 200));
   const { default: httpsMod } = await import('node:https');
   const hgot = await new Promise((resolve) => {
     const req = httpsMod.request({
-      host: '127.0.0.1', port: HSPORT, path: '/config',
-      headers: { host: `localhost:${HSPORT}` }, rejectUnauthorized: false,
+      host: '127.0.0.1', port: HPORT, path: '/config',
+      headers: { host: `localhost:${HPORT}` }, rejectUnauthorized: false,
     }, (res) => {
       let buf = '';
       res.on('data', d => { buf += d; });
@@ -6993,10 +7066,10 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
     req.end();
   });
   check(hgot.status === 200 && /"handle":"h"/.test(hgot.body),
-    `the same API answers over https on the second port (${hgot.status})`);
+    `the API answers over https on the agent's own port (${hgot.status})`);
   const hbad = await new Promise((resolve) => {
     const req = httpsMod.request({
-      host: '127.0.0.1', port: HSPORT, path: '/config',
+      host: '127.0.0.1', port: HPORT, path: '/config',
       headers: { host: 'evil.example' }, rejectUnauthorized: false,
     }, (res) => resolve(res.statusCode));
     req.on('error', () => resolve(0));
@@ -7341,7 +7414,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
 // --- 16. `npm start`: find a port that binds, detach, open the right page ---
 {
   const { execFile } = await import('node:child_process');
-  const { default: net16 } = await import('node:net');
+  const { default: net16 } = await import('node:tls');
   const homes = [];
   const mkHome = (tag) => { const h = fs.mkdtempSync(`/tmp/fedipod-up-${tag}-`); homes.push(h); return h; };
   const run = (home, args) => new Promise((resolve) => {
@@ -7381,7 +7454,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
     // Phanpy with no account bound. The old `${origin}/` also matched the
     // origin regex alone, so the path is asserted explicitly. The advertised
     // origin is the https one, on the mirrored port.
-    check(up4.ok && /https:\/\/wren\.localhost:19805\/admin\/client\//.test(up4.out) && !/admin\/setup/.test(up4.out),
+    check(up4.ok && /https:\/\/wren\.localhost:18805\/admin\/client\//.test(up4.out) && !/admin\/setup/.test(up4.out),
       'an agent that has an identity opens its own https client, not bare Phanpy or the form');
 
     // A signup carry-over on a machine that already has identities: the new
@@ -7460,13 +7533,13 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   const out = await intake17.prune({ before: '2026-07-02T00:00:00.000Z' });
 
   check(out.considered === 2, `.keep and anything recent are not candidates (${out.considered})`);
-  check(deleted.includes(INBOX + 'big-old') && !fetched.includes(INBOX + 'big-old'),
-    'a large old item is deleted UNREAD — one request, and at that size it is content');
-  check(fetched.includes(INBOX + 'small-old') && applied.includes('Follow'),
-    'a small one is read and APPLIED — the follow graph survives a discard');
+  check(fetched.includes(INBOX + 'big-old') && applied.filter(t => t === 'Follow').length === 2,
+    'a LARGE control activity is read and applied too — size does not decide its fate');
+  check(fetched.includes(INBOX + 'small-old'),
+    'and so is a small one — the follow graph survives a discard');
   check(!deleted.includes(INBOX + 'recent') && !deleted.includes(INBOX + '.keep'),
     'nothing newer than the cutoff is touched');
-  check(out.applied === 1 && out.discarded === 1 && out.dropped === 0,
+  check(out.applied === 2 && out.discarded === 0 && out.dropped === 0,
     `and it says what it did (applied ${out.applied}, discarded ${out.discarded})`);
 
   // A Create inside the small set is content too: read, classified, dropped.
@@ -7474,8 +7547,19 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   intake17.handle = async (a) => { dropped.push(a.type); return null; };
   intake17.remote.fetch = async (u) => { fetched.push(u); return { status: 200, json: async () => ({ type: 'Create' }) }; };
   const out2 = await intake17.prune({ before: '2026-07-02T00:00:00.000Z' });
-  check(out2.dropped === 1 && !dropped.includes('Create'),
-    'a small Create is read, recognised as content and dropped rather than applied');
+  check(out2.dropped === 2 && !dropped.includes('Create'),
+    'a Create is read, recognised as content and dropped rather than applied');
+
+  // The one thing still deleted unread: past the drain's byte cap it could not
+  // be handled if it were read.
+  const huge = [{ url: INBOX + 'huge-old', size: 2 * 1024 * 1024, modified: old(3) }];
+  intake17.remote.listContainer = async () => huge;
+  const fetchedBefore = fetched.length;
+  const outCap = await intake17.prune({ before: '2026-07-02T00:00:00.000Z' });
+  check(outCap.discarded === 1 && fetched.length === fetchedBefore
+    && deleted.includes(INBOX + 'huge-old'),
+    'an item past the byte cap is deleted unread — reading it could not help');
+  intake17.remote.listContainer = async () => listing;      // put the listing back
 
   // keepConcerning: nothing is discarded unread — every item is read and routed
   // through handle(), which keeps a Create only when it concerns us (returns
@@ -7581,9 +7665,9 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   await magent.store.load();
 
   const MPORT = 18641;
-  startAdmin18({ port: MPORT, gateToken: '', agent: magent, handle: 'mover18', log: () => {} });
+  startAdmin18({ port: MPORT, gateToken: '', agent: magent, handle: 'mover18', log: () => {}, tls: smokeTls });
   await new Promise(r => setTimeout(r, 150));
-  const mpost = (body) => fetch(`http://localhost:${MPORT}/state-move`, {
+  const mpost = (body) => fetchLocal(`https://localhost:${MPORT}/state-move`, {
     method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
   }).then(async r => ({ status: r.status, json: await r.json().catch(() => null) }));
 
@@ -9215,6 +9299,75 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
     'a verified Undo drops the follower even with no stored follow id');
 }
 
+// --- 28y. a Bluesky member who bridges later becomes one member, not two ---
+{
+  const { Intake } = await import(path.join(root, 'lib/intake.mjs'));
+  const DID = 'did:plc:wren99';
+  const store28 = new PodStore({ log: () => {} });
+  store28.setConfig({ remotePod: 'https://g.example/', handle: 'g', kind: 'group' });
+  // Already a member the native way: they followed the group on Bluesky.
+  store28.setContacts({ followers: [{ actor: `https://bsky.app/profile/${DID}`,
+    bsky: { did: DID, handle: 'wren.test' } }], following: [] });
+  const bridged = `https://bsky.brid.gy/ap/${DID}`;
+  const intake28 = new Intake({
+    config: { handle: 'g', kind: 'group' }, store: store28, log: () => {},
+    urls: { inbox: 'https://g.example/ap/inbox/', actor: 'https://g.example/ap/actor',
+      followers: 'https://g.example/ap/followers' },
+    remote: { fetch: async () => ({ status: 404 }), delete: async () => true, getJson: async () => null },
+    local: { writeNote: async () => {} },
+    deliverer: { deliver: async () => {}, deliverToAll: async () => {} },
+    publisher: { urls: {}, config: {}, publishFollowers: async () => {} },
+  });
+  intake28.fetchAP = async (a) => ({ id: a, inbox: a + '/inbox' });
+  intake28.republish = async () => {};
+  await intake28.onFollow({ type: 'Follow', id: 'https://bsky.brid.gy/f/1', actor: bridged, object: 'https://g.example/ap/actor' }, bridged);
+  const fs28 = store28.getContacts().followers;
+  check(fs28.length === 1 && fs28[0].actor === bridged && fs28[0].bsky?.did === DID,
+    `the bridge's follow supersedes the Bluesky-only record — one member, not two (${fs28.length})`);
+}
+
+// --- 28z. the front filters from the person's own published policy ---
+{
+  const front = await import(path.join(root, 'lib/front-core.mjs'));
+  const { identFor, policyFor, policyCache } = front._internal;
+  policyCache.clear();
+  const rec = { handle: 'me', podHome: 'https://alice.pod/solid/',
+    actorUrl: 'https://fedipod.net/u/me/ap/actor', hmacSecret: 's' };
+  // A row written at attach time carries no following and no blocklist: the
+  // agent had published nothing yet. Judging on the row alone forwards exactly
+  // the junk a blocklist exists to stop.
+  const bare = identFor(rec);
+  check(bare.following.length === 0 && bare.blocklist.domains.length === 0,
+    'a directory row on its own carries no filtering policy');
+
+  let asked = 0;
+  const policyFetch = async (url) => {
+    asked++;
+    if (!url.endsWith('ap/gateway-policy.json')) return { status: 404 };
+    return { status: 200, headers: { get: () => null },
+      text: async () => JSON.stringify({
+        v: 1, kind: 'person',
+        following: ['https://m.example/u/friend'],
+        blocklist: { domains: ['spam.example'], actors: [] },
+      }) };
+  };
+  const policy = await policyFor(rec, policyFetch);
+  const armed = identFor(rec, policy);
+  check(armed.following.includes('https://m.example/u/friend')
+    && armed.blocklist.domains.includes('spam.example'),
+    'the published policy arms the door with the following list and the blocklist');
+
+  const before = asked;
+  await policyFor(rec, policyFetch);
+  check(asked === before,
+    'and it is cached — a delivery flood is not a read per delivery on the pod');
+
+  policyCache.clear();
+  const missing = await policyFor({ podHome: 'https://nowhere.pod/' }, async () => { throw new Error('down'); });
+  check(missing === null && identFor(rec, missing).following.length === 0,
+    'an unpublished or unreachable policy leaves the row standing, not an error');
+}
+
 // --- 29. multi-user front: WebFinger, per-user actor rewrite, inbox routing ---
 {
   const front = await import(path.join(root, 'lib/front-core.mjs'));
@@ -9401,7 +9554,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
     ...ctx,
     verifier: async () => ({ webid: 'https://mei.host/profile/card#me' }),
     agentControl: {
-      optIn: async (a) => { calls.push([ 'in', a ]); return { httpStatus: 201, ok: true, handle: 'mei', doorSecret: 's3', doorPath: '/app/' }; },
+      optIn: async (a) => { calls.push([ 'in', a ]); return { httpStatus: 201, ok: true, handle: 'mei', doorSecret: 's3', doorPath: '/fedipod/' }; },
       optOut: async (a) => { calls.push([ 'out', a ]); return { httpStatus: 200, ok: true, stopped: true }; },
     },
   };
@@ -9616,12 +9769,12 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
     'the instance document answers a stranger — that is what makes the pod an instance');
   check((await ask('GET', '/status', secret)).status === 404,
     "the operator's routes are not at the origin root");
-  check((await ask('GET', '/app/status')).status === 401,
+  check((await ask('GET', '/fedipod/status')).status === 401,
     'and behind the door they need the secret');
-  const statusRes = await ask('GET', '/app/status', secret);
+  const statusRes = await ask('GET', '/fedipod/status', secret);
   check(statusRes.status === 200 && JSON.parse(statusRes.body).handle === 'alice',
     'with it, the door answers for this identity');
-  check((await ask('POST', '/app/new-actor', secret)).status === 404,
+  check((await ask('POST', '/fedipod/new-actor', secret)).status === 404,
     'routes that spawn local agents are gone, not merely refused');
   check((await ask('GET', '/api/v1/accounts/verify_credentials')).status === 401,
     'and the client API still turns away a caller with no token');
