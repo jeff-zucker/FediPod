@@ -61,3 +61,7 @@ tmp/
 
 # Local Netlify folder
 .netlify
+
+# Diagram renders — the .svg beside each one is the source
+architecture.png
+packages/fedipod-server/fedipod-server.png
