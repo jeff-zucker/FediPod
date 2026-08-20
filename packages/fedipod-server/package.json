@@ -50,6 +50,7 @@
     "build:components": "componentsjs-generator -s src -c dist/components -r fps",
     "test": "npm run build && node --test test/*.mjs",
     "test:e2e": "node test/e2e/live-agent.mjs",
+    "prepublishOnly": "npm test",
     "prepack": "node scripts/pack-tree.mjs copy",
     "postpack": "node scripts/pack-tree.mjs clean"
   }

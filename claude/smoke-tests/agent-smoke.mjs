@@ -6439,7 +6439,13 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
       && !newerThan('0.7.0', '0.7.0') && !newerThan('0.9.9', '1.0.0'),
     'version comparison orders dotted versions numerically');
     const utmp = fs.mkdtempSync('/tmp/dk-ap-upd-');
-    check(runUpdate({ root: utmp }).ok === false, 'an update refuses outside a git checkout');
+    // Outside a checkout the update goes through npm. Stubbed: a test asking
+    // what this does must not install software on the machine running it.
+    let installed = 0;
+    check(runUpdate({ root: utmp, install: () => { installed++; } }).ok === true && installed === 1,
+      'outside a checkout an update goes through npm');
+    check(runUpdate({ root: utmp, install: () => { throw new Error('offline'); } }).ok === false,
+      'and reports it rather than pretending, when npm cannot');
     fs.rmSync(utmp, { recursive: true, force: true });
     check(await checkLatest() === null, 'AP_UPDATE_CHECK=0 keeps the check entirely offline');
   }
@@ -9517,7 +9523,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   check(ok.status === 201 && okDoc.doorInbox === 'https://fedipod.net/u/alice/ap/inbox/'
     && typeof okDoc.hmacSecret === 'string' && okDoc.frontActor === undefined,
     'a valid token proving the pod attaches inbox-only by default: a door and a secret, no fronted actor');
-  check(okDoc.command === `node bin/fedipod.mjs gateway https://fedipod.net/u/alice/ap/inbox/ --secret ${okDoc.hmacSecret} --inbox-only`,
+  check(okDoc.command === `fedipod gateway https://fedipod.net/u/alice/ap/inbox/ --secret ${okDoc.hmacSecret} --inbox-only`,
     'and the one command the user runs to point their agent at the gateway');
   check(written.alice?.podHome === 'https://alice.pod/solid/' && written.alice?.webId === 'https://alice.pod/profile/card#me'
     && written.alice?.actorUrl === 'https://alice.pod/solid/ap/actor' && written.alice?.inboxOnly === true,
