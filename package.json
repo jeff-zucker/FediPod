@@ -33,7 +33,7 @@
     "install-service": "node bin/fedipod.mjs install-service",
     "uninstall-service": "node bin/fedipod.mjs uninstall-service",
     "prepublishOnly": "npm test",
-    "test": "node claude/smoke-tests/agent-smoke.mjs && node scripts/verify-ui.mjs",
+    "test": "node claude/smoke-tests/agent-smoke.mjs && node claude/smoke-tests/front-hard-test.mjs && node scripts/verify-ui.mjs",
     "verify-ui": "node scripts/verify-ui.mjs",
     "audit": "npm audit --omit=dev",
     "agent": "node run-agent.mjs"
