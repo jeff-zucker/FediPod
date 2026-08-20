@@ -1,5 +1,14 @@
 # Changes
 
+## 2026-08-20
+- **The agent serves https and nothing else, on the port you name.** `npm start
+  8081` means `https://localhost:8081` — there is no second listener and no
+  `port + 1000` mirror, and `AP_HTTPS_PORT` is gone. The well-known door
+  answers https on 8030. Anything bookmarked at a `+1000` address, or at a
+  plain `http://` one, needs changing to the port you gave the agent.
+- A certificate problem now stops the start with a message instead of falling
+  back to serving the UI and the API in the clear.
+
 ## 2026-08-19
 - **The owner's pages on a FediPod Server move from `/app/` to `/fedipod/`.**
   `app` is a name a pod owner may well want for themselves. Set

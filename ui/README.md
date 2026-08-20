@@ -1,7 +1,7 @@
 # ui/ — additional web clients
 
 Drop any static Mastodon web client dist here as `ui/<name>/` and the agent
-serves it at <!-- CLAUDE 2026-08-19 — was http://localhost:8030/<name>/ -->`https://<handle>.localhost:9030/<name>/`<!-- /CLAUDE -->, same-origin with the API —
+serves it at <!-- CLAUDE 2026-08-20 — was http://localhost:8030/<name>/; the agent is https on the port you gave it -->`https://<handle>.localhost:8030/<name>/`<!-- /CLAUDE -->, same-origin with the API —
 no CORS, no mixed content. Phanpy stays at `/`.
 
 `/admin/` is taken: that is the agent's own surface — the record at `/admin/`,

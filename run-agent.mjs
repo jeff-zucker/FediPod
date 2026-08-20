@@ -100,7 +100,6 @@ export class Agent {
       mode: !this.configured() ? 'unconfigured' : this.viewer ? 'viewer' : 'active',
       kind: cfg?.kind || 'person',
       handle: cfg?.handle || null,
-      httpsPort: this.httpsPort || null,
       actor: this.urls?.actor || null,
       followers: contacts.followers.length,
       following: contacts.following.length,
@@ -721,33 +720,20 @@ export async function startAgent({
     log(`refusing to start:\n${exposure}`);
     process.exit(2);
   }
-  // https beside http, for the clients that refuse cleartext: a per-machine
-  // certificate (never packaged — see lib/certs.mjs), one for every identity
-  // on this root, on the mirrored port space (8030 → 9030). A cert problem
-  // degrades to http-only rather than blocking the start.
-  let httpsPort = Number(process.env.AP_HTTPS_PORT) || port + 1000;
+  // https and nothing else, on the one port this agent was given: a
+  // per-machine certificate (never packaged — see lib/certs.mjs), covering
+  // every identity on this root. A certificate problem stops the start rather
+  // than quietly serving the UI and the API in the clear.
   let tls = null;
   try {
     tls = ensureTrustedTls(path.join(rootOf(agent.home), 'certs'),
       { log, names: hostLabel(handle) ? [`${hostLabel(handle)}.localhost`] : [] });
-    agent.httpsPort = httpsPort;
   } catch (e) {
-    log(`https disabled — certificate setup failed: ${e.message}`);
-    httpsPort = null;
+    log(`refusing to start: certificate setup failed (${e.message})`);
+    log('the agent serves https only — fix the certificate, or run `fedipod https --trust`');
+    process.exit(2);
   }
-  // Record the https port beside the http one: it is the advertised origin,
-  // and `up`, the actors list and sibling spawns read it from here. Stripped
-  // when certificates failed, so nothing links to a listener that is not there.
-  try {
-    const rec2 = JSON.parse(fs.readFileSync(agentJson, 'utf8')) || {};
-    if (tls && httpsPort && rec2.httpsPort !== httpsPort) {
-      writeJsonAtomic(agentJson, { ...rec2, httpsPort }, { mode: 0o644 });
-    } else if (!tls && rec2.httpsPort) {
-      const { httpsPort: gone, ...rest } = rec2;
-      writeJsonAtomic(agentJson, rest, { mode: 0o644 });
-    }
-  } catch { /* the agent still runs; it is just advertised as http */ }
-  startAdmin({ port, gateToken, agent, log, handle, httpsPort, tls });
+  startAdmin({ port, gateToken, agent, log, handle, tls });
 
   // Is a newer FediPod published? Once at boot and daily after; the answer
   // rides /status and the record page offers the update.
@@ -792,7 +778,7 @@ export async function startAgent({
   };
   connectWithRetry();
   const shutdown = () => {
-    setTimeout(() => process.exit(0), 5000).unref();   // never hang a stop on a slow pod
+    setTimeout(() => process.exit(0), 1500).unref();   // never hang a stop on a slow pod
     try { fs.rmSync(path.join(home, 'agent.pid'), { force: true }); } catch {}
     Promise.allSettled([
       agent.store.flush(),

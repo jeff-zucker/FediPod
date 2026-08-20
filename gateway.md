@@ -72,7 +72,7 @@ believes the door's receipts.
 The shadow numbers come from the agent:
 
 ```
-curl -k https://localhost:9030/gateway
+curl -k https://localhost:8030/gateway
 ```
 
 which reports the mode and the verified and unverified counts.
@@ -81,12 +81,12 @@ which reports the mode and the verified and unverified counts.
 Set it from the agent's own API:
 
 ```
-curl -k -X POST https://localhost:9030/gateway -H 'content-type: application/json' \
+curl -k -X POST https://localhost:8030/gateway -H 'content-type: application/json' \
   -d '{"action":"mode","mode":"shadow"}'
 ```
 
 <!-- CLAUDE 2026-08-19 — finding the right port; delete markers when done -->
-9030 is the default identity's https port; `node bin/fedipod.mjs status`
+8030 is the default identity's port; `node bin/fedipod.mjs status`
 prints the right one for each identity.
 <!-- /CLAUDE -->
 
@@ -166,7 +166,7 @@ If you are not using a signup page:
 3. Point your agent at it, which mints the shared secret and returns it once:
 
    ```
-   curl -k -X POST https://localhost:9030/gateway -H 'content-type: application/json' \
+   curl -k -X POST https://localhost:8030/gateway -H 'content-type: application/json' \
      -d '{"action":"configure","url":"<door-inbox-url>","webId":"<door-webid>"}'
    ```
 

@@ -1,6 +1,6 @@
 # The Admin interface
 
-Open `https://localhost:9030/` while any agent is running — it forwards you to the agent — then choose `manage account` and select the actor you want from the local actors dropdown.
+Open `https://localhost:8030/` while any agent is running — it forwards you to the agent — then choose `manage account` and select the actor you want from the local actors dropdown.
 <!-- CLAUDE 2026-08-19 — the dropdown starts stopped actors; delete markers when done -->
 Picking an actor marked "(stopped)" starts its agent, then opens its page.
 <!-- /CLAUDE -->

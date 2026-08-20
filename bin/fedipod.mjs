@@ -31,7 +31,7 @@
 //     --keys pod stores them in pod state instead, so several devices can
 //     sign as the same actor without copying files.
 //
-//   fedipod start     start the agent (UI + API on http://localhost:8030/
+//   fedipod start     start the agent (UI + API on https://localhost:8030/
 //                         and http://<handle>.localhost:8030/ — one origin per
 //                         identity, so two agents stop sharing one login).
 //                         Prints both URLs; --open also opens a browser.
@@ -76,6 +76,7 @@
 //   fedipod uninstall-service  remove that registration
 
 import fs from 'node:fs';
+import { localFetch } from '../lib/localapi.mjs';
 import os from 'node:os';
 import path from 'node:path';
 import net from 'node:net';
@@ -248,7 +249,7 @@ async function somethingOn(port) {
 // Whatever is on the port — is it one of ours?
 async function agentOn(port) {
   try {
-    const res = await fetch(`http://localhost:${port}/status`, { signal: AbortSignal.timeout(2000) });
+    const res = await localFetch(HOME, port, `/status`, { signal: AbortSignal.timeout(2000) });
     const body = await res.json();
     return typeof body?.configured === 'boolean' ? body : null;
   } catch { return null; }
@@ -336,7 +337,7 @@ async function runBrowserSetup() {
     log: (...a) => console.log('[ap]', ...a),
   });
   const shutdown = () => {
-    setTimeout(() => process.exit(0), 5000).unref();
+    setTimeout(() => process.exit(0), 1500).unref();
     try { fs.rmSync(path.join(HOME, 'agent.pid'), { force: true }); } catch {}
     Promise.allSettled([agent.store.flush(), agent.lease?.release()]).finally(() => process.exit(0));
   };
@@ -344,8 +345,8 @@ async function runBrowserSetup() {
   process.on('SIGTERM', shutdown);
 
   const label = hostLabel(handle);
-  const named = label ? `http://${label}.localhost:${port}/` : null;
-  const plain = `http://localhost:${port}/`;
+  const named = label ? `https://${label}.localhost:${port}/` : null;
+  const plain = `https://localhost:${port}/`;
   const pad = Math.max(named?.length || 0, plain.length);
   console.log('');
   if (named) {
@@ -433,15 +434,9 @@ if (cmd === 'up') {
   // bought — so the named origin works on the very first run, before anything
   // has been recorded.
   const label = hostLabel(recordedAgent().handle || path.basename(HOME));
-  // https when the agent records its https listener (the default), http when
-  // certificates failed on this machine. Read after the agent is up, because
-  // the agent itself records which it serves.
-  const originNow = () => {
-    const rec = recordedAgent();
-    return rec.httpsPort
-      ? `https://${label ? label + '.' : ''}localhost:${rec.httpsPort}`
-      : `http://${label ? label + '.' : ''}localhost:${port}`;
-  };
+  // One listener, one scheme: the port the agent was given is the port you
+  // browse, over https.
+  const originNow = () => `https://${label ? label + '.' : ''}localhost:${port}`;
 
   if (already) {
     console.log(`already running on port ${port}`);
@@ -651,7 +646,7 @@ if (cmd === 'up') {
   const { hostLabel } = await import(new URL('../lib/guard.mjs', import.meta.url));
   startAdmin({ port: PORT, handle, gateToken: process.env.AP_GATE_TOKEN || '', agent, log: (...a) => console.log('[ap]', ...a) });
   const shutdown = () => {
-    setTimeout(() => process.exit(0), 5000).unref();   // never hang a stop on a slow pod
+    setTimeout(() => process.exit(0), 1500).unref();   // never hang a stop on a slow pod
     try { fs.rmSync(path.join(HOME, 'agent.pid'), { force: true }); } catch {}
     Promise.allSettled([agent.store.flush(), agent.lease?.release()]).finally(() => process.exit(0));
   };
@@ -686,7 +681,7 @@ if (cmd === 'up') {
 
   // Something already on the port? Offer to take it over rather than dying
   // with "address in use" and leaving the user to hunt the process down.
-  const answering = await fetch(`http://localhost:${PORT}/status`)
+  const answering = await localFetch(HOME, PORT, `/status`)
     .then(r => r.status).catch(() => null);
   if (answering !== null) {
     const pidFile = path.join(HOME, 'agent.pid');
@@ -704,18 +699,18 @@ if (cmd === 'up') {
     endAsking();
     if (!/^y/i.test(ans)) { console.log('left the running agent alone'); process.exit(0); }
 
-    await fetch(`http://localhost:${PORT}/shutdown`, { method: 'POST' }).catch(() => {});
+    await localFetch(HOME, PORT, `/shutdown`, { method: 'POST' }).catch(() => {});
     if (pid) { try { process.kill(pid, 'SIGTERM'); } catch {} }
     const freed = await (async () => {                 // give it a few seconds
       for (let i = 0; i < 30; i++) {
         await new Promise(r => setTimeout(r, 300));
-        const still = await fetch(`http://localhost:${PORT}/status`).then(() => true).catch(() => false);
+        const still = await localFetch(HOME, PORT, `/status`).then(() => true).catch(() => false);
         if (!still) return true;
       }
       return false;
     })();
     if (!freed && pid) { try { process.kill(pid, 'SIGKILL'); } catch {} await new Promise(r => setTimeout(r, 500)); }
-    const clear = await fetch(`http://localhost:${PORT}/status`).then(() => false).catch(() => true);
+    const clear = await localFetch(HOME, PORT, `/status`).then(() => false).catch(() => true);
     if (!clear) {
       console.error(`could not stop whatever is on port ${PORT}. Find it with:  ss -tlnp | grep :${PORT}`);
       process.exit(1);
@@ -733,8 +728,8 @@ if (cmd === 'up') {
   {
     const { hostLabel } = await import(new URL('../lib/guard.mjs', import.meta.url));
     const label = hostLabel(startHandle);
-    const named = label ? `http://${label}.localhost:${PORT}/` : null;
-    const plain = `http://localhost:${PORT}/`;
+    const named = label ? `https://${label}.localhost:${PORT}/` : null;
+    const plain = `https://localhost:${PORT}/`;
     // One origin per identity is the point of the named form: a browser keeps
     // its storage per origin, so two agents stop sharing one Phanpy login.
     if (named) {
@@ -911,7 +906,7 @@ if (cmd === 'up') {
     console.log('             bin/fedipod.mjs state --to pod');
     process.exit(0);
   }
-  if (await fetch(`http://localhost:${PORT}/status`).then(() => true).catch(() => false)) {
+  if (await localFetch(HOME, PORT, `/status`).then(() => true).catch(() => false)) {
     console.error(`an agent is running on port ${PORT} — stop it first:  bin/fedipod.mjs stop`);
     process.exit(1);
   }
@@ -1059,7 +1054,7 @@ if (cmd === 'up') {
     if (!pod && !port) continue;                       // not an identity, just a directory
     let live = null;
     if (port) {
-      live = await fetch(`http://localhost:${port}/status`, { signal: AbortSignal.timeout(1500) })
+      live = await localFetch(HOME, port, `/status`, { signal: AbortSignal.timeout(1500) })
         .then(r => r.json()).catch(() => null);
     }
     // The kind lives in pod state, so it is only knowable from the live probe —
@@ -1438,7 +1433,7 @@ if (cmd === 'up') {
     // The agent may still be listening even with no pidfile — an older
     // build, a deleted file, or one started detached from any terminal
     // (where Ctrl-C can never reach it). Ask it to stop over the API.
-    const asked = await fetch(`http://localhost:${PORT}/shutdown`, { method: 'POST' })
+    const asked = await localFetch(HOME, PORT, `/shutdown`, { method: 'POST' })
       .then(r => r.ok).catch(() => false);
     if (asked) { console.log(`agent on port ${PORT} asked to stop`); process.exit(0); }
     console.error(`no agent found: no pidfile at ${pidFile}, nothing answering on port ${PORT}.`);
@@ -1448,7 +1443,7 @@ if (cmd === 'up') {
   }
   try { process.kill(pid, 'SIGTERM'); } catch {
     // Stale pidfile, but something may still hold the port.
-    const asked = await fetch(`http://localhost:${PORT}/shutdown`, { method: 'POST' })
+    const asked = await localFetch(HOME, PORT, `/shutdown`, { method: 'POST' })
       .then(r => r.ok).catch(() => false);
     fs.rmSync(pidFile, { force: true });
     console.log(asked ? `agent on port ${PORT} asked to stop (pidfile was stale)` : 'agent was not running (stale pidfile)');
@@ -1492,7 +1487,7 @@ if (cmd === 'up') {
   requireIdentity();
   if (has('detach')) {
     try {
-      const res = await fetch(`http://localhost:${PORT}/gateway`, {
+      const res = await localFetch(HOME, PORT, `/gateway`, {
         method: 'POST', headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ action: 'forget' }),
       });
@@ -1572,7 +1567,7 @@ if (cmd === 'up') {
     process.exit(2);
   }
   // The running agent holds the key and the config in memory — stop it first.
-  const answering = await fetch(`http://localhost:${PORT}/status`).then(r => r.ok).catch(() => false);
+  const answering = await localFetch(HOME, PORT, `/status`).then(r => r.ok).catch(() => false);
   if (answering) {
     console.error(`an agent is answering on :${PORT} — stop it first (fedipod stop), then re-run`);
     process.exit(2);
@@ -1655,7 +1650,7 @@ if (cmd === 'up') {
     const paths2 = certPaths(certDir);
     console.log(`certificate: ${paths2.cert}`);
     console.log(`  ${tls.trust ? 'signed by the local CA' : 'self-signed'}, ${tls.expiresInDays} days left`);
-    console.log('agents serve https on their port + 1000 (or AP_HTTPS_PORT) — e.g. https://localhost:9030');
+    console.log('agents serve https on the port they were given — e.g. https://localhost:8030');
     console.log('strict clients: `fedipod https --trust` mints a local CA your trust store can accept');
   }
 } else if (cmd === 'install-service' || cmd === 'uninstall-service') {
@@ -1684,7 +1679,7 @@ if (cmd === 'up') {
   // stopped through its own /shutdown so the unit can take the port.
   const handOver = async ({ name, port }) => {
     if (!await agentOn(port)) return;
-    await fetch(`http://localhost:${port}/shutdown`, { method: 'POST' }).catch(() => {});
+    await localFetch(HOME, port, `/shutdown`, { method: 'POST' }).catch(() => {});
     for (let i = 0; i < 20 && !await portFree(port); i++) await new Promise(r => setTimeout(r, 250));
     console.log(`${name}: was running detached — stopped for the service to take over`);
   };
@@ -1862,7 +1857,7 @@ WantedBy=default.target
   if (flag('summary') !== undefined) payload.summary = flag('summary');
   if (flag('icon') !== undefined) payload.icon = flag('icon');
   try {
-    const res = await fetch(`http://localhost:${PORT}/describe`, {
+    const res = await localFetch(HOME, PORT, `/describe`, {
       method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload),
     });
     const body = await res.json();
@@ -1879,7 +1874,7 @@ WantedBy=default.target
   requireIdentity();
   try {
     if (flag('add')) {
-      const res = await fetch(`http://localhost:${PORT}/alias`, {
+      const res = await localFetch(HOME, PORT, `/alias`, {
         method: 'POST', headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ add: flag('add') }),
       });
@@ -1889,7 +1884,7 @@ WantedBy=default.target
       for (const a of body.aliases) console.log(`  ${a}`);
       console.log('on the old server, Account → Move to a different account will now accept this one');
     } else if (flag('remove')) {
-      const res = await fetch(`http://localhost:${PORT}/alias`, {
+      const res = await localFetch(HOME, PORT, `/alias`, {
         method: 'POST', headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ remove: flag('remove'), ...(has('yes') ? { confirm: true } : {}) }),
       });
@@ -1899,7 +1894,7 @@ WantedBy=default.target
       console.log(body.aliases.length ? 'removed — aliases now:' : 'removed — no aliases left');
       for (const a of body.aliases) console.log(`  ${a}`);
     } else {
-      const res = await fetch(`http://localhost:${PORT}/config`);
+      const res = await localFetch(HOME, PORT, `/config`);
       const body = await res.json();
       if (res.status >= 400) { console.error(body.error || `HTTP ${res.status}`); process.exit(1); }
       const aliases = body.aliases || [];
@@ -1922,10 +1917,10 @@ WantedBy=default.target
     if (a.startsWith('--')) { if (!NOVAL.has(a)) i++; continue; }
     files.push(a);
   }
-  const jpost = (body) => fetch(`http://localhost:${PORT}/import`, {
+  const jpost = (body) => localFetch(HOME, PORT, `/import`, {
     method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
   }).then(async r => ({ status: r.status, json: await r.json().catch(() => null) }));
-  const jget = () => fetch(`http://localhost:${PORT}/import`)
+  const jget = () => localFetch(HOME, PORT, `/import`)
     .then(async r => ({ status: r.status, json: await r.json().catch(() => null) }));
   const showProgress = (p) => {
     const parts = Object.entries(p.byKind || {}).map(([k, c]) =>
@@ -2021,7 +2016,7 @@ WantedBy=default.target
   // Served by the running agent because it needs the lease: it writes the
   // statuses store, and two agents writing it is the thing the lease prevents.
   try {
-    const res = await fetch(`http://localhost:${PORT}/rebuild`, {
+    const res = await localFetch(HOME, PORT, `/rebuild`, {
       method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ fromNotes: has('from-notes') }),
     });
@@ -2043,7 +2038,7 @@ WantedBy=default.target
 } else if (cmd === 'status') {
   requireIdentity();
   try {
-    const res = await fetch(`http://localhost:${PORT}/status`);
+    const res = await localFetch(HOME, PORT, `/status`);
     console.log(JSON.stringify(await res.json(), null, 2));
   } catch (e) {
     console.error(`agent not reachable on :${PORT} (${e.message})`);
@@ -2073,7 +2068,7 @@ WantedBy=default.target
     : BY_ACTOR.includes(cmd) ? { actor: arg } : { noteId: arg };
   let body;
   try {
-    const res = await fetch(`http://localhost:${PORT}/${cmd}`, post
+    const res = await localFetch(HOME, PORT, `/${cmd}`, post
       ? { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) }
       : undefined);
     body = await res.json();
@@ -2133,7 +2128,7 @@ WantedBy=default.target
     process.exit(2);
   }
   try {
-    const res = await fetch(`http://localhost:${PORT}/archive`, {
+    const res = await localFetch(HOME, PORT, `/archive`, {
       method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ on: args[1] === 'on' }),
     });
@@ -2214,7 +2209,7 @@ WantedBy=default.target
         console.error('usage: fedipod bsky connect <handle> <app-password> [--service https://bsky.social]');
         process.exit(2);
       }
-      const res = await fetch(`http://localhost:${PORT}/atproto/connect`, {
+      const res = await localFetch(HOME, PORT, `/atproto/connect`, {
         method: 'POST', headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ identifier, appPassword, service: flag('service') }),
       });
@@ -2223,7 +2218,7 @@ WantedBy=default.target
       console.log(`connected: @${out.handle} on ${out.service}`);
       console.log('public posts will cross-post; turn off: fedipod bsky crosspost off');
     } else if (sub === 'disconnect') {
-      const res = await fetch(`http://localhost:${PORT}/atproto/disconnect`, {
+      const res = await localFetch(HOME, PORT, `/atproto/disconnect`, {
         method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}',
       });
       out = await res.json();
@@ -2234,7 +2229,7 @@ WantedBy=default.target
         console.error('usage: fedipod bsky crosspost <on|off>');
         process.exit(2);
       }
-      const res = await fetch(`http://localhost:${PORT}/atproto`, {
+      const res = await localFetch(HOME, PORT, `/atproto`, {
         method: 'POST', headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ crossPost: args[2] === 'on' }),
       });
@@ -2242,7 +2237,7 @@ WantedBy=default.target
       if (res.status >= 400) { console.error(out.error || `HTTP ${res.status}`); process.exit(1); }
       console.log(`cross-posting is ${out.atproto.crossPost ? 'on' : 'off'}`);
     } else {
-      const res = await fetch(`http://localhost:${PORT}/status`);
+      const res = await localFetch(HOME, PORT, `/status`);
       out = await res.json();
       const a = out.atproto;
       if (!a?.connected) console.log('no bluesky account connected — fedipod bsky connect <handle> <app-password>');

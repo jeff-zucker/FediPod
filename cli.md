@@ -244,7 +244,7 @@ rather than overwritten. `AP_UPDATE_CHECK=0` turns the daily check off.
 node bin/fedipod.mjs https
 node bin/fedipod.mjs https --trust
 ```
-Every agent's address is https, on its port plus 1000 (or `AP_HTTPS_PORT`).
+Every agent's address is https, on the port you gave it.
 The first agent start makes the certificate and signs it with a local
 certificate authority that can only ever vouch for localhost names. On Linux
 the authority lands in Chrome and Chromium's store by itself; Firefox, macOS
