@@ -20,6 +20,13 @@ Another host needs only its own adapter calling the same `handleDelivery`. A
 Community Solid Server can run the same door as a component of itself instead
 — see [packages/fedipod-server](../packages/fedipod-server/README.md).
 
+<!-- CLAUDE 2026-08-19 — two more routes the front serves; delete markers when done -->
+The front also serves the installer at `/install`
+(`curl -fsSL https://<host>/install | sh`) and the vendored sign-in bundle.
+The `/run` page is served too, but opting in to being run is answered only on
+a pod server — on Netlify the form's submit is refused.
+<!-- /CLAUDE -->
+
 ## Deploying
 
 This repo, with `netlify.toml` as it stands. The functions read these
@@ -36,17 +43,43 @@ Attachments people make through the signup page are kept in a Netlify Blobs
 store named `directory`, and take precedence over the rows in
 `FEDIPOD_DIRECTORY_JSON`.
 
+<!-- CLAUDE 2026-08-19 — the one-person door's variables, and two more the front reads; delete markers when done -->
+That table is the front's. `functions/inbox.mjs` — the one-person door —
+reads its own set:
+
+| Variable | What it is |
+|---|---|
+| `FEDIPOD_POLICY_URL` | The pod's `ap/gateway-policy.json`. Required — without it every delivery is refused. |
+| `FEDIPOD_INBOX_URL` | The pod inbox deliveries are forwarded into. |
+| `FEDIPOD_APPEND_TOKEN` | The bearer token the door writes with. |
+| `FEDIPOD_HMAC_SECRET` | Stamps the verification receipts. |
+
+The front also reads `FEDIPOD_DIRECTORY_URL` — a URL serving the same JSON as
+`FEDIPOD_DIRECTORY_JSON`, which must live off this deploy's own origin — and
+`FEDIPOD_OFFERS_PODS=1`, which offers pod creation on the signup page.
+`FEDIPOD_FRONT_HOST` and `FEDIPOD_FRONT_ORIGIN` are required.
+<!-- /CLAUDE -->
+
 ## What the door needs from a pod
 
 Permission to write into that person's inbox, and nothing else. FediPod's
 default inbox is public-Append, in which case the door needs no credential at
 all and writes with a plain PUT. Where an inbox is closed, give the door's own
 low-privilege WebID Append on it — never an owner credential.
+<!-- CLAUDE 2026-08-19 — where the credential goes; delete markers when done -->
+The credential is a bearer token: the front takes it from the directory row's
+`appendToken` field, the one-person door from `FEDIPOD_APPEND_TOKEN`.
+<!-- /CLAUDE -->
 
 The door holds no signing key, so it cannot post as anyone. It reads only
 public data to decide what concerns a given person: their published followers
 and following, and a small public policy document their agent writes with a
 mirror of their blocklist.
+<!-- CLAUDE 2026-08-19 — where the front's copy comes from; delete markers when done -->
+The front decides from its directory row — the `following` and `blocklist`
+fields kept beside the handle — rather than fetching the policy document;
+only the one-person door reads `ap/gateway-policy.json` live.
+<!-- /CLAUDE -->
 
 ## The two shapes of attachment
 

@@ -1,6 +1,16 @@
 # Changes
 
 ## 2026-08-19
+- **The owner's pages on a FediPod Server move from `/app/` to `/fedipod/`.**
+  `app` is a name a pod owner may well want for themselves. Set
+  `agentUiPath` to keep the old address. The pod paths an identity takes over
+  are now `api`, `oauth` and `fedipod`.
+- A FediPod Server answers three routes it was serving pages for but never
+  claiming: `/run` (the opt-in page), the sign-in library both pages load, and
+  `/install`. The component also serves its own packaged copies of the signup
+  and run pages, so neither has to be pasted into a server config.
+- The FediPod Server diagram ships with the package as `fedipod-server.svg`,
+  so its README image resolves on npm and in an installed copy.
 - The record page is redesigned: the actions live in a collapsible rail
   beside the facts; the actor dropdown rides the top bar in place of the
   static handle, with "add a new account" as its last item; migration

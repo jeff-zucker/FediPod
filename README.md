@@ -4,24 +4,39 @@
 
 `FediPod` is a merger of three federating protocols - feeds from Mastodon and other Fediverse servers and from Bluesky and other ATProto servers, with all user data stored on a Solid pod. There are four different kinds of FediPod accounts :
 
+<!-- CLAUDE 2026-08-19 — Gateway row: host requirement was "a Netlify account"; a comment inside the cell would break the table, so the marker sits here. Delete when reviewed -->
 | Kind of Account | Description | User requirements | Host requirements |
 |---|---|---|---|
 | FediPod Solo | Browse & interact with the fediverse and ATProto from a Solid pod | an always-on pod, a usually on local agent | — |
 | FediPod Group | Host a discussion group of fediverse/ATProto users from a Solid pod | an always-on pod, a usually on local agent | — |
-| FediPod Gateway | Solo or Group with spam filtering & optional community identity | same + gateway pass-through account | a Netlify account |
+| FediPod Gateway | Solo or Group with spam filtering & optional community identity | same + gateway pass-through account | an always-on host — Netlify is the shipped example |
 | FediPod Server | Full ActivityPub server as a CSS component | a pod on a CSS server implementing the FediPod component | a CSS server implementing the FediPod component |
 
 ## Installation & Setup
 
 You may sign up for free for a solo, group, or gateway account at https://fedipod.net/ .  Wizards will walk you through install and setup. If you want to host a community, instructions are available for [Fediverse User Group](groups.md), the lightweight [FediPod Gateway](gateway.md) and for the full CSS component [FediPod Server](packages/fedipod-server). 
 
+<!-- CLAUDE 2026-08-19 — the install command and prerequisites; delete markers when done -->
+To install without the wizard:
+
+```
+curl -fsSL https://fedipod.net/install | sh
+```
+
+It clones FediPod into `~/FediPod` (set `FEDIPOD_DIR` for another folder) and
+needs git and Node 20 or newer. Re-running it updates the install.
+<!-- /CLAUDE -->
+
 ### Running the agent - 
 
 From the install folder, run `npm start`. You may optionally add a port number (`npm start 8081`) to change your local agent's port (default is 8030).
 
-`fedipod https --trust` once to add its authority to your trust store, so
-
-Now point your browser (any) at http://localhost:8030 — or your own port if you set one — and there you go!
+<!-- CLAUDE 2026-08-19 — replaces the "point your browser at http://localhost:8030" line and a stray https half-sentence; delete markers when done -->
+`npm start` opens your browser on the agent by itself. Each identity has an
+address of its own, `https://<handle>.localhost:9030` (your http port plus
+1000), so two identities never share a browser login; `https://localhost:9030/`
+forwards to a running agent.
+<!-- /CLAUDE -->
 
 ### Running the agent as a service (recommended)
 
@@ -38,6 +53,20 @@ It registers every identity on this machine, one service each, so all of your ac
 You can manage your posts, see logs, park, move, transfer your account and perform other actions. See the [GUI admin](gui.md) and [CLI admin](cli.md) pages.
 
 You can also use the admin tools to create other actors, either groups or persons.  You may have as many as you want on the local machine, but each one needs a separate pod.
+
+<!-- CLAUDE 2026-08-19 — updating; delete markers when done -->
+Every agent checks once a day whether a newer FediPod is published. When one
+exists, the record page offers **Update**, and `node bin/fedipod.mjs update`
+does the same from the terminal. `AP_UPDATE_CHECK=0` turns the check off.
+<!-- /CLAUDE -->
+
+<!-- CLAUDE 2026-08-19 — moving in from Mastodon; delete markers when done -->
+You can move an existing Mastodon-family account here: list the old account as
+an alias, trigger the move on its server, and your followers arrive by
+themselves; the old server's CSV exports (follows, blocks, mutes, lists,
+domain blocks) are imported with the CLI. See the [GUI admin](gui.md) and
+[CLI admin](cli.md) pages.
+<!-- /CLAUDE -->
 
 ## A FediPod.net Gateway account (reccommended)
 
@@ -59,12 +88,12 @@ click, using `https://localhost:9030` (or your own port) as the instance.
 The agent federates for real: follow/unfollow, post, reply, favourite,
 boost, media, delete; incoming boosts from people you follow and a
 configurable public-hashtag feed (`POST /tagfeed`) fill the timeline.
-Also: editing posts, content warnings, polls and voting, all four visibility
+Also: editing posts, content warnings, <!-- CLAUDE 2026-08-19 — was "polls and voting": composing polls is not offered -->voting in polls<!-- /CLAUDE -->, all four visibility
 levels (followers-only and direct posts work only on a pod that enforces
 access control — on one that doesn't, the composer refuses and says why),
 a conversations view for direct messages, bookmarks, favourites, lists,
 keyword filters, scheduled posts, pinned posts (visible from other servers),
-blocking and muting from the client, custom emojis, and web-push
+blocking and muting from the client, <!-- CLAUDE 2026-08-19 — was "custom emojis": the agent has no emoji set of its own -->custom emojis in what you receive<!-- /CLAUDE -->, and web-push
 notifications that reach you while the client is closed.
 
 
@@ -75,8 +104,9 @@ notifications that reach you while the client is closed.
 - **Desktop clients** (Tuba, Whalebird, …): add `https://localhost:9030` (or other port for other agent) as a
   custom instance.
 <!-- CLAUDE 2026-08-19 — certificate note; rework/trim as you like, delete these markers when done -->
-- **The certificate** is made and trusted automatically at first start, so
-  browsers and apps accept it without asking.
+- **The certificate** is made at first start. On Linux, Chrome and Chromium
+  trust it right away; Firefox, macOS and Windows take one command,
+  `node bin/fedipod.mjs https --trust`, which prints any remaining step.
 <!-- /CLAUDE -->
 - **Streaming**: the agent serves the Mastodon streaming API
   (`/api/v1/streaming`, WebSocket) so clients update live instead of polling.
@@ -89,6 +119,10 @@ notifications that reach you while the client is closed.
 ## Architecture
 
 `Activitypods` requires a server which provides both an ActivityPub server and a Solid server and thus requires a specific server setup.  `FediPod`, on the other hand, can be installed on any subdomained https-served pod.  It does this by splitting the ActivityPub server into two parts.  The pod part provides discovery (webfinger) and stores mostly public data while the local server provides the ActivityPub actions and storage for most private data. The exception is private direct messages which are stored on the pod protected by ACL resources.
+<!-- CLAUDE 2026-08-19 — widens the exception; delete markers when done -->
+The same protected area also holds followers-only posts and the pending-follow
+and blocked collections.
+<!-- /CLAUDE -->
 
 ![FediPod flow](architecture.svg)
 
@@ -96,7 +130,7 @@ notifications that reach you while the client is closed.
 
 FediPod is a full ActivityPub server, on both of the spec's profiles:
 server-to-server (§7) and client-to-server (§6) — `POST /ap/outbox` on the
-agent takes a signed activity (or a bare Note) and does the id-minting,
+agent takes an <!-- CLAUDE 2026-08-19 — was "a signed activity": the request is authenticated, the body carries no signature -->activity<!-- /CLAUDE --> (or a bare Note) and does the id-minting,
 side-effects and delivery, authenticated by a Solid-OIDC token whose WebID is
 the owner's. The Mastodon REST API is the everyday client interface; C2S is
 the spec's own.

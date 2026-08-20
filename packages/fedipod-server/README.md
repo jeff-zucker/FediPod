@@ -12,7 +12,7 @@ made, and opting out is the only way one ends.
 With nothing configured beyond the defaults, installing the component changes
 nothing about how the server serves pods.
 
-![FediPod as a component of a Solid server](../../css-component.svg)
+![FediPod as a component of a Solid server](fedipod-server.svg)
 
 ## Install
 
@@ -36,7 +36,11 @@ Add the package context to your CSS config and import the shipped snippet:
 ```
 
 Then set what you need on the `urn:fedipod:server:Handler` node and restart
-the server. The snippet places the component in the routing waterfall ahead of
+the server.
+<!-- CLAUDE 2026-08-19 — the CSS config that fits; delete markers when done -->
+Use a subdomain-pods CSS config: identities need an origin of their own, and
+a path-pod config cannot opt anyone in.
+<!-- /CLAUDE --> The snippet places the component in the routing waterfall ahead of
 the LDP catch-all, on the initializer and finalizer lists so identities start
 and stop with the server, and on the websocket handler list for the live feed.
 
@@ -58,16 +62,31 @@ pod itself. Its state lives on the pod. Its signing key lives in
 `door-secret.json`: the secret guarding that identity's own pages. Each
 identity has its own; one owner's secret opens nobody else's door.
 
+<!-- CLAUDE 2026-08-19 — agentDataDir row: was "signing key, log, and door secret"; identity logs go to the server's own log. A comment inside the cell would break the table, so the marker sits here. Delete when reviewed -->
 | Setting | What it is |
 |---|---|
 | `agentRuntimeOptIn` | Whether pod owners can sign up. With it off, nothing runs. |
-| `agentDataDir` | Where each identity keeps its signing key, log, and door secret. Required whenever sign-up is on. |
-| `agentUiPath` | Where the owner's pages live on the pod's origin. `/app/` by default; empty serves no pages. |
+| `agentDataDir` | Where each identity keeps its signing key, credential and door secret; its log lines go to the server's own log. Required whenever sign-up is on. |
+| `agentUiPath` | Where the owner's pages live on the pod's origin. `/fedipod/` by default; empty serves no pages. |
 | `agentRegistryContainer` | The internal container holding the sign-up rows. |
-| `runPage` | The HTML served at `/run`: the page where a pod owner opts in or out. The repo ships one at `web/front/run.html`. |
+| `runPage` | The HTML served at `/run`: the page where a pod owner opts in or out. The package's own `web/front/run.html` is served unless you set this. |
 | `agentWebIdSuffix` | Path from a pod's base to its owner's WebID. Defaults to `profile/card#me`. |
 | `agentPollSeconds` | How often the inbox is swept. Deliveries also wake the sweep as they land, so this is the fallback. |
 | `agentAutoAcceptFollows` | Whether a newly provisioned identity accepts follows without review. On by default. |
+
+<!-- CLAUDE 2026-08-19 — settings the table above is missing; delete markers when done -->
+| Setting | What it is |
+|---|---|
+| `frontHost` | The apex host the shared front answers on. The shipped snippet carries `fedipod.net`; set your own apex, or sign-up never routes. |
+| `frontOrigin` | Its origin. |
+| `directoryContainer` | The internal container holding the handle directory. |
+| `agentAutoFront` | Whether every identity that starts also gets a `@handle@frontHost` address — an inbox-only directory row, written once. Off by default. |
+| `offersPods` | Whether the signup page offers to create pods here. |
+| `signupPage` | The signup page served at `/`, `/signup` and `/new-account`. The package's own is served unless you set this. |
+| `gatewayWebId` | The WebID stamped on verification receipts. |
+
+`signupPage` and `runPage` are the page's HTML itself, not a path to a file.
+<!-- /CLAUDE -->
 
 ### The pod is the instance
 
@@ -75,7 +94,7 @@ Each identity answers on its pod's origin, so the pod is what a client
 connects to. Point a Mastodon app at `https://mei.example.org/` and it finds
 what it expects: nodeinfo, the client API under `/api/`, sign-in under
 `/oauth/`, the live feed at `/api/v1/streaming`, and the ActivityPub write API
-at `/ap/outbox`. The owner's own pages — the record, the setup screens and the
+at `/ap/outbox`. The owner's own pages — the record<!-- CLAUDE 2026-08-19 — dropped "the setup screens": they are not served here; a server-hosted identity provisions itself from the opt-in --> and the
 bundled web client — are behind `agentUiPath`, which the door secret guards.
 
 The client API answers any origin, the way any Mastodon server does, so a
@@ -86,8 +105,8 @@ redirect, and only that client, holding its secret, can exchange it for a
 token.
 
 A client API is rooted at an origin, so each identity needs an origin of its
-own: subdomain pods, one per identity. Two entries on one host are refused
-when the server starts rather than half-working.
+own: subdomain pods, one per identity. <!-- CLAUDE 2026-08-19 — was "refused when the server starts" -->A second identity on a host is
+refused at opt-in<!-- /CLAUDE --> rather than half-working.
 
 ### Before you turn it on
 
@@ -100,17 +119,17 @@ for anyone hosting other people, it is a promise being made to them.
 owner's door, with that identity's own door secret:
 
 ```
-curl -X POST https://mei.example.org/app/config \
+curl -X POST https://mei.example.org/fedipod/config \
   -H 'x-dk-token: THE_DOOR_SECRET_FROM_door-secret.json' -H 'content-type: application/json' \
   -d '{"password":"the one you will type into your phone"}'
 ```
 
 **Some pod paths stop being served.** On an identity's origin the paths above
 belong to the identity, so pod resources at those names — a container called
-`api`, `oauth` or `app`, or documents at `ap/actor`, `ap/outbox`,
+`api`, `oauth` or `fedipod`, or documents at `ap/actor`, `ap/outbox`,
 `.well-known/nodeinfo` and `nodeinfo/2.0` — are not served over HTTP there.
 They stay in the pod and in its listings. Every other path is the pod, exactly
-as before. The server logs the list for each identity when it starts.
+as before.<!-- CLAUDE 2026-08-19 — dropped "The server logs the list for each identity when it starts.": it does not -->
 
 **Run one worker.** A delivery is picked up the moment it lands only in a
 single-worker server. With `--workers` above one the inbox is swept on the
@@ -119,7 +138,7 @@ single worker outright, and says so when refused.
 
 ## How sign-up works
 
-A pod owner opens the `/run` page (supply `runPage`), signs in with their pod,
+A pod owner opens the `/run` page, signs in with their pod,
 and opts in or out. Underneath it is one endpoint:
 
 ```
@@ -131,7 +150,8 @@ The request carries a Solid-OIDC token; the WebID it proves must live under
 the pod being claimed. The reply carries the identity's door secret, shown
 that once and never again — losing it is not fatal, because opting in again
 mints a fresh one and retires the old, with no restart and no dropped
-connections. `{"action": "opt-out"}` stops the identity and returns the pod
+connections. <!-- CLAUDE 2026-08-19 — the full opt-out call -->`{"action": "opt-out", "podBase": "https://mei.example.org/"}`,
+with the same token as opt-in,<!-- /CLAUDE --> stops the identity and returns the pod
 to plain pod serving; deliveries keep landing in its inbox and simply wait.
 Opted-in pods are recorded in the registry container and come back after a
 server restart — which is also why sign-up wants a persistent storage
@@ -171,8 +191,8 @@ npm run test:e2e    # boots a real server and uses it as a client would
 container listings — through the transport an identity uses, and checks the
 lease protocol and the deletion deny-list still hold across it.
 
-`npm run test:e2e` starts a real Community Solid Server with two pods, waits
-for both to become identities, then signs in as a phone app does, posts,
+`npm run test:e2e` starts a real Community Solid Server with <!-- CLAUDE 2026-08-19 — was "two pods": a third exercises runtime opt-in and opt-out -->three pods (two
+become identities up front; the third opts in and out at runtime)<!-- /CLAUDE -->, then signs in as a phone app does, posts,
 receives a follow from another server, and watches the live feed. It takes
 about a minute. `FEDIPOD_E2E_LOG=info` shows the server's log while it runs.
 
