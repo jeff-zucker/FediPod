@@ -23,7 +23,6 @@
     "phanpy/dist",
     "run-agent.mjs",
     "scripts",
-    "claude/smoke-tests",
     "gui.md",
     "cli.md",
     "groups.md",

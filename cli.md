@@ -8,12 +8,12 @@ own values.
 ## Starting and stopping
 
 ```
-npm start                                        # start your default identity (the one you last used)
-npm start 8081                                   # same, on a port of your choice — it is remembered
-node bin/fedipod.mjs up --profile NAME    # start a specific identity
-node bin/fedipod.mjs stop                    # stop it, saving state first
-node bin/fedipod.mjs status                  # is it running, and as whom
-node bin/fedipod.mjs profiles                # every identity on this machine, running or not
+fedipod start              # start your default identity (the one you last used)
+fedipod start --port 8081  # same, on a port of your choice — it is remembered
+fedipod up --profile NAME  # start a specific identity
+fedipod stop               # stop it, saving state first
+fedipod status             # is it running, and as whom
+fedipod profiles           # every identity on this machine, running or not
 ```
 
 Installing the boot services (see the README) makes starting by hand unnecessary.
@@ -21,8 +21,8 @@ Installing the boot services (see the README) makes starting by hand unnecessary
 ## Creating an identity
 
 ```
-node bin/fedipod.mjs setup                   # opens the browser setup
-node bin/fedipod.mjs setup --cli             # the same questions in the terminal
+fedipod setup        # opens the browser setup
+fedipod setup --cli  # the same questions in the terminal
 ```
 `--group` makes a group actor instead of a person, `--new-account` creates the
 pod account as part of it, `--keys pod` puts the signing key in pod state for
@@ -45,7 +45,7 @@ commands — talk to the running agent and say so when it is not there. `keys`,
 ## Recovery
 
 ```
-node bin/fedipod.mjs rotate-key --force
+fedipod rotate-key --force
 ```
 When an identity's `keys.json` is lost or damaged the agent refuses to start;
 this mints a replacement and tells other servers.
@@ -54,7 +54,7 @@ It asks before rotating; `--yes` answers for you.
 using the old key stops working as this identity.
 
 ```
-node bin/fedipod.mjs rebuild --from-notes
+fedipod rebuild --from-notes
 ```
 A deeper version of the GUI's **Recover posts**: reads every note the pod
 still holds, and can bring back a post whose deletion half-failed. Adds only;
@@ -63,19 +63,19 @@ nothing local is overwritten.  Agent must be running.
 ## Security
 
 ```
-node bin/fedipod.mjs passwd                         # require a password when a client logs in
-node bin/fedipod.mjs tokens                         # list client logins; --revoke <prefix> or --revoke-all
-node bin/fedipod.mjs revoke-credential --email EMAIL   # cut this machine off from the pod account
+fedipod passwd                           # require a password when a client logs in
+fedipod tokens                           # list client logins; --revoke <prefix> or --revoke-all
+fedipod revoke-credential --email EMAIL  # cut this machine off from the pod account
 ```
 A new password takes effect when a running agent restarts.
 
 ## Bluesky
 
 ```
-node bin/fedipod.mjs bsky connect HANDLE APP-PASSWORD   # drive an existing Bluesky account
-node bin/fedipod.mjs bsky status                        # which account, and any last error
-node bin/fedipod.mjs bsky crosspost off                 # your public posts stay off Bluesky (on: they mirror)
-node bin/fedipod.mjs bsky disconnect                    # forget the session and the stored credential
+fedipod bsky connect HANDLE APP-PASSWORD  # drive an existing Bluesky account
+fedipod bsky status                       # which account, and any last error
+fedipod bsky crosspost off                # your public posts stay off Bluesky (on: they mirror)
+fedipod bsky disconnect                   # forget the session and the stored credential
 ```
 HANDLE and APP-PASSWORD come from the Bluesky account: make the app password
 under its Settings → Privacy and security → App Passwords. Add
@@ -85,7 +85,7 @@ Disconnecting does not remove anything already posted to Bluesky.
 ## Inbox history
 
 ```
-node bin/fedipod.mjs archive off        # stop keeping drained mail (on: keep it, the default)
+fedipod archive off  # stop keeping drained mail (on: keep it, the default)
 ```
 The archive keeps each incoming activity's original bytes in the private
 half's `inbox-archive/` after it is verified and applied (JSON-LD, so the
@@ -96,20 +96,20 @@ rebuild it.
 ## Moving the install
 
 ```
-node bin/fedipod.mjs home                # where your identities live
-node bin/fedipod.mjs home --to DIR       # move them all somewhere else
+fedipod home           # where your identities live
+fedipod home --to DIR  # move them all somewhere else
 ```
 Stop the agents first. If you use the boot services, run
-`npm run install-service` again afterwards.
+`fedipod install-service` again afterwards.
 
 ## Going quiet, and leaving
 
 ```
-node bin/fedipod.mjs park                    # stop the mail and unfollow, keeping the handle
-node bin/fedipod.mjs revive                  # come back: re-follow everyone from the parking snapshot
-node bin/fedipod.mjs retire                  # permanent: followers' servers are told to drop the account
-node bin/fedipod.mjs retire --move-to @you@new.host    # tell followers to migrate, then stand down
-node bin/fedipod.mjs retire --keep-handle    # stand down, but the handle keeps resolving
+fedipod park                            # stop the mail and unfollow, keeping the handle
+fedipod revive                          # come back: re-follow everyone from the parking snapshot
+fedipod retire                          # permanent: followers' servers are told to drop the account
+fedipod retire --move-to @you@new.host  # tell followers to migrate, then stand down
+fedipod retire --keep-handle            # stand down, but the handle keeps resolving
 ```
 Each asks before acting; `--yes` answers for you. These are the terminal form
 of the record page's status control and lifecycle buttons.
@@ -117,10 +117,10 @@ of the record page's status control and lifecycle buttons.
 ## Where the private half lives
 
 ```
-node bin/fedipod.mjs state                   # show where the private half and public face live
-node bin/fedipod.mjs state --to pod          # move the private half into pod state (multi-device)
-node bin/fedipod.mjs state --to DIR          # or into another directory
-node bin/fedipod.mjs upgrade                 # which identities are on an older layout
+fedipod state           # show where the private half and public face live
+fedipod state --to pod  # move the private half into pod state (multi-device)
+fedipod state --to DIR  # or into another directory
+fedipod upgrade         # which identities are on an older layout
 ```
 `upgrade` reports and names the `state` commands to run; it moves nothing
 itself. Stop the agent before moving state.
@@ -128,7 +128,7 @@ itself. Stop the agent before moving state.
 ## Taking your data out
 
 ```
-node bin/fedipod.mjs export --format as-collections --to DIR
+fedipod export --format as-collections --to DIR
 ```
 Writes the outbox, followers and the archived inbox as paged AS2 collections;
 `--to` also takes a pod container URL.
@@ -136,19 +136,19 @@ Writes the outbox, followers and the archived inbox as paged AS2 collections;
 ## Running a group
 
 ```
-node bin/fedipod.mjs members                 # who is in
-node bin/fedipod.mjs requests                # who is waiting to join
-node bin/fedipod.mjs admit ACTOR-URL         # let one in (or: admit --all)
-node bin/fedipod.mjs refuse ACTOR-URL
-node bin/fedipod.mjs joins open|approve      # whether joining waits for review
-node bin/fedipod.mjs mute ACTOR-URL          # stop carrying them; unmute undoes it
-node bin/fedipod.mjs eject ACTOR-URL
-node bin/fedipod.mjs review on|off           # whether posts wait for approval
-node bin/fedipod.mjs pending                 # posts waiting for approval
-node bin/fedipod.mjs approve NOTE-URL
-node bin/fedipod.mjs decline NOTE-URL
-node bin/fedipod.mjs announced               # what the group has carried
-node bin/fedipod.mjs retract NOTE-URL        # un-carry one
+fedipod members             # who is in
+fedipod requests            # who is waiting to join
+fedipod admit ACTOR-URL     # let one in (or: admit --all)
+fedipod refuse ACTOR-URL
+fedipod joins open|approve  # whether joining waits for review
+fedipod mute ACTOR-URL      # stop carrying them; unmute undoes it
+fedipod eject ACTOR-URL
+fedipod review on|off       # whether posts wait for approval
+fedipod pending             # posts waiting for approval
+fedipod approve NOTE-URL
+fedipod decline NOTE-URL
+fedipod announced           # what the group has carried
+fedipod retract NOTE-URL    # un-carry one
 ```
 The agent must be running. What these mean: [Groups](groups.md).
 
@@ -161,9 +161,9 @@ service installers the README names, as fedipod subcommands; and
 ## Moving here from another server
 
 ```
-node bin/fedipod.mjs alias --add @you@old.server   # list the old account on your actor
-node bin/fedipod.mjs alias                         # show the aliases
-node bin/fedipod.mjs alias --remove URL --yes      # take one off
+fedipod alias --add @you@old.server  # list the old account on your actor
+fedipod alias                        # show the aliases
+fedipod alias --remove URL --yes     # take one off
 ```
 The alias is what the old account's server checks before it will send the
 move. Add it, then trigger the move on the old server. Leave the alias in
@@ -171,13 +171,13 @@ place until the migration has settled — servers keep checking it while they
 retry.
 
 ```
-node bin/fedipod.mjs admit --all                   # accept every waiting follow request
+fedipod admit --all  # accept every waiting follow request
 ```
 Turning on automatic acceptance first (the admin page's **new followers**
 control) means the incoming wave never queues at all.
 
 ```
-node bin/fedipod.mjs import following_accounts.csv blocked_accounts.csv
+fedipod import following_accounts.csv blocked_accounts.csv
 ```
 Takes the CSV files from the old server's export — follows, blocks, mutes,
 lists and domain blocks; the file names say which is which, or pass
@@ -189,8 +189,8 @@ are not imported.
 ## The gateway
 
 ```
-node bin/fedipod.mjs gateway <door-inbox-url> --secret <hmac> --inbox-only
-node bin/fedipod.mjs gateway --detach
+fedipod gateway <door-inbox-url> --secret <hmac> --inbox-only
+fedipod gateway --detach
 ```
 Attaching points your actor's advertised inbox at a gateway's door, so
 deliveries are verified and de-junked before they reach your pod; your name,
@@ -205,9 +205,9 @@ What a gateway is, easing into one, and running your own: [gateway.md](gateway.m
 ## Keys
 
 ```
-node bin/fedipod.mjs keys
-node bin/fedipod.mjs keys --to pod
-node bin/fedipod.mjs keys --to local
+fedipod keys
+fedipod keys --to pod
+fedipod keys --to local
 ```
 Where the signing key lives. On the pod, every device that reaches your
 state store can sign as the actor — that is what multi-device needs; the
@@ -220,7 +220,7 @@ the agent before moving keys.
 ## update
 
 ```
-node bin/fedipod.mjs update
+fedipod update
 ```
 Pulls the latest published FediPod into this install and restarts the
 agents — those installed as services restart themselves; any started by hand
@@ -231,8 +231,8 @@ rather than overwritten. `AP_UPDATE_CHECK=0` turns the daily check off.
 ## https
 
 ```
-node bin/fedipod.mjs https
-node bin/fedipod.mjs https --trust
+fedipod https
+fedipod https --trust
 ```
 Every agent's address is https, on the port you gave it.
 The first agent start makes the certificate and signs it with a local

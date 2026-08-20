@@ -77,7 +77,7 @@ curl -k -X POST https://localhost:8030/gateway -H 'content-type: application/jso
   -d '{"action":"mode","mode":"shadow"}'
 ```
 
-8030 is the default identity's port; `node bin/fedipod.mjs status`
+8030 is the default identity's port; `fedipod status`
 prints the right one for each identity.
 
 ## The receipt secret

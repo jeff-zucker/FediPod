@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // fedipod.mjs — CLI for the standalone pod-stored ActivityPub actor.
 //
-//   npm start   (= fedipod up)
+//   fedipod start
 //     The one command. Finds a port that BINDS — starting from the recorded
 //     one, or 8030 — puts the agent behind it detached (logging to
 //     AP_HOME/agent.log, stoppable by pidfile), and opens the browser where
@@ -298,12 +298,12 @@ function refuseExistingIdentity() {
   let held = '(unreadable)';
   try { held = JSON.parse(fs.readFileSync(credPath, 'utf8')).remotePod; } catch {}
   console.error(`${HOME} already holds an identity: ${held}`);
-  console.error('For another identity:  bin/fedipod.mjs setup --profile <name>');
-  console.error('To list what exists:   bin/fedipod.mjs profiles');
+  console.error('For another identity:  fedipod setup --profile <name>');
+  console.error('To list what exists:   fedipod profiles');
   console.error('To replace this one:   add --force (the old credential is lost)');
   console.error('');
   console.error('If a setup died half-way, do NOT re-run it — the credential it already');
-  console.error('minted cannot be minted twice. Run `bin/fedipod.mjs start` and');
+  console.error('minted cannot be minted twice. Run `fedipod start` and');
   console.error('finish at /admin/setup/ in the browser.');
   process.exit(2);
 }
@@ -395,7 +395,7 @@ if (cmd === 'up') {
     // question, the same one `setup` opens with — `npm start` stays the
     // single command it was.
     if (!process.stdin.isTTY) {
-      console.error('no identities yet — bin/fedipod.mjs setup');
+      console.error('no identities yet — fedipod setup');
       process.exit(2);
     }
     const first = await ask('handle (the name in your address; permanent)');
@@ -469,8 +469,8 @@ if (cmd === 'up') {
   // Phanpy with no account bound, which reads as the wrong app entirely.
   const url = configured ? `${originNow()}/admin/client/` : `${originNow()}/admin/setup/`;
   console.log(`\n  ${url}\n`);
-  console.log(configured ? 'stop it with:  bin/fedipod.mjs stop'
-    : 'setup continues in the browser. Stop it with:  bin/fedipod.mjs stop');
+  console.log(configured ? 'stop it with:  fedipod stop'
+    : 'setup continues in the browser. Stop it with:  fedipod stop');
   if (!has('no-open')) openBrowser(url);
   process.exit(0);
 } else if (cmd === 'setup' && PROFILE && (useProfile(PROFILE), refuseExistingIdentity(), false)) {
@@ -553,7 +553,7 @@ if (cmd === 'up') {
   if (kind === 'group' && !newAccount && !wfHost) {
     console.error(`${pod} is a path on ${new URL(pod).host}, not the root of its own host.`);
     console.error('WebFinger is answered only at a host root, so nobody could find this group.');
-    console.error('Give the group a pod of its own:  bin/fedipod.mjs setup --group --new-account');
+    console.error('Give the group a pod of its own:  fedipod setup --group --new-account');
     process.exit(2);
   }
   console.log(kind === 'group' ? '\nThe group will be:\n' : '\nYou will be:\n');
@@ -674,7 +674,7 @@ if (cmd === 'up') {
   // This flag is read only by setup; it silently did nothing here, while the
   // key guard's own error message told people to use it.
   if (has('rotate-key')) {
-    console.error('start does not rotate keys — use:  bin/fedipod.mjs rotate-key');
+    console.error('start does not rotate keys — use:  fedipod rotate-key');
     process.exit(2);
   }
   if (portFlag()) recordAgent({ port: PORT });   // `start --port N` (or bare N) moves it for good
@@ -901,13 +901,13 @@ if (cmd === 'up') {
   if (!to) {
     console.log(`private data: ${where(cred)}`);
     console.log(`public face:  ${apUrls(cred.remotePod, cred.root).home}`);
-    console.log('\nTo move it:  bin/fedipod.mjs state --to ~/somewhere/private/');
-    console.log('             bin/fedipod.mjs state --to <container-url>');
-    console.log('             bin/fedipod.mjs state --to pod');
+    console.log('\nTo move it:  fedipod state --to ~/somewhere/private/');
+    console.log('             fedipod state --to <container-url>');
+    console.log('             fedipod state --to pod');
     process.exit(0);
   }
   if (await localFetch(HOME, PORT, `/status`).then(() => true).catch(() => false)) {
-    console.error(`an agent is running on port ${PORT} — stop it first:  bin/fedipod.mjs stop`);
+    console.error(`an agent is running on port ${PORT} — stop it first:  fedipod stop`);
     process.exit(1);
   }
   // A path or a URL. `state` prints the path form, so refusing it here would
@@ -1080,7 +1080,7 @@ if (cmd === 'up') {
   // Which one answers with no --profile. A property of the ROOT, not of any
   // identity — which is the whole point of it being a pointer.
   const theDefault = (() => { const d = defaultProfile(AP_ROOT); return typeof d === 'string' ? d : null; })();
-  if (!rows.length) console.log('no identities yet — bin/fedipod.mjs setup');
+  if (!rows.length) console.log('no identities yet — fedipod setup');
   else {
     const w = (k, min) => Math.max(min, ...rows.map(r => String(r[k]).length));
     const [wn, wp, wo, wk] = [w('name', 7), w('pod', 3), w('port', 4), w('kind', 4)];

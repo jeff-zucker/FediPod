@@ -1,6 +1,10 @@
 # Changes
 
 ## 2026-08-20
+- **FediPod installs from npm**: `npm install -g fedipod`, and every command is
+  `fedipod <something>` rather than a path into a checkout. `fedipod update`
+  updates through npm; on a checkout it still fast-forwards. The signup page
+  hands out the same short command.
 - Moderation another server asked for has a place on the group's admin page:
   **Moderation requests**, with carry-out and turn-down beside each one. It
   appears when something is waiting. `fedipod modqueue` does the same from the

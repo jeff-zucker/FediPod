@@ -15,9 +15,17 @@
 
 You may sign up for free for a solo, group, or gateway account at https://fedipod.net/ .  Wizards will walk you through install and setup. If you want to host a community, instructions are available for [Fediverse User Group](https://github.com/jeff-zucker/FediPod/blob/main/groups.md), the lightweight [FediPod Gateway](https://github.com/jeff-zucker/FediPod/blob/main/gateway.md) and for the full CSS component [FediPod Server](https://github.com/jeff-zucker/FediPod/blob/main/packages/fedipod-server/README.md). 
 
+### Installing
+
+```
+npm install -g fedipod
+```
+
+Needs Node 20 or newer.
+
 ### Running the agent - 
 
-From the install folder, run `npm start`. You may optionally add a port number (`npm start 8081`) to change your local agent's port (default is 8030).
+Run `fedipod start`. You may optionally add a port number (`fedipod start --port 8081`) to change your local agent's port (default is 8030).
 
 Now point your browser (any) at `https://localhost:8030` — or your own port if you set one — and there you go!
 
@@ -25,11 +33,11 @@ Now point your browser (any) at `https://localhost:8030` — or your own port if
 
 If you don't want to run the agent each time, you can install it as a system service. This is recommended as leaving the agent off causes your mail to pile up on the pod host.  To create a system service :
 ```
-npm run install-service
+fedipod install-service
 ```
 It registers every identity on this machine, one service each, so all of your actors start at boot. An identity running in a terminal is stopped and taken over by its service.
 
-`npm run uninstall-service` reverses it. 
+`fedipod uninstall-service` reverses it. 
 
 ## Managing your FediPod install
 
@@ -38,7 +46,7 @@ You can manage your posts, see logs, park, move, transfer your account and perfo
 You can also use the admin tools to create other actors, either groups or persons.  You may have as many as you want on the local machine, but each one needs a separate pod.
 
 Every agent checks once a day whether a newer FediPod is published. When one
-exists, the record page offers **Update**, and `node bin/fedipod.mjs update`
+exists, the record page offers **Update**, and `fedipod update`
 does the same from the terminal. `AP_UPDATE_CHECK=0` turns the check off.
 
 ## A FediPod.net Gateway account (reccommended)
