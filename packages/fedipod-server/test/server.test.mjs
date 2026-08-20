@@ -23,6 +23,17 @@ test('claims only the front host, only its routes', () => {
   assert.equal(claims({ host: '', pathname: '/' }, F), false);
 });
 
+test('claims every route the front core serves, pages and the files they load', () => {
+  const F = 'fedipod.net';
+  // Each page is useless without what it loads, so the assets are claims too:
+  // an unclaimed one falls through to the pod and 404s.
+  for (const pathname of ['/', '/signup', '/new-account', '/run',
+    '/.well-known/webfinger', '/api/handle', '/api/attach', '/api/agent',
+    '/solid-client-authn.bundle.js', '/install']) {
+    assert.equal(claims({ host: 'fedipod.net', pathname }, F), true, pathname);
+  }
+});
+
 test('an identity claims its protocol routes and its door, and nothing else', () => {
   const hosts = new Set(['alice.example.org']);
   const owns = (pathname, host = 'alice.example.org') => agentClaims({ host, pathname }, hosts);
@@ -32,12 +43,13 @@ test('an identity claims its protocol routes and its door, and nothing else', ()
   assert.equal(owns('/ap/outbox'), true);
   assert.equal(owns('/.well-known/nodeinfo'), true);
   assert.equal(owns('/nodeinfo/2.0'), true);
-  assert.equal(owns('/app/'), true, 'the door');
-  assert.equal(owns('/app'), true, 'and the door without its slash');
+  assert.equal(owns('/fedipod/'), true, 'the door');
+  assert.equal(owns('/fedipod'), true, 'and the door without its slash');
+  assert.equal(owns('/app/'), false, 'a name the owner may want is theirs');
   assert.equal(owns('/profile/card'), false, 'a pod resource is the pod\'s');
   assert.equal(owns('/ap/inbox/x.json'), false, 'inbox items are pod resources, read and written as such');
   assert.equal(owns('/api/v1/instance', 'carol.example.org'), false, 'another host is not this identity');
-  assert.equal(agentClaims({ host: 'alice.example.org', pathname: '/app/' }, hosts, ''), false,
+  assert.equal(agentClaims({ host: 'alice.example.org', pathname: '/fedipod/' }, hosts, ''), false,
     'with no door configured there are no pages to claim');
   assert.equal(agentClaims({ host: 'alice.example.org', pathname: '/api/' }, new Set()), false,
     'and with no identities nothing is claimed at all');

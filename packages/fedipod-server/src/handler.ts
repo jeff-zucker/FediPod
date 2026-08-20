@@ -6,7 +6,7 @@
 // componentsjs-generator reads FediPodServerArgs to emit one component
 // parameter per field, so the config injects each by name.
 
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { HttpHandler, getLoggerFor } from '@solid/community-server';
@@ -79,6 +79,14 @@ const FRONT_CORE = `${LIB_ROOT}/front-core.mjs`;
 const EMBED = `${LIB_ROOT}/embed.mjs`;
 const esmImport = new Function('s', 'return import(s)') as (s: string) => Promise<Record<string, Function>>;
 
+// The front's pages and the files they load, carried in the same two layouts
+// as lib/. A missing file is not fatal: the route it feeds answers 404.
+const WEB_ROOT = existsSync(join(__dirname, '../web/front/run.html'))
+  ? join(__dirname, '../web/front') : join(__dirname, '../../../web/front');
+const webFile = (name: string): string | null => {
+  try { return readFileSync(join(WEB_ROOT, name), 'utf8'); } catch { return null; }
+};
+
 // A pod that will not come up yet is usually a pod still being created by the
 // server that is booting. Keep asking, slower each time, up to a few minutes.
 const START_RETRY_MS = [ 2_000, 5_000, 15_000, 60_000, 300_000 ];
@@ -93,7 +101,7 @@ function deriveHandle(podBase: string): string {
 /** A door path always has both slashes, so claiming and stripping agree. */
 function normalizeUiPath(raw?: string): string {
   if (raw === '') return '';
-  const path = raw ?? '/app/';
+  const path = raw ?? '/fedipod/';
   return `/${path.replace(/^\/+|\/+$/gu, '')}/`;
 }
 
@@ -440,8 +448,12 @@ export class FediPodServerHandler extends HttpHandler implements Initializable, 
       frontOrigin: this.args.frontOrigin,
       gatewayWebId: this.args.gatewayWebId,
       offersPods: !!this.args.offersPods,
-      signupPage: this.args.signupPage || null,
-      runPage: this.args.runPage || null,
+      signupPage: this.args.signupPage || webFile('new-account.html'),
+      runPage: this.args.runPage || webFile('run.html'),
+      // Both pages load the sign-in library, and the signup page hands out the
+      // installer command; without these the pages render but cannot be used.
+      authBundle: webFile('solid-client-authn.bundle.js'),
+      installScript: webFile('install.sh'),
       lookup: (h: string) => this.dir.lookup(h),
       putDirectory: (h: string, rec: never) => this.dir.putDirectory(h, rec),
       podPut: (_handle: string, url: string, body: string, ct: string) => this.podPut(url, body, ct),

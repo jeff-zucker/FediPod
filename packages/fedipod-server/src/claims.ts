@@ -3,8 +3,11 @@
 // front's apex the gateway answers the fediverse routes; a pod subdomain is a
 // real Solid pod and is never claimed.
 
-const FRONT_PATHS = new Set(['/', '/signup', '/new-account',
-  '/.well-known/webfinger', '/api/handle', '/api/attach', '/api/agent']);
+const FRONT_PATHS = new Set(['/', '/signup', '/new-account', '/run',
+  '/.well-known/webfinger', '/api/handle', '/api/attach', '/api/agent',
+  // What the two pages load: the sign-in library both use, and the installer
+  // the signup page hands every new user.
+  '/solid-client-authn.bundle.js', '/install']);
 
 export function claims(input: { host?: string; pathname: string }, frontHost: string): boolean {
   if (!input.host || !frontHost) return false;
@@ -26,7 +29,7 @@ const AGENT_PREFIXES = [ '/api/', '/oauth/' ];
 export function agentClaims(
   input: { host?: string; pathname: string },
   agentHosts: Set<string>,
-  uiPath = '/app/',
+  uiPath = '/fedipod/',
 ): boolean {
   if (!input.host || agentHosts.size === 0) return false;
   if (!agentHosts.has(String(input.host).toLowerCase())) return false;

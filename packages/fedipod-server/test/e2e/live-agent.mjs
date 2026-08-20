@@ -212,12 +212,12 @@ try {
   check(noPassword.status === 403, 'sign-in is refused until the identity has a password');
 
   // The operator sets one through their own door, which the secret guards.
-  const noGate = await fetch(`${POD}app/config`, {
+  const noGate = await fetch(`${POD}fedipod/config`, {
     method: 'POST', headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ password: PASSWORD }),
   });
   check(noGate.status === 401 || noGate.status === 403, "the operator's door is shut without the secret");
-  const setPassword = await fetch(`${POD}app/config`, {
+  const setPassword = await fetch(`${POD}fedipod/config`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'x-dk-token': doorSecret('alice') },
     body: JSON.stringify({ password: PASSWORD }),
@@ -238,9 +238,15 @@ try {
     : new URL(authorize.headers.get('location') ?? 'http://x/', 'http://x/').searchParams.get('code');
   check(Boolean(code), 'the password buys an authorization code');
 
+  // A registered client proves its secret and names the redirect the code was
+  // bound to — the code alone is not a token.
   const token = await (await fetch(`${POD}oauth/token`, {
     method: 'POST', headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ client_id: appReg.client_id, code, grant_type: 'authorization_code' }),
+    body: JSON.stringify({
+      client_id: appReg.client_id, client_secret: appReg.client_secret,
+      redirect_uri: 'urn:ietf:wg:oauth:2.0:oob',
+      code, grant_type: 'authorization_code',
+    }),
   })).json();
   const bearer = token.access_token;
   check(Boolean(bearer), 'which the client exchanges for an access token');
@@ -293,23 +299,23 @@ try {
   socket.close();
 
   // ---- the operator's door -------------------------------------------------
-  check((await fetch(`${POD}app/status`)).status === 401, "the operator's own routes need the secret");
-  check((await fetch(`${POD}app/status`, { headers: { 'x-dk-token': doorSecret('carol') }})).status === 401,
+  check((await fetch(`${POD}fedipod/status`)).status === 401, "the operator's own routes need the secret");
+  check((await fetch(`${POD}fedipod/status`, { headers: { 'x-dk-token': doorSecret('carol') }})).status === 401,
     "one identity's secret does not open another identity's door");
-  const status = await fetch(`${POD}app/status`, { headers: { 'x-dk-token': doorSecret('alice') }});
+  const status = await fetch(`${POD}fedipod/status`, { headers: { 'x-dk-token': doorSecret('alice') }});
   check(status.status === 200 && (await status.json()).handle === 'alice', 'and answer with it');
-  check((await fetch(`${POD}app/shutdown`, { method: 'POST', headers: { 'x-dk-token': doorSecret('alice') }})).status === 404,
+  check((await fetch(`${POD}fedipod/shutdown`, { method: 'POST', headers: { 'x-dk-token': doorSecret('alice') }})).status === 404,
     'routes that manage a local process are not there to be found');
-  const page = await fetch(`${POD}app/`, { headers: { 'x-dk-token': doorSecret('alice') }});
+  const page = await fetch(`${POD}fedipod/`, { headers: { 'x-dk-token': doorSecret('alice') }});
   check(page.status === 200 && (await page.text()).toLowerCase().includes('<!doctype html'),
     'the web client is served behind the door');
-  const record = await fetch(`${POD}app/admin/`, { headers: { 'x-dk-token': doorSecret('alice') }});
+  const record = await fetch(`${POD}fedipod/admin/`, { headers: { 'x-dk-token': doorSecret('alice') }});
   check(record.status === 200, "the operator's own pages are served behind it too");
   // The pages ask for their assets and their API relative to where they are
   // served, so the same build works at an origin root and behind a door.
-  check((await fetch(`${POD}app/admin/bar.css`, { headers: { 'x-dk-token': doorSecret('alice') }})).status === 200,
+  check((await fetch(`${POD}fedipod/admin/bar.css`, { headers: { 'x-dk-token': doorSecret('alice') }})).status === 200,
     'and their stylesheets resolve from there');
-  check((await fetch(`${POD}app/admin/client/`, { headers: { 'x-dk-token': doorSecret('alice') }})).status === 200,
+  check((await fetch(`${POD}fedipod/admin/client/`, { headers: { 'x-dk-token': doorSecret('alice') }})).status === 200,
     'as does the client wrapper');
 
   // ---- CORS ----------------------------------------------------------------
@@ -345,10 +351,10 @@ try {
       { headers: { accept: 'application/activity+json' }})).json();
     check(dana.preferredUsername === 'dana', 'provisioned as @dana, from the opt-in alone');
   }
-  check((await fetch(`${DANA}app/status`)).status === 401, "dana's door needs a secret");
-  const danaStatus = await fetch(`${DANA}app/status`, { headers: { 'x-dk-token': optInBody.doorSecret }});
+  check((await fetch(`${DANA}fedipod/status`)).status === 401, "dana's door needs a secret");
+  const danaStatus = await fetch(`${DANA}fedipod/status`, { headers: { 'x-dk-token': optInBody.doorSecret }});
   check(danaStatus.status === 200, 'the returned secret opens it');
-  check((await fetch(`${DANA}app/status`, { headers: { 'x-dk-token': doorSecret('alice') }})).status === 401,
+  check((await fetch(`${DANA}fedipod/status`, { headers: { 'x-dk-token': doorSecret('alice') }})).status === 401,
     "alice's secret does not open dana's door");
 
   const reOptIn = await danaSession.fetch(`${BASE}api/agent`, {
@@ -358,9 +364,9 @@ try {
   const rotated = await reOptIn.json();
   check(reOptIn.status === 201 && rotated.status === 'rotated' && rotated.doorSecret !== optInBody.doorSecret,
     'opting in again rotates the secret — that is lost-secret recovery');
-  check((await fetch(`${DANA}app/status`, { headers: { 'x-dk-token': optInBody.doorSecret }})).status === 401,
+  check((await fetch(`${DANA}fedipod/status`, { headers: { 'x-dk-token': optInBody.doorSecret }})).status === 401,
     'the old secret stops working at once');
-  check((await fetch(`${DANA}app/status`, { headers: { 'x-dk-token': rotated.doorSecret }})).status === 200,
+  check((await fetch(`${DANA}fedipod/status`, { headers: { 'x-dk-token': rotated.doorSecret }})).status === 200,
     'and the new one works, with no restart');
 
   const optOut = await danaSession.fetch(`${BASE}api/agent`, {
