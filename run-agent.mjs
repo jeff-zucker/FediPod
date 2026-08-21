@@ -47,7 +47,7 @@ import { Lease } from './lib/lease.mjs';
 import { startAdmin } from './lib/admin.mjs';
 import { exposureProblem, hostLabel } from './lib/guard.mjs';
 import { pendingSteps } from './lib/migrate.mjs';
-import { apUrls } from './lib/wire.mjs';
+import { apUrls, assertionKeyId } from './lib/wire.mjs';
 import { followActor, unfollowActor, resolveHandle } from './lib/social.mjs';
 
 export class Agent {
@@ -324,11 +324,14 @@ export class Agent {
     clearInterval(this.schedTimer);
     this.deliverer = new Deliverer({
       store: this.store, rsaPrivate: keys.rsaPrivate, keyId: this.urls.actor + '#main-key',
+      actorId: this.urls.actor, edPrivate: keys.edPrivate,
+      proofKeyId: assertionKeyId(this.urls),
       log: this.log, passive: this.viewer,
     });
     this.publisher = new Publisher({
       config, remote: this.remote, local: this.local, store: this.store,
-      deliverer: this.deliverer, publicKeyPem: keys.rsaPublicPem, log: this.log,
+      deliverer: this.deliverer, publicKeyPem: keys.rsaPublicPem,
+      assertionKey: keys.edPublicMultibase, log: this.log,
       resolveMention: (h) => resolveHandle(this, h),
       // Whether the fediverse tree is on the pod at all, so the ACL check does
       // not probe for something the default layout keeps on local disk.
@@ -389,7 +392,9 @@ export class Agent {
       log: this.log,
     });
     this.publisher.publicKeyPem = keys.rsaPublicPem;
+    this.publisher.assertionKey = keys.edPublicMultibase;
     this.deliverer.rsaPrivate = keys.rsaPrivate;
+    this.deliverer.edPrivate = keys.edPrivate;
     await this.publisher.publishProfile();
     return { changed: before !== keys.rsaPublicPem, publicKeyPem: keys.rsaPublicPem };
   }

@@ -1,6 +1,32 @@
 # Changes
 
 ## 2026-08-20
+- Activities you send carry a **signed proof** (FEP-8b32), so a server that
+  meets one of your posts second-hand — carried by a group, or forwarded by a
+  follower's server — can tell it is yours without asking your pod. Your actor
+  publishes an Ed25519 key beside the RSA one; HTTP signatures are unchanged.
+  An activity you forward for somebody else keeps their proof and never gets
+  yours.
+- Posts that have a **headline** show it: Lemmy posts, blog articles, PeerTube
+  videos and Bookwyrm reviews arrive with a title above the body instead of
+  losing it.
+- A delivery whose sender's key could not be fetched is no longer discarded as
+  a forgery. Servers that require signed fetches — Threads, and Mastodon in
+  secure mode — were being dropped at the gateway door in silence.
+- Only the activities that make up a conversation are carried to your followers
+  on someone else's behalf. Anything of a type FediPod does not read was being
+  re-delivered to every follower over your signature.
+- A blocked domain stays blocked on a non-default port at the gateway, as it
+  already did at the agent.
+- Signatures over an address that carries a query string are now ones a
+  receiver can check, which covers paged collections and inboxes that live at
+  `?rest_route=…`.
+- An actor typed as a list (`["Person","Service"]`) is an ordinary actor, and a
+  post typed as a list is ordinary content. Both were being refused.
+- A link post whose attachment carries `href` and no `url` keeps its link.
+- Your actor document says whether follows wait for you. A person's follows
+  have always waited by default; other servers were told the account was open
+  and showed people as following you when they were still queued.
 - The installer puts `fedipod` on your PATH, so a machine set up from a signup
   page runs the same commands as one installed from npm.
 - **FediPod installs from npm**: `npm install -g fedipod`, and every command is

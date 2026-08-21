@@ -8617,6 +8617,21 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
     await it._maybeForward(reply([PUBLIC], OURS + 'x'));
     check(sent.length === 0, 'a reply not addressed to our followers is not forwarded');
   }
+
+  // A type nothing in intake handles falls out of handle() with no rejection,
+  // and "no rejection" is what qualifies an activity to be carried. Without a
+  // gate, a stranger could have anything at all re-delivered to every follower
+  // over our signature.
+  {
+    const { it, sent } = mkFwd(followers);
+    await it._maybeForward({ ...reply([PUBLIC, FOLLOWERS], OURS + 'x'), type: 'Offer' });
+    check(sent.length === 0, 'an activity of a type we never examine is not carried to followers');
+    await it._maybeForward({ ...reply([PUBLIC, FOLLOWERS], OURS + 'x'), type: 'Flag' });
+    check(sent.length === 0, 'nor is a Flag, which we read but never speak on anyone else\'s behalf');
+    await it._maybeForward({ id: 'https://c.example/act/2', type: 'Like',
+      actor: 'https://c.example/u/a', to: [PUBLIC, FOLLOWERS], object: OURS + 'x' });
+    check(sent.length === 1, 'while a Like on one of our posts still is');
+  }
 }
 
 // --- 21g. Add/Remove are acknowledged, never dead-lettered (§7.6/§7.9) ---
@@ -9179,8 +9194,17 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   const signedGood = await sign27(mkReq(), keys.rsaPrivate, new URL(KID));
   const tampered = new Request(signedGood.url, { method: 'POST', headers: signedGood.headers, body: '{"type":"Delete"}' });
   const bad = await httpsig.verifyHttpSignature(tampered, { documentLoader: loaderFor(actorDoc27) });
-  check(bad.verified === false && bad.reason === 'bad-signature-or-key-unfetchable',
+  check(bad.verified === false && bad.reason === 'bad-signature',
     'a body swapped after signing fails, and says why (a forgery, dropped at the edge)');
+
+  // A key we could not fetch is not evidence of forgery: every secure-mode
+  // sender (Threads, Mastodon with AUTHORIZED_FETCH) refuses the keyless
+  // loader, and its deliveries must survive that as unverified.
+  const unfetchable = await httpsig.verifyHttpSignature(
+    await sign27(mkReq(), keys.rsaPrivate, new URL(KID)),
+    { documentLoader: async () => { throw new Error('key fetch → 404'); } });
+  check(unfetchable.verified === false && unfetchable.reason === 'key-unfetchable',
+    'a signature whose key cannot be fetched is unverified, and is NOT called a forgery');
 
   // No signature at all → unverified, distinguished as such.
   const none = await httpsig.verifyHttpSignature(mkReq(), { documentLoader: loaderFor(actorDoc27) });
@@ -9265,6 +9289,31 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   const rcpt = JSON.parse(control.puts.find(p => p.u.endsWith('.receipt.json')).b);
   check(httpsig28.verifyReceipt(rcpt, ident.hmacSecret) === true && rcpt.verified === false,
     'the receipt is HMAC-valid and honestly records unverified (no reachable key here)');
+
+  // A SIGNED delivery whose key will not fetch — what every secure-mode
+  // sender looks like from a keyless door — forwards unverified. Dropping it
+  // as a forgery is a silent blackout: the 202 stops the sender retrying.
+  const secureMode = mkPut();
+  const signedFollow = await sign28(
+    mkReq28({ type: 'Follow', actor: AID, object: ident.actorUrl }), keys.rsaPrivate, new URL(KID));
+  r = await gw.handleDelivery(signedFollow, ident, {
+    podPut: secureMode.put,
+    fetchImpl: async () => new Response('{"error":"Not found"}', { status: 404 }),
+  });
+  check(r.status === 202 && secureMode.puts.length === 2,
+    'a signed delivery whose key answers 404 still reaches the pod (activity + receipt)');
+  const smRcpt = JSON.parse(secureMode.puts.find(p => p.u.endsWith('.receipt.json')).b);
+  check(httpsig28.verifyReceipt(smRcpt, ident.hmacSecret) === true
+    && smRcpt.verified === false && smRcpt.reason === 'key-unfetchable',
+    'and its receipt records key-unfetchable, not a forged signature');
+
+  // The agent's isBlocked strips the port; a door that keeps it would let a
+  // blocked domain back in on a non-default one.
+  const ported = mkPut();
+  r = await gw.handleDelivery(mkReq28({ type: 'Create', actor: 'https://spam.example:8443/u/x', object: {} }),
+    ident, { podPut: ported.put });
+  check(r.status === 202 && ported.puts.length === 0,
+    'a blocked domain on a non-default port is blocked at the door too');
 
   const failPod = { put: async () => false };
   r = await gw.handleDelivery(mkReq28({ type: 'Follow', actor: 'https://s.example/u', object: ident.actorUrl }),
@@ -9829,6 +9878,205 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
     'a restart adopts the identity already on the pod rather than provisioning a second');
   await again.stop();
   fs.rmSync(dataDir, { recursive: true, force: true });
+}
+
+// --- 29. the rest of the fediverse: type lists, bare Links, signed queries,
+//        and an actor document that admits its own follow policy ---
+{
+  const { isContentType, Intake: IK29 } = await import(path.join(root, 'lib/intake.mjs'));
+  const wire29 = await import(path.join(root, 'lib/wire.mjs'));
+
+  // AS2 lets `type` be a list, and implementations use both forms.
+  check(isContentType(['Note']) && isContentType(['Page', 'Object']),
+    'a content type given as a list reads the same as a bare one');
+  check(!isContentType(['Person', 'Collection']), 'and a list of non-content still is not content');
+
+  // The same for actors: a doc typed ["Person","Service"] is an ordinary actor
+  // and must reach the cache, or it renders with no name and no counts.
+  {
+    const cached = [];
+    const doc = { id: 'https://p.example/u/x', type: ['Person', 'Service'],
+      preferredUsername: 'x', inbox: 'https://p.example/u/x/inbox' };
+    const it = new IK29({
+      config: { handle: 'me', kind: 'person' },
+      urls: { actor: 'https://me.example/ap/actor', notes: 'https://me.example/ap/notes/' },
+      store: { cacheActor: (id, d) => cached.push({ id, d }) },
+      deliverer: { signedFetch: async () => new Response(JSON.stringify(doc),
+        { headers: { 'content-type': 'application/activity+json' } }) },
+      remote: {}, local: {}, publisher: {}, log: () => {},
+    });
+    const got = await it.fetchAP(doc.id);
+    check(got?.id === doc.id && cached.length === 1,
+      'an actor typed as a list is cached like any other');
+  }
+
+  // A bare Link carries href and no url — Lemmy's link posts arrive that way.
+  const att = wire29.attachmentsOf({ attachment: [
+    { type: 'Link', href: 'https://news.example/story', mediaType: 'text/html' },
+    { type: 'Document', url: 'https://p.example/pic.png', mediaType: 'image/png' },
+    { type: 'Link' },
+  ] });
+  check(att.length === 2 && att[0].url === 'https://news.example/story'
+    && att[1].url === 'https://p.example/pic.png',
+    'a bare Link is kept by its href, and one with neither is still dropped');
+
+  // A headline lives in `name`; the body in `content`. Losing the headline
+  // makes a Lemmy link post almost nothing at all.
+  const lemmy = wire29.titledContent({ type: 'Page', name: 'Otters seen on the canal',
+    content: '<p>Three of them, by the lock.</p>' });
+  check(lemmy === '<p><strong>Otters seen on the canal</strong></p><p>Three of them, by the lock.</p>',
+    'a Lemmy post keeps its headline above its body');
+  check(wire29.titledContent({ type: 'Page', name: 'Otters & <b>lock</b>', content: '' })
+    === '<p><strong>Otters &amp; &lt;b&gt;lock&lt;/b&gt;</strong></p>',
+    'and a headline is escaped, not rendered');
+  check(wire29.titledContent({ type: 'Note', name: 'ignored', content: '<p>hi</p>' }) === '<p>hi</p>',
+    'a Note is untouched — Mastodon has no headline to lose');
+  check(wire29.titledContent({ type: ['Page'], name: 'Otters',
+    content: '<p>Otters again, by the lock.</p>' }) === '<p>Otters again, by the lock.</p>',
+    'and a body that already opens with the headline does not get it twice');
+  check(wire29.titledContent({ type: 'Article', content: '<p>no title here</p>' }) === '<p>no title here</p>',
+    'an article with no headline reads exactly as before');
+
+  // What the actor says about follows has to match what the agent does with
+  // them: a person queues them by default, so the document must say so.
+  check(wire29.followsNeedApproval({ kind: 'person' }) === true
+    && wire29.followsNeedApproval({ kind: 'person', autoAcceptFollows: true }) === false
+    && wire29.followsNeedApproval({ kind: 'group' }) === false
+    && wire29.followsNeedApproval({ kind: 'group', approveJoins: true }) === true,
+    'the follow gate is read from the same config the drain reads');
+  const u29 = wire29.apUrls('https://pod.example/');
+  const person29 = wire29.actorDoc({ urls: u29, handle: 'me', publicKeyPem: 'K',
+    approveJoins: wire29.followsNeedApproval({ kind: 'person' }) });
+  check(person29.manuallyApprovesFollowers === true,
+    'so a default person advertises a locked account rather than silently queueing');
+
+  // draft-cavage signs the path AND the query. Fedify 2.3.4 signs the path
+  // alone, which no correct verifier can reconstruct.
+  {
+    const { signRequest: sign29 } = await import(req.resolve('@fedify/fedify/sig'));
+    const { withQueryInTarget } = await import(path.join(root, 'lib/deliver.mjs'));
+    const nodeCrypto29 = await import('node:crypto');
+    const pair = nodeCrypto29.generateKeyPairSync('rsa', { modulusLength: 2048 });
+    const jwk = pair.privateKey.export({ format: 'jwk' });
+    const priv = await nodeCrypto29.webcrypto.subtle.importKey('jwk',
+      { ...jwk, alg: 'RS256', key_ops: ['sign'] },
+      { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, true, ['sign']);
+    const pub = nodeCrypto29.createPublicKey(pair.privateKey);
+    const KID29 = new URL('https://me.example/ap/actor#main-key');
+
+    const verifies = async (url, method, body) => {
+      const signed = await withQueryInTarget(await sign29(
+        new Request(url, { method, headers: { accept: 'application/activity+json' },
+          ...(body ? { body } : {}) }), priv, KID29), priv);
+      const h = signed.headers.get('signature');
+      const f = Object.fromEntries([...h.matchAll(/([A-Za-z]+)="([^"]*)"/g)].map(m => [m[1], m[2]]));
+      const uu = new URL(url);
+      const msg = (t) => f.headers.split(/\s+/).map(n => n === '(request-target)'
+        ? `(request-target): ${t}`
+        : `${n}: ` + (n === 'host' ? (signed.headers.get('host') || uu.host) : signed.headers.get(n))).join('\n');
+      const ok = (t) => nodeCrypto29.verify('sha256', Buffer.from(msg(t)), pub,
+        Buffer.from(f.signature, 'base64'));
+      return {
+        full: ok(`${method.toLowerCase()} ${uu.pathname}${uu.search}`),
+        pathOnly: ok(`${method.toLowerCase()} ${uu.pathname}`),
+        body: body ? await signed.text() : null,
+      };
+    };
+
+    const paged = await verifies('https://peer.example/users/bob/followers?page=2', 'GET');
+    check(paged.full && !paged.pathOnly,
+      'a signed GET of a paged collection covers the query a verifier will read');
+    const wp = await verifies('https://peer.example/?rest_route=/activitypub/1.0/actors/1/inbox',
+      'POST', '{"type":"Follow"}');
+    check(wp.full && wp.body === '{"type":"Follow"}',
+      'so does a delivery to an inbox that lives in a query string, body intact');
+    const plain = await verifies('https://peer.example/users/bob/inbox', 'POST', '{"type":"Like"}');
+    check(plain.full && plain.body === '{"type":"Like"}',
+      'and a URL with no query is signed exactly as before');
+  }
+}
+
+// --- 30. FEP-8b32: a proof an independent implementation can check ---
+{
+  const { verifyProof } = await import(req.resolve('@fedify/fedify/sig'));
+  const { DataIntegrityProof, Person: P30 } = await import(req.resolve('@fedify/fedify/vocab'));
+  const proof30 = await import(path.join(root, 'lib/proof.mjs'));
+  const wire30 = await import(path.join(root, 'lib/wire.mjs'));
+  const { Deliverer: D30 } = await import(path.join(root, 'lib/deliver.mjs'));
+  const nc30 = await import('node:crypto');
+
+  const ed = nc30.generateKeyPairSync('ed25519');
+  const edPriv = await proof30.edPrivateKey(ed.privateKey.export({ type: 'pkcs8', format: 'pem' }));
+  const multibase = proof30.multibaseEd25519(ed.publicKey.export({ type: 'spki', format: 'pem' }));
+  check(multibase.startsWith('z6Mk'),
+    'an Ed25519 public key encodes as a multibase Multikey');
+
+  const u30 = wire30.apUrls('https://pod.example/');
+  const actor30 = wire30.actorDoc({ urls: u30, handle: 'me', name: 'Me',
+    publicKeyPem: keys.rsaPublicPem, assertionKey: multibase,
+    webId: 'https://pod.example/profile/card#me' });
+  check(actor30.assertionMethod?.[0]?.type === 'Multikey'
+    && actor30.assertionMethod[0].id === wire30.assertionKeyId(u30)
+    && actor30.assertionMethod[0].controller === u30.actor
+    && actor30.publicKey?.id === u30.actor + '#main-key',
+    'the actor publishes the Multikey beside its RSA key, not instead of it');
+  check(!wire30.actorDoc({ urls: u30, handle: 'me', publicKeyPem: keys.rsaPublicPem }).assertionMethod,
+    'and an actor with no Ed25519 key publishes no assertionMethod at all');
+
+  // Parsed by a library that is not ours: the contexts have to be right, and
+  // the RSA half has to survive them.
+  const parsed30 = await P30.fromJsonLd(actor30);
+  let ams = 0, pks = 0;
+  for await (const k of parsed30.getAssertionMethods({ suppressError: true })) ams++;
+  for await (const k of parsed30.getPublicKeys({ suppressError: true })) pks++;
+  check(ams === 1 && pks === 1 && parsed30.preferredUsername?.toString() === 'me',
+    'and another implementation reads both keys off the document');
+
+  const mkAct = () => ({
+    '@context': wire30.AS_CTX, id: u30.actor + '/act/1', type: 'Create', actor: u30.actor,
+    to: ['https://www.w3.org/ns/activitystreams#Public'],
+    object: { id: u30.notes + '1', type: 'Note', content: '<p>hello</p>', attributedTo: u30.actor },
+  });
+  const signed30 = await proof30.attachProof(mkAct(),
+    { privateKey: edPriv, verificationMethod: wire30.assertionKeyId(u30) });
+  check(signed30.proof?.cryptosuite === 'eddsa-jcs-2022'
+    && signed30.proof.proofPurpose === 'assertionMethod'
+    && signed30.proof.proofValue.startsWith('z')
+    && [].concat(signed30['@context']).includes(proof30.DI_CTX),
+    'a signed activity carries the proof and declares the terms it is written in');
+
+  const loader30 = async (url) => (url.startsWith(u30.actor)
+    ? { document: actor30, documentUrl: u30.actor, contextUrl: null }
+    : (() => { throw new Error('no document at ' + url); })());
+  const proofObj = await DataIntegrityProof.fromJsonLd({ '@context': proof30.DI_CTX, ...signed30.proof });
+  const verified = await verifyProof(signed30, proofObj, { documentLoader: loader30 });
+  check(verified != null && verified.id?.href === wire30.assertionKeyId(u30),
+    'and an independent implementation verifies it against the published key');
+  const tampered30 = { ...signed30, object: { ...signed30.object, content: '<p>goodbye</p>' } };
+  check(await verifyProof(tampered30, proofObj, { documentLoader: loader30 }) == null,
+    'while an edited copy of the same activity does not verify');
+
+  // Only our own. Signing a stranger's activity as an assertion of ours would
+  // be claiming we wrote it — and §7.1.2 forwarding hands us exactly that.
+  {
+    const sent = [];
+    const d30 = new D30({
+      store: { getQueue: () => [], setQueue: () => {}, addDeadLetter: () => {} },
+      keyId: u30.actor + '#main-key', rsaPrivate: keys.rsaPrivate, actorId: u30.actor,
+      edPrivate: edPriv, proofKeyId: wire30.assertionKeyId(u30), log: () => {}, passive: true,
+    });
+    d30.deliverNow = async (inbox, activity) => { sent.push(activity); };
+    await d30.deliverToAll(['https://a.example/inbox', 'https://b.example/inbox'], mkAct());
+    check(sent.length === 2 && sent[0].proof && sent[0].proof.proofValue === sent[1].proof.proofValue,
+      'every recipient of one activity gets one and the same proof');
+    const theirs = { ...mkAct(), id: 'https://c.example/act/9', actor: 'https://c.example/u/bob' };
+    await d30.deliverToAll(['https://a.example/inbox'], theirs);
+    check(!sent[2].proof, 'an activity we forward for someone else is never signed as ours');
+    const already = { ...theirs, proof: { type: 'DataIntegrityProof', proofValue: 'ztheirs' } };
+    await d30.deliverToAll(['https://a.example/inbox'], already);
+    check(sent[3].proof?.proofValue === 'ztheirs', 'and their own proof reaches our followers intact');
+    d30.stop?.();
+  }
 }
 
 // The CSS-gateway component (packages/css-gateway) is a TypeScript package with
