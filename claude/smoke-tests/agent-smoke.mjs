@@ -5966,6 +5966,21 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   check(!/SECRET-NOT-FOR-THE-PAGE/.test(JSON.stringify(got.json)),
     'and never the pod credential');
 
+  const pkgVersion = JSON.parse(
+    fs.readFileSync(new URL('../../package.json', import.meta.url), 'utf8')).version;
+  check(got.json.version === pkgVersion && got.json.versionOnDisk === pkgVersion,
+    `and the version it is running beside the one on disk, so the record can say when a restart is owed (${got.json.version} / ${got.json.versionOnDisk})`);
+
+  // A checkout that moved under a live agent: the process keeps reporting what
+  // it is running, and the newer number arrives beside it rather than instead.
+  const AHEADPORT = CPORT + 2;
+  startAdmin({ port: AHEADPORT, gateToken: '', agent: cagent, handle: 'solo', log: () => {},
+    tls: smokeTls, versionOnDisk: () => '9.9.9' });
+  await new Promise(r => setTimeout(r, 150));
+  const ahead = await fetchLocal(`https://localhost:${AHEADPORT}/config`).then(r => r.json());
+  check(ahead.version === pkgVersion && ahead.versionOnDisk === '9.9.9',
+    `a checkout ahead of the running agent never renames what is running (${ahead.version} / ${ahead.versionOnDisk})`);
+
   const partial = await cpost({ summary: 'finches, actually' });
   check(partial.status === 200 && cstore.getConfig().uiPassword?.saltHex === 'aa'
     && cstore.getConfig().handle === 'solo' && cstore.getConfig().summary === 'finches, actually',

@@ -141,7 +141,7 @@ function render() {
     ['local host', (origins.named || origins.loopback || `http://localhost:${config.port}`)
       .replace(/\/$/, '')],
   ];
-  if (config.update || config.pendingUpgrade?.length) rows.push(['software', 'ctl']);
+  if (config.version || config.update || config.pendingUpgrade?.length) rows.push(['software', 'ctl']);
   if (config.quiescedAt) rows.push(['parked since', config.quiescedAt]);
   if (config.movedTo) rows.push(['moved to', config.movedTo]);
   // A person gates followers here; a group's gate is the joins control on its
@@ -190,8 +190,13 @@ function render() {
       dd.append(UPDATE_CTL);
       UPDATE_CTL.hidden = false;
       const u = config.update;
+      // The version this agent is running, never the one sitting in the
+      // checkout — saying otherwise would name a version nobody is serving.
+      const running = config.version || u?.current || null;
       const words = [];
-      if (u) words.push(u.available ? `FediPod ${u.current} — ${u.latest} available` : `FediPod ${u.current}`);
+      if (running) words.push(u?.available ? `FediPod ${running} — ${u.latest} available` : `FediPod ${running}`);
+      if (config.versionOnDisk && running && config.versionOnDisk !== running)
+        words.push(`${config.versionOnDisk} is on disk — restart to run it`);
       if (config.pendingUpgrade?.length) words.push('older data layout — run `fedipod upgrade` in a terminal');
       UPDATE_WORD.textContent = words.join('; ');
       UPDATE_GO.hidden = !u?.available;
