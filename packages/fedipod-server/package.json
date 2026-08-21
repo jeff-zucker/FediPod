@@ -1,6 +1,6 @@
 {
   "name": "fedipod-server",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "The FediPod Server: a full ActivityPub server as a Community Solid Server component.",
   "license": "MIT",
   "main": "dist/index.js",
