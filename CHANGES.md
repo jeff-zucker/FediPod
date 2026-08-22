@@ -1,5 +1,13 @@
 # Changes
 
+## 2026-08-21
+- The **software row** on the record page names the version your agent is
+  actually running, and says so when the copy on your machine is further
+  ahead: "0.9.0; 0.9.1 is on disk — restart to run it". An agent serves the
+  code it started with until it is restarted, and the row now tells you when
+  that has drifted. It also appears for an agent that cannot reach the update
+  check, which previously showed no version at all.
+
 ## 2026-08-20
 - Activities you send carry a **signed proof** (FEP-8b32), so a server that
   meets one of your posts second-hand — carried by a group, or forwarded by a

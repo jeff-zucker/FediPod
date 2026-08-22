@@ -3,6 +3,8 @@
 Open `https://localhost:8030/` while any agent is running — it forwards you to the agent — then choose `manage account` and select the actor you want from the local actors dropdown.
 Picking an actor marked "(stopped)" starts its agent, then opens its page.
 
+The software row names the version the agent is running. When the copy on the machine is further ahead — after an update, or after pulling a checkout — it says so and asks for a restart, because an agent goes on serving the code it started with until it is restarted.
+
 `Update`, shown on the software row when a newer FediPod exists, pulls the latest version and restarts every agent on the machine — agents installed as services; any started by hand need their own restart. The same row flags an older data layout after an update; the `fedipod upgrade` terminal command lists those moves and the commands that make them.
 
 * **Parking** (the status control) stops the mail and unfollows people you follow, but keeps your handle
