@@ -20,9 +20,9 @@
 </head>
 <body>
 <h1>FediPod - join the fediverse from a Solid pod.</h1>
-<p class="lede">Welcome to <b>FediPod</b>! Here, you can get a free pod and fediverse account or link to your existing pod/account.</p>
+<p class="lede">Welcome to <b>FediPod</b! Here, you can get a free pod and fediverse account or link to your existing pod/account.</p>
 
-Current FediPod is 0.10.0. To install or update: <code>curl -fsSL https://fedipod.net/install | sh</code>
+Current FediPod is : 0.9.1, to install or update : -fsSL https://fedipod.net/install | sh
 
 <p>
 FediPod is experimental and free to use.  See the <a href="https://github.com/jeff-zucker/FediPod">FediPod repository</a> for details.
@@ -32,6 +32,12 @@ FediPod is experimental and free to use.  See the <a href="https://github.com/je
  — update an existing install with <code id="current-version-cmd"></code></p>
 
 <script>
+  // Another host deploying this front serves the same page: the command names
+  // that host, not fedipod.net.
+  if (location.origin !== 'https://fedipod.net' && location.protocol.startsWith('http')) {
+    document.getElementById('install-cmd').textContent =
+      `curl -fsSL ${location.origin}/install | sh\n\nfedipod start`;
+  }
   fetch('/api/handle?handle=__probe__').then(r => r.json()).then(d => {
     if (d.version) {
       document.getElementById('current-version-num').textContent = d.version;
