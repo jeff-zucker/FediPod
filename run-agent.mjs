@@ -47,7 +47,7 @@ import { Lease } from './lib/lease.mjs';
 import { startAdmin } from './lib/admin.mjs';
 import { exposureProblem, hostLabel } from './lib/guard.mjs';
 import { pendingSteps } from './lib/migrate.mjs';
-import { apUrls, assertionKeyId } from './lib/wire.mjs';
+import { apUrls, assertionKeyId , publicHandle } from './lib/wire.mjs';
 import { followActor, unfollowActor, resolveHandle } from './lib/social.mjs';
 
 export class Agent {
@@ -541,11 +541,7 @@ export class Agent {
     this.importer?.resume();
     // The identity the fediverse actually sees: a fronted actor's name and
     // host are the front's, not the pod's.
-    {
-      const cfgNow = this.store.getConfig();
-      const front = cfgNow?.gateway?.frontActor?.match(/\/u\/([^/]+)\/ap\/actor\/?$/)?.[1];
-      this.log(`federating as @${front || cfgNow?.handle}@${new URL(this.urls.actor).host}`);
-    }
+    this.log(`federating as @${publicHandle(this.store.getConfig())}@${new URL(this.urls.actor).host}`);
     if (this.renamed) {
       // The display name lives in the actor document, so a rename only
       // reaches other servers once that is republished.
