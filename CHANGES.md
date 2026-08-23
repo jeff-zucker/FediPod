@@ -11,6 +11,13 @@
   checked as you type — and taking or leaving a gateway handle restarts the
   agent by itself, signing key carried along. Hint text across the record is
   full-size and higher-contrast.
+- **A gateway-based handle is the identity, everywhere.** The published actor
+  document, the client's own account, the record's Fediverse identity row,
+  the actors dropdown and the journal all name `@you@the-gateway` — never the
+  pod handle. That also makes federated profile Updates stick: receivers
+  re-verify a changed username by WebFinger and silently drop the update when
+  it does not resolve, which is exactly what a pod-handle username did. A
+  forced republish now always federates its Update.
 - **fedipod.net's page slims to words and one command.** The install command
   is the whole signup: setup creates your pod locally (or uses one you have),
   and attach, detach and transfers all live in the agent's admin page.
