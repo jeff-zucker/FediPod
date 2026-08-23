@@ -72,12 +72,24 @@ follows the group's own moderation settings; see [Groups](groups.md).
 **new followers** control switches between waiting for your approval and
 accepting automatically.
 
+## The gateway
+
+The **Gateway** panel attaches this account to a mail-filtering gateway (a
+fedipod.net-style front), shows what its door has verified, and detaches it.
+Give the gateway's address and the name you want there — the panel checks the
+name is free as you type — and choose a pod-based name (`@you@your.pod`) or a
+gateway-based name (`@you@the-gateway`); the gateway account is created
+automatically either way. Attaching proves the pod with the agent's own
+credential, so no password is typed anywhere. Detaching republishes your
+actor with your pod's own inbox.
+
 ## Moving here from another server
 
 Open **Transfer an account here** on the action rail and add your old account
 as an alias, set
 **new followers** to *accepted automatically*, then trigger the move on the
-old server; your followers arrive by themselves. Removing an alias asks
+old server (on Mastodon: Preferences → Account → *Move to a different
+account*); your followers arrive by themselves. Removing an alias asks
 twice — servers still processing the move check it while they retry. The CSV
 files from the old server's export are imported with the CLI; see
 [CLI admin](cli.md).

@@ -16,22 +16,25 @@ your pod inbox, which holds them whether your agent is running or not.
 
 ## Attaching your pod to one
 
-There is a gateway at [fedipod.net](https://fedipod.net/). Attaching takes
-three steps:
+There is a gateway at [fedipod.net](https://fedipod.net/). Attaching happens
+from your own agent, which proves the pod with its own credential — no
+password is typed anywhere:
 
-1. Open its signup page and sign in with your pod, which proves the pod is
-   yours.
-2. Run the one command it gives you. It looks like this, with the door's
-   address and your own secret filled in:
+1. Open your agent's admin page and, in the **Gateway** panel, give the
+   gateway's address and the name you want there. The panel checks the name
+   is free as you type.
+2. Choose a pod-based name (`@you@your.pod`) or a gateway-based name
+   (`@you@the-gateway`). The gateway account is created automatically either
+   way. A pod-based attach applies immediately; a gateway-based name is
+   published at the next restart.
 
-   ```
-   fedipod gateway <door-inbox-url> --secret <hmac> --inbox-only
-   ```
-3. Restart your agent, which republishes your actor with the new inbox.
+The same attach from the command line, against the running agent:
 
-That is the attach-an-existing-account path. A brand-new signup is handed a
-different one command — the installer, preloaded with the same details — and
-attaching happens during setup.
+```
+fedipod gateway --attach https://fedipod.net --name yourname
+```
+
+`--name` defaults to your handle; add `--fronted` for a gateway-based name.
 
 To undo it:
 
@@ -87,12 +90,11 @@ and your agent, and your agent believes a receipt only when the stamp checks
 out. That is what stops somebody dropping a forged "verified" receipt beside a
 forged delivery.
 
-You never fetch this secret from anywhere. Your agent mints it when you
-configure the gateway and shows it to you once; you carry it to the gateway
-yourself. Attaching through a signup page does this for you — the command it
-hands you already carries the secret.
-On the signup path the direction is reversed: the gateway mints the secret and
-hands it to you inside the command, and your agent records it.
+You never fetch this secret from anywhere. When you run your own gateway,
+your agent mints it and shows it to you once; you carry it to the gateway
+yourself. When you attach to a multi-user gateway, the direction is reversed:
+the gateway mints the secret and answers the attach with it, and your agent
+records it.
 
 ## What the gateway can see
 
@@ -124,15 +126,15 @@ and their own signing key; the front answers WebFinger for all of them, serves
 each public face by rewriting that user's pod ids onto the shared domain, and
 routes every verified delivery into the right pod.
 
-Taking a fronted identity is the same command pointed at the front actor,
-without `--inbox-only`:
+A fronted identity is the gateway-based name choice in the admin page's
+Gateway panel, or:
 
 ```
-fedipod gateway <front-origin>/u/<name>/ap/actor --secret <hmac>
+fedipod gateway --attach <front-origin> --name <name> --fronted
 ```
 
 Choose at attach time: changing an existing identity's front later renames
-every published id, and the command refuses it.
+every published id, and the attach refuses it.
 
 **A front is only a doorway.** It never hosts pods and never dictates where
 they live. A host who also wants to offer pods to people who have none runs a

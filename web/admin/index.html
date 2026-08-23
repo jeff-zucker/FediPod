@@ -314,9 +314,36 @@ pre { overflow-x: auto; background: #0001; padding: .6rem; border-radius: .3rem;
   </span>
 </section>
 
-<!-- The inbox-gateway / multi-user-front controls are deliberately not shown
-     in the UI yet. The backend routes (GET/POST /gateway) exist and work; the
-     operator surface is parked until the feature is ready to expose. -->
+<!-- The inbox gateway: a mail filter for an account that stays yours. -->
+<section id="pane-gateway" hidden>
+  <h2><span class="hlabel">Gateway</span></h2>
+  <p id="gateway-summary"></p>
+  <div id="gateway-attach-form" hidden>
+    <p class="hint">A gateway filters your fediverse mail before it reaches your pod: your
+      actor advertises the gateway's door as its inbox, each delivery is verified there,
+      spam is dropped, and the rest lands in your pod as before. Attaching proves the pod
+      with this agent's own credential — no password leaves this machine.</p>
+    <p>
+      <label for="gw-front">Gateway</label>
+      <input type="url" id="gw-front" placeholder="https://fedipod.net" autocomplete="off">
+      <label for="gw-name">Your name there</label>
+      <input type="text" id="gw-name" autocomplete="off" autocapitalize="off" spellcheck="false">
+    </p>
+    <p id="gw-name-msg" class="hint"></p>
+    <p>
+      <select id="gw-shape" aria-label="Name shape" title="   Which address the fediverse sees — the pod-based name keeps everything on your pod; a gateway-based name survives changing pods">
+        <option value="pod">keep my pod-based name</option>
+        <option value="front">use a gateway-based name</option>
+      </select>
+      <button id="gw-attach" class="primary" title="   Create the gateway account and point your mail through its door">Attach</button>
+    </p>
+  </div>
+  <div id="gateway-attached" hidden>
+    <p>
+      <button id="gw-detach" class="inline danger" title="   Republish the actor with your pod's own inbox and forget the gateway">Detach</button>
+    </p>
+  </div>
+</section>
 
 <section id="pane-group" hidden>
   <!-- Both queues are consequences of a moderation setting: with the setting off

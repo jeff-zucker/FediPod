@@ -1492,12 +1492,44 @@ if (cmd === 'up') {
   console.log('UI password set — /oauth/authorize now shows a login form (restart a running agent to pick it up)');
 } else if (cmd === 'gateway' || cmd === 'front') {
   // Attach this identity to a gateway ('front' kept as an alias). Shapes:
-  //   fedipod gateway <.../ap/inbox/> --secret S --inbox-only   the usual one:
+  //   fedipod gateway --attach <origin> [--name N] [--fronted]  ask the gateway
+  //     itself: the agent proves the pod with its own credential and stores
+  //     the door + secret the gateway answers with.
+  //   fedipod gateway <.../ap/inbox/> --secret S --inbox-only   paste-in form:
   //     identity stays on the pod; only the advertised inbox moves to the
   //     gateway's door. Leaving is one republish with the pod inbox.
   //   fedipod gateway <.../ap/actor> --secret S                 fronted identity
   //   fedipod gateway --detach                                  back to the pod inbox
   requireIdentity();
+  if (has('attach')) {
+    const front = flag('attach');
+    if (!/^https?:\/\/\S+$/.test(String(front || ''))) {
+      console.error('usage: fedipod gateway --attach <https://gateway-origin> [--name yourname] [--fronted]');
+      process.exit(2);
+    }
+    try {
+      const res = await localFetch(HOME, PORT, `/gateway`, {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ action: 'attach', front,
+          ...(flag('name') ? { handle: flag('name') } : {}),
+          ...(has('fronted') ? { fronted: true } : {}) }),
+      });
+      const body = await res.json();
+      if (res.status >= 400) { console.error(body.error || `HTTP ${res.status}`); process.exit(1); }
+      if (body.frontActor) {
+        console.log(`attached — this identity now publishes as ${body.address || body.frontActor}`);
+        console.log('Restart the agent (or `fedipod up`) to republish under the front.');
+      } else {
+        console.log(`attached — your mail now arrives through ${body.url}, filtered; your name has not moved.`);
+        console.log('Starting in shadow: the door filters, and the agent measures how much');
+        console.log('verifies before it believes any receipt. Move to trust when you are ready.');
+      }
+    } catch (e) {
+      console.error(`agent not reachable on :${PORT} (${e.message}) — start it, then attach`);
+      process.exit(1);
+    }
+    process.exit(0);
+  }
   if (has('detach')) {
     try {
       const res = await localFetch(HOME, PORT, `/gateway`, {

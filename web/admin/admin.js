@@ -237,6 +237,7 @@ function render() {
   renderAliases();
   renderOthers();
   renderInbox();
+  renderGateway();
   if (config.kind === 'group') {
     // Its lists have no bound, so this page scrolls — see body.group in the CSS.
     document.body.classList.add('group');
@@ -936,9 +937,62 @@ async function renderInbox() {
   panel.hidden = false;
 }
 
-// The inbox-gateway / multi-user-front operator panel is parked: not shown in
-// the UI yet. The backend routes (GET/POST /gateway) still exist and work, so
-// this can be re-added when the feature is ready to expose.
+// The gateway panel: attach through a multi-user front with this agent's own
+// credential, see what the door has verified, detach back to the pod inbox.
+let gwTimer = null;
+async function renderGateway() {
+  const { status, json: g } = await api('/gateway');
+  if (status !== 200 || !g) return;              // no answer, no surface
+  $('pane-gateway').hidden = false;
+  if (g.configured) {
+    const host = (() => { try { return new URL(g.url).host; } catch { return g.url; } })();
+    const st = g.stats || {};
+    $('gateway-summary').textContent = `Attached to ${host} (mode ${g.mode})`
+      + (g.frontActor ? `, publishing as ${g.frontActor}` : '')
+      + ` — ${st.verified || 0} deliveries verified, ${st.unverified || 0} unverified.`;
+    $('gateway-attach-form').hidden = true;
+    $('gateway-attached').hidden = false;
+  } else {
+    $('gateway-summary').textContent = 'Mail arrives directly at your pod\'s own inbox.';
+    $('gateway-attach-form').hidden = false;
+    $('gateway-attached').hidden = true;
+    if (!$('gw-name').value && config?.handle) $('gw-name').value = config.handle;
+  }
+}
+// Live availability, asked through the agent (the front answers it without CORS).
+function gwCheck() {
+  clearTimeout(gwTimer);
+  const front = $('gw-front').value.trim().replace(/\/+$/, '');
+  const name = $('gw-name').value.trim().toLowerCase();
+  $('gw-name-msg').textContent = ''; $('gw-name-msg').className = 'hint';
+  if (!front || !name) return;
+  gwTimer = setTimeout(async () => {
+    const { status, json } = await postJson('/gateway', { action: 'check', front, handle: name });
+    if (status !== 200 || !json) return;
+    $('gw-name-msg').textContent = json.available
+      ? `${name} is free at ${front.replace(/^https?:\/\//, '')}`
+      : (json.reason || 'that name is taken');
+    $('gw-name-msg').className = json.available ? 'hint' : 'warn';
+  }, 300);
+}
+$('gw-front').addEventListener('input', gwCheck);
+$('gw-name').addEventListener('input', gwCheck);
+$('gw-attach').onclick = async () => {
+  const front = $('gw-front').value.trim().replace(/\/+$/, '');
+  const fronted = $('gw-shape').value === 'front';
+  $('gw-attach').disabled = true;
+  const r = await write('/gateway',
+    { action: 'attach', front, handle: $('gw-name').value.trim().toLowerCase(), fronted },
+    fronted ? 'attached — restart the agent to publish under the gateway name'
+      : 'attached — your mail now arrives through the gateway, filtered');
+  $('gw-attach').disabled = false;
+  if (r) renderGateway();
+};
+$('gw-detach').onclick = async () => {
+  const r = await write('/gateway', { action: 'forget' },
+    'detached — the actor was republished advertising your pod\'s own inbox');
+  if (r) renderGateway();
+};
 
 $('inbox-keep').addEventListener('click', () => {
   dismissed = true;

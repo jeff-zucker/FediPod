@@ -1,5 +1,20 @@
 # Changes
 
+## 2026-08-23
+- **Attaching to a gateway happens from your own agent.** The admin page's
+  new **Gateway** panel (and `fedipod gateway --attach`) creates the gateway
+  account itself: the agent proves the pod with its own credential, the
+  gateway answers with the door and the receipt secret, and a pod-based
+  attach applies without a restart. No browser sign-in, and no password ever
+  near the gateway. The name choice — pod-based `@you@your.pod` or
+  gateway-based `@you@the-gateway` — is made in the panel, with availability
+  checked as you type.
+- **fedipod.net's page slims to words and one command.** The install command
+  is the whole signup: setup creates your pod locally (or uses one you have),
+  and attach, detach and transfers all live in the agent's admin page.
+- The signup page's sign-in reports its failures instead of showing a silent,
+  reset form, and its `/api/attach` call works again (v0.9.1).
+
 ## 2026-08-21
 - The **software row** on the record page names the version your agent is
   actually running, and says so when the copy on your machine is further

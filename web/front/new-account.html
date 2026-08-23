@@ -9,34 +9,20 @@
   @media (prefers-color-scheme: dark) { :root { --dim:#c2c0b4; } }
   body { font: 19px/1.6 system-ui, sans-serif; max-width: 44rem; margin: 2rem auto; padding: 0 1.1rem; }
   h1 { font-size: 1.7rem; margin: 0 0 .2rem; }
-  h2 { font-size: 1.2rem; margin: 0 0 .4rem; }
+  h2 { font-size: 1.2rem; margin: 1.4rem 0 .4rem; }
   p.lede { color: var(--dim); margin-top: 0; }
-  fieldset { border: 1px solid var(--line); border-radius: 12px; padding: 1rem 1.1rem; margin: 1rem 0; }
-  legend { font-weight: 600; padding: 0 .4rem; }
-  .choices { display: flex; flex-direction: column; gap: .5rem; }
-  .choices button { padding: .7rem .8rem; border: 1px solid var(--line); border-radius: 10px;
-    background: transparent; font: inherit; cursor: pointer; text-align: left; }
-  .choices button[aria-pressed="true"] { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
-  .choices button b { display: block; }
-  .choices button span { color: var(--dim); font-size: .95rem; }
-  label { display: block; font-weight: 600; margin: .8rem 0 .2rem; }
-  input[type=text], input[type=url] { width: 100%; padding: .5rem .6rem; font: inherit;
-    border: 1px solid var(--line); border-radius: 8px; box-sizing: border-box; }
-  .msg { min-height: 1.3em; font-size: .95rem; margin-top: .3rem; }
-  .msg.ok { color: var(--accent); } .msg.no { color: #a4433a; }
   .hint { color: var(--dim); font-size: .95rem; }
-  .primary { background: var(--accent); color: #fff; border: none; border-radius: 9px;
-    padding: .6rem 1.1rem; font: inherit; cursor: pointer; }
-  .primary[disabled] { opacity: .5; cursor: not-allowed; }
-  [hidden] { display: none !important; }
   code { background: rgba(120,120,120,.12); padding: .05em .35em; border-radius: 4px; }
   pre { background: rgba(120,120,120,.12); padding: .7rem .9rem; border-radius: 8px; overflow-x: auto; }
   ol.steps li { margin: .5rem 0; }
+  [hidden] { display: none !important; }
 </style>
 </head>
 <body>
 <h1>FediPod - join the fediverse from a Solid pod.</h1>
-<p class="lede">Welcome to the <strong>FediPod.net gateway</strong>.  Here, you can get a free pod and fediverse account or link to your existing pod/account. This gateway is a mail filter for accounts that stay yours. Your name, key and data live on your own pod; this box only receives your fediverse mail, verifies each delivery, drops spam and passes the rest to your pod.</p>
+<p class="lede">Welcome to the <strong>FediPod.net gateway</strong>. This gateway is a mail filter for
+accounts that stay yours. Your name, key and data live on your own pod; this box only receives your
+fediverse mail, verifies each delivery, drops spam and passes the rest to your pod.</p>
 
 <p>
 FediPod is experimental and free to use.  See the <a href="https://github.com/jeff-zucker/FediPod">FediPod repository</a> for details.
@@ -45,399 +31,40 @@ FediPod is experimental and free to use.  See the <a href="https://github.com/je
 <p class="hint" id="current-version" hidden>Current FediPod: <strong id="current-version-num"></strong>
  — update an existing install with <code id="current-version-cmd"></code></p>
 
-<fieldset>
-  <legend>What do you want to do?</legend>
-  <div class="choices" role="group" aria-label="Path">
-    <button type="button" id="pick-solo" aria-pressed="false"><b>Create a new solo account</b><span>a fediverse account for one person, on a pod you own</span></button>
-    <button type="button" id="pick-group" aria-pressed="false"><b>Create a new group account</b><span>an account people join &mdash; it carries members' posts to the whole group</span></button>
-    <button type="button" id="pick-manage" aria-pressed="false"><b>Manage an existing account</b><span>attach it to this gateway, detach it, or transfer in</span></button>
-  </div>
-</fieldset>
+<h2>Create a new FediPod agent</h2>
+<p>Everything happens on your own machine — this gateway never sees a password. One command
+installs the agent (and updates an existing install):</p>
+<pre id="install-cmd">curl -fsSL https://fedipod.net/install | sh
 
-<!-- create: the signup itself — prove the pod, take the name, then install -->
-<form id="create-form" hidden>
-  <h2 id="create-title">Create a new solo account</h2>
-  <p class="hint" id="create-group-hint" hidden>A group is an account people join: members post to it, and it
-    carries each member's post to everyone in the group. Mastodon users can join with no pod of their own.
-    A group needs a pod of its own.</p>
-  <p class="hint">Your account lives on a pod you own; this gateway filters its mail.</p>
+fedipod start</pre>
+<ol class="steps">
+  <li>Setup opens in your browser. It creates a Solid account and pod for you at the provider
+    you choose, or uses a pod you already have — for one person or for a group.</li>
+  <li>When setup finishes, your account is live on your own pod.</li>
+  <li>To filter your mail through this gateway, open your agent's admin page and use the
+    <strong>Gateway</strong> panel.</li>
+</ol>
 
-  <label for="create-pod">Your pod address</label>
-  <input type="url" id="create-pod" autocomplete="off" placeholder="https://you.solidcommunity.net/">
-  <p class="hint">No pod yet? Any Solid pod host that offers <em>https subdomains</em> works, or a Community
-    Solid Server you run yourself. Get the pod, then come back here.</p>
-  <p id="create-pods" class="hint" hidden>This host also offers pods — you can take one instead of bringing
-    your own; it stays exportable, so you can leave with everything.</p>
+<h2>Attach, detach, transfer</h2>
+<p>Attaching to this gateway, detaching from it, and transferring an account in or out all
+happen from your agent's admin page (or its <code>fedipod</code> command). Attaching offers the
+choice of a pod-based name (<code>@you@your.pod</code>) or a gateway-based name
+(<code>@you@fedipod.net</code>) — the gateway account is created automatically either way.</p>
 
-  <label for="create-issuer">Where you log in (your identity provider)</label>
-  <input type="url" id="create-issuer" autocomplete="off" placeholder="https://solidcommunity.net">
-
-  <label for="create-handle">Your handle (the name in your address; permanent)</label>
-  <input type="text" id="create-handle" autocomplete="off" autocapitalize="off" spellcheck="false"
-    inputmode="latin" placeholder="you" aria-describedby="create-handle-msg">
-  <p class="msg" id="create-handle-msg" aria-live="polite"></p>
-
-  <label>Your fediverse address</label>
-  <div class="choices" role="group" aria-label="Address">
-    <button type="button" id="addr-pod" aria-pressed="false"><b id="addr-pod-name">@you@your.pod</b><span>your handle is tied to your pod &mdash; you can drop the gateway and keep everything</span></button>
-    <button type="button" id="addr-front" aria-pressed="false"><b id="addr-front-name">@you@this.host</b><span>your handle is tied to the gateway &mdash; you can move pods and keep your handle</span></button>
-  </div>
-
-  <p style="margin-top:1.1rem">
-    <button type="button" id="create-continue" class="primary" disabled>Sign in with your pod &amp; create</button>
-  </p>
-  <p class="hint">Signing in proves the pod is yours — no password ever reaches this gateway.</p>
-  <p class="hint" id="create-note" hidden></p>
-</form>
-
-<!-- what a finished signup hands over: the one install command -->
-<section id="create-done" hidden></section>
-
-<!-- manage: the existing-account actions, one panel each -->
-<section id="manage-form" hidden>
-  <div class="choices" role="group" aria-label="Manage">
-    <button type="button" id="pick-attach" aria-pressed="false"><b>Attach to this gateway</b><span>filter your mail through this door &mdash; your address stays yours</span></button>
-    <button type="button" id="pick-detach" aria-pressed="false"><b>Detach from this gateway</b><span>go back to unfiltered delivery</span></button>
-    <button type="button" id="pick-transfer" aria-pressed="false"><b>Transfer a fediverse account to FediPod</b><span>move here from Mastodon and friends</span></button>
-  </div>
-</section>
-
-<!-- attach: an existing FediPod points its inbox here; identity stays put -->
-<form id="attach-form" hidden>
-  <h2>Attach an existing FediPod account</h2>
-  <p class="hint">Your account stays <code>@you@your.pod</code> — other servers keep finding you at your own
-    address. Attaching only changes where your <em>mail</em> arrives: your actor advertises this gateway's door
-    as its inbox, and everything that passes verification lands in your pod as before.</p>
-
-  <label for="pod-url">Your pod address</label>
-  <input type="url" id="pod-url" autocomplete="off" placeholder="https://you.solidcommunity.net/">
-  <p class="hint">If your FediPod uses a custom root, give the full home URL (ending in <code>/</code>);
-    a bare pod address assumes the default <code>activitypods-js/</code>.</p>
-
-  <label for="issuer">Where you log in (your identity provider)</label>
-  <input type="url" id="issuer" autocomplete="off" placeholder="https://solidcommunity.net">
-
-  <label for="slug">Your door's name here</label>
-  <input type="text" id="slug" autocomplete="off" autocapitalize="off" spellcheck="false"
-    inputmode="latin" placeholder="you" aria-describedby="slug-msg">
-  <p class="msg" id="slug-msg" aria-live="polite"></p>
-  <p class="hint">Only the door is named here — it is a routing address for servers, not your handle.</p>
-
-  <p style="margin-top:1.1rem">
-    <button type="button" id="attach-continue" class="primary" disabled>Sign in with your pod &amp; attach</button>
-  </p>
-  <p class="hint">Signing in proves the pod is yours — no password ever reaches this gateway.</p>
-  <p class="hint" id="attach-note" hidden></p>
-</form>
-
-<!-- detach: done on the user's own agent; the gateway cannot reach in -->
-<section id="detach-form" hidden>
-  <h2>Detach an existing FediPod account</h2>
-  <p class="hint">Detaching is yours to do, not this gateway's — your agent republishes your actor with your
-    pod's own inbox, and deliveries go straight there again. On your machine:</p>
-  <pre>node bin/fedipod.mjs gateway --detach</pre>
-  <p class="hint">Your name and data never moved, so nothing else changes. The door you had here goes quiet
-    and its name can be reused.</p>
-</section>
-
-<!-- transfer: the standard fediverse move, aimed at a FediPod -->
-<section id="transfer-form" hidden>
-  <h2>Transfer a fediverse account to FediPod</h2>
-  <p class="hint">The fediverse's standard migration works toward a FediPod: your followers move over
-    automatically, and your old profile redirects. Posts stay on the old server — no fediverse migration
-    carries them.</p>
-  <ol class="steps">
-    <li><strong>Have a FediPod</strong> — create one first (the first option above).</li>
-    <li>On your agent's admin page, set <strong>new followers</strong> to <em>accepted automatically</em>,
-      so the wave of arriving followers doesn't queue.</li>
-    <li>Tell your FediPod about the old account:
-      <pre>node bin/fedipod.mjs alias --add @you@old.server</pre></li>
-    <li>On the old server: Preferences → Account → <em>Move to a different account</em>, naming your
-      FediPod address.</li>
-    <li>Bring the rest over from the old server's CSV export:
-      <pre>node bin/fedipod.mjs import following_accounts.csv blocked_accounts.csv muted_accounts.csv lists.csv</pre></li>
-  </ol>
-</section>
-
-<script src="/solid-client-authn.bundle.js"></script>
 <script>
-  const $ = (id) => document.getElementById(id);
-  let offersPods = false, slugOk = false;
-
+  // Another host deploying this front serves the same page: the command names
+  // that host, not fedipod.net.
+  if (location.origin !== 'https://fedipod.net' && location.protocol.startsWith('http')) {
+    document.getElementById('install-cmd').textContent =
+      `curl -fsSL ${location.origin}/install | sh\n\nfedipod start`;
+  }
   fetch('/api/handle?handle=__probe__').then(r => r.json()).then(d => {
-    offersPods = !!d.offersPods;
-    $('create-pods').hidden = !offersPods;
     if (d.version) {
-      $('current-version-num').textContent = d.version;
-      $('current-version-cmd').textContent = `curl -fsSL ${location.origin}/install | sh`;
-      $('current-version').hidden = false;
+      document.getElementById('current-version-num').textContent = d.version;
+      document.getElementById('current-version-cmd').textContent = `curl -fsSL ${location.origin}/install | sh`;
+      document.getElementById('current-version').hidden = false;
     }
   }).catch(() => {});
-
-  const picks = ['pick-solo', 'pick-group', 'pick-manage'];
-  const panels = { 'pick-solo': 'create-form', 'pick-group': 'create-form',
-    'pick-manage': 'manage-form' };
-  const subPicks = ['pick-attach', 'pick-detach', 'pick-transfer'];
-  const subPanels = { 'pick-attach': 'attach-form', 'pick-detach': 'detach-form',
-    'pick-transfer': 'transfer-form' };
-  let createKind = 'person';
-  function subPick(which) {
-    for (const id of subPicks) {
-      $(id).setAttribute('aria-pressed', String(id === which));
-      $(subPanels[id]).hidden = id !== which;
-    }
-  }
-  function pick(which) {
-    for (const id of picks) $(id).setAttribute('aria-pressed', String(id === which));
-    for (const panel of new Set(Object.values(panels))) $(panel).hidden = panels[which] !== panel;
-    $('create-done').hidden = true;
-    if (which !== 'pick-manage') subPick(null);
-    if (panels[which] === 'create-form') {
-      createKind = which === 'pick-group' ? 'group' : 'person';
-      $('create-title').textContent = createKind === 'group'
-        ? 'Create a new group account' : 'Create a new solo account';
-      $('create-group-hint').hidden = createKind !== 'group';
-    }
-  }
-  for (const id of picks) $(id).onclick = () => pick(id);
-  for (const id of subPicks) $(id).onclick = () => subPick(id);
-
-  // Suggest the identity provider from the pod itself: the pod's origin if it
-  // answers an openid-configuration, else the apex domain if that answers —
-  // only an issuer that answers is suggested, and it stays editable.
-  let issuerTimer = null, issuerProbe = 0;
-  function suggestIssuer(u, input) {
-    clearTimeout(issuerTimer);
-    const probe = ++issuerProbe;
-    issuerTimer = setTimeout(async () => {
-      const parts = u.hostname.split('.');
-      const apex = parts.length > 2 ? u.host.replace(u.hostname, parts.slice(1).join('.')) : u.host;
-      for (const origin of new Set([`${u.protocol}//${u.host}`, `${u.protocol}//${apex}`])) {
-        if (probe !== issuerProbe || input.value) return;
-        const ok = await fetch(origin + '/.well-known/openid-configuration')
-          .then((r) => r.ok).catch(() => false);
-        if (ok && probe === issuerProbe && !input.value) {
-          input.value = origin;
-          input.dispatchEvent(new Event('input'));
-          return;
-        }
-      }
-    }, 300);
-  }
-
-  // Suggest the door name from the pod's own first label — still editable.
-  $('pod-url').addEventListener('input', () => {
-    try {
-      const u = new URL($('pod-url').value.trim());
-      const label = u.hostname.split('.')[0];
-      if (!$('slug').value && /^[a-z0-9-]{1,63}$/.test(label)) {
-        $('slug').value = label;
-        $('slug').dispatchEvent(new Event('input'));
-      }
-      if (!$('issuer').value) suggestIssuer(u, $('issuer'));
-    } catch { /* not a URL yet */ }
-    refresh();
-  });
-  $('issuer').addEventListener('input', refresh);
-
-  let t = null;
-  $('slug').addEventListener('input', () => {
-    slugOk = false; $('slug-msg').textContent = ''; $('slug-msg').className = 'msg';
-    clearTimeout(t);
-    const h = $('slug').value.trim().toLowerCase();
-    if (!h) { refresh(); return; }
-    t = setTimeout(async () => {
-      try {
-        const d = await (await fetch('/api/handle?handle=' + encodeURIComponent(h))).json();
-        slugOk = d.available;
-        $('slug-msg').textContent = d.available ? 'this door is free' : (d.reason || 'taken');
-        $('slug-msg').className = 'msg ' + (d.available ? 'ok' : 'no');
-      } catch { $('slug-msg').textContent = 'could not check'; $('slug-msg').className = 'msg no'; }
-      refresh();
-    }, 250);
-  });
-
-  function refresh() {
-    const podOk = /^https:\/\/\S+/.test($('pod-url').value.trim());
-    const issuerOk = /^https:\/\/\S+/.test($('issuer').value.trim());
-    $('attach-continue').disabled = !(podOk && slugOk && issuerOk);
-  }
-
-  // The user's pod home: their agent tree on the pod. A bare pod root gets
-  // the default root; anything with a path is taken as given.
-  function podHomeOf(raw) {
-    const u = new URL(raw.trim());
-    if (u.pathname === '/') u.pathname = '/activitypods-js/';
-    else if (!u.pathname.endsWith('/')) u.pathname += '/';
-    u.search = ''; u.hash = '';
-    return u.href;
-  }
-
-  $('attach-continue').onclick = () => {
-    const auth = window.solidClientAuthentication;
-    const n = $('attach-note');
-    if (!auth) { n.hidden = false; n.textContent = 'the sign-in library did not load — reload and try again'; return; }
-    sessionStorage.setItem('fp-attach', JSON.stringify({
-      slug: $('slug').value.trim().toLowerCase(),
-      podHome: podHomeOf($('pod-url').value),
-      kind: 'person',
-    }));
-    auth.login({
-      oidcIssuer: $('issuer').value.trim(),
-      redirectUrl: location.origin + '/',
-      clientName: 'FediPod gateway',
-    }).catch((e) => { n.hidden = false; n.textContent = 'sign-in failed to start: ' + e.message; });
-  };
-
-  // ---- the create (signup) form ----
-  let createSlugOk = false, addrShape = null;
-  const esc = (s) => String(s).replace(/[&<>"']/g, (c) =>
-    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-
-  // The two address previews follow the handle and pod as they are typed.
-  function addrPreview() {
-    const h = $('create-handle').value.trim().toLowerCase() || 'you';
-    let podHost = 'your.pod';
-    try { podHost = new URL($('create-pod').value.trim()).hostname; } catch { /* not a URL yet */ }
-    $('addr-pod-name').textContent = `@${h}@${podHost}`;
-    $('addr-front-name').textContent = `@${h}@${location.host}`;
-  }
-  function createRefresh() {
-    const podOk = /^https:\/\/\S+/.test($('create-pod').value.trim());
-    const issuerOk = /^https:\/\/\S+/.test($('create-issuer').value.trim());
-    $('create-continue').disabled = !(podOk && issuerOk && createSlugOk && addrShape);
-  }
-  $('addr-pod').onclick = () => { addrShape = 'pod';
-    $('addr-pod').setAttribute('aria-pressed', 'true');
-    $('addr-front').setAttribute('aria-pressed', 'false'); createRefresh(); };
-  $('addr-front').onclick = () => { addrShape = 'front';
-    $('addr-front').setAttribute('aria-pressed', 'true');
-    $('addr-pod').setAttribute('aria-pressed', 'false'); createRefresh(); };
-
-  $('create-pod').addEventListener('input', () => {
-    try {
-      const u = new URL($('create-pod').value.trim());
-      const label = u.hostname.split('.')[0];
-      if (!$('create-handle').value && /^[a-z0-9-]{1,63}$/.test(label)) {
-        $('create-handle').value = label;
-        $('create-handle').dispatchEvent(new Event('input'));
-      }
-      if (!$('create-issuer').value) suggestIssuer(u, $('create-issuer'));
-    } catch { /* not a URL yet */ }
-    addrPreview(); createRefresh();
-  });
-  $('create-issuer').addEventListener('input', createRefresh);
-
-  let ct = null;
-  $('create-handle').addEventListener('input', () => {
-    createSlugOk = false; $('create-handle-msg').textContent = ''; $('create-handle-msg').className = 'msg';
-    addrPreview();
-    clearTimeout(ct);
-    const h = $('create-handle').value.trim().toLowerCase();
-    if (!h) { createRefresh(); return; }
-    ct = setTimeout(async () => {
-      try {
-        const d = await (await fetch('/api/handle?handle=' + encodeURIComponent(h))).json();
-        createSlugOk = d.available;
-        $('create-handle-msg').textContent = d.available ? 'this name is free' : (d.reason || 'taken');
-        $('create-handle-msg').className = 'msg ' + (d.available ? 'ok' : 'no');
-      } catch { $('create-handle-msg').textContent = 'could not check'; $('create-handle-msg').className = 'msg no'; }
-      createRefresh();
-    }, 250);
-  });
-
-  $('create-continue').onclick = () => {
-    const auth = window.solidClientAuthentication;
-    const n = $('create-note');
-    if (!auth) { n.hidden = false; n.textContent = 'the sign-in library did not load — reload and try again'; return; }
-    sessionStorage.setItem('fp-create', JSON.stringify({
-      slug: $('create-handle').value.trim().toLowerCase(),
-      podHome: podHomeOf($('create-pod').value),
-      issuer: $('create-issuer').value.trim(),
-      kind: createKind,
-      fronted: addrShape === 'front',
-    }));
-    auth.login({
-      oidcIssuer: $('create-issuer').value.trim(),
-      redirectUrl: location.origin + '/',
-      clientName: 'FediPod gateway',
-    }).catch((e) => { n.hidden = false; n.textContent = 'sign-in failed to start: ' + e.message; });
-  };
-
-  // Back from the identity provider: finish whichever flow started the
-  // sign-in. Every failure is shown — a silent return here looks like a reset
-  // form with no explanation.
-  (async () => {
-    const auth = window.solidClientAuthentication;
-    if (!auth) return;
-    const returned = ['code', 'state', 'error'].some((k) =>
-      new URL(location.href).searchParams.has(k));
-    const authErrors = [];
-    auth.events().on('error', (name, detail) =>
-      authErrors.push([name === 'redirect' ? null : name,
-        detail && (detail.message || detail)].filter(Boolean).join(': ') || 'unknown error'));
-    const info = await auth.handleIncomingRedirect()
-      .catch((e) => { authErrors.push(e.message); return null; });
-    const create = sessionStorage.getItem('fp-create');
-    const attach = sessionStorage.getItem('fp-attach');
-    if (!returned && !info?.isLoggedIn) return;
-    sessionStorage.removeItem('fp-create');
-    sessionStorage.removeItem('fp-attach');
-    const isAttach = !!attach && !create;
-    const p = JSON.parse(create || attach || '{}');
-    let n;
-    if (isAttach) { pick('pick-manage'); subPick('pick-attach'); n = $('attach-note'); }
-    else { pick(p.kind === 'group' ? 'pick-group' : 'pick-solo'); n = $('create-note'); }
-    n.hidden = false;
-    if (!info?.isLoggedIn) {
-      n.textContent = 'sign-in did not complete: '
-        + (authErrors.join('; ') || 'the identity provider sent no session back — please try again');
-      return;
-    }
-    if (!create && !attach) {
-      n.textContent = 'signed in as ' + info.webId + ', but the form details were '
-        + 'lost on the way back — please fill the form and try again';
-      return;
-    }
-    const verb = isAttach ? 'attach' : 'signup';
-    n.textContent = 'signed in as ' + info.webId + (isAttach ? ' — attaching…' : ' — creating…');
-    const res = await auth.fetch(location.origin + '/api/attach', {
-      method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ handle: p.slug, podHome: p.podHome, kind: p.kind,
-        ...(isAttach ? {} : { fronted: p.fronted }) }),
-    }).catch((e) => { n.textContent = verb + ' failed: ' + e.message; return null; });
-    if (!res) return;
-    const d = await res.json().catch(() => ({}));
-    if (res.status !== 201) {
-      n.textContent = verb + ' failed: ' + (d.error || 'HTTP ' + res.status);
-      return;
-    }
-    if (isAttach) {
-      n.innerHTML = 'Attached. Run this on the machine your agent lives on, then restart the agent:'
-        + '<pre>' + d.command + '</pre>'
-        + 'Your mail then arrives through <code>' + d.doorInbox + '</code>, filtered. Your name has not moved.';
-      return;
-    }
-    const address = p.fronted ? d.address : `@${p.slug}@${new URL(p.podHome).hostname}`;
-    const flags = [
-      `--gateway ${d.frontActor || d.doorInbox}`,
-      `--secret ${d.hmacSecret}`,
-      `--pod ${p.podHome}`,
-      `--issuer ${p.issuer}`,
-      `--handle ${p.slug}`,
-      `--kind ${p.kind}`,
-      ...(p.fronted ? ['--fronted'] : []),
-    ];
-    const cmd = `curl -fsSL ${location.origin}/install | sh -s -- \\\n  ` + flags.join(' \\\n  ');
-    $('create-form').hidden = true;
-    const done = $('create-done');
-    done.hidden = false;
-    done.innerHTML = '<h2>' + esc(address) + '</h2>'
-      + '<p>Created. Now install your agent on the machine it will live on — one command, then start it:</p>'
-      + '<pre>' + esc(cmd) + '\n\nfedipod start</pre>'
-      + '<p>Setup opens in your browser with everything already filled in. When it finishes, your '
-      + 'account is live and your mail arrives through this gateway, filtered.</p>';
-  })();
 </script>
 <i>(cc) 4.0 By, Jeff Zucker, 2026</i>
 </body>
