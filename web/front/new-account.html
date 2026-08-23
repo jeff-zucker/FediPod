@@ -20,9 +20,9 @@
 </head>
 <body>
 <h1>FediPod - join the fediverse from a Solid pod.</h1>
-<p class="lede">Welcome to the <strong>FediPod.net gateway</strong>. This gateway is a mail filter for
-accounts that stay yours. Your name, key and data live on your own pod; this box only receives your
-fediverse mail, verifies each delivery, drops spam and passes the rest to your pod.</p>
+<p class="lede">Welcome to <b>FediPod</b>! Here, you can get a free pod and fediverse account or link to your existing pod/account.</p>
+
+Current FediPod is 0.10.0. To install or update: <code>curl -fsSL https://fedipod.net/install | sh</code>
 
 <p>
 FediPod is experimental and free to use.  See the <a href="https://github.com/jeff-zucker/FediPod">FediPod repository</a> for details.
@@ -31,33 +31,7 @@ FediPod is experimental and free to use.  See the <a href="https://github.com/je
 <p class="hint" id="current-version" hidden>Current FediPod: <strong id="current-version-num"></strong>
  — update an existing install with <code id="current-version-cmd"></code></p>
 
-<h2>Create a new FediPod agent</h2>
-<p>Everything happens on your own machine — this gateway never sees a password. One command
-installs the agent (and updates an existing install):</p>
-<pre id="install-cmd">curl -fsSL https://fedipod.net/install | sh
-
-fedipod start</pre>
-<ol class="steps">
-  <li>Setup opens in your browser. It creates a Solid account and pod for you at the provider
-    you choose, or uses a pod you already have — for one person or for a group.</li>
-  <li>When setup finishes, your account is live on your own pod.</li>
-  <li>To filter your mail through this gateway, open your agent's admin page and use the
-    <strong>Gateway</strong> panel.</li>
-</ol>
-
-<h2>Attach, detach, transfer</h2>
-<p>Attaching to this gateway, detaching from it, and transferring an account in or out all
-happen from your agent's admin page (or its <code>fedipod</code> command). Attaching offers the
-choice of a pod-based name (<code>@you@your.pod</code>) or a gateway-based name
-(<code>@you@fedipod.net</code>) — the gateway account is created automatically either way.</p>
-
 <script>
-  // Another host deploying this front serves the same page: the command names
-  // that host, not fedipod.net.
-  if (location.origin !== 'https://fedipod.net' && location.protocol.startsWith('http')) {
-    document.getElementById('install-cmd').textContent =
-      `curl -fsSL ${location.origin}/install | sh\n\nfedipod start`;
-  }
   fetch('/api/handle?handle=__probe__').then(r => r.json()).then(d => {
     if (d.version) {
       document.getElementById('current-version-num').textContent = d.version;
@@ -66,6 +40,6 @@ choice of a pod-based name (<code>@you@your.pod</code>) or a gateway-based name
     }
   }).catch(() => {});
 </script>
-<i>(cc) 4.0 By, Jeff Zucker, 2026</i>
+<i style="text-align:right">(cc) 4.0 By, Jeff Zucker, 2026</i>
 </body>
 </html>
