@@ -198,8 +198,8 @@ fedipod gateway --detach
 `--attach` asks the gateway itself: the agent proves the pod with its own
 credential, and the gateway answers with the door and the receipt secret.
 `--name` defaults to your handle; `--fronted` takes a gateway-based name,
-published at the next restart. The admin page's Gateway panel is the same
-action with the name checked as you type.
+and the agent restarts itself to publish under it. The admin page's Gateway
+row offers the same action with the name checked as you type.
 Attaching points your actor's advertised inbox at a gateway's door, so
 deliveries are verified and de-junked before they reach your pod; your name,
 key and data stay on your pod. The URL and secret come from the gateway's

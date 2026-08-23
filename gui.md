@@ -74,14 +74,18 @@ accepting automatically.
 
 ## The gateway
 
-The **Gateway** panel attaches this account to a mail-filtering gateway (a
-fedipod.net-style front), shows what its door has verified, and detaches it.
-Give the gateway's address and the name you want there — the panel checks the
-name is free as you type — and choose a pod-based name (`@you@your.pod`) or a
-gateway-based name (`@you@the-gateway`); the gateway account is created
-automatically either way. Attaching proves the pod with the agent's own
-credential, so no password is typed anywhere. Detaching republishes your
-actor with your pod's own inbox.
+The **gateway** row on the record (under **software**) attaches this account
+to a mail-filtering gateway (a fedipod.net-style front) and detaches it; when
+attached it names the gateway, and the handle there when you took one. Both
+buttons open a popup. Attaching offers the choice of handle: keep your
+pod-based handle (`@you@your.pod` — you can drop the gateway any time and
+keep everything), or create a handle at the gateway (`@you@the-gateway` —
+your address lives on the gateway's domain, but not your data or key), typed
+straight into the blank of the address with a free/taken check as you type.
+The gateway account is created automatically with either choice, and the
+agent proves the pod with its own credential, so no password is typed
+anywhere. Taking or leaving a gateway handle restarts the agent by itself;
+detaching republishes your actor with your pod's own inbox.
 
 ## Moving here from another server
 

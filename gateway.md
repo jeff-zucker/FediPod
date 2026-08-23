@@ -25,8 +25,8 @@ password is typed anywhere:
    is free as you type.
 2. Choose a pod-based name (`@you@your.pod`) or a gateway-based name
    (`@you@the-gateway`). The gateway account is created automatically either
-   way. A pod-based attach applies immediately; a gateway-based name is
-   published at the next restart.
+   way. A pod-based attach applies immediately; taking a gateway-based name
+   restarts the agent itself to publish under it.
 
 The same attach from the command line, against the running agent:
 

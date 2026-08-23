@@ -142,6 +142,7 @@ function render() {
       .replace(/\/$/, '')],
   ];
   if (config.version || config.update || config.pendingUpgrade?.length) rows.push(['software', 'ctl']);
+  rows.push(['gateway', 'ctl']);
   if (config.quiescedAt) rows.push(['parked since', config.quiescedAt]);
   if (config.movedTo) rows.push(['moved to', config.movedTo]);
   // A person gates followers here; a group's gate is the joins control on its
@@ -184,6 +185,11 @@ function render() {
       dd.append(FOLLOWS_CTL);
       FOLLOWS_CTL.hidden = false;
       FOLLOWS_PICK.value = config.autoAcceptFollows ? 'auto' : 'approve';
+    }
+    if (k === 'gateway') {
+      dd.textContent = '';
+      dd.append(GATEWAY_CTL);
+      refreshGateway();
     }
     if (k === 'software') {
       dd.textContent = '';
@@ -237,7 +243,6 @@ function render() {
   renderAliases();
   renderOthers();
   renderInbox();
-  renderGateway();
   if (config.kind === 'group') {
     // Its lists have no bound, so this page scrolls — see body.group in the CSS.
     document.body.classList.add('group');
@@ -937,35 +942,62 @@ async function renderInbox() {
   panel.hidden = false;
 }
 
-// The gateway panel: attach through a multi-user front with this agent's own
-// credential, see what the door has verified, detach back to the pod inbox.
-let gwTimer = null;
-async function renderGateway() {
+// The gateway, as a facts row under software: attach through a multi-user
+// front with this agent's own credential, detach back to the pod inbox. The
+// forms live in the floating window, like every other disclosure.
+const GATEWAY_CTL = $('gateway-ctl');           // held: it rides into a generated row
+const GATEWAY_WORD = $('gateway-word');
+const GW_OPEN_ATTACH = $('gateway-open-attach');
+const GW_OPEN_DETACH = $('gateway-open-detach');
+let gwState = null;
+async function refreshGateway() {
   const { status, json: g } = await api('/gateway');
-  if (status !== 200 || !g) return;              // no answer, no surface
-  $('pane-gateway').hidden = false;
+  if (status !== 200 || !g) return;
+  gwState = g;
+  GATEWAY_CTL.hidden = false;
   if (g.configured) {
-    const host = (() => { try { return new URL(g.url).host; } catch { return g.url; } })();
-    const st = g.stats || {};
-    $('gateway-summary').textContent = `Attached to ${host} (mode ${g.mode})`
-      + (g.frontActor ? `, publishing as ${g.frontActor}` : '')
-      + ` — ${st.verified || 0} deliveries verified, ${st.unverified || 0} unverified.`;
-    $('gateway-attach-form').hidden = true;
-    $('gateway-attached').hidden = false;
+    let host = g.url;
+    try { host = new URL(g.url).host; } catch { /* show it as-is */ }
+    const frontName = g.frontActor?.match(/\/u\/([^/]+)\/ap\/actor\/?$/)?.[1];
+    GATEWAY_WORD.textContent = frontName ? `${host} — publishing as @${frontName}@${host}` : host;
+    GW_OPEN_ATTACH.hidden = true;
+    GW_OPEN_DETACH.hidden = false;
   } else {
-    $('gateway-summary').textContent = 'Mail arrives directly at your pod\'s own inbox.';
-    $('gateway-attach-form').hidden = false;
-    $('gateway-attached').hidden = true;
-    if (!$('gw-name').value && config?.handle) $('gw-name').value = config.handle;
+    GATEWAY_WORD.textContent = '';
+    GW_OPEN_ATTACH.hidden = false;
+    GW_OPEN_DETACH.hidden = true;
   }
 }
+const gwShape = () => document.querySelector('input[name=gwShape]:checked')?.value || 'pod';
+function gwPreviews() {
+  $('gw-pod-preview').textContent = config?.address || `@${config?.handle || 'you'}@your.pod`;
+  try { $('gw-front-host').textContent = new URL($('gw-front').value.trim()).host; }
+  catch { /* not a URL yet — the placeholder host stands */ }
+}
+function gwShapeChanged() { gwPreviews(); gwCheck(); }
+for (const r of document.querySelectorAll('input[name=gwShape]')) r.addEventListener('change', gwShapeChanged);
+// Typing in the blank IS choosing that shape.
+$('gw-name').addEventListener('focus', () => {
+  const r = document.querySelector('input[name=gwShape][value=front]');
+  if (!r.checked) { r.checked = true; gwShapeChanged(); }
+});
+GW_OPEN_ATTACH.addEventListener('click', () => {
+  gwShapeChanged();
+  solWindow.show('gateway-attach-form', 'Attach to a gateway');
+});
+GW_OPEN_DETACH.addEventListener('click', () => {
+  $('gw-detach-fronted').hidden = !gwState?.frontActor;
+  $('gw-detach-plain').hidden = !!gwState?.frontActor;
+  solWindow.show('gateway-detach-form', 'Detach from gateway');
+});
 // Live availability, asked through the agent (the front answers it without CORS).
+let gwTimer = null;
 function gwCheck() {
   clearTimeout(gwTimer);
   const front = $('gw-front').value.trim().replace(/\/+$/, '');
   const name = $('gw-name').value.trim().toLowerCase();
   $('gw-name-msg').textContent = ''; $('gw-name-msg').className = 'hint';
-  if (!front || !name) return;
+  if (gwShape() !== 'front' || !front || !name) return;
   gwTimer = setTimeout(async () => {
     const { status, json } = await postJson('/gateway', { action: 'check', front, handle: name });
     if (status !== 200 || !json) return;
@@ -975,24 +1007,30 @@ function gwCheck() {
     $('gw-name-msg').className = json.available ? 'hint' : 'warn';
   }, 300);
 }
-$('gw-front').addEventListener('input', gwCheck);
-$('gw-name').addEventListener('input', gwCheck);
-$('gw-attach').onclick = async () => {
+$('gw-front').addEventListener('input', () => { gwPreviews(); gwCheck(); });
+$('gw-name').addEventListener('input', () => { gwPreviews(); gwCheck(); });
+$('gw-attach').addEventListener('click', async () => {
   const front = $('gw-front').value.trim().replace(/\/+$/, '');
-  const fronted = $('gw-shape').value === 'front';
+  const fronted = gwShape() === 'front';
+  const name = $('gw-name').value.trim().toLowerCase();
+  if (fronted && !name) { say('give the handle you want at the gateway', 'err'); return; }
   $('gw-attach').disabled = true;
+  // Pod-based sends no name: the door's label is the agent's business, not
+  // the user's, and the agent picks a free variant by itself.
   const r = await write('/gateway',
-    { action: 'attach', front, handle: $('gw-name').value.trim().toLowerCase(), fronted },
-    fronted ? 'attached — restart the agent to publish under the gateway name'
+    { action: 'attach', front, ...(fronted ? { handle: name, fronted: true } : {}) },
+    fronted ? 'attached — the agent is restarting to publish under the gateway handle; reload in a moment'
       : 'attached — your mail now arrives through the gateway, filtered');
   $('gw-attach').disabled = false;
-  if (r) renderGateway();
-};
-$('gw-detach').onclick = async () => {
+  if (r) { closePanels(); refreshGateway(); }
+});
+$('gw-detach').addEventListener('click', async () => {
+  const fronted = !!gwState?.frontActor;
   const r = await write('/gateway', { action: 'forget' },
-    'detached — the actor was republished advertising your pod\'s own inbox');
-  if (r) renderGateway();
-};
+    fronted ? 'detached — the agent is restarting under your pod\'s own name; reload in a moment'
+      : 'detached — the actor was republished advertising your pod\'s own inbox');
+  if (r) { closePanels(); refreshGateway(); }
+});
 
 $('inbox-keep').addEventListener('click', () => {
   dismissed = true;

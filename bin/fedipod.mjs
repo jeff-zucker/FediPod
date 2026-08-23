@@ -1518,7 +1518,7 @@ if (cmd === 'up') {
       if (res.status >= 400) { console.error(body.error || `HTTP ${res.status}`); process.exit(1); }
       if (body.frontActor) {
         console.log(`attached — this identity now publishes as ${body.address || body.frontActor}`);
-        console.log('Restart the agent (or `fedipod up`) to republish under the front.');
+        console.log('The agent is restarting itself to publish under the front.');
       } else {
         console.log(`attached — your mail now arrives through ${body.url}, filtered; your name has not moved.`);
         console.log('Starting in shadow: the door filters, and the agent measures how much');

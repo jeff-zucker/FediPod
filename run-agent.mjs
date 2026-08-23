@@ -539,7 +539,13 @@ export class Agent {
     this.schedTimer.unref();
     // A CSV import interrupted by a restart or a handoff picks back up here.
     this.importer?.resume();
-    this.log(`federating as @${this.store.getConfig()?.handle}@${new URL(this.urls.base).host}`);
+    // The identity the fediverse actually sees: a fronted actor's name and
+    // host are the front's, not the pod's.
+    {
+      const cfgNow = this.store.getConfig();
+      const front = cfgNow?.gateway?.frontActor?.match(/\/u\/([^/]+)\/ap\/actor\/?$/)?.[1];
+      this.log(`federating as @${front || cfgNow?.handle}@${new URL(this.urls.actor).host}`);
+    }
     if (this.renamed) {
       // The display name lives in the actor document, so a rename only
       // reaches other servers once that is republished.

@@ -15,14 +15,14 @@
 :root { color-scheme: light dark; font-size: 112.5%;
   --bar-col: 1280px;                 /* the bar centres on the same column */
   --link: #1a4f8a; --heading: #5b3a8e;
-  --ink: #1b1c1e; --muted: #5f6368;
+  --ink: #1b1c1e; --muted: #4a4e53;
   --btn-bg: #f4efe6; --btn-bg-hover: #ece3d2; --btn-bg-active: #e2d5bd; --btn-edge: #8a7a61;
   --field-bg: #ffffff; --field-bg-hover: #f7f4ee; --field-edge: #767676;
   --danger: #b00020; --ring: var(--link);
   --chevron: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6'><path d='M1 1l4 4 4-4' fill='none' stroke='%23444444' stroke-width='1.6' stroke-linecap='round'/></svg>"); }
 @media (prefers-color-scheme: dark) {
   :root { --link: #7fb3e8; --heading: #b9a3e3;
-    --ink: #e8eaed; --muted: #a5a9ad;
+    --ink: #e8eaed; --muted: #b9bdc2;
     --btn-bg: #35302a; --btn-bg-hover: #423b31; --btn-bg-active: #4d4436; --btn-edge: #9a8d7a;
     --field-bg: #383d44; --field-bg-hover: #40464e; --field-edge: #9aa0a6;
     --danger: #ff8a8a;
@@ -98,7 +98,8 @@ p { margin: .5rem 0; }
 fieldset { border: 1px solid #bbb; border-radius: .4rem; margin: 1rem 0; padding: .75rem 1rem 1rem; }
 legend { padding: 0 .3rem; font-weight: 600; color: var(--heading); }
 label { display: block; margin: .75rem 0 .2rem; }
-.hint { color: var(--muted); font-size: .9rem; margin: .15rem 0 0; }
+.hint { color: var(--muted); font-size: 1rem; margin: .15rem 0 0; }
+.choice input[type=text] { width: 9ch; display: inline-block; padding: .15rem .3rem; }
 /* SETTINGS: light wells, unmistakably fields, in both schemes. */
 input[type=text], input[type=email], input[type=url], input[type=password], textarea {
   font: inherit; width: 100%; padding: .5rem; box-sizing: border-box;
@@ -314,36 +315,13 @@ pre { overflow-x: auto; background: #0001; padding: .6rem; border-radius: .3rem;
   </span>
 </section>
 
-<!-- The inbox gateway: a mail filter for an account that stays yours. -->
-<section id="pane-gateway" hidden>
-  <h2><span class="hlabel">Gateway</span></h2>
-  <p id="gateway-summary"></p>
-  <div id="gateway-attach-form" hidden>
-    <p class="hint">A gateway filters your fediverse mail before it reaches your pod: your
-      actor advertises the gateway's door as its inbox, each delivery is verified there,
-      spam is dropped, and the rest lands in your pod as before. Attaching proves the pod
-      with this agent's own credential — no password leaves this machine.</p>
-    <p>
-      <label for="gw-front">Gateway</label>
-      <input type="url" id="gw-front" placeholder="https://fedipod.net" autocomplete="off">
-      <label for="gw-name">Your name there</label>
-      <input type="text" id="gw-name" autocomplete="off" autocapitalize="off" spellcheck="false">
-    </p>
-    <p id="gw-name-msg" class="hint"></p>
-    <p>
-      <select id="gw-shape" aria-label="Name shape" title="   Which address the fediverse sees — the pod-based name keeps everything on your pod; a gateway-based name survives changing pods">
-        <option value="pod">keep my pod-based name</option>
-        <option value="front">use a gateway-based name</option>
-      </select>
-      <button id="gw-attach" class="primary" title="   Create the gateway account and point your mail through its door">Attach</button>
-    </p>
-  </div>
-  <div id="gateway-attached" hidden>
-    <p>
-      <button id="gw-detach" class="inline danger" title="   Republish the actor with your pod's own inbox and forget the gateway">Detach</button>
-    </p>
-  </div>
-</section>
+<span id="gateway-ctl" hidden>
+  <span id="gateway-word"></span>
+  <button type="button" id="gateway-open-attach" class="inline" hidden
+    title="   Attach this account to a mail-filtering gateway">Attach to a gateway</button>
+  <button type="button" id="gateway-open-detach" class="inline danger" hidden
+    title="   Go back to your pod's own inbox">Detach from gateway</button>
+</span>
 
 <section id="pane-group" hidden>
   <!-- Both queues are consequences of a moderation setting: with the setting off
@@ -448,6 +426,45 @@ pre { overflow-x: auto; background: #0001; padding: .6rem; border-radius: .3rem;
 <!-- Every consequence is written here rather than assembled in script: the
      page asking "are you sure" has to say what it is sure about, and this is
      the only record of it. Script picks which block to show, nothing else. -->
+<!-- The gateway popups: attach proves the pod with this agent's own credential;
+     detach republishes the pod's own inbox. -->
+<form id="gateway-attach-form" hidden>
+  <p class="hint">A gateway filters your fediverse mail before it reaches your pod: each
+    delivery is verified at its door, spam is dropped, and the rest lands in your pod as
+    before. Attaching proves the pod with this agent's own credential — no password
+    leaves this machine.</p>
+  <label for="gw-front">gateway</label>
+  <input type="url" id="gw-front" placeholder="https://fedipod.net" autocomplete="off">
+  <fieldset>
+    <legend>Your fediverse handle</legend>
+    <label class="choice"><input type="radio" name="gwShape" value="pod" checked>
+      Keep my pod-based handle: <strong id="gw-pod-preview"></strong><br>
+      <span class="hint">Your address stays tied to your own pod — you can drop the
+        gateway any time and keep everything.</span></label>
+    <label class="choice"><input type="radio" name="gwShape" value="front">
+      Create a handle at the gateway:
+      @<input type="text" id="gw-name" placeholder="name" autocomplete="off"
+        autocapitalize="off" spellcheck="false">@<span id="gw-front-host">fedipod.net</span><br>
+      <span class="hint">Your address lives on the gateway's domain, but not your data
+        or key; you can change pods later and keep the handle.</span>
+      <span id="gw-name-msg" class="hint"></span></label>
+  </fieldset>
+  <p>
+    <button id="gw-attach" type="button" class="primary"
+      title="   Create the gateway account and point your mail through its door">Attach</button>
+  </p>
+</form>
+<form id="gateway-detach-form" hidden>
+  <p class="hint" id="gw-detach-plain">Deliveries go back to your pod's own inbox — the
+    actor is republished advertising it. Your name and data never moved.</p>
+  <p class="warn" id="gw-detach-fronted" hidden>This identity publishes under the gateway's
+    name. Detaching moves every published id back to the pod — a rename other servers
+    see, not just a mail change.</p>
+  <p>
+    <button id="gw-detach" type="button" class="primary"
+      title="   Forget the gateway and republish the actor with the pod inbox">Detach</button>
+  </p>
+</form>
 <form id="confirm-form" hidden>
   <div id="warn-rotate-key" class="warn" hidden>
     <p>A new keypair replaces the one in this home and the actor is republished so other
