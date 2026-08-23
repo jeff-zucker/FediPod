@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>FediPod — keep your name, lose the noise</title>
+<title>FediPod — access the Fediverse and ATProto from a Solid pod</title>
 <style>
   :root { color-scheme: light dark; --line:#d9d4c7; --dim:#45443d; --accent:#6a8a5a; }
   @media (prefers-color-scheme: dark) { :root { --dim:#c2c0b4; } }
@@ -202,8 +202,30 @@ FediPod is experimental and free to use.  See the <a href="https://github.com/je
   for (const id of picks) $(id).onclick = () => pick(id);
   for (const id of subPicks) $(id).onclick = () => subPick(id);
 
-  // Suggest the door name from the pod's own first label, and the identity
-  // provider from the pod's apex domain — both still editable.
+  // Suggest the identity provider from the pod itself: the pod's origin if it
+  // answers an openid-configuration, else the apex domain if that answers —
+  // only an issuer that answers is suggested, and it stays editable.
+  let issuerTimer = null, issuerProbe = 0;
+  function suggestIssuer(u, input) {
+    clearTimeout(issuerTimer);
+    const probe = ++issuerProbe;
+    issuerTimer = setTimeout(async () => {
+      const parts = u.hostname.split('.');
+      const apex = parts.length > 2 ? u.host.replace(u.hostname, parts.slice(1).join('.')) : u.host;
+      for (const origin of new Set([`${u.protocol}//${u.host}`, `${u.protocol}//${apex}`])) {
+        if (probe !== issuerProbe || input.value) return;
+        const ok = await fetch(origin + '/.well-known/openid-configuration')
+          .then((r) => r.ok).catch(() => false);
+        if (ok && probe === issuerProbe && !input.value) {
+          input.value = origin;
+          input.dispatchEvent(new Event('input'));
+          return;
+        }
+      }
+    }, 300);
+  }
+
+  // Suggest the door name from the pod's own first label — still editable.
   $('pod-url').addEventListener('input', () => {
     try {
       const u = new URL($('pod-url').value.trim());
@@ -212,10 +234,7 @@ FediPod is experimental and free to use.  See the <a href="https://github.com/je
         $('slug').value = label;
         $('slug').dispatchEvent(new Event('input'));
       }
-      if (!$('issuer').value) {
-        const parts = u.hostname.split('.');
-        $('issuer').value = 'https://' + (parts.length > 2 ? parts.slice(1).join('.') : u.hostname);
-      }
+      if (!$('issuer').value) suggestIssuer(u, $('issuer'));
     } catch { /* not a URL yet */ }
     refresh();
   });
@@ -303,10 +322,7 @@ FediPod is experimental and free to use.  See the <a href="https://github.com/je
         $('create-handle').value = label;
         $('create-handle').dispatchEvent(new Event('input'));
       }
-      if (!$('create-issuer').value) {
-        const parts = u.hostname.split('.');
-        $('create-issuer').value = 'https://' + (parts.length > 2 ? parts.slice(1).join('.') : u.hostname);
-      }
+      if (!$('create-issuer').value) suggestIssuer(u, $('create-issuer'));
     } catch { /* not a URL yet */ }
     addrPreview(); createRefresh();
   });
@@ -348,75 +364,79 @@ FediPod is experimental and free to use.  See the <a href="https://github.com/je
     }).catch((e) => { n.hidden = false; n.textContent = 'sign-in failed to start: ' + e.message; });
   };
 
-  // Back from the identity provider: finish the signup with the proven login.
+  // Back from the identity provider: finish whichever flow started the
+  // sign-in. Every failure is shown — a silent return here looks like a reset
+  // form with no explanation.
   (async () => {
     const auth = window.solidClientAuthentication;
     if (!auth) return;
-    const info = await auth.handleIncomingRedirect().catch(() => null);
-    const pending = sessionStorage.getItem('fp-create');
-    if (!info?.isLoggedIn || !pending) return;
+    const returned = ['code', 'state', 'error'].some((k) =>
+      new URL(location.href).searchParams.has(k));
+    const authErrors = [];
+    auth.events().on('error', (name, detail) =>
+      authErrors.push([name === 'redirect' ? null : name,
+        detail && (detail.message || detail)].filter(Boolean).join(': ') || 'unknown error'));
+    const info = await auth.handleIncomingRedirect()
+      .catch((e) => { authErrors.push(e.message); return null; });
+    const create = sessionStorage.getItem('fp-create');
+    const attach = sessionStorage.getItem('fp-attach');
+    if (!returned && !info?.isLoggedIn) return;
     sessionStorage.removeItem('fp-create');
-    const p = JSON.parse(pending);
-    pick(p.kind === 'group' ? 'pick-group' : 'pick-solo');
-    const n = $('create-note');
-    n.hidden = false;
-    n.textContent = 'signed in as ' + info.webId + ' — creating…';
-    const res = await auth.fetch('/api/attach', {
-      method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ handle: p.slug, podHome: p.podHome, kind: p.kind, fronted: p.fronted }),
-    }).catch(() => null);
-    const d = res ? await res.json().catch(() => ({})) : {};
-    if (res && res.status === 201) {
-      const address = p.fronted ? d.address : `@${p.slug}@${new URL(p.podHome).hostname}`;
-      const flags = [
-        `--gateway ${d.frontActor || d.doorInbox}`,
-        `--secret ${d.hmacSecret}`,
-        `--pod ${p.podHome}`,
-        `--issuer ${p.issuer}`,
-        `--handle ${p.slug}`,
-        `--kind ${p.kind}`,
-        ...(p.fronted ? ['--fronted'] : []),
-      ];
-      const cmd = `curl -fsSL ${location.origin}/install | sh -s -- \\\n  ` + flags.join(' \\\n  ');
-      $('create-form').hidden = true;
-      const done = $('create-done');
-      done.hidden = false;
-      done.innerHTML = '<h2>' + esc(address) + '</h2>'
-        + '<p>Created. Now install your agent on the machine it will live on — one command, then start it:</p>'
-        + '<pre>' + esc(cmd) + '\n\nfedipod start</pre>'
-        + '<p>Setup opens in your browser with everything already filled in. When it finishes, your '
-        + 'account is live and your mail arrives through this gateway, filtered.</p>';
-    } else {
-      n.textContent = 'signup failed: ' + (d.error || (res ? 'HTTP ' + res.status : 'no response'));
-    }
-  })();
-
-  // Back from the identity provider: finish the attach with the proven login.
-  (async () => {
-    const auth = window.solidClientAuthentication;
-    if (!auth) return;
-    const info = await auth.handleIncomingRedirect().catch(() => null);
-    const pending = sessionStorage.getItem('fp-attach');
-    if (!info?.isLoggedIn || !pending) return;
     sessionStorage.removeItem('fp-attach');
-    const p = JSON.parse(pending);
-    pick('pick-manage');
-    subPick('pick-attach');
-    const n = $('attach-note');
+    const isAttach = !!attach && !create;
+    const p = JSON.parse(create || attach || '{}');
+    let n;
+    if (isAttach) { pick('pick-manage'); subPick('pick-attach'); n = $('attach-note'); }
+    else { pick(p.kind === 'group' ? 'pick-group' : 'pick-solo'); n = $('create-note'); }
     n.hidden = false;
-    n.textContent = 'signed in as ' + info.webId + ' — attaching…';
-    const res = await auth.fetch('/api/attach', {
+    if (!info?.isLoggedIn) {
+      n.textContent = 'sign-in did not complete: '
+        + (authErrors.join('; ') || 'the identity provider sent no session back — please try again');
+      return;
+    }
+    if (!create && !attach) {
+      n.textContent = 'signed in as ' + info.webId + ', but the form details were '
+        + 'lost on the way back — please fill the form and try again';
+      return;
+    }
+    const verb = isAttach ? 'attach' : 'signup';
+    n.textContent = 'signed in as ' + info.webId + (isAttach ? ' — attaching…' : ' — creating…');
+    const res = await auth.fetch(location.origin + '/api/attach', {
       method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ handle: p.slug, podHome: p.podHome, kind: p.kind }),
-    }).catch(() => null);
-    const d = res ? await res.json().catch(() => ({})) : {};
-    if (res && res.status === 201) {
+      body: JSON.stringify({ handle: p.slug, podHome: p.podHome, kind: p.kind,
+        ...(isAttach ? {} : { fronted: p.fronted }) }),
+    }).catch((e) => { n.textContent = verb + ' failed: ' + e.message; return null; });
+    if (!res) return;
+    const d = await res.json().catch(() => ({}));
+    if (res.status !== 201) {
+      n.textContent = verb + ' failed: ' + (d.error || 'HTTP ' + res.status);
+      return;
+    }
+    if (isAttach) {
       n.innerHTML = 'Attached. Run this on the machine your agent lives on, then restart the agent:'
         + '<pre>' + d.command + '</pre>'
         + 'Your mail then arrives through <code>' + d.doorInbox + '</code>, filtered. Your name has not moved.';
-    } else {
-      n.textContent = 'attach failed: ' + (d.error || (res ? 'HTTP ' + res.status : 'no response'));
+      return;
     }
+    const address = p.fronted ? d.address : `@${p.slug}@${new URL(p.podHome).hostname}`;
+    const flags = [
+      `--gateway ${d.frontActor || d.doorInbox}`,
+      `--secret ${d.hmacSecret}`,
+      `--pod ${p.podHome}`,
+      `--issuer ${p.issuer}`,
+      `--handle ${p.slug}`,
+      `--kind ${p.kind}`,
+      ...(p.fronted ? ['--fronted'] : []),
+    ];
+    const cmd = `curl -fsSL ${location.origin}/install | sh -s -- \\\n  ` + flags.join(' \\\n  ');
+    $('create-form').hidden = true;
+    const done = $('create-done');
+    done.hidden = false;
+    done.innerHTML = '<h2>' + esc(address) + '</h2>'
+      + '<p>Created. Now install your agent on the machine it will live on — one command, then start it:</p>'
+      + '<pre>' + esc(cmd) + '\n\nfedipod start</pre>'
+      + '<p>Setup opens in your browser with everything already filled in. When it finishes, your '
+      + 'account is live and your mail arrives through this gateway, filtered.</p>';
   })();
 </script>
 <i>(cc) 4.0 By, Jeff Zucker, 2026</i>
