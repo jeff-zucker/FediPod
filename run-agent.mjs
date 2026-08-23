@@ -358,7 +358,9 @@ export class Agent {
     this.intake.bskyGroup = null;
     if (this.viewer) {
       this.startViewer();
-      this.log(`another agent is active for this pod — viewing as @${config.handle} (read-only)`);
+      this.log(this.lease.denied === 'unreadable'
+        ? `the pod cannot be read, so the lease is unknown — viewing as @${config.handle} (read-only)`
+        : `another agent is active for this pod — viewing as @${config.handle} (read-only)`);
       return true;
     }
     await this.startActive({ repair });
