@@ -35,11 +35,20 @@ environment variables:
 | `FEDIPOD_FRONT_HOST` | The host the door answers on. |
 | `FEDIPOD_FRONT_ORIGIN` | Its origin. |
 | `FEDIPOD_GATEWAY_WEBID` | The WebID stamped on verification receipts. |
+| `FEDIPOD_ADMIN_WEBID` | The WebID allowed to use the roster at `/admin`. <!-- CLAUDE 2026-08-31 new row --> |
 | `FEDIPOD_DIRECTORY_JSON` | The starting directory, as JSON: which handles exist and which pod each belongs to. |
 
 Attachments people make through the signup page are kept in a Netlify Blobs
 store named `directory`, and take precedence over the rows in
 `FEDIPOD_DIRECTORY_JSON`.
+
+<!-- CLAUDE 2026-08-31 — the roster page; delete these markers when done -->
+The `/admin` page lists every account the front answers for and can remove
+one: the row is dropped and the name stops resolving, with nothing on the
+user's pod touched. Reading or removing requires signing in as
+`FEDIPOD_ADMIN_WEBID`. Rows from `FEDIPOD_DIRECTORY_JSON` can only be
+removed by editing that variable and redeploying.
+<!-- /CLAUDE -->
 
 That table is the front's. `functions/inbox.mjs` — the one-person door —
 reads its own set:
