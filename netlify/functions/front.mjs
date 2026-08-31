@@ -21,6 +21,7 @@
 //   FEDIPOD_FRONT_ORIGIN   "https://fedipod.net"
 //   FEDIPOD_DIRECTORY_URL  a JSON map { handle: record, … } (public policy fields only;
 //                          keep appendToken/hmacSecret out of anything world-readable)
+//   FEDIPOD_ADMIN_WEBID    the WebID allowed to read the roster at /admin
 
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -48,6 +49,11 @@ try {
   runPage = readFileSync(
     fileURLToPath(new URL('../../web/front/run.html', import.meta.url)), 'utf8');
 } catch { /* without it /run 404s */ }
+let adminPage = '';
+try {
+  adminPage = readFileSync(
+    fileURLToPath(new URL('../../web/front/admin.html', import.meta.url)), 'utf8');
+} catch { /* without it /admin 404s */ }
 // The deploy's own version: what the signup page shows as current.
 let frontVersion = null;
 try {
@@ -101,12 +107,15 @@ export default async function handler(request) {
     frontOrigin: process.env.FEDIPOD_FRONT_ORIGIN,
     signupPage,
     runPage,
+    adminPage,
     authBundle,
     installScript,
     version: frontVersion,
     offersPods: process.env.FEDIPOD_OFFERS_PODS === '1',
     gatewayWebId: process.env.FEDIPOD_GATEWAY_WEBID || null,
+    adminWebId: process.env.FEDIPOD_ADMIN_WEBID || null,
     lookup: (handle) => map[handle] || null,
+    listDirectory: async () => map,
     // Attach writes its row here; the next directory() pass reads it back.
     putDirectory: async (handle, record) => {
       const store = getStore('directory');

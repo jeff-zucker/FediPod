@@ -1,5 +1,13 @@
 # Changes
 
+## 2026-08-31
+- **The front has a roster page.** `/admin` on a front (fedipod.net) lists
+  every account the server answers for — the address, person or group,
+  whether the identity lives on the front or only gateways through it, and
+  the pod behind it. Reading it requires signing in as the WebID the deploy
+  names in `FEDIPOD_ADMIN_WEBID`; the roster API strips every secret from
+  the rows it returns. Env-seeded rows and attach-created rows appear alike.
+
 ## 2026-08-23
 - **Attaching to a gateway happens from your own agent.** The record's new
   **gateway** row (and `fedipod gateway --attach`) creates the gateway

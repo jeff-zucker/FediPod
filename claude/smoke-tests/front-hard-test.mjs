@@ -90,9 +90,12 @@ const front = http.createServer(async (req, res) => {
     host: HOST, frontOrigin: ORIGIN,
     signupPage: '<!doctype html><title>sign up</title>',
     runPage: '<!doctype html><title>run</title>',
+    adminPage: '<!doctype html><title>roster</title>',
     authBundle: '/* auth */', installScript: '#!/bin/sh\necho install\n',
     offersPods: false, gatewayWebId: ORIGIN + '/gw#it',
+    adminWebId: 'https://wren.example/profile/card#me',
     lookup: (h) => directory[h] || attached[h] || null,
+    listDirectory: async () => ({ ...directory, ...attached }),
     putDirectory: async (h, rec) => { attached[h] = rec; },
     podPut: async (_h, url, b, ct) => {
       const r = await fetch(url, { method: 'PUT', headers: { 'content-type': ct }, body: b })
@@ -100,7 +103,12 @@ const front = http.createServer(async (req, res) => {
       return !!r && r.status < 400;
     },
     // The pod token check is the one thing a local run cannot do for real.
-    verifier: async () => ({ webid: 'https://wren.example/profile/card#me' }),
+    // The token value picks the proven WebID, so tests can be someone else.
+    verifier: async (authz) => ({
+      webid: authz === 'Bearer someone-else'
+        ? 'https://eve.example/profile/card#me'
+        : 'https://wren.example/profile/card#me',
+    }),
   }).catch(e => ({ status: 500, headers: {}, body: String(e && e.stack || e) }));
   res.writeHead(out.status, out.headers || {});
   res.end(out.body ?? '');
@@ -156,6 +164,29 @@ try {
     `and the command it hands over is one an installed agent has (${(attBody.command || '').slice(0, 24)}…)`);
   check(attached.wren?.inboxOnly === true && attached.wren.actorUrl === 'https://wren.example/ap/actor',
     'the row it writes keeps the identity on their own pod');
+
+  // ---- the roster the host reads --------------------------------------------
+  const finch = await get('/api/attach', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', authorization: 'Bearer pretend' },
+    body: JSON.stringify({ handle: 'finch', podHome: 'https://wren.example/', fronted: true }),
+  });
+  check(finch.status === 201, 'a fronted attach also lands (for the roster below)');
+  const adminPage = await get('/admin');
+  check(adminPage.status === 200 && /roster/.test(await adminPage.text()),
+    'the admin page is served at /admin');
+  check((await get('/api/roster')).status === 401, 'the roster refuses an unproven reader');
+  check((await get('/api/roster', { headers: { authorization: 'Bearer someone-else' } })).status === 403,
+    'and a proven WebID that is not the admin');
+  const rosterRes = await get('/api/roster', { headers: { authorization: 'Bearer pretend' } });
+  const roster = await rosterRes.json();
+  const byHandle = Object.fromEntries((roster.accounts || []).map(a => [a.handle, a]));
+  check(rosterRes.status === 200 && byHandle.alice && byHandle.wren && byHandle.finch,
+    `the admin sees every account, attached ones included (${Object.keys(byHandle).join(', ')})`);
+  check(byHandle.wren.fronted === false && byHandle.finch.fronted === true,
+    'each row says whether the identity lives here or only gateways here');
+  check(!/hmacSecret|shared-secret/.test(JSON.stringify(roster)),
+    'and no row carries a secret');
 
   // ---- a delivery through the door -----------------------------------------
   const deliver = async (activity) => {

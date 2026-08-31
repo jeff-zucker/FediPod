@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FediPod — accounts on this server</title>
+<style>
+  :root { color-scheme: light dark; --line:#d9d4c7; --dim:#45443d; --accent:#6a8a5a; }
+  @media (prefers-color-scheme: dark) { :root { --dim:#c2c0b4; } }
+  body { font: 19px/1.6 system-ui, sans-serif; max-width: 44rem; margin: 2rem auto; padding: 0 1.1rem; }
+  h1 { font-size: 1.7rem; margin: 0 0 .2rem; }
+  p.lede { color: var(--dim); margin-top: 0; }
+  label { display: block; font-weight: 600; margin: .8rem 0 .2rem; }
+  input[type=url] { width: 100%; padding: .5rem .6rem; font: inherit;
+    border: 1px solid var(--line); border-radius: 8px; box-sizing: border-box; }
+  .hint { color: var(--dim); font-size: .95rem; }
+  .primary { background: var(--accent); color: #fff; border: none; border-radius: 9px;
+    padding: .6rem 1.1rem; font: inherit; cursor: pointer; }
+  .primary[disabled] { opacity: .5; cursor: not-allowed; }
+  [hidden] { display: none !important; }
+  table { border-collapse: collapse; width: 100%; margin: 1.2rem 0; }
+  th, td { text-align: left; padding: .5rem .7rem; border-bottom: 1px solid var(--line); }
+  th { font-weight: 600; }
+</style>
+</head>
+<body>
+<h1>Accounts on this server</h1>
+<p class="lede">Every name this server answers for: accounts whose identity lives here, and
+accounts that only use it as their gateway. Sign in as the server's admin to see them.</p>
+
+<form id="roster-form">
+  <p class="field">
+  <label for="roster-issuer">Your identity provider</label>
+  <input type="url" id="roster-issuer" autocomplete="off" placeholder="https://your.identity.provider">
+  </p>
+  <p class="actions">
+    <button type="button" id="roster-signin" class="primary" disabled>Sign in &amp; list accounts</button>
+  </p>
+  <p class="hint" id="roster-note" hidden></p>
+</form>
+
+<table id="roster-table" hidden>
+  <thead>
+    <tr><th>Account</th><th>Kind</th><th>Identity</th><th>Pod</th></tr>
+  </thead>
+  <tbody id="roster-rows"></tbody>
+</table>
+
+<script src="/solid-client-authn.bundle.js"></script>
+<script>
+  const $ = (id) => document.getElementById(id);
+  const note = (text) => { const n = $('roster-note'); n.hidden = !text; n.textContent = text || ''; };
+
+  $('roster-issuer').addEventListener('input', () => {
+    $('roster-signin').disabled = !/^https?:\/\/\S+/.test($('roster-issuer').value.trim());
+  });
+
+  $('roster-signin').onclick = () => {
+    const auth = window.solidClientAuthentication;
+    if (!auth) { note('the sign-in library did not load — reload and try again'); return; }
+    auth.login({
+      oidcIssuer: $('roster-issuer').value.trim(),
+      redirectUrl: location.origin + '/admin',
+      clientName: 'FediPod admin',
+    }).catch((e) => note('sign-in failed to start: ' + e.message));
+  };
+
+  // Back from the identity provider: read the roster with the proven login.
+  (async () => {
+    const auth = window.solidClientAuthentication;
+    if (!auth) return;
+    const info = await auth.handleIncomingRedirect().catch(() => null);
+    if (!info?.isLoggedIn) return;
+    note('signed in as ' + info.webId + ' — reading the roster…');
+    const res = await auth.fetch('/api/roster').catch(() => null);
+    const d = res ? await res.json().catch(() => ({})) : {};
+    if (!res) { note('the server did not answer'); return; }
+    if (res.status === 403) { note('signed in as ' + info.webId + ', which is not this server’s admin'); return; }
+    if (res.status === 501) { note('this server names no admin — set FEDIPOD_ADMIN_WEBID and redeploy'); return; }
+    if (res.status !== 200) { note('roster unavailable: ' + (d.error || 'HTTP ' + res.status)); return; }
+    const rows = $('roster-rows');
+    rows.textContent = '';
+    for (const a of d.accounts || []) {
+      const tr = document.createElement('tr');
+      const cell = (child) => { const td = document.createElement('td'); td.append(child); tr.append(td); };
+      cell(a.address);
+      cell(a.kind);
+      cell(a.fronted ? 'lives here' : 'gateway only');
+      const pod = document.createElement('a');
+      pod.href = a.podHome; pod.textContent = new URL(a.podHome).host;
+      cell(pod);
+      rows.append(tr);
+    }
+    $('roster-table').hidden = false;
+    note((d.accounts || []).length + ' account(s) on ' + d.host);
+  })();
+</script>
+<i>(cc) 4.0 By, Jeff Zucker, 2026</i>
+</body>
+</html>
