@@ -17,6 +17,7 @@
   .primary { background: var(--accent); color: #fff; border: none; border-radius: 9px;
     padding: .6rem 1.1rem; font: inherit; cursor: pointer; }
   .primary[disabled] { opacity: .5; cursor: not-allowed; }
+  button { font: inherit; cursor: pointer; }
   [hidden] { display: none !important; }
   table { border-collapse: collapse; width: 100%; margin: 1.2rem 0; }
   th, td { text-align: left; padding: .5rem .7rem; border-bottom: 1px solid var(--line); }
@@ -41,7 +42,7 @@ accounts that only use it as their gateway. Sign in as the server's admin to see
 
 <table id="roster-table" hidden>
   <thead>
-    <tr><th>Account</th><th>Kind</th><th>Identity</th><th>Pod</th></tr>
+    <tr><th>Account</th><th>Kind</th><th>Identity</th><th>Pod</th><th>Remove</th></tr>
   </thead>
   <tbody id="roster-rows"></tbody>
 </table>
@@ -72,30 +73,55 @@ accounts that only use it as their gateway. Sign in as the server's admin to see
     if (!auth) return;
     const info = await auth.handleIncomingRedirect().catch(() => null);
     if (!info?.isLoggedIn) return;
+
+    // Signed fetches build a DPoP proof from the URL, so it must be absolute.
+    const load = async () => {
+      let res;
+      try { res = await auth.fetch(location.origin + '/api/roster'); }
+      catch (e) { note('the roster request failed: ' + e.message); return; }
+      const d = await res.json().catch(() => ({}));
+      if (res.status === 403) { note('signed in as ' + info.webId + ', which is not this server’s admin'); return; }
+      if (res.status === 501) { note('this server names no admin — set FEDIPOD_ADMIN_WEBID and redeploy'); return; }
+      if (res.status !== 200) { note('roster unavailable: ' + (d.error || 'HTTP ' + res.status)); return; }
+      const rows = $('roster-rows');
+      rows.textContent = '';
+      for (const a of d.accounts || []) {
+        const tr = document.createElement('tr');
+        const cell = (child) => { const td = document.createElement('td'); td.append(child); tr.append(td); };
+        cell(a.address);
+        cell(a.kind);
+        cell(a.fronted ? 'lives here' : 'gateway only');
+        const pod = document.createElement('a');
+        pod.href = a.podHome; pod.textContent = new URL(a.podHome).host;
+        cell(pod);
+        const rm = document.createElement('button');
+        rm.type = 'button'; rm.textContent = 'Remove';
+        rm.onclick = () => revoke(a);
+        cell(rm);
+        rows.append(tr);
+      }
+      $('roster-table').hidden = false;
+      note((d.accounts || []).length + ' account(s) on ' + d.host);
+    };
+
+    const revoke = async (a) => {
+      if (!confirm('Remove ' + a.address + ' from this server? The name stops resolving here; nothing on their pod is touched.')) return;
+      let res;
+      try {
+        res = await auth.fetch(location.origin + '/api/revoke', {
+          method: 'POST', headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ handle: a.handle }),
+        });
+      } catch (e) { note('the remove request failed: ' + e.message); return; }
+      const d = await res.json().catch(() => ({}));
+      if (res.status !== 200) { note('remove refused: ' + (d.error || 'HTTP ' + res.status)); return; }
+      if (!d.removed) { note(a.address + ' stays: ' + d.reason); return; }
+      await load();
+      note('removed ' + a.address);
+    };
+
     note('signed in as ' + info.webId + ' — reading the roster…');
-    // The signed fetch builds a DPoP proof from the URL, so it must be absolute.
-    let res;
-    try { res = await auth.fetch(location.origin + '/api/roster'); }
-    catch (e) { note('the roster request failed: ' + e.message); return; }
-    const d = await res.json().catch(() => ({}));
-    if (res.status === 403) { note('signed in as ' + info.webId + ', which is not this server’s admin'); return; }
-    if (res.status === 501) { note('this server names no admin — set FEDIPOD_ADMIN_WEBID and redeploy'); return; }
-    if (res.status !== 200) { note('roster unavailable: ' + (d.error || 'HTTP ' + res.status)); return; }
-    const rows = $('roster-rows');
-    rows.textContent = '';
-    for (const a of d.accounts || []) {
-      const tr = document.createElement('tr');
-      const cell = (child) => { const td = document.createElement('td'); td.append(child); tr.append(td); };
-      cell(a.address);
-      cell(a.kind);
-      cell(a.fronted ? 'lives here' : 'gateway only');
-      const pod = document.createElement('a');
-      pod.href = a.podHome; pod.textContent = new URL(a.podHome).host;
-      cell(pod);
-      rows.append(tr);
-    }
-    $('roster-table').hidden = false;
-    note((d.accounts || []).length + ' account(s) on ' + d.host);
+    await load();
   })();
 </script>
 <i>(cc) 4.0 By, Jeff Zucker, 2026</i>

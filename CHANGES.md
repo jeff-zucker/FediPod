@@ -7,6 +7,11 @@
   the pod behind it. Reading it requires signing in as the WebID the deploy
   names in `FEDIPOD_ADMIN_WEBID`; the roster API strips every secret from
   the rows it returns. Env-seeded rows and attach-created rows appear alike.
+- **The admin can remove an account.** Each roster row has a Remove button:
+  the server drops the row and stops answering for the name; nothing on the
+  user's pod is touched. A row seeded in the deploy environment cannot be
+  dropped from the page — the answer says to remove it from
+  `FEDIPOD_DIRECTORY_JSON` and redeploy.
 
 ## 2026-08-23
 - **Attaching to a gateway happens from your own agent.** The record's new

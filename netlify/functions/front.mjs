@@ -116,6 +116,14 @@ export default async function handler(request) {
     adminWebId: process.env.FEDIPOD_ADMIN_WEBID || null,
     lookup: (handle) => map[handle] || null,
     listDirectory: async () => map,
+    // Drops the blob row; a handle that survives in the env seed stays.
+    removeDirectory: async (handle) => {
+      const store = getStore('directory');
+      await store.delete(handle);
+      dir = null;
+      const seeds = await seedRows().catch(() => ({}));
+      return !seeds[handle];
+    },
     // Attach writes its row here; the next directory() pass reads it back.
     putDirectory: async (handle, record) => {
       const store = getStore('directory');

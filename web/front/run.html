@@ -114,7 +114,8 @@ you to keep running. Sign in with your pod to prove it is yours.</p>
     const n = $('run-note');
     n.hidden = false;
     n.textContent = 'signed in as ' + info.webId + ' — asking the server…';
-    const res = await auth.fetch('/api/agent', {
+    // The signed fetch builds a DPoP proof from the URL, so it must be absolute.
+    const res = await auth.fetch(location.origin + '/api/agent', {
       method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ action: p.action, podBase: p.podBase }),
     }).catch(() => null);

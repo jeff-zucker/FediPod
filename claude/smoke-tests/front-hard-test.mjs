@@ -97,6 +97,8 @@ const front = http.createServer(async (req, res) => {
     lookup: (h) => directory[h] || attached[h] || null,
     listDirectory: async () => ({ ...directory, ...attached }),
     putDirectory: async (h, rec) => { attached[h] = rec; },
+    // Mirrors the adapter: only attach-created rows can go; seeds survive.
+    removeDirectory: async (h) => { delete attached[h]; return !directory[h]; },
     podPut: async (_h, url, b, ct) => {
       const r = await fetch(url, { method: 'PUT', headers: { 'content-type': ct }, body: b })
         .catch(() => null);
@@ -187,6 +189,26 @@ try {
     'each row says whether the identity lives here or only gateways here');
   check(!/hmacSecret|shared-secret/.test(JSON.stringify(roster)),
     'and no row carries a secret');
+
+  // ---- revoking an account ---------------------------------------------------
+  const revoke = (handle, authz) => get('/api/revoke', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', ...(authz ? { authorization: authz } : {}) },
+    body: JSON.stringify({ handle }),
+  });
+  check((await revoke('finch')).status === 401, 'revoking needs a proven reader');
+  check((await revoke('finch', 'Bearer someone-else')).status === 403, 'who is the admin');
+  check((await revoke('nobody', 'Bearer pretend')).status === 404, 'and an account that exists');
+  const gone = await (await revoke('finch', 'Bearer pretend')).json();
+  const after = await (await get('/api/roster', { headers: { authorization: 'Bearer pretend' } })).json();
+  check(gone.removed === true && !after.accounts.some(a => a.handle === 'finch'),
+    'a removed account leaves the roster');
+  check((await get(`/.well-known/webfinger?resource=acct:finch@${HOST}`)).status === 404,
+    'and its name stops resolving');
+  const seeded = await (await revoke('alice', 'Bearer pretend')).json();
+  check(seeded.removed === false && /environment/.test(seeded.reason || '')
+    && (await get(`/.well-known/webfinger?resource=acct:alice@${HOST}`)).status === 200,
+    'an env-seeded row stays, and the answer says where to remove it');
 
   // ---- a delivery through the door -----------------------------------------
   const deliver = async (activity) => {
