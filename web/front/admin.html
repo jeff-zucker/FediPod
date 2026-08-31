@@ -31,10 +31,10 @@ accounts that only use it as their gateway. Sign in as the server's admin to see
 <form id="roster-form">
   <p class="field">
   <label for="roster-issuer">Your identity provider</label>
-  <input type="url" id="roster-issuer" autocomplete="off" placeholder="https://your.identity.provider">
+  <input type="url" id="roster-issuer" autocomplete="off" value="https://solidcommunity.net">
   </p>
   <p class="actions">
-    <button type="button" id="roster-signin" class="primary" disabled>Sign in &amp; list accounts</button>
+    <button type="submit" id="roster-signin" class="primary">Sign in &amp; list accounts</button>
   </p>
   <p class="hint" id="roster-note" hidden></p>
 </form>
@@ -55,7 +55,8 @@ accounts that only use it as their gateway. Sign in as the server's admin to see
     $('roster-signin').disabled = !/^https?:\/\/\S+/.test($('roster-issuer').value.trim());
   });
 
-  $('roster-signin').onclick = () => {
+  $('roster-form').addEventListener('submit', (ev) => {
+    ev.preventDefault();
     const auth = window.solidClientAuthentication;
     if (!auth) { note('the sign-in library did not load — reload and try again'); return; }
     auth.login({
@@ -63,7 +64,7 @@ accounts that only use it as their gateway. Sign in as the server's admin to see
       redirectUrl: location.origin + '/admin',
       clientName: 'FediPod admin',
     }).catch((e) => note('sign-in failed to start: ' + e.message));
-  };
+  });
 
   // Back from the identity provider: read the roster with the proven login.
   (async () => {
@@ -72,9 +73,11 @@ accounts that only use it as their gateway. Sign in as the server's admin to see
     const info = await auth.handleIncomingRedirect().catch(() => null);
     if (!info?.isLoggedIn) return;
     note('signed in as ' + info.webId + ' — reading the roster…');
-    const res = await auth.fetch('/api/roster').catch(() => null);
-    const d = res ? await res.json().catch(() => ({})) : {};
-    if (!res) { note('the server did not answer'); return; }
+    // The signed fetch builds a DPoP proof from the URL, so it must be absolute.
+    let res;
+    try { res = await auth.fetch(location.origin + '/api/roster'); }
+    catch (e) { note('the roster request failed: ' + e.message); return; }
+    const d = await res.json().catch(() => ({}));
     if (res.status === 403) { note('signed in as ' + info.webId + ', which is not this server’s admin'); return; }
     if (res.status === 501) { note('this server names no admin — set FEDIPOD_ADMIN_WEBID and redeploy'); return; }
     if (res.status !== 200) { note('roster unavailable: ' + (d.error || 'HTTP ' + res.status)); return; }
