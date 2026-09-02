@@ -1,13 +1,13 @@
 # FediPod
 
-- access the fediverse from a Solid pod
+- access the Fediverse from a Solid pod
 
 `FediPod` is a merger of three federating protocols - feeds from Mastodon and other Fediverse servers and from Bluesky and other ATProto servers, with all user data stored on a Solid pod. There are four different kinds of FediPod accounts :
 
 | Kind of Account | Description | User requirements | Host requirements |
 |---|---|---|---|
-| FediPod Solo | Browse & interact with the fediverse and ATProto from a Solid pod | an always-on pod, a usually on local agent | — |
-| FediPod Group | Host a discussion group of fediverse/ATProto users from a Solid pod | an always-on pod, a usually on local agent | — |
+| FediPod Solo | Browse & interact with the Fediverse and ATProto from a Solid pod | an always-on pod, a usually on local agent | — |
+| FediPod Group | Host a discussion group of Fediverse/ATProto users from a Solid pod | an always-on pod, a usually on local agent | — |
 | FediPod Gateway | Solo or Group with spam filtering & optional community identity | same + gateway pass-through account | any always-on host, Netlify will do |
 | FediPod Server | Full ActivityPub server as a CSS component | a pod on a CSS server implementing the FediPod component | a CSS server implementing the FediPod component |
 
@@ -51,7 +51,7 @@ does the same from the terminal. `AP_UPDATE_CHECK=0` turns the check off.
 
 ## A FediPod.net Gateway account (reccommended)
 
-Most of what a fediverse inbox receives is broadcast noise. A gateway is a
+Most of what a Fediverse inbox receives is broadcast noise. A gateway is a
 shared, always-on door that verifies each delivery, drops the junk, and
 passes the rest to your pod — while your key and data stay on your own
 pod. There is a free gateway at [fedipod.net](https://fedipod.net/). Attaching to it or detaching from it is a few wizard-guided clicks.
@@ -85,7 +85,12 @@ notifications that reach you while the client is closed.
 
 ## Bluesky and ATProto
 
-`FediPod` includes experimental support for ATProto. A Bluesky connection lets your `FediPod` agent drive an existing Bluesky (or other ATProto) account alongside your fediverse identity. When you post a public post from `FediPod`, it will be cross-posted to Bluesky as a mirror (a toggle you can turn off). Private DMs from `FediPod` to Bluesky are not currently supported.  Bluesky replies and activity flow into your timeline so you see, for example, a combined Bluesky and Mastodon feed.  You can like, boost, and reply to Bluesky posts from within `FediPod`.  None of these features require `Bridgy Fed`, however, fully joining a `FediPod` group from a Bluesky client other than `FediPod` does require a bridge.
+`FediPod` includes experimental support for ATProto. A Bluesky connection lets your `FediPod` agent drive an existing Bluesky (or other ATProto) account alongside your Fediverse identity. When you post a public post from `FediPod`, it will be cross-posted to Bluesky as a mirror (a toggle you can turn off). Private DMs from `FediPod` to Bluesky are not currently supported.  Bluesky replies and activity flow into your timeline so you see, for example, a combined Bluesky and Mastodon feed.  You can like, boost, and reply to Bluesky posts from within `FediPod`.  None of these features require `Bridgy Fed`, however, fully joining a `FediPod` group from a Bluesky client other than `FediPod` does require a bridge.
+
+## Your other Fediverse accounts
+
+If you also hold an account on Mastodon — or on any other server speaking the Mastodon API, such as GoToSocial, Pleroma, Akkoma, Pixelfed or Friendica — you can connect it and read it here. Its home timeline and notifications join the feed you already read, interleaved by time, and a post both accounts see appears once rather than twice. Favouriting, boosting and replying act as the account the post came through, on its own server. Connect one from the **Other identities** row of the admin page: you sign in at that server, and the token it hands back stays on this machine.
+
 
 ## Architecture
 
@@ -112,7 +117,7 @@ as owner-only documents. See [Groups](https://github.com/jeff-zucker/FediPod/blo
 
 ## Acknowledgements
 
-This project is inspired by the fantastic [ActivityPods project](https://github.com/activitypods) and is meant to be a lightweight alternative rather than a replacement.  Thanks to [Sébastien](https://github.com/srosset81) and collaborators for all your work.  Thanks to [Damon](https://github.com/outlaw-dame), [Mikhal](https://github.com/mrkvon), [Alain](https://github.com/bourgeoa), [Sharon](https://github.com/SharonStrats), and [Vincent](https://github.com/Vinnl) for testing and encouragement.  Special thanks are due to [Joseph](https://github.com/jg10-mastodon-social) whose client-to-server authentication approach and the netlify/fronted-identity ideas I borrowed from [solid-activitypub-netlify](https://github.com/jg10-mastodon-social/solid-activitypub-netlify).
+This project is inspired by the fantastic [ActivityPods project](https://github.com/activitypods) and is meant to be a lightweight alternative rather than a replacement.  Thanks to [Sébastien](https://github.com/srosset81) and collaborators for all your work.  Thanks to [Damon](https://github.com/outlaw-dame), [Mikhal](https://github.com/mrkvon), [Alain](https://github.com/bourgeoa), and [Sharon](https://github.com/SharonStrats), for testing and encouragement.  Special thanks are due to [Joseph](https://github.com/jg10-mastodon-social) whose client-to-server authentication approach and the netlify/fronted-identity ideas I borrowed from [solid-activitypub-netlify](https://github.com/jg10-mastodon-social/solid-activitypub-netlify) and to [Vincent](https://github.com/Vinnl) and [Emilia](https://github.com/ThisIsMissEm) whose ideas on the multiple Fediverse accounts sparked FediPod's support for it.
 
 ## Transparency
 
