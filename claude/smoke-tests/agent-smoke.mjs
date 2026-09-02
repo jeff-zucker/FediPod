@@ -8266,7 +8266,8 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   const ARCH = fs.mkdtempSync('/tmp/fedipod-inbox-archive-');
   const on = mkDrain(storageFor(ARCH));
   await on.intake.drain();
-  const monthDir = path.join(ARCH, '2026-08');
+  const MONTH = new Date().toISOString().slice(0, 7);   // the archive files by receipt month
+  const monthDir = path.join(ARCH, MONTH);
   const archived = fs.existsSync(monthDir) ? fs.readdirSync(monthDir) : [];
   check(on.deleted.length === 1 && archived.length === 1 && archived[0] === `${HASH}.json`,
     'a drained item leaves its original bytes behind, named by their own hash, and is still deleted');
@@ -8276,7 +8277,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
     'the record holds the raw bytes untouched, plus who, whence and when');
 
   // The same file is JSON-LD: an RDF reader gets the receipt as a graph.
-  const recIri = 'https://archive.example/2026-08/item.json';
+  const recIri = `https://archive.example/${MONTH}/item.json`;
   const recG = $rdf21c.graph();
   await new Promise((resolve, reject) => $rdf21c.parse(
     fs.readFileSync(path.join(monthDir, archived[0]), 'utf8'), recG, recIri,
