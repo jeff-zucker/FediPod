@@ -70,4 +70,5 @@ tmp/
 
 # Diagram renders — the .svg beside each one is the source
 architecture.png
+mult-account.png
 packages/fedipod-server/fedipod-server.png

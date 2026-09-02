@@ -61,7 +61,7 @@ Users are recommended to associate with a gateway as it reduces the mail load on
 ## Fediverse Clients
 
 The UI is the bundled [Phanpy](https://github.com/cheeaun/phanpy)
-client (MIT, by Chee Aun). It is served same-origin over the agent's Mastodon client-API facade. Log in with one click, using `https://localhost:8030` (or your own port) as the instance.
+client (MIT, by Chee Aun). It is served same-origin over the agent's Mastodon client-API facade, and logging in is one click — the instance is filled in for you. If you ever enter it by hand, use the address on the record's **local host** row.
 
 The agent federates for real: follow/unfollow, post, reply, favourite,
 boost, media, delete; incoming boosts from people you follow and a

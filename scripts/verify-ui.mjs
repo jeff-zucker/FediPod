@@ -1,11 +1,14 @@
 // verify-ui.mjs — integrity check for the vendored client bundles.
 //
-// phanpy/dist is third-party code we hand-patched; nothing else in the
-// project would notice if a file in it changed. This records a SHA-256 per
-// file and re-checks them, so tampering (or an accidental edit) is visible.
+// phanpy/dist is upstream's own build, unmodified; nothing else in the project
+// would notice if a file in it changed. This records a SHA-256 per file and
+// re-checks them, so tampering (or an accidental edit) is visible. The two
+// things the agent needs done to the client happen when the files are served
+// (lib/admin.mjs), which is what lets these hashes be compared against the
+// ones upstream published.
 //
 //   node scripts/verify-ui.mjs           # verify against phanpy/SHA256SUMS
-//   node scripts/verify-ui.mjs --write   # (re)record after a deliberate patch
+//   node scripts/verify-ui.mjs --write   # (re)record after a client upgrade
 
 import crypto from 'node:crypto';
 import fs from 'node:fs';

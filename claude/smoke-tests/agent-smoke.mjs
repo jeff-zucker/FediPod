@@ -243,11 +243,26 @@ if (up) {
   // the page answers navigations from its precache with the headers it stored,
   // so a header fix (the CSP script-src hash) never reaches a browser that has
   // it. sw.js stays as a kill-switch so old installs clean themselves up.
-  const noRegister = ['phanpy/dist/index.html', 'phanpy/dist/compose/index.html']
-    .every(f => !/inline-sw/.test(fs.readFileSync(path.join(root, f), 'utf8')));
-  const swSrc = fs.readFileSync(path.join(root, 'phanpy/dist/sw.js'), 'utf8');
-  check(noRegister && /registration\.unregister\(\)/.test(swSrc),
-    'UI registers no service worker; sw.js is the kill-switch');
+  // Both are done as the files are SERVED, so the vendored tree stays
+  // upstream's own build and its hashes can be compared with the published
+  // ones.
+  const swIdx = await fetchLocal(`https://127.0.0.1:${PORT}/index.html`, { headers: gh });
+  const swIdxBody = await swIdx.text();
+  const swCompose = await fetchLocal(`https://127.0.0.1:${PORT}/compose/index.html`, { headers: gh });
+  const swComposeBody = await swCompose.text();
+  const swServed = await fetchLocal(`https://127.0.0.1:${PORT}/sw.js`, { headers: gh });
+  const swServedBody = await swServed.text();
+  check(swIdx.status === 200 && !/inline-sw/.test(swIdxBody) && !/inline-sw/.test(swComposeBody)
+    && /registration\.unregister\(\)/.test(swServedBody),
+    'the client is served registering no service worker, and sw.js is the kill-switch');
+  check(['phanpy/dist/index.html', 'phanpy/dist/compose/index.html']
+    .every(f => /inline-sw/.test(fs.readFileSync(path.join(root, f), 'utf8'))),
+    'while the vendored files themselves are unmodified, so the hashes are upstream’s');
+  // Upstream's instance validator wants a dot in the hostname, which is why
+  // the address to log in at is the named origin and not bare localhost.
+  const instanceOk = (s) => /[^\s\r\n\t/\\]+\.[^\s\r\n\t/\\]+/.test(s) && !/[\s/\\@]/.test(s);
+  check(instanceOk('you.localhost:8030') && !instanceOk('localhost:8030'),
+    'and the named origin is what an unpatched client will accept as an instance');
 
   // --- 3. facade basics ---
   const inst = await fetchLocal(`https://127.0.0.1:${PORT}/api/v1/instance`, { headers: gh });
