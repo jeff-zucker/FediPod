@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="680" height="396" viewBox="0 0 680 396" role="img" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif">
+<title>A FediPod agent aggregating two connected Fediverse accounts plus a Bluesky account</title>
+<desc>Four account boxes on the left: the FediPod account, a Mastodon account, a GoToSocial account and a Bluesky account, each labelled with its handle. Each has a solid arrow carrying content into the FediPod agent and a dashed arrow carrying actions back out. The agent holds one merged statuses index, one signing key with three account tokens, and two connectors. Copyright 2026 Jeff Zucker, licensed CC BY-SA 4.0.</desc>
+<defs>
+<marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="#888780" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker>
+</defs>
+
+<rect x="0" y="0" width="680" height="396" fill="#FFFFFF"/>
+
+<rect x="420" y="40" width="220" height="290" rx="8" fill="#FFFFFF" stroke="#888780" stroke-width="0.5"/>
+<text x="530" y="69" text-anchor="middle" font-size="14" font-weight="500" fill="#2C2C2A">FediPod agent</text>
+
+<rect x="40" y="40" width="200" height="56" rx="8" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.5"/>
+<text x="140" y="63" text-anchor="middle" font-size="14" font-weight="500" fill="#3C3489">FediPod account</text>
+<text x="140" y="80" text-anchor="middle" font-size="12" font-weight="400" fill="#534AB7">@me@mypod</text>
+
+<rect x="40" y="118" width="200" height="56" rx="8" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.5"/>
+<text x="140" y="141" text-anchor="middle" font-size="14" font-weight="500" fill="#085041">Mastodon account</text>
+<text x="140" y="158" text-anchor="middle" font-size="12" font-weight="400" fill="#0F6E56">@me@mastodon.social</text>
+
+<rect x="40" y="196" width="200" height="56" rx="8" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.5"/>
+<text x="140" y="219" text-anchor="middle" font-size="14" font-weight="500" fill="#085041">GoToSocial account</text>
+<text x="140" y="236" text-anchor="middle" font-size="12" font-weight="400" fill="#0F6E56">@me@gts.example</text>
+
+<rect x="40" y="274" width="200" height="56" rx="8" fill="#FAECE7" stroke="#993C1D" stroke-width="0.5"/>
+<text x="140" y="297" text-anchor="middle" font-size="14" font-weight="500" fill="#712B13">Bluesky account</text>
+<text x="140" y="314" text-anchor="middle" font-size="12" font-weight="400" fill="#993C1D">@me.bsky.social</text>
+
+<rect x="440" y="96" width="180" height="56" rx="4" fill="#F1EFE8" stroke="#5F5E5A" stroke-width="0.5"/>
+<text x="530" y="119" text-anchor="middle" font-size="14" font-weight="500" fill="#444441">statuses index</text>
+<text x="530" y="136" text-anchor="middle" font-size="12" font-weight="400" fill="#5F5E5A">one merged timeline</text>
+
+<rect x="440" y="176" width="180" height="56" rx="4" fill="#F1EFE8" stroke="#5F5E5A" stroke-width="0.5"/>
+<text x="530" y="199" text-anchor="middle" font-size="14" font-weight="500" fill="#444441">credentials</text>
+<text x="530" y="216" text-anchor="middle" font-size="12" font-weight="400" fill="#5F5E5A">one key, three tokens</text>
+
+<rect x="440" y="256" width="180" height="56" rx="4" fill="#F1EFE8" stroke="#5F5E5A" stroke-width="0.5"/>
+<text x="530" y="279" text-anchor="middle" font-size="14" font-weight="500" fill="#444441">connectors</text>
+<text x="530" y="296" text-anchor="middle" font-size="12" font-weight="400" fill="#5F5E5A">Mastodon API, ATProto</text>
+
+<line x1="250" y1="48" x2="410" y2="48" stroke="#888780" stroke-width="0.5" marker-end="url(#arrow)"/>
+<text x="330" y="42" text-anchor="middle" font-size="12" font-weight="400" fill="#5F5E5A">drains its inbox</text>
+<line x1="410" y1="88" x2="250" y2="88" stroke="#888780" stroke-width="0.5" stroke-dasharray="4 4" marker-end="url(#arrow)"/>
+<text x="330" y="82" text-anchor="middle" font-size="12" font-weight="400" fill="#5F5E5A">signs and delivers</text>
+
+<line x1="250" y1="126" x2="410" y2="126" stroke="#888780" stroke-width="0.5" marker-end="url(#arrow)"/>
+<text x="330" y="120" text-anchor="middle" font-size="12" font-weight="400" fill="#5F5E5A">polls its timeline</text>
+<line x1="410" y1="166" x2="250" y2="166" stroke="#888780" stroke-width="0.5" stroke-dasharray="4 4" marker-end="url(#arrow)"/>
+<text x="330" y="160" text-anchor="middle" font-size="12" font-weight="400" fill="#5F5E5A">acts as this account</text>
+
+<line x1="250" y1="204" x2="410" y2="204" stroke="#888780" stroke-width="0.5" marker-end="url(#arrow)"/>
+<text x="330" y="198" text-anchor="middle" font-size="12" font-weight="400" fill="#5F5E5A">polls its timeline</text>
+<line x1="410" y1="244" x2="250" y2="244" stroke="#888780" stroke-width="0.5" stroke-dasharray="4 4" marker-end="url(#arrow)"/>
+<text x="330" y="238" text-anchor="middle" font-size="12" font-weight="400" fill="#5F5E5A">acts as this account</text>
+
+<line x1="250" y1="282" x2="410" y2="282" stroke="#888780" stroke-width="0.5" marker-end="url(#arrow)"/>
+<text x="330" y="276" text-anchor="middle" font-size="12" font-weight="400" fill="#5F5E5A">polls its timeline</text>
+<line x1="410" y1="322" x2="250" y2="322" stroke="#888780" stroke-width="0.5" stroke-dasharray="4 4" marker-end="url(#arrow)"/>
+<text x="330" y="316" text-anchor="middle" font-size="12" font-weight="400" fill="#5F5E5A">acts and mirrors posts</text>
+
+<text x="40" y="352" text-anchor="start" font-size="12" font-weight="400" fill="#888780">© 2026 Jeff Zucker · CC BY-SA 4.0</text>
+</svg>

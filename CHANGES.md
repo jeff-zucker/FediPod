@@ -1,5 +1,26 @@
 # Changes
 
+## 2026-09-02
+- **Fediverse accounts you hold elsewhere can be connected.** Connecting one
+  works on any server speaking the Mastodon API — Mastodon, GoToSocial,
+  Pleroma, Akkoma, Pixelfed, Friendica. You sign in at that server, and its
+  home timeline and notifications join the feed you already read,
+  interleaved by time. Favouriting, boosting and
+  replying act as that account on its own server, and a post you wrote there
+  can be deleted from here. The token is kept beside the signing key on this
+  machine and never reaches the pod; what arrives is a view cache and is never
+  written to the pod either.
+- **A post two of your accounts both see is one row.** The statuses index
+  merges a repeat sighting instead of dropping it, recording which accounts saw
+  it — so the favourite control reflects any of them holding it, and undoing
+  removes it from every account that does. A note the hashtag feed saw first is
+  raised to a followed post when your own inbox delivers it, instead of staying
+  a tag row without its slug.
+- **The record gathers every account elsewhere under one row.** **Other
+  identities** carries the button that connects one, and each account already
+  connected — Bluesky and Fediverse alike — is a row of its own beneath it with
+  its own Disconnect. Your own Fediverse identity keeps its own row above.
+
 ## 2026-08-31
 - **The front has a roster page.** `/admin` on a front (fedipod.net) lists
   every account the server answers for — the address, person or group,

@@ -133,6 +133,9 @@ dl { margin: .5rem 0; }        /* grid only above 34rem — see the media query 
     gap: .6rem .9rem; align-items: baseline; }
 }
 dt { color: var(--muted); }
+/* An identity connected under "Other identities" belongs to the row above it,
+   and the indent is what says so. */
+dt.under { padding-left: 1.25rem; }
 dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
 .rows { list-style: none; padding: 0; margin: .3rem 0; }
 .rows li { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center;
@@ -216,16 +219,16 @@ pre { overflow-x: auto; background: #0001; padding: .6rem; border-radius: .3rem;
       <label class="choice"><input type="radio" name="newKind" value="person" checked>
         A <strong>person</strong> — an account you read and post from</label>
       <label class="choice"><input type="radio" name="newKind" value="group">
-        A <strong>group</strong> of fediverse users you manage</label>
+        A <strong>group</strong> of Fediverse users you manage</label>
     </fieldset>
 
     <fieldset>
       <legend>Actor's Handle</legend>
       <label for="new-handle">Handle</label>
       <input type="text" id="new-handle" autocomplete="off"
-        placeholder="handle part of fediverse address: @HANDLE@server"
+        placeholder="handle part of Fediverse address: @HANDLE@server"
         aria-describedby="new-handle-hint">
-      <p class="hint" id="new-handle-hint">The name in your fediverse address. This is permanent.
+      <p class="hint" id="new-handle-hint">The name in your Fediverse address. This is permanent.
         Letters, digits, hyphens, and underscores only.</p>
     </fieldset>
 
@@ -303,8 +306,8 @@ pre { overflow-x: auto; background: #0001; padding: .6rem; border-radius: .3rem;
       <option value="auto">accepted automatically</option>
     </select>
   </span>
-  <span id="bsky-connect-ctl" hidden>
-    <button type="button" id="bsky-open" class="inline" title="   Connect a Bluesky account this identity also posts as">Connect Bluesky account</button>
+  <span id="ident-ctl" hidden>
+    <button type="button" id="ident-open" class="inline" title="   Connect an account you hold on another network, so its timeline joins the one you read here">Connect an identity</button>
   </span>
   <span id="bsky-ctl" hidden>
     <select id="bsky-crosspost" aria-label="Bluesky crossposting" title="   Whether your public posts also go to the Bluesky account">
@@ -344,7 +347,7 @@ pre { overflow-x: auto; background: #0001; padding: .6rem; border-radius: .3rem;
        on arrival. Shown only when something is actually waiting. -->
   <div id="block-modqueue" hidden>
     <h3>Moderation requests <span class="muted" id="modqueue-count"></span></h3>
-    <p class="hint">Asked for by a moderator over the fediverse. A delivery cannot prove who
+    <p class="hint">Asked for by a moderator over the Fediverse. A delivery cannot prove who
       sent it, so nothing here has been acted on.</p>
     <ul class="rows" role="list" id="modqueue"></ul>
   </div>
@@ -423,20 +426,46 @@ pre { overflow-x: auto; background: #0001; padding: .6rem; border-radius: .3rem;
     <button id="bsky-connect" type="submit" class="primary" title="   Sign in to the Bluesky account with the app password">Connect</button>
   </p>
 </form>
+<form id="ident-form" hidden>
+  <p class="hint">Either kind brings that account's timeline and notifications
+    into the feed you read here, and acts as that account when you reply to,
+    favourite or boost one of its posts.</p>
+  <p>
+    <button type="button" id="ident-pick-fedi" class="primary" title="   Sign in at a Mastodon-API server: Mastodon, GoToSocial, Pleroma, Akkoma, Pixelfed or Friendica">A Fediverse account</button>
+    <button type="button" id="ident-pick-bsky" title="   Sign in to Bluesky or another ATProto server with an app password">A Bluesky account</button>
+  </p>
+</form>
+<form id="fediacct-form" hidden>
+  <ol class="hint">
+    <li>Name the server your other account is on.</li>
+    <li>That server asks you to sign in and to allow FediPod. It is the only
+      place your password is typed; this agent never sees or stores one.</li>
+    <li>Its timeline and notifications then join the ones you already read here,
+      and a like or a reply on one of its posts goes out as that account.</li>
+    <li>What arrives is held on this machine for reading. None of it is written
+      to your pod.</li>
+  </ol>
+  <label for="fediacct-host">server</label>
+  <input type="text" id="fediacct-host" placeholder="mastodon.social" autocomplete="off"
+    title="   The server your other account lives on — Mastodon, GoToSocial, Pleroma, Akkoma, Pixelfed and Friendica all speak the API this needs">
+  <p>
+    <button id="fediacct-connect" type="submit" class="primary" title="   Go to that server to sign in and allow FediPod">Continue to that server</button>
+  </p>
+</form>
 <!-- Every consequence is written here rather than assembled in script: the
      page asking "are you sure" has to say what it is sure about, and this is
      the only record of it. Script picks which block to show, nothing else. -->
 <!-- The gateway popups: attach proves the pod with this agent's own credential;
      detach republishes the pod's own inbox. -->
 <form id="gateway-attach-form" hidden>
-  <p class="hint">A gateway filters your fediverse mail before it reaches your pod: each
+  <p class="hint">A gateway filters your Fediverse mail before it reaches your pod: each
     delivery is verified at its door, spam is dropped, and the rest lands in your pod as
     before. Attaching proves the pod with this agent's own credential — no password
     leaves this machine.</p>
   <label for="gw-front">gateway</label>
   <input type="url" id="gw-front" placeholder="https://fedipod.net" autocomplete="off">
   <fieldset>
-    <legend>Your fediverse handle</legend>
+    <legend>Your Fediverse handle</legend>
     <label class="choice"><input type="radio" name="gwShape" value="pod" checked>
       Keep my pod-based handle: <strong id="gw-pod-preview"></strong><br>
       <span class="hint">Your address stays tied to your own pod — you can drop the

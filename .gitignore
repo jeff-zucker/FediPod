@@ -32,6 +32,12 @@ ids.json
 lease.json
 tagfeed.json
 masto-markers.json
+# Credentials for accounts held elsewhere: the Bluesky app password in
+# plaintext, and a full-access OAuth token per connected fediverse account.
+atproto.json
+bskyfeed.json
+fediaccts/
+fediacctfeed.json
 
 # secrets and local config
 .env

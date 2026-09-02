@@ -505,7 +505,7 @@ if (cmd === 'up') {
     if (/^y/i.test(have)) {
       // Either tuck the fediverse account into the pod they already have,
       // or make a fresh pod on the same Solid account for it.
-      const where = await ask('store your fediverse account in that pod, or in a new pod? (existing/new)', 'existing');
+      const where = await ask('store your Fediverse account in that pod, or in a new pod? (existing/new)', 'existing');
       if (/^n/i.test(where)) newAccount = true;
       else pod = await ask('your pod address (e.g. https://you.solidcommunity.net/)');
     } else {
@@ -575,8 +575,8 @@ if (cmd === 'up') {
   }
   console.log('The display name can be changed later; the handle and pod cannot.');
   const go = await ask(newAccount
-    ? (kind === 'group' ? 'create pod and group? (y/n)' : 'create pod and fediverse account? (y/n)')
-    : (kind === 'group' ? 'create group on this pod? (y/n)' : 'create fediverse account on this pod? (y/n)'), 'y');
+    ? (kind === 'group' ? 'create pod and group? (y/n)' : 'create pod and Fediverse account? (y/n)')
+    : (kind === 'group' ? 'create group on this pod? (y/n)' : 'create Fediverse account on this pod? (y/n)'), 'y');
   if (!/^y/i.test(go)) { console.log('nothing was created'); process.exit(0); }
   endAsking();                           // hand the tty to the password prompt
 
@@ -589,7 +589,7 @@ if (cmd === 'up') {
     console.log(`account + pod created: ${pod}`);
     if (!webfingerHost(pod)) {
       console.log(`\n${issuerHost} created the pod at a path rather than on its own subdomain,`);
-      console.log(`so @${handle}@\u2026 cannot be discovered by other fediverse servers.`);
+      console.log(`so @${handle}@\u2026 cannot be discovered by other Fediverse servers.`);
       const cont = kind === 'group' ? 'n' : (interactive ? await ask('continue anyway? (y/n)', 'n') : 'y');
       endAsking();
       if (!/^y/i.test(cont)) {

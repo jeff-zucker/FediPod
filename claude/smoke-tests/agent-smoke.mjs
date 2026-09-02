@@ -2042,6 +2042,47 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     const got = st.getStatuses().find(s => s.noteId === 'https://evil.example/n/1');
     check(got.content.length === 100_000 && got.truncated === true,
       'and so is a planted post, which says so rather than pretending');
+
+    // A post two of the owner's accounts both follow the author of arrives
+    // twice. The second arrival used to be dropped whole, and it is the only
+    // record that the other account saw it.
+    const SEEN = 'https://m.example/n/both';
+    const events = [];
+    st.onEvent = (t) => events.push(t);
+    st.addStatus({ noteId: SEEN, kind: 'acct', actor: 'https://m.example/u/a',
+      published: '2026-09-01T10:00:00Z', sourceAccts: [{ acct: 'one' }] });
+    st.addStatus({ noteId: 'https://m.example/n/newer', kind: 'acct',
+      actor: 'https://m.example/u/b', published: '2026-09-01T11:00:00Z' });
+    const wasAt = st.getStatuses().findIndex(x => x.noteId === SEEN);
+    events.length = 0;
+    const merged = st.addStatus({ noteId: SEEN, kind: 'acct',
+      actor: 'https://m.example/u/a', sourceAccts: [{ acct: 'two' }] });
+    const both = st.getStatuses().find(x => x.noteId === SEEN);
+    check(merged.merged === true && both.sourceAccts.length === 2,
+      'a post two accounts saw is one row naming both');
+    check(st.getStatuses().findIndex(x => x.noteId === SEEN) === wasAt,
+      'and it keeps its place, so the prune tail is still the oldest');
+    check(events.length === 0,
+      'and raises no second stream event, which would show it twice');
+
+    await st.commit();
+    puts.length = 0;
+    st.addStatus({ noteId: SEEN, kind: 'acct', sourceAccts: [{ acct: 'two' }] });
+    await st.commit();
+    check(puts.length === 0,
+      `a sweep that re-reads the same post writes nothing (${puts.length})`);
+
+    // Our own intake may raise an aggregated row; nothing else may, or a tag
+    // sweep could promote a stranger's mention into the home timeline.
+    st.addStatus({ noteId: SEEN, kind: 'timeline', slug: 'both' });
+    check(st.getStatuses().find(x => x.noteId === SEEN).kind === 'timeline',
+      'our own intake raises an aggregated row to timeline');
+    const MENTION = 'https://m.example/n/stranger';
+    st.addStatus({ noteId: MENTION, kind: 'mention', actor: 'https://evil.example/u/x' });
+    st.addStatus({ noteId: MENTION, kind: 'tag' });
+    check(st.getStatuses().find(x => x.noteId === MENTION).kind === 'mention',
+      'but a tag arrival does not raise a mention');
+    st.onEvent = null;
   }
 
   // --- a sweep publishes the collections once, not once per event ---
@@ -8758,7 +8799,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   check(!page.includes('<script>alert') && page.includes('&lt;script&gt;'),
     'the display name is escaped, not interpreted');
   check(page.includes('@group@activitypub.example') && page.includes('authorize_interaction')
-    && page.includes('a group on the fediverse'),
+    && page.includes('a group on the Fediverse'),
     'the page shows the address, says what it is, and carries the remote-follow control');
 
   // The actor advertises the page as its url, and mention ANCHORS point at the
@@ -10099,6 +10140,186 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
 // its own toolchain (tsc + componentsjs-generator) and its own tests — `npm
 // test` there, and `test/live-css.mjs` against a real CSS. It is deliberately
 // NOT exercised from this offline suite.
+
+// --- 31. connected fediverse accounts: custody, the poll, and who acts ---
+{
+  const { FediAccounts, safeId, cleanHost } = await import(path.join(root, 'lib/fediacct.mjs'));
+  const { AcctFeed } = await import(path.join(root, 'lib/acctfeed.mjs'));
+  const { PodStore } = await import(path.join(root, 'lib/store.mjs'));
+  const { MastoApi } = await import(path.join(root, 'lib/mastoapi.mjs'));
+  const wire31 = await import(path.join(root, 'lib/wire.mjs'));
+
+  const reply = (status, body, headers = {}) => ({
+    status, json: async () => body,
+    headers: { get: (k) => headers[String(k).toLowerCase()] ?? null },
+  });
+
+  // A username from a remote server becomes a FILE name here, so it is checked
+  // rather than trusted — `--handle ../escape` is a bug this project has paid
+  // for once already.
+  check(safeId('../../escape', 'm.example') === null && safeId('a..b', 'm.example') === null
+    && safeId('alice', 'm.example') === 'alice@m.example',
+    'a remote username cannot climb out of the credential directory');
+  check(cleanHost('https://M.Example/path') === 'm.example' && cleanHost('not a host') === null,
+    'a server address is reduced to a bare authority');
+
+  const ACTOR31 = 'https://pod.example/ap/actor';
+  const FDIR = fs.mkdtempSync(path.join(os.tmpdir(), 'fedipod-acct-'));
+  let revoked = false;
+  const fetcher31 = async (url) => {
+    const u = new URL(url);
+    if (u.pathname === '/api/v1/apps') return reply(200, { client_id: 'cid', client_secret: 'sec' });
+    if (u.pathname === '/oauth/token') return reply(200, { access_token: 'tok-1', scope: 'read write' });
+    if (revoked) return reply(401, { error: 'revoked' });
+    if (u.pathname === '/api/v1/accounts/verify_credentials') {
+      return reply(200, { id: '99', username: 'alice', acct: 'alice',
+        uri: 'https://m.example/users/alice', url: 'https://m.example/@alice', display_name: 'Alice' });
+    }
+    return reply(200, {});
+  };
+
+  const accts = new FediAccounts({ localDir: FDIR, actorId: ACTOR31, log: () => {}, fetcher: fetcher31 });
+  const begun = await accts.begin({ host: 'm.example', redirectUri: 'https://localhost:8030/fediacct/callback' });
+  check(begun.url.startsWith('https://m.example/oauth/authorize?')
+    && begun.url.includes('client_id=cid') && /[?&]state=[a-f0-9]{48}/.test(begun.url),
+    'connecting starts at the other server, carrying a state nonce');
+
+  // Without the nonce, any page the owner visits could hand this callback
+  // somebody else's code and bind THEIR account here.
+  let refused = null;
+  await accts.complete({ state: 'never-minted', code: 'c' }).catch(e => { refused = e.message; });
+  check(refused, `a code arriving under a state we never minted is refused (${refused})`);
+
+  const row31 = await accts.complete({ state: begun.state, code: 'c' });
+  check(row31.handle === '@alice@m.example' && !('token' in row31),
+    'the roster names the account and carries no token');
+  check(fs.existsSync(path.join(FDIR, 'fediaccts', 'alice@m.example.json')),
+    'and the credential is a file of its own, beside the keys');
+  let reused = null;
+  await accts.complete({ state: begun.state, code: 'c' }).catch(e => { reused = e.message; });
+  check(reused, 'and that state cannot be spent twice');
+
+  const stranger = new FediAccounts({
+    localDir: FDIR, actorId: 'https://other.example/ap/actor', log: () => {}, fetcher: fetcher31,
+  });
+  check(stranger.list().length === 0 && accts.list().length === 1,
+    'a credential stamped for another identity is absent here, and costs no one the roster');
+
+  revoked = true;
+  let dead = null;
+  await accts.api('alice@m.example', '/api/v1/timelines/home').catch(e => { dead = e.status; });
+  check(dead === 401 && accts.status()[0].needsReconnect === true,
+    'a token revoked on the far side marks the account rather than dropping it');
+  revoked = false;
+  fs.rmSync(FDIR, { recursive: true, force: true });
+
+  // --- the poll, on a real store, so the merge in addStatus is the real one ---
+  const store31 = new PodStore({ log: () => {} });
+  const SHARED = 'https://m.example/users/carol/statuses/500';
+  const CAROL = 'https://m.example/users/carol';
+  const post31 = (id, uri, extra = {}) => ({
+    id, uri, url: uri.replace('/users/', '/@').replace('/statuses/', '/'),
+    content: '<p>hello <script>alert(1)</script></p>',
+    created_at: '2026-09-01T10:00:00.000Z', media_attachments: [],
+    account: { id: '7', username: 'carol', uri: CAROL, url: 'https://m.example/@carol', display_name: 'Carol' },
+    ...extra,
+  });
+  // The same post, seen by both accounts, filed under a different local id by
+  // each server — which is why the canonical uri is the key and the local id
+  // is per account.
+  const timelines31 = {
+    'alice@m.example': [post31('500', SHARED)],
+    'bob@n.example': [post31('900', SHARED)],
+  };
+  const rows31 = [
+    { id: 'alice@m.example', handle: '@alice@m.example', host: 'm.example', accountId: '99', token: 't', enabled: true, actorUrl: 'https://m.example/users/alice' },
+    { id: 'bob@n.example', handle: '@bob@n.example', host: 'n.example', accountId: '5', token: 't', enabled: true, actorUrl: 'https://n.example/users/bob' },
+  ];
+  const acted31 = [];
+  const accounts31 = {
+    list: () => rows31,
+    read: (id) => rows31.find(r => r.id === id),
+    api: async (id, p, init = {}) => {
+      if (init.method === 'POST') { acted31.push([id, p]); return reply(200, {}); }
+      return reply(200, p.startsWith('/api/v1/timelines/home') ? (timelines31[id] || []) : [],
+        { 'x-ratelimit-remaining': '200' });
+    },
+  };
+  const feed31 = new AcctFeed({ store: store31, accounts: accounts31, log: () => {} });
+  await feed31.sweep();
+
+  const seen31 = store31.getStatuses().filter(s => s.noteId === SHARED);
+  check(seen31.length === 1 && seen31[0].sourceAccts?.length === 2,
+    `one post two accounts saw is one row naming both (${seen31.length} row(s))`);
+  check(seen31[0].kind === 'acct' && !/script/i.test(seen31[0].content),
+    'stored as an aggregated row, with the markup sanitized on the way in');
+  check(store31.getActors()[CAROL]?.preferredUsername === 'carol',
+    'and the author is cached under their ActivityPub id, not a second copy');
+
+  // A boost: the inner post is the content, the booster the carrier — the
+  // envelope statusOrBoost already renders for our own timeline.
+  const BOOSTED = 'https://m.example/users/erin/statuses/502';
+  timelines31['alice@m.example'] = [{
+    id: '501', account: { id: '8', username: 'dave', uri: 'https://m.example/users/dave' },
+    reblog: post31('502', BOOSTED),
+  }];
+  timelines31['bob@n.example'] = [];
+  await feed31.sweep();
+  const boost31 = store31.getStatuses().find(s => s.noteId === BOOSTED);
+  check(boost31?.via === 'https://m.example/users/dave',
+    'a boost stores the inner post and says who carried it');
+
+  // A block the owner set locally has to survive an aggregated route: this is
+  // the hole the tag feed had to close, and it is the same hole here.
+  store31.setBlocklist({ domains: [], actors: [CAROL] });
+  const BLOCKED = 'https://m.example/users/carol/statuses/600';
+  timelines31['alice@m.example'] = [post31('600', BLOCKED)];
+  await feed31.sweep();
+  check(!store31.getStatuses().some(s => s.noteId === BLOCKED),
+    'a blocked author does not reach the timeline through a connected account');
+  store31.setBlocklist({ domains: [], actors: [] });
+
+  // --- who acts, and what the client is told ---
+  const purls31 = wire31.apUrls('https://pod.example/');
+  const held31 = [
+    { acct: 'alice@m.example', remoteId: '500' },
+    { acct: 'bob@n.example', remoteId: '900', favourited: true },
+  ];
+  const statuses31 = [{ noteId: SHARED, kind: 'acct', actor: CAROL, sourceAccts: held31 }];
+  const api31 = new MastoApi({
+    agent: {
+      configured: () => true, viewer: false, urls: purls31,
+      publisher: { urls: purls31, config: {} },
+      fediaccts: accounts31,
+      store: {
+        getConfig: () => ({ handle: 'you' }), getStatuses: () => statuses31,
+        getActors: () => ({}), getContacts: () => ({ followers: [], following: [] }),
+        idFor: () => 'aa01', urlFor: () => SHARED,
+        updateStatus: (id, patch) => {
+          const i = statuses31.findIndex(x => x.noteId === id);
+          statuses31[i] = { ...statuses31[i], ...patch };
+          return statuses31[i];
+        },
+      },
+    },
+    log: () => {},
+  });
+  check(api31.status(statuses31[0]).favourited === true,
+    'the star is lit when ANY of the owner’s accounts holds the like');
+
+  const swallow = () => {};
+  acted31.length = 0;
+  await api31.acctAction(swallow, statuses31[0], 'favourite');
+  check(acted31.length === 1 && acted31[0][0] === 'alice@m.example'
+    && acted31[0][1].includes('/500/favourite'),
+    'a like goes out from the one account that saw it first, at its own id there');
+
+  acted31.length = 0;
+  await api31.acctAction(swallow, statuses31[0], 'unfavourite');
+  const undone = acted31.map(a => a[0]).sort();
+  check(undone.length === 2 && undone[0] === 'alice@m.example' && undone[1] === 'bob@n.example',
+    'and an unlike goes out from EVERY account holding one, leaving no stray behind');
+}
 
 child.kill('SIGTERM');
 fs.rmSync(HOME, { recursive: true, force: true });

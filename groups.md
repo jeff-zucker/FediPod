@@ -68,15 +68,15 @@ A group can be handed on rather than abandoned using the `Transfer this account 
 
 A group with a connected Bluesky account is joinable from Bluesky: following
 the group's Bluesky account is a join, and mentioning its handle submits a
-post. Both pass through the same moderation settings as fediverse members —
+post. Both pass through the same moderation settings as Fediverse members —
 join review, post review, and muting all apply, and an approved post is
 carried to the group's Bluesky followers as a repost.
 A follow from an already-bridged Bluesky account is ignored on the Bluesky
 side — its join arrives over ActivityPub from the bridge instead. Carrying
-fediverse posts to the group's Bluesky followers happens only while
+Fediverse posts to the group's Bluesky followers happens only while
 crossposting is on.
 
-A Bluesky member's posts reach the fediverse side only if their account is
+A Bluesky member's posts reach the Fediverse side only if their account is
 bridged (it follows @ap.brid.gy on Bluesky). Unbridged members are welcomed
 with a single post mentioning them explaining that, and everything else about their
 membership still works, and bridging later upgrades them in place: the

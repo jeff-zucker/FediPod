@@ -41,6 +41,8 @@ import { Intake } from './lib/intake.mjs';
 import { TagFeed } from './lib/tagfeed.mjs';
 import { ImportWorker } from './lib/import.mjs';
 import { Atproto } from './lib/atproto.mjs';
+import { FediAccounts } from './lib/fediacct.mjs';
+import { AcctFeed } from './lib/acctfeed.mjs';
 import { BskyFeed } from './lib/bskyfeed.mjs';
 import { BskyGroup } from './lib/bskygroup.mjs';
 import { Lease } from './lib/lease.mjs';
@@ -352,6 +354,11 @@ export class Agent {
     // credential connected for another identity is treated as absent.
     this.atproto = new Atproto({ localDir: this.home, actorId: this.urls.actor, log: this.log });
     this.publisher.atproto = this.atproto;
+    // Fediverse accounts the owner holds elsewhere. Same custody rules as the
+    // Bluesky credential, and the same absence when stamped for someone else.
+    this.fediaccts = new FediAccounts({ localDir: this.home, actorId: this.urls.actor, log: this.log });
+    this.acctfeed?.stop();
+    this.acctfeed = null;
     this.bskyfeed?.stop();
     this.bskyfeed = null;
     this.bskygroup = null;
@@ -521,6 +528,7 @@ export class Agent {
     this.tagfeed ||= new TagFeed({ store: this.store, intake: this.intake, log: this.log });
     this.tagfeed.start();
     this.startBsky();
+    this.startAccts();
     // Scheduled posts: a 30s sweep publishes what has come due. The entry is
     // removed before publishing, so a slow publish cannot double-post; a
     // failed one is dropped with its reason in the log.
@@ -608,12 +616,34 @@ export class Agent {
 
   stopBsky() { this.bskyfeed?.stop(); }
 
+  // The connected fediverse accounts' poll, only ever running when at least
+  // one is connected. Reused, not replaced, for the same orphaned-timer reason
+  // as tagfeed.
+  startAccts() {
+    if (this.viewer || !this.fediaccts?.connected()) return;
+    if (this.store.getConfig()?.quiescedAt) return;
+    this.acctfeed ||= new AcctFeed({
+      store: this.store, accounts: this.fediaccts, log: this.log,
+    });
+    this.acctfeed.start();
+  }
+
+  stopAccts() { this.acctfeed?.stop(); }
+
+  // Connecting or disconnecting an account changes what there is to poll, and
+  // the last one going leaves a timer with nothing to ask.
+  restartAccts() {
+    this.stopAccts();
+    this.startAccts();
+  }
+
   demote() {
     if (this.viewer) return;
     this.log('another device took over — demoting to viewer');
     this.intake?.stop();
     this.tagfeed?.stop();
     this.bskyfeed?.stop();
+    this.acctfeed?.stop();
     this.deliverer?.stop();
     this.importer?.stop();
     clearInterval(this.schedTimer);
@@ -645,6 +675,7 @@ export class Agent {
         this.tagfeed ||= new TagFeed({ store: this.store, intake: this.intake, log: this.log });
         this.tagfeed.start();
         this.startBsky();
+    this.startAccts();
         // A stranded CSV import resumes here too — startActive is not on the
         // takeover path, so without this the rows sat pending until a restart.
         this.importer?.resume();

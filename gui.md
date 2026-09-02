@@ -45,7 +45,7 @@ Each identity has a page anyone can open, at `ap/profile.html` under its pod
 shows the name, bio and address, and offers a Follow box: a visitor types
 their own server and lands on that server's follow screen. Hand out that
 link, or the `@name@host` address itself, which works in the search box of
-any fediverse app.
+any Fediverse app.
 
 ## Bluesky
 
@@ -55,12 +55,38 @@ ones), deleting a post deletes its Bluesky copy, and the account's timeline
 and notifications appear in your home feed. Replying to, favouriting and
 boosting a Bluesky post act as the connected account. A reply lives on
 Bluesky only — it is always public and fits Bluesky's 300-character limit —
-because your fediverse followers cannot see the post it answers. The
+because your Fediverse followers cannot see the post it answers. The
 **crosspost** control stops the
 mirroring without disconnecting. Disconnecting forgets the login but removes
 nothing already posted. For a group, the connected account is the group's
 presence on Bluesky — joining and posting through it follow the group's own
 moderation settings; see [Groups](groups.md).
+
+## Your other Fediverse accounts
+
+Connecting an account you hold on another server brings its home timeline and
+its notifications into the feed you already read here, interleaved by time.
+Mastodon, GoToSocial, Pleroma, Akkoma, Pixelfed and Friendica all work. You
+sign in at that server rather than here: this agent never sees a password, and
+the token it is given stays on this machine and is never written to your pod.
+
+Favouriting, boosting or replying to one of those posts acts **as that
+account**, on its own server, because that is where the conversation is. A
+reply from a connected account is public or unlisted. A post you wrote on that
+account can be deleted from here, and it is deleted where it lives.
+
+A post that two of your accounts both see appears once, not twice. The
+favourite and boost controls are lit when any of your accounts has done it, so
+using one again undoes it everywhere rather than adding a second from a second
+account.
+
+What arrives is held on this machine for reading. None of it is written to your
+pod and none of it is republished — your own posts still go out from your pod
+account alone.
+
+Disconnecting stops the reading and removes the stored token; nothing already
+posted is touched. If the other server stops accepting the token, the account
+is marked **sign in again** rather than quietly dropped.
 
 ## Handling follow requests
 

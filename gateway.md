@@ -1,6 +1,6 @@
 # The gateway
 
-Most of what a fediverse inbox receives is broadcast noise. A gateway is an
+Most of what a Fediverse inbox receives is broadcast noise. A gateway is an
 always-on, internet-facing door that stands in front of your pod: it checks
 each delivery's signature where the headers still exist, drops forgeries and
 junk before they ever touch your pod, and passes the rest on with a receipt

@@ -28,7 +28,7 @@ const MODERATION = $('moderation');
 const STATUS = $('status-ctl');
 const STATUS_PICK = $('status-pick');   // held: getElementById can't see it mid-render
 const BSKY_CTL = $('bsky-ctl');
-const BSKY_CONNECT_CTL = $('bsky-connect-ctl');
+const IDENT_CTL = $('ident-ctl');
 const FOLLOWS_CTL = $('follows-ctl');
 const FOLLOWS_PICK = $('follows-pick');
 const UPDATE_CTL = $('update-ctl');
@@ -113,6 +113,49 @@ document.getElementById('win').addEventListener('win:closed', () => {
 });
 
 
+// One row per identity connected elsewhere, indented under the row that adds
+// them. Each carries its own way out: disconnecting one has nothing to do with
+// the others.
+function identityRows() {
+  const out = [];
+  const row = (label, ...nodes) => {
+    const dt = document.createElement('dt');
+    dt.className = 'under';
+    dt.textContent = label;
+    const dd = document.createElement('dd');
+    dd.append(...nodes);
+    out.push([dt, dd]);
+  };
+  if (config.atproto?.connected) {
+    const a = document.createElement('a');
+    a.href = `https://bsky.app/profile/${config.atproto.handle}`;
+    a.textContent = `@${config.atproto.handle}`;
+    a.target = '_blank';
+    a.rel = 'noopener';
+    a.title = `   Open this account's Bluesky page in a new tab`;
+    BSKY_CTL.hidden = false;
+    BSKY_CROSSPOST.value = config.atproto.crossPost ? 'on' : 'off';
+    row('Bluesky', a, ' ', BSKY_CTL);
+  } else {
+    BSKY_CTL.hidden = true;
+  }
+  for (const acct of config.fediAccounts || []) {
+    const name = document.createElement('span');
+    name.textContent = acct.needsReconnect ? `${acct.handle} — sign in again` : acct.handle;
+    if (acct.needsReconnect) name.className = 'warn';
+    const off = document.createElement('button');
+    off.type = 'button';
+    off.className = 'inline danger';
+    off.textContent = 'Disconnect';
+    off.title = `   Stop reading ${acct.handle} and remove its stored token`;
+    off.addEventListener('click', async () => {
+      if (await write('/fediacct/disconnect', { id: acct.id }, `${acct.handle} disconnected`)) await load();
+    });
+    row(acct.host, name, ' ', off);
+  }
+  return out;
+}
+
 function render() {
   // The bar names the actor, the same way on every page. Only the tab title is
   // this page's own business.
@@ -134,7 +177,7 @@ function render() {
     ['Fediverse identity', config.address || `@${config.handle} — no resolvable address`,
       config.accountId && config.address ? { href: `/admin/client/#/a/${config.accountId}` } : null],
     ['Solid identity', config.webId, config.remotePod ? { href: config.remotePod, blank: true } : null],
-    ['Bluesky identity', 'ctl'],
+    ['Other identities', 'ctl'],
     ['local store', config.home],
     // The address you actually open, not the bare number — the named origin when
     // there is one, since that is what the client and the OAuth redirect use.
@@ -148,6 +191,8 @@ function render() {
   // A person gates followers here; a group's gate is the joins control on its
   // kind row, so the row would be a second switch for the same thing.
   if (config.kind !== 'group') rows.splice(2, 0, ['new followers', 'ctl']);
+  // Rows that belong under the one being written, appended after it.
+  let kids = null;
   for (const [k, v, link] of rows) {
     if (!v) continue;
     const dt = document.createElement('dt');
@@ -207,27 +252,19 @@ function render() {
       UPDATE_WORD.textContent = words.join('; ');
       UPDATE_GO.hidden = !u?.available;
     }
-    // Connected: the account itself, then the way out. Not: a form on the page.
-    if (k === 'Bluesky identity') {
+    // The way to add one. Each account already connected is a row of its own
+    // underneath, so this row stays the action and never becomes a list.
+    if (k === 'Other identities') {
       dd.textContent = '';
-      if (config.atproto?.connected) {
-        const a = document.createElement('a');
-        a.href = `https://bsky.app/profile/${config.atproto.handle}`;
-        a.textContent = `@${config.atproto.handle}`;
-        a.target = '_blank';
-        a.rel = 'noopener';
-        a.title = `   Open this account's Bluesky page in a new tab`;
-        dd.append(a, ' ', BSKY_CTL);
-        BSKY_CTL.hidden = false;
-        BSKY_CONNECT_CTL.hidden = true;
-        BSKY_CROSSPOST.value = config.atproto.crossPost ? 'on' : 'off';
-      } else {
-        dd.append(BSKY_CONNECT_CTL);
-        BSKY_CONNECT_CTL.hidden = false;
-        BSKY_CTL.hidden = true;
-      }
+      dd.append(IDENT_CTL);
+      IDENT_CTL.hidden = false;
+      kids = identityRows();
     }
     facts.append(dt, dd);
+    if (kids) {
+      for (const [ckt, ckd] of kids) facts.append(ckt, ckd);
+      kids = null;
+    }
   }
   if (!config.address) {
     const p = document.createElement('p');
@@ -420,9 +457,17 @@ function setRail(closed) {
 $('rail-toggle').addEventListener('click', () => setRail(!$('rail').classList.contains('closed')));
 if (matchMedia('(max-width: 47rem)').matches) setRail(true);
 
-$('bsky-open').addEventListener('click', () => {
+// One way in for both networks, because from the record they are the same
+// thing: an account elsewhere whose timeline joins the one you read here.
+$('ident-open').addEventListener('click', () => {
   closePanels();
-  solWindow.show('bsky-form', 'Connect Bluesky account');
+  solWindow.show('ident-form', 'Connect an identity');
+});
+$('ident-pick-fedi').addEventListener('click', () => {
+  solWindow.show('fediacct-form', 'Connect a Fediverse account');
+});
+$('ident-pick-bsky').addEventListener('click', () => {
+  solWindow.show('bsky-form', 'Connect a Bluesky account');
 });
 
 let bskyBusy = false;
@@ -443,6 +488,20 @@ $('bsky-form').addEventListener('submit', async (ev) => {
     }
   } finally { bskyBusy = false; }
 });
+// The sign-in happens at the other server, so this hands the browser over
+// rather than taking a password. What comes back lands on /fediacct/callback,
+// which this machine answers and nowhere else does.
+let fediBusy = false;
+$('fediacct-form').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  if (fediBusy) return;
+  fediBusy = true;
+  try {
+    const r = await write('/fediacct/connect', { host: $('fediacct-host').value.trim() }, '');
+    if (r?.authorize) location.href = r.authorize;
+  } finally { fediBusy = false; }
+});
+
 $('bsky-disconnect').addEventListener('click', async () => {
   if (bskyBusy) return;
   bskyBusy = true;
