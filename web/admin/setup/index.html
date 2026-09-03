@@ -94,7 +94,8 @@ button:disabled { opacity: .5; cursor: default; }
   <ul class="steps" id="run-steps"></ul>
   <p class="sr-only" id="run-say" role="status"></p>
   <p class="err" id="run-error" role="alert"></p>
-  <p><button id="run-again" title="   Try the step that failed again" hidden>Try again</button></p>
+  <p><button id="run-again" title="   Try the step that failed again" hidden>Try again</button>
+    <button id="run-reenter" title="   Discard the credential and enter the account and pod again" hidden>Re-enter credentials</button></p>
 </section>
 
 <section id="pane-form" hidden>
@@ -163,6 +164,10 @@ button:disabled { opacity: .5; cursor: default; }
         <input type="url" id="pod" name="pod" autocomplete="url" placeholder="https://you.solidcommunity.net/">
       </div>
     </fieldset>
+
+    <p id="row-reenter" class="warn" hidden>Finishing a setup that already has an account credential.
+      Wrong account or pod?
+      <button type="button" id="form-reenter" title="   Discard the credential and enter the account and pod again">Re-enter credentials</button></p>
 
     <h2>You will be</h2>
     <p class="address" id="preview">…</p>

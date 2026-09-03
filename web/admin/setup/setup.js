@@ -78,14 +78,16 @@ function paneForm() {
   // Resuming: the account exists and the credential is minted. Asking for a
   // password again would mint a second one and orphan the first, which cannot
   // be recovered.
-  if (state.resumable) {
-    // Both already settled in the credential this run is resuming from.
-    $('fs-pod').hidden = true;
-    $('row-password').hidden = true;
-    $('submit').textContent = 'Finish setting up';
-  } else if (state.passwordSupplied) {
-    $('row-password').hidden = true;      // AP_PASSWORD is set in the environment
-  }
+  // Set both ways, not just hidden-when-resuming: re-entering credentials
+  // re-renders this in the other mode, and a one-way hide would strand the
+  // account and pod fields off-screen. Resuming settles the account and the
+  // credential, so those fields go; a fresh run shows them.
+  $('row-reenter').hidden = !state.resumable;
+  $('fs-pod').hidden = state.resumable;
+  // The password field also goes when AP_PASSWORD supplied it in the environment.
+  $('row-password').hidden = state.resumable || state.passwordSupplied;
+  $('submit').textContent = state.resumable ? 'Finish setting up' : 'Create it';
+  if (state.resumable) $('form-reenter').onclick = reEnter;   // the escape from a wrong credential
   show('pane-form');
   // The markup's autofocus was set while this pane was still hidden, so it
   // never fired — move focus to the first field now that the pane is showing.
@@ -208,6 +210,30 @@ async function watchRun() {
     state = json || state;
     paneForm();
   };
+  // A failure past the credential (a wrong pod answering 401 to the first
+  // write) leaves a credential that "Try again" can only re-use. Offer to
+  // discard it and re-enter the account and pod — only when there is one.
+  const { json: st } = await api('/setup/state');
+  const reenter = $('run-reenter');
+  reenter.hidden = !st?.hasCredential;
+  reenter.onclick = reEnter;
+}
+
+// Discard the saved credential (server confirms, then the full form returns).
+// Destructive and unrecoverable — a minted credential is shown once — so it
+// asks first.
+async function reEnter() {
+  if (!confirm('Discard the saved account credential and enter the account and pod again?\n\n'
+    + 'The old credential is left on your account — revoke it from the account dashboard if you want it gone.')) return;
+  const { status, json } = await postJson('/setup/reset', {});
+  if (status !== 200) {
+    const box = $('pane-form').hidden ? $('run-error') : $('form-error');
+    box.textContent = json?.error || `could not reset (HTTP ${status})`;
+    return;
+  }
+  const { json: st } = await api('/setup/state');
+  state = st || {};
+  paneForm();
 }
 
 function renderRun(run) {

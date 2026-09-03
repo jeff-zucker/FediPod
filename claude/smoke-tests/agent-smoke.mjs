@@ -5928,6 +5928,13 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   const named = await rawHost(SPORT, `wren.localhost:${SPORT}`);
   check(/^HTTP\/1\.1 200/.test(named), 'and the agent now answers at its own name');
 
+  // A working identity is torn down with `retire`, never swapped out under it:
+  // /setup/reset refuses one and leaves its credential untouched.
+  const resetCfgd = await spost('/setup/reset', {});
+  check(resetCfgd.status === 409 && /working identity/.test(resetCfgd.json?.error || ''),
+    `a configured home refuses /setup/reset (${resetCfgd.status})`);
+  check(fs.existsSync(credFile), 'and its credential is left in place');
+
   // --- resuming a setup that died after the mint ---
   const RHOME = fs.mkdtempSync('/tmp/fedipod-resume-');
   fs.copyFileSync(credFile, path.join(RHOME, 'credential.json'));
@@ -5955,9 +5962,41 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
     && rdone.steps.find(s => s.key === 'credential').state === 'skipped',
     'and mints no second credential — the first one cannot be minted twice');
 
+  // --- re-enter credentials: a resumable home can discard its credential ---
+  // The escape from a credential bound to the wrong pod (a 401 on the first
+  // write), where "Finish setting up" could only re-use it. Reset removes it
+  // so the account and pod can be entered again.
+  const XHOME = fs.mkdtempSync('/tmp/fedipod-reenter-');
+  const xcred = path.join(XHOME, 'credential.json');
+  fs.copyFileSync(credFile, xcred);
+  const XPORT = 18649;   // outside the 186xx block; section 14 reuses 18629
+  startAdmin({ port: XPORT, gateToken: '', agent: makeAgent(XHOME), log: () => {}, tls: smokeTls });
+  await new Promise(r => setTimeout(r, 150));
+  const xreset = (init) => fetchLocal(`https://localhost:${XPORT}/setup/reset`, init)
+    .then(async r => ({ status: r.status, json: await r.json().catch(() => null) }));
+
+  const xstate0 = await fetchLocal(`https://localhost:${XPORT}/setup/state`).then(r => r.json());
+  check(xstate0.resumable === true, 'a copied credential is resumable before reset');
+  const xsiteReset = await xreset({ method: 'POST',
+    headers: { 'content-type': 'application/json', 'sec-fetch-site': 'cross-site' }, body: '{}' });
+  check(xsiteReset.status === 403 && fs.existsSync(xcred),
+    `a cross-site reset is refused and touches nothing (${xsiteReset.status})`);
+  const didReset = await xreset({ method: 'POST',
+    headers: { 'content-type': 'application/json' }, body: '{}' });
+  check(didReset.status === 200 && didReset.json?.removed === true && !fs.existsSync(xcred),
+    `/setup/reset discards the credential (${didReset.status})`);
+  const xstate1 = await fetchLocal(`https://localhost:${XPORT}/setup/state`).then(r => r.json());
+  check(xstate1.hasCredential === false && xstate1.resumable === false,
+    'and setup is back to a clean, full form');
+  const xagain = await xreset({ method: 'POST',
+    headers: { 'content-type': 'application/json' }, body: '{}' });
+  check(xagain.status === 200 && xagain.json?.removed === false,
+    'a second reset finds nothing to remove');
+
   mockCss13.close();
   fs.rmSync(SHOME, { recursive: true, force: true });
   fs.rmSync(RHOME, { recursive: true, force: true });
+  fs.rmSync(XHOME, { recursive: true, force: true });
 }
 
 // --- 14. the record can be read back and edited, and a merge stays a merge ---
