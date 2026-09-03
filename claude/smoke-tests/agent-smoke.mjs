@@ -5769,6 +5769,97 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
     'and junk is refused rather than previewed');
 }
 
+// --- 12c. the pod check: reachable, and its WebID declares an issuer ---
+{
+  const { checkPodUsable } = await import(path.join(root, 'lib/setup.mjs'));
+  const POD = 'https://p.example/';
+  const CARD = 'https://p.example/profile/card';
+  const fakeFetch = (map) => async (url) => {
+    const e = map[String(url)];
+    if (e === 'throw') throw new Error('ECONNREFUSED');
+    const { status = 404, body = '', ct = 'text/turtle' } = e || {};
+    return { status, headers: { get: (h) => h.toLowerCase() === 'content-type' ? ct : null }, text: async () => body };
+  };
+  const CARD_OK = `@prefix solid: <http://www.w3.org/ns/solid/terms#>.\n<${CARD}#me> solid:oidcIssuer <https://issuer.example/>.`;
+
+  const good = await checkPodUsable(POD, { fetch: fakeFetch({ [POD]: { status: 200 }, [CARD]: { status: 200, body: CARD_OK } }) });
+  check(good.ok === true, 'a reachable pod whose WebID declares an issuer passes');
+
+  const empty = await checkPodUsable(POD, { fetch: fakeFetch({ [POD]: { status: 200 }, [CARD]: { status: 200, body: '' } }) });
+  check(empty.ok === false && /no OIDC issuer/.test(empty.error),
+    'an empty WebID document is refused with a plain reason, not a bare 401 later');
+
+  const noCard = await checkPodUsable(POD, { fetch: fakeFetch({ [POD]: { status: 200 }, [CARD]: { status: 404 } }) });
+  check(noCard.ok === false && /no WebID document/.test(noCard.error), 'a missing WebID document is refused');
+
+  const unreachable = await checkPodUsable(POD, { fetch: fakeFetch({ [POD]: 'throw' }) });
+  check(unreachable.ok === false && /could not be reached/.test(unreachable.error),
+    'an unreachable pod is refused before a credential is minted');
+
+  const noPod = await checkPodUsable(POD, { fetch: fakeFetch({ [POD]: { status: 404 } }) });
+  check(noPod.ok === false && /no pod at/.test(noPod.error), 'a 404 at the pod root is refused');
+
+  const protectedCard = await checkPodUsable(POD, { fetch: fakeFetch({ [POD]: { status: 200 }, [CARD]: { status: 401 } }) });
+  check(protectedCard.ok === true, 'a WebID document that is not public cannot be judged here, so bootstrap decides');
+}
+
+// --- 12d. the pod check is wired into the run, both ways in ---
+{
+  const { runSetup, newRun } = await import(path.join(root, 'lib/setup.mjs'));
+  const stubAgent = (home) => {
+    let bootstrapped = false;
+    return {
+      home,
+      bootstrap: async () => { bootstrapped = true; },
+      connect: async () => {}, urls: {},
+      publisher: { publishProfile: async () => ({ unreachable: [] }) },
+      store: { attach() {}, load: async () => {}, getConfig: () => null, setConfig() {}, flush: async () => {} },
+      _bootstrapped: () => bootstrapped,
+    };
+  };
+
+  // Existing pod, unreachable: the run stops before a credential is minted.
+  const H1 = fs.mkdtempSync('/tmp/fedipod-podcheck-');
+  const a1 = stubAgent(H1);
+  let minted = false;
+  const r1 = newRun();
+  await runSetup({
+    home: H1, agent: a1, run: r1,
+    answers: { mode: 'existing', pod: 'https://gone.example/', handle: 'you', issuer: 'https://gone.example', email: 'e@x', password: 'pw' },
+    deps: {
+      checkPodUsable: async () => ({ ok: false, error: 'the pod is not reachable (test)' }),
+      mintCredential: async () => { minted = true; return {}; },
+    },
+  });
+  check(r1.phase === 'error' && /not reachable/.test(r1.error || ''),
+    'an unreachable existing pod fails the run with the reason');
+  check(minted === false && a1._bootstrapped() === false,
+    'and no credential is minted, nothing bootstrapped');
+  check(!fs.existsSync(path.join(H1, 'credential.json')), 'and no credential file is written');
+
+  // Resuming with a credential bound to a pod whose profile is empty: it stops
+  // at bootstrap, before the write that would 401.
+  const H2 = fs.mkdtempSync('/tmp/fedipod-podcheck2-');
+  fs.writeFileSync(path.join(H2, 'credential.json'),
+    JSON.stringify({ remotePod: 'https://p.example/', webId: 'https://p.example/profile/card#me', issuerOrigin: 'https://p.example' }));
+  const a2 = stubAgent(H2);
+  const r2 = newRun();
+  await runSetup({
+    home: H2, agent: a2, run: r2,
+    answers: { handle: 'you', kind: 'person' },
+    deps: { checkPodUsable: async () => ({ ok: false, error: 'the WebID document declares no OIDC issuer (test)' }) },
+  });
+  check(r2.phase === 'error' && /no OIDC issuer/.test(r2.error || ''),
+    'a resuming run on an issuer-less pod fails with the reason');
+  check(a2._bootstrapped() === false
+    && r2.steps.find(s => s.key === 'bootstrap').state === 'error'
+    && r2.steps.find(s => s.key === 'credential').state === 'skipped',
+    'and it stops at bootstrap, before the write that would 401');
+
+  fs.rmSync(H1, { recursive: true, force: true });
+  fs.rmSync(H2, { recursive: true, force: true });
+}
+
 // --- 13. setup runs in the server, outlives the page, and leaks no password ---
 {
   const { startAdmin } = await import(path.join(root, 'lib/admin.mjs'));
@@ -5777,7 +5868,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   const RPORT = 18627;
   const CSS = 18630;
   const CSS_ORIGIN = `http://127.0.0.1:${CSS}`;
-  const NEW_POD = `http://wrenpod.127.0.0.1.nip.io:${CSS}/`;   // a string only: never fetched
+  const NEW_POD = `http://wrenpod.127.0.0.1.nip.io:${CSS}/`;   // nip.io → 127.0.0.1; the mock serves its root and WebID for the pod check
   const PASSWORD = 'hunter2-not-in-any-log';
   let mintFails = true;
   let mints = 0;
@@ -5791,6 +5882,16 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
       res.writeHead(code, { 'content-type': 'application/json' });
       res.end(JSON.stringify(o));
     };
+    // The fake pod (a subdomain host): its root is a storage and its WebID
+    // document declares an issuer, so the pre-bootstrap pod check passes.
+    if ((req.headers.host || '').startsWith('wrenpod.')) {
+      if (req.url === '/') { res.writeHead(200, { 'content-type': 'text/turtle' }); return res.end('<> a <http://www.w3.org/ns/pim/space#Storage>.'); }
+      if (req.url === '/profile/card') {
+        res.writeHead(200, { 'content-type': 'text/turtle' });
+        return res.end(`@prefix solid: <http://www.w3.org/ns/solid/terms#>.\n<${NEW_POD}profile/card#me> solid:oidcIssuer <${CSS_ORIGIN}/>.`);
+      }
+      res.writeHead(404); return res.end();
+    }
     if (req.url === '/.well-known/openid-configuration') return send({ token_endpoint: `${CSS_ORIGIN}/.oidc/token` });
     if (req.url === '/.account/') {
       return send({ controls: {
@@ -6621,7 +6722,8 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
       answers: { mode: 'existing', issuer: 'https://i.example', email: 'a@b.c', password: 'pw',
         handle: 'mei', pod: 'https://mei.i.example/', kind: 'person', gateway },
       deps: { mintCredential: async () => ({ clientId: 'C', secret: 'S',
-        webId: 'https://mei.i.example/profile/card#me' }) },
+        webId: 'https://mei.i.example/profile/card#me' }),
+        checkPodUsable: async () => ({ ok: true }) },   // the pod check has its own tests (§12c/d)
     });
     check(booted?.gateway?.url === gateway.url && booted?.gateway?.hmacSecret === 'S',
       'a signup-carried gateway reaches bootstrap, so the first publish advertises the door');
