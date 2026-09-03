@@ -60,7 +60,19 @@ function paneForm() {
     if (fr.kind) $('form').elements.kind.value = fr.kind;
     if (fr.handle) $('handle').value = fr.handle;
     if (fr.pod) { $('form').elements.mode.value = 'existing'; $('pod').value = fr.pod; }
-    if (fr.issuer) $('issuer').value = fr.issuer;
+    // A gateway-arranged signup names its own provider; give the dropdown that
+    // choice too, so the carried-over answer survives the narrower control.
+    if (fr.issuer) {
+      $('issuer').value = fr.issuer;
+      const sel = $('issuer-new');
+      if (![...sel.options].some(o => o.value === fr.issuer)) {
+        const o = document.createElement('option');
+        o.value = fr.issuer;
+        o.textContent = host(fr.issuer);
+        sel.appendChild(o);
+      }
+      sel.value = fr.issuer;
+    }
     if (fr.gatewayHost) strap(`finishing your ${fr.gatewayHost} signup — enter your Solid account details`);
   }
   // Resuming: the account exists and the credential is minted. Asking for a
@@ -94,7 +106,7 @@ function answers() {
     kind,
     mode,
     handle: f.handle.value.trim(),
-    issuer: f.issuer.value.trim(),
+    issuer: (mode === 'new' ? f.issuerNew.value : f.issuer.value).trim(),
     email: f.email.value.trim(),
   };
   if (mode === 'new') a.podName = f.podName.value.trim() || a.handle;
@@ -123,6 +135,8 @@ function onEdit() {
   const mode = state.resumable ? 'existing' : $('form').elements.mode.value;
   $('row-podname').hidden = mode !== 'new';
   $('row-pod').hidden = mode === 'new';
+  $('row-issuer-new').hidden = mode !== 'new';
+  $('row-issuer-existing').hidden = mode === 'new';
   clearTimeout(editTimer);
   editTimer = setTimeout(preview, 150);
 }

@@ -20,7 +20,7 @@ fieldset { border: 1px solid #bbb; border-radius: .4rem; margin: 1rem 0; padding
 legend { padding: 0 .3rem; font-weight: 600; }
 label { display: block; margin: .75rem 0 .2rem; }
 .hint { color: #666; font-size: .9rem; margin: .15rem 0 0; }
-input[type=text], input[type=email], input[type=url], input[type=password], textarea {
+input[type=text], input[type=email], input[type=url], input[type=password], select, textarea {
   font: inherit; width: 100%; padding: .5rem; box-sizing: border-box;
   border: 1px solid #767676; border-radius: .3rem; background: Field; color: FieldText;
 }
@@ -124,8 +124,19 @@ button:disabled { opacity: .5; cursor: default; }
       <label class="choice"><input type="radio" name="mode" value="existing">
         Use a pod I already have</label>
 
-      <label for="issuer">Solid identity provider</label>
-      <input type="url" id="issuer" name="issuer" value="https://solidcommunity.net" autocomplete="url">
+      <div id="row-issuer-new">
+        <label for="issuer-new">Solid pod provider</label>
+        <select id="issuer-new" name="issuerNew" aria-describedby="issuer-new-hint">
+          <option value="https://solidcommunity.net">solidcommunity.net</option>
+        </select>
+        <p class="hint" id="issuer-new-hint">Providers that give each pod its own subdomain, so the
+          Fediverse address works everywhere.</p>
+      </div>
+
+      <div id="row-issuer-existing" hidden>
+        <label for="issuer">Solid identity provider</label>
+        <input type="url" id="issuer" name="issuer" value="https://solidcommunity.net" autocomplete="url">
+      </div>
 
       <label for="email">Solid Account email/username</label>
       <input type="email" id="email" name="email" autocomplete="email" placeholder="you@example.org">
