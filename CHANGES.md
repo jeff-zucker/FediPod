@@ -1,5 +1,13 @@
 # Changes
 
+## 2026-09-03
+- **Creating a pod picks its provider from a dropdown.** The setup page's
+  "Create a Solid account and pod" mode offers the providers that give each
+  pod its own subdomain — the shape a Fediverse address needs to resolve
+  everywhere — instead of a free URL field. "Use a pod I already have" keeps
+  the free identity-provider field, and a gateway-arranged signup's own
+  provider joins the list pre-selected.
+
 ## 2026-09-02
 - **Fediverse accounts you hold elsewhere can be connected.** Connecting one
   works on any server speaking the Mastodon API — Mastodon, GoToSocial,
