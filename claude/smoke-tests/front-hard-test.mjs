@@ -127,7 +127,7 @@ try {
     'and at its two other names');
   const run = await get('/run');
   check(run.status === 200 && /run/.test(await run.text()), 'the opt-in page is served at /run');
-  const bundle = await get('/solid-client-authn.bundle.js');
+  const bundle = await get('/solid-oidc-client.js');
   check(bundle.status === 200 && /auth/.test(await bundle.text()),
     'the sign-in library those pages load is served');
   const inst = await get('/install');

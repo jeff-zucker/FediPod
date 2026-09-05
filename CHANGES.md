@@ -1,5 +1,14 @@
 # Changes
 
+## 2026-09-04
+- **The sign-in on the run-your-identity and accounts pages uses a smaller,
+  pinned Solid-OIDC client.** `/run` and `/admin` now load
+  `@uvdsl/solid-oidc-client-browser` (vendored worker-free, sha512-pinned by
+  `scripts/pin-solid-oidc.mjs`) in place of the old unversioned auth bundle.
+  Signing in is unchanged for you: sign in at your provider, come back, and the
+  page acts with your proof. The accounts page (`/admin`) now also works on the
+  CSS-component deployment, not only the hosted front.
+
 ## 2026-09-03
 - **Creating a pod picks its provider from a dropdown.** The setup page's
   "Create a Solid account and pod" mode offers the providers that give each

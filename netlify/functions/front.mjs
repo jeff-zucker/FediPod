@@ -37,7 +37,7 @@ try {
 } catch { /* the page is optional; the front still routes federation without it */ }
 try {
   authBundle = readFileSync(
-    fileURLToPath(new URL('../../web/front/solid-client-authn.bundle.js', import.meta.url)), 'utf8');
+    fileURLToPath(new URL('../../web/front/solid-oidc-client.js', import.meta.url)), 'utf8');
 } catch { /* without it the page's sign-in step is unavailable */ }
 let installScript = '';
 try {

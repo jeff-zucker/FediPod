@@ -47,10 +47,18 @@ accounts that only use it as their gateway. Sign in as the server's admin to see
   <tbody id="roster-rows"></tbody>
 </table>
 
-<script src="/solid-client-authn.bundle.js"></script>
-<script>
+<script type="module">
   const $ = (id) => document.getElementById(id);
   const note = (text) => { const n = $('roster-note'); n.hidden = !text; n.textContent = text || ''; };
+
+  // The Solid-OIDC client for the sign-in round trip. Constructed once; the
+  // redirect state lives in this tab's sessionStorage, so the same session
+  // finishes the login on the way back.
+  let session = null;
+  try {
+    const { SessionCore } = await import('/solid-oidc-client.js');
+    session = new SessionCore({ redirect_uris: [location.origin + '/admin'], client_name: 'FediPod admin' });
+  } catch { /* leave null — the "did not load" note fires */ }
 
   $('roster-issuer').addEventListener('input', () => {
     $('roster-signin').disabled = !/^https?:\/\/\S+/.test($('roster-issuer').value.trim());
@@ -58,29 +66,25 @@ accounts that only use it as their gateway. Sign in as the server's admin to see
 
   $('roster-form').addEventListener('submit', (ev) => {
     ev.preventDefault();
-    const auth = window.solidClientAuthentication;
-    if (!auth) { note('the sign-in library did not load — reload and try again'); return; }
-    auth.login({
-      oidcIssuer: $('roster-issuer').value.trim(),
-      redirectUrl: location.origin + '/admin',
-      clientName: 'FediPod admin',
-    }).catch((e) => note('sign-in failed to start: ' + e.message));
+    if (!session) { note('the sign-in library did not load — reload and try again'); return; }
+    session.login($('roster-issuer').value.trim(), location.origin + '/admin')
+      .catch((e) => note('sign-in failed to start: ' + e.message));
   });
 
   // Back from the identity provider: read the roster with the proven login.
   (async () => {
-    const auth = window.solidClientAuthentication;
-    if (!auth) return;
-    const info = await auth.handleIncomingRedirect().catch(() => null);
-    if (!info?.isLoggedIn) return;
+    if (!session) return;
+    await session.handleRedirectFromLogin().catch(() => {});
+    if (!session.isActive) return;
+    const webId = session.webId;
 
     // Signed fetches build a DPoP proof from the URL, so it must be absolute.
     const load = async () => {
       let res;
-      try { res = await auth.fetch(location.origin + '/api/roster'); }
+      try { res = await session.authFetch(location.origin + '/api/roster'); }
       catch (e) { note('the roster request failed: ' + e.message); return; }
       const d = await res.json().catch(() => ({}));
-      if (res.status === 403) { note('signed in as ' + info.webId + ', which is not this server’s admin'); return; }
+      if (res.status === 403) { note('signed in as ' + webId + ', which is not this server’s admin'); return; }
       if (res.status === 501) { note('this server names no admin — set FEDIPOD_ADMIN_WEBID and redeploy'); return; }
       if (res.status !== 200) { note('roster unavailable: ' + (d.error || 'HTTP ' + res.status)); return; }
       const rows = $('roster-rows');
@@ -108,7 +112,7 @@ accounts that only use it as their gateway. Sign in as the server's admin to see
       if (!confirm('Remove ' + a.address + ' from this server? The name stops resolving here; nothing on their pod is touched.')) return;
       let res;
       try {
-        res = await auth.fetch(location.origin + '/api/revoke', {
+        res = await session.authFetch(location.origin + '/api/revoke', {
           method: 'POST', headers: { 'content-type': 'application/json' },
           body: JSON.stringify({ handle: a.handle }),
         });
@@ -120,7 +124,7 @@ accounts that only use it as their gateway. Sign in as the server's admin to see
       note('removed ' + a.address);
     };
 
-    note('signed in as ' + info.webId + ' — reading the roster…');
+    note('signed in as ' + webId + ' — reading the roster…');
     await load();
   })();
 </script>

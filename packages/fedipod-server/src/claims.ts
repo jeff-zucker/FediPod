@@ -3,11 +3,12 @@
 // front's apex the gateway answers the fediverse routes; a pod subdomain is a
 // real Solid pod and is never claimed.
 
-const FRONT_PATHS = new Set(['/', '/signup', '/new-account', '/run',
+const FRONT_PATHS = new Set(['/', '/signup', '/new-account', '/run', '/admin',
   '/.well-known/webfinger', '/api/handle', '/api/attach', '/api/agent',
-  // What the two pages load: the sign-in library both use, and the installer
-  // the signup page hands every new user.
-  '/solid-client-authn.bundle.js', '/install']);
+  '/api/roster', '/api/revoke',
+  // What the pages load: the sign-in library the /run and /admin pages use, and
+  // the installer the signup page hands every new user.
+  '/solid-oidc-client.js', '/install']);
 
 export function claims(input: { host?: string; pathname: string }, frontHost: string): boolean {
   if (!input.host || !frontHost) return false;

@@ -37,6 +37,8 @@ export interface FediPodServerArgs {
   signupPage?: string;
   /** The run-your-identity page HTML served at /run. */
   runPage?: string;
+  /** The accounts-roster page HTML served at /admin. */
+  adminPage?: string;
   /** Directory holding each agent identity's signing key and log. Required when runtime opt-in is on. */
   agentDataDir?: string;
   /** Path from a pod's base to the owner's WebID. */
@@ -456,9 +458,11 @@ export class FediPodServerHandler extends HttpHandler implements Initializable, 
       offersPods: !!this.args.offersPods,
       signupPage: this.args.signupPage || webFile('new-account.html'),
       runPage: this.args.runPage || webFile('run.html'),
-      // Both pages load the sign-in library, and the signup page hands out the
-      // installer command; without these the pages render but cannot be used.
-      authBundle: webFile('solid-client-authn.bundle.js'),
+      adminPage: this.args.adminPage || webFile('admin.html'),
+      // The /run and /admin pages load the sign-in library, and the signup page
+      // hands out the installer command; without these the pages render but
+      // cannot be used.
+      authBundle: webFile('solid-oidc-client.js'),
       installScript: webFile('install.sh'),
       lookup: (h: string) => this.dir.lookup(h),
       putDirectory: (h: string, rec: never) => this.dir.putDirectory(h, rec),

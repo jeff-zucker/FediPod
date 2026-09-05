@@ -45,9 +45,17 @@ you to keep running. Sign in with your pod to prove it is yours.</p>
   <p class="hint" id="run-note" hidden></p>
 </form>
 
-<script src="/solid-client-authn.bundle.js"></script>
-<script>
+<script type="module">
   const $ = (id) => document.getElementById(id);
+
+  // The Solid-OIDC client for the sign-in round trip. Constructed once; the
+  // redirect state (PKCE, csrf) lives in this tab's sessionStorage, so the same
+  // session finishes the login on the way back.
+  let session = null;
+  try {
+    const { SessionCore } = await import('/solid-oidc-client.js');
+    session = new SessionCore({ redirect_uris: [location.origin + '/run'], client_name: 'FediPod gateway' });
+  } catch { /* leave null — the "did not load" notes below fire */ }
 
   // Offered only where this server actually runs identities. An
   // unauthenticated probe tells the two apart: 501 = not offered here,
@@ -85,37 +93,32 @@ you to keep running. Sign in with your pod to prove it is yours.</p>
   $('run-issuer').addEventListener('input', runFormCheck);
 
   const runStart = (action) => {
-    const auth = window.solidClientAuthentication;
     const n = $('run-note');
-    if (!auth) { n.hidden = false; n.textContent = 'the sign-in library did not load — reload and try again'; return; }
+    if (!session) { n.hidden = false; n.textContent = 'the sign-in library did not load — reload and try again'; return; }
     const u = new URL($('run-pod-url').value.trim());
     if (u.pathname === '') u.pathname = '/';
     if (!u.pathname.endsWith('/')) u.pathname += '/';
     u.search = ''; u.hash = '';
     sessionStorage.setItem('fp-run', JSON.stringify({ podBase: u.href, action }));
-    auth.login({
-      oidcIssuer: $('run-issuer').value.trim(),
-      redirectUrl: location.origin + '/run',
-      clientName: 'FediPod gateway',
-    }).catch((e) => { n.hidden = false; n.textContent = 'sign-in failed to start: ' + e.message; });
+    session.login($('run-issuer').value.trim(), location.origin + '/run')
+      .catch((e) => { n.hidden = false; n.textContent = 'sign-in failed to start: ' + e.message; });
   };
   $('run-continue').onclick = () => runStart('opt-in');
   $('run-leave').onclick = () => runStart('opt-out');
 
   // Back from the identity provider: finish the opt-in with the proven login.
   (async () => {
-    const auth = window.solidClientAuthentication;
-    if (!auth) return;
-    const info = await auth.handleIncomingRedirect().catch(() => null);
+    if (!session) return;
+    await session.handleRedirectFromLogin().catch(() => {});
     const pending = sessionStorage.getItem('fp-run');
-    if (!info?.isLoggedIn || !pending) return;
+    if (!session.isActive || !pending) return;
     sessionStorage.removeItem('fp-run');
     const p = JSON.parse(pending);
     const n = $('run-note');
     n.hidden = false;
-    n.textContent = 'signed in as ' + info.webId + ' — asking the server…';
+    n.textContent = 'signed in as ' + session.webId + ' — asking the server…';
     // The signed fetch builds a DPoP proof from the URL, so it must be absolute.
-    const res = await auth.fetch(location.origin + '/api/agent', {
+    const res = await session.authFetch(location.origin + '/api/agent', {
       method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ action: p.action, podBase: p.podBase }),
     }).catch(() => null);
