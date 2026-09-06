@@ -1,5 +1,29 @@
 # Changes
 
+## 2026-09-05
+- **A shared-domain handle the server fronts itself now receives its mail.**
+  Where a server runs an identity and is also its door, the record the door
+  keeps names the identity's own place on the pod, which is where deliveries
+  are written and where the identity is watching. Mail addressed to such a
+  handle reaches it. A record made by attaching a pod yourself is untouched;
+  one this server wrote itself is corrected as the identity starts.
+- **A pod is asked where its access rules live, rather than being assumed.**
+  Every pod server states, on the resource itself, where access to it is
+  controlled, and that is now what is read and written. A pod that states
+  nothing keeps the name it always had. A pod that states its rules as ACP
+  policies is left exactly as it is: this agent writes authorizations, and
+  putting them over policies would take away the rules protecting the pod.
+- **A pod is asked where it describes the services it offers**, instead of
+  only looking at the one path where such a description has always been found.
+- **Your profile is changed by adding the account statements to it**, rather
+  than by writing the whole document back. A profile says things that are not
+  this agent's to restate, and a server is entitled to refuse a write that
+  would restate them. A pod that cannot take such a change is sent the whole
+  document as before.
+- **A pod server that names the pod's owner decides who may opt in.** Where a
+  pod publishes its owner, the token has to prove that owner. Where it does
+  not, the older rule stands: the WebID must live under the pod.
+
 ## 2026-09-04
 - **The sign-in on the run-your-identity and accounts pages uses a smaller,
   pinned Solid-OIDC client.** `/run` and `/admin` now load

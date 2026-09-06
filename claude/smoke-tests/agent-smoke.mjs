@@ -10477,6 +10477,120 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
     'and an unlike goes out from EVERY account holding one, leaving no stray behind');
 }
 
+// ---------------------------------------------------------------------------
+// 32. Where a resource's access control lives, and how the owner's profile is
+//     changed. Both are things the pod states and this agent reads, rather
+//     than things worked out from a URL or done by rewriting a document.
+{
+  const { RemotePod } = await import(path.join(root, 'lib/remote.mjs'));
+  const cred = { webId: 'https://p.example/profile/card#me', remotePod: 'https://p.example/' };
+  const podFor = (handler) => new RemotePod(cred, { log: () => {}, session: {
+    fetch: async (url, init = {}) => handler(url, init),
+    warmup: async () => {},
+    stats: () => ({}),
+  } });
+
+  const asked = [];
+  let pod = podFor(async (url, init) => {
+    asked.push(`${init.method || 'GET'} ${url}`);
+    if ((init.method || 'GET') === 'HEAD') {
+      return new Response(null, { headers: { link: '</rules/notes>; rel="acl"' } });
+    }
+    return new Response(null, { status: 205 });
+  });
+  check(await pod.aclUrlFor('https://p.example/notes/') === 'https://p.example/rules/notes',
+    'access control lives where the pod says it does, not at a name built from the URL');
+  asked.length = 0;
+  await pod.aclUrlFor('https://p.example/notes/');
+  check(asked.length === 0, 'and having been told once, the agent does not ask again');
+
+  pod = podFor(async () => new Response(null, {}));
+  check(await pod.aclUrlFor('https://p.example/notes/') === 'https://p.example/notes/.acl',
+    'a pod that states nothing keeps the name every server this runs against uses');
+
+  // A pod whose rules are ACP policies: writing authorizations over them would
+  // replace the only thing protecting it with something it does not read.
+  const written = [];
+  pod = podFor(async (url, init) => {
+    const method = init.method || 'GET';
+    if (method === 'HEAD') return new Response(null, { headers: { link: '<acr>; rel="acl"' } });
+    if (method === 'PUT') { written.push(url); return new Response(null, { status: 205 }); }
+    return new Response(
+      '<https://p.example/notes/> <http://www.w3.org/ns/solid/acp#accessControl> <#c> .',
+      { headers: { 'content-type': 'text/turtle' } });
+  });
+  check(await pod.setAcl('https://p.example/notes/', [ 'Read' ]) === null && written.length === 0,
+    'a pod stating access as ACP policies has nothing written over them');
+
+  written.length = 0;
+  pod = podFor(async (url, init) => {
+    const method = init.method || 'GET';
+    if (method === 'HEAD') return new Response(null, {});
+    if (method === 'PUT') { written.push(url); return new Response(null, { status: 205 }); }
+    return new Response('', { status: 404 });
+  });
+  await pod.setAcl('https://p.example/notes/', [ 'Read' ]);
+  check(written.length === 1 && written[0] === 'https://p.example/notes/.acl',
+    'a pod stating access as authorizations still gets them');
+
+  const PROFILE = 'https://p.example/profile/card';
+  const card = `<${PROFILE}#me> <http://xmlns.com/foaf/0.1/name> "Mei" .`;
+  const account = { actorUrl: 'https://p.example/activitypods-js/ap/actor',
+    accountName: '@mei@p.example', kind: 'person' };
+
+  const sent = [];
+  pod = podFor(async (url, init) => {
+    const method = init.method || 'GET';
+    if (method === 'PATCH') { sent.push(String(init.body)); return new Response(null, { status: 205 }); }
+    return new Response(card, { headers: { 'content-type': 'text/turtle' } });
+  });
+  await pod.linkAccountInProfile(account);
+  check(sent.length === 1 && sent[0].includes('solid:patches') && sent[0].includes('solid:inserts')
+    && !sent[0].includes('foaf/0.1/name'),
+  'the profile gains the account statements alone, and what else it says is not touched');
+
+  const put = [];
+  pod = podFor(async (url, init) => {
+    const method = init.method || 'GET';
+    if (method === 'PATCH') return new Response('', { status: 415 });
+    if (method === 'PUT') { put.push(String(init.body)); return new Response(null, { status: 205 }); }
+    return new Response(card, { headers: { 'content-type': 'text/turtle' } });
+  });
+  await pod.linkAccountInProfile(account);
+  check(put.length === 1 && put[0].includes('OnlineAccount') && put[0].includes('Mei'),
+    'a pod that cannot patch is sent the document, carrying what was already there');
+
+  pod = podFor(async (url, init) => {
+    const method = init.method || 'GET';
+    if (method === 'PATCH') return new Response('', { status: 409 });
+    if (method === 'PUT') throw new Error('the profile must not be rewritten after a 409');
+    return new Response(card, { headers: { 'content-type': 'text/turtle' } });
+  });
+  let refused = false;
+  try { await pod.linkAccountInProfile(account); } catch { refused = true; }
+  check(refused, 'a profile that changed under a patch is left alone for the next attempt');
+}
+
+// Where a pod describes the services it offers is stated on its own responses
+// too, and the well-known path is only where a pod that states nothing has
+// always been found.
+{
+  const { Intake } = await import(path.join(root, 'lib/intake.mjs'));
+  const intake = Object.create(Intake.prototype);
+  intake.urls = { base: 'https://p.example/' };
+  const realFetch = globalThis.fetch;
+  try {
+    globalThis.fetch = async () => new Response(null, {
+      headers: { link: '</described>; rel="http://www.w3.org/ns/solid/terms#storageDescription"' },
+    });
+    check(await intake._storageDescriptionUrl() === 'https://p.example/described',
+      'a pod is asked where it describes itself, and its answer is followed');
+    globalThis.fetch = async () => new Response(null, {});
+    check(await intake._storageDescriptionUrl() === 'https://p.example/.well-known/solid',
+      'a pod that describes no such place keeps the path it has always been found at');
+  } finally { globalThis.fetch = realFetch; }
+}
+
 child.kill('SIGTERM');
 fs.rmSync(HOME, { recursive: true, force: true });
 console.log(failures ? `\n${failures} FAILURE(S)` : '\nall green');

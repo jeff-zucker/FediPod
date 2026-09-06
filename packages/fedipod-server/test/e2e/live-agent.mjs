@@ -85,20 +85,29 @@ const REMOTE_PORT = 4792;
 const REMOTE = `http://127.0.0.1:${REMOTE_PORT}/`;
 const delivered = [];
 const remote = http.createServer((req, res) => {
-  if (req.url === '/u/bob') {
+  const isActor = /^\/u\/([a-z]+)$/u.exec(req.url || '');
+  if (isActor) {
+    const name = isActor[1];
     res.writeHead(200, { 'content-type': 'application/activity+json' });
     res.end(JSON.stringify({
       '@context': 'https://www.w3.org/ns/activitystreams',
-      id: `${REMOTE}u/bob`, type: 'Person', preferredUsername: 'bob',
-      inbox: `${REMOTE}u/bob/inbox`, outbox: `${REMOTE}u/bob/outbox`,
+      id: `${REMOTE}u/${name}`, type: 'Person', preferredUsername: name,
+      inbox: `${REMOTE}u/${name}/inbox`, outbox: `${REMOTE}u/${name}/outbox`,
     }));
     return;
   }
-  if (req.url === '/u/bob/inbox' && req.method === 'POST') {
+  const isInbox = /^\/u\/([a-z]+)\/inbox$/u.exec(req.url || '');
+  if (isInbox && req.method === 'POST') {
     const chunks = [];
     req.on('data', (c) => chunks.push(c));
     req.on('end', () => {
-      try { delivered.push(JSON.parse(Buffer.concat(chunks).toString())); } catch { /* not ours */ }
+      // Who it reached is recorded alongside it: two of these tests only mean
+      // something if the answer went back to the actor that asked.
+      try {
+        delivered.push(Object.assign(
+          JSON.parse(Buffer.concat(chunks).toString()), { deliveredTo: isInbox[1] },
+        ));
+      } catch { /* not ours */ }
       res.writeHead(202).end();
     });
     return;
@@ -168,7 +177,7 @@ try {
     const wf = await fetch(`${BASE}.well-known/webfinger?resource=acct:alice@localhost`);
     if (wf.status !== 200) return false;
     const href = (await wf.json()).links?.[0]?.href;
-    return href === `${POD}ap/actor`;
+    return href === actorUrl;
   });
   check(fronted, 'the front resolves @alice@localhost to the identity on its pod');
   const stateRes = await fetch(`${POD}activitypods-js/ap-state/`, { headers: { accept: 'text/turtle' }});
@@ -296,6 +305,25 @@ try {
     'the live feed carries the new post');
   }
   socket.close();
+
+  // ---- a delivery that arrives through the door ----------------------------
+  // Mail for @alice@localhost is taken by the front and written into the
+  // identity's own inbox, which is the container the agent watches. A door
+  // record naming the pod root instead would write where nothing reads, and
+  // the Accept below would never be sent.
+  const doorDelivery = await fetch(`${BASE}u/alice/ap/inbox/`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/activity+json' },
+    body: JSON.stringify({
+      '@context': 'https://www.w3.org/ns/activitystreams',
+      type: 'Follow', id: `${REMOTE}activities/2`,
+      actor: `${REMOTE}u/dave`, object: actorUrl,
+    }),
+  });
+  check(doorDelivery.status === 202, 'the door takes a delivery for the fronted handle');
+  check(await until('the identity answers a follow that came in through the door',
+    async () => delivered.some((d) => d.type === 'Accept' && d.deliveredTo === 'dave')),
+  'a delivery through the door reaches the identity and is answered');
 
   // ---- the operator's door -------------------------------------------------
   check((await fetch(`${POD}fedipod/status`)).status === 401, "the operator's own routes need the secret");

@@ -279,6 +279,43 @@ try {
   // ---- what must NOT be answered -------------------------------------------
   check((await get('/some/pod/document')).status === 404,
     'a path the front does not own falls through');
+
+  // ---- who the pod's own server says owns it -------------------------------
+  // Opting in is proved by a token. Which token counts was decided by where
+  // the WebID sat in relation to the pod's URL; where a pod server names its
+  // owner outright, that is the answer instead.
+  {
+    const OWNER = 'https://wren.example/profile/card#me';
+    const OWNER_REL = 'http://www.w3.org/ns/solid/terms#owner';
+    const optIn = ({ link = null, webid = OWNER, podBase = POD }) => routeFront(
+      new Request(ORIGIN + '/api/agent', {
+        method: 'POST',
+        headers: { authorization: 'Bearer x', 'content-type': 'application/json' },
+        body: JSON.stringify({ action: 'opt-in', podBase }),
+      }), {
+        host: HOST, frontOrigin: ORIGIN,
+        lookup: async () => null,
+        putDirectory: async () => {},
+        podPut: async () => true,
+        podGet: async () => ({ status: 404, text: async () => '' }),
+        verifier: async () => ({ webid }),
+        fetchImpl: async () => new Response(null, { headers: link ? { link } : {} }),
+        agentControl: {
+          optIn: async () => ({ httpStatus: 201, ok: true }),
+          optOut: async () => ({ httpStatus: 200, ok: true }),
+        },
+      });
+
+    check((await optIn({ link: `<${OWNER}>; rel="${OWNER_REL}"` })).status === 201,
+      'a pod naming this person as its owner lets them opt in');
+    check((await optIn({ link: `<https://someone.else/card#me>; rel="${OWNER_REL}"` })).status === 403,
+      'and one naming somebody else refuses them, wherever their own WebID lives');
+    check((await optIn({})).status === 403,
+      'a pod naming no owner leaves where the WebID lives as the only evidence');
+    check((await optIn({ webid: POD + 'profile/card#me' })).status === 201,
+      'and there, a WebID under the pod is still proof enough');
+  }
+
 } finally {
   front.close(); pod.close();
 }

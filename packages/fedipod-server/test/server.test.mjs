@@ -10,7 +10,7 @@ import assert from 'node:assert/strict';
 import { Readable } from 'node:stream';
 import { claims, agentClaims } from '../dist/claims.js';
 import { nodeToWhatwg, applyToNode } from '../dist/adapt.js';
-import { makeDirectory, makeStorePodPut, makeAgentRegistry } from '../dist/directory.js';
+import { makeDirectory, makeStorePodPut, makeAgentRegistry, frontRow } from '../dist/directory.js';
 
 test('claims only the front host, only its routes', () => {
   const F = 'fedipod.net';
@@ -148,4 +148,40 @@ test('the store-backed directory round-trips and podPut writes through the store
   const ok = await podPut('https://alice.pod/ap/inbox/abc', '{}', 'application/activity+json');
   assert.equal(ok, true);
   assert.equal(disk.get('https://alice.pod/ap/inbox/abc'), '{}');
+});
+
+test("the door's record of an identity this server runs names the identity's own tree", () => {
+  const POD = 'https://mei.example.org/';
+  const HOME = `${POD}activitypods-js/`;
+  const next = {
+    handle: 'mei', podHome: HOME, actorUrl: `${HOME}ap/actor`, kind: 'person',
+    gatewayWebId: null, hmacSecret: 'fresh', inboxOnly: true,
+  };
+
+  assert.deepEqual(frontRow(null, next, POD), next, 'with no record, the new one stands');
+
+  // The record this server used to write named the pod root, so the door wrote
+  // deliveries where nothing was watching. Correct it, and keep the secret so a
+  // gateway holding it goes on working.
+  const stale = {
+    handle: 'mei', podHome: POD, actorUrl: `${POD}ap/actor`, kind: 'person',
+    gatewayWebId: null, hmacSecret: 'in-use-somewhere', inboxOnly: true,
+  };
+  const fixed = frontRow(stale, next, POD);
+  assert.equal(fixed.podHome, HOME, "a record this server wrote is pointed at the identity's tree");
+  assert.equal(fixed.actorUrl, `${HOME}ap/actor`);
+  assert.equal(fixed.hmacSecret, 'in-use-somewhere', 'and keeps the secret already in use');
+
+  assert.equal(frontRow(fixed, next, POD), null, 'a record already right is left alone');
+
+  // An owner who attached their own pod owns that record. Never touch it, even
+  // when it names a pod this server happens to run.
+  const attached = {
+    handle: 'mei', podHome: POD, actorUrl: 'https://fedipod.net/u/mei/ap/actor',
+    kind: 'person', hmacSecret: 'theirs',
+  };
+  assert.equal(frontRow(attached, next, POD), null, 'an attached record belongs to its owner');
+
+  const elsewhere = { ...stale, podHome: 'https://someone-else.example/' };
+  assert.equal(frontRow(elsewhere, next, POD), null, "another pod's record is not ours to rewrite");
 });

@@ -17,7 +17,7 @@ import { claims, agentClaims } from './claims';
 import { nodeToWhatwg, applyToNode } from './adapt';
 import { makeStoreIO } from './store-css';
 import { makeStoreSession } from './store-pod';
-import { makeDirectory, makeStorePodPut, makeAgentRegistry } from './directory';
+import { makeDirectory, makeStorePodPut, makeAgentRegistry, frontRow } from './directory';
 import type { IO, Directory, AgentRegistry } from './directory';
 
 export interface FediPodServerArgs {
@@ -63,6 +63,9 @@ export interface FediPodServerArgs {
 interface EmbeddedIdentity {
   handle: string;
   host: string;
+  /** Where the identity's own tree begins on its pod, and the actor inside it. */
+  podHome: string;
+  actorUrl: string;
   surface: { handler: (req: unknown, res: unknown) => Promise<void>; streaming?: unknown };
   stop: () => Promise<void>;
   agent?: { store?: { getConfig?: () => { kind?: string } | null | undefined } };
@@ -318,21 +321,28 @@ export class FediPodServerHandler extends HttpHandler implements Initializable, 
    * When this server is also the door, give a running identity a
    * @handle@<frontHost> address: one inbox-only directory row so the
    * shared-domain handle resolves and the door can take verified delivery for
-   * it. Written once — a manual attach or an earlier boot wins. The identity
-   * keeps its own actor ids on the pod; nothing is moved.
+   * it. The row names the identity's own tree, which is where its inbox and
+   * its actor are — the door writes deliveries there and the agent watches
+   * that container. A row written by an attach belongs to its owner and is
+   * left alone; one this server wrote itself is corrected. The identity keeps
+   * its own ids on the pod; nothing is moved.
    */
   private async frontIdentity(podBase: string, identity: EmbeddedIdentity): Promise<void> {
-    const { handle } = identity;
+    const { handle, podHome, actorUrl } = identity;
     try {
-      if (await this.dir.lookup(handle)) return;
-      const kind = identity.agent?.store?.getConfig?.()?.kind === 'group' ? 'group' : 'person';
-      await this.dir.putDirectory(handle, {
-        handle, podHome: podBase, actorUrl: `${podBase}ap/actor`, kind,
+      const existing = await this.dir.lookup(handle);
+      const row = frontRow(existing, {
+        handle, podHome, actorUrl,
+        kind: identity.agent?.store?.getConfig?.()?.kind === 'group' ? 'group' : 'person',
         gatewayWebId: this.args.gatewayWebId ?? null,
         hmacSecret: randomBytes(32).toString('base64'),
         inboxOnly: true,
-      });
-      this.logger.info(`FediPod: @${handle}@${this.frontHost} now resolves to ${podBase}`);
+      }, podBase);
+      if (!row) return;
+      await this.dir.putDirectory(handle, row);
+      this.logger.info(existing
+        ? `FediPod: the door's record of @${handle} now names ${podHome}`
+        : `FediPod: @${handle}@${this.frontHost} now resolves to ${podBase}`);
     } catch (e: unknown) {
       this.logger.warn(`FediPod: could not front @${handle}: ${(e as Error).message}`);
     }

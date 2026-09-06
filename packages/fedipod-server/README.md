@@ -144,8 +144,13 @@ POST /api/agent
 {"action": "opt-in", "podBase": "https://mei.example.org/"}
 ```
 
-The request carries a Solid-OIDC token; the WebID it proves must live under
-the pod being claimed. The reply carries the identity's door secret, shown
+<!-- CLAUDE 2026-09-05 — corrects the opt-in proof, which now reads the pod's
+     own owner link where the pod server publishes one; delete these markers
+     when you have read it -->
+The request carries a Solid-OIDC token. Where the pod's server names an owner,
+the token must prove that owner. Where it names none, the WebID the token
+proves must live under the pod being claimed.
+<!-- /CLAUDE --> The reply carries the identity's door secret, shown
 that once and never again — losing it is not fatal, because opting in again
 mints a fresh one and retires the old, with no restart and no dropped
 connections. `{"action": "opt-out", "podBase": "https://mei.example.org/"}`,

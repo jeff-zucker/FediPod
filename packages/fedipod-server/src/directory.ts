@@ -41,6 +41,27 @@ export interface Directory {
   putDirectory(handle: string, record: DirectoryRecord): Promise<void>;
 }
 
+/**
+ * The row an identity this server runs should have in the door's directory,
+ * or null to leave what is already there alone.
+ *
+ * A row an owner made by attaching is theirs, and is never touched. A row this
+ * server wrote for this same pod is corrected when it still names the pod root
+ * rather than the identity's own tree — the place the door writes deliveries
+ * and the agent watches. The secret rides across the correction, because a
+ * gateway holding it has to go on working.
+ */
+export function frontRow(
+  existing: DirectoryRecord | null,
+  next: DirectoryRecord,
+  podBase: string,
+): DirectoryRecord | null {
+  if (!existing) return next;
+  const ours = existing.inboxOnly === true && existing.podHome === podBase;
+  if (!ours || existing.podHome === next.podHome) return null;
+  return { ...existing, podHome: next.podHome, actorUrl: next.actorUrl };
+}
+
 export function makeDirectory(io: IO, containerUrl: string): Directory {
   const table = jsonTable<DirectoryRecord>(io, containerUrl);
   return {
