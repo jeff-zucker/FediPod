@@ -341,6 +341,14 @@ try {
     async () => delivered.some((d) => d.type === 'Accept' && d.deliveredTo === 'dave')),
   'a delivery through the door reaches the identity and is answered');
 
+  // ---- how a client learns to sign in --------------------------------------
+  const metaRes = await fetch(`${POD}.well-known/oauth-authorization-server`);
+  const meta = metaRes.status === 200 ? await metaRes.json() : {};
+  check(metaRes.status === 200 && meta.authorization_endpoint === `${POD}oauth/authorize`,
+    'the metadata document is served on the pod origin, with no credential');
+  check((meta.token_endpoint_auth_methods_supported || []).includes('none'),
+    'and says a client keeping no secret may sign in');
+
   // ---- the owner reads their own inbox -------------------------------------
   // Deliveries land in a container on the pod and the drain empties it, so
   // what arrived is whole only in the archive. This is the owner's view of it,

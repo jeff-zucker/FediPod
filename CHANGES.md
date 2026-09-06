@@ -13,6 +13,15 @@
   attempts answered as though the password were wrong, which made apps ask you
   to type it again — the one thing that could not help. It now says to wait,
   and for how long.
+- **An app can be known by the document it publishes about itself**, instead
+  of registering here first. It names itself by a URL, that URL says who it is
+  and where it may be sent back to, and it proves each sign-in with a
+  challenge because such an app keeps no secret. An app that listens on your
+  own machine may use whatever port it was given, as the standard for those
+  expects.
+- **There is now a document saying how to sign in**, at the address clients
+  look for it. It names where to ask, where to collect a token, where to
+  register, and that an app keeping no secret is welcome.
 - **An app that runs in a browser can sign in.** A browser cannot keep a
   secret, so such an app proves instead that it is the same caller that asked,
   by answering a challenge it set when it started. Until now the token step

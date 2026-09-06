@@ -1803,7 +1803,10 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     "an account's own statuses paginate rather than stopping at 20");
 
   // Logging out of a client left a working 90-day bearer behind.
-  const rev = masto.slice(masto.indexOf("'/oauth/revoke'"), masto.indexOf("'/oauth/revoke'") + 700);
+  // Anchored on the route test, not on the bare path: the path is also a
+  // string in the authorization-server metadata, and the first match was that.
+  const revAt = masto.indexOf("pathname === '/oauth/revoke'");
+  const rev = masto.slice(revAt, revAt + 700);
   check(/masto-tokens\.json/.test(rev) && /filter\(r => r\.token !== gone\)/.test(rev),
     '/oauth/revoke actually drops the token');
 
@@ -10663,6 +10666,50 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   check(Boolean(bySecret.access_token), 'a client that kept its secret still uses it');
   const skipped = await exchange({ code: await askFor(challenge), client_secret: reg.client_secret });
   check(skipped.status === 400, 'but the secret does not step around a challenge already made');
+}
+
+// ---------------------------------------------------------------------------
+// 33c. Where a client looks first to learn how to sign in (RFC 8414).
+{
+  const meta = await (await fetchLocal(
+    `https://127.0.0.1:${PORT}/.well-known/oauth-authorization-server`,
+    { headers: { 'x-dk-token': TOKEN } })).json();
+  check(meta.authorization_endpoint === `https://127.0.0.1:${PORT}/oauth/authorize`
+    && meta.token_endpoint === `https://127.0.0.1:${PORT}/oauth/token`,
+  'the metadata names where to ask and where to collect');
+  check(meta.issuer === `https://127.0.0.1:${PORT}`, 'and says who is issuing');
+  check((meta.code_challenge_methods_supported || []).includes('S256'),
+    'that a challenge can be answered with S256');
+  check((meta.token_endpoint_auth_methods_supported || []).includes('none'),
+    'and that a client keeping no secret is welcome, which is what a browser app needs to hear');
+  check(Boolean(meta.registration_endpoint), 'with somewhere to register for those that want to');
+}
+
+// ---------------------------------------------------------------------------
+// 33d. A client named by its own published document, rather than by anything
+//      registered here.
+{
+  const { MastoApi } = await import(path.join(root, 'lib/mastoapi.mjs'));
+  const M = MastoApi.redirectMatches;
+
+  check(M('https://app.example/cb', 'https://app.example/cb'), 'an exact redirect matches');
+  // A native client is handed its port by the machine it runs on, so it can
+  // only publish the loopback address without one (RFC 8252).
+  check(M('http://127.0.0.1', 'http://127.0.0.1:39860'),
+    'a loopback redirect matches whatever port the machine handed out');
+  check(M('http://127.0.0.1/cb', 'http://127.0.0.1:5000/cb'), 'path and all');
+  check(!M('http://127.0.0.1', 'http://evil.example:80'),
+    'but another host is not loopback however it is dressed');
+  check(!M('https://app.example', 'https://app.example:8443'),
+    'and only on loopback is the port free to differ');
+  check(!M('http://127.0.0.1', 'https://127.0.0.1:99'), 'the scheme still has to agree');
+
+  const api = Object.create(MastoApi.prototype);
+  api.log = () => {};
+  check(await api.resolveClientDocument('http://app.example/meta.json') === null,
+    'a client naming itself over cleartext is refused before anything is fetched');
+  check(await api.resolveClientDocument('not-a-url') === null,
+    'and so is one that is not a URL at all');
 }
 
 // ---------------------------------------------------------------------------

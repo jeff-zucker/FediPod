@@ -27,6 +27,9 @@ const AGENT_PATHS = new Set([
   // receiving changes, and nothing at this address was ever served before.
   '/ap/inbox',
   '/.well-known/nodeinfo', '/nodeinfo/2.0',
+  // Where a client looks first to learn how to sign in. Nothing was served
+  // at this name before, so no pod resource is displaced.
+  '/.well-known/oauth-authorization-server',
 ]);
 const AGENT_PREFIXES = [ '/api/', '/oauth/' ];
 
