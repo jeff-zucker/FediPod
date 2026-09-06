@@ -10,14 +10,12 @@ client at the pod's own address. Signing up is the only way an account is
 made, and opting out is the only way one ends.
 
 With nothing configured beyond the defaults, installing the component changes
-nothing about how the server serves pods.
+nothing about how the server serves pods. All pods, whether or not they opt-in
+to being a Fediverse account, behave as Solid pods.
 
 ![A pod and its agent, both inside one Solid server](fedipod-server.svg)
 
-<!-- CLAUDE 2026-09-06 — new section; the subdomain and single-worker
-     requirements were buried further down as asides. Delete these markers
-     when you have read it -->
-## What the server has to be
+## Requirements
 
 A pod here becomes an address other Fediverse servers talk to and a Mastodon
 app connects to. That asks things of the server it lives on. Check these
@@ -37,7 +35,6 @@ sign-up refuses rather than half-working.
   stops.
 - **A directory on disk.** Each account keeps its signing key and its door
   secret there. Sign-up will not start without one.
-<!-- /CLAUDE -->
 
 ## Install
 
@@ -164,13 +161,10 @@ POST /api/agent
 {"action": "opt-in", "podBase": "https://mei.example.org/"}
 ```
 
-<!-- CLAUDE 2026-09-05 — corrects the opt-in proof, which now reads the pod's
-     own owner link where the pod server publishes one; delete these markers
-     when you have read it -->
 The request carries a Solid-OIDC token. Where the pod's server names an owner,
 the token must prove that owner. Where it names none, the WebID the token
 proves must live under the pod being claimed.
-<!-- /CLAUDE -->
+
 The reply carries the identity's door secret, shown
 that once and never again — losing it is not fatal, because opting in again
 mints a fresh one and retires the old, with no restart and no dropped
