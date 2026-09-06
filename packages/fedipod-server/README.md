@@ -124,6 +124,19 @@ with the password. The authorization code is bound to the client's registered
 redirect, and only that client, holding its secret, can exchange it for a
 token.
 
+<!-- CLAUDE 2026-09-06 — new paragraph; the ActivityPub client interface it
+     describes did not exist when the section was written. Delete these
+     markers when you have read it -->
+An ActivityPub client needs none of that arranged by hand. The actor says
+where to sign in, and `/.well-known/oauth-authorization-server` says the same
+thing at the address such clients look for first. An app that keeps no secret,
+which is anything running in a browser, signs in by answering a challenge it
+set at the start. An app that publishes a document about itself is known by
+that document's address and registers nothing here. Once in, it posts to the
+outbox the actor names, and reads what the identity received at `/ap/inbox`,
+which nobody but the owner may read.
+<!-- /CLAUDE -->
+
 A client API is rooted at an origin, so each identity needs an origin of its
 own: subdomain pods, one per identity. A second identity on a host is
 refused at opt-in rather than half-working.
@@ -147,6 +160,9 @@ curl -X POST https://mei.example.org/fedipod/config \
 **Some pod paths stop being served.** On an identity's origin the paths above
 belong to the identity, so pod resources at those names — a container called
 `api`, `oauth` or `fedipod`, or documents at `ap/actor`, `ap/outbox`,
+<!-- CLAUDE 2026-09-06 — two names added to this list; delete these markers -->
+`ap/inbox`, `.well-known/oauth-authorization-server`,
+<!-- /CLAUDE -->
 `.well-known/nodeinfo` and `nodeinfo/2.0` — are not served over HTTP there.
 They stay in the pod and in its listings. Every other path is the pod, exactly
 as before.
