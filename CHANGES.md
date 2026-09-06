@@ -1,5 +1,24 @@
 # Changes
 
+## 2026-09-06 (later)
+- **An app you did not write can now find its way in.** Your actor says where
+  a client signs in and where it collects its token, so an ActivityPub app
+  needs nothing configured by hand to reach your account. It says so only
+  where your account answers on an address a stranger can reach, which is a
+  pod server; on a laptop the client surface is on your own machine and there
+  is nothing useful to advertise.
+- **A token now says which account it is for**, so an app knows whose it holds
+  without asking a second time.
+- **Being turned away for asking too often says so.** Too many sign-in
+  attempts answered as though the password were wrong, which made apps ask you
+  to type it again — the one thing that could not help. It now says to wait,
+  and for how long.
+- **You can read your own inbox.** `GET /ap/inbox`, yours alone, holding what
+  arrived rather than what is left. Deliveries land in a container on your pod
+  and the drain empties it as it handles each item, so the archive is the only
+  place your mail is still whole. It is paged a month at a time. Apps still
+  deliver to the address your actor names; nothing about receiving changed.
+
 ## 2026-09-06
 - **A server running more than one worker says an identity cannot be reached,
   instead of answering as though it were not there.** An identity runs in one
