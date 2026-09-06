@@ -13,6 +13,12 @@
   attempts answered as though the password were wrong, which made apps ask you
   to type it again — the one thing that could not help. It now says to wait,
   and for how long.
+- **The address your actor gives for its outbox is one an app can write to.**
+  It named the collection on your pod, which answers reads and refuses
+  writes, so an app following it was turned away when it tried to post.
+  Reading that address now goes on to the same collection as before, and
+  writing reaches your agent. Your inbox is unchanged and still names the pod,
+  because that is what holds your mail when nothing is running.
 - **An app can be known by the document it publishes about itself**, instead
   of registering here first. It names itself by a URL, that URL says who it is
   and where it may be sent back to, and it proves each sign-in with a

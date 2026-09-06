@@ -181,6 +181,17 @@ try {
       && actorNow.endpoints?.oauthTokenEndpoint === `${POD}oauth/token`,
     'the actor says where a client signs in and collects its token');
     check(actorNow.endpoints?.sharedInbox, 'without losing what it already advertised');
+    // A client-to-server client posts to the address the actor gives, so that
+    // address has to be one that will take a write. The pod holds the
+    // collection and cannot; the agent can, and sends reads on to the pod.
+    check(actorNow.outbox === `${POD}ap/outbox`,
+      'the actor names an outbox a client can actually write to');
+    const readOutbox = await fetch(actorNow.outbox, { redirect: 'manual' });
+    check(readOutbox.status === 303
+      && readOutbox.headers.get('location') === `${POD}activitypods-js/ap/outbox`,
+    "and reading it goes on to the pod's own collection");
+    check(actorNow.inbox === `${POD}activitypods-js/ap/inbox/`,
+      'while the inbox still names the pod, which is what buffers deliveries');
   }
 
   // Auto-fronting: because this one server also runs the door, @alice@localhost
