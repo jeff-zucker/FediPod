@@ -324,6 +324,7 @@ export class Agent {
     this.deliverer?.stop();
     this.tagfeed?.stop();
     clearInterval(this.schedTimer);
+    this.publisher?.stopPolls();
     this.deliverer = new Deliverer({
       store: this.store, rsaPrivate: keys.rsaPrivate, keyId: this.urls.actor + '#main-key',
       actorId: this.urls.actor, edPrivate: keys.edPrivate,
@@ -547,6 +548,10 @@ export class Agent {
         }).then(() => this.log(`scheduled post published (${e.id})`))
           .catch(err => this.log(`scheduled post ${e.id} failed: ${err.message} — dropped`));
       }
+      // A poll whose time is up is shut on the same sweep: it stops taking
+      // answers here, and everyone holding it is told once.
+      this.publisher.closeDuePolls()
+        .catch(err => this.log(`closing polls: ${err.message}`));
     }, 30_000);
     this.schedTimer.unref();
     // A CSV import interrupted by a restart or a handoff picks back up here.
@@ -651,6 +656,7 @@ export class Agent {
     this.deliverer?.stop();
     this.importer?.stop();
     clearInterval(this.schedTimer);
+    this.publisher?.stopPolls();
     // The lease too: standing down means standing down. Left renewing, a viewer
     // keeps writing to the pod on the active agent's behalf and can win the
     // lease back on a conditional PUT it had no business making.

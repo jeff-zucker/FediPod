@@ -9052,6 +9052,13 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
         published24.push({ content, ...opts });
         return { id: urls24.notes + 'c2s-' + published24.length };
       },
+      publishQuestion: async (content, opts) => {
+        // The same refusal the real publisher makes, so what is measured here
+        // is the outbox turning it into an answer.
+        if ((opts.options || []).length < 2) throw new Error('a poll needs at least two options');
+        published24.push({ content, question: true, ...opts });
+        return { id: urls24.notes + 'c2s-poll-' + published24.length };
+      },
       updateNote: async (s, opts) => ({ ...s, ...opts }),
       publishFeatured: async () => { featured24++; },
       publishProfile: async () => {},
@@ -9177,8 +9184,11 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   check(move.status === 422, `Move → 422, pointed at the admin surface (got ${move.status})`);
   const retire = await ask24(api24, { type: 'Delete', object: urls24.actor });
   check(retire.status === 422, `Delete of the actor → 422, same (got ${retire.status})`);
-  const poll = await ask24(api24, { type: 'Question', content: 'which?' });
-  check(poll.status === 422, `a non-Note object → 422 (got ${poll.status})`);
+  const article = await ask24(api24, {
+    type: 'Create', to: ['https://www.w3.org/ns/activitystreams#Public'],
+    object: { type: 'Article', name: 'A title', content: 'which?' },
+  });
+  check(article.status === 422, `an object type we do not make → 422 (got ${article.status})`);
   const badBody = await ask24(api24, null);
   check(badBody.status === 400, `an empty body → 400 (got ${badBody.status})`);
 
@@ -9200,6 +9210,31 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   });
   const viewer = await ask24(apiViewer, blockBody);
   check(viewer.status === 503, `a viewer that cannot take the lease → 503 (got ${viewer.status})`);
+
+  // A poll, posted the way the protocol says: a Question whose choices are in
+  // oneOf (pick one) or anyOf (pick several), each naming itself.
+  const askPoll = (choices, key = 'oneOf') => ({
+    '@context': 'https://www.w3.org/ns/activitystreams',
+    type: 'Create',
+    to: ['https://www.w3.org/ns/activitystreams#Public'],
+    object: {
+      type: 'Question', content: 'Tea or coffee?',
+      [key]: choices.map(name => ({ type: 'Note', name })),
+      endTime: new Date(Date.now() + 86400_000).toISOString(),
+    },
+  });
+  const before24 = published24.length;
+  const oneOfRes = await ask24(api24, askPoll(['Tea', 'Coffee']));
+  const madePoll = published24[before24];
+  check(oneOfRes.status === 201 && madePoll?.question === true
+    && madePoll.options.join('|') === 'Tea|Coffee' && madePoll.multiple === false,
+    'the outbox takes a Question and makes a poll of it');
+  const anyOfRes = await ask24(api24, askPoll(['Tea', 'Coffee'], 'anyOf'));
+  check(anyOfRes.status === 201 && published24.at(-1).multiple === true,
+    'anyOf is the same poll taking more than one answer');
+  const oneChoice = await ask24(api24, askPoll(['Tea']));
+  check(oneChoice.status === 422 && /at least two/.test(oneChoice.json?.error || ''),
+    `the publisher's refusal comes back as the answer, not as a 500 (got ${oneChoice.status})`);
 }
 
 // --- 25. FEP conformance: moderators (1b12), pending (4ccd), blocked (c648), audience, announced Delete ---
@@ -10751,6 +10786,221 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
     'a client naming itself over cleartext is refused before anything is fetched');
   check(await api.resolveClientDocument('not-a-url') === null,
     'and so is one that is not a URL at all');
+}
+
+// ---------------------------------------------------------------------------
+// 35. Polls: publishing a Question, counting the answers that come back,
+//     and shutting it when its time is up.
+{
+  const { Publisher } = await import(path.join(root, 'lib/publisher.mjs'));
+  const { Intake } = await import(path.join(root, 'lib/intake.mjs'));
+  const wire35 = await import(path.join(root, 'lib/wire.mjs'));
+  const polls35 = await import(path.join(root, 'lib/polls.mjs'));
+  const { pollParams } = await import(path.join(root, 'lib/mastoapi.mjs'));
+
+  const urls35 = wire35.apUrls('https://pod.example/');
+
+  // A store that actually holds things, so a vote can move a number and the
+  // next read can see it.
+  const mkStore35 = () => {
+    const docs = {};
+    let statuses = [];
+    return {
+      docs,
+      get statuses() { return statuses; },
+      getStatuses: () => statuses,
+      addStatus: (s) => { statuses = [s, ...statuses]; return { added: true, merged: false, status: s }; },
+      updateStatus: (noteId, patch) => {
+        const i = statuses.findIndex(x => x.noteId === noteId);
+        if (i < 0) return null;
+        statuses[i] = { ...statuses[i], ...patch };
+        return statuses[i];
+      },
+      read: (n, d) => (n in docs ? structuredClone(docs[n]) : d),
+      write: (n, v) => { docs[n] = structuredClone(v); },
+      getContacts: () => ({ followers: [{ actor: 'f', inbox: 'https://f.example/inbox' }], following: [] }),
+      isBlocked: () => false,
+      addNotification: () => {},
+    };
+  };
+
+  const mkPub35 = (store) => {
+    const put = [];
+    const sent = [];
+    const pub = new Publisher({
+      config: { remotePod: 'https://pod.example/', handle: 'you', name: 'You' },
+      remote: { putJson: async (u, b) => put.push({ u, b }), setAcl: async () => {}, delete: async () => true },
+      local: { writeNote: async () => {} },
+      store,
+      deliverer: { deliverToAll: async (i, a) => sent.push({ i, a }) },
+      publicKeyPem: 'x', log: () => {},
+    });
+    pub.recordOutbox = async () => {};
+    return { pub, put, sent };
+  };
+
+  // --- publishing one ---
+  {
+    const store = mkStore35();
+    const { pub, put, sent } = mkPub35(store);
+    const q = await pub.publishQuestion('Tea or coffee?', {
+      options: ['Tea', 'Coffee'],
+      expiresAt: new Date(Date.now() + 86400_000).toISOString(),
+    });
+    const doc = put.find(x => x.u === q.id)?.b;
+    check(doc?.type === 'Question' && doc.oneOf?.length === 2
+      && doc.oneOf[0].name === 'Tea' && doc.oneOf[0].replies?.totalItems === 0,
+      'a poll is published as a Question whose choices carry their own count');
+    check(typeof doc?.endTime === 'string' && !doc.closed,
+      'it says when it closes and does not say it has');
+    const created = sent.find(x => x.a?.type === 'Create');
+    check(created?.a.object?.type === 'Question' && created.a.object['@context'] === undefined
+      && Array.isArray(created.a['@context']),
+      'the Create carries the Question with the context hoisted onto the activity');
+    check(store.getStatuses()[0]?.poll?.options.length === 2,
+      'and the status row carries the poll, so a client can show it');
+
+    const bad = await pub.publishQuestion('x', { options: ['Tea'] }).then(() => null, e => e.message);
+    check(/at least two/.test(bad || ''), 'one option is not a poll');
+    const same = await pub.publishQuestion('x', { options: ['Tea', 'Tea'] }).then(() => null, e => e.message);
+    check(/differ/.test(same || ''),
+      'and neither is two options nobody could tell apart — a vote names its choice');
+    const many = await pub.publishQuestion('x', { options: ['a', 'b', 'c', 'd', 'e'] })
+      .then(() => null, e => e.message);
+    check(/at most/.test(many || ''), 'the option cap holds at the publisher, not only at the client API');
+  }
+
+  // --- counting the answers ---
+  {
+    const store = mkStore35();
+    const { pub } = mkPub35(store);
+    const q = await pub.publishQuestion('Tea or coffee?', { options: ['Tea', 'Coffee'] });
+    check(await pub.recordVote(q.id, 'https://a.example/u/1', 'Tea') === true, 'a vote counts');
+    check(await pub.recordVote(q.id, 'https://a.example/u/1', 'Coffee') === false,
+      'a second answer to a one-answer poll does not — a voter does not get to change their mind');
+    check(await pub.recordVote(q.id, 'https://a.example/u/2', 'Coffee') === true,
+      'but somebody else does');
+    check(await pub.recordVote(q.id, 'https://a.example/u/3', 'Tisane') === false,
+      'an option the poll does not offer counts for nothing');
+    const row = store.getStatuses().find(x => x.noteId === q.id);
+    check(row.poll.options[0].votes === 1 && row.poll.options[1].votes === 1
+      && row.poll.votersCount === 2,
+      'the tally follows the roster: two people, one answer each');
+    const roster = store.read(polls35.VOTES_DOC, {})[q.id];
+    check(Object.keys(roster).every(k => !k.includes('example')),
+      'and the roster holds who voted as a hash, not as a list of everyone who took part');
+
+    // Several answers each.
+    const store2 = mkStore35();
+    const { pub: pub2 } = mkPub35(store2);
+    const q2 = await pub2.publishQuestion('Which?', { options: ['a', 'b'], multiple: true });
+    await pub2.recordVote(q2.id, 'https://a.example/u/1', 'a');
+    await pub2.recordVote(q2.id, 'https://a.example/u/1', 'b');
+    check(await pub2.recordVote(q2.id, 'https://a.example/u/1', 'b') === false,
+      'the same answer twice is still one answer');
+    const row2 = store2.getStatuses().find(x => x.noteId === q2.id);
+    check(row2.poll.options[0].votes === 1 && row2.poll.options[1].votes === 1
+      && row2.poll.votersCount === 1,
+      'a poll taking several answers counts two answers from one person as one voter');
+  }
+
+  // --- the rewrite window, and shutting it ---
+  {
+    const store = mkStore35();
+    const { pub, put, sent } = mkPub35(store);
+    const q = await pub.publishQuestion('Tea or coffee?', { options: ['Tea', 'Coffee'] });
+    const putsAfterPublish = put.length;
+    await pub.recordVote(q.id, 'https://a.example/u/1', 'Tea');
+    await pub.recordVote(q.id, 'https://a.example/u/2', 'Tea');
+    check(put.length === putsAfterPublish,
+      'a vote does not rewrite the poll on the pod — a burst of them costs one rewrite, not one each');
+    check(pub.pollTimers.size === 1, 'it opens one rewrite window and leaves it open');
+    pub.stopPolls();
+    check(pub.pollTimers.size === 0, 'and shutdown closes it rather than leaving a timer running');
+
+    await pub.republishPoll(q.id);
+    const rewritten = put.filter(x => x.u === q.id).at(-1)?.b;
+    check(rewritten?.oneOf[0].replies.totalItems === 2 && rewritten.votersCount === 2,
+      'the rewrite publishes the count, in the choices and as a voters count');
+    const upd = sent.filter(x => x.a?.type === 'Update').at(-1);
+    check(upd && !rewritten.updated,
+      'and tells everyone holding it — without marking the poll edited, which it was not');
+    // An Update is named after the count it carries. A server that has seen an
+    // activity id drops the next one wearing it, so a clock-stamped id costs
+    // the count whenever two rewrites land in the same millisecond.
+    const first = sent.filter(x => x.a?.type === 'Update')[0];
+    await pub.republishPoll(q.id);
+    check(sent.filter(x => x.a?.type === 'Update').at(-1).a.id === first.a.id,
+      'republishing the same count twice is the duplicate it looks like');
+    await pub.recordVote(q.id, 'https://a.example/u/3', 'Coffee');
+    await pub.republishPoll(q.id);
+    check(sent.filter(x => x.a?.type === 'Update').at(-1).a.id !== first.a.id,
+      'and a count that moved is a new Update, not one a server will drop as seen');
+
+    // Shutting it.
+    store.updateStatus(q.id, {
+      poll: { ...store.getStatuses()[0].poll, expiresAt: new Date(Date.now() - 1000).toISOString() },
+    });
+    const shut = await pub.closeDuePolls();
+    const closedRow = store.getStatuses().find(x => x.noteId === q.id);
+    check(shut === 1 && closedRow.poll.closed, 'a poll whose time is up is shut on the sweep');
+    check(put.filter(x => x.u === q.id).at(-1).b.closed, 'and the pod document says so');
+    check(await pub.recordVote(q.id, 'https://a.example/u/9', 'Tea') === false,
+      'a shut poll takes no more answers');
+    check(!store.read(polls35.VOTES_DOC, {})[q.id],
+      'and its roster is retired, so a shut poll stops carrying everyone who voted in it');
+    check(closedRow.poll.options[0].votes === 2,
+      'while the count it closed on stays on the row');
+  }
+
+  // --- a vote is not a reply ---
+  {
+    const store = mkStore35();
+    const q = { noteId: urls35.notes + 'q1', kind: 'post', actor: urls35.actor,
+      poll: { options: [{ title: 'Tea', votes: 0 }], multiple: false } };
+    store.addStatus(q);
+    const voted = [];
+    const replied = [];
+    const intake = new Intake({
+      config: {}, urls: urls35,
+      remote: { fetch: async () => new Response('{}', { status: 200 }) },
+      local: { writeNote: async () => {} },
+      store,
+      deliverer: {},
+      publisher: { urls: urls35, recordVote: async (id, who, name) => { voted.push({ id, who, name }); return true; } },
+      log: () => {},
+    });
+    intake.fetchAP = async (u) => ({ id: u, type: 'Note', name: 'Tea',
+      attributedTo: 'https://a.example/u/1', inReplyTo: q.noteId, published: '2026-09-06T00:00:00Z' });
+    intake.addReply = async (...a) => { replied.push(a); };
+    const rejected = await intake.ingestNote('https://a.example/n/1', 'https://a.example/u/1');
+    check(!rejected && voted.length === 1 && voted[0].name === 'Tea',
+      'an answer to our poll is counted');
+    check(!replied.length && !store.getStatuses().some(x => x.noteId === 'https://a.example/n/1'),
+      'and does not become a blank reply in the thread or a row in the timeline');
+
+    // A reply with words in it is a reply, whatever else it carries.
+    intake.fetchAP = async (u) => ({ id: u, type: 'Note', name: 'Tea', content: '<p>actually…</p>',
+      attributedTo: 'https://a.example/u/2', inReplyTo: q.noteId, published: '2026-09-06T00:00:00Z' });
+    await intake.ingestNote('https://a.example/n/2', 'https://a.example/u/2');
+    check(voted.length === 1 && store.getStatuses().some(x => x.noteId === 'https://a.example/n/2'),
+      'a reply that says something is kept as one, not swallowed into a tally');
+  }
+
+  // --- what a client sends ---
+  {
+    check(pollParams({ status: 'x' }) === null, 'a plain post asks for no poll');
+    const json = pollParams({ poll: { options: ['a', 'b'], expires_in: 3600, multiple: true } });
+    check(json.options.join('|') === 'a|b' && json.expiresIn === 3600 && json.multiple === true,
+      'a JSON client’s poll is read from its poll object');
+    const form = pollParams({
+      'poll[options][]': ['a', 'b'], 'poll[expires_in]': '3600', 'poll[multiple]': 'true',
+    });
+    check(form.options.join('|') === 'a|b' && form.expiresIn === 3600 && form.multiple === true,
+      'and a form-encoded one from the bracket spelling clients use for it');
+    check(pollParams({ poll: { options: ['a', 'b'] } }).expiresIn === null,
+      'a poll with no closing time says so, rather than claiming one');
+  }
 }
 
 // ---------------------------------------------------------------------------

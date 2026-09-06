@@ -1,5 +1,26 @@
 # Changes
 
+## 2026-09-06 (polls)
+- **You can make a poll now, not only vote in one.** The composer in the
+  client grows its poll button, because the instance stops saying polls are
+  impossible. Up to four options, up to fifty characters each, single answer
+  or several, running between five minutes and a month.
+- **The answers are counted here.** A vote is not a special thing on the
+  fediverse: it arrives as a reply naming the option it chose. Those are now
+  taken as answers rather than filed in the thread — before this they would
+  have shown as blank replies and rung you once per voter. One answer per
+  person on a single-answer poll, an option the poll does not offer counts for
+  nothing, and a poll that has shut takes no more.
+- **The count goes back out.** Everyone holding the poll is told as it moves,
+  and told once more when it closes. A run of votes costs one rewrite rather
+  than one each, so a busy poll is not a steady stream of writes to your pod.
+  The poll is not marked as edited when its numbers change, because it was not.
+- **An app can post one too**, through the outbox, as a Question with its
+  choices in `oneOf` or `anyOf`.
+- **A form-encoded client no longer loses all but the last of a repeated
+  field.** A list sent that way was read as a single value, which would have
+  taken a poll's options down to one. Media ids were subject to the same.
+
 ## 2026-09-06 (later still)
 - **Mail reaches an account under its own name straight away again.** An
   account that publishes under a name of its own asked its pod to watch the
