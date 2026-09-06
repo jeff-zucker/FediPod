@@ -10545,7 +10545,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
     return new Response(card, { headers: { 'content-type': 'text/turtle' } });
   });
   await pod.linkAccountInProfile(account);
-  check(sent.length === 1 && sent[0].includes('solid:patches') && sent[0].includes('solid:inserts')
+  check(sent.length === 1 && sent[0].includes('solid:InsertDeletePatch') && sent[0].includes('solid:inserts')
     && !sent[0].includes('foaf/0.1/name'),
   'the profile gains the account statements alone, and what else it says is not touched');
 

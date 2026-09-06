@@ -5,7 +5,10 @@
 // symlinked into this package's node_modules). Not part of FediPod's offline
 // suite — this is the live-CSS validation of the HttpHandler shell.
 import { Readable } from 'node:stream';
+import { DataFactory } from 'n3';
+import * as $rdf from 'rdflib';
 import {
+  N3PatchBodyParser, guardStream,
   BasicRepresentation, readableToString, NotFoundHttpError,
   DataAccessorBasedStore, InMemoryDataAccessor, SingleRootIdentifierStrategy,
   ComposedAuxiliaryStrategy, SuffixAuxiliaryIdentifierStrategy, MonitoringStore,
@@ -293,6 +296,44 @@ const gone = await optHandler.optOutPod({ podBase: OPT_POD });
 check(gone.httpStatus === 404, 'opting out twice says the pod is not opted in');
 await optHandler.finalize();
 fs.rmSync(optDataDir, { recursive: true, force: true });
+
+// ---- the profile patch, read by the parser that will receive it ------------
+// The agent adds the account statements to the owner's profile by patch rather
+// than by writing the document back. A patch the server cannot read is a
+// silent fall back to writing it back, so the document goes through the very
+// parser a Solid server uses before it is believed.
+{
+  const PROFILE = 'https://p.example/profile/card';
+  const FOAF = $rdf.Namespace('http://xmlns.com/foaf/0.1/');
+  const RDFT = $rdf.Namespace('http://www.w3.org/1999/02/22-rdf-syntax-ns#');
+  const AS = $rdf.Namespace('https://www.w3.org/ns/activitystreams#');
+  const me = $rdf.sym(`${PROFILE}#me`);
+  const actor = $rdf.sym('https://p.example/activitypods-js/ap/actor');
+  const pod = Object.create(RemotePod.prototype);
+  const metadata = { contentType: 'text/n3', identifier: DataFactory.namedNode(PROFILE) };
+
+  const read = async (label, inserts, deletes, wantIn, wantOut) => {
+    try {
+      const patch = await new N3PatchBodyParser().handle({
+        metadata,
+        request: guardStream(Readable.from([ pod.n3Patch(PROFILE, inserts, deletes) ])),
+      });
+      check(patch.inserts.length === wantIn && patch.deletes.length === wantOut, label);
+    } catch (e) {
+      check(false, `${label} — ${e.message}`);
+    }
+  };
+
+  await read('a profile patch is read by the parser a Solid server hands it to', [
+    [ me, FOAF('account'), actor ],
+    [ actor, RDFT('type'), FOAF('OnlineAccount') ],
+    [ actor, RDFT('type'), AS('Person') ],
+    [ actor, FOAF('accountName'), $rdf.literal('@mei@p.example') ],
+  ], [ [ actor, FOAF('accountName'), $rdf.literal('@old@p.example') ] ], 4, 1);
+  await read('and so is one that only adds', [ [ me, FOAF('account'), actor ] ], [], 1, 0);
+  await read('and one that only removes', [],
+    [ [ actor, FOAF('accountName'), $rdf.literal('@old@p.example') ] ], 0, 1);
+}
 
 console.log(fails ? `\n${fails} FAILURE(S)` : '\nall green');
 process.exit(fails ? 1 : 0);
