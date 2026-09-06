@@ -13,6 +13,11 @@
   attempts answered as though the password were wrong, which made apps ask you
   to type it again — the one thing that could not help. It now says to wait,
   and for how long.
+- **An app that runs in a browser can sign in.** A browser cannot keep a
+  secret, so such an app proves instead that it is the same caller that asked,
+  by answering a challenge it set when it started. Until now the token step
+  demanded a secret and refused them. An app that does hold a secret still
+  uses it, and a challenge, once set, cannot be stepped around with one.
 - **You can read your own inbox.** `GET /ap/inbox`, yours alone, holding what
   arrived rather than what is left. Deliveries land in a container on your pod
   and the drain empties it as it handles each item, so the archive is the only

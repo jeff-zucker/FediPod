@@ -10619,6 +10619,53 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
 }
 
 // ---------------------------------------------------------------------------
+// 33b. A client that runs in a browser cannot keep a secret. It proves it is
+//      the same caller that asked, instead, with the verifier for the
+//      challenge it presented (RFC 7636).
+{
+  const nodeCrypto = await import('node:crypto');
+  const b64 = (b) => b.toString('base64url');
+  const verifier = b64(nodeCrypto.randomBytes(40));            // 54 chars
+  const challenge = b64(nodeCrypto.createHash('sha256').update(verifier).digest());
+
+  const reg = await (await fetchLocal(`https://127.0.0.1:${PORT}/api/v1/apps`, {
+    method: 'POST', headers: { 'x-dk-token': TOKEN, 'content-type': 'application/json' },
+    body: JSON.stringify({ client_name: 'browser client', redirect_uris: 'urn:ietf:wg:oauth:2.0:oob',
+      scopes: 'read write' }),
+  })).json();
+
+  const askFor = async (ch) => (await (await fetchLocal(`https://127.0.0.1:${PORT}/oauth/authorize`
+    + `?redirect_uri=urn:ietf:wg:oauth:2.0:oob&client_id=${reg.client_id}&response_type=code&scope=read`
+    + (ch ? `&code_challenge=${ch}&code_challenge_method=S256` : ''),
+  { headers: { 'x-dk-token': TOKEN } })).json()).code;
+
+  const exchange = (body) => fetchLocal(`https://127.0.0.1:${PORT}/oauth/token`, {
+    method: 'POST', headers: { 'x-dk-token': TOKEN, 'content-type': 'application/json' },
+    body: JSON.stringify({ client_id: reg.client_id, redirect_uri: 'urn:ietf:wg:oauth:2.0:oob',
+      grant_type: 'authorization_code', ...body }),
+  });
+
+  const good = await (await exchange({ code: await askFor(challenge), code_verifier: verifier })).json();
+  check(Boolean(good.access_token),
+    'a client with no secret gets its token by answering the challenge it made');
+
+  const wrong = await exchange({ code: await askFor(challenge), code_verifier: b64(nodeCrypto.randomBytes(40)) });
+  check(wrong.status === 400, 'a verifier that answers nothing is refused');
+
+  // Without this, anyone holding a stolen code could invent a proof for it.
+  const unchallenged = await exchange({ code: await askFor(null), code_verifier: verifier });
+  check(unchallenged.status === 400,
+    'and a code made without a challenge cannot be redeemed with one');
+
+  // The secret path still works, and a challenge cannot be stepped around
+  // with the secret once it has been made.
+  const bySecret = await (await exchange({ code: await askFor(null), client_secret: reg.client_secret })).json();
+  check(Boolean(bySecret.access_token), 'a client that kept its secret still uses it');
+  const skipped = await exchange({ code: await askFor(challenge), client_secret: reg.client_secret });
+  check(skipped.status === 400, 'but the secret does not step around a challenge already made');
+}
+
+// ---------------------------------------------------------------------------
 // 34. Being turned away for asking too often says so. Last in the file on
 //     purpose: it spends the authorize allowance for the rest of the minute.
 {
