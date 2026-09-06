@@ -3418,6 +3418,45 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     'a live saved channel is reconnected without POSTing a new one');
 }
 
+// --- 5q2. a fronted identity subscribes on its POD inbox, not its front ---
+// The topic travels in the BODY, so the url map RemotePod applies to the
+// request line never reaches it. A fronted inbox url named the front, which the
+// pod cannot grant read on, and the pod answered 403: push off, mail arriving
+// only on the poll.
+{
+  const { Intake } = await import(path.join(root, 'lib/intake.mjs'));
+  const { apUrls } = await import(path.join(root, 'lib/wire.mjs'));
+  const urls = apUrls('https://apfed.pod.example/', 'activitypods-js/',
+    { publicBase: 'https://front.example/u/jeff/' });
+  const DESC = 'https://apfed.pod.example/.well-known/solid';
+  const CHAN = 'https://pod.example/.notifications/WebSocketChannel2023/';
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (u, init = {}) => (init.method === 'HEAD'
+    ? new Response(null, { headers: { link: `<${DESC}>; rel="http://www.w3.org/ns/solid/terms#storageDescription"` } })
+    : new Response(`<${CHAN}> <http://www.w3.org/ns/solid/notifications#channelType> `
+      + '<http://www.w3.org/ns/solid/notifications#WebSocketChannel2023> .',
+    { headers: { 'content-type': 'text/turtle' } }));
+  let sentTo = null; let sentTopic = null;
+  const intake = new Intake({
+    config: {}, urls,
+    remote: {
+      fetch: async (u, init) => {
+        sentTo = u; sentTopic = JSON.parse(init.body).topic;
+        return new Response('{}', { status: 403 });
+      },
+    },
+    local: {}, store: { read: (n, d) => d, write: () => {} },
+    deliverer: {}, publisher: {}, log: () => {},
+  });
+  intake.stopped = true;   // leave no retry timer behind
+  await intake._subscribeOnce();
+  globalThis.fetch = realFetch;
+  check(sentTo === CHAN && sentTopic === 'https://apfed.pod.example/activitypods-js/ap/inbox/',
+    'a fronted identity subscribes with its POD inbox as the topic, not its front url');
+  check(urls.inbox === 'https://front.example/u/jeff/ap/inbox/',
+    'and the front url is still the one the actor advertises');
+}
+
 // --- 5r2. a pod's own infrastructure is never deletable ---
 // Standing rule after a pod was crippled: settings/, the root .well-known, any
 // .acl or .meta, and the profile are what make a pod a pod. Deleting one does

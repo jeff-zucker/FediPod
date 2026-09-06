@@ -1,5 +1,14 @@
 # Changes
 
+## 2026-09-06 (later still)
+- **Mail reaches an account under its own name straight away again.** An
+  account that publishes under a name of its own asked its pod to watch the
+  wrong address for arriving mail: the name it publishes under rather than the
+  place on the pod the mail actually lands. The pod refused, because it cannot
+  watch somewhere that is not on it, so nothing woke the agent and mail waited
+  for the next sweep, up to two minutes. It now names the place on the pod.
+  Accounts that publish under their pod's own name were never affected.
+
 ## 2026-09-06 (later)
 - **An app you did not write can now find its way in.** Your actor says where
   a client signs in and where it collects its token, so an ActivityPub app
