@@ -74,6 +74,9 @@ keyword filters, scheduled posts, pinned posts (visible from other servers),
 blocking and muting from the client, custom emojis, and web-push
 notifications that reach you while the client is closed.
 
+Polls: up to four options, one answer or several, running from five minutes to
+a month.
+
 ### Other clients
 
 - **Web clients**: drop any static Mastodon client dist into `ui/<name>/`
