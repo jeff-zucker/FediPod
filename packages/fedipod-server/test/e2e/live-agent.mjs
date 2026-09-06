@@ -341,6 +341,34 @@ try {
     async () => delivered.some((d) => d.type === 'Accept' && d.deliveredTo === 'dave')),
   'a delivery through the door reaches the identity and is answered');
 
+  // ---- the owner reads their own inbox -------------------------------------
+  // Deliveries land in a container on the pod and the drain empties it, so
+  // what arrived is whole only in the archive. This is the owner's view of it,
+  // and nobody else's.
+  check((await fetch(`${POD}ap/inbox`)).status === 401,
+    "a stranger cannot read the owner's mail");
+  const inboxRes = await fetch(`${POD}ap/inbox`, { headers: auth });
+  const inbox = await inboxRes.json();
+  check(inboxRes.status === 200 && inbox.type === 'OrderedCollection',
+    'the owner reads their inbox as a collection');
+  check(Boolean(inbox.first), 'which names the page to start at');
+  if (inbox.first) {
+    let page = null;
+    const arrived = await until('the inbox page carries what was delivered', async () => {
+      page = await (await fetch(inbox.first, { headers: auth })).json();
+      return page?.type === 'OrderedCollectionPage'
+        && (page.orderedItems || []).some((a) => a.type === 'Follow');
+    }, 20_000);
+    check(arrived, 'a delivered activity is there, as it was received');
+    if (arrived) {
+      check(page.partOf === `${POD}ap/inbox`, 'and the page says which collection it belongs to');
+      const follow = page.orderedItems.find((a) => a.type === 'Follow');
+      check(follow.actor?.startsWith(REMOTE), 'with the sender it actually came from');
+    }
+  }
+  check((await fetch(`${POD}ap/inbox`, { method: 'POST', headers: auth })).status === 405,
+    'and nothing is delivered here — the actor names the pod inbox for that');
+
   // ---- the operator's door -------------------------------------------------
   check((await fetch(`${POD}fedipod/status`)).status === 401, "the operator's own routes need the secret");
   check((await fetch(`${POD}fedipod/status`, { headers: { 'x-dk-token': doorSecret('carol') }})).status === 401,

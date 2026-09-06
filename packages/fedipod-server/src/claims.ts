@@ -20,7 +20,14 @@ export function claims(input: { host?: string; pathname: string }, frontHost: st
 // What an identity answers on its own pod's origin: the protocol routes other
 // software addresses it by, and the one path its owner's pages live under.
 // Everything else on that origin is the pod, and falls through to CSS.
-const AGENT_PATHS = new Set([ '/ap/actor', '/ap/outbox', '/.well-known/nodeinfo', '/nodeinfo/2.0' ]);
+const AGENT_PATHS = new Set([
+  '/ap/actor', '/ap/outbox',
+  // The owner reading their own mail. Deliveries still go to the inbox
+  // container on the pod, which the actor document names; nothing about
+  // receiving changes, and nothing at this address was ever served before.
+  '/ap/inbox',
+  '/.well-known/nodeinfo', '/nodeinfo/2.0',
+]);
 const AGENT_PREFIXES = [ '/api/', '/oauth/' ];
 
 /**
