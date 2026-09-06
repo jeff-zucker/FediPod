@@ -338,6 +338,10 @@ export class Agent {
       // Whether the fediverse tree is on the pod at all, so the ACL check does
       // not probe for something the default layout keeps on local disk.
       privateOnPod: !cred.privateRoot,
+      // Inside a pod server the client surface answers on the pod's own
+      // origin, so it can be advertised. Standalone it is on loopback, and
+      // naming it in a world-readable actor would send clients nowhere.
+      clientOrigin: this.embedded ? this.urls.base : null,
     });
     // Intake is constructed even for viewers — its signed fetchAP powers
     // search/deref; start() (draining) is active-only.

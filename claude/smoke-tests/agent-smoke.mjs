@@ -10591,6 +10591,56 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   } finally { globalThis.fetch = realFetch; }
 }
 
+// ---------------------------------------------------------------------------
+// 33. What the actor tells a client-to-server client about signing in. The two
+//     OAuth entries appear only where the surface answers somewhere a stranger
+//     can reach, so they are supplied by the caller rather than built here.
+{
+  const wire = await import(path.join(root, 'lib/wire.mjs'));
+  const urls = wire.apUrls('https://mei.example.org/');
+  const base = { urls, handle: 'mei', name: 'Mei', publicKeyPem: 'x' };
+
+  const quiet = wire.actorDoc(base);
+  check(quiet.endpoints.sharedInbox === urls.inbox
+    && !('oauthAuthorizationEndpoint' in quiet.endpoints)
+    && !('oauthTokenEndpoint' in quiet.endpoints),
+  'an actor whose surface is on a laptop advertises no way in, because there is none');
+
+  const open = wire.actorDoc({ ...base,
+    oauthAuthorize: 'https://mei.example.org/oauth/authorize',
+    oauthToken: 'https://mei.example.org/oauth/token' });
+  check(open.endpoints.oauthAuthorizationEndpoint === 'https://mei.example.org/oauth/authorize'
+    && open.endpoints.oauthTokenEndpoint === 'https://mei.example.org/oauth/token',
+  'and one reachable on its own origin says where to sign in and collect a token');
+  check(open.endpoints.sharedInbox === urls.inbox,
+    'without displacing the inbox it already advertised');
+  check(JSON.stringify({ ...open, endpoints: null }) === JSON.stringify({ ...quiet, endpoints: null }),
+    'and nothing else about the actor moves');
+}
+
+// ---------------------------------------------------------------------------
+// 34. Being turned away for asking too often says so. Last in the file on
+//     purpose: it spends the authorize allowance for the rest of the minute.
+{
+  const ask = () => fetchLocal(`https://127.0.0.1:${PORT}/oauth/authorize`
+    + '?redirect_uri=urn:ietf:wg:oauth:2.0:oob&client_id=dk-ap-client&response_type=code',
+  { method: 'POST',
+    headers: { 'x-dk-token': TOKEN, 'content-type': 'application/x-www-form-urlencoded' },
+    body: 'password=wrong' });
+
+  let throttled = null;
+  for (let i = 0; i < 8 && !throttled; i++) {
+    const res = await ask();
+    if (res.status === 429) throttled = res;
+    else if (res.status !== 401) { check(false, `a refused authorize answered ${res.status}`); break; }
+  }
+  check(Boolean(throttled), 'asking too often is refused with 429, not another wrong-password 401');
+  if (throttled) {
+    check(Number(throttled.headers.get('retry-after')) > 0,
+      'and says how long the wait is, so a client can wait rather than ask the person to retype');
+  }
+}
+
 child.kill('SIGTERM');
 fs.rmSync(HOME, { recursive: true, force: true });
 console.log(failures ? `\n${failures} FAILURE(S)` : '\nall green');

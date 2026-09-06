@@ -171,6 +171,18 @@ try {
   check((await fetch(`${POD}.well-known/webfinger?resource=acct:alice@${ALICE}`)).status === 200,
     'the pod answers WebFinger for it');
 
+  // A client-to-server client is told where to sign in by the actor itself, so
+  // a stranger's app needs nothing configured by hand. Advertised only here,
+  // where the surface answers on the pod's own origin.
+  if (gotActor) {
+    const actorNow = await (await fetch(actorUrl,
+      { headers: { accept: 'application/activity+json' } })).json();
+    check(actorNow.endpoints?.oauthAuthorizationEndpoint === `${POD}oauth/authorize`
+      && actorNow.endpoints?.oauthTokenEndpoint === `${POD}oauth/token`,
+    'the actor says where a client signs in and collects its token');
+    check(actorNow.endpoints?.sharedInbox, 'without losing what it already advertised');
+  }
+
   // Auto-fronting: because this one server also runs the door, @alice@localhost
   // resolves through the front to alice's own actor — no manual attach.
   const fronted = await until('the door fronts the identity as @alice@localhost', async () => {
@@ -258,6 +270,10 @@ try {
   })).json();
   const bearer = token.access_token;
   check(Boolean(bearer), 'which the client exchanges for an access token');
+  // An ActivityPub API client learns which actor it is acting for from the
+  // token itself, rather than spending a second round trip asking.
+  check(token.activitypub_actor_id === actorUrl,
+    'and the token says which actor it acts for');
 
   const auth = { authorization: `Bearer ${bearer}` };
   const me = await fetch(`${POD}api/v1/accounts/verify_credentials`, { headers: auth });
