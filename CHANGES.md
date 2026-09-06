@@ -1,5 +1,15 @@
 # Changes
 
+## 2026-09-06
+- **A server running more than one worker says an identity cannot be reached,
+  instead of answering as though it were not there.** An identity runs in one
+  process, and with several workers that process is the one serving no
+  requests. Every process now knows which addresses belong to an identity, so
+  a request for one is answered with the reason rather than handed to plain
+  pod serving. The identity goes on federating; what it cannot do is answer a
+  client. Running one worker is what makes it reachable, and the server says
+  so at startup.
+
 ## 2026-09-05
 - **A shared-domain handle the server fronts itself now receives its mail.**
   Where a server runs an identity and is also its door, the record the door

@@ -287,6 +287,33 @@ check(await rebooted.canHandle({ request: { headers: { host: 'dana.localhost:400
 'after a restart the opted-in pod is claimed again, from the registry alone');
 await rebooted.finalize();
 
+// A worker of a multi-worker server: it answers requests but runs no
+// identities, because the process that runs them answers none. It must still
+// claim their routes — a worker claiming nothing would hand an identity's
+// client API to plain pod serving — and say why it cannot answer.
+{
+  const worker = new FediPodServerHandler({
+    resourceStore: realStore, frontHost: 'fedipod.net', frontOrigin: 'https://fedipod.net',
+    directoryContainer: podBase + '.internal/fedipod/directory/',
+    agentRuntimeOptIn: true, agentDataDir: optDataDir,
+    agentRegistryContainer: podBase + '.internal/fedipod/agents/',
+    clusterManager: { isSingleThreaded: () => false, isPrimary: () => false },
+  });
+  await worker.initialize();
+  check(await worker.canHandle({ request: { headers: { host: 'dana.localhost:4000' }, url: '/ap/actor' } })
+    .then(() => true).catch(() => false),
+  'a worker claims the routes of an identity it does not run');
+  const res = { s: 0, b: '', writeHead(st) { this.s = st; return this; }, end(b) { this.b = b || ''; } };
+  await worker.handle({
+    request: { headers: { host: 'dana.localhost:4000' }, url: '/api/v1/instance' }, response: res });
+  check(res.s === 503 && /--workers 1/.test(res.b),
+    'and says the identity runs where no request arrives, rather than asking for a retry');
+  check(!fs.existsSync(pathMod.join(optDataDir, 'dana', 'keys.json'))
+    || fs.readdirSync(optDataDir).length > 0,
+  'while starting no identity of its own');
+  await worker.finalize();
+}
+
 const out = await optHandler.optOutPod({ podBase: OPT_POD });
 check(out.httpStatus === 200, 'opt-out answers 200');
 check(await claimsFor('dana.localhost:4000', '/api/v1/instance') === false,

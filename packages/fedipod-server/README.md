@@ -129,10 +129,16 @@ belong to the identity, so pod resources at those names — a container called
 They stay in the pod and in its listings. Every other path is the pod, exactly
 as before.
 
-**Run one worker.** A delivery is picked up the moment it lands only in a
-single-worker server. With `--workers` above one the inbox is swept on the
-timer instead, and the server says so at startup. Sign-up requires a
-single worker outright, and says so when refused.
+<!-- CLAUDE 2026-09-06 — replaces the old "Run one worker" paragraph, which
+     said only that mail was slower; a second worker also puts every identity
+     out of reach. Delete these markers when you have read it -->
+**Run one worker.** An identity runs in one process, and with `--workers`
+above one that process is the one serving no requests. Its client API, its
+live feed and its owner's pages then cannot be reached at all: they answer
+503 saying so. The identity still federates — posts go out, deliveries are
+taken and swept on the timer rather than as they land — but nobody can point
+a client at it. The server says this at startup. Sign-up refuses outright.
+<!-- /CLAUDE -->
 
 ## How sign-up works
 

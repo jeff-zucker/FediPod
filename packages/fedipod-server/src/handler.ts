@@ -189,11 +189,12 @@ export class FediPodServerHandler extends HttpHandler implements Initializable, 
    */
   public async initialize(): Promise<void> {
     if (!this.registry) return;
+    const runs = this.runsIdentities();
     // The stock CSS CLI installs no signal handlers, so a SIGTERM (systemd
     // stop, docker stop, Ctrl+C) killed the process with agent state
     // unflushed and the lease held for its whole TTL. Flush first, bounded,
     // then re-raise so the process still dies the way it was asked to.
-    if (!this.onSignal) {
+    if (runs && !this.onSignal) {
       this.onSignal = (signal: NodeJS.Signals): void => {
         const timeout = new Promise((resolve) => { setTimeout(resolve, 5_000).unref?.(); });
         void Promise.race([ this.finalize(), timeout ]).then(() => {
@@ -203,13 +204,14 @@ export class FediPodServerHandler extends HttpHandler implements Initializable, 
       process.once('SIGTERM', this.onSignal);
       process.once('SIGINT', this.onSignal);
     }
-    // The agent runs in the primary process, and a write made by a worker
-    // raises its change event there — so with workers the inbox is swept on the
-    // timer rather than the moment a delivery lands. Everything still works; it
-    // is just slower, and worth saying rather than leaving to be discovered.
-    if (this.args.clusterManager && !this.args.clusterManager.isSingleThreaded()) {
-      this.logger.warn('FediPod agent is running in a multi-worker server: deliveries are picked up by the '
-        + 'inbox sweep instead of as they arrive. Run with --workers 1 for immediate delivery.');
+    // Identities run in the primary, and requests are answered by the workers,
+    // so with more than one worker an identity federates but cannot be reached:
+    // its client API, its owner pages and its live feed are in a process no
+    // request arrives at. Said once, by the process that has them.
+    if (runs && this.args.clusterManager && !this.args.clusterManager.isSingleThreaded()) {
+      this.logger.warn('FediPod is running in a multi-worker server. Deliveries are picked up by the inbox '
+        + 'sweep rather than as they land, and no identity can answer its client API, its live feed or its '
+        + "owner's pages while requests are served by other processes. Run with --workers 1.");
     }
     // Awaited, and BEFORE the server listens: a pod whose owner opted in must
     // have its routes claimed from the first request after a restart, never
@@ -236,8 +238,14 @@ export class FediPodServerHandler extends HttpHandler implements Initializable, 
       this.logger.error(`could not read the opt-in registry — opted-in identities are absent this boot: ${
         (e as Error).message}`);
     }
-    if (pods.length > 0) this.logger.info(`FediPod agent enabled for ${pods.length} opted-in pod(s)`);
-    for (const pod of pods) void this.startIdentity(pod);
+    if (pods.length > 0) {
+      this.logger.info(runs
+        ? `FediPod agent enabled for ${pods.length} opted-in pod(s)`
+        : `FediPod claimed the routes of ${pods.length} opted-in pod(s); they are run elsewhere`);
+    }
+    // Claimed everywhere, run in one place. A process that does not run them
+    // must still not let a pod answer for a path that belongs to an identity.
+    if (runs) for (const pod of pods) void this.startIdentity(pod);
   }
 
   /** Stop every identity: timers cleared, state written, lease let go. */
@@ -359,6 +367,18 @@ export class FediPodServerHandler extends HttpHandler implements Initializable, 
     throw new Error('not a gateway route');   // reject → CSS's LDP handler takes it
   }
 
+  /**
+   * Whether identities run in this process. They run in one: the lease admits
+   * a single drainer, and the state each one holds is in memory. With workers,
+   * that process is the primary — which serves no requests, so every process
+   * still has to know which hosts belong to an identity even though only one
+   * of them can answer for it.
+   */
+  private runsIdentities(): boolean {
+    const cluster = this.args.clusterManager;
+    return !cluster || cluster.isSingleThreaded() || cluster.isPrimary();
+  }
+
   /** The running identity answering on a host, if it has finished starting. */
   public surfaceFor(host?: string): EmbeddedIdentity | undefined {
     return this.surfaces.get(String(host ?? '').toLowerCase());
@@ -442,8 +462,16 @@ export class FediPodServerHandler extends HttpHandler implements Initializable, 
     if (this.agentHosts.has(host)) {
       const identity = this.surfaces.get(host);
       if (!identity) {
-        // Claimed, but its identity is not up yet. Saying so is better than
-        // letting the pod answer for a route that is about to stop being pod.
+        // Claimed, but nothing here can answer for it. Saying which of the two
+        // reasons it is beats letting the pod answer for a route that is not
+        // the pod's, and beats telling a client to try again when trying again
+        // will reach another process just as unable to help.
+        if (!this.runsIdentities()) {
+          response.writeHead(503, { 'content-type': 'application/json' });
+          response.end(JSON.stringify({ error: 'this identity is not reachable on a server running more '
+            + 'than one worker: it runs in the process that serves no requests. Run with --workers 1.' }));
+          return;
+        }
         response.writeHead(503, { 'content-type': 'application/json', 'retry-after': '5' });
         response.end(JSON.stringify({ error: 'this identity is still starting' }));
         return;

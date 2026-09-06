@@ -50,6 +50,17 @@
       ]
     },
     {
+      "comment": "Claiming the identities' routes in every process that answers requests. The identities themselves run in one process — with workers, the primary — but a worker that had claimed nothing would hand an identity's client API to plain pod serving instead of saying it cannot be reached.",
+      "@id": "urn:solid-server:default:WorkerParallelInitializer",
+      "@type": "ParallelHandler",
+      "handlers": [
+        {
+          "@type": "InitializableHandler",
+          "initializable": { "@id": "urn:fedipod:server:Handler" }
+        }
+      ]
+    },
+    {
       "comment": "Insert the handler into the routing waterfall just before the LDP catch-all, so it claims only the front routes and everything else stays normal CSS. OverrideListInsertBefore is available in componentsjs 5.x (which CSS 7 uses).",
       "@type": "Override",
       "overrideInstance": { "@id": "urn:solid-server:default:BaseHttpHandler" },
