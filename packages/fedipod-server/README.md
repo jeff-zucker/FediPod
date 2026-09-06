@@ -156,7 +156,8 @@ POST /api/agent
 The request carries a Solid-OIDC token. Where the pod's server names an owner,
 the token must prove that owner. Where it names none, the WebID the token
 proves must live under the pod being claimed.
-<!-- /CLAUDE --> The reply carries the identity's door secret, shown
+<!-- /CLAUDE -->
+The reply carries the identity's door secret, shown
 that once and never again — losing it is not fatal, because opting in again
 mints a fresh one and retires the old, with no restart and no dropped
 connections. `{"action": "opt-out", "podBase": "https://mei.example.org/"}`,
