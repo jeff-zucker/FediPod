@@ -10671,9 +10671,11 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
 // ---------------------------------------------------------------------------
 // 33c. Where a client looks first to learn how to sign in (RFC 8414).
 {
-  const meta = await (await fetchLocal(
-    `https://127.0.0.1:${PORT}/.well-known/oauth-authorization-server`,
-    { headers: { 'x-dk-token': TOKEN } })).json();
+  // Asked for WITHOUT the door secret: a client that must be handed one
+  // before it can ask how to sign in cannot set itself up at all.
+  const metaRes = await fetchLocal(`https://127.0.0.1:${PORT}/.well-known/oauth-authorization-server`);
+  check(metaRes.status === 200, 'a client can ask how to sign in without holding the door secret');
+  const meta = await metaRes.json();
   check(meta.authorization_endpoint === `https://127.0.0.1:${PORT}/oauth/authorize`
     && meta.token_endpoint === `https://127.0.0.1:${PORT}/oauth/token`,
   'the metadata names where to ask and where to collect');

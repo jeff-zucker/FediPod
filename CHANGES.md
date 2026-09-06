@@ -26,7 +26,8 @@
   own machine may use whatever port it was given, as the standard for those
   expects.
 - **There is now a document saying how to sign in**, at the address clients
-  look for it. It names where to ask, where to collect a token, where to
+  look for it, and an app can read it without being handed your door secret
+  first, so an app on your own machine can set itself up. It names where to ask, where to collect a token, where to
   register, and that an app keeping no secret is welcome.
 - **An app that runs in a browser can sign in.** A browser cannot keep a
   secret, so such an app proves instead that it is the same caller that asked,
