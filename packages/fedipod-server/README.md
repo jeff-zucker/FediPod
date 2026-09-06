@@ -14,6 +14,31 @@ nothing about how the server serves pods.
 
 ![A pod and its agent, both inside one Solid server](fedipod-server.svg)
 
+<!-- CLAUDE 2026-09-06 — new section; the subdomain and single-worker
+     requirements were buried further down as asides. Delete these markers
+     when you have read it -->
+## What the server has to be
+
+A pod here becomes an address other Fediverse servers talk to and a Mastodon
+app connects to. That asks things of the server it lives on. Check these
+before installing: a server that does not meet them cannot offer accounts, and
+sign-up refuses rather than half-working.
+
+- **Community Solid Server 7.**
+- **Pods on subdomains.** Each account answers on its own pod's address, so
+  every pod needs a host to itself. A server that puts its pods on paths of
+  one shared host cannot offer accounts at all.
+- **A single worker.** Run the server as one copy of itself — `--workers 1`,
+  which is the default. With more, it still serves pods normally, but no pod
+  can be an account: sign-up is refused, and an account set up earlier goes on
+  posting and receiving while no longer answering its owner's apps.
+- **Storage that survives a restart.** Sign-ups are recorded in the server's
+  own storage. On a memory backend every account is forgotten when the server
+  stops.
+- **A directory on disk.** Each account keeps its signing key and its door
+  secret there. Sign-up will not start without one.
+<!-- /CLAUDE -->
+
 ## Install
 
 ```
@@ -128,17 +153,6 @@ belong to the identity, so pod resources at those names — a container called
 `.well-known/nodeinfo` and `nodeinfo/2.0` — are not served over HTTP there.
 They stay in the pod and in its listings. Every other path is the pod, exactly
 as before.
-
-<!-- CLAUDE 2026-09-06 — replaces the old "Run one worker" paragraph, which
-     said only that mail was slower; a second worker also puts every identity
-     out of reach. Delete these markers when you have read it -->
-**Run one worker.** An identity runs in one process, and with `--workers`
-above one that process is the one serving no requests. Its client API, its
-live feed and its owner's pages then cannot be reached at all: they answer
-503 saying so. The identity still federates — posts go out, deliveries are
-taken and swept on the timer rather than as they land — but nobody can point
-a client at it. The server says this at startup. Sign-up refuses outright.
-<!-- /CLAUDE -->
 
 ## How sign-up works
 
