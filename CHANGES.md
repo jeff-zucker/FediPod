@@ -1,5 +1,117 @@
 # Changes
 
+## 2026-09-09 (a security review, and most of what it found)
+
+A full read of the project turned up a long list; this is the browser build's
+share of it, fixed. Nothing here is a new feature except where it says so.
+
+### Things another website could do to you, and now cannot
+
+- **Any page you visited could drive the browser build's admin routes.** The
+  service worker answered them on this origin with no password — the only
+  interlock on the destructive ones was typing your handle, which is public. A
+  page you merely opened in another tab could move every follower to somebody
+  else's account, retire the identity, rotate the key, point your inbox at
+  their gateway, or set a password you did not know. It now refuses anything
+  that is not your own page asking.
+- **The same page could have a 90-day access token for your account delivered
+  to itself**, because the OAuth mint accepted any address to send the code
+  back to. It answers this origin alone now. Twenty of those mints also used to
+  push your own working sessions out of the list and sign you out of every
+  client you had.
+- **Your signing key sat on your pod in the clear.** Three documents said it
+  was locked under your account password. It was not, and now it is: your pod's
+  host stores ciphertext and cannot post as you. Each browser opens it once and
+  remembers, so nothing asks you again — a *new* browser asks for the password
+  once. Rotating the key needs it too, for the same reason.
+- **A page could read your token straight out of storage** — that part is how
+  browsers work and no app escapes it. What changed is what runs on the page at
+  all: the app and the gateway pages now say where scripts may come from, and
+  nothing may frame them.
+- **Signing out now tells your pod.** It used to clear the screen and leave the
+  token alive at the pod for its full life, which mattered most on a borrowed
+  computer.
+- **Setup no longer leaves a key behind.** Creating an account minted a
+  permanent full-access credential for your pod and then dropped it on the
+  floor — nothing held it, so nobody would think to revoke it. It is deleted
+  when setup finishes.
+
+### Things a stranger could do by delivering to your inbox
+
+- **Anyone with any valid fediverse key could act as anybody**, where a mail
+  door was in trust mode: the door said "this signature checked out" and
+  nothing asked *whose*. One delivery could evict a follower or get a follow
+  accepted in someone else's name.
+- **One message per account you follow could stop you following all of them.**
+  A refusal only had to *look* like a refusal — it did not have to answer the
+  request you actually sent — and neither side would ever notice, because the
+  far end thinks the question was answered and never retries.
+- **A stranger could withdraw somebody else's waiting follow request**, so that
+  person simply never got followed and nothing said why.
+- **Any public post could be put in your mentions as "X mentioned you"**, and a
+  group could be made to carry a member's post the member never sent it. What
+  the delivery *claimed* is no longer taken for what the post itself says.
+- **Your account could be used as a signed relay.** Anything a stranger wrote
+  could be re-delivered to all your followers over your signature. Only the
+  kinds this agent actually fetched and checked are passed on now, only from
+  someone it knows of, and at most twenty per sweep.
+- **A hostile server could exhaust or bloat you**: an unbounded reply body, a
+  post with thousands of emoji or poll options, or a half-megabyte activity
+  filed whole into a document rewritten on every change. All bounded.
+- **A single host could answer for everybody**, making `@anyone@that.host`
+  resolve to one account, and an open redirect could make one server answer for
+  another's documents. Both refused.
+- `javascript:` and `data:` addresses in someone's emoji, mentions and
+  attachments no longer reach your client. Avatars were already guarded.
+
+### Things that were broken, or promised and absent
+
+- **Pictures work.** Media and avatar upload always failed in the browser
+  build — the image was mangled before anything could read it, twice over.
+- **The notification bell goes out.** It stayed lit forever after the first
+  look, and the mentions column showed favourites and boosts as mentions.
+- **Follow requests reach every client.** They were visible on FediPod's own
+  page and in no Mastodon client at all.
+- **Keyword filters do something.** They were stored, listed, and applied by
+  nobody.
+- **GIFs show.** Every one rendered blank, being labelled as a kind of video.
+- **CSV import works in the browser**, the same importer the installed agent
+  runs. It used to answer "not available".
+- **Park and revive work in the browser** — go quiet without giving up your
+  name. This matters more here than on an install: close the tab and nothing
+  collects your mail, but the gateway keeps delivering it to your pod. Related
+  bug: transferring an account away reported that it had saved your follow
+  list, and had not, so setting yourself back to active re-followed nobody.
+- **A scheduled post is refused rather than lost.** The browser build accepted
+  one, said "scheduled", and had nothing running to ever publish it.
+- **The web-push toggle is gone from the browser build** rather than looking on
+  and doing nothing.
+- **Controls that could not work are gone**: a gateway handle this build does
+  not offer (it told you the name was free and then refused it), and a
+  "move private data" panel that no button had ever opened, in either build.
+- **Signing in as somebody else works.** The first identity's agent stayed live
+  and went on answering as the wrong person.
+- **Two devices no longer double-act.** A device handed the lease back kept
+  delivering from the queue, and one taking it over could write stale state
+  over newer.
+- Third-party clients are now held to the access they were granted. Every
+  token had full authority whatever it asked for.
+
+### Gentler on your pod
+
+The browser build ignored a pod asking it to slow down, polled every two
+minutes while doing nothing, wrote a document on every timeline scroll,
+rewrote its two largest documents once per incoming post, and re-created
+containers that already existed each time the browser restarted it. All fixed;
+a gateway now passes on how long a receiving server asked to be left alone.
+
+### Also
+
+`npm audit` reports nothing outstanding (an XML parser inside a dependency,
+which the browser bundle carried too). The tests grew from 1,449 checks to
+1,465, plus four new harnesses; the ones covering behaviour these fixes changed
+were updated, and negative cases added beside them.
+
 ## 2026-09-06 (polls)
 - **You can make a poll now, not only vote in one.** The composer in the
   client grows its poll button, because the instance stops saying polls are

@@ -74,6 +74,20 @@ keyword filters, scheduled posts, pinned posts (visible from other servers),
 blocking and muting from the client, custom emojis, and web-push
 notifications that reach you while the client is closed.
 
+<!-- CLAUDE 2026-09-09 — the browser build does not have three of the things
+     this paragraph promises, and it says so honestly now rather than
+     advertising them. Written as a first draft in your voice; rework or move
+     it wherever you think it belongs. Delete these markers when done. -->
+Two of those are the installed agent only. **Scheduled posts** need something
+running between now and the time you picked, and in the browser build nothing
+is — so it refuses a scheduled post rather than accepting one it would silently
+drop. **Web-push notifications** likewise: the browser build has no push
+service behind it, so it does not advertise one and your client hides the
+toggle instead of showing one that does nothing. Both work on the installed
+agent. **Custom emojis** you receive are rendered everywhere; the picker for
+sending your own is not built yet, on either.
+<!-- /CLAUDE -->
+
 Polls: up to four options, one answer or several, running from five minutes to
 a month.
 
@@ -85,6 +99,12 @@ a month.
   custom instance.
 - **Streaming**: the agent serves the Mastodon streaming API
   (`/api/v1/streaming`, WebSocket) so clients update live instead of polling.
+  <!-- CLAUDE 2026-09-09 — true of the installed agent; the browser build is a
+       service worker and cannot hold a socket. It advertises no streaming URL,
+       so clients fall back to polling on their own. Delete markers when done. -->
+  The browser build cannot: a service worker answers fetches, not sockets, so it
+  advertises no streaming URL and clients poll instead.
+  <!-- /CLAUDE -->
 
 ## Bluesky and ATProto
 

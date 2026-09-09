@@ -91,7 +91,15 @@ is marked **sign in again** rather than quietly dropped.
 ## Handling follow requests
 
 New followers appear under **Follow requests** with **Accept** and **Refuse**
-beside them; nothing is accepted without you. Groups are different — joining
+beside them; nothing is accepted without you.
+<!-- CLAUDE 2026-09-09 — these were visible on this page and NOWHERE else
+     until today: the client API stubbed the list empty and offered no way to
+     answer one, so no Mastodon client could show them. Delete markers when
+     read. -->
+They show in any Mastodon client as well, now that the client API serves the
+queue and takes both answers — before this they were visible on this page
+alone.
+<!-- /CLAUDE --> Groups are different — joining
 follows the group's own moderation settings; see [Groups](groups.md).
 
 **Accept all** answers the whole queue at once, and the identity pane's
@@ -123,6 +131,12 @@ account*); your followers arrive by themselves. Removing an alias asks
 twice — servers still processing the move check it while they retry. The CSV
 files from the old server's export are imported with the CLI; see
 [CLI admin](cli.md).
+<!-- CLAUDE 2026-09-09 — the browser build runs the same importer now, so
+     "with the CLI" is no longer the whole story. Reword as you like; delete
+     these markers when done. -->
+The in-browser build runs the same importer, so a CSV can be handed to it
+there too.
+<!-- /CLAUDE -->
 
 ## Protecting & recovering your data
 

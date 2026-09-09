@@ -6,10 +6,12 @@ See `claude/plans/browser-agent.md` for the whole design and status.
 | file | what |
 |---|---|
 | `pod-auth.mjs` | The pod side of sign-in, browser-native: create a CSS account + pod, mint a client credential, and a DPoP-bound `fetch` that writes to the pod. The twin of `lib/account.mjs` + `vendor/idp-grant.cjs`. |
-| `keystore.mjs` | WebCrypto RSA/Ed25519 key generation, and wrapping the keys under the account password (PBKDF2-SHA256 + AES-GCM-256) so any browser recovers them from the pod. |
-| `signup.mjs` | The `fedipod setup` flow, in the browser, up to publish: account, pod, credential, keys locked on the pod. Produces the credential/keys/config shapes the agent already reads. |
+| `keystore.mjs` | WebCrypto RSA/Ed25519 key generation, and wrapping the keys under the account password (PBKDF2-SHA256 + AES-GCM-256). The pod holds only the wrapped form, so the pod's host cannot sign as you. |
+| `keys-browser.mjs` | Importing a keys record for signing, and finding one: this browser's opened copy in IndexedDB first, else the pod's. A wrapped one the browser has not opened yet raises `KeyPasswordNeeded`, which `boot.mjs` answers with the unlock pane — once per browser. |
+| `signup.mjs` | The `fedipod setup` flow, in the browser, up to publish: account, pod, credential, keys locked on the pod (owner-only ACL written *before* the key). Produces the credential/keys/config shapes the agent already reads. |
 | `shims/fedify-sig.mjs` | Browser stand-in for `@fedify/fedify/sig` (which will not bundle for a browser). `sign()` returns signed headers as data for the relay; `signRequest()` wraps it Fedify-shaped. Proven byte-identical to Fedify. |
 | `shims/node-crypto.mjs` | Browser stand-in for `node:crypto` — the small synchronous slice the agent uses, via crypto-browserify, plus native WebCrypto. |
+| `shims/safefetch.mjs` | Browser stand-in for `lib/safefetch.mjs`. Pinning and the private-address checks are unnecessary here (a browser closes DNS rebinding itself); the BYTE BUDGET is not, so `readCapped` streams and stops at the cap exactly as the Node one does. |
 | `dist/` | The bundled agent, built by `scripts/build-app.mjs`. Committed like `phanpy/dist`, regenerated on release. (Not present until the agent entry is built.) |
 
 Build: `node scripts/build-app.mjs`. Tests live in `claude/validation/`:
@@ -47,3 +49,18 @@ second device runs read-only until it takes over — and starts the drain/mirror
 only when it is the active holder.
 
 Build: `node scripts/build-app.mjs --entry web/app/sw-src.mjs --out web/app/dist/sw.js` and `--entry web/app/boot.mjs --out web/app/dist/boot.js`, then `node scripts/stage-site.mjs` to assemble `web/app/site/` (the front, the worker, Phanpy under `/app/`, and `web/admin` under `/admin/`). Tests: `claude/validation/browser-agent/` (run.mjs, sw-run.mjs) and `claude/smoke-tests/admin-facade-smoke.mjs`.
+
+## What this build does not have
+
+Declared rather than pretended: each is omitted from the instance document, so
+a client hides the control instead of offering one that quietly does nothing.
+See the `MastoApi` options in `agent.mjs`.
+
+| | why |
+|---|---|
+| **Streaming** | a service worker answers fetches, not sockets. No streaming URL is advertised, so clients poll. |
+| **Web push** | `shims/web-push.mjs` is a no-op. `vapid` is omitted, and a client that subscribes anyway gets a 422 rather than a subscription nothing will push to. |
+| **Scheduled posts** | nothing runs between now and the scheduled time. A `scheduled_at` is refused with a 422 that says so — accepting one was silent loss. |
+| **Groups** | sign-up makes personal identities only (`signup.mjs`), and the moderation surface is not here. Joining a group works; hosting one needs the installed agent. See `groups.md`. |
+| **A fronted `@you@front` handle** | the browser model is `@you@yourpod` with the gateway as a mail door. `admin-facade.mjs` refuses a fronted attach, and `stage-site.mjs` hides the radio that offered it. |
+| **Moving the private half** | `/state-move` is about filesystem paths and `credential.json`. A browser has neither; its private half is always on the pod. |
