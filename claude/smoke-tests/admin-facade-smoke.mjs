@@ -107,6 +107,11 @@ async function call(facade, method, p, body) {
 let pass = 0; const ok = (name) => { console.log(`PASS  ${name}`); pass++; };
 
 const agent = mockAgent();
+// The real worker, over the mock store — the browser agent builds one the same
+// way (web/app/agent.mjs). Nothing is started: stage() arms a timer only when
+// the agent goes active, and this suite never does.
+const { ImportWorker } = await import('../../lib/import.mjs');
+agent.importer = new ImportWorker({ agent, log: () => {} });
 const facade = new AdminFacade({ agent, log: () => {} });
 
 // GET /status
@@ -244,10 +249,33 @@ assert.equal(r.status, 200); assert.equal(r.json.forgotten, true);
 assert.equal(agent.store.getConfig().gateway, undefined);
 ok('POST /gateway forget detaches');
 
-// import is honestly deferred, not silently broken
+// CSV import — the same ImportWorker the Node agent runs, staged onto the pod.
 r = await call(facade, 'POST', '/import', {});
-assert.equal(r.status, 501);
-ok('POST /import returns a clear "not yet" rather than a dead control');
+assert.equal(r.status, 400);
+assert.match(r.json.error, /kind must be one of/);
+ok('POST /import with no kind says which kinds there are');
+
+r = await call(facade, 'POST', '/import', { kind: 'follow', text: '' });
+assert.equal(r.status, 400);
+ok('and with no CSV text, that the text is what is missing');
+
+r = await call(facade, 'POST', '/import',
+  { kind: 'follow', text: 'Account address,Show boosts\n@alice@mastodon.example,true\nnot-an-address\n' });
+assert.equal(r.status, 200);
+assert.equal(r.json.kind, 'follow');
+assert.equal(r.json.invalid, 1);
+ok(`POST /import stages a follow list and counts what it could not read (${r.json.staged ?? r.json.added ?? '?'} staged, 1 invalid)`);
+
+r = await call(facade, 'GET', '/import');
+assert.equal(r.status, 200);
+assert.equal(typeof r.json.rows, 'number');
+assert.equal(typeof r.json.pending, 'number');
+ok(`GET /import reports the run's progress (${r.json.rows} row(s), ${r.json.pending} pending)`);
+
+r = await call(facade, 'POST', '/import', { clear: true });
+assert.equal(r.status, 200); assert.equal(r.json.cleared, true);
+ok('and the run can be cleared');
+agent.importer.stop();
 
 // fediacct mirror — connect (redirect out), the HTML callback, list, disconnect
 r = await call(facade, 'GET', '/fediacct');

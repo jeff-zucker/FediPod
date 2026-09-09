@@ -162,7 +162,32 @@ export async function mintCredential({ issuer, email, password, webId, podUrl, a
   if (made.status >= 400 || !made.json?.secret) throw new Error(`mint failed (HTTP ${made.status}): ${made.json?.message || ''}`);
   const tokenEndpoint = await discoverTokenEndpoint(origin);
   return { clientId: made.json.id, secret: made.json.secret, webId: wid, tokenEndpoint,
-    resource: made.json.resource, issuerOrigin: origin };
+    resource: made.json.resource, issuerOrigin: origin,
+    // Carried so sign-up can hand it straight back to revokeCredential. It is a
+    // session token for the ACCOUNT — never stored, never written to the pod,
+    // and gone with the tab.
+    accountToken: token };
+}
+
+/**
+ * Delete a client credential.
+ *
+ * The one sign-up mints is full, permanent access to the pod, and it is needed
+ * only while sign-up is running — the agent itself runs on the Solid-OIDC
+ * session. Leaving it behind meant every account carried an orphaned key that
+ * nothing held and nobody would think to revoke, while the page told the user
+ * it was "stored in this browser", which it never was.
+ *
+ * Best effort by design: a server that will not delete it leaves a credential
+ * the owner can still revoke from their pod's own account page, and saying so
+ * is better than failing a sign-up that otherwise worked.
+ */
+export async function revokeCredential({ resource, accountToken }) {
+  if (!resource || !accountToken) return false;
+  try {
+    const r = await accountFetch(resource, { method: 'DELETE', token: accountToken });
+    return r.status < 400;
+  } catch { return false; }
 }
 
 /** The OIDC token endpoint, from the issuer's discovery document. */

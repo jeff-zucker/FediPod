@@ -16,15 +16,36 @@ import { MastoApi } from '../../lib/mastoapi.mjs';
 import { TagFeed } from '../../lib/tagfeed.mjs';
 import { makeDpopSession } from './pod-auth.mjs';
 import { BrowserRemotePod } from './pod-remote.mjs';
-import { importSigningKey, loadKeysFromPod } from './keys-browser.mjs';
-import { generateKeys } from './keystore.mjs';
+import { importSigningKey, loadKeysFromPod, keyCacheKey } from './keys-browser.mjs';
+import { generateKeys, wrapKeys } from './keystore.mjs';
+import { kvPut } from './idb-kv.mjs';
 import { RelayDeliverer } from './deliver-relay.mjs';
 import { AdminFacade } from './admin-facade.mjs';
 import { BrowserAtproto } from './atproto-browser.mjs';
 import { BskyFeed } from '../../lib/bskyfeed.mjs';
 import { BrowserFediAccounts } from './fediacct-browser.mjs';
 import { AcctFeed } from '../../lib/acctfeed.mjs';
-import { unfollowActor } from '../../lib/social.mjs';
+import { followActor, unfollowActor } from '../../lib/social.mjs';
+import { ImportWorker } from '../../lib/import.mjs';
+
+// The authorities this identity answers on: exactly one, this origin. The Node
+// agent gets this from lib/guard.mjs, which is not in the browser bundle and
+// would not fit if it were — its whole subject is loopback and named local
+// origins, neither of which means anything here.
+//
+// Two questions are asked of it. `has()` decides whether an OAuth redirect_uri
+// is somewhere this agent actually answers. `isLocalRequest()` decides whether
+// a caller is the owner rather than a stranger, and in a browser that question
+// has exactly one honest answer: whether the request came from this origin —
+// which the service worker has already established before anything reaches the
+// facade, and stamps on the request it builds (see sw-src.mjs).
+const originAuthorities = (host) => ({
+  set: new Set([String(host || '').toLowerCase()]),
+  has(authority) { return this.set.has(String(authority || '').toLowerCase()); },
+  isLocalRequest(req) { return req?.sameOrigin === true; },
+  isLocal(h) { return this.has(h); },
+  wsAuthorities() { return []; },     // fetch-only: this build serves no socket
+});
 
 export class BrowserAgent {
   constructor({ log = console.log } = {}) {
@@ -56,12 +77,24 @@ export class BrowserAgent {
     this.lease.onLost = () => this.demote();
     this.lease.startRenewal();
     try {
+      // Forced, not revalidated. While this device watched, the ACTIVE one was
+      // writing; our cache is however stale the last viewer poll left it, and
+      // the store is write-through — so the first write from here would push a
+      // whole document back over newer state. Read what is actually there
+      // before acting on it.
+      await this.store.load({ force: true }).catch((e) => this.log(`re-reading state: ${e.message}`));
+      // And start delivering again, since demote() stopped it. startQueue() is
+      // idempotent, so a goActive() that was already active costs nothing.
+      this.deliverer?.startQueue?.();
       await this.publisher.publishProfile();
       await this.store.flush?.();
       await this.intake.start();
       this.startBsky();
       this.startAccts();
       this.tagfeed?.start();
+      // Resumes a run that was staged on another device, or here before a
+      // restart — the state lives on the pod, not in this process.
+      this.importer?.start();
     } catch (e) { this.log(`going active: ${e.message}`); }
   }
 
@@ -73,23 +106,35 @@ export class BrowserAgent {
     this.log('another device took over — read-only here');
     this.lease.stopRenewal();
     this.intake?.stop?.();
+    // The delivery queue as well. Its timer starts in the Deliverer's
+    // constructor and nothing here ever switched it off, so a demoted device
+    // went on sending from a queue the active device is also sending from —
+    // the same activity delivered twice, from two browsers, over one key.
+    this.deliverer?.stop?.();
+    this.importer?.stop?.();
     this.stopBsky(); this.stopAccts(); this.tagfeed?.stop?.();
     this.startViewerPoll();
   }
 
   // A viewer refreshes the feed from the pod (the active device updates it), and
   // promotes the moment the lease is free.
+  // Five minutes with jitter, matching the Node agent (run-agent.mjs). Two
+  // minutes flat was ~60 pod requests an hour from a device that is not acting,
+  // and unjittered meant several idle devices on one pod knocking in lockstep.
+  static VIEWER_POLL_MS = 5 * 60_000;
+
   startViewerPoll() {
     clearTimeout(this._viewerTimer);
+    const every = () => BrowserAgent.VIEWER_POLL_MS * (0.85 + Math.random() * 0.3);
     const tick = () => {
       this._viewerTimer = setTimeout(async () => {
         try {
           if (!this.viewer) return;
-          await this.store.load().catch(() => {});
+          await this.store.load().catch(() => {});     // revalidating is enough while watching
           if (await this.lease.acquire()) { await this.goActive(); this.log('lease freed — now active'); return; }
         } catch (e) { this.log(`viewer poll: ${e.message}`); }
         if (this.viewer) tick();
-      }, 120_000);
+      }, every());
     };
     tick();
   }
@@ -140,7 +185,13 @@ export class BrowserAgent {
     // The RDF truth (followers, notes) also on the pod.
     this.local = new PodRdf({ storage: new HttpStorage(this.urls.fediverse, session.fetch) });
 
+    // `passive`: no queue-drain timer until this device is the active one.
+    // Whether it IS the active one is not known here — the lease is acquired
+    // further down, after everything is constructed — and the timer starts in
+    // the Deliverer's constructor, so a viewer used to boot delivering. Start
+    // it in goActive() instead, which is the one place that means "act".
     this.deliverer = new RelayDeliverer({
+      passive: true,
       store: this.store, rsaPrivate: keys.rsaPrivate, keyId: this.urls.actor + '#main-key',
       actorId: this.urls.actor, log: this.log,
       relayUrl: `${frontOrigin.replace(/\/$/, '')}/api/relay`, handle: config.handle, sessionFetch: session.fetch,
@@ -182,15 +233,36 @@ export class BrowserAgent {
       config: this.store.getConfig(), urls: this.urls, remote: this.remote, local: this.local,
       store: this.store, deliverer: this.deliverer, publisher: this.publisher, log: this.log, push: true, lease: this.lease,
     });
-    // The Mastodon facade the service worker serves. allowed:null → a same-origin
-    // request is treated as local, so the one-click sign-in needs no second
-    // password (the account password already unlocked the key to get here).
-    this.masto = new MastoApi({ agent: this, log: this.log, allowed: null, scheme: 'https', streaming: false });
+    // The Mastodon facade the service worker serves.
+    //
+    // It used to be handed `allowed: null`, which reads as "no policy" — and
+    // `redirectAllowed()` waves through EVERY redirect_uri when there is no
+    // policy (lib/mastoapi.mjs:315). So any page could have a freshly minted
+    // 90-day bearer delivered to an address of its own. One origin, ours, is
+    // the whole of the policy here.
+    // Three capabilities this build does not have, declared rather than
+    // pretended: no streaming socket (a worker is fetch-only), no web push
+    // (shims/web-push.mjs is a no-op), and no scheduling (nothing here runs
+    // between now and the scheduled time to publish). Each is omitted from the
+    // instance document, so the client hides the control instead of offering
+    // one that quietly does nothing.
+    this.masto = new MastoApi({
+      agent: this, log: this.log, scheme: 'https',
+      streaming: false, webPush: false, scheduling: false,
+      allowed: originAuthorities(self.location.host),
+    });
 
     // The owner's record/manage surface (the same web/admin page the Node agent
     // serves), answered by this agent over the worker. Personal only — the
     // group and multi-actor endpoints do not exist here. See admin-facade.mjs.
     this.admin = new AdminFacade({ agent: this, log: this.log });
+
+    // The CSV follow/block/mute importer — the same worker the Node agent runs.
+    // It needs only `agent.store` and social.mjs, both of which are in this
+    // bundle, so the browser answering 501 was a gap rather than a limitation.
+    // Started only by goActive(): it follows people over minutes, which is
+    // exactly the kind of writing a viewer must not do.
+    this.importer = new ImportWorker({ agent: this, log: this.log });
 
     // The topical (hashtag) feed, so a fresh account is not a blank wall. It
     // polls public tag timelines and mirrors NEW notes as view-only statuses —
@@ -264,14 +336,30 @@ export class BrowserAgent {
   }
 
   // Rotate the signing key (POST /rotate-key). Mint a fresh keypair, replace the
-  // owner-only keys.json on the pod, swap it into the live publisher/deliverer,
-  // and republish the actor so the new public key is on the wire. The old key
-  // stops signing the moment this returns — same one-way change as the Node
-  // agent's rotateKey (run-agent.mjs).
-  async rotateKey() {
+  // pod's copy, swap it into the live publisher/deliverer, and republish the
+  // actor so the new public key is on the wire. The old key stops signing the
+  // moment this returns — same one-way change as the Node agent's rotateKey
+  // (run-agent.mjs).
+  //
+  // The pod's copy is wrapped, so this needs the account password. There is
+  // nowhere to get it from without asking: the worker boots from a stored
+  // session and holds no password, and caching one to save a prompt on a
+  // once-in-a-while action would put the account password in storage to avoid
+  // typing it. So the caller supplies it, and rotating without one is refused
+  // rather than quietly writing a bare key back where a wrapped one was.
+  async rotateKey({ password } = {}) {
+    if (!password) {
+      const e = new Error('rotating the signing key needs your account password — '
+        + 'it is what the new key is locked under on the pod');
+      e.code = 'key-password-needed';
+      throw e;
+    }
     const before = this.publisher.publicKeyPem;
     const rec = await generateKeys();
-    await this.remote.putJson(this.urls.state + 'keys.json', rec, 'application/json');
+    rec.mintedFor = this.urls.actor;                  // one key, one actor (lib/keys.mjs)
+    await this.remote.putJson(this.urls.state + 'keys.json',
+      await wrapKeys(rec, password), 'application/json');
+    await kvPut(keyCacheKey(this.urls.actor), rec).catch(() => {});
     const keys = await importSigningKey(rec);
     this.publisher.publicKeyPem = keys.rsaPublicPem;
     this.deliverer.rsaPrivate = keys.rsaPrivate;
@@ -312,13 +400,37 @@ export class BrowserAgent {
   // Connecting or disconnecting one changes what there is to poll.
   restartAccts() { this.stopAccts(); this.acctfeed = null; this.startAccts(); }
 
-  // Hand the identity to another account (POST /move). The federated act is the
-  // Move to every follower's server; then this account quiesces — unfollows
-  // everyone and closes its inbox — since it is being left behind. Same as the
-  // Node agent's moveTo + quiesce (run-agent.mjs). `target` is an actor URL,
-  // already resolved by the caller.
-  async moveTo(target) {
-    const moved = await this.publisher.publishMove(target);
+  // The follow graph, written down before it is torn down.
+  //
+  // Both parking and moving away unfollow everyone, and the record page offers
+  // "active" again after either — so both have to leave something to come back
+  // from. moveTo used to report `snapshot: following.length` without writing
+  // one, so a browser account set back to active re-followed nobody and said so
+  // only in a count of zero. Same file, same name, same shape as the Node
+  // agent's `_snapshotFollowing` (run-agent.mjs).
+  async _snapshotFollowing() {
+    const following = this.store.getContacts().following;
+    this.store.write('parked.json', {
+      parkedAt: new Date().toISOString(),
+      following: following.map(f => ({ actor: f.actor, handle: f.handle || null })),
+    });
+    await this.store.flush();
+    return following;
+  }
+
+  // Keep the handle, take no more mail.
+  //
+  // Unfollowing is what actually stops the volume — every account you follow
+  // pushes its posts into your inbox — and closing the inbox handles what no
+  // follow graph can gate: stranger mentions, new follow requests, spam.
+  //
+  // This matters more here than it does on Node. A Node agent runs as a service
+  // and keeps draining; close the tab on a browser agent and nothing drains,
+  // while the gateway goes on delivering into the pod inbox regardless (it
+  // writes straight to the pod — see lib/gateway-core.mjs). An unattended
+  // browser account is a pod quietly filling up with nobody collecting, and
+  // this is the only control that stops it at the source.
+  async quiesce() {
     const following = this.store.getContacts().following.map(f => f.actor).filter(Boolean);
     let unfollowed = 0;
     for (const actor of following) {
@@ -326,7 +438,48 @@ export class BrowserAgent {
       catch (e) { this.log(`unfollow ${actor} failed: ${e.message}`); }
     }
     const quiescedAt = await this.publisher.closeInbox();
-    this.log(`moved to ${target}: unfollowed ${unfollowed}/${following.length}, inbox closed`);
-    return { ...moved, unfollowed, following: following.length, quiescedAt, snapshot: following.length };
+    this.log(`quiesced: unfollowed ${unfollowed}/${following.length}, inbox closed`);
+    return { unfollowed, following: following.length, quiescedAt };
+  }
+
+  // Park (POST /park). The snapshot is taken FIRST: unfollowing is what stops
+  // the traffic, but it also destroys the only record of who was being
+  // followed, and "until I want this back" needs that record.
+  async park() {
+    const following = await this._snapshotFollowing();
+    const r = await this.quiesce();
+    this.log(`parked: ${r.unfollowed} unfollow(s) recorded for revival, inbox closed`);
+    return { ...r, snapshot: following.length };
+  }
+
+  // Undo a park (POST /revive). Re-open the inbox, then re-follow everyone in
+  // the snapshot. Each Follow needs the far end to Accept, so this is a request
+  // rather than a restoration — some will not come back, which is the nature of
+  // the thing, and why the result counts both numbers.
+  async revive() {
+    const parked = this.store.read('parked.json', null);
+    await this.publisher.openInbox();
+    let refollowed = 0;
+    for (const f of parked?.following || []) {
+      try { await followActor(this, f.actor); refollowed++; }
+      catch (e) { this.log(`re-follow ${f.actor} failed: ${e.message}`); }
+    }
+    if (parked) this.store.remove('parked.json').catch(() => {});
+    await this.store.flush();
+    this.log(`revived: inbox open, ${refollowed}/${parked?.following?.length || 0} follow(s) re-sent`);
+    return { refollowed, of: parked?.following?.length || 0, parkedAt: parked?.parkedAt || null };
+  }
+
+  // Hand the identity to another account (POST /move). The federated act is the
+  // Move to every follower's server; then this account quiesces — unfollows
+  // everyone and closes its inbox — since it is being left behind. Same as the
+  // Node agent's moveTo + quiesce (run-agent.mjs). `target` is an actor URL,
+  // already resolved by the caller.
+  async moveTo(target) {
+    const moved = await this.publisher.publishMove(target);
+    const following = await this._snapshotFollowing();
+    const r = await this.quiesce();
+    this.log(`moved to ${target}: unfollowed ${r.unfollowed}/${r.following}, inbox closed`);
+    return { ...moved, ...r, snapshot: following.length };
   }
 }

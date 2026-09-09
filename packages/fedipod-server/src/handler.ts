@@ -501,6 +501,13 @@ export class FediPodServerHandler extends HttpHandler implements Initializable, 
       // hands out the installer command; without these the pages render but
       // cannot be used.
       authBundle: webFile('solid-oidc-client.js'),
+      // Each page's own script — inline until 2026-09-09, so that the pages can
+      // be served under `script-src 'self'` (see lib/front-core.mjs).
+      pageScripts: {
+        'new-account.js': webFile('new-account.js'),
+        'run.js': webFile('run.js'),
+        'admin.js': webFile('admin.js'),
+      },
       installScript: webFile('install.sh'),
       lookup: (h: string) => this.dir.lookup(h),
       putDirectory: (h: string, rec: never) => this.dir.putDirectory(h, rec),

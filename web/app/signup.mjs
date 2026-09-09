@@ -10,8 +10,11 @@
 // write key, so the caller stores it in this browser only, never on the pod.
 // The only thing this writes to the pod is the password-wrapped signing key.
 
-import { createAccountWithPod, mintCredential, makeDpopSession } from './pod-auth.mjs';
-import { generateKeys } from './keystore.mjs';
+import { createAccountWithPod, mintCredential, makeDpopSession, revokeCredential } from './pod-auth.mjs';
+import { generateKeys, wrapKeys } from './keystore.mjs';
+import { BrowserRemotePod } from './pod-remote.mjs';
+import { kvPut } from './idb-kv.mjs';
+import { keyCacheKey } from './keys-browser.mjs';
 
 // The container everything the agent publishes hangs under. New pods made here
 // use `fedipod/`; the agent's own default stays `activitypods-js/` for installs
@@ -121,24 +124,45 @@ export async function signUp(answers, { onStep = () => {}, frontOrigin = null } 
   // A pod-writing session for the remaining pod writes and the gateway proof.
   const session = await makeDpopSession(credential);
 
-  // --- keys, stored owner-only on the pod ---
-  // In the state container, which is owner-only, so only the pod owner's
-  // authenticated session (the redirect-login OIDC session, or the credential
-  // here) can read the key. This is the pod trust model: the pod host already
-  // holds your data and identity, so the key living there in the clear, readable
-  // by nobody but the owner, is consistent with it — and it lets any browser you
-  // sign into read the key with no password.
+  // --- keys, encrypted, in an owner-only container on the pod ---
+  //
+  // The durable copy is on the pod, because a browser has no disk you can carry
+  // to the next machine. That copy used to be the bare record, on the argument
+  // that the pod's owner-only ACL is protection enough and the pod host already
+  // holds your data. It is not the same thing: your data is your data, and the
+  // signing key IS you — whoever holds it is you to every server in the
+  // fediverse, for as long as the key lives, and no ACL reaches the host itself.
+  // So it is wrapped under the account password first, and the host stores
+  // ciphertext. (Three documents already said this was happening. Now it is.)
+  //
+  // Two things in that order, deliberately: the ACL BEFORE the key. Writing the
+  // key first leaves a window where a pod whose root is world-readable serves it
+  // to anyone who asks, and a brought pod is exactly the case where that root
+  // may be public.
+  //
+  // The opened copy is kept in this browser (IndexedDB) so the worker can boot
+  // itself after an idle kill with nobody there to type a password. A browser
+  // that has no copy asks for the password once — see boot.mjs.
   const keysStep = step('keys');
   let keys;
   if (!prog.keysStored) {
-    keysStep.running('making your signing key and storing it on the pod');
+    keysStep.running('making your signing key and locking it under your password');
     keys = await generateKeys();
     keys.mintedFor = actorUrl;                                   // one key, one actor (lib/keys.mjs)
+    const remote = new BrowserRemotePod(session, { webId: credential.webId, log: () => {} });
+    // Owner-only: no public modes at all. A pod that refuses the ACL write is
+    // not a pod this key may sit on, wrapped or not.
+    await remote.setAcl(`${pod}${AP_ROOT}ap-state/`, []);
     const put = await session.fetch(keysDocFor(pod), {
-      method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(keys),
+      method: 'PUT', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(await wrapKeys(keys, password)),
     });
     if (put.status >= 400) throw new Error(`could not store the signing key on the pod (HTTP ${put.status}). `
       + `The credential is for ${credential.webId} — that WebID must own ${pod} and its ${AP_ROOT} must be writable by it.`);
+    // This browser's own opened copy, so the boot after the login redirect
+    // needs no password. Best effort: a browser that refuses IndexedDB (private
+    // mode) simply asks for the password on the way back in.
+    await kvPut(keyCacheKey(actorUrl), keys).catch(() => {});
     prog.keys = keys; prog.keysStored = true;
     keysStep.ok();
   } else {
@@ -181,15 +205,31 @@ export async function signUp(answers, { onStep = () => {}, frontOrigin = null } 
   });
   if (cfgPut.status >= 400) throw new Error(`could not store the config on the pod (HTTP ${cfgPut.status})`);
 
+  // The credential was for sign-up, and sign-up is over. The agent runs on the
+  // Solid-OIDC session from here on and never needs it again, so leaving it
+  // alive would leave permanent full access to the pod in a key nothing holds.
+  // Best effort: a server that will not delete it is a credential the owner can
+  // still revoke from their pod's account page, and not a reason to fail a
+  // sign-up that otherwise worked.
+  const revoked = await revokeCredential({
+    resource: credential.resource, accountToken: credential.accountToken,
+  });
+  delete credential.accountToken;              // never leaves this function
+  if (!revoked && credential.resource) {
+    onStep('credential', 'ok', 'this browser is ready (the setup credential could not be '
+      + 'revoked automatically — you can remove it from your pod\'s account page)');
+  }
+
   PROGRESS.delete(key);                                          // finished — nothing left to resume
 
   const host = new URL(pod).host;
   return {
     credential, config, actorUrl,
     address: `@${handle}@${host}`,
-    // The plaintext keys, for booting the agent in THIS browser session right
-    // away. They live in memory only; the durable copy is the owner-only one on
-    // the pod. A fresh browser gets them by reading that with its OIDC session.
+    // The opened keys, for booting the agent in THIS browser session right away.
+    // The durable copy on the pod is wrapped under the account password; this
+    // browser also holds an opened one in IndexedDB (above), which is what the
+    // worker reads. A fresh browser asks for the password once and makes its own.
     keys,
     keysPublic: { rsa: keys.rsa.publicPem, ed25519: keys.ed25519?.publicPem || null },
   };

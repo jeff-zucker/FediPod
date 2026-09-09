@@ -44,7 +44,16 @@ export class RelayDeliverer extends Deliverer {
     if (status === 0) { const err = new Error(r0.error || 'relay could not send'); err.status = 502; throw err; }
     if (status >= 400) {
       const err = new Error(`${init.method || 'POST'} ${url} → ${status}`); err.status = status;
-      // the relay does not forward Retry-After yet; the queue's own ladder applies
+      // The receiving server's own answer to "when should I try again", carried
+      // through the relay (lib/front-core.mjs). Spelled `retryAfterMs`, which is
+      // what the delivery queue reads (lib/deliver.mjs) — the queue's ladder is
+      // the fallback for when there is none, not a replacement for being told.
+      if (r0.retryAfter) {
+        const secs = Number(r0.retryAfter);
+        const ms = Number.isFinite(secs) ? Math.max(secs, 1) * 1000
+          : Math.max(Date.parse(r0.retryAfter) - Date.now(), 1000);
+        if (Number.isFinite(ms)) err.retryAfterMs = Math.min(ms, 24 * 60 * 60_000);
+      }
       throw err;
     }
     // A read (GET) comes back with the fetched body; a delivery (POST) has none.

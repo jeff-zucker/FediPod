@@ -11,26 +11,75 @@
 //   On every load: fedipodOnLoad() — finish a redirect, or restore, then boot.
 import { signUp, handleProblem } from './signup.mjs';
 import { beginLogin, completeLogin, getSession, signOut } from './oidc-session.mjs';
+import { unwrapKeys, isKeyEnvelope } from './keystore.mjs';
+import { kvPut } from './idb-kv.mjs';
+import { keyCacheKey } from './keys-browser.mjs';
 
 const REDIRECT = `${location.origin}/`;   // the app root doubles as the OIDC callback
 
-async function bootWorker() {
+async function bootWorker({ reset = false } = {}) {
   const reg = await navigator.serviceWorker.register('/sw.js', { type: 'module' });
   await navigator.serviceWorker.ready;
   if (!navigator.serviceWorker.controller) {
     await new Promise((r) => navigator.serviceWorker.addEventListener('controllerchange', r, { once: true }));
   }
   const worker = reg.active || navigator.serviceWorker.controller;
+  // A fresh login means a possibly different identity, and the worker may still
+  // be holding the last one. Make it let go before it is asked to boot, and
+  // wait for the acknowledgement — posting and racing on would let the boot
+  // land while the old agent was still installed.
+  if (reset) {
+    await new Promise((res) => {
+      const on = (e) => {
+        if (e.data?.type !== 'reset-done') return;
+        navigator.serviceWorker.removeEventListener('message', on);
+        res();
+      };
+      navigator.serviceWorker.addEventListener('message', on);
+      worker.postMessage({ type: 'reset' });
+      setTimeout(res, 2000);      // an older worker will not answer; boot anyway
+    });
+  }
   const booted = new Promise((res, rej) => {
     const on = (e) => {
       if (e.data?.type === 'booted') { navigator.serviceWorker.removeEventListener('message', on); res(); }
-      if (e.data?.type === 'boot-error') { navigator.serviceWorker.removeEventListener('message', on); const err = new Error(e.data.error); err.detail = e.data.stack || ''; rej(err); }
+      if (e.data?.type === 'boot-error') { navigator.serviceWorker.removeEventListener('message', on); const err = new Error(e.data.error); err.detail = e.data.stack || ''; err.code = e.data.code || null; rej(err); }
     };
     navigator.serviceWorker.addEventListener('message', on);
   });
   worker.postMessage({ type: 'boot', frontOrigin: location.origin });
   await booted;
 }
+
+// A browser that has signed in but has never opened this account's signing key.
+//
+// The key on the pod is wrapped under the account password (signup.mjs), which
+// is what keeps the pod's host from being able to sign as you. Opening it needs
+// the password once per browser; after that the opened copy lives in this
+// origin's IndexedDB and the worker boots from it with nothing to ask.
+//
+// The unwrap happens HERE, in the page, and not in the worker: the worker boots
+// itself whenever the browser restarts it, with nobody present to type anything.
+window.fedipodUnlock = async (password) => {
+  if (!password) throw new Error('Enter your account password.');
+  const session = await getSession();
+  if (!session) throw new Error('Sign in first.');
+  // The config on the pod says where this account's state lives; the key sits
+  // beside it. Both are read with the session, as the owner.
+  const podFromWebId = new URL(session.webId).origin + '/';
+  const state = `${podFromWebId}fedipod/ap-state/`;
+  const readJson = async (url) => {
+    const r = await session.fetch(url, { headers: { accept: 'application/json' } });
+    if (r.status >= 400) throw new Error(`could not read ${url} (HTTP ${r.status})`);
+    return r.json();
+  };
+  const [cfg, doc] = await Promise.all([readJson(state + 'config.json'), readJson(state + 'keys.json')]);
+  if (!isKeyEnvelope(doc)) throw new Error('this account\'s key is not locked — nothing to unlock');
+  const rec = await unwrapKeys(doc, password);          // throws 'wrong password'
+  const actorUrl = `${cfg.remotePod}${cfg.root || 'fedipod/'}ap/actor`;
+  await kvPut(keyCacheKey(actorUrl), rec);
+  await bootWorker();
+};
 
 // New account: create the account, pod, key, config and gateway attach (this
 // needs the password once), then redirect to the pod's login to establish the
@@ -84,7 +133,7 @@ window.fedipodOnLoad = async () => {
   if (new URLSearchParams(location.search).get('code')) {
     await completeLogin({ currentUrl: location.href });
     history.replaceState({}, '', REDIRECT);
-    await bootWorker();
+    await bootWorker({ reset: true });        // this may be a different account
     return 'signed-in';
   }
   if (await getSession()) { await bootWorker(); return 'restored'; }
@@ -132,6 +181,15 @@ if (typeof document !== 'undefined') (async () => {
     let state = 'anonymous';
     try { state = await window.fedipodOnLoad(); }
     catch (e) {
+      // A browser that has never opened this account's key is not a failure —
+      // it is the ordinary state of a NEW browser, and the answer is a password
+      // field rather than a stack trace. Everything else falls through below.
+      if (e.code === 'key-password-needed') {
+        $('loading').hidden = true; $('hero').hidden = true; $('landing').hidden = true;
+        $('brand').hidden = false; $('unlock').hidden = false;
+        $('unlock-password').focus();
+        return;
+      }
       // We logged in (or had a saved session) but the agent could not start.
       // Show exactly why — including where it threw — instead of silently
       // dropping back to the landing, which hides every real failure.
@@ -161,6 +219,25 @@ if (typeof document !== 'undefined') (async () => {
   // landing give way to the short brand, so only "FediPod" and the form show.
   const showLanding = () => { $('pane-form').hidden = true; $('running').hidden = true; $('brand').hidden = true; $('hero').hidden = false; $('landing').hidden = false; };
   const showForm = () => { $('hero').hidden = true; $('landing').hidden = true; $('brand').hidden = false; $('pane-form').hidden = false; goStep(1); };
+
+  // --- unlock: this browser's first use of an account whose key is locked ---
+  const doUnlock = async () => {
+    $('unlock-error').textContent = '';
+    const btn = $('unlock-go'); btn.disabled = true;
+    try {
+      await window.fedipodUnlock($('unlock-password').value);
+      $('unlock-password').value = '';
+      location.href = '/admin/client/';
+    } catch (err) {
+      // 'wrong password' is what unwrapKeys throws on a failed AES-GCM auth,
+      // which is the only way to tell a typo from a real problem.
+      $('unlock-error').textContent = err.message || String(err);
+      btn.disabled = false;
+      $('unlock-password').select();
+    }
+  };
+  $('unlock-go')?.addEventListener('click', doUnlock);
+  $('unlock-password')?.addEventListener('keydown', (e) => { if (e.key === 'Enter') doUnlock(); });
 
   // --- sign in: the full @you@yourpod address → redirect to your pod's login ---
   const doSignin = async () => {

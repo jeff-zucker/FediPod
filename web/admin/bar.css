@@ -42,8 +42,13 @@ body { background: var(--surface); }
 #bar select:hover { background-color: var(--field-bg-hover); }
 /* The app title, in px rather than rem: it is chrome, the same on every page,
    not something that should move when a page changes its base size. */
-#bar .name { flex: 1 1 auto; font-weight: 600; font-size: 30px; color: var(--heading);
+#bar .name { flex: 1 1 auto; font-weight: 600; font-size: 40px; color: var(--heading);
   margin: 0; line-height: 1.1; }
+/* The browser build wraps the brand text in a link (to /?add) — the general
+   #bar a rule below would otherwise pin it back down to nav-link size and
+   colour, since a rule on the anchor itself always wins over inheriting the
+   heading's size. */
+#bar .name a { font: inherit; color: inherit; text-decoration: none; }
 /* Plain text, not chrome: three destinations in a row read better without a
    box round each. */
 #bar button, #bar a { font: inherit; font-size: .95rem; padding: .15rem .2rem;

@@ -15,6 +15,7 @@
 // It mirrors lib/admin.mjs's handlers for those paths, calling the same agent
 // objects (store, publisher, intake, deliverer, remote) the Node agent does.
 import { publicHandle, webfingerHost } from '../../lib/wire.mjs';
+import { normalizeImport, IMPORT_KINDS } from '../../lib/import.mjs';
 import { hashPassword } from '../../lib/mastoapi.mjs';
 
 // The identity itself — changing any means a different actor, i.e. a new setup.
@@ -29,7 +30,7 @@ export const ADMIN_PATHS = new Set([
   '/status', '/config', '/gateway', '/alias', '/rotate-key', '/import',
   '/deadletter', '/blocks', '/profiles', '/modqueue', '/log', '/fediacct', '/describe',
   '/atproto', '/atproto/connect', '/atproto/disconnect',
-  '/rebuild', '/move', '/retire', '/inbox/prune',
+  '/rebuild', '/move', '/retire', '/inbox/prune', '/park', '/revive',
   '/fediacct/connect', '/fediacct/disconnect', '/fediacct/callback',
 ]);
 
@@ -155,7 +156,8 @@ export class AdminFacade {
         case '/modqueue': return json(200, []);           // person: no moderation queue
         case '/log': return json(200, { lines: [] });     // no local log file in the browser
         case '/fediacct': return json(200, { accounts: a.fediaccts?.status() || [] });
-        case '/import': return json(200, { running: false, total: 0, done: 0 });
+        case '/import':
+          return json(200, a.importer ? a.importer.progress() : { running: false, total: 0, done: 0 });
         // The OAuth redirect returns here as a top-level navigation, so this one
         // answers with an HTML page, not JSON. It completes the connection, then
         // shows the result with a way back to the record page.
@@ -238,10 +240,28 @@ export class AdminFacade {
         return json(200, { ok: true, summary: cfg.summary || null, icon: cfg.icon || null });
       }
 
+      // Going quiet, and coming back. The record page's active/parked select.
+      case '/park': {
+        if (!await a.requestTakeover?.()) return json(503, { error: 'another device is active for this pod — park from there' });
+        return json(200, { ok: true, ...await a.park() });
+      }
+      case '/revive': {
+        if (!await a.requestTakeover?.()) return json(503, { error: 'another device is active for this pod — revive from there' });
+        return json(200, { ok: true, ...await a.revive() });
+      }
+
       case '/rotate-key': {
         await a.requestTakeover?.();
-        const r = await a.rotateKey();
-        return json(200, { ok: true, changed: !!r?.changed });
+        // The pod's copy of the key is wrapped under the account password, so a
+        // rotation has to be given one. 428 rather than 400: nothing is wrong
+        // with the request, something is required before it can be made.
+        try {
+          const r = await a.rotateKey({ password: body.password });
+          return json(200, { ok: true, changed: !!r?.changed });
+        } catch (e) {
+          if (e.code !== 'key-password-needed') throw e;
+          return json(428, { error: e.message, needsPassword: true });
+        }
       }
 
       // Recover posts this browser lost, from what the pod still holds.
@@ -489,11 +509,37 @@ export class AdminFacade {
         return json(200, { ok: true, account: row });
       }
 
-      // Not yet in the browser: the CSV follow-import worker is an agent
-      // capability the browser build does not carry. A clear message, not a
-      // dead control.
-      case '/import':
-        return json(501, { error: 'not available in the browser yet' });
+      // CSV import — follows, blocks, mutes, lists and domains, staged onto the
+      // pod and applied by a worker over the following minutes. The same
+      // ImportWorker the Node agent runs (lib/import.mjs); it needs only the
+      // store and social.mjs, both of which are in this bundle.
+      case '/import': {
+        if (!a.importer) return json(409, { error: 'agent not connected yet' });
+        // Staging arms a worker that keeps writing for minutes, so a device
+        // that could not take the lease must not run one beside the device
+        // that holds it.
+        if (!await a.requestTakeover?.()) {
+          return json(503, { error: 'another device is active for this pod — import from there' });
+        }
+        if (body.clear === true) {
+          a.importer.clear();
+          return json(200, { ok: true, cleared: true });
+        }
+        if (!IMPORT_KINDS.includes(body.kind)) {
+          return json(400, { error: `kind must be one of: ${IMPORT_KINDS.join(', ')}` });
+        }
+        if (typeof body.text !== 'string' || !body.text.trim()) {
+          return json(400, { error: 'text required — the CSV file contents' });
+        }
+        const { values, invalid } = normalizeImport(body.kind, body.text);
+        const r = a.importer.stage(body.kind, values);
+        await a.store.flush();
+        return json(200, {
+          ok: true, kind: body.kind, ...r,
+          invalid: invalid.length,
+          ...(invalid.length ? { invalidSample: invalid.slice(0, 5) } : {}),
+        });
+      }
 
       default:
         return json(404, { error: 'not available on a personal browser identity' });

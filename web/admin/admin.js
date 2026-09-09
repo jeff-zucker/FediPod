@@ -13,8 +13,15 @@ const $ = (id) => document.getElementById(id);
 // machine, `/app` when the identity is hosted by its own pod server. Read from
 // the page's own address, so one build serves both.
 const BASE = location.pathname.replace(/\/admin\/.*$/u, '');
+// Every call carries `x-fedipod-page`. On the Node agent it is ignored — the
+// Origin check there already refuses a page on somebody else's site. In the
+// browser build the agent IS this origin's service worker, which cannot see
+// Sec-Fetch-* and answers these routes with no password, so this header is the
+// whole door: a cross-site form cannot set one, and a cross-origin fetch that
+// sets one is stopped at a preflight the worker never grants. See sw-src.mjs.
+const PAGE_HEADER = { 'x-fedipod-page': '1' };
 const api = async (path, init) => {
-  const res = await fetch(BASE + path, init);
+  const res = await fetch(BASE + path, { ...init, headers: { ...(init?.headers || {}), ...PAGE_HEADER } });
   return { status: res.status, json: await res.json().catch(() => null) };
 };
 const postJson = (path, body) => api(path, {
@@ -93,10 +100,7 @@ function resetConfirm() {
   $('confirm-handle').value = '';
   $('confirm-handle-move').value = '';
   $('move-target').value = '';
-  $('state-path').value = '';
-  $('state-url').value = '';
-  document.querySelector('input[name=stateWhere][value=path]').checked = true;
-  stateRows();
+  $('rotate-password').value = '';
 }
 function closePanels(keep = null) {
   if (!keep) solWindow.close();
@@ -154,16 +158,51 @@ function identityRows() {
     name.textContent = acct.handle;
     if (acct.href) { name.href = acct.href; name.target = '_blank'; name.rel = 'noopener'; name.title = '   Open this account elsewhere in a new tab'; }
     if (acct.warn) name.className = 'warn';
-    row(acct.label, name, ' ', optionsMenu(acct));
+    // Where storage is a real choice (every browser-build account today), two
+    // dropdowns sit in the row itself. Where it isn't (the Node agent's
+    // Bluesky, which shows a cross-post toggle instead), the Options
+    // disclosure it always has is unchanged.
+    row(acct.label, name, ' ', ...(acct.storage ? connectionControls(acct) : [optionsMenu(acct)]));
   }
   return out;
 }
 
-// Every connected account carries one Options menu: pause its feed, choose
-// where its credential lives, disconnect. Which controls show is driven by what
-// the account reports — Storage only where a backend offers the choice (the
-// browser), Cross-post only where it is a toggle (the Node agent's Bluesky) —
-// so the same menu serves both.
+// Connected, Paused or Disconnected, and where the key lives — one dropdown
+// each, in the row. Replaces the separate feed and connect dropdowns that used
+// to sit behind an Options disclosure; only reached where acct.storage is set.
+function connectionControls(acct) {
+  const send = async ([path, payload], msg) => { if (await write(path, payload, msg)) await load(); };
+  const pick = (opts, current, onChange, title) => {
+    const el = document.createElement('select');
+    if (title) el.title = title;
+    for (const [v, t] of opts) { const o = document.createElement('option'); o.value = v; o.textContent = t; o.selected = v === current; el.appendChild(o); }
+    el.addEventListener('change', () => onChange(el.value));
+    return el;
+  };
+  const conn = pick(
+    [['connected', 'Connected'], ['paused', 'Paused'], ['disconnected', 'Disconnected']],
+    acct.feedPaused ? 'paused' : 'connected',
+    (v) => (v === 'disconnected'
+      ? send(acct.off(), 'disconnected')
+      : send(acct.feed(v === 'paused'), v === 'paused' ? 'paused adding to your feed' : 'added to your home feed')),
+    '   Connected feeds this account into your home feed here; Paused keeps the account but stops adding its posts; Disconnected removes it.');
+  const storage = pick(
+    [['pod', 'Store key on Pod'], ['browser', 'Store key in Browser']],
+    acct.storage,
+    (v) => {
+      if (v === 'pod' && !confirm('Store this account on your pod?\n\nIt will follow you to any browser you sign in from — but a full-access token to that account then lives on your pod.')) { load(); return; }
+      send(acct.store(v), v === 'pod' ? 'stored on your pod' : 'stored in this browser');
+    },
+    '   On your pod the key follows you to any browser you sign in from, and a full-access token then lives there; in this browser the token never leaves this device.');
+  const wrap = document.createElement('span');
+  wrap.className = 'conn-controls';
+  wrap.append(conn, ' ', storage);
+  return [wrap];
+}
+
+// Every connected account without a storage choice carries an Options menu
+// instead: pause its feed, its cross-post toggle (the Node agent's Bluesky),
+// disconnect.
 function optionsMenu(acct) {
   const d = document.createElement('details');
   d.className = 'opts';
@@ -940,21 +979,7 @@ const LIFECYCLE = {
   retire: { path: '/retire', title: 'Retire this identity', go: 'Retire it', danger: true, done: (r) => `retired ${r.deletedAt}: Delete delivered to ${r.inboxes} inbox(es)` },
   move: { path: '/move', title: 'Transfer this account away', go: 'Transfer it', focus: 'move-target',
     done: (r) => `transferred to ${r.target}: Move delivered to ${r.inboxes} inbox(es), unfollowed ${r.unfollowed}/${r.following}` },
-  'move-state': { path: '/state-move', title: 'Move private data', go: 'Move it', focus: 'state-path',
-    done: (r) => (r.unchanged ? 'already there — nothing moved'
-      : `moved ${r.docs} document(s) and ${r.notes} post(s) — private data is now ${r.now}`) },
 };
-
-// The destination choice reveals the field it needs: a directory for this
-// device, an address for another one, nothing for the pod.
-function stateRows() {
-  const w = picked('stateWhere');
-  $('state-row-path').hidden = w !== 'path';
-  $('state-row-url').hidden = w !== 'url';
-}
-for (const el of document.querySelectorAll('input[name=stateWhere]')) {
-  el.addEventListener('change', stateRows);
-}
 let pending = null;
 
 const closeConfirm = () => closePanels();
@@ -997,16 +1022,15 @@ $('confirm-form').addEventListener('submit', async (ev) => {
   const what = pending;
   const body = what === 'retire' ? { confirm: $('confirm-handle').value.trim() }
     : what === 'move' ? { target: $('move-target').value.trim(), confirm: $('confirm-handle-move').value.trim() }
-      : what === 'move-state' ? {
-        to: picked('stateWhere') === 'pod' ? 'pod'
-          : picked('stateWhere') === 'url' ? $('state-url').value.trim() : $('state-path').value.trim(),
-      }
+      // Only where the field is shown (the browser build — see index.html).
+      // On the Node agent the row stays hidden and nothing is sent, which is
+      // what that agent expects.
+      : what === 'rotate-key' && !$('rotate-pw-row').hidden
+        ? { password: $('rotate-password').value }
         : {};
   if (what === 'move' && !body.target) { say('name the account to transfer to', 'err'); return; }
-  if (what === 'move-state' && !body.to) { say('name the destination', 'err'); return; }
   $('confirm-go').disabled = true;
-  say(what === 'move-state' ? 'moving your private data — copying, checking, then switching over'
-    : `${what} — this talks to the pod and to other servers, so it takes a moment`);
+  say(`${what} — this talks to the pod and to other servers, so it takes a moment`);
   const r = await write(LIFECYCLE[what].path, body, what);
   $('confirm-go').disabled = false;
   if (!r) return;                        // write() already said why

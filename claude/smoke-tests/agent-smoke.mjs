@@ -97,6 +97,21 @@ const HOME = fs.mkdtempSync('/tmp/fedipod-smoke-');
 const PORT = 18621;
 const TOKEN = 'smoke-token';
 
+// A stand-in for a real Response, for the code paths that read a body rather
+// than call .json() — readCapped streams and needs text(), which a `{ status,
+// json }` literal does not have. Keeping the stub honest is what caught the
+// difference in the first place.
+const resp = (body, status = 200) => {
+  const text = JSON.stringify(body);
+  return {
+    status, ok: status < 400,
+    headers: { get: (k) => (String(k).toLowerCase() === 'content-length' ? String(text.length) : null) },
+    body: null,                       // no stream: readCapped falls back to text()
+    text: async () => text,
+    json: async () => JSON.parse(text),
+  };
+};
+
 let failures = 0;
 const check = (ok, label) => { console.log(`${ok ? 'PASS' : 'FAIL'}  ${label}`); if (!ok) failures++; };
 
@@ -576,8 +591,10 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
   const all = mk();
   await all.pub.publishCollections();
-  check(all.seen.length === 14,
-    `an unnarrowed publish is still the whole surface — pages + heads, plus the private container the pending/blocked probe ensures (saw ${all.seen.length})`);
+  check(all.seen.length === 15,
+    `an unnarrowed publish is still the whole surface — pages + heads, plus the private container the pending/blocked probe ensures, plus the HEAD that asks whether it is already there (saw ${all.seen.length})`);
+  check(all.seen.filter(x => /^GET .*\.keep$/.test(x)).length === 1,
+    `the probe is one READ of the canary, not another write (${all.seen.filter(x => /\.keep$/.test(x)).join(', ')})`);
 
   // One new follower changes the follower list. It does not change what this
   // actor follows, it does not change the outbox, and it cannot change an ACL
@@ -2403,14 +2420,14 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   // A blocked author reached the timeline by posting under a tag: this path
   // never went through ingestNote, where the author check lives.
   const blockedRun = mk(
-    async () => ({ status: 200, json: async () => [{ uri: 'https://spam.example/n/1' }] }),
+    async () => resp([{ uri: 'https://spam.example/n/1' }]),
     ['https://spam.example'],
   );
   await blockedRun.tf.sweep();
   check(blockedRun.added.length === 0,
     'a blocked author does not reach the timeline through a hashtag');
 
-  const okRun = mk(async () => ({ status: 200, json: async () => [{ uri: 'https://ok.example/n/1' }] }));
+  const okRun = mk(async () => resp([{ uri: 'https://ok.example/n/1' }]));
   await okRun.tf.sweep();
   check(okRun.added.length === 1, 'while an unblocked one still does');
 
@@ -2418,7 +2435,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   // the note's origin had any business naming that author. Post under a
   // followed tag from a host you control, credit it to anyone.
   const forged = mk(
-    async () => ({ status: 200, json: async () => [{ uri: 'https://evil.example/n/1' }] }),
+    async () => resp([{ uri: 'https://evil.example/n/1' }]),
     [], 'https://mastodon.example/users/alice',
   );
   await forged.tf.sweep();
@@ -2428,7 +2445,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   // It is somebody else's server, polled on our schedule, with no other way to
   // ask us to stop. A 429 used to log a line and change nothing.
   let asked = 0;
-  const refused = mk(async () => { asked++; return { status: 429, headers: { get: () => null }, json: async () => [] }; });
+  const refused = mk(async () => { asked++; return { ...resp([]), status: 429 }; });
   await refused.tf.sweep();
   const first = asked;
   check(refused.tf.quietUntil > Date.now() + 10 * 60_000,
@@ -2480,7 +2497,12 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   // Deferred siblings must ADVANCE, or only the item that opened the socket
   // ever climbs the ladder and a queue of K takes K times as long to give up.
   const dsrc = fs.readFileSync(path.join(root, 'lib/deliver.mjs'), 'utf8');
-  const cool = dsrc.slice(dsrc.indexOf('if (until && until > now)'), dsrc.indexOf('      try {'));
+  // From the cooled-sibling branch to the next `try {` AFTER it — searching the
+  // whole file for the first one instead made this depend on nothing else in
+  // deliver.mjs ever growing a try block above line ~280, which is not a
+  // property the file has.
+  const coolAt = dsrc.indexOf('if (until && until > now)');
+  const cool = dsrc.slice(coolAt, dsrc.indexOf('      try {', coolAt));
   check(/item\.attempts \+= 1/.test(cool) && /MAX_ATTEMPTS/.test(cool),
     'a cooled sibling advances its own ladder and can still be given up on');
   check(dsrc.indexOf('this._cooling.set(host') < dsrc.indexOf('giving up on'),
@@ -2591,15 +2613,59 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   // Reject: their server has recorded that we do NOT follow them. Ours went on
   // saying we did, and published it — a disagreement that could never resolve,
   // because as far as they are concerned the question was answered.
-  const rej = mk([{ actor: THEM, accepted: false }]);
-  await rej.intake.onReject({ type: 'Reject', object: { type: 'Follow' }, actor: THEM }, THEM);
+  // The Follow we sent, which a Reject has to be answering. followActor stores
+  // it on the record for exactly this (lib/social.mjs).
+  const OURS = 'https://pod.example/activitypods-js/ap/act/f-1';
+  const followRec = (over = {}) => ({ actor: THEM, accepted: false, followActivity: { id: OURS }, ...over });
+  const rejectOf = (id) => ({ type: 'Reject', object: { type: 'Follow', id }, actor: THEM });
+
+  const rej = mk([followRec()]);
+  await rej.intake.onReject(rejectOf(OURS), THEM);
   check(rej.state.contacts.following.length === 0 && rej.pub() === 1,
     'a Reject drops the following it refused, and republishes the list');
 
   const other = mk([{ actor: 'https://someone.else/u/a', accepted: true }]);
-  await other.intake.onReject({ type: 'Reject', object: { type: 'Follow' }, actor: THEM }, THEM);
+  await other.intake.onReject(rejectOf(OURS), THEM);
   check(other.state.contacts.following.length === 1,
     'and one from somebody we never followed changes nothing');
+
+  // S5. Only the TYPE was checked, so a Reject naming no particular follow
+  // severed whatever it was aimed at — one Append per account you follow and
+  // you stop following all of them, silently, with nothing to retry because the
+  // far end never hears about it.
+  const vague = mk([followRec()]);
+  await vague.intake.onReject({ type: 'Reject', object: { type: 'Follow' }, actor: THEM }, THEM);
+  check(vague.state.contacts.following.length === 1 && vague.pub() === 0,
+    'a Reject that names no follow is ignored, not obeyed');
+
+  const wrongId = mk([followRec()]);
+  await wrongId.intake.onReject(rejectOf('https://them.example/some/other/follow'), THEM);
+  check(wrongId.state.contacts.following.length === 1,
+    'and one answering a different follow than the one we sent');
+
+  // A record from before followActivity was stored has nothing to match on.
+  // Keeping the follow is the safe answer; dropping it was the unsafe one.
+  const legacy = mk([{ actor: THEM, accepted: true }]);
+  await legacy.intake.onReject(rejectOf(OURS), THEM);
+  check(legacy.state.contacts.following.length === 1,
+    'a follow with no stored id is kept rather than severed on an unmatchable Reject');
+
+  // The gateway's word, bound to this actor, is the other way to believe one.
+  const viaDoor = mk([{ actor: THEM, accepted: true }]);
+  await viaDoor.intake.onReject(rejectOf(OURS), THEM, { trusted: true });
+  check(viaDoor.state.contacts.following.length === 0,
+    'a door-verified Reject is honoured without the id match');
+
+  // Accept: `named &&` used to let an Accept naming nothing flip the flag, so a
+  // request still sitting in a locked account's queue read as accepted.
+  const acc = mk([followRec()]);
+  await acc.intake.onAccept({ type: 'Accept', object: { id: OURS }, actor: THEM }, THEM);
+  check(acc.state.contacts.following[0].accepted === true, 'an Accept naming our follow is taken');
+
+  const bare = mk([followRec()]);
+  await bare.intake.onAccept({ type: 'Accept', actor: THEM }, THEM);
+  check(bare.state.contacts.following[0].accepted === false,
+    'and one naming nothing at all is not');
 
   // Move: believed only where the actor's OWN document agrees, since a redirect
   // anyone can Append is not a redirect.
@@ -2615,6 +2681,88 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     { type: 'Move', actor: THEM, target: 'https://attacker.example/u/x' }, THEM);
   check(typeof verdict === 'string' && !lying.state.contacts.following[0].movedTo,
     'one the actor does not confirm is refused rather than followed');
+}
+
+// --- 5c-quater. the envelope is not the note, and an Undo must name what it undoes ---
+{
+  const { Intake } = await import(path.join(root, 'lib/intake.mjs'));
+  const OURS = 'https://p.example/ap/notes/';
+  const mkIn = ({ following = [], followers = [], requests = [], kind = 'person', origin = {} } = {}) => {
+    const state = { contacts: { followers, following }, requests, notes: [], statuses: [] };
+    const intake = new Intake({
+      config: { kind },
+      urls: { inbox: 'https://p.example/in/', actor: 'https://p.example/ap/actor',
+        followers: 'https://p.example/ap/followers', notes: OURS },
+      remote: { putJson: async () => {} }, local: { addNote: async () => {} },
+      store: {
+        read: (n, d) => d, write: () => {},
+        getContacts: () => JSON.parse(JSON.stringify(state.contacts)),
+        setContacts: (c) => { state.contacts = c; },
+        getRequests: () => JSON.parse(JSON.stringify(state.requests)),
+        setRequests: (r) => { state.requests = r; },
+        getStatuses: () => state.statuses, getActors: () => ({}), isBlocked: () => false,
+        addNotification: (n) => state.notes.push(n), updateStatus: () => {}, addStatus: () => {},
+        idFor: (u) => String(u).length, cacheActor: () => {}, urlFor: () => null,
+      },
+      deliverer: { deliver: async () => {}, deliverToAll: async () => {} },
+      publisher: { publishCollections: async () => {}, urls: {} },
+      log: () => {},
+    });
+    intake.fetchAP = async (u) => origin[u] || null;
+    intake.republish = async () => {};
+    return { intake, state };
+  };
+
+  // S9. onCreate reads addressing off the DELIVERED copy to decide whether the
+  // fetch is worth it. Nothing re-asked the question of the copy that came back,
+  // so anyone could take any public post, address the delivery to us, and have
+  // it filed as "X mentioned you".
+  const STRANGER = 'https://s.example/u/x';
+  const NOTE = 'https://s.example/n/1';
+  const publicNote = { id: NOTE, type: 'Note', attributedTo: STRANGER, content: 'not for you',
+    to: ['https://www.w3.org/ns/activitystreams#Public'] };
+  // The object is a BARE ID, which is the shape that reaches the hole: with an
+  // inline object the envelope merge already lets the object's own addressing
+  // win, so only a Create naming its object by URL is decided by the envelope.
+  const forged = mkIn({ origin: { [NOTE]: publicNote } });
+  const why = await forged.intake.onCreate({
+    type: 'Create', actor: STRANGER, id: 'https://s.example/act/1',
+    // the envelope claims it is addressed to us; the note itself is not
+    to: ['https://p.example/ap/actor'],
+    object: NOTE,
+  }, STRANGER);
+  check(typeof why === 'string' && /does not address us/.test(why),
+    `a public post re-addressed to us in the envelope alone is refused (${why})`);
+  check(forged.state.notes.length === 0, 'and rings nobody');
+
+  // The same note, actually addressed to us by its own server, is taken.
+  const realMention = { ...publicNote, to: ['https://www.w3.org/ns/activitystreams#Public',
+    'https://p.example/ap/actor'] };
+  const genuine = mkIn({ origin: { [NOTE]: realMention } });
+  const ok9 = await genuine.intake.onCreate({
+    type: 'Create', actor: STRANGER, id: 'https://s.example/act/2',
+    to: ['https://p.example/ap/actor'], object: NOTE,
+  }, STRANGER);
+  check(!ok9, `a note whose own server addresses us is ingested (${ok9 || 'accepted'})`);
+
+  // S30. `actor` is a field in an unsigned body, so an Undo that names nothing
+  // let anyone withdraw anyone else's waiting follow request — and the victim's
+  // server, believing it still pending, never resends.
+  const WAITING = 'https://w.example/u/a';
+  const THEIR_FOLLOW = 'https://w.example/act/f1';
+  const withReq = () => mkIn({ requests: [{ actor: WAITING, activity: { id: THEIR_FOLLOW } }] });
+
+  const vague = withReq();
+  await vague.intake.onUndo({ type: 'Undo', actor: WAITING, object: { type: 'Follow' } }, WAITING);
+  check(vague.state.requests.length === 1, 'an Undo naming no follow does not withdraw a waiting request');
+
+  const wrong = withReq();
+  await wrong.intake.onUndo({ type: 'Undo', actor: WAITING, object: 'https://w.example/act/other' }, WAITING);
+  check(wrong.state.requests.length === 1, 'nor one naming a different follow');
+
+  const right = withReq();
+  await right.intake.onUndo({ type: 'Undo', actor: WAITING, object: THEIR_FOLLOW }, WAITING);
+  check(right.state.requests.length === 0, 'the requester withdrawing their own request still works');
 }
 
 // --- 5c-ter. nothing grows without a bound ---
@@ -4383,7 +4531,7 @@ const tf = new TagFeed({
     id: u, type: 'Note', attributedTo: 'https://m.example/u/tagger',
     content: '<p>#solid post</p>', published: '2026-07-28T05:00:00Z',
   }) },
-  fetcher: async () => ({ status: 200, json: async () => [{ uri: 'https://m.example/n/t1' }, { uri: 'https://m.example/n/t1' }] }),
+  fetcher: async () => resp([{ uri: 'https://m.example/n/t1' }, { uri: 'https://m.example/n/t1' }]),
 });
 store2.write('tagfeed.json', { instance: 'https://tags.example', tags: ['solid'], intervalMin: 60 });
 await tf.sweep();
@@ -7799,7 +7947,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
     log: () => {},
     remote: {
       listContainer: async () => listing,
-      fetch: async (u) => { fetched.push(u); return { status: 200, json: async () => ({ type: 'Follow', actor: 'https://m.example/u/a' }) }; },
+      fetch: async (u) => { fetched.push(u); return resp({ type: 'Follow', actor: 'https://m.example/u/a' }); },
       delete: async (u) => { deleted.push(u); return true; },
       getJson: async () => null,
     },
@@ -7825,7 +7973,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   // A Create inside the small set is content too: read, classified, dropped.
   const dropped = [];
   intake17.handle = async (a) => { dropped.push(a.type); return null; };
-  intake17.remote.fetch = async (u) => { fetched.push(u); return { status: 200, json: async () => ({ type: 'Create' }) }; };
+  intake17.remote.fetch = async (u) => { fetched.push(u); return resp({ type: 'Create' }); };
   const out2 = await intake17.prune({ before: '2026-07-02T00:00:00.000Z' });
   check(out2.dropped === 2 && !dropped.includes('Create'),
     'a Create is read, recognised as content and dropped rather than applied');
@@ -7847,7 +7995,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   const seen17 = [];
   intake17.remote.fetch = async (u) => {
     seen17.push(u);
-    return { status: 200, json: async () => ({ type: 'Create', _concerns: u.endsWith('big-old') }) };
+    return resp({ type: 'Create', _concerns: u.endsWith('big-old') });
   };
   intake17.handle = async (a) => (a._concerns ? undefined : 'not addressed to us');
   const out3 = await intake17.prune({ before: '2026-07-02T00:00:00.000Z', keepConcerning: true });
@@ -8887,9 +9035,41 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
     check(sent.length === 0, 'an activity of a type we never examine is not carried to followers');
     await it._maybeForward({ ...reply([PUBLIC, FOLLOWERS], OURS + 'x'), type: 'Flag' });
     check(sent.length === 0, 'nor is a Flag, which we read but never speak on anyone else\'s behalf');
-    await it._maybeForward({ id: 'https://c.example/act/2', type: 'Like',
-      actor: 'https://c.example/u/a', to: [PUBLIC, FOLLOWERS], object: OURS + 'x' });
-    check(sent.length === 1, 'while a Like on one of our posts still is');
+  }
+
+  // S10. Forwarding signs somebody else's activity with OUR key and pushes it to
+  // every follower. Only the types this drain actually dereferenced at the
+  // author's origin earn that: a Like, an Announce and an Undo are believed on
+  // the envelope alone, and relaying one made us a signed relay for whatever a
+  // stranger cared to write.
+  {
+    const { it, sent } = mkFwd(followers);
+    for (const type of ['Like', 'Announce', 'Undo']) {
+      await it._maybeForward({ id: `https://c.example/act/${type}`, type,
+        actor: 'https://c.example/u/a', to: [PUBLIC, FOLLOWERS], object: OURS + 'x' });
+    }
+    check(sent.length === 0, 'a Like, an Announce and an Undo are not carried over our signature');
+    await it._maybeForward(reply([PUBLIC, FOLLOWERS], OURS + 'x'));
+    check(sent.length === 1, 'while a Create, whose object was fetched and checked, still is');
+  }
+
+  // And only for somebody we know of. A complete stranger addressing our
+  // followers collection is not a conversation we are party to.
+  {
+    const { it, sent } = mkFwd(followers);
+    await it._maybeForward({ ...reply([PUBLIC, FOLLOWERS], OURS + 'x'),
+      id: 'https://stranger.example/act/1', actor: 'https://stranger.example/u/x' });
+    check(sent.length === 0, 'a Create from an actor we know nothing about is not forwarded');
+  }
+
+  // A budget per drain, so a flood cannot make one sweep into thousands of
+  // outbound deliveries under our key.
+  {
+    const { it, sent } = mkFwd(followers);
+    for (let i = 0; i < 30; i++) {
+      await it._maybeForward({ ...reply([PUBLIC, FOLLOWERS], OURS + 'x'), id: `https://c.example/act/n${i}` });
+    }
+    check(sent.length === 20, `one drain forwards at most its budget (sent ${sent.length} of 30)`);
   }
 }
 
@@ -9635,33 +9815,62 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
     return { st, ik, accepts };
   };
   const follow = { type: 'Follow', id: 'https://m.example/f/1', actor: FOLLOWER, object: urls28.actor };
+  // What the door actually writes: `verified` says a signature checked out,
+  // and `actor`/`keyId` say WHOSE. All three are needed — `verified` alone
+  // used to be enough, which is what let any valid key in the fediverse act
+  // as anybody (2026-09-09 review, S4).
+  const boundReceipt = (over = {}) => ({ verified: true, actor: FOLLOWER, keyId: FOLLOWER + '#main-key', ...over });
 
   const shadow = mkIntake('shadow');
-  await shadow.ik.handle(follow, { verified: true });
+  await shadow.ik.handle(follow, boundReceipt());
   check(shadow.st.getRequests().some(rq => rq.actor === FOLLOWER)
     && !shadow.st.getContacts().followers.some(f => f.actor === FOLLOWER),
     'in SHADOW mode a verified Follow still only QUEUES — receipts are measured, not trusted');
 
   const trust = mkIntake('trust');
-  await trust.ik.handle(follow, { verified: true });
+  await trust.ik.handle(follow, boundReceipt());
   check(trust.st.getContacts().followers.some(f => f.actor === FOLLOWER)
     && !trust.st.getRequests().some(rq => rq.actor === FOLLOWER)
     && trust.accepts.some(a => a.type === 'Accept'),
     'in TRUST mode a verified Follow auto-accepts — no queue, Accept sent');
 
   const trustUnverified = mkIntake('trust');
-  await trustUnverified.ik.handle(follow, { verified: false });
+  await trustUnverified.ik.handle(follow, boundReceipt({ verified: false }));
   check(trustUnverified.st.getRequests().some(rq => rq.actor === FOLLOWER),
     'an UNVERIFIED follow in trust mode still queues (nothing proved the sender)');
+
+  // S4. A receipt is about ONE actor. Anyone can hold a valid fediverse signing
+  // key; without this the door's "I checked a signature" was read as "I checked
+  // THIS sender", and one delivery from any key in the world auto-accepted a
+  // Follow, or evicted a follower, in somebody else's name.
+  const impostor = mkIntake('trust');
+  await impostor.ik.handle(follow, boundReceipt({ actor: 'https://evil.example/u/mallory',
+    keyId: 'https://evil.example/u/mallory#main-key' }));
+  check(impostor.st.getRequests().some(rq => rq.actor === FOLLOWER)
+    && !impostor.st.getContacts().followers.some(f => f.actor === FOLLOWER),
+    'a VERIFIED receipt that names a different actor does not vouch for this one — it queues');
+
+  const offKey = mkIntake('trust');
+  await offKey.ik.handle(follow, boundReceipt({ keyId: 'https://evil.example/keys/1' }));
+  check(offKey.st.getRequests().some(rq => rq.actor === FOLLOWER),
+    'nor does one whose signing key is hosted off the actor\'s own origin');
 
   // A gateway-verified Undo is honored without the followId match an
   // unverified one needs.
   const u = mkIntake('trust');
   u.st.setContacts({ followers: [{ actor: FOLLOWER, inbox: FOLLOWER + '/inbox' /* no followId */ }], following: [] });
-  await u.ik.handle({ type: 'Undo', actor: FOLLOWER, object: { type: 'Follow', actor: FOLLOWER, object: urls28.actor } },
-    { verified: true });
+  const undo = { type: 'Undo', actor: FOLLOWER, object: { type: 'Follow', actor: FOLLOWER, object: urls28.actor } };
+  await u.ik.handle(undo, boundReceipt());
   check(!u.st.getContacts().followers.some(f => f.actor === FOLLOWER),
     'a verified Undo drops the follower even with no stored follow id');
+
+  // The same eviction, asked for by a stranger holding a good key of their own.
+  const uEvil = mkIntake('trust');
+  uEvil.st.setContacts({ followers: [{ actor: FOLLOWER, inbox: FOLLOWER + '/inbox' }], following: [] });
+  await uEvil.ik.handle(undo, boundReceipt({ actor: 'https://evil.example/u/mallory',
+    keyId: 'https://evil.example/u/mallory#main-key' }));
+  check(uEvil.st.getContacts().followers.some(f => f.actor === FOLLOWER),
+    'but a stranger\'s verified receipt cannot evict a follower it does not name');
 }
 
 // --- 28y. a Bluesky member who bridges later becomes one member, not two ---

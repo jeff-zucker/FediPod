@@ -29,15 +29,7 @@
 FediPod is experimental and free to use.  See the <a href="https://github.com/jeff-zucker/FediPod">FediPod repository</a> for details.
 </p>
 
-<script>
-  fetch('/api/handle?handle=__probe__').then(r => r.json()).then(d => {
-    if (d.version) {
-      document.getElementById('current-version-num').textContent = d.version;
-      document.getElementById('current-version-cmd').textContent = `curl -fsSL ${location.origin}/install | sh`;
-      document.getElementById('current-version').hidden = false;
-    }
-  }).catch(() => {});
-</script>
+<script src="/new-account.js"></script>
 <i style="text-align:right">(cc) 4.0 By, Jeff Zucker, 2026</i>
 </body>
 </html>

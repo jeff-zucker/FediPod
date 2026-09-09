@@ -22,6 +22,21 @@ const ACP_NS = 'http://www.w3.org/ns/solid/acp#';
 const RETRY_MAX = 5;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const backoff = (n) => Math.min(5000, 400 * 2 ** n) + Math.floor(Math.random() * 250);
+// A server answering 429 or 503 is asking to be left alone, and Retry-After
+// says for how long. The Node side has honoured it since the 2026-07-29
+// incident (lib/safefetch.mjs); this side climbed its own ladder and ignored
+// what the pod actually asked for — five retries inside about fifteen seconds,
+// per request, with every other request on this agent doing the same. The
+// ceiling keeps a hostile or confused header from parking the agent for a day.
+const COOLDOWN_MAX_MS = 5 * 60_000;
+const retryAfterMs = (res) => {
+  const raw = res?.headers?.get?.('retry-after');
+  if (!raw) return null;
+  const secs = Number(raw);
+  if (Number.isFinite(secs)) return Math.min(Math.max(secs, 1) * 1000, COOLDOWN_MAX_MS);
+  const when = Date.parse(raw);                       // the HTTP-date spelling
+  return Number.isFinite(when) ? Math.min(Math.max(when - Date.now(), 1000), COOLDOWN_MAX_MS) : null;
+};
 
 // The deletion deny-list, verbatim from lib/remote.mjs — a pod's identity,
 // settings, discovery, access rules and lease are never deletable.
@@ -49,6 +64,7 @@ export class BrowserRemotePod {
     this.aclFlavour = null;
     this.toPod = null;
     this._listCache = new Map();
+    this.pausedUntil = 0;             // set by a Retry-After; see fetch()
   }
 
   setUrlMap(fn) { this.toPod = typeof fn === 'function' ? fn : null; }
@@ -68,9 +84,24 @@ export class BrowserRemotePod {
     // refused, not applied.
     let attempt = 0;
     for (;;) {
+      // One pause for the whole pod, not one per request. Without it every
+      // in-flight call rides its own ladder into a server that has already said
+      // it is overloaded — which is how a throttle becomes a stampede.
+      if (this.pausedUntil && Date.now() < this.pausedUntil) {
+        await sleep(Math.min(this.pausedUntil - Date.now(), COOLDOWN_MAX_MS));
+      }
       try {
         const res = await this.session.fetch(url, init);
-        if ((res.status === 429 || res.status === 503) && attempt < RETRY_MAX) { await sleep(backoff(attempt++)); continue; }
+        if ((res.status === 429 || res.status === 503) && attempt < RETRY_MAX) {
+          const asked = retryAfterMs(res);
+          if (asked) {
+            this.pausedUntil = Date.now() + asked;
+            this.log(`${url} → ${res.status}, Retry-After ${Math.round(asked / 1000)}s — holding the pod off`);
+          }
+          await sleep(asked ?? backoff(attempt++));
+          if (asked) attempt++;
+          continue;
+        }
         return res;
       } catch (e) {
         if (attempt >= RETRY_MAX) throw e;

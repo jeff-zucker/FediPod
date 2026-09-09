@@ -128,9 +128,11 @@ dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
 .muted { color: var(--muted); }
 /* The actors dropdown rides the bar, at the bar's own text scale. */
 #bar select { font-size: .95rem; }
-/* The per-account Options disclosure: one summary opening a small stack of
-   self-describing dropdowns — Show/Hide in Feed, Store in Browser/Pod,
-   Connected/Disconnect. */
+/* The per-account Options disclosure: only where storage is not a real choice
+   (the Node agent's Bluesky, cross-post instead) — a summary opening
+   Show/Hide in Feed, Cross-post On/Off, Connected/Disconnect. Where storage
+   IS a choice, two dropdowns sit in the row directly instead (admin.js
+   connectionControls). */
 details.opts { display: inline-block; }
 details.opts > summary { cursor: pointer; color: var(--link); list-style: none; }
 details.opts > summary::-webkit-details-marker { display: none; }
@@ -141,6 +143,9 @@ details.opts > div { margin: .4rem 0 .2rem; padding: .5rem .6rem; display: flex;
   background: var(--raised); min-width: 11rem; }
 details.opts > div select { width: 100%; }
 .opt-hint { color: var(--muted); font-size: .9rem; margin: -.1rem 0 .1rem; }
+/* The connection and storage dropdowns that sit in the row itself (admin.js
+   connectionControls) — extra room from the account name before them. */
+.conn-controls { display: inline-flex; align-items: center; gap: .4rem; margin-left: 1rem; }
 /* The alias row inside the Transfer-an-account-here panel. */
 #alias-ctl { display: flex; gap: .5rem; align-items: center; margin-top: .3rem; }
 #alias-ctl input { flex: 1 1 12rem; width: auto; }
@@ -159,7 +164,7 @@ pre { overflow-x: auto; background: #0001; padding: .6rem; border-radius: .3rem;
   fieldset { border-color: #555; } .rows li { border-color: #444; }
 }
 </style>
-<link rel="stylesheet" href="bar.css">
+<link rel="stylesheet" href="bar.css?v=3">
 <link rel="stylesheet" href="window.css">
 </head>
 <body>
@@ -459,7 +464,7 @@ pre { overflow-x: auto; background: #0001; padding: .6rem; border-radius: .3rem;
       Keep my pod-based handle: <strong id="gw-pod-preview"></strong><br>
       <span class="hint">Your address stays tied to your own pod — you can drop the
         gateway any time and keep everything.</span></label>
-    <label class="choice"><input type="radio" name="gwShape" value="front">
+    <label class="choice" id="gw-shape-front"><input type="radio" name="gwShape" value="front">
       Create a handle at the gateway:
       @<input type="text" id="gw-name" placeholder="name" autocomplete="off"
         autocapitalize="off" spellcheck="false">@<span id="gw-front-host">fedipod.net</span><br>
@@ -487,6 +492,15 @@ pre { overflow-x: auto; background: #0001; padding: .6rem; border-radius: .3rem;
   <div id="warn-rotate-key" class="warn" hidden>
     <p>A new keypair replaces the one in this home and the actor is republished so other
       servers learn it. Any other device still holding the old key stops being able to sign.</p>
+    <!-- Browser build only: there the key on the pod is locked under the account
+         password, so a new one has to be locked too. The Node agent keeps its key
+         on disk and needs nothing here — stage-site.mjs reveals this row. -->
+    <div id="rotate-pw-row" hidden>
+      <label for="rotate-password">Your account password</label>
+      <input type="password" id="rotate-password" autocomplete="current-password">
+      <p class="hint">Your signing key is kept on your pod locked under this, so the
+        replacement has to be locked under it too. It is not sent anywhere else.</p>
+    </div>
   </div>
   <div id="warn-retire" class="warn" hidden>
     <p><strong>This cannot be undone.</strong> A Delete goes to every follower's inbox telling
@@ -502,28 +516,13 @@ pre { overflow-x: auto; background: #0001; padding: .6rem; border-radius: .3rem;
     <label for="confirm-handle">Type the handle to confirm</label>
     <input type="text" id="confirm-handle" autocomplete="off">
   </div>
-  <div id="warn-move-state" class="warn" hidden>
-    <p>Your timeline, contacts, blocklist and notifications move to the place you choose.
-      Everything is copied and checked before the agent switches over, and the old copy is
-      left where it was for you to delete. The agent keeps running.</p>
-    <fieldset>
-      <legend>Where to</legend>
-      <label class="choice"><input type="radio" name="stateWhere" value="path" checked>
-        another place on this device</label>
-      <label class="choice"><input type="radio" name="stateWhere" value="url">
-        another device</label>
-      <label class="choice"><input type="radio" name="stateWhere" value="pod">
-        onto the pod</label>
-      <div id="state-row-path">
-        <label for="state-path">Directory</label>
-        <input type="text" id="state-path" autocomplete="off" placeholder="~/somewhere/private/">
-      </div>
-      <div id="state-row-url" hidden>
-        <label for="state-url">Address the other device serves</label>
-        <input type="url" id="state-url" autocomplete="off" placeholder="https://other-device.example/private/">
-      </div>
-    </fieldset>
-  </div>
+  <!-- "Move private data" (POST /state-move) had a panel here and no way to
+       open it: nothing in this page has ever carried data-confirm="move-state",
+       so the panel was only ever hidden. Removed 2026-09-09 rather than left as
+       markup that looks like a feature. The route is still there for the CLI,
+       which is where moving the private half between a directory and the pod
+       belongs — it is about filesystem paths and credential.json, neither of
+       which a browser has. -->
   <div id="warn-move" class="warn" hidden>
     <p>A <code>Move</code> goes to every follower's inbox and their servers migrate them to the
       account you name, so they end up following that one instead. The actor left behind

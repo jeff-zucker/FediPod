@@ -23,10 +23,35 @@ export function insecureUrlReason(url, what = 'address') {
 }
 export async function assertPublicUrl() { return null; }     // no socket pinning in a browser
 export async function pinnedFor() { return undefined; }
+// The one thing in this file that is NOT made unnecessary by being in a
+// browser. Pinning and the private-address checks answer DNS rebinding, which
+// a browser closes on its own; a byte budget answers a server that simply
+// keeps sending, which it does not. This used to check `content-length` and
+// then hand back `res.text()` — and a chunked response carries no
+// `content-length` at all, so every caller below dereferences a URL a stranger
+// chose (the note, the actor, the receipt, the Tombstone check, WebFinger)
+// with no bound on what comes back. Stream it and stop at the budget, the way
+// the Node version does. TextDecoder rather than Buffer, and `stream: true` so
+// a UTF-8 sequence split across two chunks still decodes.
 export async function readCapped(res, max = MAX_BYTES) {
   const len = Number(res.headers?.get?.('content-length') || 0);
   if (len > max) throw new Error(`response too large (${len} bytes)`);
-  return res.text();
+  if (!res.body) return res.text();
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder('utf-8');
+  let out = '';
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.length;
+    if (total > max) {
+      await reader.cancel();
+      throw new Error(`response exceeded ${max} bytes`);
+    }
+    out += decoder.decode(value, { stream: true });
+  }
+  return out + decoder.decode();
 }
 export async function safeFetch(url, init = {}, fetchImpl = fetch) {
   return fetchImpl(url, { ...init, signal: init.signal || AbortSignal.timeout(HTTP_TIMEOUT_MS) });

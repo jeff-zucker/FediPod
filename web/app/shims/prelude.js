@@ -6,6 +6,23 @@ globalThis.Buffer ??= (() => {
   const b64 = (u) => btoa(String.fromCharCode(...u));
   const hex = (u) => { let s = ''; for (const b of u) s += b.toString(16).padStart(2, '0'); return s; };
   class Buf extends Uint8Array {
+    // Uint8Array.indexOf finds a single BYTE; Node's Buffer finds a whole
+    // subsequence, and lib/mastoapi.mjs's readMultipart walks a multipart body
+    // by searching for the boundary and for the CRLFCRLF that ends each part's
+    // headers. Without this every search returned -1, so an upload came back
+    // "file required" however good the bytes were.
+    indexOf(needle, from = 0) {
+      const pat = typeof needle === 'string' ? new TextEncoder().encode(needle)
+        : needle instanceof Uint8Array ? needle : null;
+      if (pat === null) return super.indexOf(needle, from);      // a single byte
+      if (pat.length === 0) return Math.min(from, this.length);
+      const last = this.length - pat.length;
+      outer: for (let i = Math.max(0, from); i <= last; i++) {
+        for (let j = 0; j < pat.length; j++) if (this[i + j] !== pat[j]) continue outer;
+        return i;
+      }
+      return -1;
+    }
     toString(enc) {
       if (enc === 'hex') return hex(this);
       if (enc === 'base64') return b64(this);

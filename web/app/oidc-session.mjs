@@ -79,7 +79,8 @@ export async function beginLogin({ issuer, redirectUri, clientName = 'FediPod' }
   const challenge = b64u(await sha256(verifier));
   const state = rand(16);
   await idbPut('pending', { issuer, client_id, redirectUri, verifier, state, pair,
-    tokenEndpoint: cfg.token_endpoint, authorizationEndpoint: cfg.authorization_endpoint });
+    tokenEndpoint: cfg.token_endpoint, authorizationEndpoint: cfg.authorization_endpoint,
+    revocationEndpoint: cfg.revocation_endpoint || null });
   const url = new URL(cfg.authorization_endpoint);
   for (const [k, v] of Object.entries({ client_id, redirect_uri: redirectUri, response_type: 'code',
     scope: 'openid webid offline_access', code_challenge: challenge, code_challenge_method: 'S256', state, prompt: 'consent' })) url.searchParams.set(k, v);
@@ -105,6 +106,10 @@ export async function completeLogin({ currentUrl }) {
   if (!res.ok || !tok.access_token) throw new Error(`token exchange failed (HTTP ${res.status}): ${tok.error || ''}`);
   const webId = jwtPayload(tok.access_token).webid || jwtPayload(tok.id_token || '').webid || null;
   const session = { issuer: p.issuer, client_id: p.client_id, tokenEndpoint: p.tokenEndpoint, pair: p.pair,
+    // Where to hand the refresh token back at sign-out. Kept on the session
+    // because discovery is a network round trip and sign-out should not need
+    // one — see signOut().
+    revocationEndpoint: p.revocationEndpoint || null,
     refreshToken: tok.refresh_token || null, accessToken: tok.access_token,
     expiresAt: Date.now() + Math.max(30, (tok.expires_in || 300)) * 1000, webId };
   await idbPut('session', session);
@@ -118,7 +123,34 @@ export async function getSession() {
   return s ? sessionHandle(s) : null;
 }
 
-export async function signOut() { await idbDel('session'); await idbDel('pending'); }
+/**
+ * Sign out, and tell the issuer.
+ *
+ * Dropping the row locally left the REFRESH TOKEN alive at the pod for its full
+ * life — signing out of a shared or borrowed browser cleared the screen and
+ * nothing else, and anyone who had copied the token could go on minting access
+ * tokens with it. RFC 7009: hand it back.
+ *
+ * Best effort, and the local teardown happens either way: an issuer that is
+ * unreachable, or that publishes no revocation endpoint, must not be able to
+ * keep somebody signed in.
+ */
+export async function signOut() {
+  const s = await idbGet('session').catch(() => null);
+  if (s?.revocationEndpoint && s.refreshToken) {
+    try {
+      await fetch(s.revocationEndpoint, {
+        method: 'POST',
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          token: s.refreshToken, token_type_hint: 'refresh_token', client_id: s.client_id,
+        }),
+      });
+    } catch { /* told if we could; leaving is not conditional on being heard */ }
+  }
+  await idbDel('session');
+  await idbDel('pending');
+}
 
 function sessionHandle(s) {
   let { accessToken, expiresAt, refreshToken } = s;
@@ -135,6 +167,15 @@ function sessionHandle(s) {
     accessToken = tok.access_token;
     expiresAt = Date.now() + Math.max(30, (tok.expires_in || 300)) * 1000;
     if (tok.refresh_token) refreshToken = tok.refresh_token;
+    // Re-read before writing back. There is ONE 'session' row, and this handle
+    // closed over the session it was made from — so a refresh that was already
+    // in flight when the user signed in as somebody else would put the OLD
+    // identity back, silently, over the new one. Only write if the row is still
+    // the session this handle belongs to.
+    const now = await idbGet('session');
+    if (now && now.webId !== s.webId) {
+      throw new Error('signed in as somebody else while this session was refreshing');
+    }
     await idbPut('session', { ...s, accessToken, expiresAt, refreshToken });
   };
   const authFetch = async (url, init = {}) => {

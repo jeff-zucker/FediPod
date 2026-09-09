@@ -6,6 +6,23 @@ globalThis.Buffer ??= (() => {
   const b64 = (u) => btoa(String.fromCharCode(...u));
   const hex = (u) => { let s = ''; for (const b of u) s += b.toString(16).padStart(2, '0'); return s; };
   class Buf extends Uint8Array {
+    // Uint8Array.indexOf finds a single BYTE; Node's Buffer finds a whole
+    // subsequence, and lib/mastoapi.mjs's readMultipart walks a multipart body
+    // by searching for the boundary and for the CRLFCRLF that ends each part's
+    // headers. Without this every search returned -1, so an upload came back
+    // "file required" however good the bytes were.
+    indexOf(needle, from = 0) {
+      const pat = typeof needle === 'string' ? new TextEncoder().encode(needle)
+        : needle instanceof Uint8Array ? needle : null;
+      if (pat === null) return super.indexOf(needle, from);      // a single byte
+      if (pat.length === 0) return Math.min(from, this.length);
+      const last = this.length - pat.length;
+      outer: for (let i = Math.max(0, from); i <= last; i++) {
+        for (let j = 0; j < pat.length; j++) if (this[i + j] !== pat[j]) continue outer;
+        return i;
+      }
+      return -1;
+    }
     toString(enc) {
       if (enc === 'hex') return hex(this);
       if (enc === 'base64') return b64(this);
@@ -10001,11 +10018,11 @@ function titledContent(note) {
 }
 function attachmentsOf(note) {
   const list = Array.isArray(note?.attachment) ? note.attachment : note?.attachment ? [note.attachment] : [];
-  return list.map((a) => ({
+  return list.slice(0, MAX_ATTACHMENTS).map((a) => ({
     url: typeof a?.url === "string" ? a.url : a?.url?.href || (typeof a?.href === "string" ? a.href : void 0),
-    mediaType: a?.mediaType || "",
-    ...a?.name ? { description: a.name } : {}
-  })).filter((a) => a.url);
+    mediaType: String(a?.mediaType || "").slice(0, 128),
+    ...a?.name ? { description: String(a.name).slice(0, 1500) } : {}
+  })).map((a) => ({ ...a, url: attachmentUrl(a.url) })).filter((a) => a.url);
 }
 function mentionsIn(text) {
   return [...new Set(String(text).match(MENTION_RE) || [])].map((m) => m.slice(1));
@@ -10235,7 +10252,7 @@ function addRemoveActivity({ urls, type, object, target, serial }) {
     target
   };
 }
-var import_sanitize_html, AS_CTX, SEC_CTX, PUBLIC, assertionKeyId, OUTBOX_PAGE_SIZE, outboxPageId, outboxPageCount, outboxItemId, FOLLOWERS_PAGE_SIZE, followersPageId, followersPageCount, ALLOWED_TAGS, ALLOWED_ATTRS, HTML_ESCAPES, MENTION_RE;
+var import_sanitize_html, AS_CTX, SEC_CTX, PUBLIC, assertionKeyId, OUTBOX_PAGE_SIZE, outboxPageId, outboxPageCount, outboxItemId, FOLLOWERS_PAGE_SIZE, followersPageId, followersPageCount, ALLOWED_TAGS, ALLOWED_ATTRS, MAX_ATTACHMENTS, MAX_ATTACHMENT_URL, attachmentUrl, HTML_ESCAPES, MENTION_RE;
 var init_wire = __esm({
   "lib/wire.mjs"() {
     import_sanitize_html = __toESM(require_sanitize_html(), 1);
@@ -10273,6 +10290,18 @@ var init_wire = __esm({
       "h4"
     ];
     ALLOWED_ATTRS = ["href", "rel", "class", "lang", "title"];
+    MAX_ATTACHMENTS = 20;
+    MAX_ATTACHMENT_URL = 2048;
+    attachmentUrl = (u) => {
+      if (!u) return null;
+      const s = String(u).slice(0, MAX_ATTACHMENT_URL);
+      try {
+        const p = new URL(s);
+        return p.protocol === "https:" || p.protocol === "http:" ? s : null;
+      } catch {
+        return null;
+      }
+    };
     HTML_ESCAPES = { "&": "&amp;", "<": "&lt;", ">": "&gt;" };
     MENTION_RE = /@([A-Za-z0-9_.-]+)@([A-Za-z0-9.-]+\.[A-Za-z]{2,}(?::\d+)?)/g;
   }
@@ -15612,9 +15641,10 @@ var require_errors = __commonJS({
     }
     var key;
     var i;
-    function ParseError(message, locator) {
+    function ParseError(message, locator, cause) {
       this.message = message;
       this.locator = locator;
+      this.cause = cause;
       if (Error.captureStackTrace) Error.captureStackTrace(this, ParseError);
     }
     extendError(ParseError);
@@ -15672,7 +15702,7 @@ var require_grammar = __commonJS({
           }
           return isStr ? part : part.source;
         }).join(""),
-        UNICODE_SUPPORT ? "mu" : "m"
+        UNICODE_SUPPORT ? "u" : ""
       );
     }
     function regg(args) {
@@ -15698,6 +15728,7 @@ var require_grammar = __commonJS({
     var NameStartChar_s = chars(NameStartChar);
     var NameChar = reg("[", NameStartChar_s, chars(/[-.0-9\xB7]/), chars(/[\u0300-\u036F\u203F-\u2040]/), "]");
     var Name = reg(NameStartChar, NameChar, "*");
+    var Name_exact = reg("^", Name, "$");
     var Nmtoken = reg(NameChar, "+");
     var EntityRef = reg("&", Name, ";");
     var CharRef = regg(/&#[0-9]+;|&#x[0-9a-fA-F]+;/);
@@ -15712,11 +15743,12 @@ var require_grammar = __commonJS({
     var NCNameStartChar = chars_without(NameStartChar, ":");
     var NCNameChar = chars_without(NameChar, ":");
     var NCName = reg(NCNameStartChar, NCNameChar, "*");
+    var NCName_exact = reg("^", NCName, "$");
     var QName = reg(NCName, regg(":", NCName), "?");
     var QName_exact = reg("^", QName, "$");
     var QName_group = reg("(", QName, ")");
     var SystemLiteral = regg(/"[^"]*"|'[^']*'/);
-    var PI = reg(/^<\?/, "(", Name, ")", regg(S, "(", Char, "*?)"), "?", /\?>/);
+    var PI = reg(/^<\?/, "(", Name, ")", regg(S, "(?!", _SChar, ")(", Char, "*?)"), "?", /\?>/);
     var PubidChar = /[\x20\x0D\x0Aa-zA-Z0-9-'()+,./:=?;!*#@$_%]/;
     var PubidLiteral = regg('"', PubidChar, '*"', "|", "'", chars_without(PubidChar, "'"), "*'");
     var COMMENT_START = "<!--";
@@ -15805,6 +15837,8 @@ var require_grammar = __commonJS({
     exports.ExternalID = ExternalID;
     exports.ExternalID_match = ExternalID_match;
     exports.Name = Name;
+    exports.Name_exact = Name_exact;
+    exports.NCName_exact = NCName_exact;
     exports.NotationDecl = NotationDecl;
     exports.Reference = Reference;
     exports.PEReference = PEReference;
@@ -16096,6 +16130,8 @@ var require_dom = __commonJS({
     };
     _extends(LiveNodeList, NodeList);
     function NamedNodeMap() {
+      this._nsIndex = /* @__PURE__ */ Object.create(null);
+      this._noNsIndex = /* @__PURE__ */ Object.create(null);
     }
     function _findNodeIndex(list, node) {
       var i = 0;
@@ -16106,6 +16142,30 @@ var require_dom = __commonJS({
         i++;
       }
     }
+    function _nnmBucket(map, namespaceURI, create) {
+      if (!namespaceURI) {
+        return map._noNsIndex;
+      }
+      var bucket = map._nsIndex[namespaceURI];
+      if (!bucket && create) {
+        bucket = map._nsIndex[namespaceURI] = /* @__PURE__ */ Object.create(null);
+      }
+      return bucket;
+    }
+    function _nnmIndexFind(map, namespaceURI, localName) {
+      var bucket = _nnmBucket(map, namespaceURI, false);
+      var found = bucket && bucket[localName];
+      return found ? found : null;
+    }
+    function _nnmIndexAdd(map, attr) {
+      _nnmBucket(map, attr.namespaceURI, true)[attr.localName] = attr;
+    }
+    function _nnmIndexRemove(map, attr) {
+      var bucket = _nnmBucket(map, attr.namespaceURI, false);
+      if (bucket) {
+        delete bucket[attr.localName];
+      }
+    }
     function _addNamedNode(el, list, newAttr, oldAttr) {
       if (oldAttr) {
         list[_findNodeIndex(list, oldAttr)] = newAttr;
@@ -16113,6 +16173,7 @@ var require_dom = __commonJS({
         list[list.length] = newAttr;
         list.length++;
       }
+      _nnmIndexAdd(list, newAttr);
       if (el) {
         newAttr.ownerElement = el;
         var doc = el.ownerDocument;
@@ -16130,6 +16191,7 @@ var require_dom = __commonJS({
           list[i] = list[++i];
         }
         list.length = lastIndex;
+        _nnmIndexRemove(list, attr);
         if (el) {
           var doc = el.ownerDocument;
           if (doc) {
@@ -16185,7 +16247,7 @@ var require_dom = __commonJS({
         if (el && el !== this._ownerElement) {
           throw new DOMException(DOMException.INUSE_ATTRIBUTE_ERR);
         }
-        var oldAttr = this.getNamedItemNS(attr.namespaceURI, attr.localName);
+        var oldAttr = _nnmIndexFind(this, attr.namespaceURI, attr.localName);
         if (oldAttr === attr) {
           return attr;
         }
@@ -16847,8 +16909,29 @@ var require_dom = __commonJS({
             while (child) {
               var next = child.nextSibling;
               if (next !== null && next.nodeType === TEXT_NODE && child.nodeType === TEXT_NODE) {
-                node.removeChild(next);
-                child.appendData(next.data);
+                var tail = [];
+                var sibling = next;
+                while (sibling !== null && sibling.nodeType === TEXT_NODE) {
+                  tail.push(sibling.data);
+                  sibling = sibling.nextSibling;
+                }
+                var removed = child.nextSibling;
+                while (removed !== sibling) {
+                  var following = removed.nextSibling;
+                  removed.parentNode = null;
+                  removed.previousSibling = null;
+                  removed.nextSibling = null;
+                  removed = following;
+                }
+                child.nextSibling = sibling;
+                if (sibling !== null) {
+                  sibling.previousSibling = child;
+                } else {
+                  node.lastChild = child;
+                }
+                child.appendData(tail.join(""));
+                _onUpdateChild(node.ownerDocument, node);
+                child = sibling;
               } else {
                 child = next;
               }
@@ -17486,10 +17569,10 @@ var require_dom = __commonJS({
        * "InvalidCharacterError".
        *
        * Note: When the resulting document is serialized with `requireWellFormed: true`, the
-       * serializer throws `InvalidStateError` if `.target` contains `:` or is an ASCII
-       * case-insensitive match for `"xml"`, or if `.data` contains `?>` or characters outside the
-       * XML Char production (W3C DOM Parsing §3.2.1.7). Without that option the data is emitted
-       * verbatim.
+       * serializer throws `InvalidStateError` if `.target` is not a valid XML `NCName` (a `Name`
+       * with no colon) or is an ASCII case-insensitive match for `"xml"`, or if `.data` contains
+       * `?>` or characters outside the XML Char production (W3C DOM Parsing §3.2.1.7). Without that
+       * option the target and data are emitted verbatim.
        *
        * @param {string} target
        * @param {string} data
@@ -17544,19 +17627,29 @@ var require_dom = __commonJS({
        * The current implementation does not fill the `childNodes` with those of the corresponding
        * `Entity`
        *
+       * The `name` is validated against the XML `Name` production at creation time; an invalid name
+       * throws `InvalidCharacterError`. When the resulting node is serialized with
+       * `requireWellFormed: true`, the serializer re-validates `nodeName` against the XML `Name`
+       * production and throws `InvalidStateError` if a later `nodeName` mutation made it invalid;
+       * without that option the name is emitted verbatim.
+       *
+       * __This implementation differs from the specification:__ xmldom does not expand entities —
+       * the parser resolves entity references inline and never constructs `EntityReference` nodes,
+       * so this method is the only producer.
+       *
        * @deprecated
        * In DOM Level 4.
        * @param {string} name
        * The name of the entity to reference. No namespace well-formedness checks are performed.
        * @returns {EntityReference}
        * @throws {DOMException}
-       * With code `INVALID_CHARACTER_ERR` when `name` is not valid.
+       * With code `INVALID_CHARACTER_ERR` when `name` is not a valid XML `Name`.
        * @throws {DOMException}
        * with code `NOT_SUPPORTED_ERR` when the document is of type `html`
        * @see https://www.w3.org/TR/DOM-Level-3-Core/core.html#ID-392B75AE
        */
       createEntityReference: function(name) {
-        if (!g.Name.test(name)) {
+        if (!g.Name_exact.test(name)) {
           throw new DOMException(DOMException.INVALID_CHARACTER_ERR, 'not a valid xml name "' + name + '"');
         }
         if (this.type === "html") {
@@ -17994,7 +18087,13 @@ var require_dom = __commonJS({
       }
       return true;
     }
-    function addSerializedAttribute(buf, qualifiedName, value) {
+    function addSerializedAttribute(buf, qualifiedName, value, requireWellFormed) {
+      if (requireWellFormed && !g.QName_exact.test(qualifiedName)) {
+        throw new DOMException(
+          'The attribute name "' + qualifiedName + '" is not a valid XML QName',
+          DOMExceptionName.InvalidStateError
+        );
+      }
       buf.push(" ", qualifiedName, '="', value.replace(/[<>&"\t\n\r]/g, _xmlEncoder), '"');
     }
     function serializeToString(node, buf, visibleNamespaces, opts) {
@@ -18058,6 +18157,12 @@ var require_dom = __commonJS({
                     }
                   }
                 }
+                if (requireWellFormed && !g.QName_exact.test(prefixedNodeName)) {
+                  throw new DOMException(
+                    'The element name "' + prefixedNodeName + '" is not a valid XML QName',
+                    DOMExceptionName.InvalidStateError
+                  );
+                }
                 buf.push("<", prefixedNodeName);
                 var childNamespaces = namespaces.slice();
                 for (var i = 0; i < len; i++) {
@@ -18076,7 +18181,7 @@ var require_dom = __commonJS({
                   if (needNamespaceDefine(attr, isHTML, childNamespaces)) {
                     var attrPrefix = attr.prefix || "";
                     var uri = attr.namespaceURI;
-                    addSerializedAttribute(buf, attrPrefix ? "xmlns:" + attrPrefix : "xmlns", uri);
+                    addSerializedAttribute(buf, attrPrefix ? "xmlns:" + attrPrefix : "xmlns", uri, requireWellFormed);
                     childNamespaces.push({ prefix: attrPrefix, namespace: uri });
                   }
                   var filteredAttr = nodeFilter ? nodeFilter(attr) : attr;
@@ -18084,14 +18189,14 @@ var require_dom = __commonJS({
                     if (typeof filteredAttr === "string") {
                       buf.push(filteredAttr);
                     } else {
-                      addSerializedAttribute(buf, filteredAttr.name, filteredAttr.value);
+                      addSerializedAttribute(buf, filteredAttr.name, filteredAttr.value, requireWellFormed);
                     }
                   }
                 }
                 if (nodeName === prefixedNodeName && needNamespaceDefine(n, isHTML, childNamespaces)) {
                   var nodePrefix = n.prefix || "";
                   var uri = n.namespaceURI;
-                  addSerializedAttribute(buf, nodePrefix ? "xmlns:" + nodePrefix : "xmlns", uri);
+                  addSerializedAttribute(buf, nodePrefix ? "xmlns:" + nodePrefix : "xmlns", uri, requireWellFormed);
                   childNamespaces.push({ prefix: nodePrefix, namespace: uri });
                 }
                 var canCloseTag = !n.firstChild;
@@ -18124,7 +18229,7 @@ var require_dom = __commonJS({
                 }
                 return { ns: namespaces };
               case ATTRIBUTE_NODE:
-                addSerializedAttribute(buf, n.name, n.value);
+                addSerializedAttribute(buf, n.name, n.value, requireWellFormed);
                 return null;
               case TEXT_NODE:
                 if (requireWellFormed && g.InvalidChar.test(n.data)) {
@@ -18166,6 +18271,12 @@ var require_dom = __commonJS({
                 var pubid = n.publicId;
                 var sysid = n.systemId;
                 if (requireWellFormed) {
+                  if (!g.Name_exact.test(n.name)) {
+                    throw new DOMException(
+                      'The doctype name "' + n.name + '" is not a valid XML Name',
+                      DOMExceptionName.InvalidStateError
+                    );
+                  }
                   if (pubid && !g.PubidLiteral_match.test(pubid)) {
                     throw new DOMException("DocumentType publicId is not a valid PubidLiteral", DOMExceptionName.InvalidStateError);
                   }
@@ -18192,8 +18303,11 @@ var require_dom = __commonJS({
                 return null;
               case PROCESSING_INSTRUCTION_NODE:
                 if (requireWellFormed) {
-                  if (n.target.indexOf(":") !== -1 || n.target.toLowerCase() === "xml") {
-                    throw new DOMException("The ProcessingInstruction target is not well-formed", DOMExceptionName.InvalidStateError);
+                  if (!g.NCName_exact.test(n.target) || n.target.toLowerCase() === "xml") {
+                    throw new DOMException(
+                      'The processing instruction target "' + n.target + '" is not a valid XML NCName or is reserved',
+                      DOMExceptionName.InvalidStateError
+                    );
                   }
                   if (g.InvalidChar.test(n.data)) {
                     throw new DOMException(
@@ -18208,6 +18322,12 @@ var require_dom = __commonJS({
                 buf.push("<?", n.target, " ", n.data, "?>");
                 return null;
               case ENTITY_REFERENCE_NODE:
+                if (requireWellFormed && !g.Name_exact.test(n.nodeName)) {
+                  throw new DOMException(
+                    'The entity reference name "' + n.nodeName + '" is not a valid XML Name',
+                    DOMExceptionName.InvalidStateError
+                  );
+                }
                 buf.push("&", n.nodeName, ";");
                 return null;
               //case ENTITY_NODE:
@@ -18344,6 +18464,25 @@ var require_dom = __commonJS({
                 this.nodeValue = data;
             }
           }
+        });
+        Object.defineProperty(CharacterData.prototype, "data", {
+          get: function() {
+            return this._data != null ? this._data : "";
+          },
+          set: function(v) {
+            this._data = v;
+            this.length = typeof v === "string" ? v.length : 0;
+          }
+        });
+        Object.defineProperty(CharacterData.prototype, "nodeValue", {
+          get: function() {
+            return this.data;
+          },
+          set: function(v) {
+            this.data = v;
+          },
+          enumerable: true,
+          configurable: true
         });
         Object.defineProperty(Element2.prototype, "children", {
           get: function() {
@@ -20658,9 +20797,26 @@ var require_sax = __commonJS({
               if (!tagNameRaw) {
                 return errorHandler.fatalError("end tag name missing");
               }
-              var tagNameMatch = end > 0 && g.reg("^", g.QName_group, g.S_OPT, "$").exec(tagNameRaw);
+              var endTagNameStrict = g.reg("^", g.QName_group, g.S_OPT, "$");
+              var tagNameMatch = end > 0 && endTagNameStrict.exec(tagNameRaw);
               if (!tagNameMatch) {
-                return errorHandler.fatalError('end tag name contains invalid characters: "' + tagNameRaw + '"');
+                var leadingTagNameMatch = end > 0 && g.reg("^", g.QName_group).exec(tagNameRaw);
+                if (isHTML && leadingTagNameMatch) {
+                  errorHandler.warning('end tag name contains invalid trailing characters: "' + tagNameRaw + '"');
+                  tagNameMatch = leadingTagNameMatch;
+                } else if (
+                  // Backward compatibility, remove this whole `else if` arm in the next breaking release
+                  // (XML then falls through to the `fatalError` below, for a clean mode split: XML fatal,
+                  // HTML warning). A valid end-tag name followed by a line break and trailing content was
+                  // silently accepted while `reg` still used the `m` flag; re-adding `m` here matches exactly
+                  // those inputs, kept recoverable and reported.
+                  leadingTagNameMatch && new RegExp(endTagNameStrict.source, endTagNameStrict.flags + "m").test(tagNameRaw)
+                ) {
+                  errorHandler.error('end tag name is followed by a line break and trailing content: "' + tagNameRaw + '"');
+                  tagNameMatch = leadingTagNameMatch;
+                } else {
+                  return errorHandler.fatalError('end tag name contains invalid characters: "' + tagNameRaw + '"');
+                }
               }
               if (!domBuilder.currentElement && !domBuilder.doc.documentElement) {
                 return;
@@ -20734,7 +20890,7 @@ var require_sax = __commonJS({
           if (e instanceof ParseError) {
             throw e;
           } else if (e instanceof DOMException) {
-            throw new ParseError(e.name + ": " + e.message, domBuilder.locator, e);
+            return errorHandler.fatalError("Error constructing the DOM: " + e.name + ": " + e.message, e);
           }
           errorHandler.error("element parse error: " + e);
           end = -1;
@@ -20775,6 +20931,9 @@ var require_sax = __commonJS({
       var s = S_TAG;
       while (true) {
         var c = source.charAt(p);
+        if (s === S_TAG && c === "<") {
+          throw new Error("unexpected < in tag name: " + source.slice(start, p));
+        }
         switch (c) {
           case "=":
             if (s === S_ATTR) {
@@ -20950,7 +21109,7 @@ var require_sax = __commonJS({
         if (nsPrefix !== false) {
           if (localNSMap == null) {
             localNSMap = /* @__PURE__ */ Object.create(null);
-            _copy(currentNSMap, currentNSMap = /* @__PURE__ */ Object.create(null));
+            currentNSMap = Object.create(currentNSMap);
           }
           currentNSMap[nsPrefix] = localNSMap[nsPrefix] = value;
           a.uri = NAMESPACE.XMLNS;
@@ -20997,7 +21156,13 @@ var require_sax = __commonJS({
     function parseHtmlSpecialContent(source, elStartEnd, tagName, entityReplacer, domBuilder) {
       var isEscapableRaw = isHTMLEscapableRawTextElement(tagName);
       if (isEscapableRaw || isHTMLRawTextElement(tagName)) {
-        var elEndStart = source.indexOf("</" + tagName + ">", elStartEnd);
+        var closeTag = new RegExp("</" + tagName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + ">", "ig");
+        closeTag.lastIndex = elStartEnd;
+        var match = closeTag.exec(source);
+        var elEndStart = match ? match.index : -1;
+        if (elEndStart < 0) {
+          return elStartEnd + 1;
+        }
         var text = source.substring(elStartEnd + 1, elEndStart);
         if (isEscapableRaw) {
           text = text.replace(ENTITY_REG, entityReplacer);
@@ -21501,14 +21666,16 @@ var require_dom_parser = __commonJS({
        *
        * @param {string} message
        * - The message to be used for reporting and throwing the error.
+       * @param {Error} [cause]
+       * The error that caused this fatal error, preserved as the thrown `ParseError`'s `cause`.
        * @returns {never}
        * This function always throws an error and never returns a value.
        * @throws {ParseError}
        * Always throws a ParseError with the provided message.
        */
-      fatalError: function(message) {
+      fatalError: function(message, cause) {
         this.reportError("fatalError", message);
-        throw new ParseError(message, this.locator);
+        throw new ParseError(message, this.locator, cause);
       }
     };
     function _locator(l) {
@@ -32351,7 +32518,22 @@ async function pinnedFor() {
 async function readCapped(res, max = MAX_BYTES) {
   const len = Number(res.headers?.get?.("content-length") || 0);
   if (len > max) throw new Error(`response too large (${len} bytes)`);
-  return res.text();
+  if (!res.body) return res.text();
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder("utf-8");
+  let out = "";
+  let total = 0;
+  for (; ; ) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.length;
+    if (total > max) {
+      await reader.cancel();
+      throw new Error(`response exceeded ${max} bytes`);
+    }
+    out += decoder.decode(value, { stream: true });
+  }
+  return out + decoder.decode();
 }
 async function safeFetch(url, init = {}, fetchImpl = fetch) {
   return fetchImpl(url, { ...init, signal: init.signal || AbortSignal.timeout(HTTP_TIMEOUT_MS) });
@@ -32484,7 +32666,20 @@ async function verifyHttpSignature(request, { documentLoader, keyCache, timeWind
     checks: { signature: false }
   };
 }
+function sortedKeys(v) {
+  if (Array.isArray(v)) return v.map(sortedKeys);
+  if (v && typeof v === "object") {
+    const out = {};
+    for (const k of Object.keys(v).sort()) out[k] = sortedKeys(v[k]);
+    return out;
+  }
+  return v;
+}
 function canonical(obj) {
+  const { hmac, ...rest } = obj;
+  return JSON.stringify(sortedKeys(rest));
+}
+function canonicalLegacy(obj) {
   return JSON.stringify(obj, Object.keys(obj).filter((k) => k !== "hmac").sort());
 }
 function makeReceipt(result, { gateway = null } = {}) {
@@ -32505,14 +32700,17 @@ function signReceipt(receipt, secret) {
 }
 function verifyReceipt(receipt, secret) {
   if (!receipt || typeof receipt !== "object" || !receipt.hmac || !secret) return false;
-  const expected = node_crypto_default.createHmac("sha256", secret).update(canonical(receipt)).digest();
   let given;
   try {
     given = Buffer.from(receipt.hmac, "base64");
   } catch {
     return false;
   }
-  return given.length === expected.length && node_crypto_default.timingSafeEqual(given, expected);
+  const matches = (text) => {
+    const expected = node_crypto_default.createHmac("sha256", secret).update(text).digest();
+    return given.length === expected.length && node_crypto_default.timingSafeEqual(given, expected);
+  };
+  return matches(canonical(receipt)) || matches(canonicalLegacy(receipt));
 }
 var init_httpsig = __esm({
   "lib/httpsig.mjs"() {
@@ -32598,11 +32796,11 @@ var require_src = __commonJS({
       return str + "]";
     }
     function serializeObject(obj) {
-      const sortedKeys = sort(Object.keys(obj));
+      const sortedKeys2 = sort(Object.keys(obj));
       let str = "{";
-      const length = sortedKeys.length;
+      const length = sortedKeys2.length;
       for (let i = 0; i < length; i++) {
-        const key = sortedKeys[i];
+        const key = sortedKeys2[i];
         const val = obj[key];
         if (val === void 0 || typeof val === "symbol") {
           continue;
@@ -33119,7 +33317,7 @@ var PodStore = class {
     const legacy = Object.entries(ids).find(([, u]) => u === url);
     if (legacy) return legacy[0];
     ids[id] = url;
-    this.write("ids.json", ids);
+    this.cache.set("ids.json", ids);
     return id;
   }
   urlFor(id) {
@@ -44651,16 +44849,39 @@ var Publisher = class {
   }
   // Media container on the remote pod — public-Read like notes, created lazily
   // at first upload (idempotent; the flag only saves round-trips).
+  // Ask before writing. `_mediaReady` is per PROCESS, and a service worker is
+  // restarted whenever the browser feels like it — so on the browser build this
+  // re-created a container that has existed since sign-up, and rewrote its ACL,
+  // on every restart. A HEAD is one request and usually the only one.
   async ensureMediaContainer() {
     if (this._mediaReady) return;
+    if (await this._containerExists(this.urls.media)) {
+      this._mediaReady = true;
+      return;
+    }
     await this.remote.putJson(this.urls.media + ".keep", { keep: true }, "application/json");
     await this.remote.setAcl(this.urls.media, ["Read"]);
     this._mediaReady = true;
+  }
+  // Whether the canary this class writes is already there. Only a definite
+  // "yes" counts: anything else falls through to the write, which is
+  // idempotent anyway, so a failed probe costs a request and never correctness.
+  async _containerExists(base) {
+    try {
+      const r = await this.remote.fetch(`${base}.keep`, { method: "HEAD" });
+      return r?.status >= 200 && r.status < 300;
+    } catch {
+      return false;
+    }
   }
   // The owner-only container that followers-only and direct posts live in.
   // Its ACL is set once; every note under it inherits.
   async ensurePrivateContainer() {
     if (this._privateContainer) return;
+    if (await this._containerExists(this.urls.privateNotes)) {
+      this._privateContainer = true;
+      return;
+    }
     await this.remote.putJson(this.urls.privateNotes + ".keep", { keep: true }, "application/json");
     await this.remote.setAcl(this.urls.privateNotes, []);
     this._privateContainer = true;
@@ -45149,8 +45370,26 @@ var CO_MEMBER_MAX = 5e3;
 var MAX_ITEM_BYTES = 512 * 1024;
 var ACTOR_TYPES = /* @__PURE__ */ new Set(["Person", "Group", "Service", "Application", "Organization"]);
 var CONTENT_TYPES = /* @__PURE__ */ new Set(["Note", "Article", "Question", "Page", "Video", "Audio", "Image", "Event"]);
+var httpOnly = (u) => {
+  if (!u) return null;
+  try {
+    const p = new URL(String(u));
+    return p.protocol === "https:" || p.protocol === "http:" ? String(u) : null;
+  } catch {
+    return null;
+  }
+};
+var MAX_MODQUEUE = 200;
+var MAX_EMOJIS = 60;
+var MAX_POLL_OPTIONS = 50;
+var MAX_OPTION_CHARS2 = 200;
+var MAX_MENTIONS = 60;
+var MAX_URL_CHARS = 2048;
 function emojisOf(note) {
-  return [].concat(note?.tag || []).filter((t) => t?.type === "Emoji" && t.icon?.url && t.name).map((t) => ({ shortcode: String(t.name).replace(/^:|:$/g, ""), url: String(t.icon.url) }));
+  return [].concat(note?.tag || []).filter((t) => t?.type === "Emoji" && t.icon?.url && t.name).slice(0, MAX_EMOJIS).map((t) => ({
+    shortcode: String(t.name).replace(/^:|:$/g, "").slice(0, 64),
+    url: httpOnly(String(t.icon.url).slice(0, MAX_URL_CHARS))
+  })).filter((e) => e.url);
 }
 function pollOf(note) {
   const opts = note?.oneOf || note?.anyOf;
@@ -45159,8 +45398,8 @@ function pollOf(note) {
     multiple: !!note.anyOf,
     expiresAt: note.endTime || null,
     closed: !!note.closed,
-    options: opts.map((o) => ({
-      title: String(o?.name ?? ""),
+    options: opts.slice(0, MAX_POLL_OPTIONS).map((o) => ({
+      title: String(o?.name ?? "").slice(0, MAX_OPTION_CHARS2),
       votes: Number(o?.replies?.totalItems) || 0
     }))
   };
@@ -45169,7 +45408,24 @@ var typesOf = (t) => (Array.isArray(t) ? t : [t]).filter((x) => typeof x === "st
 var isContentType = (t) => typesOf(t).some((x) => CONTENT_TYPES.has(x));
 var isActorType = (t) => typesOf(t).some((x) => ACTOR_TYPES.has(x));
 var FORWARDABLE = /* @__PURE__ */ new Set(["Create", "Update", "Delete", "Like", "Announce", "Undo"]);
+var FORWARD_TYPES = /* @__PURE__ */ new Set(["Create", "Update", "Delete"]);
+var MAX_FORWARDS_PER_DRAIN = 20;
 var ACCEPT_AP2 = 'application/activity+json, application/ld+json; profile="https://www.w3.org/ns/activitystreams"';
+function trimActivity(a) {
+  if (!a || typeof a !== "object") return a ?? null;
+  const idOf = (v) => typeof v === "string" ? v : v?.id ?? null;
+  const out = {};
+  for (const k of ["id", "type", "actor", "target"]) {
+    const v = idOf(a[k]);
+    if (v) out[k] = String(v).slice(0, 2048);
+  }
+  const obj = idOf(a.object);
+  if (obj) out.object = String(obj).slice(0, 2048);
+  else if (a.object && typeof a.object === "object" && a.object.type) {
+    out.object = { type: String(a.object.type).slice(0, 64) };
+  }
+  return out;
+}
 function sameOrigin(a, b) {
   try {
     return new URL(a).origin === new URL(b).origin;
@@ -45210,6 +45466,7 @@ var Intake = class {
     this.serial = Date.now();
     this.stopped = false;
     this.lastDrain = null;
+    this._forwardBudget = MAX_FORWARDS_PER_DRAIN;
     this.lastDrainAtMs = 0;
     this.reconnectTries = 0;
     this.drainCooldownUntil = 0;
@@ -45445,6 +45702,7 @@ var Intake = class {
       return this._draining;
     }
     this._inSweep = true;
+    this._forwardBudget = MAX_FORWARDS_PER_DRAIN;
     this.store.hold?.();
     this._draining = this._drainOnce().finally(async () => {
       this._inSweep = false;
@@ -45489,7 +45747,7 @@ var Intake = class {
         } else {
           const res = await this.remote.fetch(item.url, { headers: { accept: "*/*" } });
           if (res.status >= 400 && res.status !== 404) throw new Error(`inbox item GET \u2192 ${res.status}`);
-          const activity = res.status < 400 ? await res.json().catch(() => null) : null;
+          const activity = res.status < 400 ? await readCapped(res, MAX_ITEM_BYTES).then(JSON.parse).catch(() => null) : null;
           if (keepConcerning) {
             const rejection = activity ? await this.handle(activity) : "unparsable JSON";
             if (rejection) out.dropped++;
@@ -45642,7 +45900,7 @@ var Intake = class {
           this.store.addDeadLetter({
             inboxUrl: url,
             reason: rejection,
-            activity,
+            activity: trimActivity(activity),
             ...activity ? {} : { raw: raw?.slice(0, 2e3) ?? null }
           });
           this.log(`rejected (${rejection}) \u2014 dead-lettered: ${url}`);
@@ -45652,7 +45910,7 @@ var Intake = class {
         const n = this._bumpAttempt(url, e.message);
         this.log(`inbox item ${url} attempt ${n}/${MAX_ITEM_ATTEMPTS}: ${e.message}`);
         if (n >= MAX_ITEM_ATTEMPTS) {
-          this.store.addDeadLetter({ inboxUrl: url, reason: `failed ${n}x: ${e.message}`, activity });
+          this.store.addDeadLetter({ inboxUrl: url, reason: `failed ${n}x: ${e.message}`, activity: trimActivity(activity) });
           pending.push(url);
         }
       }
@@ -45705,6 +45963,11 @@ var Intake = class {
       this.log(`fetch ${url}: unreadable as JSON \u2014 ${e.message}`);
       return null;
     }
+    const landed = res.finalUrl || url;
+    if (!sameOrigin(landed, url) && doc && doc.id && !sameOrigin(doc.id, landed)) {
+      this.log(`fetch ${url}: redirected to ${landed}, which is not where ${doc.id} lives \u2014 refused`);
+      return null;
+    }
     if (isActorType(doc?.type) && doc.id && sameOrigin(doc.id, url)) {
       this.store.cacheActor(doc.id, doc);
     }
@@ -45755,15 +46018,24 @@ var Intake = class {
       return null;
     }
   }
+  // Whether a receipt says anything about THIS actor. Verified-and-about-someone
+  // -else is worth exactly as much as unverified, and is treated the same way:
+  // the drain's verify-by-dereference still stands behind it.
+  receiptVouchesFor(receipt, actor) {
+    if (!receipt?.verified) return false;
+    if (!receipt.actor || receipt.actor !== actor) return false;
+    if (!receipt.keyId || !sameOrigin(receipt.keyId, actor)) return false;
+    return true;
+  }
   async handle(activity, receipt = null) {
     const actor = typeof activity.actor === "string" ? activity.actor : activity.actor?.id;
     if (!actor) return "no actor";
     if (!httpUrl(actor)) return `actor is not an http(s) URL (${actor})`;
     if (this.store.isBlocked(actor)) return `blocked sender (${actor})`;
+    const trusted = this.receiptVouchesFor(receipt, actor) && this.store.getConfig()?.gateway?.mode === "trust";
     if (this.config.kind === "group" && (this.config.moderators || []).includes(actor) && this.isModerationAsk(activity)) {
-      return this.queueModeration(activity, actor);
+      return this.queueModeration(activity, actor, { trusted });
     }
-    const trusted = !!receipt?.verified && this.store.getConfig()?.gateway?.mode === "trust";
     switch (activity.type) {
       case "Follow":
         return this.onFollow(activity, actor, { trusted });
@@ -45772,7 +46044,7 @@ var Intake = class {
       case "Create":
         return this.onCreate(activity, actor);
       case "Accept":
-        return this.onAccept(activity, actor);
+        return this.onAccept(activity, actor, { trusted });
       case "Like":
       case "Announce": {
         const wrapped = activity.object;
@@ -45799,7 +46071,7 @@ var Intake = class {
       case "Update":
         return this.onUpdate(activity, actor);
       case "Reject":
-        return this.onReject(activity, actor);
+        return this.onReject(activity, actor, { trusted });
       case "Move":
         return this.onMove(activity, actor);
       case "Add":
@@ -45831,21 +46103,44 @@ var Intake = class {
   }
   // Held, not run: one entry per distinct ask, capped, waiting for the
   // operator to apply or dismiss it (social.applyModeration).
-  queueModeration(activity, actor) {
+  // A moderator's WORD, not their proof. `actor` is a field in an unsigned
+  // body and a moderator's URL is public, so anyone can claim to be one — which
+  // is exactly why these are QUEUED for the operator rather than run. What was
+  // missing is that the queue did not say which is which, and a stranger could
+  // fill all 200 slots and push the real asks out.
+  //
+  // So: the entry records whether the door vouched for the sender, and when the
+  // queue is full the UNVERIFIED entries are what get dropped. A real
+  // moderator's ask cannot be crowded out by someone impersonating them.
+  queueModeration(activity, actor, { trusted = false } = {}) {
     const q = this.store.read("modqueue.json", []);
     const objectId = typeof activity.object === "string" ? activity.object : activity.object?.id;
     const key = [activity.type, actor, objectId || JSON.stringify(activity.object || null)].join(" ");
-    if (q.some((e) => e.key === key)) return;
+    const seen = q.find((e) => e.key === key);
+    if (seen) {
+      if (trusted && !seen.verified) {
+        seen.verified = true;
+        this.store.write("modqueue.json", q);
+      }
+      return;
+    }
     q.unshift({
       key,
       id: (this.serial++).toString(36) + "-" + q.length,
       type: activity.type,
       moderator: actor,
-      activity,
+      activity: trimActivity(activity),
+      verified: !!trusted,
       at: (/* @__PURE__ */ new Date()).toISOString()
     });
-    this.store.write("modqueue.json", q.slice(0, 200));
-    this.log(`moderation queued from ${actor}: ${activity.type} ${objectId || ""}`);
+    let kept = q;
+    if (kept.length > MAX_MODQUEUE) {
+      const verified = kept.filter((e) => e.verified);
+      const rest = kept.filter((e) => !e.verified);
+      kept = [...verified, ...rest].slice(0, MAX_MODQUEUE);
+    }
+    this.store.write("modqueue.json", kept);
+    this.log(`moderation queued from ${actor}${trusted ? "" : " (unverified)"}: ${activity.type} ${objectId || ""}`);
   }
   // §7.6 Add / §7.9 Remove. The side effect would be to add or remove the object
   // to/from the collection named in `target` — but only a collection we own AND
@@ -45875,7 +46170,7 @@ var Intake = class {
           actor,
           inbox: doc.inbox,
           sharedInbox: doc.endpoints?.sharedInbox,
-          activity,
+          activity: trimActivity(activity),
           at: (/* @__PURE__ */ new Date()).toISOString()
         });
         this.store.setRequests(reqs.slice(0, 500));
@@ -45923,7 +46218,13 @@ var Intake = class {
     const rec = contacts.followers.find((f) => f.actor === actor);
     if (!rec) {
       const reqs = this.store.getRequests();
-      if (reqs.some((r) => r.actor === actor)) {
+      const pending = reqs.find((r) => r.actor === actor);
+      if (pending) {
+        const theirs = pending.activity?.id;
+        if (!trusted && (!theirs || named !== theirs)) {
+          this.log(`Undo from ${actor} does not name the request we hold \u2014 ignored`);
+          return;
+        }
         this.store.setRequests(reqs.filter((r) => r.actor !== actor));
         await this.republish({ pending: true });
         this.log(`join request withdrawn: ${actor}`);
@@ -45979,18 +46280,28 @@ var Intake = class {
   async _maybeForward(activity) {
     if (!activity || typeof activity !== "object") return;
     if (!FORWARDABLE.has(activity.type)) return;
+    if (!FORWARD_TYPES.has(activity.type)) return;
     try {
       const audience = [].concat(activity.to || [], activity.cc || [], activity.audience || []).map((v) => typeof v === "string" ? v : v?.id).filter(Boolean);
       if (!audience.includes(this.urls.followers)) return;
       if (!this._referencesOurObject(activity)) return;
       const actor = typeof activity.actor === "string" ? activity.actor : activity.actor?.id;
       if (actor === this.urls.actor) return;
+      if (!this.known(actor)) {
+        this.log(`not forwarding ${activity.type} from ${actor}: nobody we know of`);
+        return;
+      }
+      if (this._forwardBudget <= 0) {
+        this.log(`not forwarding ${activity.type}: this drain's forwarding budget is spent`);
+        return;
+      }
       const id = typeof activity.id === "string" ? activity.id : null;
       if (!id) return;
       const forwarded = this.store.read("forwarded.json", []);
       if (forwarded.includes(id)) return;
       const inboxes = [...new Set(this.store.getContacts().followers.filter((f) => !f.bsky).map((f) => f.sharedInbox || f.inbox).filter(Boolean))];
       if (!inboxes.length) return;
+      this._forwardBudget -= 1;
       await this.deliverer.deliverToAll(inboxes, activity);
       this.store.write("forwarded.json", [...forwarded, id].slice(-MAX_FORWARDED));
       this.log(`forwarded ${activity.type} ${id} to ${inboxes.length} follower inbox(es)`);
@@ -46072,9 +46383,14 @@ var Intake = class {
     const held = this.store.getPending().find((p) => p.noteId === noteId);
     const inboxes = this.announceTargets(s.actor);
     const { announceActivity: announceActivity2 } = await Promise.resolve().then(() => (init_wire(), wire_exports));
+    const wrapperObject = (a) => {
+      const inner = a?.object;
+      const id = typeof inner === "string" ? inner : inner?.id;
+      return id === noteId ? a : null;
+    };
     const act = announceActivity2({
       urls: this.urls,
-      object: activity || held?.activity || noteId,
+      object: wrapperObject(activity) || wrapperObject(held?.activity) || noteId,
       serial: this.serial++,
       audience: this.urls.actor
     });
@@ -46189,6 +46505,9 @@ var Intake = class {
     const author = authorOf(note, actor);
     if (!author) return `object names an author its origin does not vouch for (${objectId})`;
     if (this.store.isBlocked(author)) return `blocked author (${author})`;
+    if (!via && !this.concernsUs(note, author)) {
+      return `the note its own server serves does not address us (${objectId})`;
+    }
     const asked = note.inReplyTo && this.store.getStatuses().find((x) => x.noteId === String(note.inReplyTo) && x.kind === "post" && x.poll);
     if (asked && isVoteShape(note)) {
       const counted = await this.publisher.recordVote(asked.noteId, author, note.name).catch((e) => {
@@ -46214,7 +46533,7 @@ var Intake = class {
         attachments
       });
     }
-    const mentions = [].concat(note.tag || []).filter((t) => t?.type === "Mention" && t.href && t.name).map((t) => ({ href: t.href, name: t.name }));
+    const mentions = [].concat(note.tag || []).filter((t) => t?.type === "Mention" && t.href && t.name).slice(0, MAX_MENTIONS).map((t) => ({ href: httpOnly(String(t.href).slice(0, MAX_URL_CHARS)), name: String(t.name).slice(0, 256) })).filter((m) => m.href);
     const emojis = emojisOf(note);
     const poll = pollOf(note);
     const audience = [].concat(note.to || [], note.cc || []).map(String);
@@ -46409,11 +46728,30 @@ var Intake = class {
   // has recorded that we do not follow them; ours went on saying we did, and
   // published it — so the two disagreed permanently, and a retry would never
   // come because as far as they are concerned the question was answered.
-  async onReject(activity, actor) {
+  //
+  // It has to answer the Follow we actually SENT. Only the type was checked, so
+  // one Append per account you follow — from anyone, naming no particular
+  // follow — severed every one of them at once, and silently: their server
+  // never hears about it, so nothing ever retries and nothing looks wrong until
+  // the timeline goes quiet. `followActivity` is stored by followActor
+  // (lib/social.mjs) for exactly this kind of comparison.
+  async onReject(activity, actor, { trusted = false } = {}) {
     if (activity.object?.type && activity.object.type !== "Follow") return;
     const contacts = this.store.getContacts();
     const rec = contacts.following.find((f) => f.actor === actor);
     if (!rec) return;
+    const named = typeof activity.object === "string" ? activity.object : activity.object?.id;
+    const ours = rec.followActivity?.id;
+    if (!trusted) {
+      if (!ours) {
+        this.log(`Reject from ${actor}: no follow id on record to match it against \u2014 ignored`);
+        return;
+      }
+      if (named !== ours) {
+        this.log(`Reject from ${actor} answers ${named || "nothing"}, not the follow we sent \u2014 ignored`);
+        return;
+      }
+    }
     contacts.following = contacts.following.filter((f) => f.actor !== actor);
     this.store.setContacts(contacts);
     await this.republish({ following: true, pending: true });
@@ -46439,13 +46777,13 @@ var Intake = class {
     this.store.addNotification({ type: "move", actor, target });
     this.log(`${actor} moved to ${target} \u2014 follow the new account to keep seeing them`);
   }
-  async onAccept(activity, actor) {
+  async onAccept(activity, actor, { trusted = false } = {}) {
     const contacts = this.store.getContacts();
     const rec = contacts.following.find((f) => f.actor === actor);
     const named = typeof activity.object === "string" ? activity.object : activity.object?.id;
     const ours = rec?.followActivity?.id;
-    if (ours && named && named !== ours) {
-      this.log(`Accept from ${actor} answers ${named}, not the follow we sent \u2014 ignored`);
+    if (ours && named !== ours && !trusted) {
+      this.log(`Accept from ${actor} answers ${named || "nothing"}, not the follow we sent \u2014 ignored`);
       return;
     }
     if (rec && !rec.accepted) {
@@ -46669,11 +47007,17 @@ async function lookupWebFinger(acct) {
     headers: { accept: "application/jrd+json, application/json" }
   }).catch(() => null);
   if (!res || res.status >= 400) return null;
+  let jrd2;
   try {
-    return JSON.parse(await readCapped2(res, 256 * 1024));
+    jrd2 = JSON.parse(await readCapped2(res, 256 * 1024));
   } catch {
     return null;
   }
+  const subject = String(jrd2?.subject || "").replace(/^acct:/, "").toLowerCase();
+  if (subject && subject !== clean.toLowerCase()) {
+    return null;
+  }
+  return jrd2;
 }
 var selfLink = (jrd2) => jrd2?.links?.find((l) => l.rel === "self" && /application\/(activity\+json|ld\+json)/.test(l.type || ""));
 async function confirmDelegation(asked, doc, lookup = lookupWebFinger) {
@@ -47362,7 +47706,6 @@ var STUBS = new Map(Object.entries({
   "/api/v1/filters": [],
   "/api/v1/custom_emojis": [],
   "/api/v1/announcements": [],
-  "/api/v1/follow_requests": [],
   "/api/v1/instance/peers": [],
   "/api/v1/trends/tags": [],
   "/api/v1/trends/links": [],
@@ -47375,15 +47718,29 @@ var AUTHZ_MAX_ATTEMPTS = 5;
 var CODE_TTL_MS = 5 * 6e4;
 var MAX_APPS = 200;
 var CLIENT_DOC_TTL_MS = 10 * 6e4;
+var CLIENT_DOC_MAX_CACHED = 200;
+var CLIENT_DOC_WINDOW_MS = 6e4;
+var CLIENT_DOC_MAX_FETCHES = 20;
 var CLIENT_DOC_MAX = 64 * 1024;
 var MastoApi = class _MastoApi {
-  constructor({ agent: agent2, log: log2 = console.log, allowed = null, scheme = null, embedded = false, streaming = true }) {
+  constructor({
+    agent: agent2,
+    log: log2 = console.log,
+    allowed = null,
+    scheme = null,
+    embedded = false,
+    streaming = true,
+    webPush = true,
+    scheduling = true
+  }) {
     this.agent = agent2;
     this.embedded = embedded;
     this.log = log2;
     this.allowed = allowed;
     this.scheme = scheme;
     this.streaming = streaming;
+    this.webPush = webPush;
+    this.scheduling = scheduling;
     this.authzAttempts = [];
   }
   get store() {
@@ -47425,12 +47782,51 @@ var MastoApi = class _MastoApi {
     const now = Date.now();
     return this.tokenRecords().filter((r) => now - (r.createdAt || 0) < TOKEN_TTL_MS).map((r) => r.token);
   }
-  mintToken() {
+  // `scope` is what the owner actually granted at /oauth/authorize. It used to
+  // be discarded: every token was full authority, so a client that asked for
+  // `read` could post, delete, and edit the profile. Recorded now, and enforced
+  // at the one gate every client route passes (see scopeFor / authed).
+  mintToken(scope = null) {
     const t = node_crypto_default.randomBytes(24).toString("hex");
     const now = Date.now();
     const kept = this.tokenRecords().filter((r) => now - (r.createdAt || 0) < TOKEN_TTL_MS);
-    this.store.write("masto-tokens.json", [...kept, { token: t, createdAt: now }].slice(-20));
+    this.store.write(
+      "masto-tokens.json",
+      [...kept, { token: t, createdAt: now, ...scope ? { scope } : {} }].slice(-20)
+    );
     return t;
+  }
+  // What one request needs. Mastodon's four coarse scopes; a client that was
+  // granted a granular `write:statuses` satisfies `write` here, which is the
+  // direction that cannot let anything through that `write` would not.
+  //
+  // Reads are `read`, writes are `write`, and the two Mastodon carves out are
+  // kept: relationship changes accept the legacy `follow`, and push
+  // subscriptions want `push`. Nothing here grants across: `write` does NOT
+  // imply `read`, exactly as on Mastodon, so a write-only client cannot read
+  // the owner's direct messages.
+  static scopeFor(method, pathname) {
+    if (/^\/api\/v\d\/push\//u.test(pathname)) return "push";
+    const relationship = /^\/api\/v1\/(accounts\/[a-f0-9]+\/(follow|unfollow|block|unblock|mute|unmute|remove_from_followers)|follow_requests\/)/u;
+    if (method !== "GET" && method !== "HEAD") {
+      return relationship.test(pathname) ? "follow" : "write";
+    }
+    return "read";
+  }
+  // Whether a token's granted scopes satisfy `need`.
+  //
+  // A record with NO scope is a token minted before scopes were kept — it is
+  // full authority, because that is what it was granted, and quietly demoting
+  // live 90-day tokens would sign people out of working clients for a bug that
+  // was ours. New tokens all carry one.
+  static scopeAllows(granted, need) {
+    if (granted == null) return true;
+    const have = String(granted).split(/[\s,+]+/u).filter(Boolean);
+    if (!have.length) return true;
+    if (need === "follow") {
+      return have.some((g) => g === "follow" || g === "write" || g.startsWith("write:"));
+    }
+    return have.some((g) => g === need || g.startsWith(`${need}:`));
   }
   // Registered OAuth apps. A third-party (browser) client registers here, and
   // the authorization code it later receives is bound to the client_id and the
@@ -47481,26 +47877,42 @@ var MastoApi = class _MastoApi {
     this.clientDocs = this.clientDocs || /* @__PURE__ */ new Map();
     const seen = this.clientDocs.get(clientId);
     if (seen && Date.now() - seen.at < CLIENT_DOC_TTL_MS) return seen.client;
+    if (!this._clientDocFetches || Date.now() - this._clientDocWindow > CLIENT_DOC_WINDOW_MS) {
+      this._clientDocWindow = Date.now();
+      this._clientDocFetches = 0;
+    }
+    if (this._clientDocFetches >= CLIENT_DOC_MAX_FETCHES) {
+      this.log(`client document ${clientId} not fetched: too many lookups this minute`);
+      return null;
+    }
+    this._clientDocFetches += 1;
+    if (this.clientDocs.size >= CLIENT_DOC_MAX_CACHED) {
+      this.clientDocs.delete(this.clientDocs.keys().next().value);
+    }
+    const remember = (client2) => {
+      this.clientDocs.set(clientId, { at: Date.now(), client: client2 });
+      return client2;
+    };
     let doc;
     try {
       const res = await safeFetch(clientId, { headers: { accept: "application/json" } });
       if (res.status >= 400) {
         this.log(`client document ${clientId} \u2192 ${res.status}`);
-        return null;
+        return remember(null);
       }
       doc = JSON.parse(await readCapped(res, CLIENT_DOC_MAX));
     } catch (e) {
       this.log(`client document ${clientId} could not be read: ${e.message}`);
-      return null;
+      return remember(null);
     }
     if (doc?.client_id !== clientId) {
       this.log(`client document ${clientId} names ${doc?.client_id ?? "nothing"} \u2014 refused`);
-      return null;
+      return remember(null);
     }
     const redirectUris = [].concat(doc.redirect_uris || []).filter((u) => typeof u === "string");
     if (!redirectUris.length) {
       this.log(`client document ${clientId} names no redirect \u2014 refused`);
-      return null;
+      return remember(null);
     }
     const client = {
       clientId,
@@ -47508,8 +47920,7 @@ var MastoApi = class _MastoApi {
       name: String(doc.client_name || clientId).slice(0, 200),
       scopes: "read write follow"
     };
-    this.clientDocs.set(clientId, { at: Date.now(), client });
-    return client;
+    return remember(client);
   }
   /**
    * Whether a redirect the client asked for is one it published.
@@ -47589,9 +48000,17 @@ var MastoApi = class _MastoApi {
     if (rec) this.store.write("oauth-codes.json", all.filter((c) => c.code !== code));
     return rec || null;
   }
-  authed(req) {
+  // The live record for the bearer on this request, or null.
+  tokenOf(req) {
     const m = /^Bearer (.+)$/.exec(req.headers.authorization || "");
-    return !!m && this.tokens().includes(m[1]);
+    if (!m) return null;
+    const now = Date.now();
+    return this.tokenRecords().find(
+      (r) => r.token === m[1] && now - (r.createdAt || 0) < TOKEN_TTL_MS
+    ) || null;
+  }
+  authed(req) {
+    return !!this.tokenOf(req);
   }
   // A redirect_uri must name an authority this agent answers on — otherwise
   // a visited page could navigate to /oauth/authorize and have the freshly
@@ -47899,8 +48318,46 @@ var MastoApi = class _MastoApi {
         visible_in_picker: false
       })),
       card: null,
-      poll: s.poll ? this.pollJson(s) : null
+      poll: s.poll ? this.pollJson(s) : null,
+      // What a filter matched, if any. Mastodon's clients read this and do the
+      // hiding or warning; they do NOT match keywords themselves — Phanpy does
+      // not — so filters that were stored and served but never applied were a
+      // setting that did nothing. The README named them as a feature.
+      filtered: this.filtersFor(s)
     };
+  }
+  // v2 filters against one status. `context` is the timeline the client is
+  // showing, which we do not know here, so every non-expired filter is offered
+  // and the client drops the ones whose context does not match — the same
+  // information it uses to decide anyway.
+  filtersFor(s) {
+    const now = Date.now();
+    const hay = `${s.content || ""} ${s.spoiler || ""}`.replace(/<[^>]*>/gu, " ").toLowerCase();
+    if (!hay.trim()) return [];
+    const out = [];
+    for (const f of this.store.getFilters?.() || []) {
+      if (f.expiresAt && Date.parse(f.expiresAt) <= now) continue;
+      const hit = (f.keywords || []).filter((k) => {
+        const word = String(k.keyword || "").toLowerCase().trim();
+        if (!word) return false;
+        if (!k.wholeWord) return hay.includes(word);
+        const esc = word.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+        return new RegExp(`(?:^|[^\\p{L}\\p{N}_])${esc}(?:[^\\p{L}\\p{N}_]|$)`, "u").test(hay);
+      }).map((k) => k.keyword);
+      if (!hit.length) continue;
+      out.push({
+        filter: {
+          id: f.id,
+          title: f.title,
+          context: f.context || ["home"],
+          expires_at: f.expiresAt || null,
+          filter_action: f.action || "warn"
+        },
+        keyword_matches: hit,
+        status_matches: []
+      });
+    }
+    return out;
   }
   // A timeline row's id may name the CARRY rather than the post — statusOrBoost
   // mints `via:<noteId>` for the envelope. A client that asks about a row it
@@ -48009,7 +48466,7 @@ var MastoApi = class _MastoApi {
     };
   }
   mediaJson(a) {
-    const kind = /^video\//.test(a.mediaType) ? "video" : /^audio\//.test(a.mediaType) ? "audio" : /^image\/gif/.test(a.mediaType) ? "gifv" : "image";
+    const kind = /^video\//.test(a.mediaType) ? "video" : /^audio\//.test(a.mediaType) ? "audio" : "image";
     return {
       id: a.id || this.store.idFor(a.url),
       type: kind,
@@ -48041,8 +48498,15 @@ var MastoApi = class _MastoApi {
       note: ""
     };
   }
+  // Ours is stored with a hyphen; Mastodon's API spells it with an underscore,
+  // and a client that does not know the type shows "Unknown notification type"
+  // — which is what every Mastodon client did with a follow request here. The
+  // stored spelling is left alone so existing state keeps reading.
+  notificationType(t) {
+    return t === "follow-request" ? "follow_request" : t;
+  }
   notification(n) {
-    const out = { id: n.id, type: n.type, created_at: n.at, account: this.account(n.actor) };
+    const out = { id: n.id, type: this.notificationType(n.type), created_at: n.at, account: this.account(n.actor) };
     if (n.noteId) {
       const s = this.store.getStatuses().find((x) => x.noteId === n.noteId);
       if (s) out.status = this.status(s);
@@ -48106,7 +48570,7 @@ var MastoApi = class _MastoApi {
         client_id: app.clientId,
         client_secret: app.clientSecret,
         redirect_uri: redirectUris.join(" ") || "urn:ietf:wg:oauth:2.0:oob",
-        vapid_key: this.push.publicKey()
+        ...this.webPush ? { vapid_key: this.push.publicKey() } : {}
       });
     }
     if (pathname === "/oauth/authorize" && (req.method === "GET" || req.method === "POST")) {
@@ -48169,7 +48633,7 @@ var MastoApi = class _MastoApi {
         scope: client.scope,
         challenge: params.get("code_challenge") || null,
         challengeMethod: params.get("code_challenge_method") || null
-      }) : this.mintToken();
+      }) : this.mintToken(client.scope);
       if (!redirect || redirect === "urn:ietf:wg:oauth:2.0:oob") return send(200, { code });
       const target = new URL(redirect);
       target.searchParams.set("code", code);
@@ -48192,7 +48656,7 @@ var MastoApi = class _MastoApi {
           return send(400, { error: "invalid_grant" });
         }
         return send(200, {
-          access_token: this.mintToken(),
+          access_token: this.mintToken(rec.scope || "read"),
           token_type: "Bearer",
           scope: rec.scope || "read",
           created_at: Math.floor(Date.now() / 1e3),
@@ -48210,7 +48674,7 @@ var MastoApi = class _MastoApi {
           return send(400, { error: "invalid_grant" });
         }
         return send(200, {
-          access_token: this.mintToken(),
+          access_token: this.mintToken(rec.scope || "read"),
           token_type: "Bearer",
           scope: rec.scope || "read",
           created_at: Math.floor(Date.now() / 1e3),
@@ -48235,7 +48699,7 @@ var MastoApi = class _MastoApi {
           return send(400, { error: "invalid_grant" });
         }
         return send(200, {
-          access_token: this.mintToken(),
+          access_token: this.mintToken(rec.scope || "read"),
           token_type: "Bearer",
           scope: rec.scope || "read",
           created_at: Math.floor(Date.now() / 1e3),
@@ -48249,10 +48713,11 @@ var MastoApi = class _MastoApi {
         this.log("token refused: code is not a live authorization");
         return send(400, { error: "invalid_grant" });
       }
+      const granted = this.tokenRecords().find((r) => r.token === body.code)?.scope || "read write follow push";
       return send(200, {
         access_token: body.code,
         token_type: "Bearer",
-        scope: body.scope || "read write follow push",
+        scope: granted,
         created_at: Math.floor(Date.now() / 1e3),
         ...this.urls?.actor ? { activitypub_actor_id: this.urls.actor } : {}
       });
@@ -48306,7 +48771,7 @@ var MastoApi = class _MastoApi {
         configuration: {
           ...instanceConfig(),
           ...su ? { urls: { streaming: su } } : {},
-          vapid: { public_key: this.push.publicKey() }
+          ...this.webPush ? { vapid: { public_key: this.push.publicKey() } } : {}
         },
         registrations: { enabled: false, approval_required: false, message: null },
         contact: { email: "", account: null },
@@ -48315,7 +48780,13 @@ var MastoApi = class _MastoApi {
     }
     const stub = STUBS.get(pathname);
     if (stub !== void 0 && req.method === "GET") return send(200, stub);
-    if (!this.authed(req)) return send(401, { error: "The access token is invalid" });
+    const bearer = this.tokenOf(req);
+    if (!bearer) return send(401, { error: "The access token is invalid" });
+    const need = _MastoApi.scopeFor(req.method, pathname);
+    if (!_MastoApi.scopeAllows(bearer.scope, need)) {
+      this.log(`refused ${req.method} ${pathname}: token has "${bearer.scope}", needs "${need}"`);
+      return send(403, { error: `This action is outside the authorized scopes (needs ${need})` });
+    }
     if (!this.agent.configured()) return send(503, { error: "agent not configured" });
     if (this.agent.viewer && req.method !== "GET" && req.method !== "HEAD") {
       const took = await this.agent.requestTakeover?.();
@@ -48473,6 +48944,9 @@ var MastoApi = class _MastoApi {
         }
       }
       if (body.scheduled_at) {
+        if (!this.scheduling) {
+          return send(422, { error: "this instance cannot schedule posts \u2014 it has no process running between now and then to publish one. Post it when you want it sent." });
+        }
         const at = Date.parse(body.scheduled_at);
         if (!Number.isFinite(at) || at < Date.now() + 6e4) {
           return send(422, { error: "scheduled_at must be at least a minute from now" });
@@ -48822,15 +49296,62 @@ var MastoApi = class _MastoApi {
       const updated = await social_exports[mAction[2]](this.agent, s);
       return send(200, this.status(updated || s));
     }
+    if (pathname === "/api/v1/follow_requests" && req.method === "GET") {
+      const limit = Math.min(Number(url.searchParams.get("limit")) || 40, 80);
+      return send(200, this.store.getRequests().slice(0, limit).map((r) => this.account(r.actor)));
+    }
+    const mReq = /^\/api\/v1\/follow_requests\/([a-f0-9]+)\/(authorize|reject)$/.exec(pathname);
+    if (mReq && req.method === "POST") {
+      const actorUrl = this.store.urlFor(mReq[1]);
+      if (!actorUrl) return send(404, { error: "Record not found" });
+      if (!this.store.getRequests().some((r) => r.actor === actorUrl)) {
+        return send(404, { error: "Record not found" });
+      }
+      try {
+        if (mReq[2] === "authorize") await admitRequest(this.agent, actorUrl);
+        else await refuseRequest(this.agent, actorUrl);
+      } catch (e) {
+        return send(422, { error: e.message });
+      }
+      await this.store.flush();
+      return send(200, this.relationship(actorUrl));
+    }
     if (pathname === "/api/v1/notifications") {
       const limit = Math.min(Number(url.searchParams.get("limit")) || 30, 60);
+      const q = url.searchParams;
       let items = this.store.getNotifications();
-      const maxId = url.searchParams.get("max_id");
-      if (maxId) {
-        const i = items.findIndex((n) => n.id === maxId);
-        if (i >= 0) items = items.slice(i + 1);
+      const listParam = (name) => {
+        const all = [...q.getAll(`${name}[]`), ...q.getAll(name)].flatMap((v) => String(v).split(",")).map((v) => v.trim()).filter(Boolean);
+        return all.length ? new Set(all) : null;
+      };
+      const want = listParam("types");
+      const skip = listParam("exclude_types");
+      const shown = (n) => this.notificationType(n.type);
+      if (want) items = items.filter((n) => want.has(shown(n)));
+      if (skip) items = items.filter((n) => !skip.has(shown(n)));
+      const cut = (id, keepNewer) => {
+        const i = items.findIndex((n) => n.id === id);
+        if (i < 0) return;
+        items = keepNewer ? items.slice(0, i) : items.slice(i + 1);
+      };
+      const maxId = q.get("max_id");
+      if (maxId) cut(maxId, false);
+      const sinceId = q.get("since_id") || q.get("min_id");
+      if (sinceId) cut(sinceId, true);
+      const page = q.get("min_id") && !q.get("since_id") ? items.slice(Math.max(0, items.length - limit)) : items.slice(0, limit);
+      if (page.length) {
+        const base = `${this.scheme || (req.socket?.encrypted ? "https" : "http")}://${req.headers.host}${pathname}`;
+        const link = (params) => {
+          const u = new URL(base);
+          for (const [k, v] of q) if (k !== "max_id" && k !== "since_id" && k !== "min_id") u.searchParams.append(k, v);
+          for (const [k, v] of Object.entries(params)) u.searchParams.set(k, v);
+          return u.href;
+        };
+        return send(200, page.map((n) => this.notification(n)), {
+          link: `<${link({ max_id: page[page.length - 1].id })}>; rel="next", <${link({ min_id: page[0].id })}>; rel="prev"`
+        });
       }
-      return send(200, items.slice(0, limit).map((n) => this.notification(n)));
+      return send(200, []);
     }
     if (pathname === "/api/v1/markers") {
       if (req.method === "POST") {
@@ -48902,6 +49423,7 @@ var MastoApi = class _MastoApi {
     if (pathname === "/api/v1/push/subscription") {
       const token = (/^Bearer (.+)$/.exec(req.headers.authorization || "") || [])[1];
       if (!token) return send(401, { error: "The access token is invalid" });
+      if (!this.webPush) return send(422, { error: "this instance does not send web push" });
       if (req.method === "GET") {
         const sub = this.push.get(token);
         return sub ? send(200, this.push.json(token, sub)) : send(404, { error: "Record not found" });
@@ -49199,6 +49721,7 @@ function readBody(req) {
 }
 
 // lib/tagfeed.mjs
+var MAX_TIMELINE_BYTES = 2 * 1024 * 1024;
 var DEFAULTS2 = {
   instance: "https://mastodon.social",
   tags: ["solidproject", "linkeddata", "rdf"],
@@ -49272,56 +49795,61 @@ var TagFeed = class {
     const known = new Set(this.store.getStatuses().map((s) => s.noteId));
     let budget = MAX_NEW_PER_SWEEP;
     let added = 0;
-    for (const tag of tags) {
-      let list;
-      try {
-        const { safeFetch: safeFetch2, retryAfterMs: retryAfterMs2 } = await Promise.resolve().then(() => (init_safefetch(), safefetch_exports));
-        const url = `${instance}/api/v1/timelines/tag/${encodeURIComponent(tag)}?limit=${PER_TAG}`;
-        const res = this.fetcher === globalThis.fetch ? await safeFetch2(url, { headers: { accept: "application/json" } }) : await this.fetcher(url, { headers: { accept: "application/json" } });
-        if (res.status >= 400) {
-          this._backOff(res.status, retryAfterMs2(res));
+    this.store.hold?.();
+    try {
+      for (const tag of tags) {
+        let list;
+        try {
+          const { safeFetch: safeFetch2, retryAfterMs: retryAfterMs3, readCapped: readCapped2 } = await Promise.resolve().then(() => (init_safefetch(), safefetch_exports));
+          const url = `${instance}/api/v1/timelines/tag/${encodeURIComponent(tag)}?limit=${PER_TAG}`;
+          const res = this.fetcher === globalThis.fetch ? await safeFetch2(url, { headers: { accept: "application/json" } }) : await this.fetcher(url, { headers: { accept: "application/json" } });
+          if (res.status >= 400) {
+            this._backOff(res.status, retryAfterMs3(res));
+            return;
+          }
+          list = JSON.parse(await readCapped2(res, MAX_TIMELINE_BYTES));
+        } catch (e) {
+          this.log(`tagfeed #${tag}: ${e.message}`);
+          this._backOff(0, null);
           return;
         }
-        list = await res.json();
-      } catch (e) {
-        this.log(`tagfeed #${tag}: ${e.message}`);
-        this._backOff(0, null);
-        return;
-      }
-      this.failures = 0;
-      for (const st2 of Array.isArray(list) ? list : []) {
-        const noteId = st2?.uri;
-        if (!noteId || known.has(noteId) || this.store.isBlocked(noteId)) continue;
-        if (budget-- <= 0) break;
-        const note = await this.intake.fetchAP(noteId).catch(() => null);
-        if (!note || note.id !== noteId || !isContentType(note.type)) continue;
-        const author = authorOf(note);
-        if (!author || this.store.isBlocked(author)) continue;
-        if (!this.store.getActors()[author]) {
-          await this.intake.fetchAP(author).catch(() => {
+        this.failures = 0;
+        for (const st2 of Array.isArray(list) ? list : []) {
+          const noteId = st2?.uri;
+          if (!noteId || known.has(noteId) || this.store.isBlocked(noteId)) continue;
+          if (budget-- <= 0) break;
+          const note = await this.intake.fetchAP(noteId).catch(() => null);
+          if (!note || note.id !== noteId || !isContentType(note.type)) continue;
+          const author = authorOf(note);
+          if (!author || this.store.isBlocked(author)) continue;
+          if (!this.store.getActors()[author]) {
+            await this.intake.fetchAP(author).catch(() => {
+            });
+          }
+          const { attachmentsOf: attachmentsOf2, titledContent: titledContent2 } = await Promise.resolve().then(() => (init_wire(), wire_exports));
+          const attachments = attachmentsOf2(note);
+          this.store.addStatus({
+            noteId,
+            actor: author,
+            content: titledContent2(note),
+            published: note.published,
+            inReplyTo: note.inReplyTo,
+            kind: "tag",
+            tag,
+            ...attachments.length ? { attachments } : {}
           });
+          known.add(noteId);
+          added++;
         }
-        const { attachmentsOf: attachmentsOf2, titledContent: titledContent2 } = await Promise.resolve().then(() => (init_wire(), wire_exports));
-        const attachments = attachmentsOf2(note);
-        this.store.addStatus({
-          noteId,
-          actor: author,
-          content: titledContent2(note),
-          published: note.published,
-          inReplyTo: note.inReplyTo,
-          kind: "tag",
-          tag,
-          ...attachments.length ? { attachments } : {}
-        });
-        known.add(noteId);
-        added++;
       }
-    }
-    const all = this.store.getStatuses();
-    const tagged = all.filter((s) => s.kind === "tag");
-    if (tagged.length > MAX_TAG_ENTRIES) {
-      const drop = new Set(tagged.slice(MAX_TAG_ENTRIES).map((s) => s.noteId));
-      this.store.write("statuses.json", all.filter((s) => !drop.has(s.noteId)));
+      const all = this.store.getStatuses();
+      const tagged = all.filter((s) => s.kind === "tag");
+      if (tagged.length > MAX_TAG_ENTRIES) {
+        const drop = new Set(tagged.slice(MAX_TAG_ENTRIES).map((s) => s.noteId));
+        this.store.write("statuses.json", all.filter((s) => !drop.has(s.noteId)));
+      }
+    } finally {
+      this.store.release?.();
     }
     this.lastAdded = added;
     if (added) this.log(`tagfeed: +${added} from #${tags.join(" #")}`);
@@ -49379,6 +49907,15 @@ var ACP_NS = "http://www.w3.org/ns/solid/acp#";
 var RETRY_MAX = 5;
 var sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 var backoff = (n) => Math.min(5e3, 400 * 2 ** n) + Math.floor(Math.random() * 250);
+var COOLDOWN_MAX_MS = 5 * 6e4;
+var retryAfterMs2 = (res) => {
+  const raw = res?.headers?.get?.("retry-after");
+  if (!raw) return null;
+  const secs = Number(raw);
+  if (Number.isFinite(secs)) return Math.min(Math.max(secs, 1) * 1e3, COOLDOWN_MAX_MS);
+  const when = Date.parse(raw);
+  return Number.isFinite(when) ? Math.min(Math.max(when - Date.now(), 1e3), COOLDOWN_MAX_MS) : null;
+};
 var PROTECTED = [
   [/\/profile(\/|$)/, "the WebID document"],
   [/\/settings(\/|$)/, "the pod's own settings"],
@@ -49407,6 +49944,7 @@ var BrowserRemotePod = class {
     this.aclFlavour = null;
     this.toPod = null;
     this._listCache = /* @__PURE__ */ new Map();
+    this.pausedUntil = 0;
   }
   setUrlMap(fn) {
     this.toPod = typeof fn === "function" ? fn : null;
@@ -49424,10 +49962,19 @@ var BrowserRemotePod = class {
     if (this.toPod) url = this.toPod(url);
     let attempt = 0;
     for (; ; ) {
+      if (this.pausedUntil && Date.now() < this.pausedUntil) {
+        await sleep(Math.min(this.pausedUntil - Date.now(), COOLDOWN_MAX_MS));
+      }
       try {
         const res = await this.session.fetch(url, init);
         if ((res.status === 429 || res.status === 503) && attempt < RETRY_MAX) {
-          await sleep(backoff(attempt++));
+          const asked = retryAfterMs2(res);
+          if (asked) {
+            this.pausedUntil = Date.now() + asked;
+            this.log(`${url} \u2192 ${res.status}, Retry-After ${Math.round(asked / 1e3)}s \u2014 holding the pod off`);
+          }
+          await sleep(asked ?? backoff(attempt++));
+          if (asked) attempt++;
           continue;
         }
         return res;
@@ -49596,25 +50143,59 @@ ${clauses.join(";\n")}.
   }
 };
 
-// web/app/keys-browser.mjs
-var pemToDer = (pem) => Uint8Array.from(
-  atob(pem.replace(/-----[^-]+-----/g, "").replace(/\s+/g, "")),
-  (c) => c.charCodeAt(0)
-);
-async function importSigningKey(keysRecord) {
-  const rsaPrivate = await crypto.subtle.importKey(
-    "pkcs8",
-    pemToDer(keysRecord.rsa.privatePem),
-    { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
-    true,
-    ["sign"]
-  );
-  return { rsaPrivate, rsaPublicPem: keysRecord.rsa.publicPem, edPrivate: null, edPublicMultibase: null };
+// web/app/idb-kv.mjs
+var DB = "fedipod-accounts";
+function open() {
+  return new Promise((res, rej) => {
+    const r = indexedDB.open(DB, 1);
+    r.onupgradeneeded = () => {
+      const db = r.result;
+      if (!db.objectStoreNames.contains("kv")) db.createObjectStore("kv");
+    };
+    r.onsuccess = () => res(r.result);
+    r.onerror = () => rej(r.error);
+  });
 }
-async function loadKeysFromPod(remote, urls) {
-  const rec = await remote.getJson(urls.state + "keys.json");
-  if (!rec || !rec.rsa) throw new Error("no signing key on the pod \u2014 sign up did not finish");
-  return importSigningKey(rec);
+async function kvGet(key) {
+  const db = await open();
+  return new Promise((res, rej) => {
+    const rq = db.transaction("kv", "readonly").objectStore("kv").get(key);
+    rq.onsuccess = () => res(rq.result ?? null);
+    rq.onerror = () => rej(rq.error);
+  });
+}
+async function kvAll() {
+  const db = await open();
+  return new Promise((res, rej) => {
+    const out = {};
+    const cur = db.transaction("kv", "readonly").objectStore("kv").openCursor();
+    cur.onsuccess = () => {
+      const c = cur.result;
+      if (c) {
+        out[c.key] = c.value;
+        c.continue();
+      } else res(out);
+    };
+    cur.onerror = () => rej(cur.error);
+  });
+}
+async function kvPut(key, val) {
+  const db = await open();
+  return new Promise((res, rej) => {
+    const tx = db.transaction("kv", "readwrite");
+    tx.objectStore("kv").put(val, key);
+    tx.oncomplete = () => res();
+    tx.onerror = () => rej(tx.error);
+  });
+}
+async function kvDel(key) {
+  const db = await open();
+  return new Promise((res, rej) => {
+    const tx = db.transaction("kv", "readwrite");
+    tx.objectStore("kv").delete(key);
+    tx.oncomplete = () => res();
+    tx.onerror = () => rej(tx.error);
+  });
 }
 
 // web/app/keystore.mjs
@@ -49647,6 +50228,69 @@ async function generateKeys() {
   } catch {
   }
   return rec;
+}
+var PBKDF2_ITERATIONS = 31e4;
+async function deriveAesKey(password, salt, iterations) {
+  const base = await crypto.subtle.importKey("raw", new TextEncoder().encode(password), "PBKDF2", false, ["deriveKey"]);
+  return crypto.subtle.deriveKey(
+    { name: "PBKDF2", salt, iterations, hash: "SHA-256" },
+    base,
+    { name: "AES-GCM", length: 256 },
+    false,
+    ["encrypt", "decrypt"]
+  );
+}
+var toB64 = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf)));
+function isKeyEnvelope(doc) {
+  return !!doc && doc.v === 1 && typeof doc.ct === "string" && typeof doc.salt === "string";
+}
+var KeyPasswordNeeded = class extends Error {
+  constructor() {
+    super("this browser needs your account password to unlock the signing key");
+  }
+  code = "key-password-needed";
+};
+async function wrapKeys(keysRecord, password) {
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const aes = await deriveAesKey(password, salt, PBKDF2_ITERATIONS);
+  const plaintext = new TextEncoder().encode(JSON.stringify(keysRecord));
+  const ct = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, aes, plaintext);
+  return {
+    v: 1,
+    kdf: "PBKDF2-SHA256",
+    iterations: PBKDF2_ITERATIONS,
+    salt: toB64(salt),
+    iv: toB64(iv),
+    ct: toB64(ct)
+  };
+}
+
+// web/app/keys-browser.mjs
+var pemToDer = (pem) => Uint8Array.from(
+  atob(pem.replace(/-----[^-]+-----/g, "").replace(/\s+/g, "")),
+  (c) => c.charCodeAt(0)
+);
+async function importSigningKey(keysRecord) {
+  const rsaPrivate = await crypto.subtle.importKey(
+    "pkcs8",
+    pemToDer(keysRecord.rsa.privatePem),
+    { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+    true,
+    ["sign"]
+  );
+  return { rsaPrivate, rsaPublicPem: keysRecord.rsa.publicPem, edPrivate: null, edPublicMultibase: null };
+}
+var keyCacheKey = (actorUrl) => `signing-keys:${actorUrl}`;
+async function loadKeysFromPod(remote, urls) {
+  const cached = await kvGet(keyCacheKey(urls.actor)).catch(() => null);
+  if (cached?.rsa) return importSigningKey(cached);
+  const doc = await remote.getJson(urls.state + "keys.json");
+  if (isKeyEnvelope(doc)) throw new KeyPasswordNeeded();
+  if (!doc || !doc.rsa) throw new Error("no signing key on the pod \u2014 sign up did not finish");
+  await kvPut(keyCacheKey(urls.actor), doc).catch(() => {
+  });
+  return importSigningKey(doc);
 }
 
 // lib/deliver.mjs
@@ -49790,6 +50434,10 @@ var Deliverer = class {
       if (res.status >= 300 && res.status < 400 && res.headers.get("location")) {
         current = new URL(res.headers.get("location"), current).href;
         continue;
+      }
+      try {
+        Object.defineProperty(res, "finalUrl", { value: current, configurable: true });
+      } catch {
       }
       return res;
     }
@@ -50014,6 +50662,11 @@ var RelayDeliverer = class extends Deliverer {
     if (status >= 400) {
       const err = new Error(`${init.method || "POST"} ${url} \u2192 ${status}`);
       err.status = status;
+      if (r0.retryAfter) {
+        const secs = Number(r0.retryAfter);
+        const ms = Number.isFinite(secs) ? Math.max(secs, 1) * 1e3 : Math.max(Date.parse(r0.retryAfter) - Date.now(), 1e3);
+        if (Number.isFinite(ms)) err.retryAfterMs = Math.min(ms, 24 * 60 * 6e4);
+      }
       throw err;
     }
     const headers = new Headers();
@@ -50024,6 +50677,374 @@ var RelayDeliverer = class extends Deliverer {
 
 // web/app/admin-facade.mjs
 init_wire();
+
+// lib/import.mjs
+init_node_crypto();
+var IMPORT_STATE_DOC = "import-state.json";
+var IMPORT_KINDS = ["follow", "block", "mute", "list", "domain"];
+var TICK_MS2 = 400;
+var FOLLOW_GAP_MS = 1e3;
+var PUBLISH_EVERY = 25;
+var MAX_ROWS = 25e3;
+function parseCsv(text) {
+  const rows = [];
+  let row = [], field = "", q = false;
+  const endField = () => {
+    row.push(field);
+    field = "";
+  };
+  const endRow = () => {
+    endField();
+    if (row.some((f) => f !== "")) rows.push(row);
+    row = [];
+  };
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (q) {
+      if (c === '"') {
+        if (text[i + 1] === '"') {
+          field += '"';
+          i++;
+        } else q = false;
+      } else field += c;
+    } else if (c === '"') q = true;
+    else if (c === ",") endField();
+    else if (c === "\n" || c === "\r") {
+      if (c === "\r" && text[i + 1] === "\n") i++;
+      endRow();
+    } else field += c;
+  }
+  endRow();
+  return rows;
+}
+var HANDLE = /^[^@\s]+@[^@\s]+$/;
+var DOMAIN = /^[a-z0-9-]+(\.[a-z0-9-]+)+$/i;
+var cleanHandle = (s) => String(s || "").trim().replace(/^@/, "");
+function normalizeImport(kind, text) {
+  if (!IMPORT_KINDS.includes(kind)) throw new Error(`unknown import kind: ${kind}`);
+  const rows = parseCsv(String(text || ""));
+  const values = [];
+  const invalid = [];
+  for (const cols of rows) {
+    const first = String(cols[0] || "").trim();
+    if (!first) continue;
+    if (kind !== "list" && /^#/.test(first)) continue;
+    if (kind !== "list" && kind !== "domain" && /account address/i.test(first)) continue;
+    if (kind === "domain") {
+      const d = first.toLowerCase();
+      if (DOMAIN.test(d)) values.push(d);
+      else invalid.push(first);
+    } else if (kind === "list") {
+      const handle = cleanHandle(cols[1]);
+      if (first && HANDLE.test(handle)) values.push({ value: handle, list: first });
+      else invalid.push(cols.join(","));
+    } else {
+      const handle = cleanHandle(first);
+      if (HANDLE.test(handle)) values.push(handle);
+      else invalid.push(first);
+    }
+  }
+  return { values, invalid };
+}
+var ImportWorker = class {
+  constructor({ agent: agent2, log: log2 }) {
+    this.agent = agent2;
+    this.log = log2 || (() => {
+    });
+    this.timer = null;
+    this.busy = false;
+    this.lastFollowAt = 0;
+  }
+  state() {
+    return this.agent.store.read(IMPORT_STATE_DOC, null);
+  }
+  // Add parsed rows to the run. Rows already staged, already applied, or
+  // already following are counted out rather than re-queued, so re-running
+  // the same file is a no-op. The cap keeps the per-row rewrite bounded.
+  stage(kind, values) {
+    const agent2 = this.agent;
+    const st2 = this.state() || { startedAt: (/* @__PURE__ */ new Date()).toISOString(), rows: [] };
+    delete st2.completedAt;
+    const key = (r) => [r.kind, r.list || "", r.value].join(" ");
+    const have = new Set(st2.rows.map(key));
+    const following = new Set(agent2.store.getContacts().following.map((f) => f.handle).filter(Boolean));
+    const domains = new Set(agent2.store.getBlocklist().domains);
+    let staged = 0, duplicate = 0, already = 0, refused = 0;
+    for (const v of values) {
+      const row = typeof v === "string" ? { kind, value: v } : { kind, ...v };
+      row.status = "pending";
+      if (have.has(key(row))) {
+        duplicate++;
+        continue;
+      }
+      if (kind === "follow" && following.has(row.value)) {
+        already++;
+        continue;
+      }
+      if (kind === "domain" && domains.has(row.value)) {
+        already++;
+        continue;
+      }
+      if (st2.rows.length >= MAX_ROWS) {
+        refused++;
+        continue;
+      }
+      have.add(key(row));
+      st2.rows.push(row);
+      staged++;
+    }
+    agent2.store.write(IMPORT_STATE_DOC, st2);
+    if (staged) this.start();
+    return { staged, duplicate, already, refused, total: st2.rows.length };
+  }
+  progress() {
+    const st2 = this.state();
+    const prior = st2?.doneCount || 0;
+    if (!st2?.rows?.length && !prior) return { rows: 0, pending: 0, done: 0, failed: 0, running: !!this.timer };
+    const byKind = {};
+    let pending = 0, done = prior, failed = 0;
+    for (const r of st2.rows) {
+      const k = byKind[r.kind] ||= { pending: 0, done: 0, failed: 0 };
+      k[r.status]++;
+      if (r.status === "pending") pending++;
+      else if (r.status === "done") done++;
+      else failed++;
+    }
+    return {
+      rows: st2.rows.length + prior,
+      pending,
+      done,
+      failed,
+      byKind,
+      running: !!this.timer,
+      startedAt: st2.startedAt,
+      completedAt: st2.completedAt || null,
+      failures: st2.rows.filter((r) => r.status === "failed").slice(0, 100).map((r) => ({ kind: r.kind, value: r.value, ...r.list ? { list: r.list } : {}, reason: r.reason }))
+    };
+  }
+  clear() {
+    this.stop();
+    this.agent.store.write(IMPORT_STATE_DOC, { rows: [] });
+  }
+  // Called from startActive and after a takeover: pick a stranded run back
+  // up. Any unclosed run arms the timer — rows still pending, or a final
+  // publish that never landed.
+  resume() {
+    const st2 = this.state();
+    if (!st2?.rows?.length || st2.completedAt) return;
+    this.start();
+  }
+  start() {
+    if (this.timer) return;
+    this.timer = setInterval(() => this.tick().catch((e) => this.log(`import tick: ${e.message}`)), TICK_MS2);
+    this.timer.unref?.();
+  }
+  stop() {
+    clearInterval(this.timer);
+    this.timer = null;
+  }
+  async tick() {
+    if (this.busy) return;
+    this.busy = true;
+    try {
+      const agent2 = this.agent;
+      const st2 = this.state();
+      if (!st2?.rows) {
+        this.stop();
+        return;
+      }
+      const cfg = agent2.store.getConfig?.() || {};
+      if (cfg?.quiescedAt || cfg?.movedTo) {
+        this.stop();
+        return;
+      }
+      const next = st2.rows.find((r) => r.status === "pending");
+      if (!next) {
+        if (!st2.completedAt) await this.finish();
+        else this.stop();
+        return;
+      }
+      if (agent2.viewer) return;
+      if (agent2.lease && !agent2.lease.stillHeld()) return;
+      if (agent2.remote?.pausedUntil > Date.now()) return;
+      if (next.kind === "follow" && Date.now() - this.lastFollowAt < FOLLOW_GAP_MS) return;
+      if (next.kind === "domain") {
+        const b = agent2.store.getBlocklist();
+        const fresh = this.state();
+        if (!fresh?.rows) return;
+        for (const r of fresh.rows) {
+          if (r.status !== "pending" || r.kind !== "domain") continue;
+          if (!b.domains.includes(r.value)) b.domains.push(r.value);
+          r.status = "done";
+        }
+        agent2.store.setBlocklist(b);
+        agent2.store.write(IMPORT_STATE_DOC, fresh);
+        return;
+      }
+      const outcome = await this.applyRow(next);
+      if (outcome) this.commitRow(next, outcome);
+      if (outcome?.followed && (this.state()?.followsSincePublish || 0) >= PUBLISH_EVERY) {
+        await agent2.publisher.publishCollections({ following: true, pending: true });
+        const after = this.state();
+        if (after) {
+          after.followsSincePublish = 0;
+          agent2.store.write(IMPORT_STATE_DOC, after);
+        }
+      }
+    } finally {
+      this.busy = false;
+    }
+  }
+  // Record one travelled row's verdict. Fresh read; the row is matched by
+  // content — if clear() dropped it or a duplicate check superseded it while
+  // it was in flight, there is nothing to record and nothing is written.
+  commitRow(row, outcome) {
+    const st2 = this.state();
+    const match = st2?.rows?.find((r) => r.status === "pending" && r.kind === row.kind && r.value === row.value && (r.list || "") === (row.list || ""));
+    if (!match) return;
+    match.status = outcome.status;
+    if (outcome.reason) match.reason = outcome.reason;
+    if (outcome.followed) st2.followsSincePublish = (st2.followsSincePublish || 0) + 1;
+    if (outcome.blocked) st2.blocksApplied = true;
+    this.agent.store.write(IMPORT_STATE_DOC, st2);
+  }
+  // handle → { id, inbox } — the lean resolve: WebFinger, one actor fetch,
+  // the delegation round-trip, and nothing else. A handle we already follow
+  // answers from contacts without touching the network, and the blocklist is
+  // honored the same way the interactive resolve honors it.
+  async resolve(clean, { forBlock = false } = {}) {
+    const agent2 = this.agent;
+    const host = clean.slice(clean.lastIndexOf("@") + 1);
+    if (agent2.store.isBlocked(`https://${host}/`)) throw new Error("domain is blocked");
+    const known = agent2.store.getContacts().following.find((f) => f.handle === clean && f.actor);
+    if (known) return { id: known.actor, inbox: known.inbox };
+    const jrd2 = await lookupWebFinger("acct:" + clean);
+    const href = selfLink(jrd2)?.href;
+    if (!href) throw new Error("webfinger found no actor");
+    const doc = await agent2.intake.fetchAP(href);
+    if (!doc?.id) throw new Error("actor document unusable");
+    if (!forBlock && agent2.store.isBlocked(doc.id)) throw new Error("actor is blocked");
+    await confirmDelegation(clean.slice(clean.lastIndexOf("@") + 1), doc);
+    return doc;
+  }
+  // One row's whole journey, returned as a verdict — never written here.
+  // null means "no verdict": the pod's backoff interrupted it, and the row
+  // stays pending for after the pause.
+  async applyRow(row) {
+    const agent2 = this.agent;
+    const done = (extra = {}) => ({ status: "done", ...extra });
+    try {
+      if (row.kind === "follow") {
+        this.lastFollowAt = Date.now();
+        if (agent2.store.getContacts().following.some((f) => f.handle === row.value)) {
+          return done({ reason: "already following" });
+        }
+        const doc = await this.resolve(row.value);
+        if (agent2.store.getContacts().following.some((f) => f.actor === doc.id)) {
+          return done({ reason: "already following" });
+        }
+        await followActor(agent2, doc.id, { publish: false, doc });
+        const contacts = agent2.store.getContacts();
+        const rec = contacts.following.find((f) => f.actor === doc.id);
+        if (rec && !rec.handle) {
+          rec.handle = row.value;
+          agent2.store.setContacts(contacts);
+        }
+        return done({ followed: true });
+      }
+      if (row.kind === "block") {
+        const host = row.value.slice(row.value.lastIndexOf("@") + 1);
+        const b = agent2.store.getBlocklist();
+        if (b.domains.some((d) => host === d || host.endsWith("." + d))) {
+          return done({ reason: "domain already blocked" });
+        }
+        const doc = await this.resolve(row.value, { forBlock: true });
+        const b2 = agent2.store.getBlocklist();
+        if (b2.actors.includes(doc.id)) return done({ reason: "already blocked" });
+        b2.actors.push(doc.id);
+        agent2.store.setBlocklist(b2);
+        if (agent2.store.getContacts().following.some((f) => f.actor === doc.id)) {
+          await unfollowActor(agent2, doc.id).catch(() => {
+          });
+        }
+        return done({ blocked: true });
+      }
+      if (row.kind === "mute") {
+        const doc = await this.resolve(row.value);
+        const m = agent2.store.getMuted();
+        if (m.actors.includes(doc.id)) return done({ reason: "already muted" });
+        m.actors.push(doc.id);
+        agent2.store.setMuted(m);
+        return done();
+      }
+      if (row.kind === "list") {
+        const doc = await this.resolve(row.value);
+        const lists = agent2.store.getLists();
+        let l = lists.find((x) => x.title === row.list);
+        if (!l) {
+          l = { id: node_crypto_default.randomBytes(8).toString("hex"), title: row.list, repliesPolicy: "list", members: [] };
+          lists.push(l);
+        }
+        if ((l.members || []).includes(doc.id)) return done({ reason: "already on the list" });
+        l.members = [...l.members || [], doc.id];
+        agent2.store.setLists(lists);
+        return done();
+      }
+      return { status: "failed", reason: `unknown kind ${row.kind}` };
+    } catch (e) {
+      if (agent2.remote?.pausedUntil > Date.now()) return null;
+      return { status: "failed", reason: e.message };
+    }
+  }
+  // Everything applied: the batched republishes, once, then the record closes
+  // — done rows pruned to a count so a long run's record stays small, failed
+  // rows kept until --clear so they can be read. A publish the pod refuses
+  // leaves the run open; a restart or the next batch retries it. A batch that
+  // landed while the publishes were in flight keeps the run open too.
+  async finish() {
+    const agent2 = this.agent;
+    let st2 = this.state();
+    if (!st2?.rows) {
+      this.stop();
+      return;
+    }
+    if (st2.rows.some((r) => r.status === "pending")) return;
+    try {
+      if (st2.followsSincePublish) {
+        await agent2.publisher.publishCollections({ following: true, pending: true });
+        const s = this.state();
+        if (s) {
+          s.followsSincePublish = 0;
+          agent2.store.write(IMPORT_STATE_DOC, s);
+        }
+      }
+      if (this.state()?.blocksApplied) {
+        await agent2.publisher.publishCollections({ blocked: true });
+        const s = this.state();
+        if (s) {
+          s.blocksApplied = false;
+          agent2.store.write(IMPORT_STATE_DOC, s);
+        }
+      }
+    } catch (e) {
+      this.log(`import: final publish failed: ${e.message} \u2014 retried on restart or the next batch`);
+      this.stop();
+      return;
+    }
+    st2 = this.state();
+    if (!st2?.rows || st2.rows.some((r) => r.status === "pending")) return;
+    const doneNow = st2.rows.filter((r) => r.status === "done").length;
+    const failed = st2.rows.filter((r) => r.status === "failed").length;
+    st2.doneCount = (st2.doneCount || 0) + doneNow;
+    st2.rows = st2.rows.filter((r) => r.status !== "done");
+    st2.completedAt = (/* @__PURE__ */ new Date()).toISOString();
+    agent2.store.write(IMPORT_STATE_DOC, st2);
+    this.log(`import finished: ${st2.doneCount} applied, ${failed} failed`);
+    this.stop();
+  }
+};
+
+// web/app/admin-facade.mjs
 var PERMANENT_CONFIG = ["handle", "remotePod", "issuer", "root", "kind"];
 var WIRE_CONFIG = ["name", "summary", "icon", "image", "fields", "aliases"];
 var ADMIN_PATHS = /* @__PURE__ */ new Set([
@@ -50047,6 +51068,8 @@ var ADMIN_PATHS = /* @__PURE__ */ new Set([
   "/move",
   "/retire",
   "/inbox/prune",
+  "/park",
+  "/revive",
   "/fediacct/connect",
   "/fediacct/disconnect",
   "/fediacct/callback"
@@ -50185,7 +51208,7 @@ var AdminFacade = class {
         case "/fediacct":
           return json2(200, { accounts: a.fediaccts?.status() || [] });
         case "/import":
-          return json2(200, { running: false, total: 0, done: 0 });
+          return json2(200, a.importer ? a.importer.progress() : { running: false, total: 0, done: 0 });
         // The OAuth redirect returns here as a top-level navigation, so this one
         // answers with an HTML page, not JSON. It completes the connection, then
         // shows the result with a way back to the record page.
@@ -50272,10 +51295,24 @@ var AdminFacade = class {
         await a.publisher.publishProfile();
         return json2(200, { ok: true, summary: cfg.summary || null, icon: cfg.icon || null });
       }
+      // Going quiet, and coming back. The record page's active/parked select.
+      case "/park": {
+        if (!await a.requestTakeover?.()) return json2(503, { error: "another device is active for this pod \u2014 park from there" });
+        return json2(200, { ok: true, ...await a.park() });
+      }
+      case "/revive": {
+        if (!await a.requestTakeover?.()) return json2(503, { error: "another device is active for this pod \u2014 revive from there" });
+        return json2(200, { ok: true, ...await a.revive() });
+      }
       case "/rotate-key": {
         await a.requestTakeover?.();
-        const r = await a.rotateKey();
-        return json2(200, { ok: true, changed: !!r?.changed });
+        try {
+          const r = await a.rotateKey({ password: body.password });
+          return json2(200, { ok: true, changed: !!r?.changed });
+        } catch (e) {
+          if (e.code !== "key-password-needed") throw e;
+          return json2(428, { error: e.message, needsPassword: true });
+        }
       }
       // Recover posts this browser lost, from what the pod still holds.
       case "/rebuild": {
@@ -50538,11 +51575,36 @@ var AdminFacade = class {
         a.restartAccts?.();
         return json2(200, { ok: true, account: row });
       }
-      // Not yet in the browser: the CSV follow-import worker is an agent
-      // capability the browser build does not carry. A clear message, not a
-      // dead control.
-      case "/import":
-        return json2(501, { error: "not available in the browser yet" });
+      // CSV import — follows, blocks, mutes, lists and domains, staged onto the
+      // pod and applied by a worker over the following minutes. The same
+      // ImportWorker the Node agent runs (lib/import.mjs); it needs only the
+      // store and social.mjs, both of which are in this bundle.
+      case "/import": {
+        if (!a.importer) return json2(409, { error: "agent not connected yet" });
+        if (!await a.requestTakeover?.()) {
+          return json2(503, { error: "another device is active for this pod \u2014 import from there" });
+        }
+        if (body.clear === true) {
+          a.importer.clear();
+          return json2(200, { ok: true, cleared: true });
+        }
+        if (!IMPORT_KINDS.includes(body.kind)) {
+          return json2(400, { error: `kind must be one of: ${IMPORT_KINDS.join(", ")}` });
+        }
+        if (typeof body.text !== "string" || !body.text.trim()) {
+          return json2(400, { error: "text required \u2014 the CSV file contents" });
+        }
+        const { values, invalid } = normalizeImport(body.kind, body.text);
+        const r = a.importer.stage(body.kind, values);
+        await a.store.flush();
+        return json2(200, {
+          ok: true,
+          kind: body.kind,
+          ...r,
+          invalid: invalid.length,
+          ...invalid.length ? { invalidSample: invalid.slice(0, 5) } : {}
+        });
+      }
       default:
         return json2(404, { error: "not available on a personal browser identity" });
     }
@@ -50873,61 +51935,6 @@ var Atproto = class {
     }
   }
 };
-
-// web/app/idb-kv.mjs
-var DB = "fedipod-accounts";
-function open() {
-  return new Promise((res, rej) => {
-    const r = indexedDB.open(DB, 1);
-    r.onupgradeneeded = () => {
-      const db = r.result;
-      if (!db.objectStoreNames.contains("kv")) db.createObjectStore("kv");
-    };
-    r.onsuccess = () => res(r.result);
-    r.onerror = () => rej(r.error);
-  });
-}
-async function kvGet(key) {
-  const db = await open();
-  return new Promise((res, rej) => {
-    const rq = db.transaction("kv", "readonly").objectStore("kv").get(key);
-    rq.onsuccess = () => res(rq.result ?? null);
-    rq.onerror = () => rej(rq.error);
-  });
-}
-async function kvAll() {
-  const db = await open();
-  return new Promise((res, rej) => {
-    const out = {};
-    const cur = db.transaction("kv", "readonly").objectStore("kv").openCursor();
-    cur.onsuccess = () => {
-      const c = cur.result;
-      if (c) {
-        out[c.key] = c.value;
-        c.continue();
-      } else res(out);
-    };
-    cur.onerror = () => rej(cur.error);
-  });
-}
-async function kvPut(key, val) {
-  const db = await open();
-  return new Promise((res, rej) => {
-    const tx = db.transaction("kv", "readwrite");
-    tx.objectStore("kv").put(val, key);
-    tx.oncomplete = () => res();
-    tx.onerror = () => rej(tx.error);
-  });
-}
-async function kvDel(key) {
-  const db = await open();
-  return new Promise((res, rej) => {
-    const tx = db.transaction("kv", "readwrite");
-    tx.objectStore("kv").delete(key);
-    tx.oncomplete = () => res();
-    tx.onerror = () => rej(tx.error);
-  });
-}
 
 // web/app/atproto-browser.mjs
 var IDB_KEY = "atproto";
@@ -51679,7 +52686,23 @@ var AcctFeed = class {
 };
 
 // web/app/agent.mjs
-var BrowserAgent = class {
+var originAuthorities = (host) => ({
+  set: /* @__PURE__ */ new Set([String(host || "").toLowerCase()]),
+  has(authority) {
+    return this.set.has(String(authority || "").toLowerCase());
+  },
+  isLocalRequest(req) {
+    return req?.sameOrigin === true;
+  },
+  isLocal(h) {
+    return this.has(h);
+  },
+  wsAuthorities() {
+    return [];
+  }
+  // fetch-only: this build serves no socket
+});
+var BrowserAgent = class _BrowserAgent {
   constructor({ log: log2 = console.log } = {}) {
     this.log = log2;
     this.viewer = false;
@@ -51709,12 +52732,15 @@ var BrowserAgent = class {
     this.lease.onLost = () => this.demote();
     this.lease.startRenewal();
     try {
+      await this.store.load({ force: true }).catch((e) => this.log(`re-reading state: ${e.message}`));
+      this.deliverer?.startQueue?.();
       await this.publisher.publishProfile();
       await this.store.flush?.();
       await this.intake.start();
       this.startBsky();
       this.startAccts();
       this.tagfeed?.start();
+      this.importer?.start();
     } catch (e) {
       this.log(`going active: ${e.message}`);
     }
@@ -51727,6 +52753,8 @@ var BrowserAgent = class {
     this.log("another device took over \u2014 read-only here");
     this.lease.stopRenewal();
     this.intake?.stop?.();
+    this.deliverer?.stop?.();
+    this.importer?.stop?.();
     this.stopBsky();
     this.stopAccts();
     this.tagfeed?.stop?.();
@@ -51734,8 +52762,13 @@ var BrowserAgent = class {
   }
   // A viewer refreshes the feed from the pod (the active device updates it), and
   // promotes the moment the lease is free.
+  // Five minutes with jitter, matching the Node agent (run-agent.mjs). Two
+  // minutes flat was ~60 pod requests an hour from a device that is not acting,
+  // and unjittered meant several idle devices on one pod knocking in lockstep.
+  static VIEWER_POLL_MS = 5 * 6e4;
   startViewerPoll() {
     clearTimeout(this._viewerTimer);
+    const every = () => _BrowserAgent.VIEWER_POLL_MS * (0.85 + Math.random() * 0.3);
     const tick = () => {
       this._viewerTimer = setTimeout(async () => {
         try {
@@ -51751,7 +52784,7 @@ var BrowserAgent = class {
           this.log(`viewer poll: ${e.message}`);
         }
         if (this.viewer) tick();
-      }, 12e4);
+      }, every());
     };
     tick();
   }
@@ -51798,6 +52831,7 @@ var BrowserAgent = class {
     config = this.store.getConfig();
     this.local = new PodRdf({ storage: new HttpStorage(this.urls.fediverse, session.fetch) });
     this.deliverer = new RelayDeliverer({
+      passive: true,
       store: this.store,
       rsaPrivate: keys.rsaPrivate,
       keyId: this.urls.actor + "#main-key",
@@ -51833,8 +52867,17 @@ var BrowserAgent = class {
       push: true,
       lease: this.lease
     });
-    this.masto = new MastoApi({ agent: this, log: this.log, allowed: null, scheme: "https", streaming: false });
+    this.masto = new MastoApi({
+      agent: this,
+      log: this.log,
+      scheme: "https",
+      streaming: false,
+      webPush: false,
+      scheduling: false,
+      allowed: originAuthorities(self.location.host)
+    });
     this.admin = new AdminFacade({ agent: this, log: this.log });
+    this.importer = new ImportWorker({ agent: this, log: this.log });
     const relayGet = (u, i = {}) => this.deliverer.signedFetch(u, { ...i, method: "GET" });
     this.tagfeed = new TagFeed({ store: this.store, intake: this.intake, log: this.log, fetcher: relayGet });
     this.provisioning = (async () => {
@@ -51890,14 +52933,33 @@ var BrowserAgent = class {
     };
   }
   // Rotate the signing key (POST /rotate-key). Mint a fresh keypair, replace the
-  // owner-only keys.json on the pod, swap it into the live publisher/deliverer,
-  // and republish the actor so the new public key is on the wire. The old key
-  // stops signing the moment this returns — same one-way change as the Node
-  // agent's rotateKey (run-agent.mjs).
-  async rotateKey() {
+  // pod's copy, swap it into the live publisher/deliverer, and republish the
+  // actor so the new public key is on the wire. The old key stops signing the
+  // moment this returns — same one-way change as the Node agent's rotateKey
+  // (run-agent.mjs).
+  //
+  // The pod's copy is wrapped, so this needs the account password. There is
+  // nowhere to get it from without asking: the worker boots from a stored
+  // session and holds no password, and caching one to save a prompt on a
+  // once-in-a-while action would put the account password in storage to avoid
+  // typing it. So the caller supplies it, and rotating without one is refused
+  // rather than quietly writing a bare key back where a wrapped one was.
+  async rotateKey({ password } = {}) {
+    if (!password) {
+      const e = new Error("rotating the signing key needs your account password \u2014 it is what the new key is locked under on the pod");
+      e.code = "key-password-needed";
+      throw e;
+    }
     const before = this.publisher.publicKeyPem;
     const rec = await generateKeys();
-    await this.remote.putJson(this.urls.state + "keys.json", rec, "application/json");
+    rec.mintedFor = this.urls.actor;
+    await this.remote.putJson(
+      this.urls.state + "keys.json",
+      await wrapKeys(rec, password),
+      "application/json"
+    );
+    await kvPut(keyCacheKey(this.urls.actor), rec).catch(() => {
+    });
     const keys = await importSigningKey(rec);
     this.publisher.publicKeyPem = keys.rsaPublicPem;
     this.deliverer.rsaPrivate = keys.rsaPrivate;
@@ -51943,13 +53005,36 @@ var BrowserAgent = class {
     this.acctfeed = null;
     this.startAccts();
   }
-  // Hand the identity to another account (POST /move). The federated act is the
-  // Move to every follower's server; then this account quiesces — unfollows
-  // everyone and closes its inbox — since it is being left behind. Same as the
-  // Node agent's moveTo + quiesce (run-agent.mjs). `target` is an actor URL,
-  // already resolved by the caller.
-  async moveTo(target) {
-    const moved = await this.publisher.publishMove(target);
+  // The follow graph, written down before it is torn down.
+  //
+  // Both parking and moving away unfollow everyone, and the record page offers
+  // "active" again after either — so both have to leave something to come back
+  // from. moveTo used to report `snapshot: following.length` without writing
+  // one, so a browser account set back to active re-followed nobody and said so
+  // only in a count of zero. Same file, same name, same shape as the Node
+  // agent's `_snapshotFollowing` (run-agent.mjs).
+  async _snapshotFollowing() {
+    const following = this.store.getContacts().following;
+    this.store.write("parked.json", {
+      parkedAt: (/* @__PURE__ */ new Date()).toISOString(),
+      following: following.map((f) => ({ actor: f.actor, handle: f.handle || null }))
+    });
+    await this.store.flush();
+    return following;
+  }
+  // Keep the handle, take no more mail.
+  //
+  // Unfollowing is what actually stops the volume — every account you follow
+  // pushes its posts into your inbox — and closing the inbox handles what no
+  // follow graph can gate: stranger mentions, new follow requests, spam.
+  //
+  // This matters more here than it does on Node. A Node agent runs as a service
+  // and keeps draining; close the tab on a browser agent and nothing drains,
+  // while the gateway goes on delivering into the pod inbox regardless (it
+  // writes straight to the pod — see lib/gateway-core.mjs). An unattended
+  // browser account is a pod quietly filling up with nobody collecting, and
+  // this is the only control that stops it at the source.
+  async quiesce() {
     const following = this.store.getContacts().following.map((f) => f.actor).filter(Boolean);
     let unfollowed = 0;
     for (const actor of following) {
@@ -51961,8 +53046,51 @@ var BrowserAgent = class {
       }
     }
     const quiescedAt = await this.publisher.closeInbox();
-    this.log(`moved to ${target}: unfollowed ${unfollowed}/${following.length}, inbox closed`);
-    return { ...moved, unfollowed, following: following.length, quiescedAt, snapshot: following.length };
+    this.log(`quiesced: unfollowed ${unfollowed}/${following.length}, inbox closed`);
+    return { unfollowed, following: following.length, quiescedAt };
+  }
+  // Park (POST /park). The snapshot is taken FIRST: unfollowing is what stops
+  // the traffic, but it also destroys the only record of who was being
+  // followed, and "until I want this back" needs that record.
+  async park() {
+    const following = await this._snapshotFollowing();
+    const r = await this.quiesce();
+    this.log(`parked: ${r.unfollowed} unfollow(s) recorded for revival, inbox closed`);
+    return { ...r, snapshot: following.length };
+  }
+  // Undo a park (POST /revive). Re-open the inbox, then re-follow everyone in
+  // the snapshot. Each Follow needs the far end to Accept, so this is a request
+  // rather than a restoration — some will not come back, which is the nature of
+  // the thing, and why the result counts both numbers.
+  async revive() {
+    const parked = this.store.read("parked.json", null);
+    await this.publisher.openInbox();
+    let refollowed = 0;
+    for (const f of parked?.following || []) {
+      try {
+        await followActor(this, f.actor);
+        refollowed++;
+      } catch (e) {
+        this.log(`re-follow ${f.actor} failed: ${e.message}`);
+      }
+    }
+    if (parked) this.store.remove("parked.json").catch(() => {
+    });
+    await this.store.flush();
+    this.log(`revived: inbox open, ${refollowed}/${parked?.following?.length || 0} follow(s) re-sent`);
+    return { refollowed, of: parked?.following?.length || 0, parkedAt: parked?.parkedAt || null };
+  }
+  // Hand the identity to another account (POST /move). The federated act is the
+  // Move to every follower's server; then this account quiesces — unfollows
+  // everyone and closes its inbox — since it is being left behind. Same as the
+  // Node agent's moveTo + quiesce (run-agent.mjs). `target` is an actor URL,
+  // already resolved by the caller.
+  async moveTo(target) {
+    const moved = await this.publisher.publishMove(target);
+    const following = await this._snapshotFollowing();
+    const r = await this.quiesce();
+    this.log(`moved to ${target}: unfollowed ${r.unfollowed}/${r.following}, inbox closed`);
+    return { ...moved, ...r, snapshot: following.length };
   }
 };
 
@@ -52020,6 +53148,21 @@ async function getSession() {
   return s ? sessionHandle(s) : null;
 }
 async function signOut() {
+  const s = await idbGet("session").catch(() => null);
+  if (s?.revocationEndpoint && s.refreshToken) {
+    try {
+      await fetch(s.revocationEndpoint, {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          token: s.refreshToken,
+          token_type_hint: "refresh_token",
+          client_id: s.client_id
+        })
+      });
+    } catch {
+    }
+  }
   await idbDel("session");
   await idbDel("pending");
 }
@@ -52042,6 +53185,10 @@ function sessionHandle(s) {
     accessToken = tok.access_token;
     expiresAt = Date.now() + Math.max(30, tok.expires_in || 300) * 1e3;
     if (tok.refresh_token) refreshToken = tok.refresh_token;
+    const now = await idbGet("session");
+    if (now && now.webId !== s.webId) {
+      throw new Error("signed in as somebody else while this session was refreshing");
+    }
     await idbPut("session", { ...s, accessToken, expiresAt, refreshToken });
   };
   const authFetch = async (url, init = {}) => {
@@ -52061,6 +53208,35 @@ var FACADE = /^\/(api\/v[12]\/|oauth\/|nodeinfo\/)/;
 var FACADE_EXACT = /* @__PURE__ */ new Set(["/.well-known/nodeinfo", "/.well-known/oauth-authorization-server", "/nodeinfo/2.0"]);
 var isFacade = (p) => FACADE.test(p) || FACADE_EXACT.has(p);
 var isAdmin = (p) => ADMIN_PATHS.has(p);
+var PAGE_HEADER = "x-fedipod-page";
+var NAV_ALLOWED = /* @__PURE__ */ new Set(["/fediacct/callback"]);
+var sameOriginReferrer = (request) => {
+  const r = request.referrer;
+  if (!r || r === "about:client") return r === "about:client";
+  try {
+    return new URL(r).origin === self.location.origin;
+  } catch {
+    return false;
+  }
+};
+function notAllowed(request, url) {
+  const p = url.pathname;
+  if (!isAdmin(p) && !p.startsWith("/oauth/")) return null;
+  if (request.mode === "navigate") {
+    if (NAV_ALLOWED.has(p)) return null;
+    if (p.startsWith("/oauth/") && sameOriginReferrer(request)) return null;
+    return "a navigation may not drive this route";
+  }
+  if (p.startsWith("/oauth/")) {
+    return sameOriginReferrer(request) ? null : "this route answers this origin only";
+  }
+  if (request.headers.get(PAGE_HEADER) !== "1") return `missing ${PAGE_HEADER}`;
+  if (request.method !== "GET" && request.method !== "HEAD") {
+    const ct = (request.headers.get("content-type") || "").split(";")[0].trim().toLowerCase();
+    if (ct && ct !== "application/json") return `unexpected content type "${ct}"`;
+  }
+  return null;
+}
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", (e) => e.waitUntil(self.clients.claim()));
 async function bootFromSession(frontOrigin) {
@@ -52080,8 +53256,20 @@ function ensureBooting(frontOrigin) {
   return booting;
 }
 self.addEventListener("message", (e) => {
+  if (e.data?.type === "reset") {
+    const had = !!agent;
+    agent = null;
+    booting = null;
+    e.source?.postMessage({ type: "reset-done", had });
+    return;
+  }
   if (e.data?.type !== "boot") return;
-  ensureBooting(e.data.frontOrigin).then(() => e.source?.postMessage({ type: "booted" })).catch((err) => e.source?.postMessage({ type: "boot-error", error: err.message, stack: String(err.stack || "") }));
+  ensureBooting(e.data.frontOrigin).then(() => e.source?.postMessage({ type: "booted" })).catch((err) => e.source?.postMessage({
+    type: "boot-error",
+    error: err.message,
+    code: err.code || null,
+    stack: String(err.stack || "")
+  }));
 });
 self.addEventListener("fetch", (e) => {
   const url = new URL(e.request.url);
@@ -52089,6 +53277,11 @@ self.addEventListener("fetch", (e) => {
   e.respondWith(serve(e.request, url));
 });
 async function serve(request, url) {
+  const refuse = notAllowed(request, url);
+  if (refuse) {
+    console.warn(`[sw-agent] refused ${request.method} ${url.pathname}: ${refuse}`);
+    return json(403, { error: `refused: ${refuse}` });
+  }
   if (!agent) {
     try {
       await ensureBooting();
@@ -52096,7 +53289,8 @@ async function serve(request, url) {
     }
   }
   if (!agent) return json(503, { error: "the agent is not booted yet \u2014 open the app from the sign-in page" });
-  const bodyText = request.method === "GET" || request.method === "HEAD" ? "" : await request.text();
+  const bodyBytes = request.method === "GET" || request.method === "HEAD" ? null : Buffer.from(new Uint8Array(await request.arrayBuffer()));
+  const bodyText = bodyBytes ? new TextDecoder().decode(bodyBytes) : "";
   const reqHeaders = {};
   for (const [k, v] of request.headers) reqHeaders[k.toLowerCase()] = v;
   const listeners = {};
@@ -52104,6 +53298,11 @@ async function serve(request, url) {
     method: request.method,
     url: url.pathname + url.search,
     headers: reqHeaders,
+    // notAllowed() above let this through, so it came from this origin. Said
+    // out loud rather than left implicit: MastoApi asks (through the
+    // authorities object in agent.mjs) whether a request is the owner's own,
+    // and in a browser that question means exactly this.
+    sameOrigin: true,
     socket: { encrypted: url.protocol === "https:" },
     on(ev, cb) {
       (listeners[ev] ||= []).push(cb);
@@ -52113,7 +53312,7 @@ async function serve(request, url) {
     }
   };
   queueMicrotask(() => {
-    if (bodyText) (listeners.data || []).forEach((cb) => cb(bodyText));
+    if (bodyBytes?.length) (listeners.data || []).forEach((cb) => cb(bodyBytes));
     (listeners.end || []).forEach((cb) => cb());
   });
   let status = 200;

@@ -103,6 +103,24 @@ a { color: var(--accent); }
     <a href="https://github.com/jeff-zucker/FediPod">github.com/jeff-zucker/FediPod</a></p>
 </section>
 
+<!-- Shown only on a browser that has signed in but has never opened the signing
+     key. The key is kept on the pod encrypted under the account password, so
+     the pod's host cannot sign as you; a browser opens it once and remembers. -->
+<section id="unlock" hidden>
+  <h2>Unlock your signing key</h2>
+  <p>Your signing key is stored on your pod, locked under your account password,
+  so nobody who can read your pod — your pod's host included — can post as you.
+  This browser has not opened it yet.</p>
+  <p class="row">
+    <input type="password" id="unlock-password" autocomplete="current-password"
+      placeholder="Your account password" aria-label="Your account password">
+    <button type="button" class="primary" id="unlock-go">unlock</button>
+  </p>
+  <p class="err" id="unlock-error" role="alert"></p>
+  <p class="hint">This browser only — it is not sent anywhere.</p>
+</section>
+
+
 <section id="pane-form" hidden>
   <form id="form">
 
@@ -131,9 +149,10 @@ a { color: var(--accent); }
         <label for="password">Pod password</label>
         <input type="password" id="password" name="password" autocomplete="current-password"
           aria-describedby="password-hint">
-        <p class="hint" id="password-hint">The password is sent once in return for a credential stored
-          in this browser. The password itself is never stored, and you can revoke the credential
-          without changing it.</p>
+        <p class="hint" id="password-hint">Your password is sent once, to make your account and to
+          lock your signing key. It is never stored. The credential used to set things up is
+          deleted when setup finishes — from then on this browser signs in through your pod,
+          the way any other Solid app does.</p>
       </fieldset>
       <p class="err" id="err-1" role="alert"></p>
       <p>

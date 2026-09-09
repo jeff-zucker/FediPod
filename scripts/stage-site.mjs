@@ -53,12 +53,24 @@ const copyAdmin = (from, to) => { fs.mkdirSync(to, { recursive: true });
       text = text.replace('src="../../"', 'src="/app/"');
     } else if (/[/\\]admin$/.test(from)) {
       // Hide controls the browser build does not carry: the manual drain (it
-      // drains automatically over notifications) and the local logfile viewer
-      // (there is no local log in a browser). And rename "Recover posts" to the
-      // plainer "Refresh Feed" for this audience.
+      // drains automatically over notifications), the local logfile viewer
+      // (there is no local log in a browser), and the "create a handle at the
+      // gateway" choice — a fronted @you@front identity is not the browser
+      // model, and admin-facade.mjs refuses one outright. Leaving the radio
+      // visible meant the page checked the name's availability as you typed,
+      // told you it was free, and then refused the attach. With it hidden the
+      // pod-based choice stays selected, so that check never runs either.
+      // And rename "Recover posts" to the plainer "Refresh Feed" for this
+      // audience.
       text = text
-        .replace('<style>#actor-pick', '<style>#do-drain,#do-log,#actor-pick')
+        .replace('<style>#actor-pick', '<style>#gw-shape-front,#do-drain,#do-log,#actor-pick')
         .replace('>Recover posts<', '>Refresh Feed<')
+        // Reveal the password row on the rotate-key warning: here the key on
+        // the pod is wrapped under the account password (keystore.mjs), so a
+        // replacement has to be wrapped too and there is nowhere to get one
+        // from but the owner. The Node agent keeps its key on disk and leaves
+        // this row hidden.
+        .replace('<div id="rotate-pw-row" hidden>', '<div id="rotate-pw-row">')
         .replace('Put back posts this machine lost, from what the pod still holds',
           'Refresh your feed from what your pod still holds');
     }
@@ -92,6 +104,38 @@ fs.writeFileSync(path.join(site, '_redirects'), [
   '/app/*       /app/:splat    200',
   '/admin       /admin/        301',
   '/admin/*     /admin/:splat  200',
+  '', ].join('\n'));
+// Response headers. Same-origin IS the trust boundary for this build — the
+// worker answers the admin routes on this origin, and one page here renders
+// fediverse HTML from strangers — so `script-src 'self'` is what stands
+// between a remote post and the identity. Only `/app/*` and `/admin/*` are
+// given a CSP header here: the root page carries its own `<meta>` CSP, tuned
+// to its issuer, and a header would intersect with it and break the login.
+//
+// Netlify reads ONE `_headers`, at the publish root. (Phanpy ships its own
+// under `app/`, which is why that copy has never done anything.)
+//
+// `Referrer-Policy: same-origin` and not `no-referrer`: the worker's own gate
+// reads `request.referrer` to tell the bundled client's sign-in navigation
+// from a cross-site one (sw-src.mjs), and stripping it everywhere would refuse
+// the legitimate one. Same-origin sends it to us and to nobody else.
+//
+// `style-src` keeps `'unsafe-inline'`: the admin pages get a `<style>` block
+// injected above, and `innerHTML` with a `style=` attribute is common in both.
+// Inline STYLE cannot exfiltrate the way inline SCRIPT can, and tightening it
+// would cost the boundary nothing. `/app/*` needs `https:` for images and
+// media because the whole point of the client is rendering other servers'
+// avatars and attachments.
+fs.writeFileSync(path.join(site, '_headers'), [
+  '/app/*',
+  "  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https: data: blob:; media-src 'self' https: blob:; connect-src 'self' https:; font-src 'self' data:; object-src 'none'; base-uri 'none'; frame-ancestors 'self'; form-action 'self'",
+  '  X-Content-Type-Options: nosniff',
+  '  Referrer-Policy: same-origin',
+  '',
+  '/admin/*',
+  "  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https: data: blob:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'self'; form-action 'self'",
+  '  X-Content-Type-Options: nosniff',
+  '  Referrer-Policy: same-origin',
   '', ].join('\n'));
 let n = 0; (function count(d) { for (const e of fs.readdirSync(d, { withFileTypes: true })) e.isDirectory() ? count(path.join(d, e.name)) : n++; })(site);
 console.log(`staged web/app/site — ${n} files`);

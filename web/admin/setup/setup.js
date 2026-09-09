@@ -17,7 +17,7 @@ const show = (id) => { for (const s of document.querySelectorAll('section[id^="p
 // the page's own address, so one build serves both.
 const BASE = location.pathname.replace(/\/admin\/.*$/u, '');
 const api = async (path, init) => {
-  const res = await fetch(BASE + path, init);
+  const res = await fetch(BASE + path, { ...init, headers: { ...(init?.headers || {}), 'x-fedipod-page': '1' } });
   return { status: res.status, json: await res.json().catch(() => null) };
 };
 const postJson = (path, body) => api(path, {

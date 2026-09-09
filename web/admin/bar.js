@@ -17,7 +17,7 @@
   // open windows apart without putting the handle in the page twice.
   // /status, not /config: an agent that is not set up yet answers this one and
   // 409s the other, which logged a failed request on every setup page.
-  fetch(location.pathname.replace(/\/admin\/.*$/u, '') + '/status').then(r => (r.ok ? r.json() : null)).then((s) => {
+  fetch(location.pathname.replace(/\/admin\/.*$/u, '') + '/status', { headers: { 'x-fedipod-page': '1' } }).then(r => (r.ok ? r.json() : null)).then((s) => {
     if (s?.handle) document.title = `FediPod — ${s.handle}`;
     // The full fediverse handle, centred in the bar on every page.
     const el = document.getElementById('bar-handle');
@@ -32,7 +32,7 @@
   const pick = document.getElementById('actor-pick');
   if (pick && !document.getElementById('new-actor-form')) {
     const base = location.pathname.replace(/\/admin\/.*$/u, '');
-    fetch(base + '/profiles').then(r => (r.ok ? r.json() : null)).then((j) => {
+    fetch(base + '/profiles', { headers: { 'x-fedipod-page': '1' } }).then(r => (r.ok ? r.json() : null)).then((j) => {
       const actors = j?.identities || [];
       pick.textContent = '';
       const label = (r) => (r.address || r.handle || r.name)

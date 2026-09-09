@@ -39,6 +39,16 @@ try {
   authBundle = readFileSync(
     fileURLToPath(new URL('../../web/front/solid-oidc-client.js', import.meta.url)), 'utf8');
 } catch { /* without it the page's sign-in step is unavailable */ }
+// Each page's own script (they were inline until 2026-09-09 — see the
+// /new-account.js route in lib/front-core.mjs). Read at cold start, like the
+// pages themselves.
+const pageScripts = {};
+for (const name of ['new-account.js', 'run.js', 'admin.js']) {
+  try {
+    pageScripts[name] = readFileSync(
+      fileURLToPath(new URL(`../../web/front/${name}`, import.meta.url)), 'utf8');
+  } catch { /* without it that page has no behaviour; the page still serves */ }
+}
 let installScript = '';
 try {
   installScript = readFileSync(
@@ -109,6 +119,7 @@ export default async function handler(request) {
     runPage,
     adminPage,
     authBundle,
+    pageScripts,
     installScript,
     version: frontVersion,
     offersPods: process.env.FEDIPOD_OFFERS_PODS === '1',
