@@ -2740,6 +2740,8 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   const record = read('web/admin/index.html');
   const setup = read('web/admin/setup/index.html');
   const masto = read('lib/mastoapi.mjs');
+  // Colours moved to the shared token sheet; the record page inherits them.
+  const tokens = read('web/admin/tokens.css');
 
   // --- contrast, computed rather than eyeballed ---
   const lum = (hex) => {
@@ -2761,30 +2763,32 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
   check(Math.abs(ratio('#ffffff', '#000000') - 21) < 0.01, 'the contrast helper agrees with the known 21:1');
 
-  // The page background is --surface from bar.css, not white — that is the
-  // pair a reader actually sees.
+  // The page background is --surface from the token sheet, not white — that is
+  // the pair a reader actually sees.
   const SURFACE = '#f0f2f5', SURFACE_DARK = '#18191a';
   for (const [name, dark, bg] of [['--link', false, SURFACE], ['--heading', false, SURFACE],
     ['--link', true, SURFACE_DARK], ['--heading', true, SURFACE_DARK]]) {
-    const c = token(record, name, dark);
+    const c = token(tokens, name, dark);
     check(c && ratio(c, bg) >= 4.5,
       `${name}${dark ? ' (dark)' : ''} ${c} on ${bg} = ${ratio(c, bg).toFixed(2)}:1, AA text`);
   }
 
-  // A control boundary needs 3:1, and the fill alone cannot carry it: --btn-bg
-  // against the page is 1.15:1, so the edge is the only thing that says where a
-  // button is.
-  for (const dark of [false, true]) {
-    const edge = token(record, '--btn-edge', dark);
-    const fill = token(record, '--btn-bg', dark);
-    check(edge && fill && ratio(edge, fill) >= 3,
-      `--btn-edge${dark ? ' (dark)' : ''} ${edge} on ${fill} = ${ratio(edge, fill).toFixed(2)}:1, 1.4.11`);
+  // Buttons are the front's filled green: the white label must clear AA (4.5:1)
+  // on the fill, and the fill must stand off the page enough to read as a
+  // control (3:1, WCAG 1.4.11).
+  for (const [dark, bg] of [[false, SURFACE], [true, SURFACE_DARK]]) {
+    const btn = token(tokens, '--btn', dark);
+    const txt = token(tokens, '--btn-text', dark);
+    check(btn && txt && ratio(txt, btn) >= 4.5,
+      `--btn-text on --btn${dark ? ' (dark)' : ''} ${txt} on ${btn} = ${btn && txt ? ratio(txt, btn).toFixed(2) : '?'}:1, AA text`);
+    check(btn && ratio(btn, bg) >= 3,
+      `--btn vs page${dark ? ' (dark)' : ''} ${btn} on ${bg} = ${btn ? ratio(btn, bg).toFixed(2) : '?'}:1, 1.4.11`);
   }
   // The record page's inputs are token-styled wells; setup still writes the
   // border hex inline against a white Field.
   for (const dark of [false, true]) {
-    const fedge = token(record, '--field-edge', dark);
-    const fwell = token(record, '--field-bg', dark);
+    const fedge = token(tokens, '--field-edge', dark);
+    const fwell = token(tokens, '--field-bg', dark);
     check(fedge && fwell && ratio(fedge, fwell) >= 3,
       `record --field-edge${dark ? ' (dark)' : ''} ${fedge} on ${fwell} = ${fedge && fwell ? ratio(fedge, fwell).toFixed(2) : '?'}:1, 1.4.11`);
   }
@@ -2798,7 +2802,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   // both these pages the error IS the message. The record's .err rides the
   // --danger token; the other two still write the hex in their dark blocks.
   {
-    const d = token(record, '--danger', true);
+    const d = token(tokens, '--danger', true);
     check(d && ratio(d, SURFACE_DARK) >= 4.5,
       `record --danger in dark ${d} = ${d ? ratio(d, SURFACE_DARK).toFixed(2) : '?'}:1`);
   }
@@ -2811,12 +2815,12 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
       `${label} .err in dark ${m?.[1]} = ${m ? ratio(m[1], SURFACE_DARK).toFixed(2) : '?'}:1`);
   }
 
-  // --- the author's own 16px floor, which holds because the root is 18px
-  // (112.5% of the browser's 16px default — a percentage so it respects a
-  // user's own font-size preference) ---
+  // --- the author's own 16px floor, which holds because the root is 20px
+  // (125% of the browser's 16px default, matching the front — a percentage so
+  // it respects a user's own font-size preference) ---
   const rootDecl = /:root\s*\{[^}]*font-size:\s*([\d.]+)(px|%)/.exec(record);
   const rootPx = rootDecl ? (rootDecl[2] === '%' ? Number(rootDecl[1]) / 100 * 16 : Number(rootDecl[1])) : NaN;
-  check(rootPx === 18, `the record page root is ${rootPx}px`);
+  check(rootPx === 20, `the record page root is ${rootPx}px`);
   const smallest = Math.min(...[...record.matchAll(/font-size:\s*([\d.]+)rem/g)].map(m => Number(m[1])));
   check(smallest * rootPx >= 16,
     `the smallest rule is ${smallest}rem = ${(smallest * rootPx).toFixed(1)}px, above the 16px floor`);
@@ -9729,6 +9733,70 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
     'an unpublished or unreachable policy leaves the row standing, not an error');
 }
 
+// --- 29r. the relay: the front sends what the browser signed, and nothing else ---
+{
+  const front = await import(path.join(root, 'lib/front-core.mjs'));
+  const nodeCrypto = (await import('node:crypto')).default;
+  const ORIGIN = 'https://fedipod.net';
+  const dir = { me: { handle: 'me', podHome: 'https://alice.pod/solid/', webId: 'https://alice.pod/solid/profile/card#me',
+    actorUrl: 'https://fedipod.net/u/me/ap/actor', kind: 'person', hmacSecret: 's' } };
+  const sent = [];
+  const fetchImpl = async (url, init) => {
+    sent.push({ url, init });
+    return new Response('{"ok":true}', { status: url.endsWith('/inbox') ? 202 : 200,
+      headers: { 'content-type': 'application/activity+json' } });
+  };
+  const verifier = async (authz) => ({ webid: authz === 'DPoP alice' ? dir.me.webId
+    : authz === 'DPoP bob' ? 'https://bob.pod/profile/card#me' : null });
+  const ctx = { host: 'fedipod.net', frontOrigin: ORIGIN, lookup: (h) => dir[h] || null, verifier, fetchImpl };
+  const call = (body, authz) => front.routeFront(new Request(ORIGIN + '/api/relay', {
+    method: 'POST', headers: { 'content-type': 'application/json', ...(authz ? { authorization: authz } : {}) },
+    body: JSON.stringify(body) }), ctx);
+  const note = JSON.stringify({ type: 'Create', actor: dir.me.actorUrl });
+  const digest = 'SHA-256=' + nodeCrypto.createHash('sha256').update(note).digest('base64');
+  const signed = { url: 'https://remote.example/inbox', method: 'POST', body: note,
+    headers: { date: 'Sun, 06 Sep 2026 20:00:00 GMT', digest, 'content-type': 'application/activity+json',
+      signature: 'keyId="https://fedipod.net/u/me/ap/actor#main-key",algorithm="rsa-sha256",headers="(request-target) host date digest",signature="AAAA"',
+      cookie: 'session=steal', authorization: 'Bearer leak' } };
+  process.env.AP_ALLOW_PRIVATE_TARGETS = '1';
+  check((await call({ handle: 'me', requests: [signed] })).status === 401, 'the relay refuses a caller with no pod token');
+  check((await call({ handle: 'me', requests: [signed] }, 'DPoP bob')).status === 403, "and one whose token proves somebody else's pod");
+  const ok = await call({ handle: 'me', requests: [signed] }, 'DPoP alice');
+  const r1 = JSON.parse(ok.body).results[0];
+  check(ok.status === 200 && r1.status === 202 && sent.length === 1 && sent[0].url === signed.url
+    && sent[0].init.method === 'POST' && sent[0].init.body === note,
+    'a signed delivery is sent to the inbox the browser named, body intact');
+  const h = sent[0].init.headers;
+  check(h.date === signed.headers.date && h.digest === digest && h.signature === signed.headers.signature
+    && h['content-type'] === 'application/activity+json', 'with exactly the headers the browser signed');
+  check(!('cookie' in h) && !('authorization' in h), 'and nothing it did not sign for the remote: no cookie, no authorization');
+  const wrongKey = { ...signed, headers: { ...signed.headers, signature: signed.headers.signature.replace('/u/me/', '/u/you/') } };
+  const wk = JSON.parse((await call({ handle: 'me', requests: [wrongKey] }, 'DPoP alice')).body).results[0];
+  check(wk.status === 0 && /not this account/.test(wk.error), 'a delivery signed as another actor is not sent');
+  const badDigest = { ...signed, headers: { ...signed.headers, digest: 'SHA-256=AAAA' } };
+  const bd = JSON.parse((await call({ handle: 'me', requests: [badDigest] }, 'DPoP alice')).body).results[0];
+  check(bd.status === 0 && /digest/.test(bd.error), 'a body that does not match its digest is not sent');
+  const unsigned = { url: 'https://remote.example/inbox', method: 'POST', body: note, headers: { 'content-type': 'application/activity+json' } };
+  const us = JSON.parse((await call({ handle: 'me', requests: [unsigned] }, 'DPoP alice')).body).results[0];
+  check(us.status === 0 && /signed/.test(us.error), 'an unsigned delivery is not sent');
+  sent.length = 0;
+  const read = { url: 'https://remote.example/users/mei', method: 'GET', headers: { accept: 'application/activity+json' } };
+  const rd = JSON.parse((await call({ handle: 'me', requests: [read] }, 'DPoP alice')).body).results[0];
+  check(rd.status === 200 && rd.body === '{"ok":true}' && rd.contentType === 'application/activity+json'
+    && sent[0].init.method === 'GET' && sent[0].init.headers.accept === 'application/activity+json',
+    'a read through the relay comes back with its body and content type');
+  check((await call({ handle: 'me', requests: Array.from({ length: 21 }, () => read) }, 'DPoP alice')).status === 400,
+    'more than twenty requests in one call is refused');
+  delete process.env.AP_ALLOW_PRIVATE_TARGETS;
+  const plain = JSON.parse((await call({ handle: 'me', requests: [{ ...read, url: 'http://remote.example/users/mei' }] }, 'DPoP alice')).body).results[0];
+  check(plain.status === 0 && /https/.test(plain.error), 'a plain-http target is refused');
+  check((await call({ handle: 'ghost', requests: [read] }, 'DPoP alice')).status === 404, 'an unknown handle has no relay');
+  const roster = await front.routeFront(new Request(ORIGIN + '/roster'), { ...ctx, adminPage: '<!doctype html><title>who</title>' });
+  const oldAdmin = await front.routeFront(new Request(ORIGIN + '/admin'), { ...ctx, adminPage: '<!doctype html><title>who</title>' });
+  check(roster.status === 200 && roster.body.includes('who') && oldAdmin.status === 404,
+    'the roster page answers at /roster, and /admin is free for the record page');
+}
+
 // --- 29. multi-user front: WebFinger, per-user actor rewrite, inbox routing ---
 {
   const front = await import(path.join(root, 'lib/front-core.mjs'));
@@ -9875,14 +9943,15 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   const ok = await attach({ handle: 'alice', podHome: 'https://alice.pod/solid/' },
     'https://alice.pod/profile/card#me');
   const okDoc = JSON.parse(ok.body);
-  check(ok.status === 201 && okDoc.doorInbox === 'https://fedipod.net/u/alice/ap/inbox/'
+  const aliceDoor = 'https://fedipod.net/u/alice%40alice.pod/ap/inbox/';   // the door carries the full address
+  check(ok.status === 201 && okDoc.doorInbox === aliceDoor && okDoc.address === '@alice@alice.pod'
     && typeof okDoc.hmacSecret === 'string' && okDoc.frontActor === undefined,
-    'a valid token proving the pod attaches inbox-only by default: a door and a secret, no fronted actor');
-  check(okDoc.command === `fedipod gateway https://fedipod.net/u/alice/ap/inbox/ --secret ${okDoc.hmacSecret} --inbox-only`,
+    'a valid token proving the pod attaches inbox-only by default: a full-address door and a secret, no fronted actor');
+  check(okDoc.command === `fedipod gateway ${aliceDoor} --secret ${okDoc.hmacSecret} --inbox-only`,
     'and the one command the user runs to point their agent at the gateway');
-  check(written.alice?.podHome === 'https://alice.pod/solid/' && written.alice?.webId === 'https://alice.pod/profile/card#me'
-    && written.alice?.actorUrl === 'https://alice.pod/solid/ap/actor' && written.alice?.inboxOnly === true,
-    'the directory row records the pod, the proven WebID, and the POD actor as the identity');
+  check(written['alice@alice.pod']?.podHome === 'https://alice.pod/solid/' && written['alice@alice.pod']?.webId === 'https://alice.pod/profile/card#me'
+    && written['alice@alice.pod']?.actorUrl === 'https://alice.pod/solid/ap/actor' && written['alice@alice.pod']?.inboxOnly === true,
+    'the directory row is keyed by full address and records the pod, the proven WebID, and the POD actor');
   const okF = await attach({ handle: 'fran', podHome: 'https://fran.pod/solid/', fronted: true },
     'https://fran.pod/profile/card#me');
   const okFDoc = JSON.parse(okF.body);
@@ -9890,9 +9959,17 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
     && okFDoc.address === '@fran@fedipod.net'
     && /gateway https:\/\/fedipod\.net\/u\/fran\/ap\/actor --secret /.test(okFDoc.command),
     'fronted identity remains available behind an explicit fronted: true');
-  const dup = await attach({ handle: 'alice', podHome: 'https://alice.pod/solid/' },
+  // Full-address keying: the same handle on the SAME pod is idempotent, and on a
+  // DIFFERENT pod it is a DIFFERENT address — neither is a collision.
+  const dupSame = await attach({ handle: 'alice', podHome: 'https://alice.pod/solid/' },
     'https://alice.pod/profile/card#me');
-  check(dup.status === 409, 'the name cannot be attached twice');
+  check(dupSame.status === 201, 're-attaching the same pod is idempotent, not a collision');
+  const dupOther = await attach({ handle: 'alice', podHome: 'https://alice.other/' },
+    'https://alice.other/profile/card#me');
+  check(dupOther.status === 201, 'the same handle on another pod is a distinct address, not a collision');
+  const dupFronted = await attach({ handle: 'fran', podHome: 'https://someone.else/', fronted: true },
+    'https://someone.else/profile/card#me');
+  check(dupFronted.status === 409, 'a fronted name stays one-per-front-host');
   const badName = await attach({ handle: 'Bad Name', podHome: 'https://alice.pod/solid/' },
     'https://alice.pod/profile/card#me');
   check(badName.status === 400, 'attach rejects an ill-formed handle');

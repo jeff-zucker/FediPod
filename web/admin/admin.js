@@ -27,14 +27,12 @@ let config = null;
 const MODERATION = $('moderation');
 const STATUS = $('status-ctl');
 const STATUS_PICK = $('status-pick');   // held: getElementById can't see it mid-render
-const BSKY_CTL = $('bsky-ctl');
 const IDENT_CTL = $('ident-ctl');
 const FOLLOWS_CTL = $('follows-ctl');
 const FOLLOWS_PICK = $('follows-pick');
 const UPDATE_CTL = $('update-ctl');
 const UPDATE_WORD = $('update-word');
 const UPDATE_GO = $('update-go');
-const BSKY_CROSSPOST = $('bsky-crosspost');   // held: it rides BSKY_CTL into a generated row
 
 // #say and #fatal live in the accessibility tree from load and hide by being
 // empty (see the stylesheet). Unhiding a live region and filling it in the same
@@ -126,34 +124,94 @@ function identityRows() {
     dd.append(...nodes);
     out.push([dt, dd]);
   };
-  if (config.atproto?.connected) {
-    const a = document.createElement('a');
-    a.href = `https://bsky.app/profile/${config.atproto.handle}`;
-    a.textContent = `@${config.atproto.handle}`;
-    a.target = '_blank';
-    a.rel = 'noopener';
-    a.title = `   Open this account's Bluesky page in a new tab`;
-    BSKY_CTL.hidden = false;
-    BSKY_CROSSPOST.value = config.atproto.crossPost ? 'on' : 'off';
-    row('Bluesky', a, ' ', BSKY_CTL);
-  } else {
-    BSKY_CTL.hidden = true;
-  }
-  for (const acct of config.fediAccounts || []) {
-    const name = document.createElement('span');
-    name.textContent = acct.needsReconnect ? `${acct.handle} — sign in again` : acct.handle;
-    if (acct.needsReconnect) name.className = 'warn';
-    const off = document.createElement('button');
-    off.type = 'button';
-    off.className = 'inline danger';
-    off.textContent = 'Disconnect';
-    off.title = `   Stop reading ${acct.handle} and remove its stored token`;
-    off.addEventListener('click', async () => {
-      if (await write('/fediacct/disconnect', { id: acct.id }, `${acct.handle} disconnected`)) await load();
-    });
-    row(acct.host, name, ' ', off);
+  // One descriptor shape for every connected account — Bluesky and each
+  // fediverse account — so the row and its Options menu build the same way.
+  const accounts = [];
+  if (config.atproto?.connected) accounts.push({
+    label: 'Bluesky', handle: `@${config.atproto.handle}`,
+    href: `https://bsky.app/profile/${config.atproto.handle}`,
+    storage: config.atproto.storage || null,
+    feedPaused: 'feedPaused' in config.atproto ? config.atproto.feedPaused : null,
+    crossPost: 'crossPost' in config.atproto ? config.atproto.crossPost : null,
+    feed: (paused) => ['/atproto', { feedPaused: paused }],
+    cross: (on) => ['/atproto', { crossPost: on }],
+    store: (w) => ['/atproto', { storage: w }],
+    off: () => ['/atproto/disconnect', {}],
+  });
+  for (const acct of config.fediAccounts || []) accounts.push({
+    label: acct.host,
+    handle: acct.needsReconnect ? `${acct.handle} — sign in again` : acct.handle,
+    warn: acct.needsReconnect,
+    storage: acct.storage || null,
+    feedPaused: !acct.enabled,
+    crossPost: null,
+    feed: (paused) => ['/fediacct', { id: acct.id, enabled: !paused }],
+    store: (w) => ['/fediacct', { id: acct.id, storage: w }],
+    off: () => ['/fediacct/disconnect', { id: acct.id }],
+  });
+  for (const acct of accounts) {
+    const name = document.createElement(acct.href ? 'a' : 'span');
+    name.textContent = acct.handle;
+    if (acct.href) { name.href = acct.href; name.target = '_blank'; name.rel = 'noopener'; name.title = '   Open this account elsewhere in a new tab'; }
+    if (acct.warn) name.className = 'warn';
+    row(acct.label, name, ' ', optionsMenu(acct));
   }
   return out;
+}
+
+// Every connected account carries one Options menu: pause its feed, choose
+// where its credential lives, disconnect. Which controls show is driven by what
+// the account reports — Storage only where a backend offers the choice (the
+// browser), Cross-post only where it is a toggle (the Node agent's Bluesky) —
+// so the same menu serves both.
+function optionsMenu(acct) {
+  const d = document.createElement('details');
+  d.className = 'opts';
+  const sum = document.createElement('summary');
+  sum.textContent = 'Options';
+  d.appendChild(sum);
+  const body = document.createElement('div');
+  d.appendChild(body);
+
+  // Each control is one dropdown whose options ARE the states, so it needs no
+  // separate label — the chosen option reads as the current state.
+  const pick = (opts, current, onChange) => {
+    const el = document.createElement('select');
+    for (const [v, t] of opts) { const o = document.createElement('option'); o.value = v; o.textContent = t; o.selected = v === current; el.appendChild(o); }
+    el.addEventListener('change', () => onChange(el.value));
+    body.appendChild(el);
+  };
+  const send = async ([path, payload], msg) => { if (await write(path, payload, msg)) await load(); };
+
+  // Feed: shown in / hidden from the feed you read here.
+  if (acct.feedPaused !== null) {
+    pick([['show', 'Add to home feed'], ['hide', 'Pause adding to home feed']], acct.feedPaused ? 'hide' : 'show',
+      (v) => send(acct.feed(v === 'hide'), v === 'hide' ? 'paused adding to your feed' : 'added to your home feed'));
+  }
+  // Storage where the browser offers the choice; the Node agent's Bluesky shows
+  // its cross-post toggle in the same slot instead.
+  if (acct.storage) {
+    pick([['browser', 'Store key in Browser'], ['pod', 'Store key on Pod']], acct.storage, (v) => {
+      if (v === 'pod' && !confirm('Store this account on your pod?\n\nIt will follow you to any browser you sign in from — but a full-access token to that account then lives on your pod.')) { load(); return; }
+      send(acct.store(v), v === 'pod' ? 'stored on your pod' : 'stored in this browser');
+    });
+  } else if (acct.crossPost !== null) {
+    pick([['on', 'Cross-post On'], ['off', 'Cross-post Off']], acct.crossPost ? 'on' : 'off',
+      (v) => send(acct.cross(v === 'on'), ''));
+  }
+  // Connection: staying connected, or disconnecting.
+  pick([['connected', 'Connected'], ['disconnect', 'Disconnect']], 'connected',
+    (v) => { if (v === 'disconnect') send(acct.off(), 'disconnected'); else load(); });
+
+  // The storage consequence, at the bottom of the box under every dropdown.
+  if (acct.storage) {
+    const hint = document.createElement('p'); hint.className = 'opt-hint';
+    hint.textContent = acct.storage === 'pod'
+      ? 'Follows you to every browser you sign in from; a full-access token lives on your pod.'
+      : 'Stays in this browser; the token never leaves this device.';
+    body.appendChild(hint);
+  }
+  return d;
 }
 
 function render() {
@@ -180,9 +238,10 @@ function render() {
     ['Other identities', 'ctl'],
     ['local store', config.home],
     // The address you actually open, not the bare number — the named origin when
-    // there is one, since that is what the client and the OAuth redirect use.
-    ['local host', (origins.named || origins.loopback || `http://localhost:${config.port}`)
-      .replace(/\/$/, '')],
+    // there is one, since that is what the client and the OAuth redirect use. An
+    // agent with no local host of its own (embedded in a pod server, or in a
+    // browser) sends none, and then there is no row rather than a bare number.
+    ['local host', (origins.named || origins.loopback || '').replace(/\/$/, '') || null],
   ];
   if (config.version || config.update || config.pendingUpgrade?.length) rows.push(['software', 'ctl']);
   rows.push(['gateway', 'ctl']);
@@ -502,13 +561,8 @@ $('fediacct-form').addEventListener('submit', async (ev) => {
   } finally { fediBusy = false; }
 });
 
-$('bsky-disconnect').addEventListener('click', async () => {
-  if (bskyBusy) return;
-  bskyBusy = true;
-  try {
-    if (await write('/atproto/disconnect', {}, 'bluesky account disconnected')) await load();
-  } finally { bskyBusy = false; }
-});
+// Disconnecting Bluesky, pausing its feed and choosing its storage all live in
+// the account's Options menu now (see optionsMenu). Connecting is still here.
 // Adding resolves the old account on the agent side, so what lands in
 // alsoKnownAs is its canonical id, not the string typed here.
 // The accounts elsewhere this one may receive a Move from — the chips in the
@@ -553,15 +607,6 @@ $('alias-add').addEventListener('click', async () => {
   } finally { aliasBusy = false; }
 });
 
-// Silent on success — the select already shows the new state.
-const setCrossPost = async (on) => {
-  if (bskyBusy || on === !!config.atproto?.crossPost) return;
-  bskyBusy = true;
-  try {
-    if (await write('/atproto', { crossPost: on }, '')) config.atproto.crossPost = on;
-    BSKY_CROSSPOST.value = config.atproto?.crossPost ? 'on' : 'off';
-  } finally { bskyBusy = false; }
-};
 
 // ---- group ----
 
@@ -655,8 +700,6 @@ function onPick(el, apply, repaint = renderGroupToggles) {
 onPick($('joins-mod'), (v) => setJoins(v === MOD.on));
 onPick($('review-mod'), (v) => setReview(v === MOD.on));
 onPick(STATUS_PICK, (v) => setStatus(v === 'parked'), renderStatus);
-onPick(BSKY_CROSSPOST, (v) => setCrossPost(v === 'on'),
-  () => { BSKY_CROSSPOST.value = config?.atproto?.crossPost ? 'on' : 'off'; });
 
 // A person's follower gate. Automatic is what a migration wave needs: every
 // follower's server re-follows at once, and the waiting queue caps at 500.

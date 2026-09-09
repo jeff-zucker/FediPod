@@ -4,18 +4,17 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>FediPod — client</title>
+<link rel="stylesheet" href="../tokens.css">
 <style>
-:root { color-scheme: light dark; font-size: 112.5%; --link: #1a4f8a; --heading: #5b3a8e; }
-/* The bar is fixed height, the client takes the rest — the page never scrolls,
-   the frame does. */
+/* Colours are the shared tokens (tokens.css); only layout is here. The bar is
+   a fixed height, the client takes the rest — the page never scrolls, the frame
+   does. */
+:root { color-scheme: light dark; font-size: 125%; }
 html { height: 100%; }
 body { font: 1rem/1.5 system-ui, sans-serif; margin: 0; height: 100dvh;
   display: flex; flex-direction: column; overflow: hidden; }
 main { flex: 1 1 auto; min-height: 0; display: flex; }
 #client { flex: 1 1 auto; min-height: 0; width: 100%; border: 0; }
-@media (prefers-color-scheme: dark) {
-  :root { --link: #7fb3e8; --heading: #b9a3e3; }
-}
 </style>
 <link rel="stylesheet" href="../bar.css">
 </head>

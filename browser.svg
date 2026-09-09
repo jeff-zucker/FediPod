@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 860 486" font-family="Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#333"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="860" height="486" fill="#ffffff"/>
+
+  <!-- boxes (draw.io palette) -->
+  <g stroke-width="1.5">
+    <rect x="315" y="24"  width="230" height="72" rx="6" fill="#dae8fc" stroke="#6c8ebf"/>
+    <rect x="315" y="190" width="230" height="68" rx="6" fill="#e1d5e7" stroke="#9673a6"/>
+    <rect x="40"  y="372" width="210" height="70" rx="6" fill="#f8cecc" stroke="#b85450"/>
+    <rect x="580" y="360" width="250" height="88" rx="6" fill="#d5e8d4" stroke="#82b366"/>
+  </g>
+
+  <!-- box labels -->
+  <g fill="#111" text-anchor="middle">
+    <text x="430" y="56"  font-size="17" font-weight="bold">Open Social Web</text>
+    <text x="430" y="80"  font-size="13">Mastodon · Pixelfed · Bluesky …</text>
+
+    <text x="430" y="220" font-size="17" font-weight="bold">FediPod Gateway</text>
+    <text x="430" y="242" font-size="13">the mail door &amp; the relay</text>
+
+    <text x="145" y="391" font-size="17" font-weight="bold">Your Pod</text>
+    <text x="145" y="409" font-size="13">AP S2S formatted data</text>
+    <text x="145" y="426" font-size="13">in addition to other pod data</text>
+
+    <text x="705" y="392" font-size="17" font-weight="bold">Any Browser</text>
+    <text x="705" y="414" font-size="13">runs your FediPod Agent,</text>
+    <text x="705" y="431" font-size="13">a Mastodon API / AP C2S client</text>
+  </g>
+
+  <!-- arrows -->
+  <g stroke="#333" stroke-width="1.6" fill="none">
+    <!-- 1: Open Social Web <-> Gateway (AP S2S mail) -->
+    <line x1="430" y1="96" x2="430" y2="190" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+    <!-- 2: Your Pod -> Open Social Web (UNCHANGED, pod answers lookups) -->
+    <path d="M110,372 C46,300 46,150 322,92" marker-end="url(#arrow)"/>
+    <!-- 3: Gateway -> Your Pod (one way now) -->
+    <path d="M338,258 C300,300 250,330 205,372" marker-end="url(#arrow)"/>
+    <!-- 4: Gateway <-> Any Browser (agent loaded; signed posts sent) -->
+    <path d="M632,360 C560,320 522,300 472,258" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+    <!-- 5: Your Pod <-> Any Browser (Solid) -->
+    <line x1="250" y1="408" x2="580" y2="408" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+    <!-- 6: Any Browser <-> Open Social Web (ATProto client — Bluesky) -->
+    <path d="M760,360 C824,300 824,150 538,92" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+  </g>
+
+  <!-- arrow labels -->
+  <g fill="#333" font-size="13">
+    <text x="418" y="134" text-anchor="end">raw mail in</text>
+    <text x="418" y="150" text-anchor="end">relayed posts out</text>
+    <text x="442" y="142" text-anchor="start">AP S2S Protocol</text>
+
+    <text x="96"  y="250" text-anchor="start">Pod responds to requests for</text>
+    <text x="96"  y="266" text-anchor="start">webfinger, actor, public posts</text>
+
+    <text x="300" y="322" text-anchor="start">verified mail in</text>
+
+    <text x="588" y="302" text-anchor="middle">FediPod Agent loaded in browser;</text>
+    <text x="588" y="318" text-anchor="middle">signed posts sent to gateway</text>
+
+    <text x="430" y="400" text-anchor="middle" font-weight="bold" fill="#111">Solid Protocol</text>
+    <text x="430" y="428" text-anchor="middle">reads &amp; writes your pod</text>
+
+    <text x="780" y="238" text-anchor="end">ATProto</text>
+    <text x="780" y="254" text-anchor="end">client protocol</text>
+  </g>
+
+  <text x="830" y="474" text-anchor="end" font-size="11" fill="#888">© 2026 Jeff Zucker · CC BY-SA 4.0</text>
+</svg>

@@ -4,18 +4,9 @@
    page's left edge and the buttons over its right rather than out at the window
    borders. `width: 100%` with `box-sizing: border-box` keeps the padding inside
    that 960 instead of adding to it, which is what makes the two margins equal. */
-/* Phanpy's own colours, read off the running client. --surface is the one you
-   see behind Phanpy — its --bg-faded-color — and that is the PAGE. --raised is
-   Phanpy's --bg-color, and that is the bar sitting on top of it. Declared here
-   because bar.css is on all three pages, so they cannot drift. */
-:root { --surface: #f0f2f5; --raised: #fff;
-  --ink: #1b1c1e; --field-bg: #ffffff; --field-bg-hover: #f7f4ee; --field-edge: #767676;
-  --chevron: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6'><path d='M1 1l4 4 4-4' fill='none' stroke='%23444444' stroke-width='1.6' stroke-linecap='round'/></svg>"); }
-@media (prefers-color-scheme: dark) {
-  :root { --surface: #18191a; --raised: #242526;
-    --ink: #e8eaed; --field-bg: #383d44; --field-bg-hover: #40464e; --field-edge: #9aa0a6;
-    --chevron: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6'><path d='M1 1l4 4 4-4' fill='none' stroke='%23dddddd' stroke-width='1.6' stroke-linecap='round'/></svg>"); }
-}
+/* Colours come from tokens.css (the front's palette), linked by every page
+   before this file, so the bar matches the front and the record rather than
+   Phanpy: --surface is the page ground, --raised the bar band on top of it. */
 body { background: var(--surface); }
 /* The BAND spans the window; its CONTENTS stay in the 960 column. Constraining
    the element itself left the colour as a stripe with bare page either side.
@@ -51,7 +42,7 @@ body { background: var(--surface); }
 #bar select:hover { background-color: var(--field-bg-hover); }
 /* The app title, in px rather than rem: it is chrome, the same on every page,
    not something that should move when a page changes its base size. */
-#bar .name { flex: 1 1 auto; font-weight: 600; font-size: 24px; color: var(--heading);
+#bar .name { flex: 1 1 auto; font-weight: 600; font-size: 30px; color: var(--heading);
   margin: 0; line-height: 1.1; }
 /* Plain text, not chrome: three destinations in a row read better without a
    box round each. */

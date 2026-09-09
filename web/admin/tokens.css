@@ -1,0 +1,56 @@
+/* tokens.css — the FediPod design tokens: the front page's palette
+   (web/app/index.html), so the front, the record page, the bar and the client
+   shell are one visual system. The front is the reference; these values mirror
+   its :root. Declared under every name the pages already use — plus aliases
+   (--ink=--fg, --muted=--sub, --link=--accent, --field-edge=--field-border,
+   --danger=--err, --ring=--focus) — so a page only has to drop its own :root
+   colours and inherit these. */
+:root {
+  color-scheme: light dark;
+
+  /* ground + text */
+  --bg: #ffffff; --fg: #1a1a1a; --ink: #1a1a1a;
+  --surface: #f0f2f5;          /* the page ground behind cards */
+  --raised: #ffffff;           /* cards, the rail, the bar band, dialogs */
+
+  /* structure + action */
+  --heading: #123f74; --accent: #12467e; --link: #12467e;
+  --sub: #565656; --muted: #565656; --line: #b0b0b0;
+
+  /* fields */
+  --field-bg: #ececec; --field-bg-hover: #e2e4e8; --field-hover: #e2e4e8;
+  --field-text: #141414; --field-edge: #6f6f6f; --field-border: #6f6f6f;
+
+  /* buttons — filled, muted forest green (like the front) */
+  --btn: #3a5f43; --btn-hover: #30503a; --btn-text: #ffffff;
+  --btn-bg: #ececec; --btn-bg-hover: #e2e4e8; --btn-bg-active: #d8dade; --btn-edge: #6f6f6f;
+
+  /* status + focus */
+  --err: #b00020; --danger: #b00020; --warn: #8a4b00; --ok: #1f7a3d;
+  --focus: #12467e; --ring: #12467e;
+
+  --chevron: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6'><path d='M1 1l4 4 4-4' fill='none' stroke='%23124f8a' stroke-width='1.6' stroke-linecap='round'/></svg>");
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #191919; --fg: #f3f3f3; --ink: #f3f3f3;
+    --surface: #18191a; --raised: #242526;
+
+    --heading: #8fc2f2; --accent: #8fc2f2; --link: #8fc2f2;
+    --sub: #d2d2d2; --muted: #d2d2d2; --line: #6d6d6d;
+
+    --field-bg: #474747; --field-bg-hover: #515151; --field-hover: #515151;
+    --field-text: #f5f5f5; --field-edge: #9aa0a6; --field-border: #9aa0a6;
+
+    /* a touch brighter on the dark page so white text and the fill-vs-page edge
+       both clear their contrast floors — still muted (kept in sync with the front) */
+    --btn: #4a7a54; --btn-hover: #3f6a49; --btn-text: #ffffff;
+    --btn-bg: #474747; --btn-bg-hover: #515151; --btn-bg-active: #5b5b5b; --btn-edge: #9aa0a6;
+
+    --err: #ff9b9b; --danger: #ff9b9b; --warn: #ffb366; --ok: #7fd39a;
+    --focus: #8fc2f2; --ring: #8fc2f2;
+
+    --chevron: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6'><path d='M1 1l4 4 4-4' fill='none' stroke='%23bcd8f0' stroke-width='1.6' stroke-linecap='round'/></svg>");
+  }
+}

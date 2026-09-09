@@ -3,7 +3,7 @@
 // front's apex the gateway answers the fediverse routes; a pod subdomain is a
 // real Solid pod and is never claimed.
 
-const FRONT_PATHS = new Set(['/', '/signup', '/new-account', '/run', '/admin',
+const FRONT_PATHS = new Set(['/', '/signup', '/new-account', '/run', '/roster',
   '/.well-known/webfinger', '/api/handle', '/api/attach', '/api/agent',
   '/api/roster', '/api/revoke',
   // What the pages load: the sign-in library the /run and /admin pages use, and

@@ -21,7 +21,7 @@
 //   FEDIPOD_FRONT_ORIGIN   "https://fedipod.net"
 //   FEDIPOD_DIRECTORY_URL  a JSON map { handle: record, … } (public policy fields only;
 //                          keep appendToken/hmacSecret out of anything world-readable)
-//   FEDIPOD_ADMIN_WEBID    the WebID allowed to read the roster at /admin
+//   FEDIPOD_ADMIN_WEBID    the WebID allowed to read the roster at /roster
 
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -53,7 +53,7 @@ let adminPage = '';
 try {
   adminPage = readFileSync(
     fileURLToPath(new URL('../../web/front/admin.html', import.meta.url)), 'utf8');
-} catch { /* without it /admin 404s */ }
+} catch { /* without it /roster 404s */ }
 // The deploy's own version: what the signup page shows as current.
 let frontVersion = null;
 try {
@@ -145,4 +145,4 @@ export default async function handler(request) {
   return new Response(out.body ?? null, { status: out.status, headers: out.headers });
 }
 
-export const config = { path: '/*' };
+export const config = { path: '/*', preferStatic: true };

@@ -27,7 +27,7 @@ test('claims every route the front core serves, pages and the files they load', 
   const F = 'fedipod.net';
   // Each page is useless without what it loads, so the assets are claims too:
   // an unclaimed one falls through to the pod and 404s.
-  for (const pathname of ['/', '/signup', '/new-account', '/run', '/admin',
+  for (const pathname of ['/', '/signup', '/new-account', '/run', '/roster',
     '/.well-known/webfinger', '/api/handle', '/api/attach', '/api/agent',
     '/api/roster', '/api/revoke',
     '/solid-oidc-client.js', '/install']) {

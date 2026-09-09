@@ -159,13 +159,13 @@ try {
     body: JSON.stringify({ handle: 'wren', podHome: 'https://wren.example/' }),
   });
   const attBody = await att.json();
-  check(att.status === 201 && attBody.doorInbox === `${ORIGIN}/u/wren/ap/inbox/`
-    && typeof attBody.hmacSecret === 'string',
-    'attaching a proven pod returns a door and a secret');
+  check(att.status === 201 && attBody.doorInbox === `${ORIGIN}/u/${encodeURIComponent('wren@wren.example')}/ap/inbox/`
+    && attBody.address === '@wren@wren.example' && typeof attBody.hmacSecret === 'string',
+    'attaching a proven pod returns a full-address door and a secret');
   check(/^fedipod gateway /.test(attBody.command || ''),
     `and the command it hands over is one an installed agent has (${(attBody.command || '').slice(0, 24)}…)`);
-  check(attached.wren?.inboxOnly === true && attached.wren.actorUrl === 'https://wren.example/ap/actor',
-    'the row it writes keeps the identity on their own pod');
+  check(attached['wren@wren.example']?.inboxOnly === true && attached['wren@wren.example'].actorUrl === 'https://wren.example/ap/actor',
+    'the row it writes is keyed by full address and keeps the identity on their own pod');
 
   // ---- the roster the host reads --------------------------------------------
   const finch = await get('/api/attach', {
@@ -174,9 +174,9 @@ try {
     body: JSON.stringify({ handle: 'finch', podHome: 'https://wren.example/', fronted: true }),
   });
   check(finch.status === 201, 'a fronted attach also lands (for the roster below)');
-  const adminPage = await get('/admin');
+  const adminPage = await get('/roster');
   check(adminPage.status === 200 && /roster/.test(await adminPage.text()),
-    'the admin page is served at /admin');
+    'the roster page is served at /roster');
   check((await get('/api/roster')).status === 401, 'the roster refuses an unproven reader');
   check((await get('/api/roster', { headers: { authorization: 'Bearer someone-else' } })).status === 403,
     'and a proven WebID that is not the admin');

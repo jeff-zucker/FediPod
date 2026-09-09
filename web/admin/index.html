@@ -4,30 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>FediPod — record</title>
+<link rel="stylesheet" href="tokens.css">
 <style>
-/* 20px on the root, not on body, so every rem below scales with it.
-   Two accents, kept apart on purpose: --link is anything you can act on,
-   --heading is structure. Using one colour for both made the headings
-   look clickable. */
-/* One control chassis, one selector per element kind so nothing can fall
-   through unstyled: every control sits in the same light well; a select
-   carries a drawn chevron, a button carries the action-blue text. */
-:root { color-scheme: light dark; font-size: 112.5%;
-  --bar-col: 1280px;                 /* the bar centres on the same column */
-  --link: #1a4f8a; --heading: #5b3a8e;
-  --ink: #1b1c1e; --muted: #4a4e53;
-  --btn-bg: #f4efe6; --btn-bg-hover: #ece3d2; --btn-bg-active: #e2d5bd; --btn-edge: #8a7a61;
-  --field-bg: #ffffff; --field-bg-hover: #f7f4ee; --field-edge: #767676;
-  --danger: #b00020; --ring: var(--link);
-  --chevron: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6'><path d='M1 1l4 4 4-4' fill='none' stroke='%23444444' stroke-width='1.6' stroke-linecap='round'/></svg>"); }
-@media (prefers-color-scheme: dark) {
-  :root { --link: #7fb3e8; --heading: #b9a3e3;
-    --ink: #e8eaed; --muted: #b9bdc2;
-    --btn-bg: #35302a; --btn-bg-hover: #423b31; --btn-bg-active: #4d4436; --btn-edge: #9a8d7a;
-    --field-bg: #383d44; --field-bg-hover: #40464e; --field-edge: #9aa0a6;
-    --danger: #ff8a8a;
-    --chevron: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6'><path d='M1 1l4 4 4-4' fill='none' stroke='%23dddddd' stroke-width='1.6' stroke-linecap='round'/></svg>"); }
-}
+/* Colours are the shared tokens (tokens.css, the front's palette), so the
+   record, the front and the bar are one visual system; only the layout root —
+   the base scale and the bar's column — stays here. Controls share one look: a
+   field is a light well with a drawn chevron, a button is the front's filled
+   green. */
+:root { color-scheme: light dark; font-size: 125%; --bar-col: 1280px; }
 /* The page itself never scrolls: the body is exactly the window; the content
    column beside the rail is the scroll container. */
 html { height: 100%; }
@@ -95,7 +79,7 @@ h3 { margin: 1.25rem 0 .35rem; }
 #moderation label { display: inline; margin: 0 .3rem 0 .5rem; font-weight: normal; color: var(--muted); }
 p { margin: .5rem 0; }
 .sub { color: var(--muted); margin-top: 0; }
-fieldset { border: 1px solid #bbb; border-radius: .4rem; margin: 1rem 0; padding: .75rem 1rem 1rem; }
+fieldset { border: 1px solid var(--line); border-radius: .4rem; margin: 1rem 0; padding: .75rem 1rem 1rem; }
 legend { padding: 0 .3rem; font-weight: 600; color: var(--heading); }
 label { display: block; margin: .75rem 0 .2rem; }
 .hint { color: var(--muted); font-size: 1rem; margin: .15rem 0 0; }
@@ -114,12 +98,12 @@ select { font: inherit; appearance: none; max-width: 100%; min-width: 0;
   background-repeat: no-repeat; background-position: right .55rem center;
   background-size: .6rem auto; }
 select:hover { background-color: var(--field-bg-hover); }
-/* ACTIONS: identical to the settings — same well, same border, same ink,
-   Retire included. One control look for the whole page. */
-button { font: inherit; padding: .45rem 1rem; border-radius: .3rem; border: 1px solid var(--field-edge);
-  background: var(--field-bg); color: var(--ink); cursor: pointer; }
-button:hover { background: var(--field-bg-hover); }
-button:active { background: var(--field-bg-hover); }
+/* ACTIONS: the front's filled-green button, one look for the whole page,
+   Retire included — the typed-handle confirm, not a colour, is what guards the
+   destructive ones. */
+button { font: inherit; padding: .45rem 1rem; border-radius: .3rem; border: 1px solid var(--btn);
+  background: var(--btn); color: var(--btn-text); cursor: pointer; }
+button:hover, button:active { background: var(--btn-hover); border-color: var(--btn-hover); }
 button.primary { font-weight: 600; }
 button:disabled { opacity: .55; cursor: default; }
 /* Small buttons that sit in a line of text. */
@@ -139,12 +123,24 @@ dt.under { padding-left: 1.25rem; }
 dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
 .rows { list-style: none; padding: 0; margin: .3rem 0; }
 .rows li { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center;
-  padding: .4rem 0; border-top: 1px solid #ddd; }
+  padding: .4rem 0; border-top: 1px solid var(--line); }
 .rows li span { flex: 1 1 18rem; overflow-wrap: anywhere; }
 .muted { color: var(--muted); }
 /* The actors dropdown rides the bar, at the bar's own text scale. */
 #bar select { font-size: .95rem; }
-#bsky-ctl { display: inline-flex; gap: .6rem; align-items: baseline; margin-left: .6rem; }
+/* The per-account Options disclosure: one summary opening a small stack of
+   self-describing dropdowns — Show/Hide in Feed, Store in Browser/Pod,
+   Connected/Disconnect. */
+details.opts { display: inline-block; }
+details.opts > summary { cursor: pointer; color: var(--link); list-style: none; }
+details.opts > summary::-webkit-details-marker { display: none; }
+details.opts > summary::after { content: ' \25be'; }
+details.opts[open] > summary::after { content: ' \25b4'; }
+details.opts > div { margin: .4rem 0 .2rem; padding: .5rem .6rem; display: flex; flex-direction: column;
+  gap: .4rem; align-items: stretch; border: 1px solid var(--line); border-radius: .3rem;
+  background: var(--raised); min-width: 11rem; }
+details.opts > div select { width: 100%; }
+.opt-hint { color: var(--muted); font-size: .9rem; margin: -.1rem 0 .1rem; }
 /* The alias row inside the Transfer-an-account-here panel. */
 #alias-ctl { display: flex; gap: .5rem; align-items: center; margin-top: .3rem; }
 #alias-ctl input { flex: 1 1 12rem; width: auto; }
@@ -155,9 +151,9 @@ dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
    below the control. */
 .choice { display: block; margin: .35rem 0; font-weight: normal; }
 .choice input { width: auto; margin-right: .4rem; }
-.warn { border-left: .25rem solid #c60; padding-left: .75rem; }
+.warn { border-left: .25rem solid var(--warn); padding-left: .75rem; }
 .err { border-left: .25rem solid var(--danger); padding-left: .75rem; color: var(--danger); }
-.ok { border-left: .25rem solid #2a7; padding-left: .75rem; }
+.ok { border-left: .25rem solid var(--ok); padding-left: .75rem; }
 pre { overflow-x: auto; background: #0001; padding: .6rem; border-radius: .3rem; font-size: .9rem; }
 @media (prefers-color-scheme: dark) {
   fieldset { border-color: #555; } .rows li { border-color: #444; }
@@ -308,13 +304,6 @@ pre { overflow-x: auto; background: #0001; padding: .6rem; border-radius: .3rem;
   </span>
   <span id="ident-ctl" hidden>
     <button type="button" id="ident-open" class="inline" title="   Connect an account you hold on another network, so its timeline joins the one you read here">Connect an identity</button>
-  </span>
-  <span id="bsky-ctl" hidden>
-    <select id="bsky-crosspost" aria-label="Bluesky crossposting" title="   Whether your public posts also go to the Bluesky account">
-      <option value="on">crosspost on</option>
-      <option value="off">crosspost off</option>
-    </select>
-    <button type="button" id="bsky-disconnect" class="inline danger" title="   Forget the Bluesky session and remove the stored credential">Disconnect</button>
   </span>
 </section>
 

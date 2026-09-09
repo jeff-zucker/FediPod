@@ -57,5 +57,8 @@
     "@opentelemetry/core": "^2.8.0",
     "package.json": "npm:empty-npm-package@1.0.0",
     "package-lock.json": "npm:empty-npm-package@1.0.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2"
   }
 }

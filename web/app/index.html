@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://solidcommunity.net https://*.solidcommunity.net; form-action 'self' https://solidcommunity.net https://*.solidcommunity.net; base-uri 'none'">
+<title>FediPod</title>
+<style>
+:root {
+  color-scheme: light dark;
+  font-size: 125%;                      /* 20px default (125% of 16) */
+  --bg: #ffffff; --fg: #1a1a1a;
+  --heading: #123f74; --sub: #565656; --line: #b0b0b0; --accent: #12467e;
+  --btn: #3a5f43; --btn-hover: #30503a; --btn-text: #ffffff;
+  --field-bg: #ececec; --field-text: #141414; --field-border: #6f6f6f;
+  --err: #b00020; --warn: #8a4b00; --focus: #12467e;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #191919; --fg: #f3f3f3;
+    --heading: #8fc2f2; --sub: #d2d2d2; --line: #6d6d6d; --accent: #8fc2f2;
+    --field-bg: #474747; --field-text: #f5f5f5; --field-border: #9aa0a6;
+    --btn: #4a7a54; --btn-hover: #3f6a49;
+    --err: #ff9b9b; --warn: #ffb366; --focus: #8fc2f2;
+  }
+}
+body { font: 1rem/1.55 system-ui, sans-serif; margin: 0; background: var(--bg); color: var(--fg); }
+#page { max-width: 42rem; margin: 0 auto; padding: 1.75rem 1rem 4rem; box-sizing: border-box; }
+h1, h2, h3 { color: var(--heading); }
+h1 { font-size: 1.6rem; margin: 0 0 .5rem; }
+#brand { margin: 0 0 1.25rem; }
+h2 { font-size: 1.2rem; margin: 2rem 0 .5rem; }
+p { margin: .6rem 0; }
+code { background: rgba(120,120,120,.18); padding: .05em .35em; border-radius: 4px; }
+.sub { color: var(--sub); margin-top: 0; }
+.hint { color: var(--sub); font-size: .95rem; margin: .15rem 0 0; }    /* ~17px, never under 16 */
+.grouplabel { display: block; margin: .75rem 0 .2rem; font-weight: 600; }
+fieldset { border: 1px solid var(--line); border-radius: .4rem; margin: 1rem 0; padding: .75rem 1rem 1rem; }
+legend { padding: 0 .3rem; font-weight: 600; }
+label { display: block; margin: .75rem 0 .2rem; }
+input[type=text], input[type=email], input[type=url], input[type=password], select {
+  font: inherit; font-size: 1rem; width: 100%; padding: .55rem; box-sizing: border-box;
+  border: 1px solid var(--field-border); border-radius: .3rem;
+  background: var(--field-bg); color: var(--field-text); }
+::placeholder { color: var(--sub); opacity: 1; }
+.choice { display: block; margin: .4rem 0; font-weight: normal; }
+.choice input { margin-right: .5rem; width: auto; }
+button { font: inherit; font-size: 1rem; padding: .6rem 1.3rem; border-radius: .4rem;
+  border: 1px solid var(--btn); background: var(--btn); color: var(--btn-text);
+  font-weight: 600; cursor: pointer; }
+button:hover { background: var(--btn-hover); border-color: var(--btn-hover); }
+button.primary { font-weight: 700; }
+button:disabled { opacity: .55; cursor: default; }
+#create { margin-bottom: 2rem; }
+:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.row { display: flex; gap: .5rem; align-items: center; }
+.row input { flex: 1; }
+.row button { white-space: nowrap; }
+.address { font-size: 1.25rem; font-weight: 700; word-break: break-all; color: var(--fg); }
+.warn { border-left: .25rem solid var(--warn); padding-left: .75rem; color: var(--warn); }
+.err { border-left: .25rem solid var(--err); padding-left: .75rem; color: var(--err); }
+.err:empty { display: none; }
+.steps { list-style: none; padding: 0; }
+.steps li { padding: .3rem 0; }
+a { color: var(--accent); }
+[hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main id="page">
+
+<!-- The marketing hero: shown on the landing, hidden once a form is up. -->
+<header id="hero">
+  <h1>FediPod - join the Fediverse from a Solid pod.</h1>
+  <p>Welcome to <b>fedipod.net</b>! By creating an account here, you can get a free Solid pod
+  and Fediverse identity or link to your existing pod/identity. Your fedipod.net
+  account provides you a portal to the Fediverse and filters unverified mail.</p>
+
+  <p>There is nothing to install, once you've setup an account, just point any browser at
+  <code>https://fedipod.net</code> and sign in.</p>
+</header>
+
+<!-- The short brand: shown only when a form is up, so the form stands alone. -->
+<h1 id="brand" hidden>FediPod</h1>
+
+<p id="loading" role="status">Loading…</p>
+
+<section id="landing" hidden>
+  <h2>Already have a FediPod account?</h2>
+  <p class="row">
+    <input type="text" id="signin-address" autocapitalize="off" spellcheck="false" placeholder="@me@mypod"
+      aria-label="Your FediPod address, in the form @you@yourpod">
+    <button type="button" class="primary" id="signin">sign in</button>
+  </p>
+  <p class="err" id="signin-error" role="alert"></p>
+  <h2>New user?</h2>
+  <p><button type="button" class="primary" id="create">create an account</button></p>
+  <p>Fedipod.net is a FediPod Gateway operated by Jeff Zucker. You can detach from the gateway at any
+  time and transfer your account either to your own FediPod Gateway (easy to set up on a free tier Netlify) 
+  or to any Fediverse server. All of your data lives on your pod and your Fediverse identity is yours
+  forever independent of which gateway you attach to.</p>
+  <p>For more information, see
+    <a href="https://github.com/jeff-zucker/FediPod">github.com/jeff-zucker/FediPod</a></p>
+</section>
+
+<section id="pane-form" hidden>
+  <form id="form">
+
+    <!-- Screen 1: Your Solid Pod -->
+    <div class="step" id="step-1">
+      <fieldset>
+        <legend>Your Solid Pod</legend>
+
+        <div role="radiogroup" aria-labelledby="podtype-label">
+          <span id="podtype-label" class="grouplabel">Pod type</span>
+          <label class="choice"><input type="radio" name="mode" value="existing"> An existing pod</label>
+          <label class="choice"><input type="radio" name="mode" value="new" checked> A new pod</label>
+        </div>
+
+        <label for="provider">Pod provider</label>
+        <input type="url" id="provider" name="provider" autocomplete="url" placeholder="https://solidcommunity.net">
+
+        <label for="podName">Pod username/subdomain</label>
+        <input type="text" id="podName" name="podName" autocomplete="off" aria-describedby="podname-hint">
+        <p class="hint" id="podname-hint">The subdomain of your pod. On solidcommunity.net, alice
+          becomes the pod https://alice.solidcommunity.net.</p>
+
+        <label for="email">Pod email</label>
+        <input type="email" id="email" name="email" autocomplete="email" placeholder="you@example.org">
+
+        <label for="password">Pod password</label>
+        <input type="password" id="password" name="password" autocomplete="current-password"
+          aria-describedby="password-hint">
+        <p class="hint" id="password-hint">The password is sent once in return for a credential stored
+          in this browser. The password itself is never stored, and you can revoke the credential
+          without changing it.</p>
+      </fieldset>
+      <p class="err" id="err-1" role="alert"></p>
+      <p>
+        <button type="button" id="cancel">Cancel</button>
+        <button type="button" class="primary" id="to-2">Continue</button>
+      </p>
+    </div>
+
+    <!-- Screen 2: Your Fediverse Identity -->
+    <div class="step" id="step-2" hidden>
+      <fieldset>
+        <legend>Your Fediverse Identity</legend>
+
+        <label for="handle">Fediverse handle</label>
+        <input type="text" id="handle" name="handle" autocomplete="off"
+          placeholder="the handle part of your address: @HANDLE@server" aria-describedby="handle-hint">
+        <p class="hint" id="handle-hint">The name in your Fediverse address. This is permanent.
+          Letters, digits, and hyphens only.</p>
+
+        <span id="addr-label" class="grouplabel">Your Fediverse address</span>
+        <p class="address" id="preview" role="status" aria-live="polite" aria-labelledby="addr-label">@…@…</p>
+      </fieldset>
+      <p class="hint">The handle and the pod cannot be changed afterwards. Everything else — display
+        name, bio, pictures — you set later in the client.</p>
+      <p class="err" id="form-error" role="alert"></p>
+      <p>
+        <button type="button" id="back-1">Back</button>
+        <button type="submit" class="primary" id="submit">Create Pod and Fediverse accounts</button>
+      </p>
+    </div>
+
+  </form>
+</section>
+
+<section id="running" hidden>
+  <h2 id="running-title">Setting up…</h2>
+  <ul class="steps" id="steps" aria-live="polite"></ul>
+  <p class="err" id="run-error" role="alert"></p>
+  <p id="run-actions" hidden>
+    <button type="button" id="run-back">Start over</button>
+    <button type="button" class="primary" id="run-retry">Try again</button>
+  </p>
+</section>
+
+</main>
+<script type="module" src="/boot.js"></script>
+</body>
+</html>
