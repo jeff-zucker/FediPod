@@ -33394,9 +33394,10 @@ async function signUp(answers, { onStep = () => {
 }
 
 // lib/pod/actor.mjs
+var ACCEPT_AP = 'application/activity+json, application/ld+json; profile="https://www.w3.org/ns/activitystreams"';
 async function readIssuer(actorUrl, fetchImpl = fetch) {
   try {
-    const res = await fetchImpl(actorUrl, { headers: { accept: "application/activity+json" } });
+    const res = await fetchImpl(actorUrl, { headers: { accept: ACCEPT_AP } });
     if (res.status >= 400) return null;
     const doc = await res.json();
     return doc?.endpoints?.oauthAuthorizationEndpoint || null;
