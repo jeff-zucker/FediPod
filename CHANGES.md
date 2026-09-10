@@ -1,5 +1,23 @@
 # Changes
 
+## 2026-09-10 (three things the browser build could not do)
+
+Driving the browser build in a real browser for the first time found three
+faults, all of them in what it does rather than in what it stores.
+
+**Nothing that arrived could be read.** A post mentioning you, a reply, a boost,
+or anyone new following you was dropped. The account could publish, but its
+inbox was effectively dead. Anything already in your timeline was unaffected.
+
+**Notifications stopped after the first screen.** Scrolling back through them
+led nowhere, because the address the account handed the client to continue from
+was not a real one.
+
+**A new browser could not open your account.** The password screen appeared and
+its button did nothing, so an account made on one machine could not be reached
+from another. Your password was never wrong — the screen simply never acted on
+it. Nothing was lost; try again on that browser and it works.
+
 ## 2026-09-10 (any pod provider, in the browser)
 
 The sign-up page asks which pod provider you want and takes any address you

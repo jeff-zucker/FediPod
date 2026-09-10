@@ -170,6 +170,13 @@ async function serve(request, url) {
   // and takes its body already decoded.
   const bodyText = bodyBytes ? new TextDecoder().decode(bodyBytes) : '';
   const reqHeaders = {}; for (const [k, v] of request.headers) reqHeaders[k.toLowerCase()] = v;
+  // `host` is a forbidden header name, so a fetch Request never carries one and
+  // the loop above cannot produce it — but it is a header every real request
+  // arrives with, and the agent reads it to say where it lives. Without it the
+  // notifications `Link` header named `https://undefined/`, so a client that
+  // paged by following it (which is how a client is meant to page) walked off
+  // the origin and saw nothing past the first screen.
+  reqHeaders.host = url.host;
   const listeners = {};
   const req = { method: request.method, url: url.pathname + url.search, headers: reqHeaders,
     // notAllowed() above let this through, so it came from this origin. Said

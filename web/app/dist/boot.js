@@ -33743,6 +33743,24 @@ window.fedipodHandleProblem = handleProblem;
 if (typeof document !== "undefined") (async () => {
   const $ = (id) => document.getElementById(id);
   const params = new URLSearchParams(location.search);
+  const doUnlock = async () => {
+    $("unlock-error").textContent = "";
+    const btn = $("unlock-go");
+    btn.disabled = true;
+    try {
+      await window.fedipodUnlock($("unlock-password").value);
+      $("unlock-password").value = "";
+      location.href = "/admin/client/";
+    } catch (err) {
+      $("unlock-error").textContent = err.message || String(err);
+      btn.disabled = false;
+      $("unlock-password").select();
+    }
+  };
+  $("unlock-go")?.addEventListener("click", doUnlock);
+  $("unlock-password")?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") doUnlock();
+  });
   if (params.has("signout") || params.has("add")) {
     if (params.has("signout")) {
       try {
@@ -33812,24 +33830,6 @@ ${e.detail}` : "");
     $("pane-form").hidden = false;
     goStep(1);
   };
-  const doUnlock = async () => {
-    $("unlock-error").textContent = "";
-    const btn = $("unlock-go");
-    btn.disabled = true;
-    try {
-      await window.fedipodUnlock($("unlock-password").value);
-      $("unlock-password").value = "";
-      location.href = "/admin/client/";
-    } catch (err) {
-      $("unlock-error").textContent = err.message || String(err);
-      btn.disabled = false;
-      $("unlock-password").select();
-    }
-  };
-  $("unlock-go")?.addEventListener("click", doUnlock);
-  $("unlock-password")?.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") doUnlock();
-  });
   const doSignin = async () => {
     $("signin-error").textContent = "";
     try {

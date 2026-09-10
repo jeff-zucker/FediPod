@@ -172,6 +172,31 @@ if (typeof document !== 'undefined') (async () => {
   const $ = (id) => document.getElementById(id);
   const params = new URLSearchParams(location.search);
 
+  // --- unlock: this browser's first use of an account whose key is locked ---
+  //
+  // Wired FIRST, before anything that can leave this function early. Showing the
+  // pane is one of those early exits, so registering the handler further down
+  // meant the pane appeared with a dead button: the one browser that needs it is
+  // the only one that never got it.
+  const doUnlock = async () => {
+    $('unlock-error').textContent = '';
+    const btn = $('unlock-go'); btn.disabled = true;
+    try {
+      await window.fedipodUnlock($('unlock-password').value);
+      $('unlock-password').value = '';
+      location.href = '/admin/client/';
+    } catch (err) {
+      // 'wrong password' is what unwrapKeys throws on a failed AES-GCM auth,
+      // which is the only way to tell a typo from a real problem.
+      $('unlock-error').textContent = err.message || String(err);
+      btn.disabled = false;
+      $('unlock-password').select();
+    }
+  };
+  $('unlock-go')?.addEventListener('click', doUnlock);
+  $('unlock-password')?.addEventListener('keydown', (e) => { if (e.key === 'Enter') doUnlock(); });
+
+
   // The client shell's bar returns here for two things, and neither continues
   // into the client: `?signout` clears the FediPod session, the client's stored
   // account, and the worker on this browser; `?add` comes back to reach a
@@ -225,24 +250,6 @@ if (typeof document !== 'undefined') (async () => {
   const showLanding = () => { $('pane-form').hidden = true; $('running').hidden = true; $('brand').hidden = true; $('hero').hidden = false; $('landing').hidden = false; };
   const showForm = () => { $('hero').hidden = true; $('landing').hidden = true; $('brand').hidden = false; $('pane-form').hidden = false; goStep(1); };
 
-  // --- unlock: this browser's first use of an account whose key is locked ---
-  const doUnlock = async () => {
-    $('unlock-error').textContent = '';
-    const btn = $('unlock-go'); btn.disabled = true;
-    try {
-      await window.fedipodUnlock($('unlock-password').value);
-      $('unlock-password').value = '';
-      location.href = '/admin/client/';
-    } catch (err) {
-      // 'wrong password' is what unwrapKeys throws on a failed AES-GCM auth,
-      // which is the only way to tell a typo from a real problem.
-      $('unlock-error').textContent = err.message || String(err);
-      btn.disabled = false;
-      $('unlock-password').select();
-    }
-  };
-  $('unlock-go')?.addEventListener('click', doUnlock);
-  $('unlock-password')?.addEventListener('keydown', (e) => { if (e.key === 'Enter') doUnlock(); });
 
   // --- sign in: the full @you@yourpod address → redirect to your pod's login ---
   const doSignin = async () => {

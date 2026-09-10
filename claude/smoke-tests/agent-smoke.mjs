@@ -1964,6 +1964,32 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   check(!paramsRead.includes('provider') && !paramsRead.includes('issuer'),
     `and nothing fills the provider box from the address bar (page reads: ${[...new Set(paramsRead)].join(', ')})`);
 
+  // Three things a real browser found, none of which any unit check could see.
+  //
+  // A read sent as a delivery. Every dereference the browser agent makes goes
+  // through the relay, and the relay returns a body only for a GET — so with
+  // POST as the default the agent never saw the document it asked for, and a
+  // Follow from anyone new was rejected with "actor fetch failed". The Node side
+  // builds a `Request`, whose default is GET, and every caller meaning POST says
+  // so; this is the browser matching it.
+  check(/method: init\.method \|\| 'GET'/.test(read('web/app/deliver-relay.mjs')),
+    'a browser-side request with no method named is a read, as it is on the Node side');
+
+  // `host` is a forbidden header, so the request the worker builds cannot carry
+  // one from the fetch it intercepted — and the facade reads it to say where it
+  // lives. Without it the notifications `Link` header named `https://undefined/`,
+  // and a client paging by following it walked off the origin.
+  check(/reqHeaders\.host = url\.host/.test(read('web/app/sw-src.mjs')),
+    'the worker stamps the host it was asked on, which no fetch Request carries');
+
+  // The unlock pane is shown by an early return, so a handler registered after
+  // it never ran: the pane appeared with a dead button, in the one browser that
+  // needs it.
+  const unlockAt = bootSrc.indexOf("$('unlock-go')?.addEventListener");
+  const paneAt = bootSrc.indexOf("key-password-needed");
+  check(unlockAt > 0 && paneAt > 0 && unlockAt < paneAt,
+    'the unlock button is wired before anything that can show its pane and return');
+
   // readBody destroyed the socket and never settled, so the handler awaited
   // for the life of the process.
   const rbAt = masto.indexOf('function readBody');

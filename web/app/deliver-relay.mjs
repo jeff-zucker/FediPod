@@ -18,11 +18,16 @@ export class RelayDeliverer extends Deliverer {
     this.sessionFetch = opts.sessionFetch;   // the DPoP session's fetch, to authenticate to the relay
   }
 
-  // Same contract as Deliverer.signedFetch: resolve with { status, headers }, or
-  // throw with .status/.retryAfterMs so the queue can back off.
+  // Same contract as Deliverer.signedFetch, DEFAULT INCLUDED: an init with no
+  // method is a read. The Node one builds a `Request`, whose default is GET, and
+  // every caller that means POST says so (deliver.mjs deliverNow). Defaulting to
+  // POST here sent every dereference — an actor, a note, a reply — to the relay
+  // as a delivery, and the relay returns a body only for a GET. So the agent
+  // never saw the document it asked for: a Follow from anyone new was rejected
+  // with "actor fetch failed", and nothing needing a lookup could be ingested.
   async signedFetch(url, init = {}) {
     const body = typeof init.body === 'string' ? init.body : (init.body ? new TextDecoder().decode(init.body) : '');
-    const s = await sign({ url, method: init.method || 'POST', headers: init.headers || {}, body }, this.rsaPrivate, this.keyId);
+    const s = await sign({ url, method: init.method || 'GET', headers: init.headers || {}, body }, this.rsaPrivate, this.keyId);
     const relayReq = {
       url: s.url, method: s.method, body,
       headers: {
