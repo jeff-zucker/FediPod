@@ -48,7 +48,18 @@ worker answers the data endpoints it calls. See
 second device runs read-only until it takes over — and starts the drain/mirrors
 only when it is the active holder.
 
-Build: `node scripts/build-app.mjs --entry web/app/sw-src.mjs --out web/app/dist/sw.js` and `--entry web/app/boot.mjs --out web/app/dist/boot.js`, then `node scripts/stage-site.mjs` to assemble `web/app/site/` (the front, the worker, Phanpy under `/app/`, and `web/admin` under `/admin/`). Tests: `claude/validation/browser-agent/` (run.mjs, sw-run.mjs) and `claude/smoke-tests/admin-facade-smoke.mjs`.
+Build: `node scripts/build-app.mjs --entry web/app/sw-src.mjs --out web/app/dist/sw.js` and `--entry web/app/boot.mjs --out web/app/dist/boot.js`, then `node scripts/stage-site.mjs` to assemble `web/app/site/` (the front, the worker, Phanpy under `/app/`, and `web/admin` under `/admin/`).
+
+Tests: `claude/smoke-tests/admin-facade-smoke.mjs`, and eight harnesses in
+`claude/validation/browser-agent/` that drive a real Chrome against a scratch
+Solid server — `run` (the agent and the facade), `sw-run` (the same through the
+service worker, plus media upload and notification paging), `full-run` (the
+staged site, sign-up to Phanpy rendering), `unlock-run` (a browser with no opened
+key), `oidc-run`, `resume-run`, `gateway-run`, and `provider-csp-run` (the
+sign-up page's own policy, read from the browser's refusal reports). Three
+helpers sit beside them: `idp-login.mjs` fills the pod's login and consent
+screens, `worker-log.mjs` reads the agent's console out of the service worker,
+and the attach and relay stubs in `sw-run.mjs` stand in for the front.
 
 ## What this build does not have
 
