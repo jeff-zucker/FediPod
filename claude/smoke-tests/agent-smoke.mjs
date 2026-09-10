@@ -3123,7 +3123,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     'publisher probes through the pod rather than round the side of it');
   // Still credential-free: it asks what a STRANGER sees, and answering that
   // with our own credentials would answer a different question.
-  const rem = fs.readFileSync(path.join(root, 'lib/remote.mjs'), 'utf8');
+  const rem = fs.readFileSync(path.join(root, 'lib/pod/transport.mjs'), 'utf8');
   const probeBody = rem.slice(rem.indexOf('async probe('), rem.indexOf('async fetch('));
   check(/await fetch\(url, init\)/.test(probeBody) && !/session\.fetch/.test(probeBody),
     'and still without credentials, which is the whole point of a probe');
@@ -3273,7 +3273,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   try { pod.aclDoc('not a url', ['Read']); } catch { threw = true; }
   check(threw, 'an unusable target throws here rather than being PUT to the pod');
 
-  const src = fs.readFileSync(path.join(root, 'lib/remote.mjs'), 'utf8');
+  const src = fs.readFileSync(path.join(root, 'lib/pod/transport.mjs'), 'utf8');
   check(!/@prefix acl:/.test(src) && /\$rdf\.serialize/.test(src),
     'no Turtle is assembled from template literals — the last such site in the project');
 }
@@ -3535,8 +3535,10 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   check(!/getJson\([^)]*\)\.catch/.test(addReply),
     'addReply does not swallow a failed read into an empty replies collection');
 
-  const remoteSrc = fs.readFileSync(path.join(root, 'lib/remote.mjs'), 'utf8');
-  const body = remoteSrc.slice(remoteSrc.indexOf('async put('));
+  const remoteSrc = fs.readFileSync(path.join(root, 'lib/pod/transport.mjs'), 'utf8');
+  const putAt = remoteSrc.indexOf('async put(');
+  check(putAt > 0, 'the transport still has the put() this checks below');
+  const body = remoteSrc.slice(putAt);
   check(!/this\.session\.fetch/.test(body),
     'no method below fetch() reaches session.fetch directly, bypassing the cooldown');
 }

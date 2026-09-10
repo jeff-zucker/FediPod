@@ -100,6 +100,57 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
 ));
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 
+// lib/pod/urls.mjs
+function apUrls(remotePod, root, { publicBase = null } = {}) {
+  if (!root) throw new Error("apUrls: a container root is required \u2014 the caller states it, this library does not guess");
+  const base = remotePod.endsWith("/") ? remotePod : remotePod + "/";
+  const home = base + (root.endsWith("/") ? root : root + "/");
+  const face = publicBase ? publicBase.endsWith("/") ? publicBase : publicBase + "/" : home;
+  const urls = {
+    base,
+    home,
+    webfinger: base + ".well-known/webfinger",
+    actor: face + "ap/actor",
+    inbox: face + "ap/inbox/",
+    outbox: face + "ap/outbox",
+    followers: face + "ap/followers",
+    following: face + "ap/following",
+    notes: face + "ap/notes/",
+    privateNotes: face + "ap/private/",
+    featured: face + "ap/featured",
+    // FEP-1b12: the moderator roster a recipient validates announced
+    // moderation against. Published only when moderators are configured.
+    moderators: face + "ap/moderators",
+    // FEP-4ccd and FEP-c648: follows in limbo and the block list, as
+    // collections. They live in the private container so the owner-only ACL
+    // is inherited, not re-stated per document.
+    pendingFollowers: face + "ap/private/pending-followers",
+    pendingFollowing: face + "ap/private/pending-following",
+    blocked: face + "ap/private/blocked",
+    profileHtml: face + "ap/profile.html",
+    // Media stays on the pod even when fronted: attachment urls are not
+    // identity-checked by remotes, and proxying blobs would be pure cost.
+    media: home + "ap/media/",
+    fediverse: home + "fediverse/",
+    state: home + "ap-state/"
+  };
+  if (publicBase) {
+    urls.podHome = home;
+    urls.publicHome = face;
+    urls.toPod = (u) => typeof u === "string" && u.startsWith(face) ? home + u.slice(face.length) : u;
+    urls.toPublic = (u) => typeof u === "string" && u.startsWith(home) ? face + u.slice(home.length) : u;
+  }
+  return urls;
+}
+function webfingerHost(podUrl) {
+  const u = new URL(podUrl);
+  return u.pathname === "/" ? u.host : null;
+}
+var init_urls = __esm({
+  "lib/pod/urls.mjs"() {
+  }
+});
+
 // node_modules/entities/dist/decode-codepoint.js
 function replaceCodePoint(codePoint) {
   if (codePoint >= 55296 && codePoint <= 57343 || codePoint > 1114111) {
@@ -9530,6 +9581,7 @@ and ensure you are accounting for this risk.
 var wire_exports = {};
 __export(wire_exports, {
   AS_CTX: () => AS_CTX,
+  DEFAULT_ROOT: () => DEFAULT_ROOT,
   FOLLOWERS_PAGE_SIZE: () => FOLLOWERS_PAGE_SIZE,
   MENTION_RE: () => MENTION_RE,
   OUTBOX_PAGE_SIZE: () => OUTBOX_PAGE_SIZE,
@@ -9539,7 +9591,7 @@ __export(wire_exports, {
   actorDoc: () => actorDoc,
   addRemoveActivity: () => addRemoveActivity,
   announceActivity: () => announceActivity,
-  apUrls: () => apUrls,
+  apUrls: () => apUrls2,
   assertionKeyId: () => assertionKeyId,
   attachmentsOf: () => attachmentsOf,
   blockActivity: () => blockActivity,
@@ -9590,49 +9642,8 @@ __export(wire_exports, {
 function publicHandle(config) {
   return config?.gateway?.frontActor?.match(/\/u\/([^/]+)\/ap\/actor\/?$/)?.[1] || config?.handle || null;
 }
-function apUrls(remotePod, root = "activitypods-js/", { publicBase = null } = {}) {
-  const base = remotePod.endsWith("/") ? remotePod : remotePod + "/";
-  const home = base + (!root || root.endsWith("/") ? root : root + "/");
-  const face = publicBase ? publicBase.endsWith("/") ? publicBase : publicBase + "/" : home;
-  const urls = {
-    base,
-    home,
-    webfinger: base + ".well-known/webfinger",
-    actor: face + "ap/actor",
-    inbox: face + "ap/inbox/",
-    outbox: face + "ap/outbox",
-    followers: face + "ap/followers",
-    following: face + "ap/following",
-    notes: face + "ap/notes/",
-    privateNotes: face + "ap/private/",
-    featured: face + "ap/featured",
-    // FEP-1b12: the moderator roster a recipient validates announced
-    // moderation against. Published only when moderators are configured.
-    moderators: face + "ap/moderators",
-    // FEP-4ccd and FEP-c648: follows in limbo and the block list, as
-    // collections. They live in the private container so the owner-only ACL
-    // is inherited, not re-stated per document.
-    pendingFollowers: face + "ap/private/pending-followers",
-    pendingFollowing: face + "ap/private/pending-following",
-    blocked: face + "ap/private/blocked",
-    profileHtml: face + "ap/profile.html",
-    // Media stays on the pod even when fronted: attachment urls are not
-    // identity-checked by remotes, and proxying blobs would be pure cost.
-    media: home + "ap/media/",
-    fediverse: home + "fediverse/",
-    state: home + "ap-state/"
-  };
-  if (publicBase) {
-    urls.podHome = home;
-    urls.publicHome = face;
-    urls.toPod = (u) => typeof u === "string" && u.startsWith(face) ? home + u.slice(face.length) : u;
-    urls.toPublic = (u) => typeof u === "string" && u.startsWith(home) ? face + u.slice(home.length) : u;
-  }
-  return urls;
-}
-function webfingerHost(podUrl) {
-  const u = new URL(podUrl);
-  return u.pathname === "/" ? u.host : null;
+function apUrls2(remotePod, root, opts = {}) {
+  return apUrls(remotePod, root || DEFAULT_ROOT, opts);
 }
 function hostMeta(base) {
   return `<?xml version="1.0" encoding="UTF-8"?>
@@ -10252,13 +10263,16 @@ function addRemoveActivity({ urls, type, object, target, serial }) {
     target
   };
 }
-var import_sanitize_html, AS_CTX, SEC_CTX, PUBLIC, assertionKeyId, OUTBOX_PAGE_SIZE, outboxPageId, outboxPageCount, outboxItemId, FOLLOWERS_PAGE_SIZE, followersPageId, followersPageCount, ALLOWED_TAGS, ALLOWED_ATTRS, MAX_ATTACHMENTS, MAX_ATTACHMENT_URL, attachmentUrl, HTML_ESCAPES, MENTION_RE;
+var import_sanitize_html, AS_CTX, SEC_CTX, PUBLIC, DEFAULT_ROOT, assertionKeyId, OUTBOX_PAGE_SIZE, outboxPageId, outboxPageCount, outboxItemId, FOLLOWERS_PAGE_SIZE, followersPageId, followersPageCount, ALLOWED_TAGS, ALLOWED_ATTRS, MAX_ATTACHMENTS, MAX_ATTACHMENT_URL, attachmentUrl, HTML_ESCAPES, MENTION_RE;
 var init_wire = __esm({
   "lib/wire.mjs"() {
+    init_urls();
+    init_urls();
     import_sanitize_html = __toESM(require_sanitize_html(), 1);
     AS_CTX = "https://www.w3.org/ns/activitystreams";
     SEC_CTX = "https://w3id.org/security/v1";
     PUBLIC = "https://www.w3.org/ns/activitystreams#Public";
+    DEFAULT_ROOT = "activitypods-js/";
     assertionKeyId = (urls) => urls.actor + "#ed25519-key";
     OUTBOX_PAGE_SIZE = 20;
     outboxPageId = (outboxId, n) => `${outboxId}-${n}`;
@@ -44101,7 +44115,7 @@ var Publisher = class {
     this.assertionKey = assertionKey;
     this.clientOrigin = clientOrigin;
     const publicBase = config.gateway?.frontActor ? config.gateway.frontActor.replace(/ap\/actor\/?$/, "") : null;
-    this.urls = apUrls(config.remotePod, config.root, { publicBase });
+    this.urls = apUrls2(config.remotePod, config.root, { publicBase });
     if (this.urls.toPod && this.remote?.setUrlMap) this.remote.setUrlMap(this.urls.toPod);
     this.probeFetch = probeFetch || ((u, i) => this.remote.probe(u, i));
     this.resolveMention = resolveMention;
@@ -45319,7 +45333,7 @@ var Publisher = class {
 init_wire();
 init_safefetch();
 
-// lib/links.mjs
+// lib/pod/links.mjs
 function linkTargets(headerValue, rel, baseUrl) {
   if (!headerValue) return [];
   const wanted = String(rel).toLowerCase();
@@ -45966,12 +45980,12 @@ var Intake = class {
   async fetchAP(url) {
     const res = await this.deliverer.signedFetch(url, { headers: { accept: ACCEPT_AP2 } });
     if (res.status >= 400) return null;
-    const { readCapped: readCapped2 } = await Promise.resolve().then(() => (init_safefetch(), safefetch_exports));
+    const { readCapped: readCapped3 } = await Promise.resolve().then(() => (init_safefetch(), safefetch_exports));
     const ct = (res.headers.get("content-type") || "").split(";")[0].trim().toLowerCase();
     if (ct && !ct.endsWith("json")) return null;
     let doc = null;
     try {
-      doc = JSON.parse(await readCapped2(res));
+      doc = JSON.parse(await readCapped3(res));
     } catch (e) {
       this.log(`fetch ${url}: unreadable as JSON \u2014 ${e.message}`);
       return null;
@@ -46027,8 +46041,8 @@ var Intake = class {
     try {
       const res = await this.remote.fetch(itemUrl + ".receipt.json", { headers: { accept: "application/json" } });
       if (res.status >= 400) return null;
-      const { readCapped: readCapped2 } = await Promise.resolve().then(() => (init_safefetch(), safefetch_exports));
-      const receipt = JSON.parse(await readCapped2(res, 64 * 1024));
+      const { readCapped: readCapped3 } = await Promise.resolve().then(() => (init_safefetch(), safefetch_exports));
+      const receipt = JSON.parse(await readCapped3(res, 64 * 1024));
       const { verifyReceipt: verifyReceipt2 } = await Promise.resolve().then(() => (init_httpsig(), httpsig_exports));
       return verifyReceipt2(receipt, secret) ? receipt : null;
     } catch {
@@ -46595,8 +46609,8 @@ var Intake = class {
     if (res.status === 404 || res.status === 410) return true;
     if (res.status < 400) {
       try {
-        const { readCapped: readCapped2 } = await Promise.resolve().then(() => (init_safefetch(), safefetch_exports));
-        return JSON.parse(await readCapped2(res))?.type === "Tombstone";
+        const { readCapped: readCapped3 } = await Promise.resolve().then(() => (init_safefetch(), safefetch_exports));
+        return JSON.parse(await readCapped3(res))?.type === "Tombstone";
       } catch {
         return false;
       }
@@ -47018,7 +47032,7 @@ async function lookupWebFinger(acct) {
   if (at < 1) return null;
   const [user, host] = [clean.slice(0, at), clean.slice(at + 1)];
   if (!host || /[/\\?#]/.test(host)) return null;
-  const { safeFetch: safeFetch2, readCapped: readCapped2 } = await Promise.resolve().then(() => (init_safefetch(), safefetch_exports));
+  const { safeFetch: safeFetch2, readCapped: readCapped3 } = await Promise.resolve().then(() => (init_safefetch(), safefetch_exports));
   const url = `https://${host}/.well-known/webfinger?resource=${encodeURIComponent(`acct:${clean}`)}`;
   const res = await safeFetch2(url, {
     headers: { accept: "application/jrd+json, application/json" }
@@ -47026,7 +47040,7 @@ async function lookupWebFinger(acct) {
   if (!res || res.status >= 400) return null;
   let jrd2;
   try {
-    jrd2 = JSON.parse(await readCapped2(res, 256 * 1024));
+    jrd2 = JSON.parse(await readCapped3(res, 256 * 1024));
   } catch {
     return null;
   }
@@ -49833,14 +49847,14 @@ var TagFeed = class {
       for (const tag of tags) {
         let list;
         try {
-          const { safeFetch: safeFetch2, retryAfterMs: retryAfterMs3, readCapped: readCapped2 } = await Promise.resolve().then(() => (init_safefetch(), safefetch_exports));
+          const { safeFetch: safeFetch2, retryAfterMs: retryAfterMs3, readCapped: readCapped3 } = await Promise.resolve().then(() => (init_safefetch(), safefetch_exports));
           const url = `${instance}/api/v1/timelines/tag/${encodeURIComponent(tag)}?limit=${PER_TAG}`;
           const res = this.fetcher === globalThis.fetch ? await safeFetch2(url, { headers: { accept: "application/json" } }) : await this.fetcher(url, { headers: { accept: "application/json" } });
           if (res.status >= 400) {
             this._backOff(res.status, retryAfterMs3(res));
             return;
           }
-          list = JSON.parse(await readCapped2(res, MAX_TIMELINE_BYTES));
+          list = JSON.parse(await readCapped3(res, MAX_TIMELINE_BYTES));
         } catch (e) {
           this.log(`tagfeed #${tag}: ${e.message}`);
           this._backOff(0, null);
@@ -49928,33 +49942,63 @@ async function makeDpopSession({ clientId, secret, tokenEndpoint }) {
   return { fetch: authFetch, refresh };
 }
 
-// web/app/pod-remote.mjs
+// lib/pod/http.mjs
+var MAX_BYTES2 = 5 * 1024 * 1024;
+var COOLDOWN_MAX_MS = 30 * 6e4;
+function retryAfterMs2(res, max = COOLDOWN_MAX_MS) {
+  const raw = res?.headers?.get?.("retry-after");
+  if (!raw) return null;
+  const secs = Number(raw);
+  if (Number.isFinite(secs)) return Math.min(Math.max(secs, 1) * 1e3, max);
+  const when = Date.parse(raw);
+  if (Number.isFinite(when)) return Math.min(Math.max(when - Date.now(), 1e3), max);
+  return null;
+}
+async function readCapped2(res, max = MAX_BYTES2) {
+  const len = Number(res.headers?.get?.("content-length") || 0);
+  if (len > max) throw new Error(`response too large (${len} bytes)`);
+  if (!res.body) return res.text();
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder("utf-8");
+  let out = "";
+  let total = 0;
+  for (; ; ) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.length;
+    if (total > max) {
+      await reader.cancel();
+      throw new Error(`response exceeded ${max} bytes`);
+    }
+    out += decoder.decode(value, { stream: true });
+  }
+  return out + decoder.decode();
+}
+
+// lib/pod/transport.mjs
+var LDP2 = Namespace("http://www.w3.org/ns/ldp#");
+var DC = Namespace("http://purl.org/dc/terms/");
+var POSIX = Namespace("http://www.w3.org/ns/posix/stat#");
 var RDF5 = Namespace("http://www.w3.org/1999/02/22-rdf-syntax-ns#");
 var ACL = Namespace("http://www.w3.org/ns/auth/acl#");
 var FOAF = Namespace("http://xmlns.com/foaf/0.1/");
 var AS2 = Namespace("https://www.w3.org/ns/activitystreams#");
-var LDP2 = Namespace("http://www.w3.org/ns/ldp#");
-var DC = Namespace("http://purl.org/dc/terms/");
-var POSIX = Namespace("http://www.w3.org/ns/posix/stat#");
 var ACP_NS = "http://www.w3.org/ns/solid/acp#";
-var RETRY_MAX = 5;
+var LISTING_MAX_BYTES = 10 * 1024 * 1024;
+var COOLDOWN_DEFAULT_MS = 6e4;
 var sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-var backoff = (n) => Math.min(5e3, 400 * 2 ** n) + Math.floor(Math.random() * 250);
-var COOLDOWN_MAX_MS = 5 * 6e4;
-var retryAfterMs2 = (res) => {
-  const raw = res?.headers?.get?.("retry-after");
-  if (!raw) return null;
-  const secs = Number(raw);
-  if (Number.isFinite(secs)) return Math.min(Math.max(secs, 1) * 1e3, COOLDOWN_MAX_MS);
-  const when = Date.parse(raw);
-  return Number.isFinite(when) ? Math.min(Math.max(when - Date.now(), 1e3), COOLDOWN_MAX_MS) : null;
-};
 var PROTECTED = [
-  [/\/profile(\/|$)/, "the WebID document"],
+  [/\/profile(\/|$)/, "the WebID document \u2014 nothing could authenticate as this pod again"],
   [/\/settings(\/|$)/, "the pod's own settings"],
   [/\/\.well-known(\/|$)/, "discovery \u2014 the handle would stop resolving"],
-  [/\.acl$/, "an access-control document"],
+  [/\.acl$/, "an access-control document \u2014 what it governs becomes unreachable"],
   [/\.meta$/, "a resource description the server itself reads"],
+  // The single-active-agent lock. It is on the pod precisely because the
+  // private half need not be — a lease only one machine can reach coordinates
+  // nothing — so it survives moving the state off, and nothing ever deletes it:
+  // release() writes an expiry, it does not remove the document. Two agents
+  // both believing they hold it is silent, destructive, duplicated inbox
+  // draining.
   [/\/lease\.json$/, "the lease \u2014 two agents would drain the same inbox"]
 ];
 function protectedFromDeletion(url) {
@@ -49965,96 +50009,195 @@ function protectedFromDeletion(url) {
     throw new Error(`refusing to DELETE an unparsable URL: ${url}`);
   }
   if (p === "/" || p === "") throw new Error(`refusing to DELETE the pod root: ${url}`);
-  for (const [re, why] of PROTECTED) if (re.test(p)) throw new Error(`refusing to DELETE ${url} \u2014 ${why}`);
+  for (const [re, why] of PROTECTED) {
+    if (re.test(p)) {
+      throw new Error(`refusing to DELETE ${url} \u2014 ${why}. Deny-list: lib/pod/transport.mjs.`);
+    }
+  }
 }
-var BrowserRemotePod = class {
-  constructor(session, { webId, log: log2 = () => {
-  } }) {
+var PodTransport = class {
+  /**
+   * @param {object} session          `{ fetch(url, init) }` — injected, never built here
+   * @param {object} opts
+   * @param {string} opts.webId       who this transport acts as; the ACL owner
+   * @param {string} [opts.role]      'agent' | 'gateway' | 'signup' — what is talking
+   * @param {string} [opts.runtime]   'node' | 'browser' — where it is talking from
+   * @param {string} [opts.cooldownMode] 'refuse' fails fast for the window;
+   *                                  'wait' sleeps it out and continues
+   * @param {number} [opts.maxCooldownMs] ceiling on a Retry-After we will honour
+   */
+  constructor(session, {
+    webId,
+    log: log2 = () => {
+    },
+    role = "agent",
+    runtime = "node",
+    cooldownMode = "refuse",
+    maxCooldownMs = 30 * 6e4
+  } = {}) {
     this.session = session;
     this.webId = webId;
     this.log = log2;
+    this.role = role;
+    this.runtime = runtime;
+    this.cooldownMode = cooldownMode;
+    this.maxCooldownMs = maxCooldownMs;
+    this.pausedUntil = 0;
+    this.probeCount = 0;
     this.aclUrls = /* @__PURE__ */ new Map();
     this.aclFlavour = null;
-    this.toPod = null;
     this._listCache = /* @__PURE__ */ new Map();
-    this.pausedUntil = 0;
+    this.toPod = null;
   }
+  /** Who is talking, and from where — the prefix on every log line and error. */
+  get label() {
+    return `${this.role}/${this.runtime}`;
+  }
+  /** One line for a boot log: what this transport is and what it points at. */
+  describe() {
+    return `${this.role} over a ${this.runtime} session \u2192 ${this.webId?.split("#")[0] || "unknown"}`;
+  }
+  /** Install the advertised→pod url map for a fronted identity (urls.toPod). */
   setUrlMap(fn) {
     this.toPod = typeof fn === "function" ? fn : null;
   }
   async warmup() {
+    return this.session.warmup?.();
   }
+  /** What we have asked of this pod, for a status page or an operator. */
   stats() {
-    return { probes: 0 };
+    return {
+      role: this.role,
+      runtime: this.runtime,
+      probes: this.probeCount,
+      pausedFor: Math.max(0, Math.round((this.pausedUntil - Date.now()) / 1e3))
+    };
   }
+  /**
+   * Observe a throttling answer and arm the pod-wide cooldown.
+   *
+   * One pause for the whole pod, not one per request: without it every
+   * in-flight call rides its own ladder into a server that has already said it
+   * is overloaded, which is how a throttle becomes a stampede. A 429 or 503
+   * with NO Retry-After still arms the window — the browser copy used to arm
+   * nothing at all in that case, which is most cases.
+   */
+  _observe(res) {
+    if (res.status !== 429 && res.status !== 503) return res;
+    const asked = retryAfterMs2(res, this.maxCooldownMs);
+    const ms = asked ?? (this.cooldownMode === "refuse" ? COOLDOWN_DEFAULT_MS : 0);
+    if (!ms) return res;
+    this.pausedUntil = Date.now() + ms;
+    this.log(`[${this.label}] pod returned ${res.status}${asked ? ", Retry-After" : ""} \u2014 holding all requests for ${Math.round(ms / 1e3)}s`);
+    return res;
+  }
+  /** Honour an armed cooldown: fail fast, or wait it out, as configured. */
+  async _cooldownGate() {
+    const left = this.pausedUntil - Date.now();
+    if (left <= 0) return;
+    if (this.cooldownMode === "wait") {
+      await sleep(Math.min(left, this.maxCooldownMs));
+      return;
+    }
+    throw new Error(`[${this.label}] pod asked us to back off \u2014 ${Math.ceil(left / 1e3)}s left of its Retry-After`);
+  }
+  /**
+   * The seam a subclass overrides to add transport behaviour — the browser's
+   * retry ladder lives here. Overriding THIS rather than `fetch` is deliberate:
+   * an override cannot skip the url map, the cooldown accounting or the
+   * deletion deny-list, because those are in `fetch` above it.
+   */
+  async _send(url, init) {
+    return this.session.fetch(url, init);
+  }
+  /**
+   * A deliberately CREDENTIAL-FREE request: it asks what a stranger would see,
+   * so it cannot go through the session without answering a different question.
+   * It still belongs to this pod, though — it opens a socket to it and takes
+   * one of its workers — so it observes the same cooldown and is counted.
+   *
+   * No url map: a probe asks about the ADVERTISED face, which is the whole
+   * point of asking.
+   */
   async probe(url, init = {}) {
-    return fetch(url, init);
+    await this._cooldownGate();
+    this.probeCount++;
+    return this._observe(await fetch(url, init));
   }
-  // credential-free, on purpose
+  /**
+   * Every authenticated request. Nothing below this reaches the session
+   * directly: this is the only place the cooldown is both OBSERVED and ARMED,
+   * the url map applied, and the deny-list enforced.
+   */
   async fetch(url, init) {
+    await this._cooldownGate();
     if (this.toPod) url = this.toPod(url);
-    let attempt = 0;
-    for (; ; ) {
-      if (this.pausedUntil && Date.now() < this.pausedUntil) {
-        await sleep(Math.min(this.pausedUntil - Date.now(), COOLDOWN_MAX_MS));
-      }
-      try {
-        const res = await this.session.fetch(url, init);
-        if ((res.status === 429 || res.status === 503) && attempt < RETRY_MAX) {
-          const asked = retryAfterMs2(res);
-          if (asked) {
-            this.pausedUntil = Date.now() + asked;
-            this.log(`${url} \u2192 ${res.status}, Retry-After ${Math.round(asked / 1e3)}s \u2014 holding the pod off`);
-          }
-          await sleep(asked ?? backoff(attempt++));
-          if (asked) attempt++;
-          continue;
-        }
-        return res;
-      } catch (e) {
-        if (attempt >= RETRY_MAX) throw e;
-        this.log(`${init?.method || "GET"} ${url} failed (${e.message}); retry ${attempt + 1}/${RETRY_MAX}`);
-        await sleep(backoff(attempt++));
-      }
+    if (String(init?.method || "").toUpperCase() === "DELETE") this._guardDelete(url);
+    return this._observe(await this._send(url, init));
+  }
+  /** Both refusals a DELETE must pass, wherever it was issued from. */
+  _guardDelete(url) {
+    protectedFromDeletion(url);
+    for (const acl of this.aclUrls?.values() ?? []) {
+      if (acl === url) throw new Error(`refusing to DELETE an access-control document: ${url}`);
     }
   }
+  async put(url, body, contentType) {
+    const res = await this.fetch(url, {
+      method: "PUT",
+      headers: { "content-type": contentType },
+      body
+    });
+    if (res.status >= 400) throw new Error(`[${this.label}] PUT ${url} \u2192 ${res.status}`);
+    this.noteAclLink(url, res);
+    return res;
+  }
+  async putJson(url, obj, contentType = "application/activity+json") {
+    return this.put(url, JSON.stringify(obj), contentType);
+  }
+  // A read that FAILED is not a document that is ABSENT. Returning null for
+  // both let a 429 read as "no replies yet", and the caller then rewrote the
+  // collection from empty — erasing every reply already recorded. Only a real
+  // 404/410 is absence; anything else throws and the caller retries later.
+  async getJson(url) {
+    const res = await this.fetch(url, { headers: { accept: "*/*" } });
+    if (res.status === 404 || res.status === 410) return null;
+    if (res.status >= 400) throw new Error(`[${this.label}] GET ${url} \u2192 ${res.status}`);
+    return res.json().catch(() => null);
+  }
+  async delete(url) {
+    const res = await this.fetch(url, { method: "DELETE" });
+    return res.status < 400 || res.status === 404;
+  }
+  /** Remember an access-control location the pod volunteered on a response. */
   noteAclLink(url, res) {
     if (this.aclUrls.has(url)) return;
     const [acl] = linkTargets(res?.headers?.get?.("link"), REL.acl, url);
     if (acl) this.aclUrls.set(url, acl);
   }
-  async put(url, body, contentType) {
-    const res = await this.fetch(url, { method: "PUT", headers: { "content-type": contentType }, body });
-    if (res.status >= 400) throw new Error(`PUT ${url} \u2192 ${res.status}`);
-    this.noteAclLink(url, res);
-    return res;
-  }
-  putJson(url, obj, contentType = "application/activity+json") {
-    return this.put(url, JSON.stringify(obj), contentType);
-  }
-  async getJson(url) {
-    const res = await this.fetch(url, { headers: { accept: "*/*" } });
-    if (res.status === 404 || res.status === 410) return null;
-    if (res.status >= 400) throw new Error(`GET ${url} \u2192 ${res.status}`);
-    return res.json().catch(() => null);
-  }
-  async delete(url) {
-    protectedFromDeletion(url);
-    for (const acl of this.aclUrls.values()) if (acl === url) throw new Error(`refusing to DELETE an access-control document: ${url}`);
-    const res = await this.fetch(url, { method: "DELETE" });
-    return res.status < 400 || res.status === 404;
-  }
+  /**
+   * Where this resource's access control lives. The pod says so on any
+   * response about the resource; a pod that says nothing is taken to keep it
+   * at the usual suffix, which is what every server this runs against does.
+   */
   async aclUrlFor(targetUrl) {
     const known = this.aclUrls.get(targetUrl);
     if (known) return known;
     try {
-      this.noteAclLink(targetUrl, await this.fetch(targetUrl, { method: "HEAD" }));
+      const res = await this.fetch(targetUrl, { method: "HEAD" });
+      this.noteAclLink(targetUrl, res);
     } catch {
     }
     const resolved = this.aclUrls.get(targetUrl) || targetUrl + ".acl";
     this.aclUrls.set(targetUrl, resolved);
     return resolved;
   }
+  /**
+   * Whether writing a WAC document here is meaningful. Asked once per pod, on
+   * the first access-control write. A pod that answers with ACP policies is
+   * left alone: replacing them with authorizations it does not read would take
+   * away the rules actually protecting it.
+   */
   async aclWritable(aclUrl) {
     if (this.aclFlavour !== null) return this.aclFlavour;
     this.aclFlavour = true;
@@ -50063,15 +50206,25 @@ var BrowserRemotePod = class {
       if (res.status < 300) {
         const g = graph();
         parse2(await res.text(), g, aclUrl, "text/turtle");
-        if (g.statements.some((st2) => st2.predicate.value.startsWith(ACP_NS) || st2.object.value.startsWith(ACP_NS))) {
+        const acp = g.statements.some((st2) => st2.predicate.value.startsWith(ACP_NS) || st2.object.value.startsWith(ACP_NS));
+        if (acp) {
           this.aclFlavour = false;
-          this.log("this pod states access as ACP; its rules are left as they are");
+          this.log(`[${this.label}] this pod states access as ACP policies, which this library does not write \u2014 its access rules are left exactly as they are, and nothing here is published private`);
         }
       }
     } catch {
     }
     return this.aclFlavour;
   }
+  // WAC doc granting the public `publicModes` on target, owner full control.
+  // An empty publicModes list yields an owner-only document.
+  //
+  // Built and serialised by rdflib, like every other document written here.
+  // This is the highest-consequence RDF in the project: an ACL that comes out
+  // malformed, or naming the wrong subject, either locks the owner out or
+  // leaves the private trees world-readable. $rdf.sym() also throws on an
+  // illegal IRI, so a pod URL with something odd in it fails here rather than
+  // silently producing a document that means something else.
   aclDoc(targetUrl, publicModes, { appendAgents = [], aclUrl = null } = {}) {
     const url = aclUrl || targetUrl + ".acl";
     const doc = namedNode2(url);
@@ -50084,9 +50237,16 @@ var BrowserRemotePod = class {
       g.add(subject, ACL("default"), target, doc);
       for (const m of modes) g.add(subject, ACL("mode"), ACL(m), doc);
     };
-    if (publicModes.length) authorize(namedNode2(url + "#public"), ACL("agentClass"), FOAF("Agent"), publicModes);
+    if (publicModes.length) {
+      authorize(namedNode2(url + "#public"), ACL("agentClass"), FOAF("Agent"), publicModes);
+    }
     appendAgents.forEach((webId, i) => authorize(namedNode2(url + `#gw${i}`), ACL("agent"), namedNode2(webId), ["Append"]));
-    authorize(namedNode2(url + "#owner"), ACL("agent"), namedNode2(this.webId), ["Read", "Write", "Control"]);
+    authorize(
+      namedNode2(url + "#owner"),
+      ACL("agent"),
+      namedNode2(this.webId),
+      ["Read", "Write", "Control"]
+    );
     return serialize(doc, g, url, "text/turtle");
   }
   async setAcl(targetUrl, publicModes, opts = {}) {
@@ -50094,18 +50254,26 @@ var BrowserRemotePod = class {
     if (!await this.aclWritable(url)) return null;
     return this.put(url, this.aclDoc(targetUrl, publicModes, { ...opts, aclUrl: url }), "text/turtle");
   }
+  // Child documents of an LDP container (URLs under it, excluding aux docs).
+  // Revalidated: the inbox is polled every couple of minutes and is usually
+  // unchanged, so ask conditionally and let the server answer 304.
   async listContainer(url) {
+    this._listCache ||= /* @__PURE__ */ new Map();
     const known = this._listCache.get(url);
-    const res = await this.fetch(url, { headers: { accept: "text/turtle", ...known?.etag ? { "if-none-match": known.etag } : {} } });
+    const res = await this.fetch(url, {
+      headers: { accept: "text/turtle", ...known?.etag ? { "if-none-match": known.etag } : {} }
+    });
     if (res.status === 304 && known) return known.children;
     if (res.status >= 400) return [];
-    const body = await res.text();
-    const g = graph();
+    let body;
     try {
-      parse2(body, g, url, "text/turtle");
-    } catch {
+      body = await readCapped2(res, LISTING_MAX_BYTES);
+    } catch (e) {
+      this.log(`[${this.label}] listing at ${url}: ${e.message} \u2014 using the last known listing`);
       return known?.children ?? [];
     }
+    const g = graph();
+    parse2(body, g, url, "text/turtle");
     const here = namedNode2(url);
     const seen = /* @__PURE__ */ new Set();
     const list = [];
@@ -50123,6 +50291,49 @@ var BrowserRemotePod = class {
     this._listCache.set(url, { etag: res.headers.get("etag"), children: list });
     return list;
   }
+  /**
+   * The WebID profile advertises the actor as an account:
+   *   <webId> foaf:account <actor> .
+   *   <actor> a foaf:OnlineAccount, as:Person|as:Group ; foaf:accountName "@handle@host" .
+   * Read–check–write through rdflib. Returns false when the profile already
+   * says all of it. The parsed graph must mention the WebID before anything is
+   * written back — an empty or foreign body must never become the new profile.
+   */
+  async linkAccountInProfile({ actorUrl, accountName, kind = "person" }) {
+    const docUrl = this.webId.split("#")[0];
+    const res = await this.fetch(docUrl, { headers: { accept: "text/turtle" } });
+    if (res.status >= 400) throw new Error(`[${this.label}] GET ${docUrl} \u2192 ${res.status}`);
+    const g = graph();
+    parse2(await res.text(), g, docUrl, "text/turtle");
+    const doc = namedNode2(docUrl);
+    const me = namedNode2(this.webId);
+    if (!g.statementsMatching(me, null, null, doc).length) {
+      throw new Error(`profile at ${docUrl} does not mention ${this.webId} \u2014 not rewriting it`);
+    }
+    const actor = namedNode2(actorUrl);
+    const wanted = [
+      [me, FOAF("account"), actor],
+      [actor, RDF5("type"), FOAF("OnlineAccount")],
+      [actor, RDF5("type"), kind === "group" ? AS2("Group") : AS2("Person")],
+      [actor, FOAF("accountName"), literal2(accountName)]
+    ];
+    const missing = wanted.filter(([s, p, o]) => !g.holds(s, p, o, doc));
+    const stale = g.statementsMatching(actor, FOAF("accountName"), null, doc).filter((st2) => st2.object.value !== accountName);
+    if (!missing.length && !stale.length) return false;
+    const deletes = stale.map((st2) => [st2.subject, st2.predicate, st2.object]);
+    if (await this.patchDocument(docUrl, missing, deletes)) return true;
+    for (const st2 of stale) g.remove(st2);
+    for (const [s, p, o] of missing) g.add(s, p, o, doc);
+    await this.put(docUrl, serialize(doc, g, docUrl, "text/turtle"), "text/turtle");
+    return true;
+  }
+  /**
+   * An N3 Patch of exactly these statements, or false when the pod will not
+   * take one and the caller should write the document instead.
+   *
+   * The statements are serialised by rdflib; only the wrapper naming what is
+   * being patched is assembled here, because N3's braces have no rdflib form.
+   */
   n3Patch(docUrl, inserts, deletes) {
     const block = (triples) => {
       const g = graph();
@@ -50140,39 +50351,75 @@ ${clauses.join(";\n")}.
   async patchDocument(docUrl, inserts, deletes) {
     let res;
     try {
-      res = await this.fetch(docUrl, { method: "PATCH", headers: { "content-type": "text/n3" }, body: this.n3Patch(docUrl, inserts, deletes) });
+      res = await this.fetch(docUrl, {
+        method: "PATCH",
+        headers: { "content-type": "text/n3" },
+        body: this.n3Patch(docUrl, inserts, deletes)
+      });
     } catch {
       return false;
     }
     if (res.status < 300) return true;
     if (res.status === 405 || res.status === 415 || res.status === 501) return false;
-    throw new Error(`PATCH ${docUrl} \u2192 ${res.status}`);
+    throw new Error(`[${this.label}] PATCH ${docUrl} \u2192 ${res.status}`);
   }
-  async linkAccountInProfile({ actorUrl, accountName, kind = "person" }) {
-    const docUrl = this.webId.split("#")[0];
-    const res = await this.fetch(docUrl, { headers: { accept: "text/turtle" } });
-    if (res.status >= 400) throw new Error(`GET ${docUrl} \u2192 ${res.status}`);
-    const g = graph();
-    parse2(await res.text(), g, docUrl, "text/turtle");
-    const doc = namedNode2(docUrl);
-    const me = namedNode2(this.webId);
-    if (!g.statementsMatching(me, null, null, doc).length) throw new Error(`profile at ${docUrl} does not mention ${this.webId}`);
-    const actor = namedNode2(actorUrl);
-    const wanted = [
-      [me, FOAF("account"), actor],
-      [actor, RDF5("type"), FOAF("OnlineAccount")],
-      [actor, RDF5("type"), kind === "group" ? AS2("Group") : AS2("Person")],
-      [actor, FOAF("accountName"), literal2(accountName)]
-    ];
-    const missing = wanted.filter(([s, p, o]) => !g.holds(s, p, o, doc));
-    const stale = g.statementsMatching(actor, FOAF("accountName"), null, doc).filter((st2) => st2.object.value !== accountName);
-    if (!missing.length && !stale.length) return false;
-    const deletes = stale.map((st2) => [st2.subject, st2.predicate, st2.object]);
-    if (await this.patchDocument(docUrl, missing, deletes)) return true;
-    for (const st2 of stale) g.remove(st2);
-    for (const [s, p, o] of missing) g.add(s, p, o, doc);
-    await this.put(docUrl, serialize(doc, g, docUrl, "text/turtle"), "text/turtle");
-    return true;
+};
+
+// web/app/pod-remote.mjs
+var RETRY_MAX = 5;
+var sleep2 = (ms) => new Promise((r) => setTimeout(r, ms));
+var backoff = (n) => Math.min(5e3, 400 * 2 ** n) + Math.floor(Math.random() * 250);
+var COOLDOWN_MAX_MS2 = 5 * 6e4;
+var BrowserRemotePod = class extends PodTransport {
+  constructor(session, { webId, log: log2 = () => {
+  }, role = "agent" } = {}) {
+    super(session, {
+      webId,
+      log: log2,
+      role,
+      runtime: "browser",
+      // Wait the throttle out rather than refusing: there is a person here, and
+      // an operation that resumes in four seconds beats one that fails and asks
+      // them to try again.
+      cooldownMode: "wait",
+      maxCooldownMs: COOLDOWN_MAX_MS2
+    });
+  }
+  async warmup() {
+  }
+  /**
+   * solidcommunity.net sits behind an edge (Cloudflare) that throttles a burst
+   * of requests: during first-boot provisioning the agent makes ~15 rapid
+   * calls, and one comes back as a dropped connection ("Failed to fetch") or a
+   * 429/503. A single dropped write used to abort the whole boot. Retry those
+   * with escalating backoff — the throttle window clears in under a few seconds.
+   * Safe to retry: a thrown request never reached the server, and a 429/503 was
+   * refused, not applied.
+   *
+   * This overrides `_send`, not `fetch`, so it cannot skip the url map, the
+   * cooldown accounting or the deletion deny-list — all of which sit in `fetch`
+   * above it. The pod-wide pause is armed there too, so a retry here waits for
+   * the whole pod rather than each call climbing its own ladder.
+   */
+  async _send(url, init) {
+    let attempt = 0;
+    for (; ; ) {
+      try {
+        const res = await this.session.fetch(url, init);
+        if ((res.status === 429 || res.status === 503) && attempt < RETRY_MAX) {
+          this._observe(res);
+          if (this.pausedUntil > Date.now()) await this._cooldownGate();
+          else await sleep2(backoff(attempt));
+          attempt++;
+          continue;
+        }
+        return res;
+      } catch (e) {
+        if (attempt >= RETRY_MAX) throw e;
+        this.log(`[${this.label}] ${init?.method || "GET"} ${url} failed (${e.message}); retry ${attempt + 1}/${RETRY_MAX}`);
+        await sleep2(backoff(attempt++));
+      }
+    }
   }
 };
 
@@ -52853,13 +53100,13 @@ var BrowserAgent = class _BrowserAgent {
     this.webId = webId;
     const root = config && config.root || "fedipod/";
     this.remote = new BrowserRemotePod(session, { webId, log: this.log });
-    this.urls = apUrls(remotePod, root);
+    this.urls = apUrls2(remotePod, root);
     this.store = new PodStore({ storage: new HttpStorage(this.urls.state, session.fetch), log: this.log });
     await this.store.load().catch(() => {
     });
     const cfg = config || this.store.getConfig();
     if (!cfg) throw new Error("no account config on this pod \u2014 sign up first");
-    this.store.setConfig({ ...this.store.getConfig() || {}, ...cfg });
+    this.store.setConfig({ ...this.store.getConfig() || {}, ...cfg, root });
     const keys = keysRecord ? await importSigningKey(keysRecord) : await loadKeysFromPod(this.remote, this.urls);
     config = this.store.getConfig();
     this.local = new PodRdf({ storage: new HttpStorage(this.urls.fediverse, session.fetch) });

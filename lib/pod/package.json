@@ -1,0 +1,19 @@
+{
+  "name": "solid-ap-pod",
+  "version": "0.1.0",
+  "description": "Read and write an ActivityPub actor's documents on a Solid pod: the container layout, an injected-session transport, WAC access control, and one module per pod resource.",
+  "type": "module",
+  "license": "MIT",
+  "exports": {
+    "./urls.mjs": "./urls.mjs",
+    "./transport.mjs": "./transport.mjs",
+    "./http.mjs": "./http.mjs",
+    "./links.mjs": "./links.mjs"
+  },
+  "dependencies": {
+    "rdflib": "^2.4.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

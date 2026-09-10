@@ -180,7 +180,12 @@ export async function signUp(answers, { onStep = () => {}, frontOrigin = null } 
     gw.running(`connecting your mail door on ${new URL(frontOrigin).host}`);
     const res = await session.fetch(`${frontOrigin.replace(/\/$/, '')}/api/attach`, {
       method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ handle, podHome: pod, actorUrl, kind: 'person' }),
+      // podHome is the AP CONTAINER, not the pod root: the front builds the
+      // delivery target as `podHome + 'ap/inbox/'` (lib/front-core.mjs), so a
+      // bare pod root sends this identity's mail to <pod>/ap/inbox/ — outside
+      // the container the agent drains, where nothing would ever read it. The
+      // manage surface has always sent `urls.home`; this is the same value.
+      body: JSON.stringify({ handle, podHome: `${pod}${AP_ROOT}`, actorUrl, kind: 'person' }),
     });
     const d = await res.json().catch(() => ({}));
     if (res.status !== 201 || !d.hmacSecret) {

@@ -177,7 +177,13 @@ export class BrowserAgent {
     // Config: handed in on sign-up, or read from the pod on a returning sign-in.
     const cfg = config || this.store.getConfig();
     if (!cfg) throw new Error('no account config on this pod — sign up first');
-    this.store.setConfig({ ...(this.store.getConfig() || {}), ...cfg });
+    // `root` is written INTO the config, not just used above. The Publisher
+    // builds its own urls from `config.root` (publisher.mjs), and a config
+    // without one falls to the Node default — so an account set up elsewhere
+    // and signed into here would keep its state under `fedipod/` while every
+    // document it published landed under `activitypods-js/`. One root, decided
+    // once, carried by the config everything downstream reads.
+    this.store.setConfig({ ...(this.store.getConfig() || {}), ...cfg, root });
     // Keys: handed in (offline), or the owner-only keys.json read from the pod.
     const keys = keysRecord ? await importSigningKey(keysRecord) : await loadKeysFromPod(this.remote, this.urls);
     config = this.store.getConfig();
