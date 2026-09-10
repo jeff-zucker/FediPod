@@ -43947,6 +43947,27 @@ var AS = Namespace("https://www.w3.org/ns/activitystreams#");
 var RDF3 = Namespace("http://www.w3.org/1999/02/22-rdf-syntax-ns#");
 var XSD2 = Namespace("http://www.w3.org/2001/XMLSchema#");
 var TURTLE = "text/turtle";
+function noteFieldsFrom(doc) {
+  if (!doc || typeof doc !== "object") return {};
+  const arr = (v) => (Array.isArray(v) ? v : v ? [v] : []).filter((x) => typeof x === "string");
+  const mentions = arr2(doc.tag).filter((t) => t?.type === "Mention" && t.href).map((t) => ({ href: t.href, ...t.name ? { name: t.name } : {} }));
+  const opts = arr2(doc.oneOf).length ? arr2(doc.oneOf) : arr2(doc.anyOf);
+  return {
+    ...arr(doc.to).length ? { to: arr(doc.to) } : {},
+    ...arr(doc.cc).length ? { cc: arr(doc.cc) } : {},
+    ...mentions.length ? { mentions } : {},
+    ...typeof doc.replies === "string" ? { replies: doc.replies } : {},
+    ...doc.summary ? { summary: doc.summary } : {},
+    ...doc.updated ? { updated: doc.updated } : {},
+    ...opts.length ? { poll: {
+      multiple: arr2(doc.anyOf).length > 0,
+      options: opts.map((o) => ({ name: o?.name, votes: Number(o?.replies?.totalItems || 0) })),
+      ...doc.endTime ? { endTime: doc.endTime } : {},
+      ...doc.votersCount != null ? { votersCount: Number(doc.votersCount) } : {}
+    } } : {}
+  };
+}
+var arr2 = (v) => (Array.isArray(v) ? v : v ? [v] : []).filter((x) => x && typeof x === "object");
 var PodRdf = class {
   constructor({ storage }) {
     this.storage = storage;
@@ -43981,31 +44002,81 @@ var PodRdf = class {
     return g;
   }
   // Inverse of writeNote for one resource.
+  //
+  // Every field below `content` is OPTIONAL on the way out, because it is
+  // optional on the way in: notes written before this document carried
+  // addressing have none of it, and every reader of this tree reads a pod's
+  // whole history. An absent field is absent, never a guess.
   async readNote(url) {
     const g = this._graph(url, await this.get(url));
     const doc = namedNode2(url);
     const iri = (p) => g.any(doc, AS(p), null, doc)?.value;
     const str = (p) => g.any(doc, AS(p), null, doc)?.value;
+    const all = (p) => g.each(doc, AS(p), null, doc).map((n) => n.value);
     const attachments = g.each(doc, AS("attachment"), null, doc).map((a) => {
       const mediaType = g.any(a, AS("mediaType"), null, doc)?.value;
       const description = g.any(a, AS("name"), null, doc)?.value;
       return { url: a.value, mediaType: mediaType || "", ...description ? { description } : {} };
     });
+    const mentions = g.each(doc, AS("tag"), null, doc).filter((t) => g.holds(t, RDF3("type"), AS("Mention"), doc)).map((t) => ({
+      href: g.any(t, AS("href"), null, doc)?.value,
+      name: g.any(t, AS("name"), null, doc)?.value
+    })).filter((m) => m.href);
+    const to = all("to");
+    const cc = all("cc");
+    const options = ["oneOf", "anyOf"].flatMap((p) => g.each(doc, AS(p), null, doc).map((o) => ({
+      name: g.any(o, AS("name"), null, doc)?.value,
+      votes: Number(g.any(g.any(o, AS("replies"), null, doc), AS("totalItems"), null, doc)?.value || 0)
+    })));
+    const multiple = g.each(doc, AS("anyOf"), null, doc).length > 0;
     return {
       noteId: iri("url"),
       actor: iri("attributedTo"),
       published: str("published"),
       inReplyTo: iri("inReplyTo"),
       content: str("content"),
-      ...attachments.length ? { attachments } : {}
+      ...attachments.length ? { attachments } : {},
+      ...to.length ? { to } : {},
+      ...cc.length ? { cc } : {},
+      ...mentions.length ? { mentions } : {},
+      ...iri("replies") ? { replies: iri("replies") } : {},
+      ...str("summary") ? { summary: str("summary") } : {},
+      ...str("updated") ? { updated: str("updated") } : {},
+      ...options.length ? { poll: {
+        options,
+        multiple,
+        ...str("endTime") ? { endTime: str("endTime") } : {},
+        ...str("votersCount") ? { votersCount: Number(str("votersCount")) } : {}
+      } } : {}
     };
   }
   // Incoming or own post → one RDF resource. kind: 'timeline' | 'posts'
-  async writeNote(kind, slug, { noteId, actor, published, content, inReplyTo, attachments }) {
+  //
+  // What is recorded here used to be a REDUCTION of the wire document: no
+  // addressing, no mentions, no replies pointer, no content warning, no edit
+  // stamp. A query against this tree could not tell a public post from a direct
+  // message, which is most of what anyone would want to ask it. Everything the
+  // wire document carries is carried here now — see noteFieldsFrom, which lifts
+  // it off an AS2 document so no call site has to remember the list.
+  async writeNote(kind, slug, {
+    noteId,
+    actor,
+    published,
+    content,
+    inReplyTo,
+    attachments,
+    to,
+    cc,
+    mentions,
+    replies,
+    summary,
+    updated,
+    poll
+  }) {
     const url = `${this.fedi}${kind}/${slug}`;
     const doc = namedNode2(url);
     const g = graph();
-    g.add(doc, RDF3("type"), AS("Note"), doc);
+    g.add(doc, RDF3("type"), poll ? AS("Question") : AS("Note"), doc);
     g.add(doc, AS("url"), namedNode2(noteId), doc);
     g.add(doc, AS("attributedTo"), namedNode2(actor), doc);
     if (published) g.add(doc, AS("published"), literal2(published, XSD2("dateTime")), doc);
@@ -44017,6 +44088,36 @@ var PodRdf = class {
       g.add(at, RDF3("type"), AS("Document"), doc);
       if (a.mediaType) g.add(at, AS("mediaType"), literal2(a.mediaType), doc);
       if (a.description) g.add(at, AS("name"), literal2(a.description), doc);
+    }
+    for (const t of to || []) g.add(doc, AS("to"), namedNode2(t), doc);
+    for (const c of cc || []) g.add(doc, AS("cc"), namedNode2(c), doc);
+    for (const m of mentions || []) {
+      if (!m?.href) continue;
+      const tag = blankNode2();
+      g.add(doc, AS("tag"), tag, doc);
+      g.add(tag, RDF3("type"), AS("Mention"), doc);
+      g.add(tag, AS("href"), namedNode2(m.href), doc);
+      if (m.name) g.add(tag, AS("name"), literal2(m.name), doc);
+    }
+    if (replies) g.add(doc, AS("replies"), namedNode2(replies), doc);
+    if (summary) g.add(doc, AS("summary"), literal2(summary), doc);
+    if (updated) g.add(doc, AS("updated"), literal2(updated, XSD2("dateTime")), doc);
+    if (poll) {
+      const pred = poll.multiple ? "anyOf" : "oneOf";
+      for (const o of poll.options || []) {
+        const opt = blankNode2();
+        g.add(doc, AS(pred), opt, doc);
+        g.add(opt, RDF3("type"), AS("Note"), doc);
+        if (o.name) g.add(opt, AS("name"), literal2(o.name), doc);
+        const tally = blankNode2();
+        g.add(opt, AS("replies"), tally, doc);
+        g.add(tally, RDF3("type"), AS("Collection"), doc);
+        g.add(tally, AS("totalItems"), literal2(String(o.votes || 0), XSD2("nonNegativeInteger")), doc);
+      }
+      if (poll.endTime) g.add(doc, AS("endTime"), literal2(poll.endTime, XSD2("dateTime")), doc);
+      if (poll.votersCount != null) {
+        g.add(doc, AS("votersCount"), literal2(String(poll.votersCount), XSD2("nonNegativeInteger")), doc);
+      }
     }
     await this.put(url, serialize(doc, g, url, TURTLE));
   }
@@ -44846,7 +44947,9 @@ var Publisher = class {
           published: s.published,
           content: s.content,
           inReplyTo: s.inReplyTo,
-          attachments: s.attachments
+          attachments: s.attachments,
+          ...s.spoiler ? { summary: s.spoiler } : {},
+          ...s.mentions?.length ? { mentions: s.mentions } : {}
         });
         rdf3++;
       } catch (e) {
@@ -45196,7 +45299,8 @@ var Publisher = class {
       published,
       content: note.content,
       inReplyTo,
-      attachments
+      attachments,
+      ...noteFieldsFrom(note)
     });
     this.store.addStatus({
       noteId: note.id,
@@ -45317,7 +45421,8 @@ var Publisher = class {
       published,
       content: question.content,
       inReplyTo,
-      attachments: []
+      attachments: [],
+      ...noteFieldsFrom(question)
     });
     this.store.addStatus({
       noteId: question.id,
@@ -45535,7 +45640,8 @@ var Publisher = class {
         published: s.published,
         content: note.content,
         inReplyTo: s.inReplyTo,
-        attachments: atts
+        attachments: atts,
+        ...noteFieldsFrom(note)
       });
     }
     const patched = this.store.updateStatus(s.noteId, {
@@ -46814,7 +46920,8 @@ var Intake = class {
         published: note.published,
         content,
         inReplyTo: note.inReplyTo,
-        attachments
+        attachments,
+        ...noteFieldsFrom(note)
       });
     }
     const mentions = [].concat(note.tag || []).filter((t) => t?.type === "Mention" && t.href && t.name).slice(0, MAX_MENTIONS).map((t) => ({ href: httpOnly(String(t.href).slice(0, MAX_URL_CHARS)), name: String(t.name).slice(0, 256) })).filter((m) => m.href);
@@ -46984,7 +47091,8 @@ var Intake = class {
         published: note.published,
         content,
         inReplyTo: note.inReplyTo,
-        attachments
+        attachments,
+        ...noteFieldsFrom(note)
       }).catch((e) => this.log(`rewrite ${s.slug}: ${e.message}`));
     }
     this.log(`edited upstream: ${objectId}`);
@@ -53389,6 +53497,7 @@ var BrowserAgent = class _BrowserAgent {
         this.startViewerPoll();
         return;
       }
+      await this.backfillStatuses().catch((e) => this.log(`backfill: ${e.message}`));
       await this.goActive();
       this.log(`browser agent fully provisioned (active): @${config.handle}`);
     })().catch((e) => {
@@ -53399,6 +53508,44 @@ var BrowserAgent = class _BrowserAgent {
     });
     this.log(`browser agent up: @${config.handle} on ${remotePod}`);
     return this;
+  }
+  /**
+   * Rebuild the feed index from the RDF on the pod.
+   *
+   * The browser build WROTE this tree and never read it back, which made it
+   * pure cost: every post published and every post received cost an extra pod
+   * write, and nothing here could use any of it. This is what it was for.
+   *
+   * It matters most for what was RECEIVED. A post this actor published is also
+   * in `ap/notes/` and can be recovered from there, but an inbox item is
+   * DELETED once handled — so the only records of a received post are the RDF
+   * note and `statuses.json`, and the latter keeps a thousand entries with long
+   * content truncated. On a new device, or after state is lost, this is the
+   * difference between a timeline and a blank page.
+   *
+   * Only when there is no index at all: it is a recovery, not a sync, and it
+   * must never overwrite an index the running agent is maintaining.
+   *
+   * Ported from run-agent.mjs, where it has always run for the Node agent.
+   */
+  async backfillStatuses() {
+    if (this.store.has("statuses.json")) return { skipped: true };
+    const entries = [];
+    for (const [container, kind] of [["timeline", "timeline"], ["posts", "post"]]) {
+      for (const url of await this.local.listNotes(container)) {
+        try {
+          const n = await this.local.readNote(url);
+          if (n.noteId) entries.push({ ...n, kind, slug: url.split("/").pop() });
+        } catch (e) {
+          this.log(`backfill: skipped ${url}: ${e.message}`);
+        }
+      }
+    }
+    if (!entries.length) return { recovered: 0 };
+    entries.sort((a, b) => String(b.published || "").localeCompare(String(a.published || "")));
+    this.store.write("statuses.json", entries.slice(0, 1e3));
+    this.log(`backfilled ${entries.length} statuses from the pod's RDF`);
+    return { recovered: entries.length };
   }
   // What the record page and the bar read (GET /status). The same shape the
   // Node agent returns (run-agent.mjs), minus what a browser cannot have — no
