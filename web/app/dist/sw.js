@@ -30981,7 +30981,7 @@ var require_buffer = __commonJS({
     function ucs2Write(buf, string, offset, length) {
       return blitBuffer(utf16leToBytes(string, buf.length - offset), buf, offset, length);
     }
-    Buffer3.prototype.write = function write2(string, offset, length, encoding) {
+    Buffer3.prototype.write = function write5(string, offset, length, encoding) {
       if (offset === void 0) {
         encoding = "utf8";
         length = this.length;
@@ -35322,7 +35322,7 @@ var Serializer = class _Serializer {
   // /////////////////////////// Quad store serialization
   // @para. write  - a function taking a single string to be output
   //
-  writeStore(write2) {
+  writeStore(write5) {
     var kb = this.store;
     var fetcher2 = kb.fetcher;
     var session = fetcher2 && fetcher2.appNode;
@@ -35330,13 +35330,13 @@ var Serializer = class _Serializer {
     for (var s in sources) {
       var source = kb.fromNT(s);
       if (session && source.equals(session)) continue;
-      write2("\n" + this.atomicTermToN3(source) + " " + this.atomicTermToN3(kb.sym("http://www.w3.org/2000/10/swap/log#semantics")) + " { " + this.statementsToN3(kb.statementsMatching(void 0, void 0, void 0, source)) + " }.\n");
+      write5("\n" + this.atomicTermToN3(source) + " " + this.atomicTermToN3(kb.sym("http://www.w3.org/2000/10/swap/log#semantics")) + " { " + this.statementsToN3(kb.statementsMatching(void 0, void 0, void 0, source)) + " }.\n");
     }
     kb.statementsMatching(void 0, kb.sym("http://www.w3.org/2007/ont/link#requestedURI")).map(function(st2) {
-      write2("\n<" + st2.object.value + "> log:metadata {\n");
+      write5("\n<" + st2.object.value + "> log:metadata {\n");
       var sts = kb.statementsMatching(void 0, void 0, void 0, st2.subject);
-      write2(this.statementsToN3(this.statementsToN3(sts)));
-      write2("}.\n");
+      write5(this.statementsToN3(this.statementsToN3(sts)));
+      write5("}.\n");
     });
     var metaSources = [];
     if (session) metaSources.push(session);
@@ -35344,7 +35344,7 @@ var Serializer = class _Serializer {
     metaSources.map(function(source2) {
       metadata = metadata.concat(kb.statementsMatching(void 0, void 0, void 0, source2));
     });
-    write2(this.statementsToN3(metadata));
+    write5(this.statementsToN3(metadata));
   }
   // ////////////////////////////////////////////// XML serialization
   statementsToXML(sts) {
@@ -44195,6 +44195,91 @@ async function setPosture(pod, urls, posture) {
   return pod.setAcl(urls.inbox, [], { appendAgents: [webId] });
 }
 
+// lib/pod/collection.mjs
+var PUBLIC_READ3 = ["Read"];
+async function writePage(pod, pageUrl, doc, { publicRead = false } = {}) {
+  await pod.putJson(pageUrl, doc);
+  if (publicRead) await pod.setAcl(pageUrl, PUBLIC_READ3);
+}
+async function writeHead(pod, url, doc, { publicRead = false } = {}) {
+  await pod.putJson(url, doc);
+  if (publicRead) await pod.setAcl(url, PUBLIC_READ3);
+}
+async function dropPage(pod, pageUrl) {
+  await pod.delete(pageUrl).catch(() => {
+  });
+}
+async function writeFlat(pod, url, doc, { publicRead = false } = {}) {
+  await pod.putJson(url, doc);
+  if (publicRead) await pod.setAcl(url, PUBLIC_READ3);
+}
+
+// lib/pod/outbox.mjs
+var writePage2 = (pod, pageUrl, doc, opts) => writePage(pod, pageUrl, doc, opts);
+var writeHead2 = (pod, urls, doc, opts) => writeHead(pod, urls.outbox, doc, opts);
+var dropPage2 = (pod, pageUrl) => dropPage(pod, pageUrl);
+
+// lib/pod/followers.mjs
+var writePage3 = (pod, pageUrl, doc, opts) => writePage(pod, pageUrl, doc, opts);
+var writeHead3 = (pod, urls, doc, opts) => writeHead(pod, urls.followers, doc, opts);
+var dropPage3 = (pod, pageUrl) => dropPage(pod, pageUrl);
+
+// lib/pod/following.mjs
+var write2 = (pod, urls, doc, opts) => writeFlat(pod, urls.following, doc, opts);
+
+// lib/pod/featured.mjs
+var write3 = (pod, urls, doc) => writeFlat(pod, urls.featured, doc, { publicRead: true });
+var writeModerators = (pod, urls, doc) => writeFlat(pod, urls.moderators, doc, { publicRead: true });
+
+// lib/pod/private.mjs
+async function writePending(pod, urls, { followers, following }) {
+  await writeFlat(pod, urls.pendingFollowers, followers);
+  await writeFlat(pod, urls.pendingFollowing, following);
+}
+var writeBlocked = (pod, urls, doc) => writeFlat(pod, urls.blocked, doc);
+
+// lib/pod/http.mjs
+var MAX_BYTES2 = 5 * 1024 * 1024;
+var COOLDOWN_MAX_MS = 30 * 6e4;
+function retryAfterMs2(res, max = COOLDOWN_MAX_MS) {
+  const raw = res?.headers?.get?.("retry-after");
+  if (!raw) return null;
+  const secs = Number(raw);
+  if (Number.isFinite(secs)) return Math.min(Math.max(secs, 1) * 1e3, max);
+  const when = Date.parse(raw);
+  if (Number.isFinite(when)) return Math.min(Math.max(when - Date.now(), 1e3), max);
+  return null;
+}
+async function readCapped2(res, max = MAX_BYTES2) {
+  const len = Number(res.headers?.get?.("content-length") || 0);
+  if (len > max) throw new Error(`response too large (${len} bytes)`);
+  if (!res.body) return res.text();
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder("utf-8");
+  let out = "";
+  let total = 0;
+  for (; ; ) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.length;
+    if (total > max) {
+      await reader.cancel();
+      throw new Error(`response exceeded ${max} bytes`);
+    }
+    out += decoder.decode(value, { stream: true });
+  }
+  return out + decoder.decode();
+}
+
+// lib/pod/policy.mjs
+var POLICY_TTL_MS = 5 * 6e4;
+var POLICY_MAX_BYTES = 256 * 1024;
+async function write4(pod, urls, doc) {
+  const url = urls.home + "ap/gateway-policy.json";
+  await pod.putJson(url, doc, "application/json");
+  await pod.setAcl(url, ["Read"]);
+}
+
 // lib/publisher.mjs
 var ACCEPT_AP = 'application/activity+json, application/ld+json; profile="https://www.w3.org/ns/activitystreams"';
 var REBUILD_MAX_PER_RUN = 200;
@@ -44319,11 +44404,11 @@ var Publisher = class {
     const actor = actorDoc2;
     await write(this.remote, urls, actor);
     if (moderators) {
-      await this.remote.putJson(
-        urls.moderators,
+      await writeModerators(
+        this.remote,
+        urls,
         orderedCollection(urls.moderators, this.config.moderators)
       );
-      await this.remote.setAcl(urls.moderators, ["Read"]);
     }
     if (gwActive) await this.publishGatewayPolicy();
     await writeProfilePage(this.remote, urls, profilePageHtml({
@@ -44757,17 +44842,21 @@ var Publisher = class {
       const digest = node_crypto_default.createHash("sha256").update(JSON.stringify(doc)).digest("hex").slice(0, 16);
       after[n] = digest;
       if (before[n] === digest) continue;
-      await this.remote.putJson(outboxPageId(urls.outbox, n), doc);
-      if (!before[n] || acls) await this.remote.setAcl(outboxPageId(urls.outbox, n), ["Read"]);
+      await writePage2(
+        this.remote,
+        outboxPageId(urls.outbox, n),
+        doc,
+        { publicRead: !before[n] || acls }
+      );
       wrote++;
     }
     const stale = Object.keys(seen.outboxPages || {}).map(Number).filter((n) => Number.isFinite(n) && n > pages.length);
     for (const n of stale) {
-      await this.remote.delete(outboxPageId(urls.outbox, n)).catch(() => {
-      });
+      await dropPage2(this.remote, outboxPageId(urls.outbox, n));
     }
-    await this.remote.putJson(
-      urls.outbox,
+    await writeHead2(
+      this.remote,
+      urls,
       outboxHead(urls.outbox, outbox.length, pages.length)
     );
     if (acls) await this.remote.setAcl(urls.outbox, ["Read"]);
@@ -44815,16 +44904,20 @@ var Publisher = class {
       const digest = node_crypto_default.createHash("sha256").update(JSON.stringify(doc)).digest("hex").slice(0, 16);
       after[n] = digest;
       if (before[n] === digest) continue;
-      await this.remote.putJson(followersPageId(urls.followers, n), doc);
-      if (!before[n] || acls) await this.remote.setAcl(followersPageId(urls.followers, n), ["Read"]);
+      await writePage3(
+        this.remote,
+        followersPageId(urls.followers, n),
+        doc,
+        { publicRead: !before[n] || acls }
+      );
     }
     const stale = Object.keys(seen.followersPages || {}).map(Number).filter((n) => Number.isFinite(n) && n > pages.length);
     for (const n of stale) {
-      await this.remote.delete(followersPageId(urls.followers, n)).catch(() => {
-      });
+      await dropPage3(this.remote, followersPageId(urls.followers, n));
     }
-    await this.remote.putJson(
-      urls.followers,
+    await writeHead3(
+      this.remote,
+      urls,
       followersHead(urls.followers, actors.length, pages.length)
     );
     if (acls) await this.remote.setAcl(urls.followers, ["Read"]);
@@ -44863,11 +44956,12 @@ var Publisher = class {
       await this.publishFollowers(actors, { acls: which.acls, force: which.force });
     }
     if (which.following) {
-      await this.remote.putJson(
-        urls.following,
-        orderedCollection(urls.following, contacts.following.filter((f) => f.accepted).map((f) => f.actor))
+      await write2(
+        this.remote,
+        urls,
+        orderedCollection(urls.following, contacts.following.filter((f) => f.accepted).map((f) => f.actor)),
+        { publicRead: which.acls }
       );
-      if (which.acls) await this.remote.setAcl(urls.following, ["Read"]);
     }
     if (which.pending) await this.publishPending();
     if (which.blocked) await this.publishBlocked();
@@ -44888,14 +44982,16 @@ var Publisher = class {
     if (await this.privateReady() !== true) return;
     const { urls } = this;
     const contacts = this.store.getContacts();
-    await this.remote.putJson(urls.pendingFollowers, orderedCollection(
-      urls.pendingFollowers,
-      this.store.getRequests().filter((r) => r.activity && !r.bsky).map((r) => r.activity)
-    ));
-    await this.remote.putJson(urls.pendingFollowing, orderedCollection(
-      urls.pendingFollowing,
-      contacts.following.filter((f) => !f.accepted && f.followActivity).map((f) => f.followActivity).reverse()
-    ));
+    await writePending(this.remote, urls, {
+      followers: orderedCollection(
+        urls.pendingFollowers,
+        this.store.getRequests().filter((r) => r.activity && !r.bsky).map((r) => r.activity)
+      ),
+      following: orderedCollection(
+        urls.pendingFollowing,
+        contacts.following.filter((f) => !f.accepted && f.followActivity).map((f) => f.followActivity).reverse()
+      )
+    });
   }
   // The gateway policy: a small PUBLIC document a keyless inbox gateway reads
   // to decide, at the edge, what to forward and what to drop. It carries only
@@ -44907,7 +45003,7 @@ var Publisher = class {
     const { urls } = this;
     const contacts = this.store.getContacts();
     const bl = this.store.getBlocklist();
-    await this.remote.putJson(urls.home + "ap/gateway-policy.json", {
+    await write4(this.remote, urls, {
       v: 1,
       actorUrl: urls.actor,
       followersUrl: urls.followers,
@@ -44918,8 +45014,7 @@ var Publisher = class {
       kind: this.config.kind || "person",
       following: contacts.following.filter((f) => f.accepted && !f.bsky).map((f) => f.actor),
       blocklist: { domains: bl.domains || [], actors: bl.actors || [] }
-    }, "application/json");
-    await this.remote.setAcl(urls.home + "ap/gateway-policy.json", ["Read"]);
+    });
   }
   // FEP-c648: the blocked actors, as an owner-only collection. Actors only —
   // domain blocks are ours, and the FEP does not carry them.
@@ -44927,7 +45022,7 @@ var Publisher = class {
     if (await this.privateReady() !== true) return;
     const { urls } = this;
     const actors = [...this.store.getBlocklist().actors || []].reverse();
-    await this.remote.putJson(urls.blocked, orderedCollection(urls.blocked, actors));
+    await writeBlocked(this.remote, urls, orderedCollection(urls.blocked, actors));
   }
   // The outbox is the public record of everything this actor has said, boosts
   // included. A Create goes in as its note id, which dereferences; an Announce
@@ -45349,8 +45444,7 @@ var Publisher = class {
   // remote server reads when it shows this profile's pins.
   async publishFeatured() {
     const ids = this.store.getStatuses().filter((s) => s.kind === "post" && s.pinned).map((s) => s.noteId);
-    await this.remote.putJson(this.urls.featured, orderedCollection(this.urls.featured, ids));
-    await this.remote.setAcl(this.urls.featured, ["Read"]);
+    await write3(this.remote, this.urls, orderedCollection(this.urls.featured, ids));
     return ids.length;
   }
   // An edit keeps the note's id, slug and published time; `updated` is the
@@ -50030,39 +50124,6 @@ async function makeDpopSession({ clientId, secret, tokenEndpoint }) {
     return fetch(url, { ...init, headers });
   };
   return { fetch: authFetch, refresh };
-}
-
-// lib/pod/http.mjs
-var MAX_BYTES2 = 5 * 1024 * 1024;
-var COOLDOWN_MAX_MS = 30 * 6e4;
-function retryAfterMs2(res, max = COOLDOWN_MAX_MS) {
-  const raw = res?.headers?.get?.("retry-after");
-  if (!raw) return null;
-  const secs = Number(raw);
-  if (Number.isFinite(secs)) return Math.min(Math.max(secs, 1) * 1e3, max);
-  const when = Date.parse(raw);
-  if (Number.isFinite(when)) return Math.min(Math.max(when - Date.now(), 1e3), max);
-  return null;
-}
-async function readCapped2(res, max = MAX_BYTES2) {
-  const len = Number(res.headers?.get?.("content-length") || 0);
-  if (len > max) throw new Error(`response too large (${len} bytes)`);
-  if (!res.body) return res.text();
-  const reader = res.body.getReader();
-  const decoder = new TextDecoder("utf-8");
-  let out = "";
-  let total = 0;
-  for (; ; ) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    total += value.length;
-    if (total > max) {
-      await reader.cancel();
-      throw new Error(`response exceeded ${max} bytes`);
-    }
-    out += decoder.decode(value, { stream: true });
-  }
-  return out + decoder.decode();
 }
 
 // lib/pod/transport.mjs
