@@ -15,6 +15,7 @@
 //   FEDIPOD_GATEWAY_WEBID the WebID this gateway authenticates as
 
 import { handleDelivery } from '../../lib/gateway-core.mjs';
+import * as podInbox from '../../lib/pod/inbox.mjs';
 
 let cachedPolicy = null;
 let cachedAt = 0;
@@ -34,15 +35,7 @@ async function loadPolicy() {
 function podPutter() {
   const token = process.env.FEDIPOD_APPEND_TOKEN;
   return async (url, body, contentType) => {
-    const res = await fetch(url, {
-      method: 'PUT',
-      // No token means the pod's inbox is public-Append, which is FediPod's
-      // default: send no authorization at all rather than `Bearer undefined`,
-      // which a pod rejects outright instead of treating as anonymous.
-      headers: { 'content-type': contentType, ...(token ? { authorization: `Bearer ${token}` } : {}) },
-      body,
-    }).catch(() => null);
-    return !!res && res.status < 400;
+    return podInbox.appendWithToken(url, body, contentType, { appendToken: token });
   };
 }
 

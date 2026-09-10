@@ -27,6 +27,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { getStore } from '@netlify/blobs';
 import { routeFront } from '../../lib/front-core.mjs';
+import * as podInbox from '../../lib/pod/inbox.mjs';
 
 // The new-account page and the vendored auth library, read once at cold start.
 let signupPage = '';
@@ -147,10 +148,7 @@ export default async function handler(request) {
     podPut: async (handle, url, body, ct) => {
       const rec = map[handle];
       if (!rec) return false;
-      const headers = { 'content-type': ct,
-        ...(rec.appendToken ? { authorization: `Bearer ${rec.appendToken}` } : {}) };
-      const r = await fetch(url, { method: 'PUT', headers, body }).catch(() => null);
-      return !!r && r.status < 400;
+      return podInbox.appendWithToken(url, body, ct, { appendToken: rec.appendToken });
     },
   });
   return new Response(out.body ?? null, { status: out.status, headers: out.headers });
