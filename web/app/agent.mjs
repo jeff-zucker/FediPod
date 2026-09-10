@@ -6,6 +6,7 @@
 // the relay (deliver-relay). Everything between — wire, the store, the
 // publisher, intake, the Mastodon facade — is lib/, unchanged.
 import { apUrls } from '../../lib/wire.mjs';
+import * as containers from '../../lib/pod/containers.mjs';
 import { PodStore } from '../../lib/store.mjs';
 import { HttpStorage } from '../../lib/storage.mjs';
 import { PodRdf } from '../../lib/podrdf.mjs';
@@ -172,7 +173,12 @@ export class BrowserAgent {
     this.urls = apUrls(remotePod, root);
 
     // State store, on the pod.
-    this.store = new PodStore({ storage: new HttpStorage(this.urls.state, session.fetch), log: this.log });
+    // Through the transport, not the raw session: state writes are pod writes,
+    // and going round it skipped the Retry-After cooldown, the retry ladder and
+    // the deletion deny-list that every other write on this agent observes.
+    // The Node agent has always passed remote.fetch here.
+    const podFetch = (u, i) => this.remote.fetch(u, i);
+    this.store = new PodStore({ storage: new HttpStorage(this.urls.state, podFetch), log: this.log });
     await this.store.load().catch(() => { /* first boot: nothing there yet */ });
     // Config: handed in on sign-up, or read from the pod on a returning sign-in.
     const cfg = config || this.store.getConfig();
@@ -189,7 +195,7 @@ export class BrowserAgent {
     config = this.store.getConfig();
 
     // The RDF truth (followers, notes) also on the pod.
-    this.local = new PodRdf({ storage: new HttpStorage(this.urls.fediverse, session.fetch) });
+    this.local = new PodRdf({ storage: new HttpStorage(this.urls.fediverse, podFetch) });
 
     // `passive`: no queue-drain timer until this device is the active one.
     // Whether it IS the active one is not known here — the lease is acquired
@@ -234,7 +240,7 @@ export class BrowserAgent {
     // one browser/device may ACT on a pod at a time — a later arrival runs
     // read-only until the owner acts on it and it takes over. Written with fresh
     // fetches, never the cached store. Passed into Intake so the drain checks it.
-    this.lease = new Lease({ url: this.urls.state + 'lease.json', fetchImpl: (u, i) => session.fetch(u, i), log: this.log });
+    this.lease = new Lease({ url: this.urls.state + 'lease.json', fetchImpl: podFetch, log: this.log });
     this.intake = new Intake({
       config: this.store.getConfig(), urls: this.urls, remote: this.remote, local: this.local,
       store: this.store, deliverer: this.deliverer, publisher: this.publisher, log: this.log, push: true, lease: this.lease,
@@ -286,11 +292,7 @@ export class BrowserAgent {
       // Owner-only containers first; idempotent, so a second device provisioning
       // them too is harmless. Each public document sets its own Read ACL inside
       // publishProfile. Mirrors run-agent bootstrap.
-      await this.remote.putJson(this.urls.state + '.keep', { keep: true }, 'application/json');
-      await this.remote.setAcl(this.urls.state, []);
-      await this.remote.setAcl(this.urls.home, []);
-      await this.remote.putJson(this.urls.fediverse + '.keep', { keep: true }, 'application/json');
-      await this.remote.setAcl(this.urls.fediverse, []);
+      await containers.provisionPrivate(this.remote, this.urls);
       // Connected-account records are reads — safe whether we act or view.
       await this.atproto.load();      // the Bluesky credential, if it is browser-stored
       await this.fediaccts.load();    // connected fediverse accounts, from both backends

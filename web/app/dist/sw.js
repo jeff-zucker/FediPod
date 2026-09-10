@@ -32854,6 +32854,69 @@ var require_src = __commonJS({
 // web/app/agent.mjs
 init_wire();
 
+// lib/pod/containers.mjs
+var KEEP = { keep: true };
+var KEEP_CT = "application/json";
+var keepUrl = (base) => `${base}.keep`;
+async function exists(pod, base) {
+  try {
+    const r = await pod.fetch(keepUrl(base), { method: "HEAD" });
+    return r?.status >= 200 && r.status < 300;
+  } catch {
+    return false;
+  }
+}
+async function provisionOwnerOnly(pod, base) {
+  await pod.putJson(keepUrl(base), KEEP, KEEP_CT);
+  await pod.setAcl(base, []);
+}
+async function provisionPublic(pod, base) {
+  await pod.putJson(keepUrl(base), KEEP, KEEP_CT);
+  await pod.setAcl(base, ["Read"]);
+}
+async function provisionPrivate(pod, urls, { fediverse = true } = {}) {
+  await pod.putJson(keepUrl(urls.state), KEEP, KEEP_CT);
+  await pod.setAcl(urls.state, []);
+  await pod.setAcl(urls.home, []);
+  if (fediverse) {
+    await pod.putJson(keepUrl(urls.fediverse), KEEP, KEEP_CT);
+    await pod.setAcl(urls.fediverse, []);
+  }
+}
+async function repairPrivateAcls(pod, trees, { isPublic } = {}) {
+  const findings = [];
+  for (const url of trees) {
+    if (!await isPublic(url)) continue;
+    const finding = { url, rewritten: false, stillPublic: false, error: null };
+    findings.push(finding);
+    try {
+      await pod.setAcl(url, []);
+      finding.rewritten = true;
+    } catch (e) {
+      finding.error = e.message;
+      continue;
+    }
+    finding.stillPublic = await isPublic(url);
+  }
+  return findings;
+}
+async function probePublicReadability(probe, url, { headers = {}, timeoutMs = 2e4 } = {}) {
+  try {
+    const res = await probe(url, {
+      headers: { accept: "*/*", ...headers },
+      signal: AbortSignal.timeout(timeoutMs)
+    });
+    return res.status < 400;
+  } catch {
+    return false;
+  }
+}
+async function probePrivateEnforcement(probe, podKeepUrl) {
+  const r = await probe(podKeepUrl, { redirect: "manual" });
+  if (r.status === 401 || r.status === 403) return true;
+  return `this pod serves private documents to strangers (HTTP ${r.status})`;
+}
+
 // lib/store.mjs
 init_node_crypto();
 init_wire();
@@ -44324,34 +44387,30 @@ var Publisher = class {
       this.urls.state,
       ...this.privateOnPod === false ? [] : [this.urls.fediverse]
     ];
-    for (const url of onPod) {
-      if (!await this.publiclyReadable(url)) continue;
-      this.log(`${url} was readable without credentials \u2014 rewriting its ACL`);
-      try {
-        await this.remote.setAcl(url, []);
-      } catch (e) {
-        this.log(`SECURITY: ${url} is public and its ACL could not be rewritten: ${e.message}`);
+    const findings = await repairPrivateAcls(
+      this.remote,
+      onPod,
+      { isPublic: (u) => this.publiclyReadable(u) }
+    );
+    for (const f of findings) {
+      this.log(`${f.url} was readable without credentials \u2014 rewriting its ACL`);
+      if (f.error) {
+        this.log(`SECURITY: ${f.url} is public and its ACL could not be rewritten: ${f.error}`);
         continue;
       }
-      if (await this.publiclyReadable(url)) {
-        this.log(`SECURITY: ${url} is STILL readable without credentials \u2014 check the pod's ACLs`);
-      }
+      if (f.stillPublic) this.log(`SECURITY: ${f.url} is STILL readable without credentials \u2014 check the pod's ACLs`);
     }
   }
   // Deliberately credential-free: this asks what a stranger would see.
   // accept: */* matters — asking for turtle makes the server answer 501 on the
   // JSON documents (webfinger, actor), which reads as "unreachable" when the
   // world can in fact see them perfectly well.
-  async publiclyReadable(url) {
-    try {
-      const res = await this.probeFetch(url, {
-        headers: { accept: "*/*", "user-agent": USER_AGENT },
-        signal: AbortSignal.timeout(HTTP_TIMEOUT_MS)
-      });
-      return res.status < 400;
-    } catch {
-      return false;
-    }
+  publiclyReadable(url) {
+    return probePublicReadability(
+      this.probeFetch,
+      url,
+      { headers: { "user-agent": USER_AGENT }, timeoutMs: HTTP_TIMEOUT_MS }
+    );
   }
   // Retire this identity for good: tell everyone who follows us to drop the
   // account, then leave a Tombstone where the actor was. The inbox stays
@@ -44869,35 +44928,28 @@ var Publisher = class {
   // on every restart. A HEAD is one request and usually the only one.
   async ensureMediaContainer() {
     if (this._mediaReady) return;
-    if (await this._containerExists(this.urls.media)) {
+    if (await exists(this.remote, this.urls.media)) {
       this._mediaReady = true;
       return;
     }
-    await this.remote.putJson(this.urls.media + ".keep", { keep: true }, "application/json");
-    await this.remote.setAcl(this.urls.media, ["Read"]);
+    await provisionPublic(this.remote, this.urls.media);
     this._mediaReady = true;
   }
   // Whether the canary this class writes is already there. Only a definite
   // "yes" counts: anything else falls through to the write, which is
   // idempotent anyway, so a failed probe costs a request and never correctness.
-  async _containerExists(base) {
-    try {
-      const r = await this.remote.fetch(`${base}.keep`, { method: "HEAD" });
-      return r?.status >= 200 && r.status < 300;
-    } catch {
-      return false;
-    }
+  _containerExists(base) {
+    return exists(this.remote, base);
   }
   // The owner-only container that followers-only and direct posts live in.
   // Its ACL is set once; every note under it inherits.
   async ensurePrivateContainer() {
     if (this._privateContainer) return;
-    if (await this._containerExists(this.urls.privateNotes)) {
+    if (await exists(this.remote, this.urls.privateNotes)) {
       this._privateContainer = true;
       return;
     }
-    await this.remote.putJson(this.urls.privateNotes + ".keep", { keep: true }, "application/json");
-    await this.remote.setAcl(this.urls.privateNotes, []);
+    await provisionOwnerOnly(this.remote, this.urls.privateNotes);
     this._privateContainer = true;
   }
   // Whether the pod actually enforces that ACL: a bare, unauthenticated read
@@ -44910,8 +44962,8 @@ var Publisher = class {
     try {
       await this.ensurePrivateContainer();
       const pn = this.urls.toPod ? this.urls.toPod(this.urls.privateNotes) : this.urls.privateNotes;
-      const r = await (this.probeFetch || fetch)(pn + ".keep", { redirect: "manual" });
-      this._privateVerdict = r.status === 401 || r.status === 403 ? true : `this pod serves private documents to strangers (HTTP ${r.status}) \u2014 private posts stay off it`;
+      const verdict = await probePrivateEnforcement(this.probeFetch || fetch, pn + ".keep");
+      this._privateVerdict = verdict === true ? true : `${verdict} \u2014 private posts stay off it`;
       return this._privateVerdict;
     } catch (e) {
       return `could not verify that the pod protects private posts (${e.message})`;
@@ -53101,7 +53153,8 @@ var BrowserAgent = class _BrowserAgent {
     const root = config && config.root || "fedipod/";
     this.remote = new BrowserRemotePod(session, { webId, log: this.log });
     this.urls = apUrls2(remotePod, root);
-    this.store = new PodStore({ storage: new HttpStorage(this.urls.state, session.fetch), log: this.log });
+    const podFetch = (u, i) => this.remote.fetch(u, i);
+    this.store = new PodStore({ storage: new HttpStorage(this.urls.state, podFetch), log: this.log });
     await this.store.load().catch(() => {
     });
     const cfg = config || this.store.getConfig();
@@ -53109,7 +53162,7 @@ var BrowserAgent = class _BrowserAgent {
     this.store.setConfig({ ...this.store.getConfig() || {}, ...cfg, root });
     const keys = keysRecord ? await importSigningKey(keysRecord) : await loadKeysFromPod(this.remote, this.urls);
     config = this.store.getConfig();
-    this.local = new PodRdf({ storage: new HttpStorage(this.urls.fediverse, session.fetch) });
+    this.local = new PodRdf({ storage: new HttpStorage(this.urls.fediverse, podFetch) });
     this.deliverer = new RelayDeliverer({
       passive: true,
       store: this.store,
@@ -53134,7 +53187,7 @@ var BrowserAgent = class _BrowserAgent {
     this.atproto = new BrowserAtproto({ store: this.store, actorId: this.urls.actor, log: this.log });
     this.publisher.atproto = this.atproto;
     this.fediaccts = new BrowserFediAccounts({ store: this.store, actorId: this.urls.actor, log: this.log });
-    this.lease = new Lease({ url: this.urls.state + "lease.json", fetchImpl: (u, i) => session.fetch(u, i), log: this.log });
+    this.lease = new Lease({ url: this.urls.state + "lease.json", fetchImpl: podFetch, log: this.log });
     this.intake = new Intake({
       config: this.store.getConfig(),
       urls: this.urls,
@@ -53161,11 +53214,7 @@ var BrowserAgent = class _BrowserAgent {
     const relayGet = (u, i = {}) => this.deliverer.signedFetch(u, { ...i, method: "GET" });
     this.tagfeed = new TagFeed({ store: this.store, intake: this.intake, log: this.log, fetcher: relayGet });
     this.provisioning = (async () => {
-      await this.remote.putJson(this.urls.state + ".keep", { keep: true }, "application/json");
-      await this.remote.setAcl(this.urls.state, []);
-      await this.remote.setAcl(this.urls.home, []);
-      await this.remote.putJson(this.urls.fediverse + ".keep", { keep: true }, "application/json");
-      await this.remote.setAcl(this.urls.fediverse, []);
+      await provisionPrivate(this.remote, this.urls);
       await this.atproto.load();
       await this.fediaccts.load();
       this.viewer = !await this.lease.acquire();
