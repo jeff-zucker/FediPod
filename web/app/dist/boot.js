@@ -33198,6 +33198,15 @@ var BrowserRemotePod = class extends PodTransport {
   }
 };
 
+// lib/pod/state.mjs
+var readWrappedKeys = (pod, urls) => pod.getJson(urls.state + "keys.json");
+var readConfig = (pod, urls) => pod.getJson(urls.state + "config.json");
+var writeConfig = (pod, urls, config) => pod.putJson(urls.state + "config.json", config, "application/json");
+async function provisionKey(pod, { stateUrl, keysUrl, envelope }) {
+  await pod.setAcl(stateUrl, []);
+  await pod.putJson(keysUrl, envelope, "application/json");
+}
+
 // web/app/idb-kv.mjs
 var DB = "fedipod-accounts";
 function open() {
@@ -33301,15 +33310,17 @@ async function signUp(answers, { onStep = () => {
     keysStep.running("making your signing key and locking it under your password");
     keys = await generateKeys();
     keys.mintedFor = actorUrl;
-    const remote = new BrowserRemotePod(session, { webId: credential.webId, log: () => {
+    const remote = new BrowserRemotePod(session, { webId: credential.webId, role: "signup", log: () => {
     } });
-    await remote.setAcl(`${pod}${AP_ROOT}ap-state/`, []);
-    const put = await session.fetch(keysDocFor(pod), {
-      method: "PUT",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(await wrapKeys(keys, password))
-    });
-    if (put.status >= 400) throw new Error(`could not store the signing key on the pod (HTTP ${put.status}). The credential is for ${credential.webId} \u2014 that WebID must own ${pod} and its ${AP_ROOT} must be writable by it.`);
+    try {
+      await provisionKey(remote, {
+        stateUrl: `${pod}${AP_ROOT}ap-state/`,
+        keysUrl: keysDocFor(pod),
+        envelope: await wrapKeys(keys, password)
+      });
+    } catch (e) {
+      throw new Error(`could not store the signing key on the pod (${e.message}). The credential is for ${credential.webId} \u2014 that WebID must own ${pod} and its ${AP_ROOT} must be writable by it.`);
+    }
     await kvPut(keyCacheKey(actorUrl), keys).catch(() => {
     });
     prog.keys = keys;
@@ -33351,12 +33362,13 @@ async function signUp(answers, { onStep = () => {
     issuer: credential.issuerOrigin,
     ...gateway ? { gateway } : {}
   };
-  const cfgPut = await session.fetch(`${pod}${AP_ROOT}ap-state/config.json`, {
-    method: "PUT",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(config)
-  });
-  if (cfgPut.status >= 400) throw new Error(`could not store the config on the pod (HTTP ${cfgPut.status})`);
+  const cfgRemote = new BrowserRemotePod(session, { webId: credential.webId, role: "signup", log: () => {
+  } });
+  try {
+    await writeConfig(cfgRemote, { state: `${pod}${AP_ROOT}ap-state/` }, config);
+  } catch (e) {
+    throw new Error(`could not store the config on the pod (${e.message})`);
+  }
   const revoked = await revokeCredential({
     resource: credential.resource,
     accountToken: credential.accountToken
@@ -33644,12 +33656,14 @@ window.fedipodUnlock = async (password) => {
   if (!session) throw new Error("Sign in first.");
   const podFromWebId = new URL(session.webId).origin + "/";
   const state = `${podFromWebId}${AP_ROOT}ap-state/`;
-  const readJson = async (url) => {
-    const r = await session.fetch(url, { headers: { accept: "application/json" } });
-    if (r.status >= 400) throw new Error(`could not read ${url} (HTTP ${r.status})`);
-    return r.json();
-  };
-  const [cfg, doc] = await Promise.all([readJson(state + "config.json"), readJson(state + "keys.json")]);
+  const remote = new BrowserRemotePod(session, { webId: session.webId, role: "signup", log: () => {
+  } });
+  const urls = { state };
+  const [cfg, doc] = await Promise.all([
+    readConfig(remote, urls),
+    readWrappedKeys(remote, urls)
+  ]);
+  if (!cfg || !doc) throw new Error(`could not read this account's config and key under ${state}`);
   if (!isKeyEnvelope(doc)) throw new Error("this account's key is not locked \u2014 nothing to unlock");
   const rec = await unwrapKeys(doc, password);
   const actorUrl = `${cfg.remotePod}${cfg.root || AP_ROOT}ap/actor`;

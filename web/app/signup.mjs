@@ -13,6 +13,7 @@
 import { createAccountWithPod, mintCredential, makeDpopSession, revokeCredential } from './pod-auth.mjs';
 import { generateKeys, wrapKeys } from './keystore.mjs';
 import { BrowserRemotePod } from './pod-remote.mjs';
+import * as podState from '../../lib/pod/state.mjs';
 import { kvPut } from './idb-kv.mjs';
 import { keyCacheKey } from './keys-browser.mjs';
 
@@ -149,16 +150,20 @@ export async function signUp(answers, { onStep = () => {}, frontOrigin = null } 
     keysStep.running('making your signing key and locking it under your password');
     keys = await generateKeys();
     keys.mintedFor = actorUrl;                                   // one key, one actor (lib/keys.mjs)
-    const remote = new BrowserRemotePod(session, { webId: credential.webId, log: () => {} });
-    // Owner-only: no public modes at all. A pod that refuses the ACL write is
-    // not a pod this key may sit on, wrapped or not.
-    await remote.setAcl(`${pod}${AP_ROOT}ap-state/`, []);
-    const put = await session.fetch(keysDocFor(pod), {
-      method: 'PUT', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(await wrapKeys(keys, password)),
-    });
-    if (put.status >= 400) throw new Error(`could not store the signing key on the pod (HTTP ${put.status}). `
-      + `The credential is for ${credential.webId} — that WebID must own ${pod} and its ${AP_ROOT} must be writable by it.`);
+    const remote = new BrowserRemotePod(session, { webId: credential.webId, role: 'signup', log: () => {} });
+    // Owner-only, and THEN the key — one operation, so the order cannot be got
+    // wrong here or anywhere else. A pod that refuses the ACL write is not a
+    // pod this key may sit on, wrapped or not.
+    try {
+      await podState.provisionKey(remote, {
+        stateUrl: `${pod}${AP_ROOT}ap-state/`,
+        keysUrl: keysDocFor(pod),
+        envelope: await wrapKeys(keys, password),
+      });
+    } catch (e) {
+      throw new Error(`could not store the signing key on the pod (${e.message}). `
+        + `The credential is for ${credential.webId} — that WebID must own ${pod} and its ${AP_ROOT} must be writable by it.`);
+    }
     // This browser's own opened copy, so the boot after the login redirect
     // needs no password. Best effort: a browser that refuses IndexedDB (private
     // mode) simply asks for the password on the way back in.
@@ -205,10 +210,12 @@ export async function signUp(answers, { onStep = () => {}, frontOrigin = null } 
   // Write the config to the pod (owner-only, beside the key) so a returning
   // sign-in — which arrives with only an OIDC session — can read the account's
   // config and key from the pod and boot with no password.
-  const cfgPut = await session.fetch(`${pod}${AP_ROOT}ap-state/config.json`, {
-    method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(config),
-  });
-  if (cfgPut.status >= 400) throw new Error(`could not store the config on the pod (HTTP ${cfgPut.status})`);
+  const cfgRemote = new BrowserRemotePod(session, { webId: credential.webId, role: 'signup', log: () => {} });
+  try {
+    await podState.writeConfig(cfgRemote, { state: `${pod}${AP_ROOT}ap-state/` }, config);
+  } catch (e) {
+    throw new Error(`could not store the config on the pod (${e.message})`);
+  }
 
   // The credential was for sign-up, and sign-up is over. The agent runs on the
   // Solid-OIDC session from here on and never needs it again, so leaving it

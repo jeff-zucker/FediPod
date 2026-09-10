@@ -11,6 +11,8 @@
 //   On every load: fedipodOnLoad() — finish a redirect, or restore, then boot.
 import { signUp, handleProblem, AP_ROOT } from './signup.mjs';
 import * as podActor from '../../lib/pod/actor.mjs';
+import * as podState from '../../lib/pod/state.mjs';
+import { BrowserRemotePod } from './pod-remote.mjs';
 import { beginLogin, completeLogin, getSession, signOut } from './oidc-session.mjs';
 import { unwrapKeys, isKeyEnvelope } from './keystore.mjs';
 import { kvPut } from './idb-kv.mjs';
@@ -69,12 +71,15 @@ window.fedipodUnlock = async (password) => {
   // beside it. Both are read with the session, as the owner.
   const podFromWebId = new URL(session.webId).origin + '/';
   const state = `${podFromWebId}${AP_ROOT}ap-state/`;
-  const readJson = async (url) => {
-    const r = await session.fetch(url, { headers: { accept: 'application/json' } });
-    if (r.status >= 400) throw new Error(`could not read ${url} (HTTP ${r.status})`);
-    return r.json();
-  };
-  const [cfg, doc] = await Promise.all([readJson(state + 'config.json'), readJson(state + 'keys.json')]);
+  // Through the transport rather than the bare session: this is a pod read
+  // like any other, and going round it skipped the retry ladder that exists
+  // because the pod host throttles bursts.
+  const remote = new BrowserRemotePod(session, { webId: session.webId, role: 'signup', log: () => {} });
+  const urls = { state };
+  const [cfg, doc] = await Promise.all([
+    podState.readConfig(remote, urls), podState.readWrappedKeys(remote, urls),
+  ]);
+  if (!cfg || !doc) throw new Error(`could not read this account's config and key under ${state}`);
   if (!isKeyEnvelope(doc)) throw new Error('this account\'s key is not locked — nothing to unlock');
   const rec = await unwrapKeys(doc, password);          // throws 'wrong password'
   const actorUrl = `${cfg.remotePod}${cfg.root || AP_ROOT}ap/actor`;
