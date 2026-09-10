@@ -1945,6 +1945,25 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   check(/it is a code-execution one/.test(admin),
     'the CSP comment says what the policy actually buys');
 
+  // The sign-up page holds the pod account password and sends it to the host in
+  // the provider box, so the page's policy decides which hosts it may reach at
+  // all. Naming one provider there made the box a trap: type any other and the
+  // page failed with "Failed to fetch" and nothing else. Two halves, and both
+  // matter — it may reach whatever is typed, and only this origin's scripts run
+  // on the page that reads the password.
+  const signupPage = read('web/app/index.html');
+  const csp = (signupPage.match(/http-equiv="Content-Security-Policy" content="([^"]*)"/i) || [, ''])[1];
+  const directive = (name) => ((csp.match(new RegExp(`${name} ([^;]*)`)) || [, ''])[1] || '').trim();
+  check(/\bhttps:(\s|$)/.test(directive('connect-src')) && !/solidcommunity\.net/.test(csp),
+    `the sign-up page may reach any https pod provider (connect-src ${directive('connect-src')})`);
+  check(directive('script-src') === "'self'" && directive('base-uri') === "'none'"
+    && directive('form-action') === "'self'",
+    'and the page that reads the password still runs nothing but its own script');
+  const bootSrc = read('web/app/boot.mjs');
+  const paramsRead = [...bootSrc.matchAll(/params\.(?:has|get)\('([^']+)'\)/g)].map((m) => m[1]);
+  check(!paramsRead.includes('provider') && !paramsRead.includes('issuer'),
+    `and nothing fills the provider box from the address bar (page reads: ${[...new Set(paramsRead)].join(', ')})`);
+
   // readBody destroyed the socket and never settled, so the handler awaited
   // for the life of the process.
   const rbAt = masto.indexOf('function readBody');

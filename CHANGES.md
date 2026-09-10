@@ -1,5 +1,11 @@
 # Changes
 
+## 2026-09-10 (any pod provider, in the browser)
+
+The sign-up page asks which pod provider you want and takes any address you
+type. It could only reach solidcommunity.net, so naming any other provider
+failed with "Failed to fetch" and no explanation. Bring your own pod works.
+
 ## 2026-09-10 (the pod's RDF copy is gone)
 
 FediPod kept a second copy of your posts on the pod, in RDF, under
