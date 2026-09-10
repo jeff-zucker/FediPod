@@ -5728,13 +5728,13 @@ var require_root = __commonJS({
 var require_list = __commonJS({
   "node_modules/postcss/lib/list.js"(exports, module2) {
     "use strict";
-    var list = {
+    var list3 = {
       comma(string) {
-        return list.split(string, [","], true);
+        return list3.split(string, [","], true);
       },
       space(string) {
         let spaces = [" ", "\n", "	"];
-        return list.split(string, spaces);
+        return list3.split(string, spaces);
       },
       split(string, separators, last) {
         let array = [];
@@ -5775,8 +5775,8 @@ var require_list = __commonJS({
         return array;
       }
     };
-    module2.exports = list;
-    list.default = list;
+    module2.exports = list3;
+    list3.default = list3;
   }
 });
 
@@ -5785,10 +5785,10 @@ var require_rule = __commonJS({
   "node_modules/postcss/lib/rule.js"(exports, module2) {
     "use strict";
     var Container = require_container();
-    var list = require_list();
+    var list3 = require_list();
     var Rule = class extends Container {
       get selectors() {
-        return list.comma(this.selector);
+        return list3.comma(this.selector);
       }
       set selectors(values) {
         let match = this.selector ? this.selector.match(/,\s*/) : null;
@@ -7817,7 +7817,7 @@ var require_postcss = __commonJS({
     var fromJSON = require_fromJSON();
     var Input = require_input();
     var LazyResult = require_lazy_result();
-    var list = require_list();
+    var list3 = require_list();
     var Node5 = require_node();
     var parse3 = require_parse();
     var Processor = require_processor();
@@ -7866,7 +7866,7 @@ var require_postcss = __commonJS({
     postcss.stringify = stringify;
     postcss.parse = parse3;
     postcss.fromJSON = fromJSON;
-    postcss.list = list;
+    postcss.list = list3;
     postcss.comment = (defaults) => new Comment3(defaults);
     postcss.atRule = (defaults) => new AtRule(defaults);
     postcss.decl = (defaults) => new Declaration(defaults);
@@ -9976,10 +9976,10 @@ function followersPage(id, n, items, pageCount) {
   };
 }
 function followersPaging(actors, index = []) {
-  const list = actors.filter((a) => typeof a === "string");
+  const list3 = actors.filter((a) => typeof a === "string");
   const byId = /* @__PURE__ */ new Map();
-  for (const a of list) if (!byId.has(a)) byId.set(a, a);
-  return pageItems({ order: list, byId, index, pageSize: FOLLOWERS_PAGE_SIZE });
+  for (const a of list3) if (!byId.has(a)) byId.set(a, a);
+  return pageItems({ order: list3, byId, index, pageSize: FOLLOWERS_PAGE_SIZE });
 }
 function nodeinfoPointer(docHref) {
   return {
@@ -10028,8 +10028,8 @@ function titledContent(note) {
   return `<p><strong>${esc}</strong></p>${html}`;
 }
 function attachmentsOf(note) {
-  const list = Array.isArray(note?.attachment) ? note.attachment : note?.attachment ? [note.attachment] : [];
-  return list.slice(0, MAX_ATTACHMENTS).map((a) => ({
+  const list3 = Array.isArray(note?.attachment) ? note.attachment : note?.attachment ? [note.attachment] : [];
+  return list3.slice(0, MAX_ATTACHMENTS).map((a) => ({
     url: typeof a?.url === "string" ? a.url : a?.url?.href || (typeof a?.href === "string" ? a.href : void 0),
     mediaType: String(a?.mediaType || "").slice(0, 128),
     ...a?.name ? { description: String(a.name).slice(0, 1500) } : {}
@@ -15141,11 +15141,11 @@ var require_ttl2jsonld = __commonJS({
             if (last !== uri) context.base.push(new URL(uri, last).toString());
           },
           addPrefix: function(prefix, uri) {
-            const list = context.data[prefix];
-            if (list === void 0) {
+            const list3 = context.data[prefix];
+            if (list3 === void 0) {
               context.data[prefix] = [{ uri, count: 0 }];
-            } else if (list[list.length - 1].uri !== uri) {
-              list.push({ uri, count: 0 });
+            } else if (list3[list3.length - 1].uri !== uri) {
+              list3.push({ uri, count: 0 });
             }
           },
           hasPrefix: function(prefix) {
@@ -15154,9 +15154,9 @@ var require_ttl2jsonld = __commonJS({
           resolve: function(pname, force) {
             const prefix = Object.keys(context.data).find((key) => pname.indexOf(key + ":") === 0);
             if (prefix !== void 0) {
-              const list = context.data[prefix];
-              if (list.length === 1 && force !== true && isIRI(list[0].uri)) return pname;
-              const uri = list[list.length - 1].uri;
+              const list3 = context.data[prefix];
+              if (list3.length === 1 && force !== true && isIRI(list3[0].uri)) return pname;
+              const uri = list3[list3.length - 1].uri;
               return pname.replace(prefix + ":", uri);
             } else {
               var base = context.base.length === 0 ? options.baseIRI : context.base[context.base.length - 1];
@@ -15166,12 +15166,12 @@ var require_ttl2jsonld = __commonJS({
             }
           },
           increment: function(prefix) {
-            const list = context.data[prefix];
-            if (list !== void 0) list[list.length - 1].count++;
+            const list3 = context.data[prefix];
+            if (list3 !== void 0) list3[list3.length - 1].count++;
           },
           decrement: function(prefix) {
-            const list = context.data[prefix];
-            if (list !== void 0) list[list.length - 1].count--;
+            const list3 = context.data[prefix];
+            if (list3 !== void 0) list3[list3.length - 1].count--;
           },
           toJSON: function() {
             const root = {};
@@ -15305,17 +15305,17 @@ var require_solid_namespace = __commonJS({
 var require_conventions = __commonJS({
   "node_modules/@xmldom/xmldom/lib/conventions.js"(exports) {
     "use strict";
-    function find2(list, predicate, ac) {
+    function find2(list3, predicate, ac) {
       if (ac === void 0) {
         ac = Array.prototype;
       }
-      if (list && typeof ac.find === "function") {
-        return ac.find.call(list, predicate);
+      if (list3 && typeof ac.find === "function") {
+        return ac.find.call(list3, predicate);
       }
-      for (var i = 0; i < list.length; i++) {
-        if (hasOwn(list, i)) {
-          var item = list[i];
-          if (predicate.call(void 0, item, i, list)) {
+      for (var i = 0; i < list3.length; i++) {
+        if (hasOwn(list3, i)) {
+          var item = list3[i];
+          if (predicate.call(void 0, item, i, list3)) {
             return item;
           }
         }
@@ -15913,12 +15913,12 @@ var require_dom = __commonJS({
     }
     function toOrderedSet(input) {
       if (!input) return [];
-      var list = splitOnASCIIWhitespace(input);
-      return Object.keys(list.reduce(orderedSetReducer, {}));
+      var list3 = splitOnASCIIWhitespace(input);
+      return Object.keys(list3.reduce(orderedSetReducer, {}));
     }
-    function arrayIncludes(list) {
+    function arrayIncludes(list3) {
       return function(element) {
-        return list && list.indexOf(element) !== -1;
+        return list3 && list3.indexOf(element) !== -1;
       };
     }
     function validateQualifiedName(qualifiedName) {
@@ -16122,20 +16122,20 @@ var require_dom = __commonJS({
       this._refresh = refresh;
       _updateLiveList(this);
     }
-    function _updateLiveList(list) {
-      var inc = list._node._inc || list._node.ownerDocument._inc;
-      if (list._inc !== inc) {
-        var ls = list._refresh(list._node);
-        __set__(list, "length", ls.length);
-        if (!list.$$length || ls.length < list.$$length) {
-          for (var i = ls.length; i in list; i++) {
-            if (hasOwn(list, i)) {
-              delete list[i];
+    function _updateLiveList(list3) {
+      var inc = list3._node._inc || list3._node.ownerDocument._inc;
+      if (list3._inc !== inc) {
+        var ls = list3._refresh(list3._node);
+        __set__(list3, "length", ls.length);
+        if (!list3.$$length || ls.length < list3.$$length) {
+          for (var i = ls.length; i in list3; i++) {
+            if (hasOwn(list3, i)) {
+              delete list3[i];
             }
           }
         }
-        copy(ls, list);
-        list._inc = inc;
+        copy(ls, list3);
+        list3._inc = inc;
       }
     }
     LiveNodeList.prototype.item = function(i) {
@@ -16147,10 +16147,10 @@ var require_dom = __commonJS({
       this._nsIndex = /* @__PURE__ */ Object.create(null);
       this._noNsIndex = /* @__PURE__ */ Object.create(null);
     }
-    function _findNodeIndex(list, node) {
+    function _findNodeIndex(list3, node) {
       var i = 0;
-      while (i < list.length) {
-        if (list[i] === node) {
+      while (i < list3.length) {
+        if (list3[i] === node) {
           return i;
         }
         i++;
@@ -16180,14 +16180,14 @@ var require_dom = __commonJS({
         delete bucket[attr.localName];
       }
     }
-    function _addNamedNode(el, list, newAttr, oldAttr) {
+    function _addNamedNode(el, list3, newAttr, oldAttr) {
       if (oldAttr) {
-        list[_findNodeIndex(list, oldAttr)] = newAttr;
+        list3[_findNodeIndex(list3, oldAttr)] = newAttr;
       } else {
-        list[list.length] = newAttr;
-        list.length++;
+        list3[list3.length] = newAttr;
+        list3.length++;
       }
-      _nnmIndexAdd(list, newAttr);
+      _nnmIndexAdd(list3, newAttr);
       if (el) {
         newAttr.ownerElement = el;
         var doc = el.ownerDocument;
@@ -16197,15 +16197,15 @@ var require_dom = __commonJS({
         }
       }
     }
-    function _removeNamedNode(el, list, attr) {
-      var i = _findNodeIndex(list, attr);
+    function _removeNamedNode(el, list3, attr) {
+      var i = _findNodeIndex(list3, attr);
       if (i >= 0) {
-        var lastIndex = list.length - 1;
+        var lastIndex = list3.length - 1;
         while (i <= lastIndex) {
-          list[i] = list[++i];
+          list3[i] = list3[++i];
         }
-        list.length = lastIndex;
-        _nnmIndexRemove(list, attr);
+        list3.length = lastIndex;
+        _nnmIndexRemove(list3, attr);
         if (el) {
           var doc = el.ownerDocument;
           if (doc) {
@@ -22078,12 +22078,12 @@ var require_Permuter = __commonJS({
        *
        * @param {Array} list - The array of elements to iterate over.
        */
-      constructor(list) {
-        this.current = list.sort();
+      constructor(list3) {
+        this.current = list3.sort();
         this.done = false;
         this.dir = /* @__PURE__ */ new Map();
-        for (let i = 0; i < list.length; ++i) {
-          this.dir.set(list[i], true);
+        for (let i = 0; i < list3.length; ++i) {
+          this.dir.set(list3[i], true);
         }
       }
       /**
@@ -22136,8 +22136,8 @@ var require_Permuter = __commonJS({
 var require_NQuads = __commonJS({
   "node_modules/rdf-canonize/lib/NQuads.js"(exports, module2) {
     "use strict";
-    var RDF6 = "http://www.w3.org/1999/02/22-rdf-syntax-ns#";
-    var RDF_LANGSTRING = RDF6 + "langString";
+    var RDF7 = "http://www.w3.org/1999/02/22-rdf-syntax-ns#";
+    var RDF_LANGSTRING = RDF7 + "langString";
     var XSD_STRING = "http://www.w3.org/2001/XMLSchema#string";
     var TYPE_NAMED_NODE = "NamedNode";
     var TYPE_BLANK_NODE = "BlankNode";
@@ -23509,23 +23509,23 @@ var require_util = __commonJS({
 var require_constants = __commonJS({
   "node_modules/jsonld/lib/constants.js"(exports, module2) {
     "use strict";
-    var RDF6 = "http://www.w3.org/1999/02/22-rdf-syntax-ns#";
+    var RDF7 = "http://www.w3.org/1999/02/22-rdf-syntax-ns#";
     var XSD3 = "http://www.w3.org/2001/XMLSchema#";
     module2.exports = {
       // TODO: Deprecated and will be removed later. Use LINK_HEADER_CONTEXT.
       LINK_HEADER_REL: "http://www.w3.org/ns/json-ld#context",
       LINK_HEADER_CONTEXT: "http://www.w3.org/ns/json-ld#context",
-      RDF: RDF6,
-      RDF_LIST: RDF6 + "List",
-      RDF_FIRST: RDF6 + "first",
-      RDF_REST: RDF6 + "rest",
-      RDF_NIL: RDF6 + "nil",
-      RDF_TYPE: RDF6 + "type",
-      RDF_PLAIN_LITERAL: RDF6 + "PlainLiteral",
-      RDF_XML_LITERAL: RDF6 + "XMLLiteral",
-      RDF_JSON_LITERAL: RDF6 + "JSON",
-      RDF_OBJECT: RDF6 + "object",
-      RDF_LANGSTRING: RDF6 + "langString",
+      RDF: RDF7,
+      RDF_LIST: RDF7 + "List",
+      RDF_FIRST: RDF7 + "first",
+      RDF_REST: RDF7 + "rest",
+      RDF_NIL: RDF7 + "nil",
+      RDF_TYPE: RDF7 + "type",
+      RDF_PLAIN_LITERAL: RDF7 + "PlainLiteral",
+      RDF_XML_LITERAL: RDF7 + "XMLLiteral",
+      RDF_JSON_LITERAL: RDF7 + "JSON",
+      RDF_OBJECT: RDF7 + "object",
+      RDF_LANGSTRING: RDF7 + "langString",
       XSD: XSD3,
       XSD_BOOLEAN: XSD3 + "boolean",
       XSD_DOUBLE: XSD3 + "double",
@@ -23917,7 +23917,7 @@ var require_yallist = __commonJS({
     module2.exports = Yallist;
     Yallist.Node = Node5;
     Yallist.create = Yallist;
-    function Yallist(list) {
+    function Yallist(list3) {
       var self2 = this;
       if (!(self2 instanceof Yallist)) {
         self2 = new Yallist();
@@ -23925,8 +23925,8 @@ var require_yallist = __commonJS({
       self2.tail = null;
       self2.head = null;
       self2.length = 0;
-      if (list && typeof list.forEach === "function") {
-        list.forEach(function(item) {
+      if (list3 && typeof list3.forEach === "function") {
+        list3.forEach(function(item) {
           self2.push(item);
         });
       } else if (arguments.length > 0) {
@@ -24253,11 +24253,11 @@ var require_yallist = __commonJS({
       }
       self2.length++;
     }
-    function Node5(value, prev, next, list) {
+    function Node5(value, prev, next, list3) {
       if (!(this instanceof Node5)) {
-        return new Node5(value, prev, next, list);
+        return new Node5(value, prev, next, list3);
       }
-      this.list = list;
+      this.list = list3;
       this.value = value;
       if (prev) {
         prev.next = this;
@@ -27196,16 +27196,16 @@ var require_nodeMap = __commonJS({
       api.createNodeMap(input, graphs, "@default", issuer);
       return api.mergeNodeMaps(graphs);
     };
-    api.createNodeMap = (input, graphs, graph2, issuer, name, list) => {
+    api.createNodeMap = (input, graphs, graph2, issuer, name, list3) => {
       if (types.isArray(input)) {
         for (const node of input) {
-          api.createNodeMap(node, graphs, graph2, issuer, void 0, list);
+          api.createNodeMap(node, graphs, graph2, issuer, void 0, list3);
         }
         return;
       }
       if (!types.isObject(input)) {
-        if (list) {
-          list.push(input);
+        if (list3) {
+          list3.push(input);
         }
         return;
       }
@@ -27216,14 +27216,14 @@ var require_nodeMap = __commonJS({
             input["@type"] = type = issuer.getId(type);
           }
         }
-        if (list) {
-          list.push(input);
+        if (list3) {
+          list3.push(input);
         }
         return;
-      } else if (list && graphTypes.isList(input)) {
+      } else if (list3 && graphTypes.isList(input)) {
         const _list = [];
         api.createNodeMap(input["@list"], graphs, graph2, issuer, name, _list);
-        list.push({ "@list": _list });
+        list3.push({ "@list": _list });
         return;
       }
       if ("@type" in input) {
@@ -27237,8 +27237,8 @@ var require_nodeMap = __commonJS({
       if (types.isUndefined(name)) {
         name = graphTypes.isBlankNode(input) ? issuer.getId(input["@id"]) : input["@id"];
       }
-      if (list) {
-        list.push({ "@id": name });
+      if (list3) {
+        list3.push({ "@id": name });
       }
       const subjects = graphs[graph2];
       const subject = subjects[name] = subjects[name] || {};
@@ -27548,11 +27548,11 @@ var require_fromRdf = __commonJS({
           let node = usage.node;
           let property = usage.property;
           let head = usage.value;
-          const list = [];
+          const list3 = [];
           const listNodes = [];
           let nodeKeyCount = Object.keys(node).length;
           while (property === RDF_REST && types.isObject(referencedOnce[node["@id"]]) && types.isArray(node[RDF_FIRST]) && node[RDF_FIRST].length === 1 && types.isArray(node[RDF_REST]) && node[RDF_REST].length === 1 && (nodeKeyCount === 3 || nodeKeyCount === 4 && types.isArray(node["@type"]) && node["@type"].length === 1 && node["@type"][0] === RDF_LIST)) {
-            list.push(node[RDF_FIRST][0]);
+            list3.push(node[RDF_FIRST][0]);
             listNodes.push(node["@id"]);
             usage = referencedOnce[node["@id"]];
             node = usage.node;
@@ -27564,7 +27564,7 @@ var require_fromRdf = __commonJS({
             }
           }
           delete head["@id"];
-          head["@list"] = list.reverse();
+          head["@list"] = list3.reverse();
           for (const listNode of listNodes) {
             delete graphObject[listNode];
           }
@@ -27893,17 +27893,17 @@ var require_toRdf = __commonJS({
         }
       }
     }
-    function _listToRDF(list, issuer, dataset, graphTerm, rdfDirection, options) {
+    function _listToRDF(list3, issuer, dataset, graphTerm, rdfDirection, options) {
       const first = { termType: "NamedNode", value: RDF_FIRST };
       const rest = { termType: "NamedNode", value: RDF_REST };
       const nil = { termType: "NamedNode", value: RDF_NIL };
-      const last = list.pop();
+      const last = list3.pop();
       const result = last ? {
         termType: "BlankNode",
         value: issuer.getId().slice(2)
       } : nil;
       let subject = result;
-      for (const item of list) {
+      for (const item of list3) {
         const object = _objectToRDF(
           item,
           issuer,
@@ -28240,8 +28240,8 @@ var require_frame = __commonJS({
             const subframe = prop in frame ? frame[prop] : _createImplicitFrame(flags);
             if (graphTypes.isList(o)) {
               const subframe2 = frame[prop] && frame[prop][0] && frame[prop][0]["@list"] ? frame[prop][0]["@list"] : _createImplicitFrame(flags);
-              const list = { "@list": [] };
-              _addFrameOutput(output, prop, list);
+              const list3 = { "@list": [] };
+              _addFrameOutput(output, prop, list3);
               const src = o["@list"];
               for (const oo of src) {
                 if (graphTypes.isSubjectReference(oo)) {
@@ -28249,11 +28249,11 @@ var require_frame = __commonJS({
                     { ...state, embedded: true },
                     [oo["@id"]],
                     subframe2,
-                    list,
+                    list3,
                     "@list"
                   );
                 } else {
-                  _addFrameOutput(list, "@list", util.clone(oo));
+                  _addFrameOutput(list3, "@list", util.clone(oo));
                 }
               }
             } else if (graphTypes.isSubjectReference(o)) {
@@ -29227,15 +29227,15 @@ var require_compact = __commonJS({
           if (!("@index" in value)) {
             containers.push("@list");
           }
-          const list = value["@list"];
-          if (list.length === 0) {
+          const list3 = value["@list"];
+          if (list3.length === 0) {
             typeOrLanguage = "@any";
             typeOrLanguageValue = "@none";
           } else {
-            let commonLanguage = list.length === 0 ? defaultLanguage : null;
+            let commonLanguage = list3.length === 0 ? defaultLanguage : null;
             let commonType = null;
-            for (let i = 0; i < list.length; ++i) {
-              const item = list[i];
+            for (let i = 0; i < list3.length; ++i) {
+              const item = list3[i];
               let itemLanguage = "@none";
               let itemType = "@none";
               if (_isValue(item)) {
@@ -30600,24 +30600,24 @@ var require_buffer = __commonJS({
           return false;
       }
     };
-    Buffer3.concat = function concat2(list, length) {
-      if (!Array.isArray(list)) {
+    Buffer3.concat = function concat2(list3, length) {
+      if (!Array.isArray(list3)) {
         throw new TypeError('"list" argument must be an Array of Buffers');
       }
-      if (list.length === 0) {
+      if (list3.length === 0) {
         return Buffer3.alloc(0);
       }
       let i;
       if (length === void 0) {
         length = 0;
-        for (i = 0; i < list.length; ++i) {
-          length += list[i].length;
+        for (i = 0; i < list3.length; ++i) {
+          length += list3[i].length;
         }
       }
       const buffer = Buffer3.allocUnsafe(length);
       let pos = 0;
-      for (i = 0; i < list.length; ++i) {
-        let buf = list[i];
+      for (i = 0; i < list3.length; ++i) {
+        let buf = list3[i];
         if (isInstance(buf, Uint8Array)) {
           if (pos + buf.length > buffer.length) {
             if (!Buffer3.isBuffer(buf)) buf = Buffer3.from(buf);
@@ -30903,7 +30903,7 @@ var require_buffer = __commonJS({
           byteOffset /= 2;
         }
       }
-      function read(buf, i2) {
+      function read2(buf, i2) {
         if (indexSize === 1) {
           return buf[i2];
         } else {
@@ -30914,7 +30914,7 @@ var require_buffer = __commonJS({
       if (dir) {
         let foundIndex = -1;
         for (i = byteOffset; i < arrLength; i++) {
-          if (read(arr, i) === read(val, foundIndex === -1 ? 0 : i - foundIndex)) {
+          if (read2(arr, i) === read2(val, foundIndex === -1 ? 0 : i - foundIndex)) {
             if (foundIndex === -1) foundIndex = i;
             if (i - foundIndex + 1 === valLength) return foundIndex * indexSize;
           } else {
@@ -30927,7 +30927,7 @@ var require_buffer = __commonJS({
         for (i = byteOffset; i >= 0; i--) {
           let found = true;
           for (let j = 0; j < valLength; j++) {
-            if (read(arr, i + j) !== read(val, j)) {
+            if (read2(arr, i + j) !== read2(val, j)) {
               found = false;
               break;
             }
@@ -30981,7 +30981,7 @@ var require_buffer = __commonJS({
     function ucs2Write(buf, string, offset, length) {
       return blitBuffer(utf16leToBytes(string, buf.length - offset), buf, offset, length);
     }
-    Buffer3.prototype.write = function write5(string, offset, length, encoding) {
+    Buffer3.prototype.write = function write7(string, offset, length, encoding) {
       if (offset === void 0) {
         encoding = "utf8";
         length = this.length;
@@ -32916,6 +32916,10 @@ async function probePrivateEnforcement(probe, podKeepUrl) {
   if (r.status === 401 || r.status === 403) return true;
   return `this pod serves private documents to strangers (HTTP ${r.status})`;
 }
+
+// lib/pod/state.mjs
+var readWrappedKeys = (pod, urls) => pod.getJson(urls.state + "keys.json");
+var writeWrappedKeys = (pod, urls, envelope) => pod.putJson(urls.state + "keys.json", envelope, "application/json");
 
 // lib/store.mjs
 init_node_crypto();
@@ -34993,11 +34997,11 @@ var Serializer = class _Serializer {
       if (x.termType !== "Collection") {
         return self2.atomicTermToN3(x);
       }
-      var list = x.elements;
+      var list3 = x.elements;
       var rest = kb.sym(rdfns + "nill");
-      for (var i2 = list.length - 1; i2 >= 0; i2--) {
+      for (var i2 = list3.length - 1; i2 >= 0; i2--) {
         var bnode = factory.blankNode();
-        str += termToNT(bnode) + " " + termToNT(kb.sym(rdfns + "first")) + " " + termToNT(list[i2]) + ".\n";
+        str += termToNT(bnode) + " " + termToNT(kb.sym(rdfns + "first")) + " " + termToNT(list3[i2]) + ".\n";
         str += termToNT(bnode) + " " + termToNT(kb.sym(rdfns + "rest")) + " " + termToNT(rest) + ".\n";
         rest = bnode;
       }
@@ -35322,7 +35326,7 @@ var Serializer = class _Serializer {
   // /////////////////////////// Quad store serialization
   // @para. write  - a function taking a single string to be output
   //
-  writeStore(write5) {
+  writeStore(write7) {
     var kb = this.store;
     var fetcher2 = kb.fetcher;
     var session = fetcher2 && fetcher2.appNode;
@@ -35330,13 +35334,13 @@ var Serializer = class _Serializer {
     for (var s in sources) {
       var source = kb.fromNT(s);
       if (session && source.equals(session)) continue;
-      write5("\n" + this.atomicTermToN3(source) + " " + this.atomicTermToN3(kb.sym("http://www.w3.org/2000/10/swap/log#semantics")) + " { " + this.statementsToN3(kb.statementsMatching(void 0, void 0, void 0, source)) + " }.\n");
+      write7("\n" + this.atomicTermToN3(source) + " " + this.atomicTermToN3(kb.sym("http://www.w3.org/2000/10/swap/log#semantics")) + " { " + this.statementsToN3(kb.statementsMatching(void 0, void 0, void 0, source)) + " }.\n");
     }
     kb.statementsMatching(void 0, kb.sym("http://www.w3.org/2007/ont/link#requestedURI")).map(function(st2) {
-      write5("\n<" + st2.object.value + "> log:metadata {\n");
+      write7("\n<" + st2.object.value + "> log:metadata {\n");
       var sts = kb.statementsMatching(void 0, void 0, void 0, st2.subject);
-      write5(this.statementsToN3(this.statementsToN3(sts)));
-      write5("}.\n");
+      write7(this.statementsToN3(this.statementsToN3(sts)));
+      write7("}.\n");
     });
     var metaSources = [];
     if (session) metaSources.push(session);
@@ -35344,7 +35348,7 @@ var Serializer = class _Serializer {
     metaSources.map(function(source2) {
       metadata = metadata.concat(kb.statementsMatching(void 0, void 0, void 0, source2));
     });
-    write5(this.statementsToN3(metadata));
+    write7(this.statementsToN3(metadata));
   }
   // ////////////////////////////////////////////// XML serialization
   statementsToXML(sts) {
@@ -37582,7 +37586,7 @@ var IndexedFormula = class _IndexedFormula extends Formula {
     var wild = [];
     var given = [];
     var p;
-    var list;
+    var list3;
     for (p = 0; p < 4; p++) {
       pattern[p] = this.canon(node_default.fromValue(pat[p]));
       if (!pattern[p]) {
@@ -37597,26 +37601,26 @@ var IndexedFormula = class _IndexedFormula extends Formula {
     }
     if (given.length === 1) {
       p = given[0];
-      list = this.index[p][hash[p]];
-      if (list && justOne) {
-        if (list.length > 1) {
-          list = list.slice(0, 1);
+      list3 = this.index[p][hash[p]];
+      if (list3 && justOne) {
+        if (list3.length > 1) {
+          list3 = list3.slice(0, 1);
         }
       }
-      list = list || [];
-      return list;
+      list3 = list3 || [];
+      return list3;
     }
     var best = 1e10;
     var iBest;
     var i;
     for (i = 0; i < given.length; i++) {
       p = given[i];
-      list = this.index[p][hash[p]];
-      if (!list) {
+      list3 = this.index[p][hash[p]];
+      if (!list3) {
         return [];
       }
-      if (list.length < best) {
-        best = list.length;
+      if (list3.length < best) {
+        best = list3.length;
         iBest = i;
       }
     }
@@ -40278,14 +40282,14 @@ var N3Parser = class _N3Parser {
   }
   // ### `_readListItem` reads items from a list
   _readListItem(token) {
-    let item = null, list = null, next = this._readListItem;
+    let item = null, list3 = null, next = this._readListItem;
     const previousList = this._subject, stack = this._contextStack, parent = stack[stack.length - 1];
     switch (token.type) {
       case "[":
         this._saveContext(
           "blank",
           this._graph,
-          list = this._factory.blankNode(),
+          list3 = this._factory.blankNode(),
           this.RDF_FIRST,
           this._subject = item = this._factory.blankNode()
         );
@@ -40295,7 +40299,7 @@ var N3Parser = class _N3Parser {
         this._saveContext(
           "list",
           this._graph,
-          list = this._factory.blankNode(),
+          list3 = this._factory.blankNode(),
           this.RDF_FIRST,
           this.RDF_NIL
         );
@@ -40314,7 +40318,7 @@ var N3Parser = class _N3Parser {
           if (this._object === this.RDF_NIL)
             return next;
         }
-        list = this.RDF_NIL;
+        list3 = this.RDF_NIL;
         break;
       case "literal":
         if (token.prefix.length === 0) {
@@ -40345,25 +40349,25 @@ var N3Parser = class _N3Parser {
         if ((item = this._readEntity(token)) === void 0)
           return;
     }
-    if (list === null)
-      this._subject = list = this._factory.blankNode();
+    if (list3 === null)
+      this._subject = list3 = this._factory.blankNode();
     if (token.type === "<<")
       stack[stack.length - 1].subject = this._subject;
     if (previousList === null) {
       if (parent.predicate === null)
-        parent.subject = list;
+        parent.subject = list3;
       else
-        parent.object = list;
+        parent.object = list3;
     } else {
-      this._emit(previousList, this.RDF_REST, list, this._graph);
+      this._emit(previousList, this.RDF_REST, list3, this._graph);
     }
     if (item !== null) {
       if (this._n3Mode && (token.type === "IRI" || token.type === "prefixed")) {
-        this._saveContext("item", this._graph, list, this.RDF_FIRST, item);
+        this._saveContext("item", this._graph, list3, this.RDF_FIRST, item);
         this._subject = item, this._predicate = null;
         return this._getPathReader(this._readListItem);
       }
-      this._emit(list, this.RDF_FIRST, item, this._graph);
+      this._emit(list3, this.RDF_FIRST, item, this._graph);
     }
     return next;
   }
@@ -41237,8 +41241,8 @@ var RDFaProcessor = class _RDFaProcessor {
           continue;
         }
         for (let predicate2 in item.listMapping) {
-          var list = item.listMapping[predicate2];
-          if (list.length === 0) {
+          var list3 = item.listMapping[predicate2];
+          if (list3.length === 0) {
             this.addTriple(item.parent, item.subject, predicate2, {
               type: _RDFaProcessor.objectURI,
               value: "http://www.w3.org/1999/02/22-rdf-syntax-ns#nil"
@@ -41246,11 +41250,11 @@ var RDFaProcessor = class _RDFaProcessor {
             continue;
           }
           var bnodes = [];
-          for (let i2 = 0; i2 < list.length; i2++) {
+          for (let i2 = 0; i2 < list3.length; i2++) {
             bnodes.push(this.newBlankNode());
           }
           for (let i2 = 0; i2 < bnodes.length; i2++) {
-            this.addTriple(item.parent, bnodes[i2], "http://www.w3.org/1999/02/22-rdf-syntax-ns#first", list[i2]);
+            this.addTriple(item.parent, bnodes[i2], "http://www.w3.org/1999/02/22-rdf-syntax-ns#first", list3[i2]);
             this.addTriple(item.parent, bnodes[i2], "http://www.w3.org/1999/02/22-rdf-syntax-ns#rest", {
               type: _RDFaProcessor.objectURI,
               value: i2 + 1 < bnodes.length ? bnodes[i2 + 1] : "http://www.w3.org/1999/02/22-rdf-syntax-ns#nil"
@@ -41488,12 +41492,12 @@ var RDFaProcessor = class _RDFaProcessor {
       if (currentObjectResource) {
         if (relAtt && inlistAtt) {
           for (let i2 = 0; i2 < relAttPredicates.length; i2++) {
-            let list2 = listMapping[relAttPredicates[i2]];
-            if (!list2) {
-              list2 = [];
-              listMapping[relAttPredicates[i2]] = list2;
+            let list4 = listMapping[relAttPredicates[i2]];
+            if (!list4) {
+              list4 = [];
+              listMapping[relAttPredicates[i2]] = list4;
             }
-            list2.push({
+            list4.push({
               type: _RDFaProcessor.objectURI,
               value: currentObjectResource
             });
@@ -41520,14 +41524,14 @@ var RDFaProcessor = class _RDFaProcessor {
         }
         if (relAtt && inlistAtt) {
           for (let i2 = 0; i2 < relAttPredicates.length; i2++) {
-            let list2 = listMapping[relAttPredicates[i2]];
-            if (!list2) {
-              list2 = [];
-              listMapping[predicate] = list2;
+            let list4 = listMapping[relAttPredicates[i2]];
+            if (!list4) {
+              list4 = [];
+              listMapping[predicate] = list4;
             }
             incomplete.push({
               predicate: relAttPredicates[i2],
-              list: list2
+              list: list4
             });
           }
         } else if (relAtt) {
@@ -41598,12 +41602,12 @@ var RDFaProcessor = class _RDFaProcessor {
           let predicate2 = this.parsePredicate(values[i2], vocabulary, context.terms, prefixes, base);
           if (predicate2) {
             if (inlistAtt) {
-              let list2 = listMapping[predicate2];
-              if (!list2) {
-                list2 = [];
-                listMapping[predicate2] = list2;
+              let list4 = listMapping[predicate2];
+              if (!list4) {
+                list4 = [];
+                listMapping[predicate2] = list4;
               }
-              list2.push(datatype === _RDFaProcessor.XMLLiteralURI || datatype === _RDFaProcessor.HTMLLiteralURI ? {
+              list4.push(datatype === _RDFaProcessor.XMLLiteralURI || datatype === _RDFaProcessor.HTMLLiteralURI ? {
                 type: datatype,
                 value: current.childNodes
               } : {
@@ -44194,6 +44198,21 @@ async function setPosture(pod, urls, posture) {
   if (!webId) throw new Error(`inbox.setPosture: unknown posture ${JSON.stringify(posture)}`);
   return pod.setAcl(urls.inbox, [], { appendAgents: [webId] });
 }
+async function list(pod, urls) {
+  const children = await pod.listContainer(urls.inbox);
+  return children.map((c) => ({ ...c }));
+}
+async function readItem(pod, url, { maxBytes, readCapped: readCapped3 }) {
+  const res = await pod.fetch(url, { headers: { accept: "*/*" } });
+  if (res.status >= 400 && res.status !== 404) throw new Error(`inbox item GET \u2192 ${res.status}`);
+  return { status: res.status, raw: res.status < 400 ? await readCapped3(res, maxBytes) : null };
+}
+async function readDeliveryReceipt(pod, itemUrl, { maxBytes, readCapped: readCapped3 }) {
+  const res = await pod.fetch(itemUrl + ".receipt.json", { headers: { accept: "application/json" } });
+  if (res.status >= 400) return null;
+  return JSON.parse(await readCapped3(res, maxBytes));
+}
+var dropHandledItem = (pod, url) => pod.delete(url);
 
 // lib/pod/collection.mjs
 var PUBLIC_READ3 = ["Read"];
@@ -44213,16 +44232,35 @@ async function writeFlat(pod, url, doc, { publicRead = false } = {}) {
   await pod.putJson(url, doc);
   if (publicRead) await pod.setAcl(url, PUBLIC_READ3);
 }
+async function readPaged(pod, headUrl, { max = 1e4, alsoItems = false } = {}) {
+  const head = await pod.getJson(headUrl).catch(() => null);
+  if (!head) return null;
+  if (Array.isArray(head.orderedItems) && head.orderedItems.length) return head.orderedItems;
+  if (alsoItems && Array.isArray(head.items) && head.items.length) return head.items;
+  const items = [];
+  const seen = /* @__PURE__ */ new Set();
+  let next = head.first;
+  while (next && !seen.has(next) && items.length < max) {
+    seen.add(next);
+    const page = await pod.getJson(next).catch(() => null);
+    if (!page) break;
+    items.push(...page.orderedItems || []);
+    next = page.next;
+  }
+  return items;
+}
 
 // lib/pod/outbox.mjs
 var writePage2 = (pod, pageUrl, doc, opts) => writePage(pod, pageUrl, doc, opts);
 var writeHead2 = (pod, urls, doc, opts) => writeHead(pod, urls.outbox, doc, opts);
 var dropPage2 = (pod, pageUrl) => dropPage(pod, pageUrl);
+var readPublished = (pod, urls) => readPaged(pod, urls.outbox, { max: 1e4 });
 
 // lib/pod/followers.mjs
 var writePage3 = (pod, pageUrl, doc, opts) => writePage(pod, pageUrl, doc, opts);
 var writeHead3 = (pod, urls, doc, opts) => writeHead(pod, urls.followers, doc, opts);
 var dropPage3 = (pod, pageUrl) => dropPage(pod, pageUrl);
+var readPublished2 = (pod, urls) => readPaged(pod, urls.followers, { max: 1e5, alsoItems: true });
 
 // lib/pod/following.mjs
 var write2 = (pod, urls, doc, opts) => writeFlat(pod, urls.following, doc, opts);
@@ -44279,6 +44317,33 @@ async function write4(pod, urls, doc) {
   await pod.putJson(url, doc, "application/json");
   await pod.setAcl(url, ["Read"]);
 }
+
+// lib/pod/notes.mjs
+var PUBLIC_READ4 = ["Read"];
+async function provisionContainer(pod, urls) {
+  await pod.putJson(urls.notes + ".keep", { keep: true }, "application/json");
+  await pod.setAcl(urls.notes, PUBLIC_READ4);
+}
+var write5 = (pod, noteId, doc) => pod.putJson(noteId, doc);
+var writeCreate = (pod, createId, doc) => pod.putJson(createId, doc);
+var writeEmptyReplies = (pod, repliesId2, doc) => pod.putJson(repliesId2, doc);
+var readReplies = (pod, repliesId2) => pod.getJson(repliesId2);
+var writeReplies = (pod, repliesId2, doc) => pod.putJson(repliesId2, doc);
+var read = (pod, noteId) => pod.getJson(noteId);
+async function writeTombstone2(pod, noteId, doc) {
+  await pod.putJson(noteId, doc);
+  await pod.setAcl(noteId, PUBLIC_READ4);
+}
+var dropCreate = (pod, createId) => pod.delete(createId).catch(() => false);
+var dropReplies = (pod, repliesId2) => pod.delete(repliesId2).catch(() => {
+});
+async function list2(pod, urls) {
+  const children = await pod.listContainer(urls.notes);
+  return children.filter((c) => !/(-create|-replies)$/.test(c.url) && !c.url.endsWith(".keep")).map((c) => ({ ...c }));
+}
+
+// lib/pod/media.mjs
+var write6 = (pod, url, bytes, contentType) => pod.put(url, bytes, contentType);
 
 // lib/publisher.mjs
 var ACCEPT_AP = 'application/activity+json, application/ld+json; profile="https://www.w3.org/ns/activitystreams"';
@@ -44431,8 +44496,7 @@ var Publisher = class {
     await writeKeep(this.remote, urls);
     await setPosture(this.remote, urls, this.config.quiescedAt ? "closed" : "open");
     if (this.config.quiescedAt) this.log("inbox left closed \u2014 this actor is quiesced");
-    await this.remote.putJson(urls.notes + ".keep", { keep: true }, "application/json");
-    await this.remote.setAcl(urls.notes, ["Read"]);
+    await provisionContainer(this.remote, urls);
     await this.publishCollections({ ...ALL_COLLECTIONS, force });
     const updated = await this.announceProfileChange(actor, { force });
     await this.local.writeSettings({ handle: this.config.handle, actorUrl: urls.actor });
@@ -44723,8 +44787,7 @@ var Publisher = class {
       }
     }
     if (fromNotes) {
-      for (const child of await this.remote.listContainer(urls.notes).catch(() => [])) {
-        if (/(-create|-replies|\/\.keep)$/.test(child.url)) continue;
+      for (const child of await list2(this.remote, urls).catch(() => [])) {
         ids.add(child.url);
       }
       indexed = true;
@@ -44742,7 +44805,7 @@ var Publisher = class {
       }
       if (have.has(id) || removed.has(id)) continue;
       budget--;
-      const note = await this.remote.getJson(id).catch(() => null);
+      const note = await read(this.remote, id).catch(() => null);
       if (note?.type !== "Note" || note.id !== id || note.attributedTo !== urls.actor) continue;
       const attachments = attachmentsOf(note);
       const mentions = (Array.isArray(note.tag) ? note.tag : []).filter((t) => t?.type === "Mention" && t.href).map((t) => ({ href: t.href, name: t.name }));
@@ -44857,9 +44920,9 @@ var Publisher = class {
     await writeHead2(
       this.remote,
       urls,
-      outboxHead(urls.outbox, outbox.length, pages.length)
+      outboxHead(urls.outbox, outbox.length, pages.length),
+      { publicRead: acls }
     );
-    if (acls) await this.remote.setAcl(urls.outbox, ["Read"]);
     this.store.write(
       "published.json",
       { ...this.store.read("published.json", {}), outboxPages: after, outboxIndex: index }
@@ -44870,21 +44933,8 @@ var Publisher = class {
   // the flat collection this used to write, so an actor published before paging
   // is still readable — which matters because rebuild reads this to recover
   // posts a lost machine no longer has.
-  async readPublishedOutbox() {
-    const head = await this.remote.getJson(this.urls.outbox).catch(() => null);
-    if (!head) return null;
-    if (Array.isArray(head.orderedItems) && head.orderedItems.length) return head.orderedItems;
-    const items = [];
-    let next = head.first;
-    const seen = /* @__PURE__ */ new Set();
-    while (next && !seen.has(next) && items.length < 1e4) {
-      seen.add(next);
-      const page = await this.remote.getJson(next).catch(() => null);
-      if (!page) break;
-      items.push(...page.orderedItems || []);
-      next = page.next;
-    }
-    return items;
+  readPublishedOutbox() {
+    return readPublished(this.remote, this.urls);
   }
   // The followers collection, paged like the outbox: a head that carries only
   // the count and the page bounds, and page documents holding the actor IRIs —
@@ -44918,9 +44968,9 @@ var Publisher = class {
     await writeHead3(
       this.remote,
       urls,
-      followersHead(urls.followers, actors.length, pages.length)
+      followersHead(urls.followers, actors.length, pages.length),
+      { publicRead: acls }
     );
-    if (acls) await this.remote.setAcl(urls.followers, ["Read"]);
     this.store.write(
       "published.json",
       { ...this.store.read("published.json", {}), followersPages: after, followersIndex: index }
@@ -44929,22 +44979,8 @@ var Publisher = class {
   // Every actor in the published followers collection, walking pages. Also reads
   // the flat collection this used to write, so an actor published before paging
   // still reconciles.
-  async readPublishedFollowers() {
-    const head = await this.remote.getJson(this.urls.followers).catch(() => null);
-    if (!head) return null;
-    if (Array.isArray(head.orderedItems) && head.orderedItems.length) return head.orderedItems;
-    if (Array.isArray(head.items) && head.items.length) return head.items;
-    const items = [];
-    let next = head.first;
-    const seen = /* @__PURE__ */ new Set();
-    while (next && !seen.has(next) && items.length < 1e5) {
-      seen.add(next);
-      const page = await this.remote.getJson(next).catch(() => null);
-      if (!page) break;
-      items.push(...page.orderedItems || []);
-      next = page.next;
-    }
-    return items;
+  readPublishedFollowers() {
+    return readPublished2(this.remote, this.urls);
   }
   async publishCollections(which = ALL_COLLECTIONS) {
     const { urls } = this;
@@ -45147,8 +45183,12 @@ var Publisher = class {
       summary: spoilerText,
       container: priv ? urls.privateNotes : urls.notes
     });
-    await this.remote.putJson(note.id, note);
-    await this.remote.putJson(repliesId(note.id), collection(repliesId(note.id), []));
+    await write5(this.remote, note.id, note);
+    await writeEmptyReplies(
+      this.remote,
+      repliesId(note.id),
+      collection(repliesId(note.id), [])
+    );
     if (!priv) await this.recordOutbox(note.id);
     await this.local.writeNote("posts", slug, {
       noteId: note.id,
@@ -45173,7 +45213,7 @@ var Publisher = class {
       ...note.tag?.length ? { mentions: note.tag.map((t) => ({ href: t.href, name: t.name })) } : {}
     });
     const create = createActivity(note, urls);
-    await this.remote.putJson(create.id, create);
+    await writeCreate(this.remote, create.id, create);
     const contacts = this.store.getContacts();
     const inboxes = [...new Set([
       ...visibility === "direct" ? [] : contacts.followers.map((f) => f.sharedInbox || f.inbox),
@@ -45264,8 +45304,12 @@ var Publisher = class {
       endTime: poll.expiresAt,
       votersCount: 0
     });
-    await this.remote.putJson(question.id, question);
-    await this.remote.putJson(repliesId(question.id), collection(repliesId(question.id), []));
+    await write5(this.remote, question.id, question);
+    await writeEmptyReplies(
+      this.remote,
+      repliesId(question.id),
+      collection(repliesId(question.id), [])
+    );
     if (!priv) await this.recordOutbox(question.id);
     await this.local.writeNote("posts", slug, {
       noteId: question.id,
@@ -45290,7 +45334,7 @@ var Publisher = class {
       ...question.tag?.length ? { mentions: question.tag.map((t) => ({ href: t.href, name: t.name })) } : {}
     });
     const create = this._pollActivity("Create", question, createActivityId(question.id));
-    await this.remote.putJson(create.id, create);
+    await writeCreate(this.remote, create.id, create);
     const contacts = this.store.getContacts();
     const inboxes = [...new Set([
       ...visibility === "direct" ? [] : contacts.followers.map((f) => f.sharedInbox || f.inbox),
@@ -45388,8 +45432,9 @@ var Publisher = class {
       closed: poll.closed,
       votersCount: poll.votersCount || 0
     });
-    await this.remote.putJson(question.id, question);
-    await this.remote.putJson(
+    await write5(this.remote, question.id, question);
+    await writeCreate(
+      this.remote,
       createActivityId(question.id),
       this._pollActivity("Create", question, createActivityId(question.id))
     );
@@ -45481,8 +45526,8 @@ var Publisher = class {
       updated,
       container
     });
-    await this.remote.putJson(note.id, note);
-    await this.remote.putJson(createActivityId(note.id), createActivity(note, urls));
+    await write5(this.remote, note.id, note);
+    await writeCreate(this.remote, createActivityId(note.id), createActivity(note, urls));
     if (s.slug) {
       await this.local.writeNote("posts", s.slug, {
         noteId: note.id,
@@ -45513,10 +45558,6 @@ var Publisher = class {
   }
 };
 
-// lib/intake.mjs
-init_wire();
-init_safefetch();
-
 // lib/pod/links.mjs
 function linkTargets(headerValue, rel, baseUrl) {
   if (!headerValue) return [];
@@ -45541,9 +45582,55 @@ var REL = {
   owner: "http://www.w3.org/ns/solid/terms#owner"
 };
 
-// lib/intake.mjs
+// lib/pod/notifications.mjs
 var RDF4 = Namespace("http://www.w3.org/1999/02/22-rdf-syntax-ns#");
 var NOTIFY = Namespace("http://www.w3.org/ns/solid/notifications#");
+var WS_CHANNEL = "WebSocketChannel2023";
+async function storageDescriptionUrl(podBase, { fetchImpl = fetch, headers = {}, timeoutMs = 2e4 } = {}) {
+  try {
+    const head = await fetchImpl(podBase, {
+      method: "HEAD",
+      headers,
+      signal: AbortSignal.timeout(timeoutMs)
+    });
+    const [found] = linkTargets(head.headers.get("link"), REL.storageDescription, podBase);
+    if (found) return found;
+  } catch {
+  }
+  return podBase + ".well-known/solid";
+}
+async function readWebSocketChannel(descUrl, { fetchImpl = fetch, headers = {}, timeoutMs = 2e4 } = {}) {
+  const res = await fetchImpl(descUrl, {
+    headers: { accept: "text/turtle", ...headers },
+    signal: AbortSignal.timeout(timeoutMs)
+  });
+  const g = graph();
+  try {
+    parse2(await readCapped2(res), g, descUrl, "text/turtle");
+  } catch (e) {
+    return { channel: null, error: `service description unparsable (${e.message})` };
+  }
+  const channel = g.each(null, RDF4("type"), NOTIFY(WS_CHANNEL), null).map((n) => n.value).find(Boolean) || g.each(null, NOTIFY("channelType"), NOTIFY(WS_CHANNEL), null).map((n) => n.value).find(Boolean);
+  return { channel: channel || null, error: channel ? null : `no ${WS_CHANNEL} service` };
+}
+async function subscribeToInbox(pod, { channelUrl, podTopicUrl, ...rest }) {
+  return pod.fetch(channelUrl, {
+    method: "POST",
+    headers: { "content-type": "application/ld+json" },
+    body: JSON.stringify({
+      "@context": ["https://www.w3.org/ns/solid/notification/v1"],
+      type: `http://www.w3.org/ns/solid/notifications#${WS_CHANNEL}`,
+      topic: podTopicUrl,
+      ...rest
+    })
+  });
+}
+
+// lib/intake.mjs
+init_wire();
+init_safefetch();
+var RDF5 = Namespace("http://www.w3.org/1999/02/22-rdf-syntax-ns#");
+var NOTIFY2 = Namespace("http://www.w3.org/ns/solid/notifications#");
 var POLL_MS = 2 * 6e4;
 var POLL_PUSH_OK_MS = 10 * 6e4;
 var CHANNEL_DOC = "inbox-channel.json";
@@ -45798,17 +45885,10 @@ var Intake = class {
    * pod that says nothing has always used.
    */
   async _storageDescriptionUrl() {
-    try {
-      const head = await fetch(this.urls.base, {
-        method: "HEAD",
-        headers: { "user-agent": USER_AGENT },
-        signal: AbortSignal.timeout(HTTP_TIMEOUT_MS)
-      });
-      const [found] = linkTargets(head.headers.get("link"), REL.storageDescription, this.urls.base);
-      if (found) return found;
-    } catch {
-    }
-    return this.urls.base + ".well-known/solid";
+    return storageDescriptionUrl(
+      this.urls.base,
+      { headers: { "user-agent": USER_AGENT }, timeoutMs: HTTP_TIMEOUT_MS }
+    );
   }
   async _subscribeOnce() {
     const saved = this.store.read(CHANNEL_DOC, null);
@@ -45817,34 +45897,20 @@ var Intake = class {
       return;
     }
     const descUrl = await this._storageDescriptionUrl();
-    const descRes = await fetch(descUrl, {
-      headers: { accept: "text/turtle", "user-agent": USER_AGENT },
-      signal: AbortSignal.timeout(HTTP_TIMEOUT_MS)
-    });
-    const g = graph();
-    try {
-      parse2(await readCapped(descRes), g, descUrl, "text/turtle");
-    } catch (e) {
-      this.wsState = "unavailable";
-      this.log(`service description unparsable (${e.message}) \u2014 polling only`);
-      return;
-    }
-    const channel = g.each(null, RDF4("type"), NOTIFY("WebSocketChannel2023"), null).map((n) => n.value).find(Boolean) || g.each(null, NOTIFY("channelType"), NOTIFY("WebSocketChannel2023"), null).map((n) => n.value).find(Boolean);
+    const { channel, error } = await readWebSocketChannel(
+      descUrl,
+      { headers: { "user-agent": USER_AGENT }, timeoutMs: HTTP_TIMEOUT_MS }
+    );
     if (!channel) {
       this.wsState = "unavailable";
-      this.log("no WebSocketChannel2023 service \u2014 polling only");
+      this.log(`${error} \u2014 polling only`);
       return;
     }
     const topic = this.urls.toPod ? this.urls.toPod(this.urls.inbox) : this.urls.inbox;
-    const sub = await this.remote.fetch(channel, {
-      method: "POST",
-      headers: { "content-type": "application/ld+json" },
-      body: JSON.stringify({
-        "@context": ["https://www.w3.org/ns/solid/notification/v1"],
-        type: "http://www.w3.org/ns/solid/notifications#WebSocketChannel2023",
-        topic
-      })
-    });
+    const sub = await subscribeToInbox(
+      this.remote,
+      { channelUrl: channel, podTopicUrl: topic }
+    );
     const body = await readCapped(sub).then(JSON.parse).catch(() => null);
     if (!body?.receiveFrom) {
       this.wsState = `subscribe-failed-${sub.status}`;
@@ -45947,18 +46013,23 @@ var Intake = class {
   async prune({ before, keepConcerning = false } = {}) {
     const cutoff = Date.parse(before);
     if (!Number.isFinite(cutoff)) throw new Error(`"${before}" is not a date`);
-    const all = await this.remote.listContainer(this.urls.inbox);
+    const all = await list(this.remote, this.urls);
     const older = all.filter((e) => !e.url.endsWith(".keep") && e.modified && Date.parse(e.modified) < cutoff);
     const out = { considered: older.length, applied: 0, dropped: 0, discarded: 0, failed: 0 };
     for (const item of older) {
       try {
         if (item.size > MAX_ITEM_BYTES) {
-          await this.remote.delete(item.url);
+          await dropHandledItem(this.remote, item.url);
           out.discarded++;
         } else {
-          const res = await this.remote.fetch(item.url, { headers: { accept: "*/*" } });
-          if (res.status >= 400 && res.status !== 404) throw new Error(`inbox item GET \u2192 ${res.status}`);
-          const activity = res.status < 400 ? await readCapped(res, MAX_ITEM_BYTES).then(JSON.parse).catch(() => null) : null;
+          const got = await readItem(this.remote, item.url, { maxBytes: MAX_ITEM_BYTES, readCapped });
+          const activity = got.raw === null ? null : (() => {
+            try {
+              return JSON.parse(got.raw);
+            } catch {
+              return null;
+            }
+          })();
           if (keepConcerning) {
             const rejection = activity ? await this.handle(activity) : "unparsable JSON";
             if (rejection) out.dropped++;
@@ -45973,7 +46044,7 @@ var Intake = class {
             this.log(`state not written \u2014 stopping the prune with ${older.length - out.applied - out.dropped - out.discarded} left`);
             break;
           }
-          await this.remote.delete(item.url);
+          await dropHandledItem(this.remote, item.url);
         }
         this._clearAttempt(item.url);
         await new Promise((r) => setTimeout(r, DELETE_GAP_MS));
@@ -46050,7 +46121,7 @@ var Intake = class {
     this._pruneAttempts();
     let all;
     try {
-      all = await this.remote.listContainer(this.urls.inbox);
+      all = await list(this.remote, this.urls);
       this.drainFailures = 0;
     } catch (e) {
       this._backOff(`inbox unreadable (${e.message})`);
@@ -46076,7 +46147,7 @@ var Intake = class {
         return false;
       }
       for (const url of pending.splice(0)) {
-        if (!await this.remote.delete(url)) {
+        if (!await dropHandledItem(this.remote, url)) {
           this.log(`inbox item ${url} was handled but NOT removed \u2014 it will be seen again`);
           continue;
         }
@@ -46095,9 +46166,8 @@ var Intake = class {
       }
       let activity = null;
       try {
-        const res = await this.remote.fetch(url, { headers: { accept: "*/*" } });
-        if (res.status >= 400 && res.status !== 404) throw new Error(`inbox item GET \u2192 ${res.status}`);
-        const raw = res.status < 400 ? await readCapped(res, MAX_ITEM_BYTES) : null;
+        const got = await readItem(this.remote, url, { maxBytes: MAX_ITEM_BYTES, readCapped });
+        const raw = got.raw;
         try {
           activity = raw ? JSON.parse(raw) : null;
         } catch {
@@ -46223,10 +46293,9 @@ var Intake = class {
     const secret = this.gatewaySecret();
     if (!secret) return null;
     try {
-      const res = await this.remote.fetch(itemUrl + ".receipt.json", { headers: { accept: "application/json" } });
-      if (res.status >= 400) return null;
-      const { readCapped: readCapped3 } = await Promise.resolve().then(() => (init_safefetch(), safefetch_exports));
-      const receipt = JSON.parse(await readCapped3(res, 64 * 1024));
+      const { readCapped: cap } = await Promise.resolve().then(() => (init_safefetch(), safefetch_exports));
+      const receipt = await readDeliveryReceipt(this.remote, itemUrl, { maxBytes: 64 * 1024, readCapped: cap });
+      if (!receipt) return null;
       const { verifyReceipt: verifyReceipt2 } = await Promise.resolve().then(() => (init_httpsig(), httpsig_exports));
       return verifyReceipt2(receipt, secret) ? receipt : null;
     } catch {
@@ -46630,9 +46699,9 @@ var Intake = class {
       const held = cache[g];
       if (held && Date.parse(held.at || 0) > fresh) continue;
       const doc = await this.fetchAP(g).catch(() => null);
-      const list = doc?.followers ? await this.collectionMembers(doc.followers) : null;
-      if (!list) continue;
-      cache[g] = { at: (/* @__PURE__ */ new Date()).toISOString(), members: list };
+      const list3 = doc?.followers ? await this.collectionMembers(doc.followers) : null;
+      if (!list3) continue;
+      cache[g] = { at: (/* @__PURE__ */ new Date()).toISOString(), members: list3 };
       changed = true;
     }
     if (changed) this.store.write("comembers.json", cache);
@@ -46932,11 +47001,11 @@ var Intake = class {
     }
     const { repliesId: repliesId2, collection: collection2 } = await Promise.resolve().then(() => (init_wire(), wire_exports));
     const url = repliesId2(parentId);
-    const cur = await this.remote.getJson(url);
+    const cur = await readReplies(this.remote, url);
     const items = Array.isArray(cur?.items) ? cur.items : [];
     if (items.includes(replyId)) return;
     items.push(replyId);
-    await this.remote.putJson(url, collection2(url, items.slice(-MAX_REPLIES_RECORDED)));
+    await writeReplies(this.remote, url, collection2(url, items.slice(-MAX_REPLIES_RECORDED)));
     this.log(`reply recorded on ${parentId}`);
   }
   // The other answer to a Follow, and it was dropped on the floor. Their server
@@ -47483,8 +47552,8 @@ async function votePoll(agent2, s, choices) {
       to: [s.actor],
       object: note
     };
-    await agent2.remote.putJson(id, note);
-    await agent2.remote.putJson(create.id, create);
+    await write5(agent2.remote, id, note);
+    await writeCreate(agent2.remote, create.id, create);
     await agent2.deliverer.deliverToAll([inbox], create);
   }
   agent2.store.updateStatus(s.noteId, {
@@ -47504,12 +47573,11 @@ async function deleteNote(agent2, s) {
   const stuck = [];
   const deletedAt = (/* @__PURE__ */ new Date()).toISOString();
   try {
-    await agent2.remote.putJson(s.noteId, noteTombstone(s.noteId, deletedAt));
-    await agent2.remote.setAcl(s.noteId, ["Read"]);
+    await writeTombstone2(agent2.remote, s.noteId, noteTombstone(s.noteId, deletedAt));
   } catch {
     stuck.push(s.noteId);
   }
-  if (!await agent2.remote.delete(createActivityId(s.noteId)).catch(() => false)) {
+  if (!await dropCreate(agent2.remote, createActivityId(s.noteId))) {
     stuck.push(createActivityId(s.noteId));
   }
   if (stuck.length) {
@@ -47520,8 +47588,7 @@ async function deleteNote(agent2, s) {
       error: "the pod would not remove the post \u2014 it is still published, and has been kept here so you can try again"
     };
   }
-  await agent2.remote.delete(repliesId(s.noteId)).catch(() => {
-  });
+  await dropReplies(agent2.remote, repliesId(s.noteId));
   if (s.atproto?.uri && agent2.atproto?.connected()) {
     await agent2.atproto.deleteCrossPost(s.atproto.uri).then(() => agent2.log?.(`bluesky mirror deleted: ${s.atproto.uri}`)).catch((e) => agent2.log?.(`bluesky mirror not deleted (${e.message}): ${s.atproto.uri}`));
   }
@@ -49050,7 +49117,7 @@ var MastoApi = class _MastoApi {
         const slug = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10) + "-" + node_crypto_default.randomBytes(4).toString("hex") + "." + ext;
         const url2 = this.urls.media + slug;
         await this.agent.publisher.ensureMediaContainer();
-        await this.agent.remote.put(url2, f.data, f.contentType);
+        await write6(this.agent.remote, url2, f.data, f.contentType);
         return url2;
       };
       if ("display_name" in form) cfg.name = String(form.display_name).trim() || cfg.handle;
@@ -49758,7 +49825,7 @@ var MastoApi = class _MastoApi {
       const slug = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10) + "-" + node_crypto_default.randomBytes(4).toString("hex") + "." + ext;
       const mediaUrl = this.urls.media + slug;
       await this.agent.publisher.ensureMediaContainer();
-      await this.agent.remote.put(mediaUrl, file.data, mediaType);
+      await write6(this.agent.remote, mediaUrl, file.data, mediaType);
       const entry = { url: mediaUrl, mediaType, description: fields.description || "" };
       const id = this.store.idFor(mediaUrl);
       this.store.setMedia(id, entry);
@@ -50029,7 +50096,7 @@ var TagFeed = class {
     this.store.hold?.();
     try {
       for (const tag of tags) {
-        let list;
+        let list3;
         try {
           const { safeFetch: safeFetch2, retryAfterMs: retryAfterMs3, readCapped: readCapped3 } = await Promise.resolve().then(() => (init_safefetch(), safefetch_exports));
           const url = `${instance}/api/v1/timelines/tag/${encodeURIComponent(tag)}?limit=${PER_TAG}`;
@@ -50038,14 +50105,14 @@ var TagFeed = class {
             this._backOff(res.status, retryAfterMs3(res));
             return;
           }
-          list = JSON.parse(await readCapped3(res, MAX_TIMELINE_BYTES));
+          list3 = JSON.parse(await readCapped3(res, MAX_TIMELINE_BYTES));
         } catch (e) {
           this.log(`tagfeed #${tag}: ${e.message}`);
           this._backOff(0, null);
           return;
         }
         this.failures = 0;
-        for (const st2 of Array.isArray(list) ? list : []) {
+        for (const st2 of Array.isArray(list3) ? list3 : []) {
           const noteId = st2?.uri;
           if (!noteId || known.has(noteId) || this.store.isBlocked(noteId)) continue;
           if (budget-- <= 0) break;
@@ -50130,7 +50197,7 @@ async function makeDpopSession({ clientId, secret, tokenEndpoint }) {
 var LDP2 = Namespace("http://www.w3.org/ns/ldp#");
 var DC = Namespace("http://purl.org/dc/terms/");
 var POSIX = Namespace("http://www.w3.org/ns/posix/stat#");
-var RDF5 = Namespace("http://www.w3.org/1999/02/22-rdf-syntax-ns#");
+var RDF6 = Namespace("http://www.w3.org/1999/02/22-rdf-syntax-ns#");
 var ACL = Namespace("http://www.w3.org/ns/auth/acl#");
 var FOAF = Namespace("http://xmlns.com/foaf/0.1/");
 var AS2 = Namespace("https://www.w3.org/ns/activitystreams#");
@@ -50382,7 +50449,7 @@ var PodTransport = class {
     const target = namedNode2(targetUrl);
     const g = graph();
     const authorize = (subject, agentPred, agent2, modes) => {
-      g.add(subject, RDF5("type"), ACL("Authorization"), doc);
+      g.add(subject, RDF6("type"), ACL("Authorization"), doc);
       g.add(subject, agentPred, agent2, doc);
       g.add(subject, ACL("accessTo"), target, doc);
       g.add(subject, ACL("default"), target, doc);
@@ -50427,20 +50494,20 @@ var PodTransport = class {
     parse2(body, g, url, "text/turtle");
     const here = namedNode2(url);
     const seen = /* @__PURE__ */ new Set();
-    const list = [];
+    const list3 = [];
     for (const child of g.each(here, LDP2("contains"), null, here)) {
       const u = child.value;
       if (!u.startsWith(url) || u === url || /\.(acl|meta|receipt\.json)$/.test(u) || seen.has(u)) continue;
       seen.add(u);
-      list.push({
+      list3.push({
         url: u,
         size: Number(g.any(child, POSIX("size"), null, here)?.value || 0),
         modified: g.any(child, DC("modified"), null, here)?.value || null
       });
     }
-    list.sort((a, b) => String(a.modified || "").localeCompare(String(b.modified || "")));
-    this._listCache.set(url, { etag: res.headers.get("etag"), children: list });
-    return list;
+    list3.sort((a, b) => String(a.modified || "").localeCompare(String(b.modified || "")));
+    this._listCache.set(url, { etag: res.headers.get("etag"), children: list3 });
+    return list3;
   }
   /**
    * The WebID profile advertises the actor as an account:
@@ -50464,8 +50531,8 @@ var PodTransport = class {
     const actor = namedNode2(actorUrl);
     const wanted = [
       [me, FOAF("account"), actor],
-      [actor, RDF5("type"), FOAF("OnlineAccount")],
-      [actor, RDF5("type"), kind === "group" ? AS2("Group") : AS2("Person")],
+      [actor, RDF6("type"), FOAF("OnlineAccount")],
+      [actor, RDF6("type"), kind === "group" ? AS2("Group") : AS2("Person")],
       [actor, FOAF("accountName"), literal2(accountName)]
     ];
     const missing = wanted.filter(([s, p, o]) => !g.holds(s, p, o, doc));
@@ -50716,7 +50783,7 @@ var keyCacheKey = (actorUrl) => `signing-keys:${actorUrl}`;
 async function loadKeysFromPod(remote, urls) {
   const cached = await kvGet(keyCacheKey(urls.actor)).catch(() => null);
   if (cached?.rsa) return importSigningKey(cached);
-  const doc = await remote.getJson(urls.state + "keys.json");
+  const doc = await readWrappedKeys(remote, urls);
   if (isKeyEnvelope(doc)) throw new KeyPasswordNeeded();
   if (!doc || !doc.rsa) throw new Error("no signing key on the pod \u2014 sign up did not finish");
   await kvPut(keyCacheKey(urls.actor), doc).catch(() => {
@@ -50752,9 +50819,9 @@ var sha2563 = (s) => node_crypto_default.createHash("sha256").update(s).digest()
 var DI_CTX = "https://w3id.org/security/data-integrity/v1";
 function withProofContext(doc) {
   const ctx = doc["@context"];
-  const list = Array.isArray(ctx) ? ctx : ctx ? [ctx] : [];
-  if (list.includes(DI_CTX)) return doc;
-  return { ...doc, "@context": [...list, DI_CTX] };
+  const list3 = Array.isArray(ctx) ? ctx : ctx ? [ctx] : [];
+  if (list3.includes(DI_CTX)) return doc;
+  return { ...doc, "@context": [...list3, DI_CTX] };
 }
 async function attachProof(activity, { privateKey, verificationMethod, created = /* @__PURE__ */ new Date() } = {}) {
   if (!privateKey || !verificationMethod || !activity || typeof activity !== "object") return activity;
@@ -53381,11 +53448,7 @@ var BrowserAgent = class _BrowserAgent {
     const before = this.publisher.publicKeyPem;
     const rec = await generateKeys();
     rec.mintedFor = this.urls.actor;
-    await this.remote.putJson(
-      this.urls.state + "keys.json",
-      await wrapKeys(rec, password),
-      "application/json"
-    );
+    await writeWrappedKeys(this.remote, this.urls, await wrapKeys(rec, password));
     await kvPut(keyCacheKey(this.urls.actor), rec).catch(() => {
     });
     const keys = await importSigningKey(rec);

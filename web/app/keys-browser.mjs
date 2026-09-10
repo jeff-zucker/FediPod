@@ -5,6 +5,7 @@
 // deliverer treats a null edPrivate as "no proof", and an unproved activity
 // still federates — so the browser MVP omits them.
 import { kvGet, kvPut } from './idb-kv.mjs';
+import * as podState from '../../lib/pod/state.mjs';
 import { isKeyEnvelope, KeyPasswordNeeded } from './keystore.mjs';
 
 const pemToDer = (pem) => Uint8Array.from(
@@ -35,7 +36,7 @@ export async function loadKeysFromPod(remote, urls) {
   const cached = await kvGet(keyCacheKey(urls.actor)).catch(() => null);
   if (cached?.rsa) return importSigningKey(cached);
 
-  const doc = await remote.getJson(urls.state + 'keys.json');
+  const doc = await podState.readWrappedKeys(remote, urls);
   if (isKeyEnvelope(doc)) throw new KeyPasswordNeeded();
   if (!doc || !doc.rsa) throw new Error('no signing key on the pod — sign up did not finish');
   // A pre-wrapping install. Cache it so the next boot is one read, and leave

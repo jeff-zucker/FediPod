@@ -7,6 +7,7 @@
 // publisher, intake, the Mastodon facade — is lib/, unchanged.
 import { apUrls } from '../../lib/wire.mjs';
 import * as containers from '../../lib/pod/containers.mjs';
+import * as podState from '../../lib/pod/state.mjs';
 import { PodStore } from '../../lib/store.mjs';
 import { HttpStorage } from '../../lib/storage.mjs';
 import { PodRdf } from '../../lib/podrdf.mjs';
@@ -365,8 +366,7 @@ export class BrowserAgent {
     const before = this.publisher.publicKeyPem;
     const rec = await generateKeys();
     rec.mintedFor = this.urls.actor;                  // one key, one actor (lib/keys.mjs)
-    await this.remote.putJson(this.urls.state + 'keys.json',
-      await wrapKeys(rec, password), 'application/json');
+    await podState.writeWrappedKeys(this.remote, this.urls, await wrapKeys(rec, password));
     await kvPut(keyCacheKey(this.urls.actor), rec).catch(() => {});
     const keys = await importSigningKey(rec);
     this.publisher.publicKeyPem = keys.rsaPublicPem;
