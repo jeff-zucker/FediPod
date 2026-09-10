@@ -35,6 +35,10 @@
     "prepublishOnly": "npm test",
     "test": "node claude/smoke-tests/agent-smoke.mjs && node claude/smoke-tests/front-hard-test.mjs && node scripts/verify-ui.mjs",
     "verify-ui": "node scripts/verify-ui.mjs",
+    "build:sw": "node scripts/build-app.mjs --entry web/app/sw-src.mjs --out web/app/dist/sw.js",
+    "build:boot": "node scripts/build-app.mjs --entry web/app/boot.mjs --out web/app/dist/boot.js",
+    "build:app": "npm run build:sw && npm run build:boot",
+    "stage": "node scripts/stage-site.mjs",
     "audit": "npm audit --omit=dev",
     "agent": "node run-agent.mjs"
   },

@@ -5,9 +5,12 @@
 // so it controls the whole origin), and Phanpy under /app/ with its own
 // service-worker registration removed so only the agent worker runs.
 //
-//   node scripts/build-app.mjs --entry web/app/sw-src.mjs  --out web/app/dist/sw.js
-//   node scripts/build-app.mjs --entry web/app/boot.mjs    --out web/app/dist/boot.js
-//   node scripts/stage-site.mjs
+//   npm run build:app     # both bundles, into web/app/dist/
+//   npm run stage         # this script
+//
+// The bundles are tracked, so rebuild and commit them in the SAME commit as
+// whatever source change caused them — a dist that does not match its own
+// source is the hardest kind of thing to see in the browser build.
 import fs from 'node:fs'; import path from 'node:path'; import { fileURLToPath } from 'node:url';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const site = path.join(root, 'web/app/site');
