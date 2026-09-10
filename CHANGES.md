@@ -2,8 +2,10 @@
 
 ## 2026-09-09 (a security review, and most of what it found)
 
-A full read of the project turned up a long list; this is the browser build's
-share of it, fixed. Nothing here is a new feature except where it says so.
+A full read of the project turned up a long list. Everything serious in it is
+fixed — the browser build's whole share, and every critical or high finding on
+the installed agent, the gateway and the pod server. Nothing here is a new
+feature except where it says so.
 
 ### Things another website could do to you, and now cannot
 
@@ -105,11 +107,36 @@ rewrote its two largest documents once per incoming post, and re-created
 containers that already existed each time the browser restarted it. All fixed;
 a gateway now passes on how long a receiving server asked to be left alone.
 
+### And on the installed agent, the gateway and the pod server
+
+- **Any page you visited could take over an installed agent**, in three
+  requests and with nothing typed. A site could register itself as a client
+  pointing back at its own server, send your browser to the sign-in page, and
+  collect a key to your account — the agent's certificate is trusted by your
+  browser, so none of it looked unusual. A page in another tab can no longer
+  reach that step, and where no password is set the agent will not send a key
+  anywhere but back to itself. Connecting a third-party client from its own
+  site now needs a password set first (`fedipod passwd`); that is the point of
+  the password.
+- **A gateway account could be pointed at the gateway itself**, and on the pod
+  server that made it read the server's own internals — including the file
+  holding every user's receipt secret. It could also make the server call
+  itself over and over. A gateway is not a pod and now says so, and the
+  server's reads are confined to the account's own pod.
+- **Somebody else with an account on your pod server could take your gateway
+  name** and be handed your receipt secret with it. The gateway asks your pod
+  who owns it, rather than assuming that sharing an address means sharing an
+  owner.
+- **On a shared gateway, one account could speak for another** — post as them,
+  rewrite their posts, delete them — because everyone's addresses live on the
+  same domain. Being on the same domain is no longer enough; it has to be the
+  same account.
+
 ### Also
 
 `npm audit` reports nothing outstanding (an XML parser inside a dependency,
 which the browser bundle carried too). The tests grew from 1,449 checks to
-1,465, plus four new harnesses; the ones covering behaviour these fixes changed
+1,477, plus six new harnesses; the ones covering behaviour these fixes changed
 were updated, and negative cases added beside them.
 
 ## 2026-09-06 (polls)
