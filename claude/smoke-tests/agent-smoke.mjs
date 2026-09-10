@@ -529,8 +529,7 @@ const wire = await import(path.join(root, 'lib/wire.mjs'));
 const urls = wire.apUrls('https://pod.example/');
 check(urls.webfinger === 'https://pod.example/.well-known/webfinger'
   && urls.actor === 'https://pod.example/activitypods-js/ap/actor'
-  && urls.state === 'https://pod.example/activitypods-js/ap-state/'
-  && urls.fediverse === 'https://pod.example/activitypods-js/fediverse/',
+  && urls.state === 'https://pod.example/activitypods-js/ap-state/',
   'apUrls nests under /activitypods-js/, webfinger at root');
 const urlsCustom = wire.apUrls('https://pod.example/', 'other-root/');
 check(urlsCustom.actor === 'https://pod.example/other-root/ap/actor', 'apUrls root is configurable');
@@ -563,20 +562,20 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     const pub = new Publisher({
       config,
       remote: { setAcl: async (url, modes) => { acls.push([url, modes]); } },
-      local: {}, store: { getStatuses: () => [] }, deliverer: {}, publicKeyPem: 'x',
+      store: { getStatuses: () => [] }, deliverer: {}, publicKeyPem: 'x',
       log: () => {},
       probeFetch: async () => ({ status: probeStatus }),
     });
     return { pub, acls };
   };
 
-  // A stranger can read them → rewrite the ACL on all three private trees.
+  // A stranger can read them → rewrite the ACL on both private trees.
   const leaky = mkPub(200);
   await leaky.pub.ensurePrivateAcls();
-  const wanted = [leaky.pub.urls.home, leaky.pub.urls.state, leaky.pub.urls.fediverse];
-  check(leaky.acls.length === 3
+  const wanted = [leaky.pub.urls.home, leaky.pub.urls.state];
+  check(leaky.acls.length === 2
     && wanted.every((u, i) => leaky.acls[i][0] === u && leaky.acls[i][1].length === 0),
-    'ensurePrivateAcls repairs home + ap-state + fediverse when they read publicly');
+    'ensurePrivateAcls repairs home and ap-state when they read publicly');
 
   // Already private → no writes at all.
   const tight = mkPub(401);
@@ -598,7 +597,6 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
         fetch: async (u) => { seen.push(`GET ${u.replace('https://pod.example/', '')}`); return { ok: false }; },
         getJson: async (u) => { seen.push(`GET ${u.replace('https://pod.example/', '')}`); return null; },
       },
-      local: { writeContacts: async () => {} },
       store: {
         read: () => [], write: () => {}, getStatuses: () => [],
         getContacts: () => ({ followers: [{ actor: 'https://a.example/u/x' }], following: [] }),
@@ -661,7 +659,6 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   const pub = new Publisher({
     config: { remotePod: 'https://pod.example/', handle: 'you', name: 'You' },
     remote: { putJson: async (u, b) => put.push({ u, b }), setAcl: async () => {}, delete: async () => true },
-    local: { writeNote: async () => {} },
     store: {
       getStatuses: () => [], read: () => [], write: () => {}, addStatus: () => {},
       getContacts: () => ({ followers: [], following: [] }),
@@ -683,7 +680,6 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   const pub2 = new Publisher({
     config: { remotePod: 'https://pod.example/', handle: 'you', name: 'You' },
     remote: { putJson: async () => {}, setAcl: async () => {}, delete: async () => true },
-    local: { writeNote: async () => {} },
     store: {
       getStatuses: () => [], read: () => [], write: () => {}, addStatus: () => {},
       getContacts: () => ({ followers: [{ actor: 'f', inbox: 'https://f.example/inbox' }], following: [] }),
@@ -713,7 +709,6 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   const pub3 = new Publisher({
     config: { remotePod: 'https://pod.example/', handle: 'you', name: 'You' },
     remote: { putJson: async () => {}, setAcl: async () => {}, delete: async () => true },
-    local: { writeNote: async () => {} },
     store: {
       getStatuses: () => [{ noteId: PARENT, mentions: [
         { href: 'https://grp.example/a/actor', name: '@grp@grp.example' },
@@ -751,7 +746,6 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   const pub = new Publisher({
     config: { remotePod: 'https://pod.example/', handle: 'you', name: 'You' },
     remote: { putJson: async (id, doc) => { putDocs[id] = doc; }, setAcl: async () => {}, delete: async () => true },
-    local: { writeNote: async () => {} },
     store: {
       getStatuses: () => statuses, read: () => [], write: () => {},
       addStatus: (s) => statuses.unshift(s),
@@ -981,7 +975,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   const ri = new IntakeCls({
     config: {}, urls: rUrls, store: rStore, log: () => {},
     remote: { getJson: async (u) => put[u] || null, putJson: async (u, b) => { put[u] = b; } },
-    local: {}, deliverer: {}, publisher: { urls: rUrls },
+    deliverer: {}, publisher: { urls: rUrls },
   });
   await ri.addReply(OURS, 'https://a.example/u/mei/n/9');
   await ri.addReply(OURS, 'https://b.example/u/kofi/n/3');
@@ -1015,7 +1009,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   const { Publisher } = await import(path.join(root, 'lib/publisher.mjs'));
   const config = { remotePod: 'https://pod.example/', handle: 'you', name: 'You' };
   const mkPub = (probeStatus) => new Publisher({
-    config, remote: { setAcl: async () => {} }, local: {}, store: { getStatuses: () => [] },
+    config, remote: { setAcl: async () => {} }, store: { getStatuses: () => [] },
     deliverer: {}, publicKeyPem: 'x', log: () => {},
     probeFetch: async () => ({ status: probeStatus }),
   });
@@ -1024,7 +1018,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   // which would report a perfectly public actor as invisible.
   let sentAccept = null;
   const sniffer = new Publisher({
-    config, remote: { setAcl: async () => {} }, local: {}, store: { getStatuses: () => [] },
+    config, remote: { setAcl: async () => {} }, store: { getStatuses: () => [] },
     deliverer: {}, publicKeyPem: 'x', log: () => {},
     probeFetch: async (_u, init) => { sentAccept = init?.headers?.accept; return { status: 200 }; },
   });
@@ -1209,7 +1203,6 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
       putJson: async (url, obj) => { written.set(url, obj); },
       setAcl: async (url, modes) => { acls.push([url, modes]); },
     },
-    local: {},
     store: {
       getStatuses: () => [],
       getContacts: () => ({
@@ -1353,7 +1346,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   const intake = new Intake({
     config: {}, urls: { inbox: 'https://p.example/in/', base: 'https://p.example/' },
     remote: { listContainer: async () => { throw new Error('fetch failed'); } },
-    local: {}, store: { read: (_n, d) => d, write: () => {} },
+    store: { read: (_n, d) => d, write: () => {} },
     deliverer: {}, publisher: {}, log: (m) => logs.push(m),
   });
 
@@ -1391,7 +1384,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
         fetch: async () => ({ status: itemStatus, text: async () => '', json: async () => null }),
         delete: async (u) => { deleted.push(u); return true; },
       },
-      local: {}, store, deliverer: {}, publisher: {}, log: () => {},
+      store, deliverer: {}, publisher: {}, log: () => {},
     });
     return { intake, deleted, state, store };
   };
@@ -1717,7 +1710,6 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
       fetch: async () => ({ ok: false }),
       getJson: async () => null,
     },
-    local: { writeContacts: async () => {} },
     store: {
       read: (n, d) => (n in state ? JSON.parse(JSON.stringify(state[n])) : d),
       write: (n, v) => { state[n] = v; },
@@ -1897,7 +1889,6 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
       setAcl: async (u) => { seen.push(`ACL ${u}`); },
       fetch: async () => ({ ok: false }), getJson: async () => null,
     },
-    local: { writeSettings: async () => {}, writeContacts: async () => {} },
     store: {
       read: (n, d) => (n in state ? JSON.parse(JSON.stringify(state[n])) : d),
       write: (n, v) => { state[n] = v; },
@@ -1977,22 +1968,12 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   check(/signal: init\.signal \|\| AbortSignal\.timeout\(HTTP_TIMEOUT_MS\)/.test(sf),
     'and safeFetch itself now has the deadline it never had');
 
-  // A leftover .<pid>.tmp is not a note.
-  const { PodRdf } = await import(path.join(root, 'lib/podrdf.mjs'));
-  const listed = [];
-  const rdf = new PodRdf({ storage: { base: 'file:///tmp/x/', list: async () => ({
-    names: ['2026-01-01-abcd1234', '2026-01-01-abcd1234.4242.tmp', 'notes.acl'],
-  }) } });
-  listed.push(...await rdf.listNotes('timeline'));
-  check(listed.length === 1 && listed[0].endsWith('2026-01-01-abcd1234'),
-    `an interrupted write's leftover is not offered to the parser (${listed.length} listed)`);
-
   // An Accept has to answer the Follow we sent.
   const { Intake } = await import(path.join(root, 'lib/intake.mjs'));
   const mkA = (rec) => {
     const state = { contacts: { followers: [], following: [rec] } };
     const intake = new Intake({
-      config: {}, urls: {}, remote: {}, local: {},
+      config: {}, urls: {}, remote: {}, 
       store: {
         read: (_n, d) => d, write: () => {},
         getContacts: () => JSON.parse(JSON.stringify(state.contacts)),
@@ -2012,11 +1993,6 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   await right.intake.onAccept({ type: 'Accept', object: { id: 'https://us.example/f/1' } }, THEM);
   check(right.state.contacts.following[0].accepted === true, 'and the one that does, does');
 
-  // The ACL probe should not ask about a tree the default layout keeps on disk.
-  check(/privateOnPod === false \? \[\] :/.test(read('lib/publisher.mjs')),
-    'ensurePrivateAcls does not probe a fediverse tree that is not on the pod');
-  check(/privateOnPod: !cred\.privateRoot/.test(read('run-agent.mjs')),
-    'and the agent tells it which layout this install uses');
 }
 
 // --- 5a-quater. the fediverse posts more than Notes, and a tag is not a hole ---
@@ -2149,7 +2125,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     const { Intake } = await import(path.join(root, 'lib/intake.mjs'));
     let published = [];
     const intake = new Intake({
-      config: {}, urls: {}, remote: {}, local: {},
+      config: {}, urls: {}, remote: {}, 
       store: { read: (n, d) => d, write: () => {} },
       deliverer: {}, log: () => {},
       publisher: { publishCollections: async (w) => { published.push(w); } },
@@ -2186,7 +2162,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     const intake = new Intake({
       config: { kind: 'group' },
       urls: { actor: 'https://p.example/ap/actor', notes: 'https://p.example/ap/notes/' },
-      remote: {}, local: { delete: async () => {}, fedi: 'x/' },
+      remote: {}, 
       store: {
         read: (n, d) => d, write: () => {},
         getContacts: () => ({ followers: [{ actor: GONE }], following: [] }),
@@ -2218,7 +2194,6 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
         put: async () => {}, putJson: async () => {}, setAcl: async () => {},
         delete: async () => {}, getJson: async () => null, fetch: async () => ({ ok: false }),
       },
-      local: { writeContacts: async () => {}, writeSettings: async () => {} },
       store: {
         read: (n, d) => (n in state ? JSON.parse(JSON.stringify(state[n])) : d),
         write: (n, v) => { state[n] = v; },
@@ -2392,7 +2367,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     const { Intake } = await import(path.join(root, 'lib/intake.mjs'));
     const cached = {};
     const intake = new Intake({
-      config: {}, urls: {}, remote: {}, local: {},
+      config: {}, urls: {}, remote: {}, 
       store: { read: (n, d) => d, write: () => {}, cacheActor: (u, d) => { cached[u] = d; } },
       deliverer: {
         signedFetch: async (u) => ({
@@ -2619,7 +2594,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     const intake = new Intake({
       config: { kind: 'person' },
       urls: { inbox: 'https://p.example/in/', actor: 'https://p.example/ap/actor' },
-      remote: {}, local: {},
+      remote: {}, 
       store: {
         read: (n, d) => d, write: () => {},
         getContacts: () => JSON.parse(JSON.stringify(state.contacts)),
@@ -2717,7 +2692,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
       config: { kind },
       urls: { inbox: 'https://p.example/in/', actor: 'https://p.example/ap/actor',
         followers: 'https://p.example/ap/followers', notes: OURS },
-      remote: { putJson: async () => {} }, local: { addNote: async () => {} },
+      remote: { putJson: async () => {} }, 
       store: {
         read: (n, d) => d, write: () => {},
         getContacts: () => JSON.parse(JSON.stringify(state.contacts)),
@@ -2852,7 +2827,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     const intake = new Intake({
       config,
       urls: { inbox: 'https://p.example/in/', actor: 'https://p.example/ap/actor' },
-      remote: {}, local: {},
+      remote: {}, 
       store: {
         read: (n, d) => d, write: () => {},
         getContacts: () => JSON.parse(JSON.stringify(state.contacts)),
@@ -3161,7 +3136,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 {
   const { HttpStorage, FileStorage } = await import(path.join(root, 'lib/storage.mjs'));
   const asked = [];
-  const st = new HttpStorage('https://pod.example/ap/fediverse/',
+  const st = new HttpStorage('https://pod.example/ap-state/',
     async (u, i) => { asked.push(`${i?.method || 'GET'} ${u}`); return { status: 200, text: async () => '', headers: { get: () => null } }; });
 
   // FileStorage has checked this since it was written; HttpStorage concatenated
@@ -3179,15 +3154,9 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   check(removed, 'and to delete outside it');
   check(asked.length === 0, 'none of which reached the pod at all');
 
-  await st.read('timeline/2026-01-01-abcd1234');
-  check(asked.length === 1 && asked[0].endsWith('/ap/fediverse/timeline/2026-01-01-abcd1234'),
+  await st.read('statuses.json');
+  check(asked.length === 1 && asked[0].endsWith('/ap-state/statuses.json'),
     'while an ordinary child still resolves under the base');
-
-  // The reachable input: `published` comes from a remote document, and its
-  // first ten characters lead the storage path.
-  const src = fs.readFileSync(path.join(root, 'lib/intake.mjs'), 'utf8');
-  check(/\^\\d\{4\}-\\d\{2\}-\\d\{2\}\$/.test(src),
-    'a note published-date is a date before it is used as a path component');
 
   const fst = new FileStorage('/tmp/ap-jail-check/');
   let fsThrew = false;
@@ -3316,7 +3285,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     const fetched = [];
     const intake = new Intake({
       config: {}, urls: { inbox: 'https://p.example/in/', actor: 'https://p.example/ap/actor', notes: 'https://p.example/ap/notes/' },
-      remote: {}, local: {},
+      remote: {}, 
       store: {
         read: (n, d) => d, write: () => {},
         getContacts: () => JSON.parse(JSON.stringify(state.contacts)),
@@ -3586,7 +3555,6 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   const intake = new Intake({
     config: {}, urls: { inbox: 'https://p.example/in/', base: 'https://p.example/' },
     remote: { fetch: async () => { posted++; return { status: 200, json: async () => ({}) }; } },
-    local: {},
     store: { read: (n, d) => (docs.has(n) ? docs.get(n) : d), write: (n, v) => docs.set(n, v) },
     deliverer: {}, publisher: {}, log: () => {},
   });
@@ -3623,7 +3591,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
         return new Response('{}', { status: 403 });
       },
     },
-    local: {}, store: { read: (n, d) => d, write: () => {} },
+    store: { read: (n, d) => d, write: () => {} },
     deliverer: {}, publisher: {}, log: () => {},
   });
   intake.stopped = true;   // leave no retry timer behind
@@ -3691,7 +3659,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
       }),
     };
     const publisher = new Publisher({
-      config, store, local: {},
+      config, store, 
       remote: {
         setAcl: async (u, m) => { acls.push([u, m]); },
         putJson: async (u, o) => { written.set(u, o); },
@@ -3805,7 +3773,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     getContacts: () => ({ followers: [], following }),
   };
   const publisher = new Publisher({
-    config, store, local: {},
+    config, store, 
     remote: { setAcl: async (u, m) => { acls.push([u, m]); }, putJson: async () => {}, put: async () => {} },
     deliverer: { deliverToAll: async () => {} }, publicKeyPem: 'x', log: () => {},
     probeFetch: async () => ({ status: 200 }),
@@ -3882,7 +3850,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   const { Intake } = await import(path.join(root, 'lib/intake.mjs'));
   const intake = new Intake({
     config: {}, urls: { inbox: 'https://p.example/in/', base: 'https://p.example/' },
-    remote: {}, local: {}, store: {}, deliverer: {}, publisher: {}, log: () => {},
+    remote: {}, store: {}, deliverer: {}, publisher: {}, log: () => {},
   });
   const delays = [intake._reconnectDelay(), intake._reconnectDelay(), intake._reconnectDelay(),
     intake._reconnectDelay(), intake._reconnectDelay()];
@@ -3955,7 +3923,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
       fetch: async () => { throw new Error('remote down'); },
       delete: async () => true,
     },
-    local: {}, store, deliverer: {}, publisher: {}, log: () => {},
+    store, deliverer: {}, publisher: {}, log: () => {},
   });
 
   await mkIntake().drain();
@@ -3982,7 +3950,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   const logs = [];
   const intake = new Intake({
     config: {}, urls: { inbox: 'https://p.example/in/', base: 'https://p.example/' },
-    remote: {}, local: {}, store: { read: (_n, d) => d, write: () => {} },
+    remote: {}, store: { read: (_n, d) => d, write: () => {} },
     deliverer: {}, publisher: {}, log: (m) => logs.push(m),
   });
   const realFetch = globalThis.fetch;
@@ -4173,7 +4141,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     getContacts: () => ({ followers: [], following: [] }),
   };
   const publisher = new Publisher({
-    config, store, local: { writeSettings: async () => {}, writeContacts: async () => {} },
+    config, store, 
     remote: {
       putJson: async (u, o) => { written.set(u, o); }, put: async () => {},
       setAcl: async () => {},
@@ -4257,52 +4225,6 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   fs.rmSync(dir2, { recursive: true, force: true });
 }
 
-// --- 6. pod-RDF builders via injected fetch ---
-const { PodRdf } = await import(path.join(root, 'lib/podrdf.mjs'));
-const rdfPuts = [];
-// Remembers what it was given, so a note can be read back the way it was
-// written. Asserting on the serialised TEXT is what the hand-rolled version
-// invited; with rdflib the output is correctly prefixed and abbreviated
-// (`media:p.png`, not `<https://m.example/media/p.png>`), so the thing worth
-// testing is the round trip, not the spelling.
-const FEDI = 'https://pod.example/activitypods-js/fediverse/';
-const rdfDocs = new Map();
-const rdf = new PodRdf({
-  storage: new HttpStorage(FEDI, async (url, init = {}) => {
-    if (init.method === 'PUT') {
-      rdfPuts.push({ url, body: init.body });
-      rdfDocs.set(url, init.body);
-      return { status: 201, headers: { get: () => null }, text: async () => '' };
-    }
-    const body = rdfDocs.get(url);
-    return body === undefined
-      ? { status: 404, headers: { get: () => null }, text: async () => '' }
-      : { status: 200, headers: { get: () => null }, text: async () => body };
-  }),
-});
-// A tab is in here on purpose: the hand-rolled escaper handled \\, " and \n
-// and passed tabs through raw. See claude/plans/no-regex-rdf.md.
-await rdf.writeNote('timeline', 's1', {
-  noteId: 'https://m.example/n/1', actor: 'https://m.example/u/a',
-  published: '2026-07-28T00:00:00Z', content: 'say "hi"\nnew\tline',
-});
-check(rdfPuts[0].url === FEDI + 'timeline/s1', `timeline path (got ${rdfPuts[0].url})`);
-const back1 = await rdf.readNote(FEDI + 'timeline/s1');
-check(back1.content === 'say "hi"\nnew\tline' && back1.noteId === 'https://m.example/n/1'
-  && back1.actor === 'https://m.example/u/a' && back1.published === '2026-07-28T00:00:00Z',
-  `a note round-trips whole — quotes, newline and tab (${JSON.stringify(back1.content)})`);
-check(/\^\^xsd:dateTime/.test(rdfPuts[0].body),
-  'published keeps its dateTime datatype (rdflib takes it as the SECOND argument)');
-
-await rdf.writeNote('timeline', 's2', {
-  noteId: 'https://m.example/n/2', actor: 'https://m.example/u/a', published: '2026-07-28T00:00:00Z',
-  content: 'with pic', attachments: [{ url: 'https://m.example/media/p.png', mediaType: 'image/png', description: 'a "pic"' }],
-});
-const back = await rdf.readNote(FEDI + 'timeline/s2');
-check(back.attachments?.length === 1 && back.attachments[0].url === 'https://m.example/media/p.png'
-  && back.attachments[0].mediaType === 'image/png' && back.attachments[0].description === 'a "pic"',
-  'an attachment round-trips with its type and description');
-
 // --- 7. facade M1–M3 on a seeded in-memory PodStore, faked delivery ---
 const { MastoApi } = await import(path.join(root, 'lib/mastoapi.mjs'));
 
@@ -4348,7 +4270,6 @@ const fakeAgent = {
     deliverToAll: async (inboxes, a) => delivered.push({ inboxes, a }),
   },
   remote: { put: async (u, b, ct) => puts.push({ u, ct, len: b.length }), putJson: async () => {}, setAcl: async () => {}, delete: async () => true },
-  local: { fedi: urls2.fediverse, delete: async () => {} },
   intake: { fetchAP: async (u) => ({ id: u, type: 'Person', inbox: u + '/inbox', preferredUsername: 'who' }) },
 };
 const masto2 = new MastoApi({ agent: fakeAgent, log: () => {} });
@@ -4533,10 +4454,8 @@ const { Intake } = await import(path.join(root, 'lib/intake.mjs'));
 const { TagFeed } = await import(path.join(root, 'lib/tagfeed.mjs'));
 
 const BOB = 'https://m.example/u/bob';
-const written = [];
 const intake3 = new Intake({
   config: {}, urls: urls2, remote: {}, store: store2, deliverer: {}, publisher: {},
-  local: { writeNote: async (kind, slug, n) => written.push({ kind, slug, n }) },
   log: () => {},
 });
 intake3.fetchAP = async (u) => ({
@@ -4544,9 +4463,8 @@ intake3.fetchAP = async (u) => ({
   content: '<p>boosted content</p>', published: '2026-07-28T04:00:00Z',
 });
 await intake3.handle({ type: 'Announce', actor: BOB, object: 'https://m.example/n/boost1' });
-check(store2.getStatuses().some(s => s.noteId === 'https://m.example/n/boost1' && s.via === BOB)
-  && written.some(w => w.kind === 'timeline'),
-  'Announce from followed actor ingests boosted note (mirror + pod write)');
+check(store2.getStatuses().some(s => s.noteId === 'https://m.example/n/boost1' && s.via === BOB),
+  'Announce from followed actor ingests the boosted note');
 await intake3.handle({ type: 'Announce', actor: 'https://m.example/u/stranger', object: 'https://m.example/n/boost2' });
 check(!store2.getStatuses().some(s => s.noteId === 'https://m.example/n/boost2'),
   'Announce from stranger is ignored');
@@ -4896,10 +4814,8 @@ if (up) {
 // --- 8g2. inbox spam policy: strangers are mentions, not timeline ---
 {
   const { Intake } = await import(path.join(root, 'lib/intake.mjs'));
-  const written2 = [];
   const spamIntake = new Intake({
     config: {}, urls: urls2, remote: {}, store: store2, deliverer: {}, publisher: {},
-    local: { writeNote: async (kind, slug, n) => written2.push({ kind, slug, n }) },
     log: () => {},
   });
   const STRANGER = 'https://m.example/u/stranger';
@@ -4912,10 +4828,10 @@ if (up) {
   const s1 = store2.getStatuses().find(s => s.noteId === 'https://m.example/n/s1');
   const homeAfter = await call('/api/v1/timelines/home?limit=40');
   const notifs = await call('/api/v1/notifications');
-  check(s1?.kind === 'mention' && !written2.length
+  check(s1?.kind === 'mention'
     && !homeAfter.json.some(s => s.uri === 'https://m.example/n/s1')
     && notifs.json.some(n => n.status?.uri === 'https://m.example/n/s1'),
-    'stranger addressed to us → mention (notified, out of home, not written to pod)');
+    'stranger addressed to us → mention (notified, out of home)');
   // Not addressed to us at all → refused before any dereference.
   const reason = await spamIntake.handle({
     type: 'Create', actor: STRANGER, object: { id: 'https://m.example/n/s2', to: ['https://www.w3.org/ns/activitystreams#Public'] },
@@ -4923,15 +4839,14 @@ if (up) {
   check(/not addressed to us/.test(String(reason))
     && !store2.getStatuses().some(s => s.noteId === 'https://m.example/n/s2'),
     `blast-to-inboxes refused (${String(reason).slice(0, 32)})`);
-  // A followed actor still lands in the timeline and the pod.
+  // A followed actor still lands in the timeline.
   spamIntake.fetchAP = async (u) => ({
     id: u, type: 'Note', attributedTo: 'https://m.example/u/bob', content: '<p>from bob</p>',
     published: '2026-07-28T09:00:00Z', to: ['https://www.w3.org/ns/activitystreams#Public'],
   });
   await spamIntake.handle({ type: 'Create', actor: 'https://m.example/u/bob', object: { id: 'https://m.example/n/b1' } });
   const b1 = store2.getStatuses().find(s => s.noteId === 'https://m.example/n/b1');
-  check(b1?.kind === 'timeline' && written2.some(w => w.kind === 'timeline'),
-    'followed actor still reaches the timeline and pod RDF');
+  check(b1?.kind === 'timeline', 'followed actor still reaches the timeline');
 }
 
 // --- 8h. token expiry ---
@@ -5192,7 +5107,6 @@ function groupIntake({ kind = 'group', following = [] } = {}) {
   const intake = new Intake({
     config: st.getConfig(), urls: gUrls, store: st, log: () => {},
     remote: { getJson: async () => null },
-    local: { writeNote: async () => {} },
     deliverer: {
       deliver: async (inbox, a) => sent.push({ inboxes: [inbox], a }),
       deliverToAll: async (inboxes, a) => sent.push({ inboxes, a }),
@@ -5408,15 +5322,9 @@ function personIntake({ statuses = [], followers = [], origin = {} } = {}) {
   st.setContacts({ followers, following: [] });
   st.write('statuses.json', statuses);
   const sent = [];
-  const wrote = [];
   const intake = new Intake({
     config: st.getConfig(), urls: gUrls, store: st, log: () => {},
     remote: { getJson: async () => null },
-    local: {
-      fedi: gUrls.fediverse,
-      writeNote: async (k, slug, rec) => wrote.push({ k, slug, rec }),
-      delete: async (u) => wrote.push({ deleted: u }),
-    },
     deliverer: {
       deliver: async (i, a) => sent.push({ inboxes: [i], a }),
       deliverToAll: async (i, a) => sent.push({ inboxes: i, a }),
@@ -5434,7 +5342,7 @@ function personIntake({ statuses = [], followers = [], origin = {} } = {}) {
         for (let k = gOutbox.length - 1; k >= 0; k--) if (m(gOutbox[k])) gOutbox.splice(k, 1);
       } },
   });
-  return { st, intake, sent, wrote };
+  return { st, intake, sent };
 }
 const NOTE = 'https://a.example/u/ann/n/1';
 {
@@ -5443,8 +5351,7 @@ const NOTE = 'https://a.example/u/ann/n/1';
     origin: { [NOTE]: { status: 410 } },
   });
   const r = await p.intake.onDelete({ type: 'Delete', object: NOTE }, MEM_A);
-  check(!r && !p.st.getStatuses().length && p.wrote.some(w => w.deleted?.endsWith('timeline/d1')),
-    'a confirmed upstream Delete drops the post and its pod-RDF copy');
+  check(!r && !p.st.getStatuses().length, 'a confirmed upstream Delete drops the post');
 }
 {
   const p = personIntake({
@@ -5542,8 +5449,7 @@ const NOTE = 'https://a.example/u/ann/n/1';
   });
   await p.intake.onUpdate({ type: 'Update', object: { id: NOTE } }, MEM_A);
   const s = p.st.getStatuses()[0];
-  check(s.content === '<p>edited</p>' && !!s.editedAt
-    && p.wrote.some(w => w.slug === 'e1' && w.rec?.content === '<p>edited</p>'),
+  check(s.content === '<p>edited</p>' && !!s.editedAt,
     'an upstream edit is refetched at the origin and rewritten locally');
 }
 {
@@ -5763,7 +5669,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   };
   gagent.intake = new Intake({
     config: gstore.getConfig(), urls: gUrls, store: gstore, log: () => {},
-    remote: { getJson: async () => null }, local: { writeNote: async () => {} },
+    remote: { getJson: async () => null }, 
     deliverer: gagent.deliverer, publisher: gagent.publisher,
   });
 
@@ -5961,7 +5867,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   };
   const bIntake = new Intake({
     config: st.getConfig(), urls: pUrls, store: st, log: () => {},
-    remote: { getJson: async () => null }, local: { writeNote: async () => {} },
+    remote: { getJson: async () => null }, 
     deliverer: { deliver: async () => {}, deliverToAll: async () => {} },
     publisher: { urls: pUrls, publishCollections: async () => {} },
   });
@@ -6790,7 +6696,6 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
       [N + 'a-02']: note('a-02', { inReplyTo: 'https://far.example/n/7', tag: [{ type: 'Mention', href: 'https://far.example/u', name: '@them@far.example' }] }),
       [N + 'a-03']: note('a-03'),                   // published, but NOT in the outbox
     };
-    const written = [];
     const mkPub = (store) => new Publisher({
       config: { remotePod: POD, handle: 'me' }, store, log: () => {},
       remote: {
@@ -6800,7 +6705,6 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
           { url: N + 'a-02' }, { url: N + 'a-03' }, { url: N + '.keep' },
         ],
       },
-      local: { writeNote: async (kind, slug) => { written.push(`${kind}/${slug}`); } },
     });
 
     // A machine that lost everything.
@@ -6817,9 +6721,6 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
       'a recovered post carries its reply target, its mentions, its kind and its slug');
     check(got.find(s => s.noteId === N + 'a-01')?.reblogged === true,
       'an Announce in the outbox marks its own post boosted, with the activity an Undo would need');
-    check(written.includes('posts/a-01') && written.includes('posts/a-02'),
-      'and the RDF mirror is written back too, which is what a later backfill reads');
-
     // --from-notes looks past the outbox, and says what it costs.
     const wider = new PodStore({ log: () => {} });
     const r2 = await mkPub(wider).rebuildStatuses({ fromNotes: true });
@@ -6850,7 +6751,6 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
     const silent = new Publisher({
       config: { remotePod: POD, handle: 'me' }, store: mute, log: () => {},
       remote: { getJson: async () => null, listContainer: async () => [] },
-      local: { writeNote: async () => {} },
     });
     const r5 = await silent.rebuildStatuses();
     check(r5.recovered === 0 && !!r5.why,
@@ -7148,7 +7048,6 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
       putJson: async (u, doc) => { putDocs[u] = doc; },
       setAcl: async () => {},
     },
-    local: {},
     store: {
       getContacts: () => ({ followers: [{ actor: 'https://a.example/u/x', inbox: 'https://a.example/i' }], following: [] }),
       getConfig: () => ({}), setConfig: () => {}, flush: async () => true,
@@ -7662,7 +7561,6 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
       delete: async (u) => { deleted.push(u); return true; },
       getJson: async () => null,
     },
-    local: { writeNote: async () => {} },
     deliverer: { deliver: async () => {}, deliverToAll: async () => {} },
     publisher: { urls: {}, config: {} },
   });
@@ -7683,18 +7581,16 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   check(deleted.includes(item) && docs.has('/private/ap-state/deadletter.json'),
     'and the item is deleted only once the write has landed');
 
-  // --- privateRoot moves both private trees, and never the lease ---
+  // --- privateRoot moves the private state, and never the lease ---
   const { Agent } = await import(path.join(root, 'run-agent.mjs'));
   const a15 = new Agent({ home: '/tmp/fedipod-private-probe', log: () => {} });
   a15.urls = wire.apUrls('https://pod.example/');
   const onPod = a15.privateUrls({ remotePod: 'https://pod.example/' });
-  check(onPod.state === a15.urls.state && onPod.fediverse === a15.urls.fediverse
-    && onPod.elsewhere === false,
+  check(onPod.state === a15.urls.state && onPod.elsewhere === false,
     'without privateRoot the private half stays on the pod, exactly as before');
   const off = a15.privateUrls({ remotePod: 'https://pod.example/', privateRoot: 'http://localhost:8000/dk-pod/ap' });
-  check(off.state === 'http://localhost:8000/dk-pod/ap/ap-state/'
-    && off.fediverse === 'http://localhost:8000/dk-pod/ap/fediverse/' && off.elsewhere === true,
-    'privateRoot moves both trees together, laid out as on the pod');
+  check(off.state === 'http://localhost:8000/dk-pod/ap/ap-state/' && off.elsewhere === true,
+    'privateRoot moves the state, laid out as on the pod');
   check(a15.urls.state.startsWith('https://pod.example/'),
     'and urls.state — which is where the lease is built — is untouched by it');
   const podFetch = a15.privateUrls.call({ urls: a15.urls }, { remotePod: 'https://pod.example/' });
@@ -7727,17 +7623,6 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   await fstore2.remove('blocklist.json');
   check(!fs.existsSync(path.join(FDIR, 'ap-state/blocklist.json')), 'remove() removes it');
 
-  const frdf = new PodRdf({ storage: new FileStorage(FDIR + '/fediverse/') });
-  await frdf.writeNote('posts', 'p1', {
-    noteId: 'https://m.example/n/9', actor: 'https://m.example/u/a',
-    published: '2026-07-31T00:00:00Z', content: 'on\tdisk "quoted"',
-  });
-  const fnotes = await frdf.listNotes('posts');
-  const fback = await frdf.readNote(fnotes[0]);
-  check(fnotes.length === 1 && fback.content === 'on\tdisk "quoted"'
-    && fback.noteId === 'https://m.example/n/9',
-    `notes round-trip on files too (${fnotes.length} listed)`);
-
   let escaped = null;
   try { await new FileStorage(FDIR + '/ap-state/').read('../../etc/passwd'); }
   catch (e) { escaped = e.message; }
@@ -7759,7 +7644,6 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   seed.setConfig({ remotePod: 'https://pod.example/', handle: 'mover', name: 'Mover' });
   seed.setBlocklist({ domains: ['bad.example'], actors: [] });
   await seed.commit();
-  await fetch(SRC + 'fediverse/posts/n1', { method: 'PUT', headers: { 'content-type': 'text/turtle' }, body: '<> a as:Note .\n' });
 
   // ASYNC, deliberately: the CLI talks to the pod being served by THIS
   // process, so a synchronous exec would deadlock waiting on itself.
@@ -7784,9 +7668,8 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   const credAfter = JSON.parse(fs.readFileSync(path.join(SHOME15, 'credential.json'), 'utf8'));
   check(moved.ok && credAfter.privateRoot === DST + '',
     `and a copy that lands repoints it (${moved.ok ? credAfter.privateRoot : moved.out.slice(-120)})`);
-  check(docs.has('/moveB/ap-state/config.json') && docs.has('/moveB/ap-state/blocklist.json')
-    && docs.has('/moveB/fediverse/posts/n1'),
-    'state documents AND the RDF notes both came across');
+  check(docs.has('/moveB/ap-state/config.json') && docs.has('/moveB/ap-state/blocklist.json'),
+    'the state documents came across');
   check(docs.has('/moveA/ap-state/config.json'),
     'and the old copy is left behind rather than deleted');
 
@@ -8033,7 +7916,6 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
       delete: async (u) => { deleted.push(u); return true; },
       getJson: async () => null,
     },
-    local: { writeNote: async () => {} },
     deliverer: { deliver: async () => {}, deliverToAll: async () => {} },
     publisher: { urls: {}, config: {} },
   });
@@ -8119,39 +8001,18 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   seed18.setConfig({ handle: 'mover18', name: 'Mover' });
   seed18.setBlocklist({ domains: ['bad.example'], actors: [] });
   await seed18.commit();
-  const srcRdf = new PodRdf({ storage: new FileStorage(SRC18 + '/fediverse/') });
-  await srcRdf.put(srcRdf.fedi + 'settings', '<> a <http://www.w3.org/2002/07/owl#Thing> .\n');
-  await srcRdf.writeNote('posts', 'p1', {
-    noteId: 'https://m.example/n/1', actor: 'https://m.example/u/a',
-    published: '2026-08-01T00:00:00Z', content: 'carried\t"across"',
-  });
-  await srcRdf.writeNote('timeline', 't1', {
-    noteId: 'https://m.example/n/2', actor: 'https://m.example/u/b',
-    published: '2026-08-02T00:00:00Z', content: 'seen, not written',
-  });
-
   const copied = await copyPrivateHalf({
-    from: { state: new FileStorage(SRC18 + '/ap-state/'), fediverse: new FileStorage(SRC18 + '/fediverse/') },
-    to: { state: new FileStorage(DST18 + '/ap-state/'), fediverse: new FileStorage(DST18 + '/fediverse/') },
+    from: { state: new FileStorage(SRC18 + '/ap-state/') },
+    to: { state: new FileStorage(DST18 + '/ap-state/') },
   });
-  check(copied.docs === 2 && copied.notes === 2,
-    `copyPrivateHalf counts what it moved (${copied.docs} docs, ${copied.notes} notes)`);
+  check(copied.docs === 2, `copyPrivateHalf counts what it moved (${copied.docs} docs)`);
 
   const dstStore = new PodStore({ log: () => {} });
   dstStore.attach(new FileStorage(DST18 + '/ap-state/'));
   await dstStore.load();
   check(dstStore.getConfig()?.handle === 'mover18' && dstStore.getBlocklist().domains[0] === 'bad.example',
     'the state documents read back intact at the destination');
-  const dstRdf = new PodRdf({ storage: new FileStorage(DST18 + '/fediverse/') });
-  const dstPost = await dstRdf.readNote((await dstRdf.listNotes('posts'))[0]);
-  const dstSeen = await dstRdf.readNote((await dstRdf.listNotes('timeline'))[0]);
-  check(dstPost.content === 'carried\t"across"' && dstPost.noteId === 'https://m.example/n/1'
-    && dstSeen.content === 'seen, not written',
-    'and the RDF notes survive the trip, escaping and all');
-  check(/owl#Thing/.test(await dstRdf.get(dstRdf.fedi + 'settings')),
-    'settings came across too — contacts being absent was tolerated, not fatal');
-  check(fs.existsSync(path.join(SRC18, 'ap-state', 'config.json'))
-    && fs.existsSync(path.join(SRC18, 'fediverse', 'posts', 'p1')),
+  check(fs.existsSync(path.join(SRC18, 'ap-state', 'config.json')),
     'the source is copy-only: every document is still where it was');
 
   // The route the record page calls, over a real Agent whose private half is
@@ -8189,14 +8050,13 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
 
   const MOVED18 = path.join(MDIR, 'moved');
   const ok18 = await mpost({ to: MOVED18 });
-  check(ok18.status === 200 && ok18.json?.ok === true && ok18.json.docs === 2 && ok18.json.notes === 2,
+  check(ok18.status === 200 && ok18.json?.ok === true && ok18.json.docs === 2,
     `a directory target moves the data (${ok18.status}: ${JSON.stringify(ok18.json).slice(0, 100)})`);
   const credMoved = JSON.parse(fs.readFileSync(path.join(AHOME18, 'credential.json'), 'utf8'));
   check(credMoved.privateRoot === pathToFileURL(MOVED18).href + '/' && credMoved.layout === CURRENT_LAYOUT,
     'the credential is repointed to the directory as a file: URL, and stamped current');
-  check(fs.existsSync(path.join(MOVED18, 'ap-state', 'config.json'))
-    && fs.existsSync(path.join(MOVED18, 'fediverse', 'posts', 'p1')),
-    'the documents and notes really are at the new location');
+  check(fs.existsSync(path.join(MOVED18, 'ap-state', 'config.json')),
+    'the documents really are at the new location');
   check(fs.existsSync(path.join(SRC18, 'ap-state', 'config.json')),
     'and the old copy is left behind, exactly as the CLI move leaves it');
   check(reconnects === 1 && magent.store.storage.base === pathToFileURL(MOVED18).href + '/ap-state/',
@@ -8376,7 +8236,6 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   const pub20 = new Publisher({
     config: { remotePod: 'https://pod.example/', handle: 'you', name: 'You' },
     remote: { putJson: async () => {}, setAcl: async () => {}, getJson: async () => null, fetch: async () => ({ ok: false }) },
-    local: { writeNote: async () => {} },
     store: mkStore(),
     deliverer: { deliverToAll: async () => {} },
     publicKeyPem: 'x', log: () => {},
@@ -8406,7 +8265,6 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
     publisher: Object.assign(pub20, { unrecordOutbox: async () => {} }),
     deliverer: { deliverToAll: async () => {} },
     remote: { delete: async () => true, putJson: async (u, doc) => tombs.push([u, doc]), setAcl: async () => {} },
-    local: { fedi: 'x/', delete: async () => {} },
     store: { getContacts: () => ({ followers: [], following: [] }), removeStatus: (id) => removed.push(id) },
     atproto: bsky20,
     log: () => {},
@@ -8730,7 +8588,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
         fetch: async () => new Response(RAW, { status: 200 }),
         delete: async (u) => { deleted.push(u); return true; },
       },
-      local: {}, store, deliverer: {}, publisher: {}, log: () => {}, archive,
+      store, deliverer: {}, publisher: {}, log: () => {}, archive,
     });
     intake.handle = async () => null;   // accepted — verification has its own tests
     return { intake, deleted };
@@ -8955,7 +8813,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
       config: { handle: 'g', review: true },
       urls: { actor: 'https://g.example/ap/actor', inbox: 'https://g.example/ap/inbox/' },
       store, log: () => {},
-      remote: {}, local: { writeNote: async () => {} },
+      remote: {}, 
       deliverer: { deliverToAll: async (t, a) => announced.push(a) },
       publisher: { recordOutbox: async () => {}, urls: { actor: 'https://g.example/ap/actor' } },
     });
@@ -9030,7 +8888,6 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
         putJson: async (u, doc) => puts.push([u, doc]),
         setAcl: async () => {}, fetch: async () => ({ ok: false }), getJson: async () => null,
       },
-      local: { writeContacts: async () => {} },
       store, deliverer: {}, publicKeyPem: 'x', log: () => {},
     });
     store.state.contacts.followers.push({ actor: 'https://bsky.app/profile/did:plc:zed', bsky: { did: 'did:plc:zed', handle: 'z' } });
@@ -9062,7 +8919,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
         getStatuses: () => [],
       },
       deliverer: { deliverToAll: async (inboxes, act) => sent.push({ inboxes, act }) },
-      remote: {}, local: {}, publisher: {}, log: () => {},
+      remote: {}, publisher: {}, log: () => {},
     });
     return { it, sent };
   };
@@ -9163,7 +9020,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
     urls: { actor: 'https://me.example/ap/actor', inbox: 'https://me.example/ap/inbox/',
       followers: 'https://me.example/ap/followers', featured: 'https://me.example/ap/featured' },
     store: { isBlocked: () => false },
-    remote: {}, local: {}, deliverer: {}, publisher: {}, log: () => {},
+    remote: {}, deliverer: {}, publisher: {}, log: () => {},
   });
   const add = { type: 'Add', actor: 'https://c.example/u/a', object: 'https://x/1',
     target: 'https://me.example/ap/featured' };            // one of our own collections
@@ -9191,7 +9048,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
         getContacts: () => ({ followers: [], following }),
         getActors: () => actors,
       },
-      remote: {}, local: {}, deliverer: {}, publisher: {}, log: () => {},
+      remote: {}, deliverer: {}, publisher: {}, log: () => {},
     });
     it.fetchAP = async (u) => {
       fetches++;
@@ -9240,7 +9097,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
       getContacts: () => ({ followers: [], following: [{ actor: GROUP, accepted: true }] }),
       isBlocked: () => false,
     },
-    remote: {}, local: {}, deliverer: {}, publisher: {}, log: () => {},
+    remote: {}, deliverer: {}, publisher: {}, log: () => {},
   });
   await intake22b.onAnnounce({ type: 'Announce', object: NOTE }, GROUP, NOTE);
   check(st[0].kind === 'timeline' && st[0].via === GROUP,
@@ -9306,7 +9163,6 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
     configured: () => true,
     viewer: false,
     remote: { webId: OWNER, putJson: async () => {}, setAcl: async () => {}, delete: async () => true },
-    local: { fedi: urls24.fediverse, delete: async () => {}, writeNote: async () => {} },
     deliverer: {
       deliver: async (inbox, a) => delivered24.push({ inbox, a }),
       deliverToAll: async (inboxes, a) => delivered24.push({ inboxes, a }),
@@ -9544,7 +9400,6 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
     const pub = new Publisher({
       config: { remotePod: 'https://pod.example/', handle: 'p' },
       remote: { putJson: async (u, doc) => puts.push({ u, doc }), setAcl: async () => {} },
-      local: {},
       store: {
         getRequests: () => [
           { actor: 'https://m.example/u/a', activity: { id: 'f-a', type: 'Follow' } },
@@ -9601,7 +9456,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   const intake25 = new Intake({
     config: { remotePod: 'https://pod.example/', handle: 'p' },
     urls: urls25, remote: {}, store: st25, deliverer: {}, publisher: {},
-    local: { fedi: 'x/', delete: async () => {} }, log: () => {},
+    log: () => {},
   });
   await intake25.onAnnouncedDelete(GROUP25, { type: 'Delete', object: 'https://m.example/n/carried' });
   check(removed.length === 1 && removed[0] === 'https://m.example/n/carried',
@@ -9683,7 +9538,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   const q = mkGroup();
   const intake26 = new Intake({
     config: q.st.getConfig(), urls: urls26, remote: {}, store: q.st,
-    deliverer: q.agent.deliverer, publisher: q.agent.publisher, local: {}, log: () => {},
+    deliverer: q.agent.deliverer, publisher: q.agent.publisher, log: () => {},
   });
   await intake26.handle({ type: 'Block', actor: MOD, object: MEMBER });
   let queue = q.st.read('modqueue.json', []);
@@ -9891,7 +9746,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
     const ik = new IK28({ config: st.getConfig(), urls: urls28, remote: {}, store: st,
       deliverer: { deliver: async (i, a) => accepts.push(a), deliverToAll: async () => {} },
       publisher: { urls: urls28, publishCollections: async () => {}, publishProfile: async () => {} },
-      local: {}, log: () => {} });
+      log: () => {} });
     ik.fetchAP = async (u) => ({ id: u, type: 'Person', inbox: u + '/inbox' });
     ik.republish = async () => {};
     return { st, ik, accepts };
@@ -9970,7 +9825,6 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
     urls: { inbox: 'https://g.example/ap/inbox/', actor: 'https://g.example/ap/actor',
       followers: 'https://g.example/ap/followers' },
     remote: { fetch: async () => ({ status: 404 }), delete: async () => true, getJson: async () => null },
-    local: { writeNote: async () => {} },
     deliverer: { deliver: async () => {}, deliverToAll: async () => {} },
     publisher: { urls: {}, config: {}, publishFollowers: async () => {} },
   });
@@ -10358,9 +10212,8 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
     && u.followers === 'https://fedipod.net/u/me/ap/followers',
     'a fronted identity advertises actor and every collection on the shared domain');
   check(u.media === 'https://alice.pod/solid/activitypods-js/ap/media/'
-    && u.state === 'https://alice.pod/solid/activitypods-js/ap-state/'
-    && u.fediverse === 'https://alice.pod/solid/activitypods-js/fediverse/',
-    'but media, state and the fediverse tree stay on the pod');
+    && u.state === 'https://alice.pod/solid/activitypods-js/ap-state/',
+    'but media and state stay on the pod');
   check(u.toPod('https://fedipod.net/u/me/ap/notes/x') === 'https://alice.pod/solid/activitypods-js/ap/notes/x'
     && u.toPublic('https://alice.pod/solid/activitypods-js/ap/actor') === 'https://fedipod.net/u/me/ap/actor'
     && u.toPod('https://elsewhere.example/z') === 'https://elsewhere.example/z',
@@ -10394,7 +10247,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   const pub = new Publisher({
     config: { remotePod: POD, handle: 'me', name: 'Me',
       gateway: { frontActor: 'https://fedipod.net/u/me/ap/actor', mode: 'trust' } },
-    remote: remote30, local: { writeNote: async () => {} },
+    remote: remote30, 
     store: {
       getStatuses: () => [], getContacts: () => ({ followers: [], following: [] }),
       addStatus: () => {}, read: (n, d) => (d !== undefined ? d : {}), write: () => {},
@@ -10586,7 +10439,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
       store: { cacheActor: (id, d) => cached.push({ id, d }) },
       deliverer: { signedFetch: async () => new Response(JSON.stringify(doc),
         { headers: { 'content-type': 'application/activity+json' } }) },
-      remote: {}, local: {}, publisher: {}, log: () => {},
+      remote: {}, publisher: {}, log: () => {},
     });
     const got = await it.fetchAP(doc.id);
     check(got?.id === doc.id && cached.length === 1,
@@ -11223,7 +11076,6 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
     const pub = new Publisher({
       config: { remotePod: 'https://pod.example/', handle: 'you', name: 'You' },
       remote: { putJson: async (u, b) => put.push({ u, b }), setAcl: async () => {}, delete: async () => true },
-      local: { writeNote: async () => {} },
       store,
       deliverer: { deliverToAll: async (i, a) => sent.push({ i, a }) },
       publicKeyPem: 'x', log: () => {},
@@ -11357,7 +11209,6 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
     const intake = new Intake({
       config: {}, urls: urls35,
       remote: { fetch: async () => new Response('{}', { status: 200 }) },
-      local: { writeNote: async () => {} },
       store,
       deliverer: {},
       publisher: { urls: urls35, recordVote: async (id, who, name) => { voted.push({ id, who, name }); return true; } },

@@ -10,7 +10,6 @@ import * as containers from '../../lib/pod/containers.mjs';
 import * as podState from '../../lib/pod/state.mjs';
 import { PodStore } from '../../lib/store.mjs';
 import { HttpStorage } from '../../lib/storage.mjs';
-import { PodRdf } from '../../lib/podrdf.mjs';
 import { Publisher } from '../../lib/publisher.mjs';
 import { Intake } from '../../lib/intake.mjs';
 import { Lease } from '../../lib/lease.mjs';
@@ -195,8 +194,6 @@ export class BrowserAgent {
     const keys = keysRecord ? await importSigningKey(keysRecord) : await loadKeysFromPod(this.remote, this.urls);
     config = this.store.getConfig();
 
-    // The RDF truth (followers, notes) also on the pod.
-    this.local = new PodRdf({ storage: new HttpStorage(this.urls.fediverse, podFetch) });
 
     // `passive`: no queue-drain timer until this device is the active one.
     // Whether it IS the active one is not known here — the lease is acquired
@@ -211,7 +208,7 @@ export class BrowserAgent {
     });
 
     this.publisher = new Publisher({
-      config: this.store.getConfig(), remote: this.remote, local: this.local, store: this.store,
+      config: this.store.getConfig(), remote: this.remote, store: this.store,
       deliverer: this.deliverer, publicKeyPem: keys.rsaPublicPem, assertionKey: null, log: this.log,
     });
 
@@ -243,7 +240,7 @@ export class BrowserAgent {
     // fetches, never the cached store. Passed into Intake so the drain checks it.
     this.lease = new Lease({ url: this.urls.state + 'lease.json', fetchImpl: podFetch, log: this.log });
     this.intake = new Intake({
-      config: this.store.getConfig(), urls: this.urls, remote: this.remote, local: this.local,
+      config: this.store.getConfig(), urls: this.urls, remote: this.remote,
       store: this.store, deliverer: this.deliverer, publisher: this.publisher, log: this.log, push: true, lease: this.lease,
     });
     // The Mastodon facade the service worker serves.
@@ -304,9 +301,6 @@ export class BrowserAgent {
         this.startViewerPoll();       // reload the feed, and promote if the lease frees
         return;
       }
-      // Only now, holding the lease: this WRITES state, and a viewer doing it
-      // would push a whole document over whatever the active device has.
-      await this.backfillStatuses().catch((e) => this.log(`backfill: ${e.message}`));
       await this.goActive();
       this.log(`browser agent fully provisioned (active): @${config.handle}`);
     })().catch((e) => { this.log(`background provisioning: ${e.message}`); throw e; });
@@ -315,43 +309,6 @@ export class BrowserAgent {
 
     this.log(`browser agent up: @${config.handle} on ${remotePod}`);
     return this;
-  }
-
-  /**
-   * Rebuild the feed index from the RDF on the pod.
-   *
-   * The browser build WROTE this tree and never read it back, which made it
-   * pure cost: every post published and every post received cost an extra pod
-   * write, and nothing here could use any of it. This is what it was for.
-   *
-   * It matters most for what was RECEIVED. A post this actor published is also
-   * in `ap/notes/` and can be recovered from there, but an inbox item is
-   * DELETED once handled — so the only records of a received post are the RDF
-   * note and `statuses.json`, and the latter keeps a thousand entries with long
-   * content truncated. On a new device, or after state is lost, this is the
-   * difference between a timeline and a blank page.
-   *
-   * Only when there is no index at all: it is a recovery, not a sync, and it
-   * must never overwrite an index the running agent is maintaining.
-   *
-   * Ported from run-agent.mjs, where it has always run for the Node agent.
-   */
-  async backfillStatuses() {
-    if (this.store.has('statuses.json')) return { skipped: true };
-    const entries = [];
-    for (const [container, kind] of [['timeline', 'timeline'], ['posts', 'post']]) {
-      for (const url of await this.local.listNotes(container)) {
-        try {
-          const n = await this.local.readNote(url);
-          if (n.noteId) entries.push({ ...n, kind, slug: url.split('/').pop() });
-        } catch (e) { this.log(`backfill: skipped ${url}: ${e.message}`); }
-      }
-    }
-    if (!entries.length) return { recovered: 0 };
-    entries.sort((a, b) => String(b.published || '').localeCompare(String(a.published || '')));
-    this.store.write('statuses.json', entries.slice(0, 1000));
-    this.log(`backfilled ${entries.length} statuses from the pod's RDF`);
-    return { recovered: entries.length };
   }
 
   // What the record page and the bar read (GET /status). The same shape the

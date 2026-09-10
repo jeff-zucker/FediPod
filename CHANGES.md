@@ -1,5 +1,27 @@
 # Changes
 
+## 2026-09-10 (the pod's RDF copy is gone)
+
+FediPod kept a second copy of your posts on the pod, in RDF, under
+`fediverse/`. It is no longer written, and nothing reads it.
+
+It said nothing your pod did not already hold. A post you publish is stored as
+ActivityStreams 2, which is JSON-LD, so any RDF reader can fetch it and parse
+it. On an installed FediPod an arriving activity is kept whole in the inbox
+archive. Followers, following and your handle are in the published collections
+and in the actor document.
+
+**What this means for you.** Nothing is deleted: a `fediverse/` container
+already on your pod stays exactly as it is, and you can remove it yourself if
+you want the space back. New posts stop adding to it. Moving your private half
+between pods or directories no longer carries it.
+
+**One case is no longer covered.** If you run FediPod in a browser and your
+pod loses the container holding your timeline while keeping the rest, posts
+other people sent you can no longer be recovered — your own posts still can,
+from the notes the pod publishes. An installed FediPod keeps its inbox archive
+and is unaffected.
+
 ## 2026-09-09 (a security review, and most of what it found)
 
 A full read of the project turned up a long list. Everything serious in it is

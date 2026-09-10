@@ -131,7 +131,6 @@ function apUrls(remotePod, root, { publicBase = null } = {}) {
     // Media stays on the pod even when fronted: attachment urls are not
     // identity-checked by remotes, and proxying blobs would be pure cost.
     media: home + "ap/media/",
-    fediverse: home + "fediverse/",
     state: home + "ap-state/"
   };
   if (publicBase) {
@@ -22136,8 +22135,8 @@ var require_Permuter = __commonJS({
 var require_NQuads = __commonJS({
   "node_modules/rdf-canonize/lib/NQuads.js"(exports, module2) {
     "use strict";
-    var RDF7 = "http://www.w3.org/1999/02/22-rdf-syntax-ns#";
-    var RDF_LANGSTRING = RDF7 + "langString";
+    var RDF6 = "http://www.w3.org/1999/02/22-rdf-syntax-ns#";
+    var RDF_LANGSTRING = RDF6 + "langString";
     var XSD_STRING = "http://www.w3.org/2001/XMLSchema#string";
     var TYPE_NAMED_NODE = "NamedNode";
     var TYPE_BLANK_NODE = "BlankNode";
@@ -23509,28 +23508,28 @@ var require_util = __commonJS({
 var require_constants = __commonJS({
   "node_modules/jsonld/lib/constants.js"(exports, module2) {
     "use strict";
-    var RDF7 = "http://www.w3.org/1999/02/22-rdf-syntax-ns#";
-    var XSD3 = "http://www.w3.org/2001/XMLSchema#";
+    var RDF6 = "http://www.w3.org/1999/02/22-rdf-syntax-ns#";
+    var XSD2 = "http://www.w3.org/2001/XMLSchema#";
     module2.exports = {
       // TODO: Deprecated and will be removed later. Use LINK_HEADER_CONTEXT.
       LINK_HEADER_REL: "http://www.w3.org/ns/json-ld#context",
       LINK_HEADER_CONTEXT: "http://www.w3.org/ns/json-ld#context",
-      RDF: RDF7,
-      RDF_LIST: RDF7 + "List",
-      RDF_FIRST: RDF7 + "first",
-      RDF_REST: RDF7 + "rest",
-      RDF_NIL: RDF7 + "nil",
-      RDF_TYPE: RDF7 + "type",
-      RDF_PLAIN_LITERAL: RDF7 + "PlainLiteral",
-      RDF_XML_LITERAL: RDF7 + "XMLLiteral",
-      RDF_JSON_LITERAL: RDF7 + "JSON",
-      RDF_OBJECT: RDF7 + "object",
-      RDF_LANGSTRING: RDF7 + "langString",
-      XSD: XSD3,
-      XSD_BOOLEAN: XSD3 + "boolean",
-      XSD_DOUBLE: XSD3 + "double",
-      XSD_INTEGER: XSD3 + "integer",
-      XSD_STRING: XSD3 + "string"
+      RDF: RDF6,
+      RDF_LIST: RDF6 + "List",
+      RDF_FIRST: RDF6 + "first",
+      RDF_REST: RDF6 + "rest",
+      RDF_NIL: RDF6 + "nil",
+      RDF_TYPE: RDF6 + "type",
+      RDF_PLAIN_LITERAL: RDF6 + "PlainLiteral",
+      RDF_XML_LITERAL: RDF6 + "XMLLiteral",
+      RDF_JSON_LITERAL: RDF6 + "JSON",
+      RDF_OBJECT: RDF6 + "object",
+      RDF_LANGSTRING: RDF6 + "langString",
+      XSD: XSD2,
+      XSD_BOOLEAN: XSD2 + "boolean",
+      XSD_DOUBLE: XSD2 + "double",
+      XSD_INTEGER: XSD2 + "integer",
+      XSD_STRING: XSD2 + "string"
     };
   }
 });
@@ -32874,14 +32873,10 @@ async function provisionPublic(pod, base) {
   await pod.putJson(keepUrl(base), KEEP, KEEP_CT);
   await pod.setAcl(base, ["Read"]);
 }
-async function provisionPrivate(pod, urls, { fediverse = true } = {}) {
+async function provisionPrivate(pod, urls) {
   await pod.putJson(keepUrl(urls.state), KEEP, KEEP_CT);
   await pod.setAcl(urls.state, []);
   await pod.setAcl(urls.home, []);
-  if (fediverse) {
-    await pod.putJson(keepUrl(urls.fediverse), KEEP, KEEP_CT);
-    await pod.setAcl(urls.fediverse, []);
-  }
 }
 async function repairPrivateAcls(pod, trees, { isPublic } = {}) {
   const findings = [];
@@ -43875,8 +43870,8 @@ var HttpStorage = class {
   // The same jail FileStorage has, and for the same reason: a path here can
   // carry `..`, encodeURI leaves both `.` and `/` alone, and fetch normalises
   // the segments away — so a name derived from remote input could name a
-  // resource outside the container entirely. PodRdf._rel only checks the
-  // PREFIX, which a concatenated URL always satisfies, so it catches nothing.
+  // resource outside the container entirely. A prefix check is not enough on
+  // its own: a concatenated URL always satisfies one.
   _url(p) {
     const u = new URL(encodeURI(p), this.base);
     if (!u.href.startsWith(this.base)) throw new Error(`path escapes the container: ${p}`);
@@ -43939,209 +43934,6 @@ var HttpStorage = class {
     } catch {
       return false;
     }
-  }
-};
-
-// lib/podrdf.mjs
-var AS = Namespace("https://www.w3.org/ns/activitystreams#");
-var RDF3 = Namespace("http://www.w3.org/1999/02/22-rdf-syntax-ns#");
-var XSD2 = Namespace("http://www.w3.org/2001/XMLSchema#");
-var TURTLE = "text/turtle";
-function noteFieldsFrom(doc) {
-  if (!doc || typeof doc !== "object") return {};
-  const arr = (v) => (Array.isArray(v) ? v : v ? [v] : []).filter((x) => typeof x === "string");
-  const mentions = arr2(doc.tag).filter((t) => t?.type === "Mention" && t.href).map((t) => ({ href: t.href, ...t.name ? { name: t.name } : {} }));
-  const opts = arr2(doc.oneOf).length ? arr2(doc.oneOf) : arr2(doc.anyOf);
-  return {
-    ...arr(doc.to).length ? { to: arr(doc.to) } : {},
-    ...arr(doc.cc).length ? { cc: arr(doc.cc) } : {},
-    ...mentions.length ? { mentions } : {},
-    ...typeof doc.replies === "string" ? { replies: doc.replies } : {},
-    ...doc.summary ? { summary: doc.summary } : {},
-    ...doc.updated ? { updated: doc.updated } : {},
-    ...opts.length ? { poll: {
-      multiple: arr2(doc.anyOf).length > 0,
-      options: opts.map((o) => ({ name: o?.name, votes: Number(o?.replies?.totalItems || 0) })),
-      ...doc.endTime ? { endTime: doc.endTime } : {},
-      ...doc.votersCount != null ? { votersCount: Number(doc.votersCount) } : {}
-    } } : {}
-  };
-}
-var arr2 = (v) => (Array.isArray(v) ? v : v ? [v] : []).filter((x) => x && typeof x === "object");
-var PodRdf = class {
-  constructor({ storage }) {
-    this.storage = storage;
-    this.base = storage.base;
-    this.fedi = this.base;
-  }
-  // Callers hold absolute URLs; the storage works in paths under its base.
-  _rel(url) {
-    if (!url.startsWith(this.fedi)) throw new Error(`${url} is not under ${this.fedi}`);
-    return url.slice(this.fedi.length);
-  }
-  async get(url) {
-    const r = await this.storage.read(this._rel(url));
-    if (!r.ok) throw new Error(`pod GET ${url} \u2192 ${r.status}`);
-    return r.body;
-  }
-  async put(url, body, contentType = TURTLE) {
-    const r = await this.storage.write(this._rel(url), body, contentType);
-    if (!r.ok) throw new Error(`pod PUT ${url} \u2192 ${r.why}`);
-  }
-  async delete(url) {
-    if (!await this.storage.remove(this._rel(url))) throw new Error(`pod DELETE ${url} failed`);
-  }
-  // Child resource URLs of {fedi}{kind}/ (empty when the container is absent).
-  async listNotes(kind) {
-    const { names } = await this.storage.list(`${kind}/`);
-    return names.filter((n) => !n.endsWith("/") && !/\.(acl|meta)$/.test(n) && !/\.\d+\.tmp$/.test(n)).map((n) => `${this.fedi}${kind}/${n}`);
-  }
-  _graph(url, ttl) {
-    const g = graph();
-    parse2(ttl, g, url, TURTLE);
-    return g;
-  }
-  // Inverse of writeNote for one resource.
-  //
-  // Every field below `content` is OPTIONAL on the way out, because it is
-  // optional on the way in: notes written before this document carried
-  // addressing have none of it, and every reader of this tree reads a pod's
-  // whole history. An absent field is absent, never a guess.
-  async readNote(url) {
-    const g = this._graph(url, await this.get(url));
-    const doc = namedNode2(url);
-    const iri = (p) => g.any(doc, AS(p), null, doc)?.value;
-    const str = (p) => g.any(doc, AS(p), null, doc)?.value;
-    const all = (p) => g.each(doc, AS(p), null, doc).map((n) => n.value);
-    const attachments = g.each(doc, AS("attachment"), null, doc).map((a) => {
-      const mediaType = g.any(a, AS("mediaType"), null, doc)?.value;
-      const description = g.any(a, AS("name"), null, doc)?.value;
-      return { url: a.value, mediaType: mediaType || "", ...description ? { description } : {} };
-    });
-    const mentions = g.each(doc, AS("tag"), null, doc).filter((t) => g.holds(t, RDF3("type"), AS("Mention"), doc)).map((t) => ({
-      href: g.any(t, AS("href"), null, doc)?.value,
-      name: g.any(t, AS("name"), null, doc)?.value
-    })).filter((m) => m.href);
-    const to = all("to");
-    const cc = all("cc");
-    const options = ["oneOf", "anyOf"].flatMap((p) => g.each(doc, AS(p), null, doc).map((o) => ({
-      name: g.any(o, AS("name"), null, doc)?.value,
-      votes: Number(g.any(g.any(o, AS("replies"), null, doc), AS("totalItems"), null, doc)?.value || 0)
-    })));
-    const multiple = g.each(doc, AS("anyOf"), null, doc).length > 0;
-    return {
-      noteId: iri("url"),
-      actor: iri("attributedTo"),
-      published: str("published"),
-      inReplyTo: iri("inReplyTo"),
-      content: str("content"),
-      ...attachments.length ? { attachments } : {},
-      ...to.length ? { to } : {},
-      ...cc.length ? { cc } : {},
-      ...mentions.length ? { mentions } : {},
-      ...iri("replies") ? { replies: iri("replies") } : {},
-      ...str("summary") ? { summary: str("summary") } : {},
-      ...str("updated") ? { updated: str("updated") } : {},
-      ...options.length ? { poll: {
-        options,
-        multiple,
-        ...str("endTime") ? { endTime: str("endTime") } : {},
-        ...str("votersCount") ? { votersCount: Number(str("votersCount")) } : {}
-      } } : {}
-    };
-  }
-  // Incoming or own post → one RDF resource. kind: 'timeline' | 'posts'
-  //
-  // What is recorded here used to be a REDUCTION of the wire document: no
-  // addressing, no mentions, no replies pointer, no content warning, no edit
-  // stamp. A query against this tree could not tell a public post from a direct
-  // message, which is most of what anyone would want to ask it. Everything the
-  // wire document carries is carried here now — see noteFieldsFrom, which lifts
-  // it off an AS2 document so no call site has to remember the list.
-  async writeNote(kind, slug, {
-    noteId,
-    actor,
-    published,
-    content,
-    inReplyTo,
-    attachments,
-    to,
-    cc,
-    mentions,
-    replies,
-    summary,
-    updated,
-    poll
-  }) {
-    const url = `${this.fedi}${kind}/${slug}`;
-    const doc = namedNode2(url);
-    const g = graph();
-    g.add(doc, RDF3("type"), poll ? AS("Question") : AS("Note"), doc);
-    g.add(doc, AS("url"), namedNode2(noteId), doc);
-    g.add(doc, AS("attributedTo"), namedNode2(actor), doc);
-    if (published) g.add(doc, AS("published"), literal2(published, XSD2("dateTime")), doc);
-    if (inReplyTo) g.add(doc, AS("inReplyTo"), namedNode2(inReplyTo), doc);
-    g.add(doc, AS("content"), literal2(content || ""), doc);
-    for (const a of attachments || []) {
-      const at = namedNode2(a.url);
-      g.add(doc, AS("attachment"), at, doc);
-      g.add(at, RDF3("type"), AS("Document"), doc);
-      if (a.mediaType) g.add(at, AS("mediaType"), literal2(a.mediaType), doc);
-      if (a.description) g.add(at, AS("name"), literal2(a.description), doc);
-    }
-    for (const t of to || []) g.add(doc, AS("to"), namedNode2(t), doc);
-    for (const c of cc || []) g.add(doc, AS("cc"), namedNode2(c), doc);
-    for (const m of mentions || []) {
-      if (!m?.href) continue;
-      const tag = blankNode2();
-      g.add(doc, AS("tag"), tag, doc);
-      g.add(tag, RDF3("type"), AS("Mention"), doc);
-      g.add(tag, AS("href"), namedNode2(m.href), doc);
-      if (m.name) g.add(tag, AS("name"), literal2(m.name), doc);
-    }
-    if (replies) g.add(doc, AS("replies"), namedNode2(replies), doc);
-    if (summary) g.add(doc, AS("summary"), literal2(summary), doc);
-    if (updated) g.add(doc, AS("updated"), literal2(updated, XSD2("dateTime")), doc);
-    if (poll) {
-      const pred = poll.multiple ? "anyOf" : "oneOf";
-      for (const o of poll.options || []) {
-        const opt = blankNode2();
-        g.add(doc, AS(pred), opt, doc);
-        g.add(opt, RDF3("type"), AS("Note"), doc);
-        if (o.name) g.add(opt, AS("name"), literal2(o.name), doc);
-        const tally = blankNode2();
-        g.add(opt, AS("replies"), tally, doc);
-        g.add(tally, RDF3("type"), AS("Collection"), doc);
-        g.add(tally, AS("totalItems"), literal2(String(o.votes || 0), XSD2("nonNegativeInteger")), doc);
-      }
-      if (poll.endTime) g.add(doc, AS("endTime"), literal2(poll.endTime, XSD2("dateTime")), doc);
-      if (poll.votersCount != null) {
-        g.add(doc, AS("votersCount"), literal2(String(poll.votersCount), XSD2("nonNegativeInteger")), doc);
-      }
-    }
-    await this.put(url, serialize(doc, g, url, TURTLE));
-  }
-  // Contacts doc — the followers/following truth, rebuilt whole each change.
-  async writeContacts({ followers, following }) {
-    const url = this.fedi + "contacts";
-    const doc = namedNode2(url);
-    const me = namedNode2(url + "#me");
-    const g = graph();
-    g.add(me, RDF3("type"), AS("Person"), doc);
-    for (const f of followers) g.add(me, AS("followers"), namedNode2(f.actor), doc);
-    for (const f of following) g.add(me, AS("following"), namedNode2(f.actor), doc);
-    await this.put(url, serialize(doc, g, url, TURTLE));
-  }
-  // Settings doc — handle + pointer to the public face.
-  async writeSettings({ handle, actorUrl }) {
-    const url = this.fedi + "settings";
-    const doc = namedNode2(url);
-    const me = namedNode2(url + "#me");
-    const g = graph();
-    g.add(me, RDF3("type"), AS("Person"), doc);
-    g.add(me, AS("preferredUsername"), literal2(handle), doc);
-    g.add(me, AS("url"), namedNode2(actorUrl), doc);
-    await this.put(url, serialize(doc, g, url, TURTLE));
   }
 };
 
@@ -44466,7 +44258,6 @@ var Publisher = class {
   constructor({
     config,
     remote,
-    local,
     store,
     deliverer,
     publicKeyPem,
@@ -44474,12 +44265,10 @@ var Publisher = class {
     log: log2 = console.log,
     probeFetch = null,
     resolveMention = null,
-    privateOnPod = true,
     clientOrigin = null
   }) {
     this.config = config;
     this.remote = remote;
-    this.local = local;
     this.store = store;
     this.deliverer = deliverer;
     this.publicKeyPem = publicKeyPem;
@@ -44490,7 +44279,6 @@ var Publisher = class {
     if (this.urls.toPod && this.remote?.setUrlMap) this.remote.setUrlMap(this.urls.toPod);
     this.probeFetch = probeFetch || ((u, i) => this.remote.probe(u, i));
     this.resolveMention = resolveMention;
-    this.privateOnPod = privateOnPod;
     this.pollTimers = /* @__PURE__ */ new Map();
     this.log = log2;
   }
@@ -44600,7 +44388,6 @@ var Publisher = class {
     await provisionContainer(this.remote, urls);
     await this.publishCollections({ ...ALL_COLLECTIONS, force });
     const updated = await this.announceProfileChange(actor, { force });
-    await this.local.writeSettings({ handle: this.config.handle, actorUrl: urls.actor });
     await this.ensurePrivateAcls();
     const unreachable = await this.verifyPublicSurface();
     if (!unreachable.length) {
@@ -44672,14 +44459,9 @@ var Publisher = class {
   // this runs on every connect: probe UNauthenticated, rewrite whatever
   // answers, and say so loudly if the rewrite does not take.
   async ensurePrivateAcls() {
-    const onPod = [
-      this.urls.home,
-      this.urls.state,
-      ...this.privateOnPod === false ? [] : [this.urls.fediverse]
-    ];
     const findings = await repairPrivateAcls(
       this.remote,
-      onPod,
+      [this.urls.home, this.urls.state],
       { isPublic: (u) => this.publiclyReadable(u) }
     );
     for (const f of findings) {
@@ -44938,30 +44720,11 @@ var Publisher = class {
     const kept = merged.slice(0, 1e3);
     this.store.write("statuses.json", kept);
     const landed = await this.store.commit();
-    let rdf3 = 0;
-    for (const s of recovered) {
-      try {
-        await this.local.writeNote("posts", s.slug, {
-          noteId: s.noteId,
-          actor: s.actor,
-          published: s.published,
-          content: s.content,
-          inReplyTo: s.inReplyTo,
-          attachments: s.attachments,
-          ...s.spoiler ? { summary: s.spoiler } : {},
-          ...s.mentions?.length ? { mentions: s.mentions } : {}
-        });
-        rdf3++;
-      } catch (e) {
-        this.log(`rebuild: RDF for ${s.slug} not written (${e.message})`);
-      }
-    }
     this.log(`rebuilt ${recovered.length} post(s) and ${reblogs} boost(s) from the pod${landed ? "" : " \u2014 THE STATE WRITE DID NOT LAND"}`);
     return {
       indexed: ids.size,
       recovered: recovered.length,
       reblogs,
-      rdf: rdf3,
       landed,
       dropped: Math.max(0, merged.length - kept.length)
     };
@@ -45110,7 +44873,6 @@ var Publisher = class {
       if (which.force || !Array.isArray(known)) await this.reconcileOutbox(outbox);
       await this.publishOutbox(outbox, { acls: which.acls, force: which.force });
     }
-    if (which.followers || which.following) await this.local.writeContacts(contacts);
   }
   // FEP-4ccd: the follows in limbo, as owner-only collections of the Follow
   // activities themselves. Inside the private container so its ACL is
@@ -45293,15 +45055,6 @@ var Publisher = class {
       collection(repliesId(note.id), [])
     );
     if (!priv) await this.recordOutbox(note.id);
-    await this.local.writeNote("posts", slug, {
-      noteId: note.id,
-      actor: urls.actor,
-      published,
-      content: note.content,
-      inReplyTo,
-      attachments,
-      ...noteFieldsFrom(note)
-    });
     this.store.addStatus({
       noteId: note.id,
       actor: urls.actor,
@@ -45415,15 +45168,6 @@ var Publisher = class {
       collection(repliesId(question.id), [])
     );
     if (!priv) await this.recordOutbox(question.id);
-    await this.local.writeNote("posts", slug, {
-      noteId: question.id,
-      actor: urls.actor,
-      published,
-      content: question.content,
-      inReplyTo,
-      attachments: [],
-      ...noteFieldsFrom(question)
-    });
     this.store.addStatus({
       noteId: question.id,
       actor: urls.actor,
@@ -45633,17 +45377,6 @@ var Publisher = class {
     });
     await write5(this.remote, note.id, note);
     await writeCreate(this.remote, createActivityId(note.id), createActivity(note, urls));
-    if (s.slug) {
-      await this.local.writeNote("posts", s.slug, {
-        noteId: note.id,
-        actor: urls.actor,
-        published: s.published,
-        content: note.content,
-        inReplyTo: s.inReplyTo,
-        attachments: atts,
-        ...noteFieldsFrom(note)
-      });
-    }
     const patched = this.store.updateStatus(s.noteId, {
       content: note.content,
       text: content,
@@ -45689,7 +45422,7 @@ var REL = {
 };
 
 // lib/pod/notifications.mjs
-var RDF4 = Namespace("http://www.w3.org/1999/02/22-rdf-syntax-ns#");
+var RDF3 = Namespace("http://www.w3.org/1999/02/22-rdf-syntax-ns#");
 var NOTIFY = Namespace("http://www.w3.org/ns/solid/notifications#");
 var WS_CHANNEL = "WebSocketChannel2023";
 async function storageDescriptionUrl(podBase, { fetchImpl = fetch, headers = {}, timeoutMs = 2e4 } = {}) {
@@ -45716,7 +45449,7 @@ async function readWebSocketChannel(descUrl, { fetchImpl = fetch, headers = {}, 
   } catch (e) {
     return { channel: null, error: `service description unparsable (${e.message})` };
   }
-  const channel = g.each(null, RDF4("type"), NOTIFY(WS_CHANNEL), null).map((n) => n.value).find(Boolean) || g.each(null, NOTIFY("channelType"), NOTIFY(WS_CHANNEL), null).map((n) => n.value).find(Boolean);
+  const channel = g.each(null, RDF3("type"), NOTIFY(WS_CHANNEL), null).map((n) => n.value).find(Boolean) || g.each(null, NOTIFY("channelType"), NOTIFY(WS_CHANNEL), null).map((n) => n.value).find(Boolean);
   return { channel: channel || null, error: channel ? null : `no ${WS_CHANNEL} service` };
 }
 async function subscribeToInbox(pod, { channelUrl, podTopicUrl, ...rest }) {
@@ -45735,7 +45468,7 @@ async function subscribeToInbox(pod, { channelUrl, podTopicUrl, ...rest }) {
 // lib/intake.mjs
 init_wire();
 init_safefetch();
-var RDF5 = Namespace("http://www.w3.org/1999/02/22-rdf-syntax-ns#");
+var RDF4 = Namespace("http://www.w3.org/1999/02/22-rdf-syntax-ns#");
 var NOTIFY2 = Namespace("http://www.w3.org/ns/solid/notifications#");
 var POLL_MS = 2 * 6e4;
 var POLL_PUSH_OK_MS = 10 * 6e4;
@@ -45865,8 +45598,8 @@ function authorOf(note, delivered = null) {
   return sameIdentity(note?.id, author) ? author : null;
 }
 var Intake = class {
-  constructor({ config, urls, remote, local, store, deliverer, publisher, log: log2 = console.log, lease = null, archive = null, push = true, pollSeconds = null }) {
-    Object.assign(this, { config, urls, remote, local, store, deliverer, publisher, log: log2, lease, archive, push, pollSeconds });
+  constructor({ config, urls, remote, store, deliverer, publisher, log: log2 = console.log, lease = null, archive = null, push = true, pollSeconds = null }) {
+    Object.assign(this, { config, urls, remote, store, deliverer, publisher, log: log2, lease, archive, push, pollSeconds });
     this.serial = Date.now();
     this.stopped = false;
     this.lastDrain = null;
@@ -46911,19 +46644,6 @@ var Intake = class {
     const known = this.config.kind === "group" ? contacts.followers.some((f) => f.actor === author) : contacts.following.some((f) => f.actor === author && f.accepted);
     const followed = via || known || !known && await this.isCoMember(author);
     const kind = followed ? "timeline" : "mention";
-    const day = String(note.published || "").slice(0, 10);
-    const slug = (/^\d{4}-\d{2}-\d{2}$/.test(day) ? day : (/* @__PURE__ */ new Date()).toISOString().slice(0, 10)) + "-" + (await Promise.resolve().then(() => (init_node_crypto(), node_crypto_exports))).createHash("sha256").update(note.id).digest("hex").slice(0, 8);
-    if (kind === "timeline") {
-      await this.local.writeNote("timeline", slug, {
-        noteId: note.id,
-        actor: author,
-        published: note.published,
-        content,
-        inReplyTo: note.inReplyTo,
-        attachments,
-        ...noteFieldsFrom(note)
-      });
-    }
     const mentions = [].concat(note.tag || []).filter((t) => t?.type === "Mention" && t.href && t.name).slice(0, MAX_MENTIONS).map((t) => ({ href: httpOnly(String(t.href).slice(0, MAX_URL_CHARS)), name: String(t.name).slice(0, 256) })).filter((m) => m.href);
     const emojis = emojisOf(note);
     const poll = pollOf(note);
@@ -46944,7 +46664,6 @@ var Intake = class {
       ...poll ? { poll } : {},
       ...emojis.length ? { emojis } : {},
       ...mentions.length ? { mentions } : {},
-      ...kind === "timeline" ? { slug } : {},
       ...attachments.length ? { attachments } : {},
       ...via ? { via } : {}
     });
@@ -47019,9 +46738,6 @@ var Intake = class {
     if (s.announceActivity) {
       await this.retract(s.noteId, { collect }).catch((e) => this.log(`retract: ${e.message}`));
     }
-    if (s.slug) {
-      await this.local.delete(this.local.fedi + "timeline/" + s.slug).catch((e) => this.log(`forget ${s.noteId}: its RDF note could NOT be removed (${e.message})`));
-    }
     this.store.removeStatus(s.noteId);
   }
   // Undo an Announce this group made. Shared with the operator's `retract`.
@@ -47084,17 +46800,6 @@ var Intake = class {
         poll: { ...freshPoll, voted: !!s.poll?.voted, ownVotes: s.poll?.ownVotes || [] }
       } : {}
     });
-    if (s.slug) {
-      await this.local.writeNote("timeline", s.slug, {
-        noteId: note.id,
-        actor: s.actor,
-        published: note.published,
-        content,
-        inReplyTo: note.inReplyTo,
-        attachments,
-        ...noteFieldsFrom(note)
-      }).catch((e) => this.log(`rewrite ${s.slug}: ${e.message}`));
-    }
     this.log(`edited upstream: ${objectId}`);
   }
   // Read-modify-write, and the drain is serialized, so two replies in one sweep
@@ -47701,8 +47406,6 @@ async function deleteNote(agent2, s) {
     await agent2.atproto.deleteCrossPost(s.atproto.uri).then(() => agent2.log?.(`bluesky mirror deleted: ${s.atproto.uri}`)).catch((e) => agent2.log?.(`bluesky mirror not deleted (${e.message}): ${s.atproto.uri}`));
   }
   await agent2.publisher.unrecordOutbox((i) => i === s.noteId || i?.id && i.id === s.announceActivity?.id);
-  if (s.slug) await agent2.local.delete(agent2.local.fedi + "posts/" + s.slug).catch(() => {
-  });
   agent2.store.removeStatus(s.noteId);
   return { ok: true };
 }
@@ -50305,10 +50008,10 @@ async function makeDpopSession({ clientId, secret, tokenEndpoint }) {
 var LDP2 = Namespace("http://www.w3.org/ns/ldp#");
 var DC = Namespace("http://purl.org/dc/terms/");
 var POSIX = Namespace("http://www.w3.org/ns/posix/stat#");
-var RDF6 = Namespace("http://www.w3.org/1999/02/22-rdf-syntax-ns#");
+var RDF5 = Namespace("http://www.w3.org/1999/02/22-rdf-syntax-ns#");
 var ACL = Namespace("http://www.w3.org/ns/auth/acl#");
 var FOAF = Namespace("http://xmlns.com/foaf/0.1/");
-var AS2 = Namespace("https://www.w3.org/ns/activitystreams#");
+var AS = Namespace("https://www.w3.org/ns/activitystreams#");
 var ACP_NS = "http://www.w3.org/ns/solid/acp#";
 var LISTING_MAX_BYTES = 10 * 1024 * 1024;
 var COOLDOWN_DEFAULT_MS = 6e4;
@@ -50557,7 +50260,7 @@ var PodTransport = class {
     const target = namedNode2(targetUrl);
     const g = graph();
     const authorize = (subject, agentPred, agent2, modes) => {
-      g.add(subject, RDF6("type"), ACL("Authorization"), doc);
+      g.add(subject, RDF5("type"), ACL("Authorization"), doc);
       g.add(subject, agentPred, agent2, doc);
       g.add(subject, ACL("accessTo"), target, doc);
       g.add(subject, ACL("default"), target, doc);
@@ -50639,8 +50342,8 @@ var PodTransport = class {
     const actor = namedNode2(actorUrl);
     const wanted = [
       [me, FOAF("account"), actor],
-      [actor, RDF6("type"), FOAF("OnlineAccount")],
-      [actor, RDF6("type"), kind === "group" ? AS2("Group") : AS2("Person")],
+      [actor, RDF5("type"), FOAF("OnlineAccount")],
+      [actor, RDF5("type"), kind === "group" ? AS("Group") : AS("Person")],
       [actor, FOAF("accountName"), literal2(accountName)]
     ];
     const missing = wanted.filter(([s, p, o]) => !g.holds(s, p, o, doc));
@@ -53436,7 +53139,6 @@ var BrowserAgent = class _BrowserAgent {
     this.store.setConfig({ ...this.store.getConfig() || {}, ...cfg, root });
     const keys = keysRecord ? await importSigningKey(keysRecord) : await loadKeysFromPod(this.remote, this.urls);
     config = this.store.getConfig();
-    this.local = new PodRdf({ storage: new HttpStorage(this.urls.fediverse, podFetch) });
     this.deliverer = new RelayDeliverer({
       passive: true,
       store: this.store,
@@ -53451,7 +53153,6 @@ var BrowserAgent = class _BrowserAgent {
     this.publisher = new Publisher({
       config: this.store.getConfig(),
       remote: this.remote,
-      local: this.local,
       store: this.store,
       deliverer: this.deliverer,
       publicKeyPem: keys.rsaPublicPem,
@@ -53466,7 +53167,6 @@ var BrowserAgent = class _BrowserAgent {
       config: this.store.getConfig(),
       urls: this.urls,
       remote: this.remote,
-      local: this.local,
       store: this.store,
       deliverer: this.deliverer,
       publisher: this.publisher,
@@ -53497,7 +53197,6 @@ var BrowserAgent = class _BrowserAgent {
         this.startViewerPoll();
         return;
       }
-      await this.backfillStatuses().catch((e) => this.log(`backfill: ${e.message}`));
       await this.goActive();
       this.log(`browser agent fully provisioned (active): @${config.handle}`);
     })().catch((e) => {
@@ -53508,44 +53207,6 @@ var BrowserAgent = class _BrowserAgent {
     });
     this.log(`browser agent up: @${config.handle} on ${remotePod}`);
     return this;
-  }
-  /**
-   * Rebuild the feed index from the RDF on the pod.
-   *
-   * The browser build WROTE this tree and never read it back, which made it
-   * pure cost: every post published and every post received cost an extra pod
-   * write, and nothing here could use any of it. This is what it was for.
-   *
-   * It matters most for what was RECEIVED. A post this actor published is also
-   * in `ap/notes/` and can be recovered from there, but an inbox item is
-   * DELETED once handled — so the only records of a received post are the RDF
-   * note and `statuses.json`, and the latter keeps a thousand entries with long
-   * content truncated. On a new device, or after state is lost, this is the
-   * difference between a timeline and a blank page.
-   *
-   * Only when there is no index at all: it is a recovery, not a sync, and it
-   * must never overwrite an index the running agent is maintaining.
-   *
-   * Ported from run-agent.mjs, where it has always run for the Node agent.
-   */
-  async backfillStatuses() {
-    if (this.store.has("statuses.json")) return { skipped: true };
-    const entries = [];
-    for (const [container, kind] of [["timeline", "timeline"], ["posts", "post"]]) {
-      for (const url of await this.local.listNotes(container)) {
-        try {
-          const n = await this.local.readNote(url);
-          if (n.noteId) entries.push({ ...n, kind, slug: url.split("/").pop() });
-        } catch (e) {
-          this.log(`backfill: skipped ${url}: ${e.message}`);
-        }
-      }
-    }
-    if (!entries.length) return { recovered: 0 };
-    entries.sort((a, b) => String(b.published || "").localeCompare(String(a.published || "")));
-    this.store.write("statuses.json", entries.slice(0, 1e3));
-    this.log(`backfilled ${entries.length} statuses from the pod's RDF`);
-    return { recovered: entries.length };
   }
   // What the record page and the bar read (GET /status). The same shape the
   // Node agent returns (run-agent.mjs), minus what a browser cannot have — no

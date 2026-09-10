@@ -34,7 +34,6 @@ import { ensureTrustedTls } from './lib/certs.mjs';
 import { storageFor } from './lib/storage.mjs';
 import { resolveKeys } from './lib/keys.mjs';
 import { RemotePod } from './lib/remote.mjs';
-import { PodRdf } from './lib/podrdf.mjs';
 import { Deliverer } from './lib/deliver.mjs';
 import { Publisher } from './lib/publisher.mjs';
 import { Intake } from './lib/intake.mjs';
@@ -69,15 +68,14 @@ export class Agent {
 
   // Where the private half lives. `privateRoot` in the credential file names a
   // container — by default a plain directory beside the credential, and a pod
-  // on this machine if you move it there — under which the same two trees are
-  // laid out as on the pod. Absent means on the pod, exactly as before, so an
+  // on this machine if you move it there. Absent means on the pod, so an
   // existing install is untouched.
   privateUrls(cred, urls = this.urls) {
     if (!cred.privateRoot) {
-      return { state: urls.state, fediverse: urls.fediverse, archive: urls.home + 'inbox-archive/', elsewhere: false };
+      return { state: urls.state, archive: urls.home + 'inbox-archive/', elsewhere: false };
     }
     const base = cred.privateRoot.endsWith('/') ? cred.privateRoot : cred.privateRoot + '/';
-    return { state: base + 'ap-state/', fediverse: base + 'fediverse/', archive: base + 'inbox-archive/', elsewhere: true };
+    return { state: base + 'ap-state/', archive: base + 'inbox-archive/', elsewhere: true };
   }
 
   // A container to keep the private half in. On the pod it is reached with the
@@ -146,14 +144,9 @@ export class Agent {
     await this.remote.setAcl(this.urls.home, []);
     await this.remote.setAcl(this.urls.state, []);
     if (priv.elsewhere) {
-      for (const s of [stateStore, this.privateStorage(cred, 'fediverse')]) {
-        const r = await s.write('.keep', '{"keep":true}\n', 'application/json');
-        if (!r.ok) throw new Error(`private store ${s.base}.keep → ${r.why}`);
-      }
+      const r = await stateStore.write('.keep', '{"keep":true}\n', 'application/json');
+      if (!r.ok) throw new Error(`private store ${stateStore.base}.keep → ${r.why}`);
       this.log(`private state lives at ${cred.privateRoot} (${stateStore.kind})`);
-    } else {
-      await this.remote.putJson(this.urls.fediverse + '.keep', { keep: true }, 'application/json');
-      await this.remote.setAcl(this.urls.fediverse, []);
     }
     this.store.attach(stateStore);
     // Re-running setup must not destroy state set afterwards (the UI
@@ -314,7 +307,6 @@ export class Agent {
       const { rotateKeyOnce, ...rest } = cred;
       writeJsonAtomic(path.join(this.home, 'credential.json'), rest);
     }
-    this.local = new PodRdf({ storage: this.privateStorage(cred, 'fediverse') });
     // connect() can run more than once — connectWithRetry retries after a throw,
     // and the CLI connects for real after its confirmation. Deliverer arms a
     // 60s queue timer in its constructor and Intake owns a poll timer and a
@@ -332,13 +324,10 @@ export class Agent {
       log: this.log, passive: this.viewer,
     });
     this.publisher = new Publisher({
-      config, remote: this.remote, local: this.local, store: this.store,
+      config, remote: this.remote, store: this.store,
       deliverer: this.deliverer, publicKeyPem: keys.rsaPublicPem,
       assertionKey: keys.edPublicMultibase, log: this.log,
       resolveMention: (h) => resolveHandle(this, h),
-      // Whether the fediverse tree is on the pod at all, so the ACL check does
-      // not probe for something the default layout keeps on local disk.
-      privateOnPod: !cred.privateRoot,
       // Inside a pod server the client surface answers on the pod's own
       // origin, so it can be advertised. Standalone it is on loopback, and
       // naming it in a world-readable actor would send clients nowhere.
@@ -347,7 +336,7 @@ export class Agent {
     // Intake is constructed even for viewers — its signed fetchAP powers
     // search/deref; start() (draining) is active-only.
     this.intake = new Intake({
-      config, urls: this.urls, remote: this.remote, local: this.local, store: this.store,
+      config, urls: this.urls, remote: this.remote, store: this.store,
       deliverer: this.deliverer, publisher: this.publisher, log: this.log, lease: this.lease,
       archive: this.privateStorage(cred, 'archive'),
       push: !this.embedded, pollSeconds: this.pollSeconds || null,
@@ -581,7 +570,7 @@ export class Agent {
       this.ensureActorPublished()
         .catch(e => this.log(`actor check failed: ${e.message}`));
     }
-    this.backfillStatuses().catch(e => this.log(`statuses backfill failed: ${e.message}`));
+    this.seedFollowNotifications().catch(e => this.log(`notification seeding failed: ${e.message}`));
   }
 
   // Re-read state before acting on what we hold. A viewer's cache is kept
@@ -695,27 +684,13 @@ export class Agent {
     return true;
   }
 
-  // The statuses index is an operational mirror of the pod's RDF — rebuild it
-  // from /fediverse/ when absent (fresh state, or state loss).
-  async backfillStatuses() {
-    if (!this.store.has('notifications.json')) {
-      for (const f of this.store.getContacts().followers) {
-        this.store.addNotification({ type: 'follow', actor: f.actor });
-      }
+  // A first run inherits followers without ever having seen them arrive, so
+  // the notifications list starts empty where it should start full.
+  async seedFollowNotifications() {
+    if (this.store.has('notifications.json')) return;
+    for (const f of this.store.getContacts().followers) {
+      this.store.addNotification({ type: 'follow', actor: f.actor });
     }
-    if (this.store.has('statuses.json')) return;
-    const entries = [];
-    for (const [container, kind] of [['timeline', 'timeline'], ['posts', 'post']]) {
-      for (const url of await this.local.listNotes(container)) {
-        try {
-          const n = await this.local.readNote(url);
-          if (n.noteId) entries.push({ ...n, kind, slug: url.split('/').pop() });
-        } catch (e) { this.log(`backfill: skipped ${url}: ${e.message}`); }
-      }
-    }
-    entries.sort((a, b) => String(b.published || '').localeCompare(String(a.published || '')));
-    this.store.write('statuses.json', entries.slice(0, 1000));
-    this.log(`backfilled ${entries.length} statuses from pod RDF`);
   }
 }
 

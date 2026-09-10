@@ -964,13 +964,12 @@ if (cmd === 'up') {
   let copied;
   try {
     copied = await copyPrivateHalf({
-      from: { state: agent.privateStorage(cred, 'state'), fediverse: agent.privateStorage(cred, 'fediverse') },
-      to: { state: agent.privateStorage(destCred, 'state'), fediverse: agent.privateStorage(destCred, 'fediverse') },
+      from: { state: agent.privateStorage(cred, 'state') },
+      to: { state: agent.privateStorage(destCred, 'state') },
       log: (...a) => console.log('[state]', ...a),
     });
   } catch (e) { console.error(e.message); process.exit(1); }
   console.log(`copied ${copied.docs} state document(s)`);
-  console.log(`copied ${copied.notes} note(s)`);
 
   // An empty source produces an empty destination, and every check above
   // passes: nothing failed to land because nothing was sent. The command then
@@ -2071,8 +2070,7 @@ WantedBy=default.target
     if (res.status >= 400) { console.error(body.error || `HTTP ${res.status}`); process.exit(1); }
     if (body.why) { console.error(body.why); process.exit(1); }
     console.log(`the pod indexed ${body.indexed} post(s); recovered ${body.recovered}`
-      + `${body.reblogs ? `, and marked ${body.reblogs} of them boosted` : ''}`
-      + `${body.rdf ? ` (${body.rdf} written back to the RDF)` : ''}`);
+      + `${body.reblogs ? `, and marked ${body.reblogs} of them boosted` : ''}`);
     if (body.dropped) console.log(`${body.dropped} fell past the 1000-status cap`);
     if (!body.landed) { console.error('the state write did NOT land — nothing is saved'); process.exit(1); }
     if (!body.recovered && !has('from-notes')) {
