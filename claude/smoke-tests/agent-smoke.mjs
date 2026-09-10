@@ -219,7 +219,8 @@ if (up) {
   const xsite = await fetchLocal(`https://127.0.0.1:${PORT}/oauth/authorize?redirect_uri=https%3A%2F%2Fevil.example%2Fcb`, {
     headers: { ...gh, 'sec-fetch-site': 'cross-site' }, redirect: 'manual',
   });
-  check(xsite.status === 400, `an unregistered off-origin redirect is refused regardless of navigation (got ${xsite.status})`);
+  check(xsite.status === 400 || xsite.status === 403,
+    `an unregistered off-origin redirect is refused regardless of navigation (got ${xsite.status})`);
   const badRedirect = await fetchLocal(`https://127.0.0.1:${PORT}/oauth/authorize?redirect_uri=https%3A%2F%2Fevil.example%2Fcb`, {
     headers: gh, redirect: 'manual',
   });
@@ -365,27 +366,50 @@ if (up) {
     method: 'POST', headers: { ...gh, 'content-type': 'application/json' },
     body: JSON.stringify({ client_name: 'Elk', redirect_uris: EXT }),
   })).json();
-  const extAuthz = await fetchLocal(`https://127.0.0.1:${PORT}/oauth/authorize?response_type=code`
+  const authzExt = () => fetchLocal(`https://127.0.0.1:${PORT}/oauth/authorize?response_type=code`
     + `&client_id=${reg.client_id}&redirect_uri=${encodeURIComponent(EXT)}&scope=read`,
+    { headers: gh, redirect: 'manual' });
+
+  // S36. Registering is open, as it is on Mastodon — so with no password set,
+  // "send the code to my own server" is a request anyone can make, and the
+  // owner's browser is what carries it out. Refused until there is a password
+  // to approve it with: a page in another tab cannot type one. (The other half
+  // — that the same client works once a password IS set — is section 8c, where
+  // the store is in this process and a password can be put on it.)
+  const noPw = await authzExt();
+  check(noPw.status === 403 && !noPw.headers.get('location'),
+    `with no password set, a redirect off this agent is refused (got ${noPw.status})`);
+  check(/passwd/.test((await noPw.json()).error || ''), 'and the refusal says how to make it possible');
+
+  // A client whose redirect comes back to THIS agent needs no password: there
+  // the code never leaves the machine. That is the flow the rest of this block
+  // exercises — register, be sent a bound code, exchange it with the secret.
+  const SELF = `https://localhost:${PORT}/cb`;
+  const regSelf = await (await fetchLocal(`https://127.0.0.1:${PORT}/api/v1/apps`, {
+    method: 'POST', headers: { ...gh, 'content-type': 'application/json' },
+    body: JSON.stringify({ client_name: 'Local client', redirect_uris: SELF }),
+  })).json();
+  const extAuthz = await fetchLocal(`https://127.0.0.1:${PORT}/oauth/authorize?response_type=code`
+    + `&client_id=${regSelf.client_id}&redirect_uri=${encodeURIComponent(SELF)}&scope=read`,
     { headers: gh, redirect: 'manual' });
   const extCode = extAuthz.headers.get('location')
     ? new URL(extAuthz.headers.get('location')).searchParams.get('code') : null;
   check(extAuthz.status === 302 && !!extCode,
-    'a registered client is redirected to its own origin carrying a code');
+    `a registered client sent back to this agent gets its code (got ${extAuthz.status})`);
   const preExchange = await fetchLocal(`https://127.0.0.1:${PORT}/api/v1/accounts/verify_credentials`,
     { headers: { ...gh, authorization: `Bearer ${extCode}` } });
   check(preExchange.status === 401, 'the bound code is not itself a bearer');
   const exch = (secret) => fetchLocal(`https://127.0.0.1:${PORT}/oauth/token`, {
     method: 'POST', headers: { ...gh, 'content-type': 'application/json' },
     body: JSON.stringify({ grant_type: 'authorization_code', code: extCode,
-      client_id: reg.client_id, client_secret: secret, redirect_uri: EXT }),
+      client_id: regSelf.client_id, client_secret: secret, redirect_uri: SELF }),
   });
   check((await exch('wrong-secret')).status === 401,
     'the code cannot be exchanged without the client secret');
-  const extTok = await exch(reg.client_secret);
+  const extTok = await exch(regSelf.client_secret);
   check(extTok.status === 200 && !!(await extTok.json()).access_token,
     'the secret-holding client exchanges its code for a bearer');
-  check((await exch(reg.client_secret)).status === 400, 'and a bound code is single-use');
+  check((await exch(regSelf.client_secret)).status === 400, 'and a bound code is single-use');
 
   // CORS: the API answers a foreign origin the way any Mastodon server does.
   const preflight = await fetchLocal(`https://127.0.0.1:${PORT}/api/v1/instance`, {
@@ -4719,7 +4743,36 @@ if (up) {
   await masto2.handle(okReq, okRes, '/oauth/authorize', new URL('http://x/oauth/authorize'));
   check(okRes.status === 302 && /code=/.test(okRes.headers?.location) && /state=st1/.test(okRes.headers?.location),
     'right password → 302 with code + state');
+
+  // S36, the other half. A third-party client registered with a redirect to its
+  // OWN server is the ordinary fediverse flow — and it is only safe because
+  // somebody types the password, which a page in another tab cannot do. With
+  // the password set the client is served the form and then its code; with it
+  // cleared the same request is refused outright (the live-agent section above
+  // covers that on a real listener).
+  const elk = masto2.registerApp({ name: 'Elk', redirectUris: ['https://elk.example/cb'], scopes: 'read' });
+  const elkQuery = `client_id=${elk.clientId}&redirect_uri=${encodeURIComponent('https://elk.example/cb')}&response_type=code`;
+  const elkForm = await call(`/oauth/authorize?${elkQuery}`);
+  check(elkForm.status === 200,
+    `a third-party client with a password set is served the login form (got ${elkForm.status})`);
+
+  const elkRes = { status: 0, headers: null, writeHead(st, h) { this.status = st; this.headers = h; }, end() {} };
+  const elkReq = Readable.from([Buffer.from(new URLSearchParams({
+    client_id: elk.clientId, redirect_uri: 'https://elk.example/cb',
+    response_type: 'code', password: 'sesame',
+  }).toString())]);
+  elkReq.method = 'POST';
+  elkReq.headers = { 'content-type': 'application/x-www-form-urlencoded' };
+  await masto2.handle(elkReq, elkRes, '/oauth/authorize', new URL('http://x/oauth/authorize'));
+  check(elkRes.status === 302 && /^https:\/\/elk\.example\/cb\?code=/.test(elkRes.headers?.location || ''),
+    `and the password sends its code to its own server (${elkRes.status})`);
+
   store2.setConfig(cfg);   // clear the password for later sections
+  // The refusal WITHOUT a password is not asserted here: this harness builds
+  // MastoApi with no `allowed`, which redirectAllowed reads as "no policy" and
+  // waves everything through. Every production path supplies one
+  // (lib/admin.mjs, lib/embed.mjs, web/app/agent.mjs), so the live-agent
+  // section above is where that check belongs and where it runs.
 }
 
 // --- 8d. drain lease: one active, second is viewer, expiry hands over ---
@@ -5413,8 +5466,35 @@ const NOTE = 'https://a.example/u/ann/n/1';
     origin: { [NOTE]: { status: 410 } },
   });
   const r = await p.intake.onDelete({ type: 'Delete', object: NOTE }, STRANGER);
-  check(/crosses origins/.test(r || '') && p.st.getStatuses().length === 1,
+  check(/crosses identities/.test(r || '') && p.st.getStatuses().length === 1,
     `a forged Delete from another origin is refused (${r})`);
+}
+
+// S6. On a multi-tenant front every tenant's ids share one origin, so an
+// origin test made every tenant able to speak for every other: publish posts
+// attributed to a neighbour, rewrite their post with an Update, or delete it.
+// A receiving Mastodon would have believed it for the same reason we did.
+{
+  const CO = 'https://a.example/u/bob/ap/actor';        // a neighbour on the same front
+  const OWN = 'https://a.example/u/ann/ap/actor';       // the tenant whose note it is
+  const p = personIntake({
+    statuses: [{ noteId: NOTE, actor: MEM_A, kind: 'timeline' }],
+    origin: { [NOTE]: { status: 410 } },
+  });
+  const del = await p.intake.onDelete({ type: 'Delete', object: NOTE }, CO);
+  check(/crosses identities/.test(del || '') && p.st.getStatuses().length === 1,
+    `a co-tenant of the same front cannot delete a neighbour's post (${del})`);
+
+  const upd = await p.intake.onUpdate({ type: 'Update', object: { id: NOTE, type: 'Note', content: 'mine now' } }, CO);
+  check(/crosses identities/.test(upd || ''), `nor rewrite it (${upd})`);
+
+  const cre = await p.intake.onCreate({ type: 'Create', object: 'https://a.example/u/ann/n/9' }, CO);
+  check(/identity mismatch/.test(cre || ''), `nor publish as them (${cre})`);
+
+  // The same tenant acting on its own note is untouched.
+  const mine = await p.intake.onDelete({ type: 'Delete', object: NOTE }, OWN);
+  check(!/crosses identities/.test(mine || ''),
+    `while the tenant whose note it is still acts on it (${mine || 'accepted'})`);
 }
 {
   // A group that carried the post unsays its own Announce rather than
@@ -10149,6 +10229,18 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   const wrongPod = await attach({ handle: 'alice', podHome: 'https://alice.pod/solid/' },
     'https://mallory.pod/profile#me');
   check(wrongPod.status === 403, 'a token proving a DIFFERENT pod than the one listed is refused');
+  // S2. A row's podHome is what the proxy reads from — and on the CSS server
+  // component that read goes straight into the resource store with no access
+  // control of its own. A row naming the FRONT would read the server's own
+  // internals, the directory (every user's receipt secret) included. The front
+  // is not a pod; it refuses to be recorded as one.
+  const selfPod = await attach({ handle: 'selfy', podHome: ORIGIN + '/' }, ORIGIN + '/profile#me');
+  check(selfPod.status === 400 && /cannot live on this gateway/.test(JSON.parse(selfPod.body).error || ''),
+    `a podHome on the gateway itself is refused (${selfPod.status})`);
+  const internal = await attach({ handle: 'sneak', podHome: 'https://alice.pod/.internal/' },
+    'https://alice.pod/profile/card#me');
+  check(internal.status === 400, `and so is one reaching into a server's private tree (${internal.status})`);
+
   const ok = await attach({ handle: 'alice', podHome: 'https://alice.pod/solid/' },
     'https://alice.pod/profile/card#me');
   const okDoc = JSON.parse(ok.body);
@@ -10156,6 +10248,19 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   check(ok.status === 201 && okDoc.doorInbox === aliceDoor && okDoc.address === '@alice@alice.pod'
     && typeof okDoc.hmacSecret === 'string' && okDoc.frontActor === undefined,
     'a valid token proving the pod attaches inbox-only by default: a full-address door and a secret, no fronted actor');
+
+  // S7. Re-attaching is idempotent and hands back the EXISTING receipt secret,
+  // so it has to be the same person. Matching podHome was the whole test, which
+  // on a path-based server means any co-tenant could take over a neighbour's
+  // row — flip its kind, and be given their secret.
+  const coTenant = await attach({ handle: 'alice', podHome: 'https://alice.pod/solid/', kind: 'group' },
+    'https://alice.pod/mallory/profile/card#me');
+  check(coTenant.status === 409,
+    `somebody else on the same pod cannot re-attach that name (${coTenant.status})`);
+  const stillMine = await attach({ handle: 'alice', podHome: 'https://alice.pod/solid/' },
+    'https://alice.pod/profile/card#me');
+  check(stillMine.status === 201 && JSON.parse(stillMine.body).hmacSecret === okDoc.hmacSecret,
+    'while the owner re-attaching still gets the same secret back');
   check(okDoc.command === `fedipod gateway ${aliceDoor} --secret ${okDoc.hmacSecret} --inbox-only`,
     'and the one command the user runs to point their agent at the gateway');
   check(written['alice@alice.pod']?.podHome === 'https://alice.pod/solid/' && written['alice@alice.pod']?.webId === 'https://alice.pod/profile/card#me'

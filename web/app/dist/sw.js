@@ -45426,6 +45426,19 @@ function trimActivity(a) {
   }
   return out;
 }
+function identityPrefix(u) {
+  const m = /^(https?:\/\/[^/]+\/u\/[^/]+\/)/u.exec(u);
+  if (m) return m[1];
+  const ap = /^(https?:\/\/[^/]+\/(?:[^/]+\/)*?)ap\//u.exec(u);
+  return ap ? ap[1] : null;
+}
+function sameIdentity(a, b) {
+  if (!sameOrigin(a, b)) return false;
+  const pa = identityPrefix(String(a));
+  const pb = identityPrefix(String(b));
+  if (!pa || !pb) return true;
+  return pa === pb;
+}
 function sameOrigin(a, b) {
   try {
     return new URL(a).origin === new URL(b).origin;
@@ -45458,7 +45471,7 @@ function authorOf(note, delivered = null) {
   const claimed = [].concat(note?.attributedTo || []).map((a) => typeof a === "string" ? a : a?.id).find(Boolean) || null;
   const author = claimed || delivered;
   if (!author) return null;
-  return sameOrigin(note?.id, author) ? author : null;
+  return sameIdentity(note?.id, author) ? author : null;
 }
 var Intake = class {
   constructor({ config, urls, remote, local, store, deliverer, publisher, log: log2 = console.log, lease = null, archive = null, push = true, pollSeconds = null }) {
@@ -45976,6 +45989,10 @@ var Intake = class {
   sameOrigin(a, b) {
     return sameOrigin(a, b);
   }
+  // Overridable in tests the same way sameOrigin is.
+  sameIdentity(a, b) {
+    return sameIdentity(a, b);
+  }
   // Have we ever heard of this actor or object? Answered entirely from local
   // state, so asking costs nothing. It is what stops a stranger's Delete or
   // Update — of which Mastodon broadcasts a great many, and of which anyone at
@@ -46329,7 +46346,7 @@ var Intake = class {
     const objectId = typeof activity.object === "string" ? activity.object : activity.object?.id;
     if (!objectId) return "Create without object id";
     if (this.store.isBlocked(objectId)) return `blocked domain (${objectId})`;
-    if (!this.sameOrigin(objectId, actor)) return `object/actor origin mismatch (${objectId})`;
+    if (!this.sameIdentity(objectId, actor)) return `object/actor identity mismatch (${objectId})`;
     const envelope = typeof activity.object === "object" ? { ...activity, ...activity.object } : activity;
     if (!this.concernsUs(envelope, actor)) return `not addressed to us (${objectId})`;
     const ingested = this.store.getStatuses().some((x) => x.noteId === objectId && (x.kind === "timeline" || x.kind === "mention"));
@@ -46593,7 +46610,7 @@ var Intake = class {
   async onDelete(activity, actor) {
     const objectId = typeof activity.object === "string" ? activity.object : activity.object?.id;
     if (!objectId) return "Delete without object id";
-    if (!this.sameOrigin(objectId, actor)) return `Delete crosses origins (${objectId})`;
+    if (!this.sameIdentity(objectId, actor)) return `Delete crosses identities (${objectId})`;
     if (!this.known(objectId)) return;
     const gone = await this.isGone(objectId);
     if (gone === null) throw new Error(`cannot confirm ${objectId} is gone \u2014 will retry`);
@@ -46662,7 +46679,7 @@ var Intake = class {
   async onUpdate(activity, actor) {
     const objectId = typeof activity.object === "string" ? activity.object : activity.object?.id;
     if (!objectId) return "Update without object id";
-    if (!this.sameOrigin(objectId, actor)) return `Update crosses origins (${objectId})`;
+    if (!this.sameIdentity(objectId, actor)) return `Update crosses identities (${objectId})`;
     if (objectId === actor) {
       if (!this.known(actor)) return;
       const doc = await this.fetchAP(actor);
@@ -47404,6 +47421,12 @@ async function pinStatus(agent2, s, pinned) {
   agent2.publisher.publishProfile?.().catch(() => {
   });
   return updated || s;
+}
+
+// lib/guard.mjs
+function isCrossSiteNavigation(req) {
+  const site = req.headers["sec-fetch-site"];
+  return site === "cross-site";
 }
 
 // lib/mastoapi.mjs
@@ -48585,6 +48608,16 @@ var MastoApi = class _MastoApi {
       const app = this.findApp(params.get("client_id") || "");
       const doc = app ? null : await this.resolveClientDocument(params.get("client_id") || "");
       const external = !!app || !!doc;
+      if (isCrossSiteNavigation(req)) {
+        this.log(`authorize refused: cross-site navigation to the mint from ${req.headers.referer || "nowhere"}`);
+        return send(403, { error: "a cross-site navigation may not authorize a client" });
+      }
+      if (external && !this.store.getConfig()?.uiPassword && !this.redirectAllowed(redirect)) {
+        this.log(`authorize refused: no UI password, and "${redirect}" is not an address of this agent`);
+        return send(403, {
+          error: "this client asks to be sent somewhere other than this agent, and no password is set to approve that with. Run `fedipod passwd` and try again."
+        });
+      }
       const client = { name: app?.name || doc?.name || null, redirect, scope: params.get("scope") || "read" };
       if (app) {
         if (!app.redirectUris.includes(redirect)) {

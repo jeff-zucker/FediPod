@@ -512,7 +512,26 @@ export class FediPodServerHandler extends HttpHandler implements Initializable, 
       lookup: (h: string) => this.dir.lookup(h),
       putDirectory: (h: string, rec: never) => this.dir.putDirectory(h, rec),
       podPut: (_handle: string, url: string, body: string, ct: string) => this.podPut(url, body, ct),
-      podGet: async (url: string) => {
+      // Reads for the public proxy. `this.io.read` goes STRAIGHT into the
+      // resource store, which applies no access control of its own — so this is
+      // the one place that has to say what may be read, and it says: only
+      // inside the pod of the handle being served, and never a server-internal
+      // tree. Without it a row could name any location and this would fetch it
+      // (the directory, with every user's receipt secret, included).
+      //
+      // The front now refuses to attach such a row at all (podHomeProblem in
+      // lib/front-core.mjs); this is the same refusal at the other end, because
+      // a row can also arrive from a seed or an older deploy.
+      podGet: async (url: string, opts?: { podHome?: string }) => {
+        const denied = { status: 403, text: async () => '', headers: { get: () => null } };
+        let target: URL;
+        try { target = new URL(url); } catch { return denied; }
+        if (/(^|\/)\.internal(\/|$)/u.test(target.pathname)) return denied;
+        // Which pod asked: routeFront reads `rec.podHome + rest` and passes
+        // that podHome here, so the confinement is a value on the call rather
+        // than state on the handler. No podHome, no read.
+        const home = opts?.podHome;
+        if (!home || !url.startsWith(home)) return denied;
         const raw = await this.io.read(url);
         return raw == null
           ? { status: 404, text: async () => '', headers: { get: () => null } }
