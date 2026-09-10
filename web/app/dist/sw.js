@@ -45581,7 +45581,7 @@ function sameSocketOrigin(socketUrl, podBase) {
   if (s.protocol !== (p.protocol === "https:" ? "wss:" : "ws:")) return false;
   if (s.host === p.host) return true;
   const parent = s.hostname.toLowerCase();
-  return parent.split(".").length >= 2 && s.port === p.port && p.hostname.toLowerCase().endsWith("." + parent);
+  return (parent.split(".").length >= 2 || parent === "localhost") && s.port === p.port && p.hostname.toLowerCase().endsWith("." + parent);
 }
 function httpUrl(u) {
   try {

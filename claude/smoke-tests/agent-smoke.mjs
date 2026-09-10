@@ -2301,6 +2301,17 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
       'nor a sibling subdomain, which is a different pod on the same server');
     check(!sameSocketOrigin('wss://live/ws', 'https://jeff-zucker.teamid.live/'),
       'nor a one-label host posing as everyone\'s parent');
+    // The one single-label parent that is allowed, because it is the one that
+    // cannot be anybody else: `alice.localhost` and `localhost` are the same
+    // machine. A Solid server with subdomain pods on a developer's machine looks
+    // exactly like this, and refusing it cost every delivery a two-minute wait.
+    check(sameSocketOrigin('ws://localhost:3338/.notifications/WebSocketChannel2023/x',
+      'http://tester.localhost:3338/'),
+    'a pod on a subdomain of localhost may be told its socket is on localhost');
+    check(!sameSocketOrigin('ws://localhost:9999/ws', 'http://tester.localhost:3338/'),
+      'but not on another port, which is another server on that machine');
+    check(!sameSocketOrigin('wss://localhost/ws', 'https://fp1.solidcommunity.net/'),
+      'and localhost is no parent of a pod that is not under it');
     check(!sameSocketOrigin('ws://pod.example/ws', 'https://pod.example/'),
       'and neither is a downgrade to ws:// from an https pod');
     check(!sameSocketOrigin('https://pod.example/ws', 'https://pod.example/')

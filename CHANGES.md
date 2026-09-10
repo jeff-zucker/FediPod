@@ -1,5 +1,12 @@
 # Changes
 
+## 2026-09-10 (mail arrives at once from a pod on your own machine)
+
+A pod served from a subdomain of `localhost` — which is how a Solid server with
+subdomain pods runs on your own machine — had its live connection refused, so
+every arriving post waited up to two minutes for the next check instead. It now
+arrives as it is delivered. Pods on ordinary domains were never affected.
+
 ## 2026-09-10 (three things the browser build could not do)
 
 Driving the browser build in a real browser for the first time found three
