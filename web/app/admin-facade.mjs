@@ -15,6 +15,7 @@
 // It mirrors lib/admin.mjs's handlers for those paths, calling the same agent
 // objects (store, publisher, intake, deliverer, remote) the Node agent does.
 import { publicHandle, webfingerHost } from '../../lib/wire.mjs';
+import * as podInbox from '../../lib/pod/inbox.mjs';
 import { normalizeImport, IMPORT_KINDS } from '../../lib/import.mjs';
 import { hashPassword } from '../../lib/mastoapi.mjs';
 
@@ -380,7 +381,7 @@ export class AdminFacade {
           if (target === 'locked' && !g.webId) return json(400, { error: "locked needs the gateway's WebID — set it with action: configure" });
           const prev = g.mode || 'off';
           if (target === 'locked') await a.publisher?.lockInboxToGateway(g.webId);
-          else if (prev === 'locked' && inboxUrl) await a.remote.setAcl(inboxUrl, ['Append']);
+          else if (prev === 'locked' && inboxUrl) await podInbox.setPosture(a.remote, a.urls, 'open');
           g.mode = target;
           await persist();
           if ((prev === 'off') !== (target === 'off')) await a.publisher?.publishProfile();
@@ -437,7 +438,7 @@ export class AdminFacade {
           delete cfg.gateway; a.store.setConfig(cfg);
           if (a.publisher) a.publisher.config.gateway = undefined;
           await a.store.flush();
-          if (wasLocked && inboxUrl) await a.remote.setAcl(inboxUrl, ['Append']).catch(() => {});
+          if (wasLocked && inboxUrl) await podInbox.setPosture(a.remote, a.urls, 'open').catch(() => {});
           await a.publisher?.publishProfile();
           return json(200, { ok: true, mode: 'off', forgotten: true });
         }

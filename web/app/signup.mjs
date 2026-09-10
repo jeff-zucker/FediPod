@@ -20,7 +20,7 @@ import { keyCacheKey } from './keys-browser.mjs';
 // use `fedipod/`; the agent's own default stays `activitypods-js/` for installs
 // that predate this, so those pods are untouched. The name is stored on the
 // credential and the config, so the agent reads it rather than guessing.
-const AP_ROOT = 'fedipod/';
+export const AP_ROOT = 'fedipod/';
 const actorUrlFor = (pod) => `${pod}${AP_ROOT}ap/actor`;
 const keysDocFor = (pod) => `${pod}${AP_ROOT}ap-state/keys.json`;
 

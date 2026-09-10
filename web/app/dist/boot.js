@@ -33381,6 +33381,18 @@ async function signUp(answers, { onStep = () => {
   };
 }
 
+// lib/pod/actor.mjs
+async function readIssuer(actorUrl, fetchImpl = fetch) {
+  try {
+    const res = await fetchImpl(actorUrl, { headers: { accept: "application/activity+json" } });
+    if (res.status >= 400) return null;
+    const doc = await res.json();
+    return doc?.endpoints?.oauthAuthorizationEndpoint || null;
+  } catch {
+    return null;
+  }
+}
+
 // web/app/oidc-session.mjs
 var DB2 = "fedipod-oidc";
 var STORE = "session";
@@ -33631,7 +33643,7 @@ window.fedipodUnlock = async (password) => {
   const session = await getSession();
   if (!session) throw new Error("Sign in first.");
   const podFromWebId = new URL(session.webId).origin + "/";
-  const state = `${podFromWebId}fedipod/ap-state/`;
+  const state = `${podFromWebId}${AP_ROOT}ap-state/`;
   const readJson = async (url) => {
     const r = await session.fetch(url, { headers: { accept: "application/json" } });
     if (r.status >= 400) throw new Error(`could not read ${url} (HTTP ${r.status})`);
@@ -33640,7 +33652,7 @@ window.fedipodUnlock = async (password) => {
   const [cfg, doc] = await Promise.all([readJson(state + "config.json"), readJson(state + "keys.json")]);
   if (!isKeyEnvelope(doc)) throw new Error("this account's key is not locked \u2014 nothing to unlock");
   const rec = await unwrapKeys(doc, password);
-  const actorUrl = `${cfg.remotePod}${cfg.root || "fedipod/"}ap/actor`;
+  const actorUrl = `${cfg.remotePod}${cfg.root || AP_ROOT}ap/actor`;
   await kvPut(keyCacheKey(actorUrl), rec);
   await bootWorker();
 };
@@ -33661,8 +33673,7 @@ function parseAddress(input) {
 }
 async function issuerForPod(pod) {
   try {
-    const actor = await (await fetch(`${pod}fedipod/ap/actor`, { headers: { accept: "application/activity+json" } })).json();
-    const authz = actor?.endpoints?.oauthAuthorizationEndpoint;
+    const authz = await readIssuer(`${pod}${AP_ROOT}ap/actor`);
     if (authz) return new URL(authz).origin;
   } catch {
   }

@@ -30981,7 +30981,7 @@ var require_buffer = __commonJS({
     function ucs2Write(buf, string, offset, length) {
       return blitBuffer(utf16leToBytes(string, buf.length - offset), buf, offset, length);
     }
-    Buffer3.prototype.write = function write(string, offset, length, encoding) {
+    Buffer3.prototype.write = function write2(string, offset, length, encoding) {
       if (offset === void 0) {
         encoding = "utf8";
         length = this.length;
@@ -35322,7 +35322,7 @@ var Serializer = class _Serializer {
   // /////////////////////////// Quad store serialization
   // @para. write  - a function taking a single string to be output
   //
-  writeStore(write) {
+  writeStore(write2) {
     var kb = this.store;
     var fetcher2 = kb.fetcher;
     var session = fetcher2 && fetcher2.appNode;
@@ -35330,13 +35330,13 @@ var Serializer = class _Serializer {
     for (var s in sources) {
       var source = kb.fromNT(s);
       if (session && source.equals(session)) continue;
-      write("\n" + this.atomicTermToN3(source) + " " + this.atomicTermToN3(kb.sym("http://www.w3.org/2000/10/swap/log#semantics")) + " { " + this.statementsToN3(kb.statementsMatching(void 0, void 0, void 0, source)) + " }.\n");
+      write2("\n" + this.atomicTermToN3(source) + " " + this.atomicTermToN3(kb.sym("http://www.w3.org/2000/10/swap/log#semantics")) + " { " + this.statementsToN3(kb.statementsMatching(void 0, void 0, void 0, source)) + " }.\n");
     }
     kb.statementsMatching(void 0, kb.sym("http://www.w3.org/2007/ont/link#requestedURI")).map(function(st2) {
-      write("\n<" + st2.object.value + "> log:metadata {\n");
+      write2("\n<" + st2.object.value + "> log:metadata {\n");
       var sts = kb.statementsMatching(void 0, void 0, void 0, st2.subject);
-      write(this.statementsToN3(this.statementsToN3(sts)));
-      write("}.\n");
+      write2(this.statementsToN3(this.statementsToN3(sts)));
+      write2("}.\n");
     });
     var metaSources = [];
     if (session) metaSources.push(session);
@@ -35344,7 +35344,7 @@ var Serializer = class _Serializer {
     metaSources.map(function(source2) {
       metadata = metadata.concat(kb.statementsMatching(void 0, void 0, void 0, source2));
     });
-    write(this.statementsToN3(metadata));
+    write2(this.statementsToN3(metadata));
   }
   // ////////////////////////////////////////////// XML serialization
   statementsToXML(sts) {
@@ -44139,6 +44139,63 @@ var USER_AGENT = `fedipod/${version} (+https://github.com/jeff-zucker/FediPod)`;
 
 // lib/publisher.mjs
 init_safefetch();
+
+// lib/pod/discovery.mjs
+var PUBLIC_READ = ["Read"];
+async function writeWebfinger(pod, urls, jrd2) {
+  await pod.putJson(urls.webfinger, jrd2, "application/jrd+json");
+  await pod.setAcl(urls.webfinger, PUBLIC_READ);
+}
+async function writeHostMeta(pod, urls, xml) {
+  const url = urls.base + ".well-known/host-meta";
+  await pod.put(url, xml, "application/xrd+xml");
+  await pod.setAcl(url, PUBLIC_READ);
+}
+async function writeNodeinfo(pod, urls, { pointer, doc }) {
+  const pointerUrl = urls.base + ".well-known/nodeinfo";
+  const docUrl = urls.home + "ap/nodeinfo-2.0";
+  await pod.putJson(pointerUrl, pointer, "application/json");
+  await pod.setAcl(pointerUrl, PUBLIC_READ);
+  await pod.putJson(docUrl, doc, "application/json");
+  await pod.setAcl(docUrl, PUBLIC_READ);
+  return docUrl;
+}
+
+// lib/pod/actor.mjs
+var PUBLIC_READ2 = ["Read"];
+async function write(pod, urls, doc) {
+  await pod.putJson(urls.actor, doc);
+  await pod.setAcl(urls.actor, PUBLIC_READ2);
+}
+async function writeTombstone(pod, urls, doc) {
+  await pod.putJson(urls.actor, doc);
+  await pod.setAcl(urls.actor, PUBLIC_READ2);
+}
+async function writeMoved(pod, urls, doc) {
+  await pod.putJson(urls.actor, doc);
+  await pod.setAcl(urls.actor, PUBLIC_READ2);
+}
+async function writeProfilePage(pod, urls, html) {
+  await pod.put(urls.profileHtml, html, "text/html");
+  await pod.setAcl(urls.profileHtml, PUBLIC_READ2);
+}
+function linkInWebIdProfile(pod, { actorUrl, accountName, kind = "person" }) {
+  return pod.linkAccountInProfile({ actorUrl, accountName, kind });
+}
+
+// lib/pod/inbox.mjs
+async function writeKeep(pod, urls) {
+  await pod.putJson(urls.inbox + ".keep", { keep: true }, "application/json");
+}
+async function setPosture(pod, urls, posture) {
+  if (posture === "open") return pod.setAcl(urls.inbox, ["Append"]);
+  if (posture === "closed") return pod.setAcl(urls.inbox, []);
+  const webId = posture?.gatewayWebId;
+  if (!webId) throw new Error(`inbox.setPosture: unknown posture ${JSON.stringify(posture)}`);
+  return pod.setAcl(urls.inbox, [], { appendAgents: [webId] });
+}
+
+// lib/publisher.mjs
 var ACCEPT_AP = 'application/activity+json, application/ld+json; profile="https://www.w3.org/ns/activitystreams"';
 var REBUILD_MAX_PER_RUN = 200;
 var POLL_REWRITE_MS = 1e4;
@@ -44247,32 +44304,20 @@ var Publisher = class {
       this.log("profile unchanged \u2014 nothing republished");
       return { unreachable: [], updated: 0, skipped: true };
     }
-    await this.remote.putJson(
-      urls.webfinger,
-      jrd({ handle: this.config.handle, host, actor: urls.actor }),
-      "application/jrd+json"
+    await writeWebfinger(
+      this.remote,
+      urls,
+      jrd({ handle: this.config.handle, host, actor: urls.actor })
     );
-    await this.remote.setAcl(urls.webfinger, ["Read"]);
-    const hostMetaUrl = urls.base + ".well-known/host-meta";
-    await this.remote.put(hostMetaUrl, hostMeta(urls.base), "application/xrd+xml");
-    await this.remote.setAcl(hostMetaUrl, ["Read"]);
+    await writeHostMeta(this.remote, urls, hostMeta(urls.base));
     const nodeinfoDocUrl = urls.home + "ap/nodeinfo-2.0";
     const localPosts = this.store.getStatuses().filter((s) => s.kind === "post").length;
-    await this.remote.putJson(
-      urls.base + ".well-known/nodeinfo",
-      nodeinfoPointer(nodeinfoDocUrl),
-      "application/json"
-    );
-    await this.remote.setAcl(urls.base + ".well-known/nodeinfo", ["Read"]);
-    await this.remote.putJson(
-      nodeinfoDocUrl,
-      nodeinfoDoc({ version: AGENT_VERSION, localPosts }),
-      "application/json"
-    );
-    await this.remote.setAcl(nodeinfoDocUrl, ["Read"]);
+    await writeNodeinfo(this.remote, urls, {
+      pointer: nodeinfoPointer(nodeinfoDocUrl),
+      doc: nodeinfoDoc({ version: AGENT_VERSION, localPosts })
+    });
     const actor = actorDoc2;
-    await this.remote.putJson(urls.actor, actor);
-    await this.remote.setAcl(urls.actor, ["Read"]);
+    await write(this.remote, urls, actor);
     if (moderators) {
       await this.remote.putJson(
         urls.moderators,
@@ -44281,16 +44326,15 @@ var Publisher = class {
       await this.remote.setAcl(urls.moderators, ["Read"]);
     }
     if (gwActive) await this.publishGatewayPolicy();
-    await this.remote.put(urls.profileHtml, profilePageHtml({
+    await writeProfilePage(this.remote, urls, profilePageHtml({
       name: this.config.name || this.config.handle,
       address: webfingerHost(urls.base) ? `@${this.config.handle}@${host}` : urls.actor,
       summary: this.config.summary ? contentHtml(this.config.summary) : null,
       icon: this.config.icon || null,
       kind: this.config.kind
-    }), "text/html");
-    await this.remote.setAcl(urls.profileHtml, ["Read"]);
+    }));
     try {
-      const wrote = await this.remote.linkAccountInProfile({
+      const wrote = await linkInWebIdProfile(this.remote, {
         actorUrl: urls.actor,
         accountName: `@${this.config.handle}@${host}`,
         kind: this.config.kind
@@ -44299,13 +44343,9 @@ var Publisher = class {
     } catch (e) {
       this.log(`WebID profile not updated with the actor link: ${e.message}`);
     }
-    await this.remote.putJson(urls.inbox + ".keep", { keep: true }, "application/json");
-    if (this.config.quiescedAt) {
-      await this.remote.setAcl(urls.inbox, []);
-      this.log("inbox left closed \u2014 this actor is quiesced");
-    } else {
-      await this.remote.setAcl(urls.inbox, ["Append"]);
-    }
+    await writeKeep(this.remote, urls);
+    await setPosture(this.remote, urls, this.config.quiescedAt ? "closed" : "open");
+    if (this.config.quiescedAt) this.log("inbox left closed \u2014 this actor is quiesced");
     await this.remote.putJson(urls.notes + ".keep", { keep: true }, "application/json");
     await this.remote.setAcl(urls.notes, ["Read"]);
     await this.publishCollections({ ...ALL_COLLECTIONS, force });
@@ -44424,8 +44464,7 @@ var Publisher = class {
     const inboxes = [...new Set(contacts.followers.map((f) => f.sharedInbox || f.inbox).filter(Boolean))];
     const deletedAt = (/* @__PURE__ */ new Date()).toISOString();
     await this.deliverer.deliverToAll(inboxes, deleteActorActivity(urls, Date.parse(deletedAt)));
-    await this.remote.putJson(urls.actor, tombstoneDoc(urls, deletedAt, this.config.kind));
-    await this.remote.setAcl(urls.actor, ["Read"]);
+    await writeTombstone(this.remote, urls, tombstoneDoc(urls, deletedAt, this.config.kind));
     this.store.setConfig({ ...this.store.getConfig(), retiredAt: deletedAt });
     await this.store.flush();
     this.log(`retired: Delete sent to ${inboxes.length} inbox(es), actor replaced with a Tombstone`);
@@ -44435,7 +44474,7 @@ var Publisher = class {
   // 401 rather than a 201 into storage nobody will ever drain. WebFinger,
   // host-meta and the actor stay published, so the handle still resolves.
   async closeInbox() {
-    await this.remote.setAcl(this.urls.inbox, []);
+    await setPosture(this.remote, this.urls, "closed");
     const at = (/* @__PURE__ */ new Date()).toISOString();
     this.store.setConfig({ ...this.store.getConfig(), quiescedAt: at });
     await this.store.flush();
@@ -44444,7 +44483,7 @@ var Publisher = class {
   }
   // Undo closeInbox: mail flows again and the actor is no longer quiesced.
   async openInbox() {
-    await this.remote.setAcl(this.urls.inbox, ["Append"]);
+    await setPosture(this.remote, this.urls, "open");
     const { quiescedAt, ...rest } = this.store.getConfig() || {};
     this.store.setConfig(rest);
     this.config.quiescedAt = void 0;
@@ -44455,7 +44494,7 @@ var Publisher = class {
   // the pod except through the gateway's verify-at-the-door. Reversible with
   // openInbox (public-Append) — the one-call rollback.
   async lockInboxToGateway(gatewayWebId) {
-    await this.remote.setAcl(this.urls.inbox, [], { appendAgents: [gatewayWebId] });
+    await setPosture(this.remote, this.urls, { gatewayWebId });
     this.log(`inbox locked to gateway ${gatewayWebId} \u2014 public delivery is refused`);
   }
   // Tell the fediverse the account lives somewhere else now. Well-behaved
@@ -44468,7 +44507,7 @@ var Publisher = class {
     await this.deliverer.deliverToAll(inboxes, moveActivity(urls, target, Date.parse(at)));
     this.config.movedTo = target;
     this.store.setConfig({ ...this.store.getConfig(), movedTo: target, movedAt: at });
-    await this.remote.putJson(urls.actor, actorDoc({
+    await writeMoved(this.remote, urls, actorDoc({
       urls,
       handle: publicHandle(this.config),
       name: this.config.name,
@@ -44484,7 +44523,6 @@ var Publisher = class {
       webId: this.remote.webId || null,
       aliases: this.config.aliases || []
     }));
-    await this.remote.setAcl(urls.actor, ["Read"]);
     await this.store.flush();
     this.log(`moved to ${target}: Move sent to ${inboxes.length} inbox(es), actor now advertises movedTo`);
     return { inboxes: inboxes.length, target, movedAt: at };
@@ -51765,7 +51803,7 @@ var AdminFacade = class {
           if (target === "locked" && !g.webId) return json2(400, { error: "locked needs the gateway's WebID \u2014 set it with action: configure" });
           const prev = g.mode || "off";
           if (target === "locked") await a.publisher?.lockInboxToGateway(g.webId);
-          else if (prev === "locked" && inboxUrl) await a.remote.setAcl(inboxUrl, ["Append"]);
+          else if (prev === "locked" && inboxUrl) await setPosture(a.remote, a.urls, "open");
           g.mode = target;
           await persist();
           if (prev === "off" !== (target === "off")) await a.publisher?.publishProfile();
@@ -51829,7 +51867,7 @@ var AdminFacade = class {
           a.store.setConfig(cfg);
           if (a.publisher) a.publisher.config.gateway = void 0;
           await a.store.flush();
-          if (wasLocked && inboxUrl) await a.remote.setAcl(inboxUrl, ["Append"]).catch(() => {
+          if (wasLocked && inboxUrl) await setPosture(a.remote, a.urls, "open").catch(() => {
           });
           await a.publisher?.publishProfile();
           return json2(200, { ok: true, mode: "off", forgotten: true });

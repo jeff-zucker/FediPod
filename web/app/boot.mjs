@@ -9,7 +9,8 @@
 //   New account:  fedipodSignup(answers)  — create the account, then redirect.
 //   Returning:    fedipodSignin({ issuer }) — redirect to the pod's login.
 //   On every load: fedipodOnLoad() — finish a redirect, or restore, then boot.
-import { signUp, handleProblem } from './signup.mjs';
+import { signUp, handleProblem, AP_ROOT } from './signup.mjs';
+import * as podActor from '../../lib/pod/actor.mjs';
 import { beginLogin, completeLogin, getSession, signOut } from './oidc-session.mjs';
 import { unwrapKeys, isKeyEnvelope } from './keystore.mjs';
 import { kvPut } from './idb-kv.mjs';
@@ -67,7 +68,7 @@ window.fedipodUnlock = async (password) => {
   // The config on the pod says where this account's state lives; the key sits
   // beside it. Both are read with the session, as the owner.
   const podFromWebId = new URL(session.webId).origin + '/';
-  const state = `${podFromWebId}fedipod/ap-state/`;
+  const state = `${podFromWebId}${AP_ROOT}ap-state/`;
   const readJson = async (url) => {
     const r = await session.fetch(url, { headers: { accept: 'application/json' } });
     if (r.status >= 400) throw new Error(`could not read ${url} (HTTP ${r.status})`);
@@ -76,7 +77,7 @@ window.fedipodUnlock = async (password) => {
   const [cfg, doc] = await Promise.all([readJson(state + 'config.json'), readJson(state + 'keys.json')]);
   if (!isKeyEnvelope(doc)) throw new Error('this account\'s key is not locked — nothing to unlock');
   const rec = await unwrapKeys(doc, password);          // throws 'wrong password'
-  const actorUrl = `${cfg.remotePod}${cfg.root || 'fedipod/'}ap/actor`;
+  const actorUrl = `${cfg.remotePod}${cfg.root || AP_ROOT}ap/actor`;
   await kvPut(keyCacheKey(actorUrl), rec);
   await bootWorker();
 };
@@ -109,8 +110,7 @@ async function issuerForPod(pod) {
   // The pod's actor says where a client signs in (oauthAuthorizationEndpoint's
   // origin); failing that, the account provider is the pod host's parent domain.
   try {
-    const actor = await (await fetch(`${pod}fedipod/ap/actor`, { headers: { accept: 'application/activity+json' } })).json();
-    const authz = actor?.endpoints?.oauthAuthorizationEndpoint;
+    const authz = await podActor.readIssuer(`${pod}${AP_ROOT}ap/actor`);
     if (authz) return new URL(authz).origin;
   } catch { /* fall through */ }
   const host = new URL(pod).host;
