@@ -1,5 +1,3 @@
-<!-- CLAUDE 2026-09-11 — new file: the architecture and protocol sections
-     moved out of README.md. Review pending; delete this marker when done. -->
 # Architecture
 
 FediPod splits an ActivityPub server into two parts. The pod provides

@@ -1,5 +1,3 @@
-<!-- CLAUDE 2026-09-11 — new file: the device-based build, moved out of
-     README.md. Review pending; delete this marker when done. -->
 # The installed agent
 
 FediPod can also run as a program on your own machine, in front of the same

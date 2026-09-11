@@ -14,16 +14,12 @@ and pick group rather than person, or take the group path on a signup page.
 You can turn on join review as you create it. The group's pod must be the root
 of its own host, so its handle resolves.
 
-<!-- CLAUDE 2026-09-09 — nothing anywhere said this, and a browser user who
-     went looking for the group option would just not have found it. First
-     draft in your voice; move or reword as you like. Delete markers when done. -->
 **Running a group needs the installed agent.** The in-browser build makes
 personal identities only — the sign-up wizard has no group option, and the
 moderation surface (join review, members, muting, the moderation queue) is not
 part of that build. You can *join* a group from the browser exactly as from
 anywhere else: joining is following, and that works everywhere. It is hosting
 one that needs an install.
-<!-- /CLAUDE -->
 
 Being in a group also connects you to the people in it: posts from fellow
 members reach your timeline even when you do not follow them individually,
@@ -72,8 +68,6 @@ boosting the author.
 ## Transferring group ownership
 
 A group can be handed on rather than abandoned using the `Transfer this account away` button. This tells every follower to migrate, so the membership survives a change of host.
-
-
 
 ## Bluesky members
 

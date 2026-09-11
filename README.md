@@ -1,16 +1,12 @@
-<!-- CLAUDE 2026-09-11 — whole file rewritten: the browser version is the
-     subject; the installed agent, the gateway and the server each have a
-     linked file of their own. Review pending; delete this marker when done. -->
 # FediPod
 
 - access the Fediverse from a Solid pod
 
 FediPod gives you a Fediverse account whose data lives on a Solid pod. You
-follow people on Mastodon and the rest of the Fediverse, and on Bluesky, in
-one timeline. Your posts, followers and settings stay on your pod, and your
-Fediverse identity is yours, independent of who runs the door in front of it.
+follow people on Mastodon, Bluesky, and other Fediverse or ATProto servers in
+one timeline. Your posts, followers and settings stay on your pod.
 
-You use it in a browser at https://fedipod.net. Nothing is installed.
+The easiest way to run FediPod is to use it in any browser at https://fedipod.net. Nothing to install. A wizard will walk you through getting a pod (you can also bring your own) and creating a Fediverse identity attached to the pod.  There are also a number of [other ways to run FediPod](#other-ways-to-run-fedipod) which offer a variety of scenarios.
 
 ## Requirements
 
@@ -31,7 +27,7 @@ You use it in a browser at https://fedipod.net. Nothing is installed.
 3. Choose your handle. Your address is `@handle@yourpod`. Both parts are
    permanent; display name, bio and pictures are set later in the client.
 4. Enter your pod password once. It creates the account and locks your
-   signing key. It is not stored.
+   signing key. The password is not stored.
 
 Your account then opens in the client. To use it from another browser, go to
 https://fedipod.net, enter your address, sign in at your pod, and unlock your
@@ -85,7 +81,7 @@ there it takes over; the first drops back to reading.
 - **Other clients.** A phone app or desktop client has nothing on the network
   to connect to.
 
-All of these work with [the installed agent](installed-agent.md).
+For these, see [Other ways to run FediPod](#other-ways-to-run-fedipod).
 
 ## Your data and your keys
 
@@ -122,3 +118,4 @@ This package was created using a heavily hectored claude.
 ## License
 
 (c) Jeff Zucker, 2026; may be freely used with an MIT license.
+p

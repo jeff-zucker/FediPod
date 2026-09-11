@@ -1,12 +1,9 @@
 # The Admin interface
 
-<!-- CLAUDE 2026-09-11 — one paragraph for the browser version. Review
-     pending; delete this marker when done. -->
 In the browser version at fedipod.net, `manage account` in the bar opens this
 same page for your account. The rest of this page describes it as the
 installed agent serves it; the controls are the same, minus the manual inbox
 drain and the local log, which a browser does not have.
-<!-- /CLAUDE -->
 
 Open `https://localhost:8030/` while any agent is running — it forwards you to the agent — then choose `manage account` and select the actor you want from the local actors dropdown.
 Picking an actor marked "(stopped)" starts its agent, then opens its page.
@@ -100,14 +97,10 @@ is marked **sign in again** rather than quietly dropped.
 
 New followers appear under **Follow requests** with **Accept** and **Refuse**
 beside them; nothing is accepted without you.
-<!-- CLAUDE 2026-09-09 — these were visible on this page and NOWHERE else
-     until today: the client API stubbed the list empty and offered no way to
-     answer one, so no Mastodon client could show them. Delete markers when
-     read. -->
 They show in any Mastodon client as well, now that the client API serves the
 queue and takes both answers — before this they were visible on this page
 alone.
-<!-- /CLAUDE --> Groups are different — joining
+Groups are different — joining
 follows the group's own moderation settings; see [Groups](groups.md).
 
 **Accept all** answers the whole queue at once, and the identity pane's
@@ -139,12 +132,8 @@ account*); your followers arrive by themselves. Removing an alias asks
 twice — servers still processing the move check it while they retry. The CSV
 files from the old server's export are imported with the CLI; see
 [CLI admin](cli.md).
-<!-- CLAUDE 2026-09-09 — the browser build runs the same importer now, so
-     "with the CLI" is no longer the whole story. Reword as you like; delete
-     these markers when done. -->
 The in-browser build runs the same importer, so a CSV can be handed to it
 there too.
-<!-- /CLAUDE -->
 
 ## Protecting & recovering your data
 
