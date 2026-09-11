@@ -1,0 +1,84 @@
+{
+  "@context": [
+    "https://linkedsoftwaredependencies.org/bundles/npm/@solid/community-server/^7.0.0/components/context.jsonld",
+    "https://linkedsoftwaredependencies.org/bundles/npm/css-nextgraph/^0.0.0/components/context.jsonld"
+  ],
+  "import": [
+    "css:config/app/init/static-root.json",
+    "css:config/app/main/default.json",
+    "css:config/app/variables/default.json",
+    "css:config/http/handler/default.json",
+    "css:config/http/middleware/default.json",
+    "css:config/http/notifications/all.json",
+    "css:config/http/server-factory/http.json",
+    "css:config/http/static/default.json",
+    "css:config/identity/access/public.json",
+    "css:config/identity/email/default.json",
+    "css:config/identity/handler/default.json",
+    "css:config/identity/oidc/default.json",
+    "css:config/identity/ownership/token.json",
+    "css:config/identity/pod/static.json",
+    "css:config/ldp/authentication/dpop-bearer.json",
+    "css:config/ldp/authorization/webacl.json",
+    "css:config/ldp/handler/default.json",
+    "css:config/ldp/metadata-parser/default.json",
+    "css:config/ldp/metadata-writer/default.json",
+    "css:config/ldp/modes/default.json",
+    "css:config/storage/key-value/resource-store.json",
+    "css:config/storage/location/pod.json",
+    "css:config/storage/middleware/default.json",
+    "css:config/util/auxiliary/acl.json",
+    "css:config/util/identifiers/subdomain.json",
+    "css:config/util/index/default.json",
+    "css:config/util/logging/winston.json",
+    "css:config/util/representation-conversion/default.json",
+    "css:config/util/resource-locker/file.json",
+    "css:config/util/variables/default.json",
+    "cng:config/backend.json"
+  ],
+  "@graph": [
+    {
+      "comment": "A Solid server with pods on subdomains, each pod kept in NextGraph under a wallet of its own. Run it as: community-solid-server -c node_modules/css-nextgraph/config/server.json -m . -b https://pods.example/ -f ./data --walletsDir ./wallets --ngdPeerId <PeerId>"
+    },
+    {
+      "comment": "The first write to a new pod makes its wallet on the daemon (about eight seconds of key derivation and registration), longer than the stock six-second lock. Nothing after that comes close.",
+      "@type": "Override",
+      "overrideInstance": { "@id": "urn:solid-server:default:ResourceLocker" },
+      "overrideParameters": {
+        "@type": "WrappedExpiringReadWriteLocker",
+        "expiration": 30000
+      }
+    },
+    {
+      "comment": "The two values the backend needs, as command-line options.",
+      "@id": "urn:solid-server-app-setup:default:CliExtractor",
+      "@type": "YargsCliExtractor",
+      "parameters": [
+        {
+          "@type": "YargsParameter",
+          "name": "walletsDir",
+          "options": { "requiresArg": true, "type": "string", "describe": "Where each pod's NextGraph wallet file and mnemonic are kept." }
+        },
+        {
+          "@type": "YargsParameter",
+          "name": "ngdPeerId",
+          "options": { "requiresArg": true, "type": "string", "describe": "The NextGraph daemon's PeerId." }
+        }
+      ]
+    },
+    {
+      "@id": "urn:solid-server-app-setup:default:ShorthandResolver",
+      "@type": "CombinedShorthandResolver",
+      "resolvers": [
+        {
+          "CombinedShorthandResolver:_resolvers_key": "urn:css-nextgraph:default:variable:walletsDir",
+          "CombinedShorthandResolver:_resolvers_value": { "@type": "KeyExtractor", "key": "walletsDir" }
+        },
+        {
+          "CombinedShorthandResolver:_resolvers_key": "urn:css-nextgraph:default:variable:ngdPeerId",
+          "CombinedShorthandResolver:_resolvers_value": { "@type": "KeyExtractor", "key": "ngdPeerId" }
+        }
+      ]
+    }
+  ]
+}

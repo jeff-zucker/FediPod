@@ -1,0 +1,49 @@
+{
+  "name": "css-nextgraph",
+  "version": "0.1.0",
+  "description": "A Community Solid Server storage component that keeps every pod in NextGraph, encrypted under a wallet of its own.",
+  "license": "MIT",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "css-nextgraph": "bin/css-nextgraph.mjs"
+  },
+  "files": [
+    "dist",
+    "config",
+    "bin",
+    "README.md"
+  ],
+  "peerDependencies": {
+    "@solid/community-server": "^7.0.0"
+  },
+  "dependencies": {
+    "@ng-org/nextgraph": "0.1.2-alpha.1",
+    "arrayify-stream": "^2.0.1",
+    "n3": "^1.17.0"
+  },
+  "devDependencies": {
+    "@rdfjs/types": "^1.1.0",
+    "@solid/community-server": "^7.2.0",
+    "@types/n3": "^1.16.0",
+    "@types/node": "^20.0.0",
+    "componentsjs-generator": "^3.1.2",
+    "typescript": "^5.5.3"
+  },
+  "lsd:module": "https://linkedsoftwaredependencies.org/bundles/npm/css-nextgraph",
+  "lsd:components": "dist/components/components.jsonld",
+  "lsd:contexts": {
+    "https://linkedsoftwaredependencies.org/bundles/npm/css-nextgraph/^0.0.0/components/context.jsonld": "dist/components/context.jsonld"
+  },
+  "lsd:importPaths": {
+    "https://linkedsoftwaredependencies.org/bundles/npm/css-nextgraph/^0.0.0/components/": "dist/components/",
+    "https://linkedsoftwaredependencies.org/bundles/npm/css-nextgraph/^0.0.0/config/": "config/",
+    "https://linkedsoftwaredependencies.org/bundles/npm/css-nextgraph/^0.0.0/dist/": "dist/"
+  },
+  "scripts": {
+    "build": "tsc && npm run build:components",
+    "build:components": "componentsjs-generator -s src -c dist/components -r cng",
+    "test": "npm run build && node --test test/*.test.mjs",
+    "prepublishOnly": "npm test"
+  }
+}

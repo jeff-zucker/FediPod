@@ -1,0 +1,76 @@
+{
+  "@context": [
+    "https://linkedsoftwaredependencies.org/bundles/npm/@solid/community-server/^7.0.0/components/context.jsonld",
+    "https://linkedsoftwaredependencies.org/bundles/npm/css-nextgraph/^0.0.0/components/context.jsonld"
+  ],
+  "import": [
+    "css:config/storage/backend/data-accessors/file.json"
+  ],
+  "@graph": [
+    {
+      "comment": "The storage backend: pods live in NextGraph, CSS's own .internal/ records stay on disk. Replaces css:config/storage/backend/*.json in a server config."
+    },
+    {
+      "comment": "The accessor. args_walletsDir holds one wallet file and its mnemonic per pod root; args_ngdPeerId is the daemon's PeerId, printed on its first start; args_ngdPort its client port on this machine; args_converter is the server's own converter, which decides what is RDF (stored as triples) and what is bytes (stored as a file).",
+      "@id": "urn:css-nextgraph:default:DataAccessor",
+      "@type": "NextGraphDataAccessor",
+      "args_identifierStrategy": { "@id": "urn:solid-server:default:IdentifierStrategy" },
+      "args_walletsDir": { "@id": "urn:css-nextgraph:default:variable:walletsDir" },
+      "args_ngdPeerId": { "@id": "urn:css-nextgraph:default:variable:ngdPeerId" },
+      "args_ngdPort": 1440,
+      "args_converter": { "@id": "urn:solid-server:default:RepresentationConverter" }
+    },
+    {
+      "comment": "Set these two from the command line: --walletsDir and --ngdPeerId (see config/server.json for the variables).",
+      "@id": "urn:css-nextgraph:default:variable:walletsDir",
+      "@type": "Variable"
+    },
+    {
+      "@id": "urn:css-nextgraph:default:variable:ngdPeerId",
+      "@type": "Variable"
+    },
+
+    {
+      "comment": "Every known pod's wallet is opened when the server starts, not on its first request.",
+      "@id": "urn:solid-server:default:PrimaryParallelInitializer",
+      "@type": "ParallelHandler",
+      "handlers": [
+        {
+          "@type": "InitializableHandler",
+          "initializable": { "@id": "urn:css-nextgraph:default:DataAccessor" }
+        }
+      ]
+    },
+    {
+      "@id": "urn:solid-server:default:ResourceStore_Backend",
+      "@type": "RoutingResourceStore",
+      "rule": { "@id": "urn:css-nextgraph:default:RouterRule" }
+    },
+    {
+      "comment": ".internal/ (accounts, sign-up state) goes to files; everything else, on any origin, to NextGraph.",
+      "@id": "urn:css-nextgraph:default:RouterRule",
+      "@type": "InternalRouterRule",
+      "args_baseUrl": { "@id": "urn:solid-server:default:variable:baseUrl" },
+      "args_internalStore": { "@id": "urn:css-nextgraph:default:FileResourceStore" },
+      "args_podStore": { "@id": "urn:css-nextgraph:default:PodStore" }
+    },
+    {
+      "@id": "urn:css-nextgraph:default:FileResourceStore",
+      "@type": "DataAccessorBasedStore",
+      "identifierStrategy": { "@id": "urn:solid-server:default:IdentifierStrategy" },
+      "auxiliaryStrategy": { "@id": "urn:solid-server:default:AuxiliaryStrategy" },
+      "accessor": { "@id": "urn:solid-server:default:FileDataAccessor" },
+      "metadataStrategy": { "@id": "urn:solid-server:default:MetadataStrategy" }
+    },
+
+    {
+      "comment": "Every pod resource goes through the one accessor; its converter argument decides triples or bytes.",
+      "@id": "urn:css-nextgraph:default:PodStore",
+      "@type": "DataAccessorBasedStore",
+      "identifierStrategy": { "@id": "urn:solid-server:default:IdentifierStrategy" },
+      "auxiliaryStrategy": { "@id": "urn:solid-server:default:AuxiliaryStrategy" },
+      "accessor": { "@id": "urn:css-nextgraph:default:DataAccessor" },
+      "metadataStrategy": { "@id": "urn:solid-server:default:MetadataStrategy" }
+    }
+  ]
+}
