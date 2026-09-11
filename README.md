@@ -119,4 +119,3 @@ This package was created using a heavily hectored claude.
 ## License
 
 (c) Jeff Zucker, 2026; may be freely used with an MIT license.
-p
