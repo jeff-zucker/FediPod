@@ -26,7 +26,11 @@
     "gui.md",
     "cli.md",
     "groups.md",
-    "architecture.svg"
+    "architecture.svg",
+    "installed-agent.md",
+    "architecture.md",
+    "gateway.md",
+    "browser.svg"
   ],
   "scripts": {
     "start": "node bin/fedipod.mjs up",
