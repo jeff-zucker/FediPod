@@ -43937,9 +43937,6 @@ var HttpStorage = class {
   }
 };
 
-// lib/core/publisher.mjs
-init_node_crypto();
-
 // web/app/shims/node-fs.mjs
 var PKG = JSON.stringify({ version: "0.18.0", name: "fedipod" });
 var readFileSync = (p) => {
@@ -43958,63 +43955,9 @@ var unlinkSync = nope("unlinkSync");
 var rmSync = nope("rmSync");
 var node_fs_default = { readFileSync, existsSync, writeFileSync, mkdirSync, readdirSync, statSync, unlinkSync, rmSync };
 
-// lib/core/publisher.mjs
-init_wire();
-
-// lib/core/polls.mjs
+// lib/core/publisher/index.mjs
 init_node_crypto();
-var VOTES_DOC = "poll-votes.json";
-var MAX_OPTIONS = 4;
-var MAX_OPTION_CHARS = 50;
-var MIN_SECONDS = 5 * 60;
-var MAX_SECONDS = 2629746;
-function voterKey(actor) {
-  return node_crypto_default.createHash("sha256").update(String(actor)).digest("hex").slice(0, 16);
-}
-function isVoteShape(note) {
-  if (!note?.name || typeof note.name !== "string") return false;
-  const text = String(note.content ?? "").replace(/<[^>]*>/gu, "").trim();
-  return text === "";
-}
-function optionIndex(poll, name) {
-  const opts = poll?.options || [];
-  return opts.findIndex((o) => o.title === String(name));
-}
-function pollClosed(poll, now = Date.now()) {
-  if (!poll) return false;
-  if (poll.closed) return true;
-  return !!poll.expiresAt && Date.parse(poll.expiresAt) <= now;
-}
-function addVote(roster, key, index, { multiple = false } = {}) {
-  const had = roster[key] || [];
-  if (had.length && !multiple) return { roster, changed: false };
-  if (had.includes(index)) return { roster, changed: false };
-  return { roster: { ...roster, [key]: [...had, index] }, changed: true };
-}
-function tallyOf(roster, optionCount) {
-  const counts = new Array(optionCount).fill(0);
-  let voters = 0;
-  for (const picks of Object.values(roster || {})) {
-    let counted = false;
-    for (const i of picks) {
-      if (i >= 0 && i < optionCount) {
-        counts[i]++;
-        counted = true;
-      }
-    }
-    if (counted) voters++;
-  }
-  return { counts, voters, votes: counts.reduce((n, c) => n + c, 0) };
-}
-function withTally(poll, roster) {
-  const opts = poll?.options || [];
-  const { counts, voters } = tallyOf(roster, opts.length);
-  return {
-    ...poll,
-    options: opts.map((o, i) => ({ ...o, votes: counts[i] })),
-    votersCount: voters
-  };
-}
+init_wire();
 
 // lib/shared/ua.mjs
 var version = "0";
@@ -44034,7 +43977,7 @@ try {
 }
 var USER_AGENT = `fedipod/${version} (+https://github.com/jeff-zucker/FediPod)`;
 
-// lib/core/publisher.mjs
+// lib/core/publisher/index.mjs
 init_safefetch();
 
 // lib/pod/discovery.mjs
@@ -44143,31 +44086,9 @@ async function readPaged(pod, headUrl, { max = 1e4, alsoItems = false } = {}) {
   return items;
 }
 
-// lib/pod/outbox.mjs
-var writePage2 = (pod, pageUrl, doc, opts) => writePage(pod, pageUrl, doc, opts);
-var writeHead2 = (pod, urls, doc, opts) => writeHead(pod, urls.outbox, doc, opts);
-var dropPage2 = (pod, pageUrl) => dropPage(pod, pageUrl);
-var readPublished = (pod, urls) => readPaged(pod, urls.outbox, { max: 1e4 });
-
-// lib/pod/followers.mjs
-var writePage3 = (pod, pageUrl, doc, opts) => writePage(pod, pageUrl, doc, opts);
-var writeHead3 = (pod, urls, doc, opts) => writeHead(pod, urls.followers, doc, opts);
-var dropPage3 = (pod, pageUrl) => dropPage(pod, pageUrl);
-var readPublished2 = (pod, urls) => readPaged(pod, urls.followers, { max: 1e5, alsoItems: true });
-
-// lib/pod/following.mjs
-var write2 = (pod, urls, doc, opts) => writeFlat(pod, urls.following, doc, opts);
-
 // lib/pod/featured.mjs
-var write3 = (pod, urls, doc) => writeFlat(pod, urls.featured, doc, { publicRead: true });
+var write2 = (pod, urls, doc) => writeFlat(pod, urls.featured, doc, { publicRead: true });
 var writeModerators = (pod, urls, doc) => writeFlat(pod, urls.moderators, doc, { publicRead: true });
-
-// lib/pod/private.mjs
-async function writePending(pod, urls, { followers, following }) {
-  await writeFlat(pod, urls.pendingFollowers, followers);
-  await writeFlat(pod, urls.pendingFollowing, following);
-}
-var writeBlocked = (pod, urls, doc) => writeFlat(pod, urls.blocked, doc);
 
 // lib/pod/http.mjs
 var MAX_BYTES2 = 5 * 1024 * 1024;
@@ -44205,7 +44126,7 @@ async function readCapped2(res, max = MAX_BYTES2) {
 // lib/pod/policy.mjs
 var POLICY_TTL_MS = 5 * 6e4;
 var POLICY_MAX_BYTES = 256 * 1024;
-async function write4(pod, urls, doc) {
+async function write3(pod, urls, doc) {
   const url = urls.home + "ap/gateway-policy.json";
   await pod.putJson(url, doc, "application/json");
   await pod.setAcl(url, ["Read"]);
@@ -44217,7 +44138,7 @@ async function provisionContainer(pod, urls) {
   await pod.putJson(urls.notes + ".keep", { keep: true }, "application/json");
   await pod.setAcl(urls.notes, PUBLIC_READ4);
 }
-var write5 = (pod, noteId, doc) => pod.putJson(noteId, doc);
+var write4 = (pod, noteId, doc) => pod.putJson(noteId, doc);
 var writeCreate = (pod, createId, doc) => pod.putJson(createId, doc);
 var writeEmptyReplies = (pod, repliesId2, doc) => pod.putJson(repliesId2, doc);
 var readReplies = (pod, repliesId2) => pod.getJson(repliesId2);
@@ -44235,13 +44156,33 @@ async function list2(pod, urls) {
   return children.filter((c) => !/(-create|-replies)$/.test(c.url) && !c.url.endsWith(".keep")).map((c) => ({ ...c }));
 }
 
-// lib/pod/media.mjs
-var write6 = (pod, url, bytes, contentType) => pod.put(url, bytes, contentType);
+// lib/core/publisher/collections.mjs
+init_node_crypto();
+init_wire();
 
-// lib/core/publisher.mjs
-var ACCEPT_AP = 'application/activity+json, application/ld+json; profile="https://www.w3.org/ns/activitystreams"';
-var REBUILD_MAX_PER_RUN = 200;
-var POLL_REWRITE_MS = 1e4;
+// lib/pod/outbox.mjs
+var writePage2 = (pod, pageUrl, doc, opts) => writePage(pod, pageUrl, doc, opts);
+var writeHead2 = (pod, urls, doc, opts) => writeHead(pod, urls.outbox, doc, opts);
+var dropPage2 = (pod, pageUrl) => dropPage(pod, pageUrl);
+var readPublished = (pod, urls) => readPaged(pod, urls.outbox, { max: 1e4 });
+
+// lib/pod/followers.mjs
+var writePage3 = (pod, pageUrl, doc, opts) => writePage(pod, pageUrl, doc, opts);
+var writeHead3 = (pod, urls, doc, opts) => writeHead(pod, urls.followers, doc, opts);
+var dropPage3 = (pod, pageUrl) => dropPage(pod, pageUrl);
+var readPublished2 = (pod, urls) => readPaged(pod, urls.followers, { max: 1e5, alsoItems: true });
+
+// lib/pod/following.mjs
+var write5 = (pod, urls, doc, opts) => writeFlat(pod, urls.following, doc, opts);
+
+// lib/pod/private.mjs
+async function writePending(pod, urls, { followers, following }) {
+  await writeFlat(pod, urls.pendingFollowers, followers);
+  await writeFlat(pod, urls.pendingFollowing, following);
+}
+var writeBlocked = (pod, urls, doc) => writeFlat(pod, urls.blocked, doc);
+
+// lib/core/publisher/collections.mjs
 var ALL_COLLECTIONS = {
   followers: true,
   following: true,
@@ -44250,8 +44191,742 @@ var ALL_COLLECTIONS = {
   pending: true,
   blocked: true
 };
+async function publishOutbox(publisher, outbox, { acls = false, force = false } = {}) {
+  const { urls } = publisher;
+  const seen = publisher.store.read("published.json", {});
+  const { pages, index } = outboxPaging(outbox, seen.outboxIndex || []);
+  const before = force ? {} : seen.outboxPages || {};
+  const after = {};
+  let wrote = 0;
+  for (let i = 0; i < pages.length; i++) {
+    const n = i + 1;
+    const doc = outboxPage(urls.outbox, n, pages[i]);
+    const digest = node_crypto_default.createHash("sha256").update(JSON.stringify(doc)).digest("hex").slice(0, 16);
+    after[n] = digest;
+    if (before[n] === digest) continue;
+    await writePage2(
+      publisher.remote,
+      outboxPageId(urls.outbox, n),
+      doc,
+      { publicRead: !before[n] || acls }
+    );
+    wrote++;
+  }
+  const stale = Object.keys(seen.outboxPages || {}).map(Number).filter((n) => Number.isFinite(n) && n > pages.length);
+  for (const n of stale) {
+    await dropPage2(publisher.remote, outboxPageId(urls.outbox, n));
+  }
+  await writeHead2(
+    publisher.remote,
+    urls,
+    outboxHead(urls.outbox, outbox.length, pages.length),
+    { publicRead: acls }
+  );
+  publisher.store.write(
+    "published.json",
+    { ...publisher.store.read("published.json", {}), outboxPages: after, outboxIndex: index }
+  );
+  return wrote;
+}
+function readPublishedOutbox(publisher) {
+  return readPublished(publisher.remote, publisher.urls);
+}
+async function publishFollowers(publisher, actors, { acls = false, force = false } = {}) {
+  const { urls } = publisher;
+  const seen = publisher.store.read("published.json", {});
+  const { pages, index } = followersPaging(actors, seen.followersIndex || []);
+  const before = force ? {} : seen.followersPages || {};
+  const after = {};
+  for (let i = 0; i < pages.length; i++) {
+    const n = i + 1;
+    const doc = followersPage(urls.followers, n, pages[i], pages.length);
+    const digest = node_crypto_default.createHash("sha256").update(JSON.stringify(doc)).digest("hex").slice(0, 16);
+    after[n] = digest;
+    if (before[n] === digest) continue;
+    await writePage3(
+      publisher.remote,
+      followersPageId(urls.followers, n),
+      doc,
+      { publicRead: !before[n] || acls }
+    );
+  }
+  const stale = Object.keys(seen.followersPages || {}).map(Number).filter((n) => Number.isFinite(n) && n > pages.length);
+  for (const n of stale) {
+    await dropPage3(publisher.remote, followersPageId(urls.followers, n));
+  }
+  await writeHead3(
+    publisher.remote,
+    urls,
+    followersHead(urls.followers, actors.length, pages.length),
+    { publicRead: acls }
+  );
+  publisher.store.write(
+    "published.json",
+    { ...publisher.store.read("published.json", {}), followersPages: after, followersIndex: index }
+  );
+}
+function readPublishedFollowers(publisher) {
+  return readPublished2(publisher.remote, publisher.urls);
+}
+async function publishCollections(publisher, which = ALL_COLLECTIONS) {
+  const { urls } = publisher;
+  const contacts = publisher.store.getContacts();
+  if (which.followers) {
+    const knownF = publisher.store.read("published.json", {}).followersIndex;
+    if (which.force || !Array.isArray(knownF)) await publisher.reconcileFollowers(contacts);
+    const actors = contacts.followers.filter((f) => !f.bsky).map((f) => f.actor);
+    await publisher.publishFollowers(actors, { acls: which.acls, force: which.force });
+  }
+  if (which.following) {
+    await write5(
+      publisher.remote,
+      urls,
+      orderedCollection(urls.following, contacts.following.filter((f) => f.accepted).map((f) => f.actor)),
+      { publicRead: which.acls }
+    );
+  }
+  if (which.pending) await publisher.publishPending();
+  if (which.blocked) await publisher.publishBlocked();
+  if (which.outbox) {
+    const outbox = publisher.store.read("outbox.json", []);
+    const known2 = publisher.store.read("published.json", {}).outboxIndex;
+    if (which.force || !Array.isArray(known2)) await publisher.reconcileOutbox(outbox);
+    await publisher.publishOutbox(outbox, { acls: which.acls, force: which.force });
+  }
+}
+async function publishPending(publisher) {
+  if (await publisher.privateReady() !== true) return;
+  const { urls } = publisher;
+  const contacts = publisher.store.getContacts();
+  await writePending(publisher.remote, urls, {
+    followers: orderedCollection(
+      urls.pendingFollowers,
+      publisher.store.getRequests().filter((r) => r.activity && !r.bsky).map((r) => r.activity)
+    ),
+    following: orderedCollection(
+      urls.pendingFollowing,
+      contacts.following.filter((f) => !f.accepted && f.followActivity).map((f) => f.followActivity).reverse()
+    )
+  });
+}
+async function publishBlocked(publisher) {
+  if (await publisher.privateReady() !== true) return;
+  const { urls } = publisher;
+  const actors = [...publisher.store.getBlocklist().actors || []].reverse();
+  await writeBlocked(publisher.remote, urls, orderedCollection(urls.blocked, actors));
+}
+async function recordOutbox(publisher, item) {
+  const outbox = publisher.store.read("outbox.json", []);
+  outbox.unshift(item);
+  publisher.store.write("outbox.json", outbox);
+  await publisher.publishOutbox(outbox);
+}
+async function unrecordOutbox(publisher, matches) {
+  const before = publisher.store.read("outbox.json", []);
+  const outbox = before.filter((i) => !matches(i));
+  const gone = before.filter((i) => matches(i)).map((i) => typeof i === "string" ? i : i?.id).filter(Boolean);
+  if (gone.length) {
+    const marks = publisher.store.read("outbox-removed.json", []).filter((r) => !gone.includes(r.id));
+    const at = (/* @__PURE__ */ new Date()).toISOString();
+    publisher.store.write(
+      "outbox-removed.json",
+      [...marks, ...gone.map((id) => ({ id, at }))].slice(-500)
+    );
+  }
+  publisher.store.write("outbox.json", outbox);
+  await publisher.publishOutbox(outbox);
+}
+async function publishFeatured(publisher) {
+  const ids = publisher.store.getStatuses().filter((s) => s.kind === "post" && s.pinned).map((s) => s.noteId);
+  await write2(publisher.remote, publisher.urls, orderedCollection(publisher.urls.featured, ids));
+  return ids.length;
+}
+
+// lib/core/publisher/restore.mjs
+init_wire();
+var ACCEPT_AP = 'application/activity+json, application/ld+json; profile="https://www.w3.org/ns/activitystreams"';
+var REBUILD_MAX_PER_RUN = 200;
+async function reconcileFollowers(publisher, contacts) {
+  let published = [];
+  try {
+    published = await publisher.readPublishedFollowers() || [];
+  } catch {
+    return 0;
+  }
+  const known2 = new Set(contacts.followers.map((f) => f.actor));
+  const removed = new Set((contacts.removedFollowers || []).map((r) => r.actor));
+  const missing = published.filter((a) => typeof a === "string" && !known2.has(a) && !removed.has(a));
+  if (!missing.length) return 0;
+  let recovered = 0;
+  for (const actor of missing.slice(0, 200)) {
+    try {
+      const res = await publisher.deliverer.signedFetch(actor, { headers: { accept: ACCEPT_AP } });
+      if (!res.ok) continue;
+      const doc = await res.json();
+      if (!doc?.inbox) continue;
+      contacts.followers.push({
+        actor,
+        inbox: doc.inbox,
+        sharedInbox: doc.endpoints?.sharedInbox || null,
+        recovered: true,
+        // Said explicitly, because onUndo reads it: the pod publishes WHO
+        // follows, never the id of the Follow that did it, so a recovered
+        // record has nothing an Undo can be matched against and must not be
+        // evictable by one naming anything at all.
+        followId: null
+      });
+      recovered++;
+    } catch {
+    }
+  }
+  if (recovered) {
+    publisher.store.setContacts(contacts);
+    publisher.log(`reconciled ${recovered} follower(s) the pod knew about and this machine did not \u2014 a restored or copied state was behind`);
+  }
+  return recovered;
+}
+async function reconcileOutbox(publisher, outbox) {
+  let published = [];
+  try {
+    published = await publisher.readPublishedOutbox() || [];
+  } catch {
+    return 0;
+  }
+  if (!Array.isArray(published) || !published.length) return 0;
+  const idOf = (i) => typeof i === "string" ? i : i?.id || null;
+  const known2 = new Set(outbox.map(idOf).filter(Boolean));
+  const removed = new Set(publisher.store.read("outbox-removed.json", []).map((r) => r.id));
+  const missing = published.filter((i) => {
+    const id = idOf(i);
+    return id && !known2.has(id) && !removed.has(id);
+  });
+  if (!missing.length) return 0;
+  outbox.push(...missing);
+  publisher.store.write("outbox.json", outbox);
+  publisher.log(`reconciled ${missing.length} outbox entr(ies) the pod carried and this machine did not`);
+  return missing.length;
+}
+async function rebuildStatuses(publisher, { fromNotes = false } = {}) {
+  const { urls } = publisher;
+  const ids = /* @__PURE__ */ new Set();
+  const boosts = [];
+  let indexed = false;
+  const published = await publisher.readPublishedOutbox().catch(() => null);
+  if (published) {
+    indexed = true;
+    for (const item of published) {
+      if (typeof item === "string") {
+        if (item.startsWith(urls.notes)) ids.add(item);
+      } else if (item?.type === "Announce") boosts.push(item);
+    }
+  }
+  if (fromNotes) {
+    for (const child of await list2(publisher.remote, urls).catch(() => [])) {
+      ids.add(child.url);
+    }
+    indexed = true;
+  }
+  if (!indexed) return { indexed: 0, recovered: 0, reblogs: 0, landed: false, why: "the pod would not answer for its outbox" };
+  const statuses = publisher.store.getStatuses();
+  const have = new Set(statuses.map((s) => s.noteId));
+  const removed = new Set(publisher.store.read("outbox-removed.json", []).map((r) => r.id));
+  const recovered = [];
+  let budget = REBUILD_MAX_PER_RUN;
+  for (const id of ids) {
+    if (budget <= 0) {
+      publisher.log(`rebuild: stopping at ${REBUILD_MAX_PER_RUN} this run \u2014 run it again for the rest`);
+      break;
+    }
+    if (have.has(id) || removed.has(id)) continue;
+    budget--;
+    const note = await read(publisher.remote, id).catch(() => null);
+    if (note?.type !== "Note" || note.id !== id || note.attributedTo !== urls.actor) continue;
+    const attachments = attachmentsOf(note);
+    const mentions = (Array.isArray(note.tag) ? note.tag : []).filter((t) => t?.type === "Mention" && t.href).map((t) => ({ href: t.href, name: t.name }));
+    recovered.push({
+      noteId: note.id,
+      actor: urls.actor,
+      content: note.content || "",
+      published: note.published || null,
+      ...note.inReplyTo ? { inReplyTo: note.inReplyTo } : {},
+      kind: "post",
+      slug: note.id.slice(urls.notes.length),
+      ...attachments.length ? { attachments } : {},
+      ...mentions.length ? { mentions } : {},
+      recovered: true
+    });
+  }
+  const merged = [...statuses, ...recovered];
+  let reblogs = 0;
+  for (const act of boosts) {
+    const object = typeof act.object === "string" ? act.object : act.object?.id;
+    const s = object && merged.find((x) => x.noteId === object);
+    if (!s || s.reblogged) continue;
+    s.reblogged = true;
+    s.announceActivity = act;
+    reblogs++;
+  }
+  if (!recovered.length && !reblogs) return { indexed: ids.size, recovered: 0, reblogs: 0, landed: true };
+  merged.sort((a, b) => String(b.published || "").localeCompare(String(a.published || "")));
+  const kept = merged.slice(0, 1e3);
+  publisher.store.write("statuses.json", kept);
+  const landed = await publisher.store.commit();
+  publisher.log(`rebuilt ${recovered.length} post(s) and ${reblogs} boost(s) from the pod${landed ? "" : " \u2014 THE STATE WRITE DID NOT LAND"}`);
+  return {
+    indexed: ids.size,
+    recovered: recovered.length,
+    reblogs,
+    landed,
+    dropped: Math.max(0, merged.length - kept.length)
+  };
+}
+
+// lib/core/publisher/notes.mjs
+init_node_crypto();
+init_wire();
+async function ensureMediaContainer(publisher) {
+  if (publisher._mediaReady) return;
+  if (await exists(publisher.remote, publisher.urls.media)) {
+    publisher._mediaReady = true;
+    return;
+  }
+  await provisionPublic(publisher.remote, publisher.urls.media);
+  publisher._mediaReady = true;
+}
+function containerExists(publisher, base) {
+  return exists(publisher.remote, base);
+}
+async function ensurePrivateContainer(publisher) {
+  if (publisher._privateContainer) return;
+  if (await exists(publisher.remote, publisher.urls.privateNotes)) {
+    publisher._privateContainer = true;
+    return;
+  }
+  await provisionOwnerOnly(publisher.remote, publisher.urls.privateNotes);
+  publisher._privateContainer = true;
+}
+async function privateReady(publisher) {
+  if (publisher._privateVerdict !== void 0) return publisher._privateVerdict;
+  try {
+    await publisher.ensurePrivateContainer();
+    const pn = publisher.urls.toPod ? publisher.urls.toPod(publisher.urls.privateNotes) : publisher.urls.privateNotes;
+    const verdict = await probePrivateEnforcement(publisher.probeFetch || fetch, pn + ".keep");
+    publisher._privateVerdict = verdict === true ? true : `${verdict} \u2014 private posts stay off it`;
+    return publisher._privateVerdict;
+  } catch (e) {
+    return `could not verify that the pod protects private posts (${e.message})`;
+  }
+}
+async function mentionsFor(publisher, content, inReplyTo) {
+  const inText = new Set(mentionsIn(content));
+  const carried = inReplyTo ? (publisher.store.getStatuses().find((s) => s.noteId === inReplyTo)?.mentions || []).map((m) => String(m.name || "").replace(/^@/, "")).filter(Boolean) : [];
+  const mentions = [];
+  for (const handle of [.../* @__PURE__ */ new Set([...inText, ...carried])]) {
+    if (!publisher.resolveMention) break;
+    const doc = await publisher.resolveMention(handle).catch(() => null);
+    if (!doc?.id) {
+      publisher.log(`mention @${handle} did not resolve \u2014 left as text`);
+      continue;
+    }
+    if (!inText.has(handle) && doc.type !== "Group") continue;
+    mentions.push({ handle, actor: doc.id, page: doc.url || null, inbox: doc.endpoints?.sharedInbox || doc.inbox });
+  }
+  return mentions;
+}
+async function publishNote(publisher, content, { inReplyTo, attachments, visibility = "public", spoilerText = null } = {}) {
+  const { urls } = publisher;
+  const priv = visibility === "private" || visibility === "direct";
+  if (priv) {
+    const ready = await publisher.privateReady();
+    if (ready !== true) throw new Error(ready);
+  }
+  const published = (/* @__PURE__ */ new Date()).toISOString();
+  const slug = published.slice(0, 10) + "-" + node_crypto_default.randomBytes(4).toString("hex");
+  const mentions = await publisher._mentionsFor(content, inReplyTo);
+  const note = noteDoc({
+    urls,
+    slug,
+    content,
+    published,
+    inReplyTo,
+    attachments,
+    mentions,
+    visibility,
+    summary: spoilerText,
+    container: priv ? urls.privateNotes : urls.notes
+  });
+  await write4(publisher.remote, note.id, note);
+  await writeEmptyReplies(
+    publisher.remote,
+    repliesId(note.id),
+    collection(repliesId(note.id), [])
+  );
+  if (!priv) await publisher.recordOutbox(note.id);
+  publisher.store.addStatus({
+    noteId: note.id,
+    actor: urls.actor,
+    content: note.content,
+    published,
+    inReplyTo,
+    kind: "post",
+    slug,
+    text: content,
+    visibility,
+    ...spoilerText ? { spoiler: spoilerText } : {},
+    ...attachments?.length ? { attachments } : {},
+    ...note.tag?.length ? { mentions: note.tag.map((t) => ({ href: t.href, name: t.name })) } : {}
+  });
+  const create = createActivity(note, urls);
+  await writeCreate(publisher.remote, create.id, create);
+  const contacts = publisher.store.getContacts();
+  const inboxes = [...new Set([
+    ...visibility === "direct" ? [] : contacts.followers.map((f) => f.sharedInbox || f.inbox),
+    ...mentions.map((m) => m.inbox)
+  ].filter(Boolean))];
+  await publisher.deliverer.deliverToAll(inboxes, create);
+  publisher.log(`note published: ${note.id} \u2192 ${inboxes.length} inbox(es)`);
+  if (visibility === "public" && publisher.atproto?.connected() && publisher.store.getConfig()?.atproto?.crossPost) {
+    try {
+      const mirror = await publisher.atproto.crossPost(
+        { text: content, published, attachments },
+        { noteUrl: note.id }
+      );
+      publisher.store.updateStatus(note.id, { atproto: mirror });
+      publisher.log(`cross-posted to bluesky: ${mirror.uri}${mirror.truncated ? " (truncated, links back)" : ""}`);
+    } catch (e) {
+      publisher.store.updateStatus(note.id, { atproto: { error: e.message } });
+      publisher.log(`bluesky cross-post failed: ${e.message}`);
+    }
+  }
+  return note;
+}
+async function updateNote(publisher, s, { content, spoilerText = null, attachments = null } = {}) {
+  const { urls } = publisher;
+  const updated = (/* @__PURE__ */ new Date()).toISOString();
+  const inText = new Set(mentionsIn(content));
+  const mentions = [];
+  for (const handle of inText) {
+    if (!publisher.resolveMention) break;
+    const doc = await publisher.resolveMention(handle).catch(() => null);
+    if (!doc?.id) {
+      publisher.log(`mention @${handle} did not resolve \u2014 left as text`);
+      continue;
+    }
+    mentions.push({ handle, actor: doc.id, page: doc.url || null, inbox: doc.endpoints?.sharedInbox || doc.inbox });
+  }
+  const atts = attachments ?? s.attachments ?? [];
+  const container = String(s.noteId).startsWith(urls.privateNotes) ? urls.privateNotes : urls.notes;
+  const slug = s.slug || String(s.noteId).slice(container.length);
+  const note = noteDoc({
+    urls,
+    slug,
+    content,
+    published: s.published,
+    inReplyTo: s.inReplyTo,
+    attachments: atts,
+    mentions,
+    visibility: s.visibility || "public",
+    summary: spoilerText,
+    updated,
+    container
+  });
+  await write4(publisher.remote, note.id, note);
+  await writeCreate(publisher.remote, createActivityId(note.id), createActivity(note, urls));
+  const patched = publisher.store.updateStatus(s.noteId, {
+    content: note.content,
+    text: content,
+    editedAt: updated,
+    spoiler: spoilerText || void 0,
+    attachments: atts.length ? atts : void 0,
+    mentions: note.tag?.length ? note.tag.map((t) => ({ href: t.href, name: t.name })) : void 0
+  });
+  const update = updateActivity(note, urls);
+  const contacts = publisher.store.getContacts();
+  const inboxes = [...new Set([
+    ...s.visibility === "direct" ? [] : contacts.followers.map((f) => f.sharedInbox || f.inbox),
+    ...mentions.map((m) => m.inbox)
+  ].filter(Boolean))];
+  await publisher.deliverer.deliverToAll(inboxes, update);
+  publisher.log(`note edited: ${note.id} \u2192 ${inboxes.length} inbox(es)`);
+  return patched;
+}
+
+// lib/core/publisher/questions.mjs
+init_node_crypto();
+init_wire();
+
+// lib/core/polls.mjs
+init_node_crypto();
+var VOTES_DOC = "poll-votes.json";
+var MAX_OPTIONS = 4;
+var MAX_OPTION_CHARS = 50;
+var MIN_SECONDS = 5 * 60;
+var MAX_SECONDS = 2629746;
+function voterKey(actor) {
+  return node_crypto_default.createHash("sha256").update(String(actor)).digest("hex").slice(0, 16);
+}
+function isVoteShape(note) {
+  if (!note?.name || typeof note.name !== "string") return false;
+  const text = String(note.content ?? "").replace(/<[^>]*>/gu, "").trim();
+  return text === "";
+}
+function optionIndex(poll, name) {
+  const opts = poll?.options || [];
+  return opts.findIndex((o) => o.title === String(name));
+}
+function pollClosed(poll, now = Date.now()) {
+  if (!poll) return false;
+  if (poll.closed) return true;
+  return !!poll.expiresAt && Date.parse(poll.expiresAt) <= now;
+}
+function addVote(roster, key, index, { multiple = false } = {}) {
+  const had = roster[key] || [];
+  if (had.length && !multiple) return { roster, changed: false };
+  if (had.includes(index)) return { roster, changed: false };
+  return { roster: { ...roster, [key]: [...had, index] }, changed: true };
+}
+function tallyOf(roster, optionCount) {
+  const counts = new Array(optionCount).fill(0);
+  let voters = 0;
+  for (const picks of Object.values(roster || {})) {
+    let counted = false;
+    for (const i of picks) {
+      if (i >= 0 && i < optionCount) {
+        counts[i]++;
+        counted = true;
+      }
+    }
+    if (counted) voters++;
+  }
+  return { counts, voters, votes: counts.reduce((n, c) => n + c, 0) };
+}
+function withTally(poll, roster) {
+  const opts = poll?.options || [];
+  const { counts, voters } = tallyOf(roster, opts.length);
+  return {
+    ...poll,
+    options: opts.map((o, i) => ({ ...o, votes: counts[i] })),
+    votersCount: voters
+  };
+}
+
+// lib/core/publisher/questions.mjs
+var POLL_REWRITE_MS = 1e4;
+async function publishQuestion(publisher, content, {
+  options = [],
+  multiple = false,
+  expiresAt = null,
+  inReplyTo = void 0,
+  visibility = "public",
+  spoilerText = null
+} = {}) {
+  const { urls } = publisher;
+  const priv = visibility === "private" || visibility === "direct";
+  if (priv) {
+    const ready = await publisher.privateReady();
+    if (ready !== true) throw new Error(ready);
+  }
+  const titles = [].concat(options).map((o) => String(o ?? "").trim()).filter(Boolean);
+  if (titles.length < 2) throw new Error("a poll needs at least two options");
+  if (new Set(titles).size !== titles.length) throw new Error("a poll\u2019s options must differ from one another");
+  if (titles.length > MAX_OPTIONS) throw new Error(`a poll takes at most ${MAX_OPTIONS} options`);
+  if (titles.some((t) => t.length > MAX_OPTION_CHARS)) {
+    throw new Error(`a poll option is at most ${MAX_OPTION_CHARS} characters`);
+  }
+  if (expiresAt) {
+    const ends = Date.parse(expiresAt);
+    if (!Number.isFinite(ends)) throw new Error("the closing time is not a date");
+    const seconds = (ends - Date.now()) / 1e3;
+    if (seconds < MIN_SECONDS || seconds > MAX_SECONDS) {
+      throw new Error(`a poll runs between ${MIN_SECONDS} and ${MAX_SECONDS} seconds`);
+    }
+  }
+  const published = (/* @__PURE__ */ new Date()).toISOString();
+  const slug = published.slice(0, 10) + "-" + node_crypto_default.randomBytes(4).toString("hex");
+  const mentions = await publisher._mentionsFor(content, inReplyTo);
+  const poll = {
+    multiple: !!multiple,
+    expiresAt: expiresAt || null,
+    closed: null,
+    options: titles.map((title) => ({ title, votes: 0 })),
+    votersCount: 0,
+    // Resolved once, here: a tally rewrite must not cost a webfinger lookup
+    // per vote for people the poll named.
+    mentionInboxes: [...new Set(mentions.map((m) => m.inbox).filter(Boolean))]
+  };
+  const question = questionDoc({
+    urls,
+    slug,
+    content,
+    published,
+    inReplyTo,
+    attachments: [],
+    mentions,
+    visibility,
+    summary: spoilerText,
+    container: priv ? urls.privateNotes : urls.notes,
+    options: poll.options,
+    multiple: poll.multiple,
+    endTime: poll.expiresAt,
+    votersCount: 0
+  });
+  await write4(publisher.remote, question.id, question);
+  await writeEmptyReplies(
+    publisher.remote,
+    repliesId(question.id),
+    collection(repliesId(question.id), [])
+  );
+  if (!priv) await publisher.recordOutbox(question.id);
+  publisher.store.addStatus({
+    noteId: question.id,
+    actor: urls.actor,
+    content: question.content,
+    published,
+    kind: "post",
+    slug,
+    text: content,
+    visibility,
+    poll,
+    inReplyTo,
+    ...spoilerText ? { spoiler: spoilerText } : {},
+    ...question.tag?.length ? { mentions: question.tag.map((t) => ({ href: t.href, name: t.name })) } : {}
+  });
+  const create = publisher._pollActivity("Create", question, createActivityId(question.id));
+  await writeCreate(publisher.remote, create.id, create);
+  const contacts = publisher.store.getContacts();
+  const inboxes = [...new Set([
+    ...visibility === "direct" ? [] : contacts.followers.map((f) => f.sharedInbox || f.inbox),
+    ...poll.mentionInboxes
+  ].filter(Boolean))];
+  await publisher.deliverer.deliverToAll(inboxes, create);
+  publisher.log(`poll published: ${question.id} (${titles.length} options) \u2192 ${inboxes.length} inbox(es)`);
+  return question;
+}
+function pollActivity(publisher, type, question, id) {
+  const { "@context": ctx, ...object } = question;
+  return {
+    "@context": ctx,
+    id,
+    type,
+    actor: publisher.urls.actor,
+    published: question.published,
+    to: question.to,
+    cc: question.cc,
+    object
+  };
+}
+async function recordVote(publisher, questionId, actor, optionName) {
+  const s = publisher.store.getStatuses().find((x) => x.noteId === questionId);
+  if (!s?.poll || s.kind !== "post" || s.actor !== publisher.urls.actor) return false;
+  if (pollClosed(s.poll)) return false;
+  const index = optionIndex(s.poll, optionName);
+  if (index < 0) return false;
+  const all = publisher.store.read(VOTES_DOC, {});
+  const { roster, changed } = addVote(
+    all[questionId] || {},
+    voterKey(actor),
+    index,
+    { multiple: !!s.poll.multiple }
+  );
+  if (!changed) return false;
+  publisher.store.write(VOTES_DOC, { ...all, [questionId]: roster });
+  publisher.store.updateStatus(questionId, { poll: withTally(s.poll, roster) });
+  publisher._pollDirty(questionId);
+  return true;
+}
+function pollDirty(publisher, questionId) {
+  if (publisher.pollTimers.has(questionId)) return;
+  const t = setTimeout(() => {
+    publisher.pollTimers.delete(questionId);
+    publisher.republishPoll(questionId).catch((e) => publisher.log(`poll rewrite: ${e.message}`));
+  }, POLL_REWRITE_MS);
+  t.unref?.();
+  publisher.pollTimers.set(questionId, t);
+}
+async function republishPoll(publisher, questionId, { closing = null } = {}) {
+  const s = publisher.store.getStatuses().find((x) => x.noteId === questionId);
+  if (!s?.poll) return null;
+  const { urls } = publisher;
+  const roster = publisher.store.read(VOTES_DOC, {})[questionId] || {};
+  const shut = closing || s.poll.closed;
+  const counted = shut && !Object.keys(roster).length ? s.poll : withTally(s.poll, roster);
+  const poll = { ...counted, ...closing ? { closed: closing } : {} };
+  const container = String(s.noteId).startsWith(urls.privateNotes) ? urls.privateNotes : urls.notes;
+  const slug = s.slug || String(s.noteId).slice(container.length);
+  const mentions = (s.mentions || []).map((m) => ({
+    handle: String(m.name || "").replace(/^@/, ""),
+    actor: m.href,
+    page: null,
+    inbox: null
+  }));
+  const question = questionDoc({
+    urls,
+    slug,
+    content: s.text ?? "",
+    published: s.published,
+    inReplyTo: s.inReplyTo,
+    attachments: [],
+    mentions,
+    visibility: s.visibility || "public",
+    summary: s.spoiler || null,
+    container,
+    options: poll.options,
+    multiple: !!poll.multiple,
+    endTime: poll.expiresAt,
+    closed: poll.closed,
+    votersCount: poll.votersCount || 0
+  });
+  await write4(publisher.remote, question.id, question);
+  await writeCreate(
+    publisher.remote,
+    createActivityId(question.id),
+    publisher._pollActivity("Create", question, createActivityId(question.id))
+  );
+  publisher.store.updateStatus(questionId, { poll });
+  const stamp = node_crypto_default.createHash("sha256").update(JSON.stringify([
+    poll.options.map((o) => o.votes || 0),
+    poll.votersCount || 0,
+    poll.closed || ""
+  ])).digest("hex").slice(0, 12);
+  const update = publisher._pollActivity("Update", question, `${question.id}#poll-${stamp}`);
+  const contacts = publisher.store.getContacts();
+  const inboxes = [...new Set([
+    ...s.visibility === "direct" ? [] : contacts.followers.map((f) => f.sharedInbox || f.inbox),
+    ...s.poll.mentionInboxes || []
+  ].filter(Boolean))];
+  await publisher.deliverer.deliverToAll(inboxes, update);
+  publisher.log(`poll ${closing ? "closed" : "count published"}: ${question.id} \u2192 ${inboxes.length} inbox(es)`);
+  return poll;
+}
+async function closeDuePolls(publisher, now = Date.now()) {
+  const due = publisher.store.getStatuses().filter((s) => s.kind === "post" && s.poll && !s.poll.closed && s.poll.expiresAt && Date.parse(s.poll.expiresAt) <= now);
+  for (const s of due) {
+    const closed = new Date(Math.min(now, Date.parse(s.poll.expiresAt) || now)).toISOString();
+    clearTimeout(publisher.pollTimers.get(s.noteId));
+    publisher.pollTimers.delete(s.noteId);
+    publisher.store.updateStatus(s.noteId, { poll: { ...s.poll, closed } });
+    const done = await publisher.republishPoll(s.noteId, { closing: closed }).catch((e) => {
+      publisher.log(`poll close ${s.noteId}: ${e.message}`);
+      return null;
+    });
+    if (done) {
+      const all = publisher.store.read(VOTES_DOC, {});
+      if (all[s.noteId]) {
+        delete all[s.noteId];
+        publisher.store.write(VOTES_DOC, all);
+      }
+    }
+  }
+  return due.length;
+}
+function stopPolls(publisher) {
+  for (const t of publisher.pollTimers.values()) clearTimeout(t);
+  publisher.pollTimers.clear();
+}
+
+// lib/core/publisher/index.mjs
 var AGENT_VERSION = JSON.parse(node_fs_default.readFileSync(
-  node_path_default.join(node_path_default.dirname(fileURLToPath(import.meta.url)), "../../package.json"),
+  node_path_default.join(node_path_default.dirname(fileURLToPath(import.meta.url)), "../../../package.json"),
   "utf8"
 )).version;
 var Publisher = class {
@@ -44559,341 +45234,6 @@ var Publisher = class {
     this.log(`moved to ${target}: Move sent to ${inboxes.length} inbox(es), actor now advertises movedTo`);
     return { inboxes: inboxes.length, target, movedAt: at };
   }
-  // Anyone the pod says follows us that we have no record of, and never
-  // deliberately removed. In the steady state there is nobody: the pod's list is
-  // written from this one. They appear when the local half is BEHIND the pod —
-  // a restored backup, a home copied off a dead machine — and republishing
-  // blindly would delete them from the wire and, worse, stop delivering to them.
-  //
-  // Removals are what makes this safe to do unconditionally: `dropFollower`
-  // records every unfollow, ejection and account deletion, so a returning name
-  // is either genuinely still a follower or genuinely a mistake we made.
-  async reconcileFollowers(contacts) {
-    let published = [];
-    try {
-      published = await this.readPublishedFollowers() || [];
-    } catch {
-      return 0;
-    }
-    const known2 = new Set(contacts.followers.map((f) => f.actor));
-    const removed = new Set((contacts.removedFollowers || []).map((r) => r.actor));
-    const missing = published.filter((a) => typeof a === "string" && !known2.has(a) && !removed.has(a));
-    if (!missing.length) return 0;
-    let recovered = 0;
-    for (const actor of missing.slice(0, 200)) {
-      try {
-        const res = await this.deliverer.signedFetch(actor, { headers: { accept: ACCEPT_AP } });
-        if (!res.ok) continue;
-        const doc = await res.json();
-        if (!doc?.inbox) continue;
-        contacts.followers.push({
-          actor,
-          inbox: doc.inbox,
-          sharedInbox: doc.endpoints?.sharedInbox || null,
-          recovered: true,
-          // Said explicitly, because onUndo reads it: the pod publishes WHO
-          // follows, never the id of the Follow that did it, so a recovered
-          // record has nothing an Undo can be matched against and must not be
-          // evictable by one naming anything at all.
-          followId: null
-        });
-        recovered++;
-      } catch {
-      }
-    }
-    if (recovered) {
-      this.store.setContacts(contacts);
-      this.log(`reconciled ${recovered} follower(s) the pod knew about and this machine did not \u2014 a restored or copied state was behind`);
-    }
-    return recovered;
-  }
-  // The same argument as reconcileFollowers, for the other published list. It
-  // matters more: the outbox is the INDEX a statuses rebuild reads, so a
-  // republish from a restored-and-behind machine would destroy the record of
-  // everything this actor ever posted — and destroy it before anyone noticed
-  // there was anything to recover.
-  //
-  // Safe for the same reason: `unrecordOutbox` leaves a tombstone, so an entry
-  // the pod still carries is one this machine has not heard of, never one it
-  // deliberately took back.
-  async reconcileOutbox(outbox) {
-    let published = [];
-    try {
-      published = await this.readPublishedOutbox() || [];
-    } catch {
-      return 0;
-    }
-    if (!Array.isArray(published) || !published.length) return 0;
-    const idOf = (i) => typeof i === "string" ? i : i?.id || null;
-    const known2 = new Set(outbox.map(idOf).filter(Boolean));
-    const removed = new Set(this.store.read("outbox-removed.json", []).map((r) => r.id));
-    const missing = published.filter((i) => {
-      const id = idOf(i);
-      return id && !known2.has(id) && !removed.has(id);
-    });
-    if (!missing.length) return 0;
-    outbox.push(...missing);
-    this.store.write("outbox.json", outbox);
-    this.log(`reconciled ${missing.length} outbox entr(ies) the pod carried and this machine did not`);
-    return missing.length;
-  }
-  // Recover this actor's own posts from the pod's public face. The private half
-  // lives on this machine now, so a restored backup or a replaced machine loses
-  // statuses.json while the pod still serves every note. Followers already come
-  // back; this is the other half of the same gap.
-  //
-  // The INDEX is ap/outbox, not the ap/notes/ listing, and that difference is
-  // the safety argument. Deleting a post rewrites the outbox in one PUT, so an
-  // entry still there is a post that still stands. The note DOCUMENT can outlive
-  // its own deletion — deleteNote's `remote.delete` is a request that can fail —
-  // so walking the container can bring back something its author took down.
-  // `fromNotes` is for when you would rather have that than lose the post; it is
-  // not the default, and it says so where it is offered.
-  //
-  // MERGE ONLY. A status this machine already holds is left exactly as it is:
-  // it carries local facts — favourited, reblogged, the activities an Undo has
-  // to name — that the pod knows nothing about. That is also what makes the
-  // failure modes harmless: a listing that fails returns nothing, and nothing
-  // is what an empty listing recovers.
-  async rebuildStatuses({ fromNotes = false } = {}) {
-    const { urls } = this;
-    const ids = /* @__PURE__ */ new Set();
-    const boosts = [];
-    let indexed = false;
-    const published = await this.readPublishedOutbox().catch(() => null);
-    if (published) {
-      indexed = true;
-      for (const item of published) {
-        if (typeof item === "string") {
-          if (item.startsWith(urls.notes)) ids.add(item);
-        } else if (item?.type === "Announce") boosts.push(item);
-      }
-    }
-    if (fromNotes) {
-      for (const child of await list2(this.remote, urls).catch(() => [])) {
-        ids.add(child.url);
-      }
-      indexed = true;
-    }
-    if (!indexed) return { indexed: 0, recovered: 0, reblogs: 0, landed: false, why: "the pod would not answer for its outbox" };
-    const statuses = this.store.getStatuses();
-    const have = new Set(statuses.map((s) => s.noteId));
-    const removed = new Set(this.store.read("outbox-removed.json", []).map((r) => r.id));
-    const recovered = [];
-    let budget = REBUILD_MAX_PER_RUN;
-    for (const id of ids) {
-      if (budget <= 0) {
-        this.log(`rebuild: stopping at ${REBUILD_MAX_PER_RUN} this run \u2014 run it again for the rest`);
-        break;
-      }
-      if (have.has(id) || removed.has(id)) continue;
-      budget--;
-      const note = await read(this.remote, id).catch(() => null);
-      if (note?.type !== "Note" || note.id !== id || note.attributedTo !== urls.actor) continue;
-      const attachments = attachmentsOf(note);
-      const mentions = (Array.isArray(note.tag) ? note.tag : []).filter((t) => t?.type === "Mention" && t.href).map((t) => ({ href: t.href, name: t.name }));
-      recovered.push({
-        noteId: note.id,
-        actor: urls.actor,
-        content: note.content || "",
-        published: note.published || null,
-        ...note.inReplyTo ? { inReplyTo: note.inReplyTo } : {},
-        kind: "post",
-        slug: note.id.slice(urls.notes.length),
-        ...attachments.length ? { attachments } : {},
-        ...mentions.length ? { mentions } : {},
-        recovered: true
-      });
-    }
-    const merged = [...statuses, ...recovered];
-    let reblogs = 0;
-    for (const act of boosts) {
-      const object = typeof act.object === "string" ? act.object : act.object?.id;
-      const s = object && merged.find((x) => x.noteId === object);
-      if (!s || s.reblogged) continue;
-      s.reblogged = true;
-      s.announceActivity = act;
-      reblogs++;
-    }
-    if (!recovered.length && !reblogs) return { indexed: ids.size, recovered: 0, reblogs: 0, landed: true };
-    merged.sort((a, b) => String(b.published || "").localeCompare(String(a.published || "")));
-    const kept = merged.slice(0, 1e3);
-    this.store.write("statuses.json", kept);
-    const landed = await this.store.commit();
-    this.log(`rebuilt ${recovered.length} post(s) and ${reblogs} boost(s) from the pod${landed ? "" : " \u2014 THE STATE WRITE DID NOT LAND"}`);
-    return {
-      indexed: ids.size,
-      recovered: recovered.length,
-      reblogs,
-      landed,
-      dropped: Math.max(0, merged.length - kept.length)
-    };
-  }
-  // Publish the collections a change actually TOUCHED.
-  //
-  // Publishing all three on every follower event cost nine pod requests where
-  // two do: two reconcile reads, three collection PUTs, and three ACL PUTs
-  // whose bodies are a pure function of the WebID and the target URL and so
-  // are byte-identical to the ones written at setup. A new follower does not
-  // change what this actor follows, and it does not change the outbox.
-  //
-  // `acls` is true only on the default path, which is publishProfile: that is
-  // where the public surface is built, and where verifyPublicSurface already
-  // checks the world can read it.
-  //
-  // Reconciliation stays welded to the collection it guards. It is what stops a
-  // restored-and-behind machine publishing a short list over the pod's longer
-  // one — erasing followers it would then stop delivering to, and erasing the
-  // outbox that `rebuild` reads as its index — so a narrowed publish still runs
-  // the one belonging to whatever it is about to overwrite.
-  // Publish only the pages that actually changed.
-  //
-  // `known` is what we last wrote, so a post rewrites the newest page and the
-  // head and nothing else — where the flat collection rewrote the actor's whole
-  // history on every post. A page gets its ACL when it is first created; the
-  // container above it is owner-only, so it cannot be inherited.
-  // `force` is for the caller that publishes BECAUSE the pod does not have what
-  // the digests say it has. Without it a repair republish rewrote the head and
-  // skipped every page — the digests still matched the local record — so the
-  // head advertised a `first:` that 404s, readPublishedOutbox came back empty,
-  // rebuildStatuses recovered nothing, and the whole thing logged success. That
-  // happens to an actor with one post as surely as one with five thousand.
-  async publishOutbox(outbox, { acls = false, force = false } = {}) {
-    const { urls } = this;
-    const seen = this.store.read("published.json", {});
-    const { pages, index } = outboxPaging(outbox, seen.outboxIndex || []);
-    const before = force ? {} : seen.outboxPages || {};
-    const after = {};
-    let wrote = 0;
-    for (let i = 0; i < pages.length; i++) {
-      const n = i + 1;
-      const doc = outboxPage(urls.outbox, n, pages[i]);
-      const digest = node_crypto_default.createHash("sha256").update(JSON.stringify(doc)).digest("hex").slice(0, 16);
-      after[n] = digest;
-      if (before[n] === digest) continue;
-      await writePage2(
-        this.remote,
-        outboxPageId(urls.outbox, n),
-        doc,
-        { publicRead: !before[n] || acls }
-      );
-      wrote++;
-    }
-    const stale = Object.keys(seen.outboxPages || {}).map(Number).filter((n) => Number.isFinite(n) && n > pages.length);
-    for (const n of stale) {
-      await dropPage2(this.remote, outboxPageId(urls.outbox, n));
-    }
-    await writeHead2(
-      this.remote,
-      urls,
-      outboxHead(urls.outbox, outbox.length, pages.length),
-      { publicRead: acls }
-    );
-    this.store.write(
-      "published.json",
-      { ...this.store.read("published.json", {}), outboxPages: after, outboxIndex: index }
-    );
-    return wrote;
-  }
-  // Every activity in the published outbox, walking the pages. Also understands
-  // the flat collection this used to write, so an actor published before paging
-  // is still readable — which matters because rebuild reads this to recover
-  // posts a lost machine no longer has.
-  readPublishedOutbox() {
-    return readPublished(this.remote, this.urls);
-  }
-  // The followers collection, paged like the outbox: a head that carries only
-  // the count and the page bounds, and page documents holding the actor IRIs —
-  // so a remote server reads a small head and walks pages instead of pulling one
-  // document that grows without limit. Regenerated from the in-memory follow
-  // graph: a follow extends the newest page and an unfollow leaves its page one
-  // short (wire.pageItems), so only the pages that changed are rewritten.
-  async publishFollowers(actors, { acls = false, force = false } = {}) {
-    const { urls } = this;
-    const seen = this.store.read("published.json", {});
-    const { pages, index } = followersPaging(actors, seen.followersIndex || []);
-    const before = force ? {} : seen.followersPages || {};
-    const after = {};
-    for (let i = 0; i < pages.length; i++) {
-      const n = i + 1;
-      const doc = followersPage(urls.followers, n, pages[i], pages.length);
-      const digest = node_crypto_default.createHash("sha256").update(JSON.stringify(doc)).digest("hex").slice(0, 16);
-      after[n] = digest;
-      if (before[n] === digest) continue;
-      await writePage3(
-        this.remote,
-        followersPageId(urls.followers, n),
-        doc,
-        { publicRead: !before[n] || acls }
-      );
-    }
-    const stale = Object.keys(seen.followersPages || {}).map(Number).filter((n) => Number.isFinite(n) && n > pages.length);
-    for (const n of stale) {
-      await dropPage3(this.remote, followersPageId(urls.followers, n));
-    }
-    await writeHead3(
-      this.remote,
-      urls,
-      followersHead(urls.followers, actors.length, pages.length),
-      { publicRead: acls }
-    );
-    this.store.write(
-      "published.json",
-      { ...this.store.read("published.json", {}), followersPages: after, followersIndex: index }
-    );
-  }
-  // Every actor in the published followers collection, walking pages. Also reads
-  // the flat collection this used to write, so an actor published before paging
-  // still reconciles.
-  readPublishedFollowers() {
-    return readPublished2(this.remote, this.urls);
-  }
-  async publishCollections(which = ALL_COLLECTIONS) {
-    const { urls } = this;
-    const contacts = this.store.getContacts();
-    if (which.followers) {
-      const knownF = this.store.read("published.json", {}).followersIndex;
-      if (which.force || !Array.isArray(knownF)) await this.reconcileFollowers(contacts);
-      const actors = contacts.followers.filter((f) => !f.bsky).map((f) => f.actor);
-      await this.publishFollowers(actors, { acls: which.acls, force: which.force });
-    }
-    if (which.following) {
-      await write2(
-        this.remote,
-        urls,
-        orderedCollection(urls.following, contacts.following.filter((f) => f.accepted).map((f) => f.actor)),
-        { publicRead: which.acls }
-      );
-    }
-    if (which.pending) await this.publishPending();
-    if (which.blocked) await this.publishBlocked();
-    if (which.outbox) {
-      const outbox = this.store.read("outbox.json", []);
-      const known2 = this.store.read("published.json", {}).outboxIndex;
-      if (which.force || !Array.isArray(known2)) await this.reconcileOutbox(outbox);
-      await this.publishOutbox(outbox, { acls: which.acls, force: which.force });
-    }
-  }
-  // FEP-4ccd: the follows in limbo, as owner-only collections of the Follow
-  // activities themselves. Inside the private container so its ACL is
-  // inherited — and published only where that ACL provably holds, the same
-  // bar private posts clear. A Bluesky-only request has no Follow activity a
-  // remote server could ever act on, so it is not listed.
-  async publishPending() {
-    if (await this.privateReady() !== true) return;
-    const { urls } = this;
-    const contacts = this.store.getContacts();
-    await writePending(this.remote, urls, {
-      followers: orderedCollection(
-        urls.pendingFollowers,
-        this.store.getRequests().filter((r) => r.activity && !r.bsky).map((r) => r.activity)
-      ),
-      following: orderedCollection(
-        urls.pendingFollowing,
-        contacts.following.filter((f) => !f.accepted && f.followActivity).map((f) => f.followActivity).reverse()
-      )
-    });
-  }
   // The gateway policy: a small PUBLIC document a keyless inbox gateway reads
   // to decide, at the edge, what to forward and what to drop. It carries only
   // public facts — the actor/followers URLs, the REAL pod inbox to forward to,
@@ -44904,7 +45244,7 @@ var Publisher = class {
     const { urls } = this;
     const contacts = this.store.getContacts();
     const bl = this.store.getBlocklist();
-    await write4(this.remote, urls, {
+    await write3(this.remote, urls, {
       v: 1,
       actorUrl: urls.actor,
       followersUrl: urls.followers,
@@ -44917,483 +45257,90 @@ var Publisher = class {
       blocklist: { domains: bl.domains || [], actors: bl.actors || [] }
     });
   }
-  // FEP-c648: the blocked actors, as an owner-only collection. Actors only —
-  // domain blocks are ours, and the FEP does not carry them.
-  async publishBlocked() {
-    if (await this.privateReady() !== true) return;
-    const { urls } = this;
-    const actors = [...this.store.getBlocklist().actors || []].reverse();
-    await writeBlocked(this.remote, urls, orderedCollection(urls.blocked, actors));
+  // collections.mjs
+  publishOutbox(...a) {
+    return publishOutbox(this, ...a);
   }
-  // The outbox is the public record of everything this actor has said, boosts
-  // included. A Create goes in as its note id, which dereferences; an Announce
-  // has only a fragment id, so the activity itself goes in the collection —
-  // legal AS2, and what Mastodon serves.
-  async recordOutbox(item) {
-    const outbox = this.store.read("outbox.json", []);
-    outbox.unshift(item);
-    this.store.write("outbox.json", outbox);
-    await this.publishOutbox(outbox);
+  readPublishedOutbox(...a) {
+    return readPublishedOutbox(this, ...a);
   }
-  // Taking something out of the outbox is a DECISION — a post deleted, a boost
-  // undone. It leaves a mark for the same reason dropFollower does: the pod's
-  // copy is rewritten right after, but a rewrite that fails would otherwise let
-  // the next reconcile put the entry back. Bounded, like the follower one.
-  async unrecordOutbox(matches) {
-    const before = this.store.read("outbox.json", []);
-    const outbox = before.filter((i) => !matches(i));
-    const gone = before.filter((i) => matches(i)).map((i) => typeof i === "string" ? i : i?.id).filter(Boolean);
-    if (gone.length) {
-      const marks = this.store.read("outbox-removed.json", []).filter((r) => !gone.includes(r.id));
-      const at = (/* @__PURE__ */ new Date()).toISOString();
-      this.store.write(
-        "outbox-removed.json",
-        [...marks, ...gone.map((id) => ({ id, at }))].slice(-500)
-      );
-    }
-    this.store.write("outbox.json", outbox);
-    await this.publishOutbox(outbox);
+  publishFollowers(...a) {
+    return publishFollowers(this, ...a);
   }
-  // Media container on the remote pod — public-Read like notes, created lazily
-  // at first upload (idempotent; the flag only saves round-trips).
-  // Ask before writing. `_mediaReady` is per PROCESS, and a service worker is
-  // restarted whenever the browser feels like it — so on the browser build this
-  // re-created a container that has existed since sign-up, and rewrote its ACL,
-  // on every restart. A HEAD is one request and usually the only one.
-  async ensureMediaContainer() {
-    if (this._mediaReady) return;
-    if (await exists(this.remote, this.urls.media)) {
-      this._mediaReady = true;
-      return;
-    }
-    await provisionPublic(this.remote, this.urls.media);
-    this._mediaReady = true;
+  readPublishedFollowers(...a) {
+    return readPublishedFollowers(this, ...a);
   }
-  // Whether the canary this class writes is already there. Only a definite
-  // "yes" counts: anything else falls through to the write, which is
-  // idempotent anyway, so a failed probe costs a request and never correctness.
-  _containerExists(base) {
-    return exists(this.remote, base);
+  publishCollections(...a) {
+    return publishCollections(this, ...a);
   }
-  // The owner-only container that followers-only and direct posts live in.
-  // Its ACL is set once; every note under it inherits.
-  async ensurePrivateContainer() {
-    if (this._privateContainer) return;
-    if (await exists(this.remote, this.urls.privateNotes)) {
-      this._privateContainer = true;
-      return;
-    }
-    await provisionOwnerOnly(this.remote, this.urls.privateNotes);
-    this._privateContainer = true;
+  publishPending(...a) {
+    return publishPending(this, ...a);
   }
-  // Whether the pod actually enforces that ACL: a bare, unauthenticated read
-  // of the private container's canary must be refused. Returns true, or the
-  // reason private posts stay off. A definite answer is cached for the run; a
-  // network failure is not, so a pod that was briefly unreachable is asked
-  // again rather than refused forever.
-  async privateReady() {
-    if (this._privateVerdict !== void 0) return this._privateVerdict;
-    try {
-      await this.ensurePrivateContainer();
-      const pn = this.urls.toPod ? this.urls.toPod(this.urls.privateNotes) : this.urls.privateNotes;
-      const verdict = await probePrivateEnforcement(this.probeFetch || fetch, pn + ".keep");
-      this._privateVerdict = verdict === true ? true : `${verdict} \u2014 private posts stay off it`;
-      return this._privateVerdict;
-    } catch (e) {
-      return `could not verify that the pod protects private posts (${e.message})`;
-    }
+  publishBlocked(...a) {
+    return publishBlocked(this, ...a);
   }
-  // Compose → wire note on remote pod + RDF truth locally + deliver Create.
-  // Who this text mentions, resolved. A mention nobody can resolve stays plain
-  // text rather than failing the post. The text itself decides: trim a handle
-  // out and that person is not notified, which is what every fediverse client
-  // leads people to expect. A Group named in the parent is the one thing
-  // carried forward regardless — drop it and the group stops carrying the
-  // thread.
-  async _mentionsFor(content, inReplyTo) {
-    const inText = new Set(mentionsIn(content));
-    const carried = inReplyTo ? (this.store.getStatuses().find((s) => s.noteId === inReplyTo)?.mentions || []).map((m) => String(m.name || "").replace(/^@/, "")).filter(Boolean) : [];
-    const mentions = [];
-    for (const handle of [.../* @__PURE__ */ new Set([...inText, ...carried])]) {
-      if (!this.resolveMention) break;
-      const doc = await this.resolveMention(handle).catch(() => null);
-      if (!doc?.id) {
-        this.log(`mention @${handle} did not resolve \u2014 left as text`);
-        continue;
-      }
-      if (!inText.has(handle) && doc.type !== "Group") continue;
-      mentions.push({ handle, actor: doc.id, page: doc.url || null, inbox: doc.endpoints?.sharedInbox || doc.inbox });
-    }
-    return mentions;
+  recordOutbox(...a) {
+    return recordOutbox(this, ...a);
   }
-  async publishNote(content, { inReplyTo, attachments, visibility = "public", spoilerText = null } = {}) {
-    const { urls } = this;
-    const priv = visibility === "private" || visibility === "direct";
-    if (priv) {
-      const ready = await this.privateReady();
-      if (ready !== true) throw new Error(ready);
-    }
-    const published = (/* @__PURE__ */ new Date()).toISOString();
-    const slug = published.slice(0, 10) + "-" + node_crypto_default.randomBytes(4).toString("hex");
-    const mentions = await this._mentionsFor(content, inReplyTo);
-    const note = noteDoc({
-      urls,
-      slug,
-      content,
-      published,
-      inReplyTo,
-      attachments,
-      mentions,
-      visibility,
-      summary: spoilerText,
-      container: priv ? urls.privateNotes : urls.notes
-    });
-    await write5(this.remote, note.id, note);
-    await writeEmptyReplies(
-      this.remote,
-      repliesId(note.id),
-      collection(repliesId(note.id), [])
-    );
-    if (!priv) await this.recordOutbox(note.id);
-    this.store.addStatus({
-      noteId: note.id,
-      actor: urls.actor,
-      content: note.content,
-      published,
-      inReplyTo,
-      kind: "post",
-      slug,
-      text: content,
-      visibility,
-      ...spoilerText ? { spoiler: spoilerText } : {},
-      ...attachments?.length ? { attachments } : {},
-      ...note.tag?.length ? { mentions: note.tag.map((t) => ({ href: t.href, name: t.name })) } : {}
-    });
-    const create = createActivity(note, urls);
-    await writeCreate(this.remote, create.id, create);
-    const contacts = this.store.getContacts();
-    const inboxes = [...new Set([
-      ...visibility === "direct" ? [] : contacts.followers.map((f) => f.sharedInbox || f.inbox),
-      ...mentions.map((m) => m.inbox)
-    ].filter(Boolean))];
-    await this.deliverer.deliverToAll(inboxes, create);
-    this.log(`note published: ${note.id} \u2192 ${inboxes.length} inbox(es)`);
-    if (visibility === "public" && this.atproto?.connected() && this.store.getConfig()?.atproto?.crossPost) {
-      try {
-        const mirror = await this.atproto.crossPost(
-          { text: content, published, attachments },
-          { noteUrl: note.id }
-        );
-        this.store.updateStatus(note.id, { atproto: mirror });
-        this.log(`cross-posted to bluesky: ${mirror.uri}${mirror.truncated ? " (truncated, links back)" : ""}`);
-      } catch (e) {
-        this.store.updateStatus(note.id, { atproto: { error: e.message } });
-        this.log(`bluesky cross-post failed: ${e.message}`);
-      }
-    }
-    return note;
+  unrecordOutbox(...a) {
+    return unrecordOutbox(this, ...a);
   }
-  // --- polls ---------------------------------------------------------------
-  //
-  // A poll is published as a Question and answered by ordinary replies naming
-  // an option, so the count is ours to keep and ours to republish. The roster
-  // of who chose what lives in agent state (polls.VOTES_DOC); the tallies on
-  // the status row and in the pod document are always derived from it.
-  /**
-   * Publish a poll. `options` is a list of choice titles, `multiple` lets a
-   * voter pick more than one, and `expiresAt` is when voting stops.
-   */
-  async publishQuestion(content, {
-    options = [],
-    multiple = false,
-    expiresAt = null,
-    inReplyTo = void 0,
-    visibility = "public",
-    spoilerText = null
-  } = {}) {
-    const { urls } = this;
-    const priv = visibility === "private" || visibility === "direct";
-    if (priv) {
-      const ready = await this.privateReady();
-      if (ready !== true) throw new Error(ready);
-    }
-    const titles = [].concat(options).map((o) => String(o ?? "").trim()).filter(Boolean);
-    if (titles.length < 2) throw new Error("a poll needs at least two options");
-    if (new Set(titles).size !== titles.length) throw new Error("a poll\u2019s options must differ from one another");
-    if (titles.length > MAX_OPTIONS) throw new Error(`a poll takes at most ${MAX_OPTIONS} options`);
-    if (titles.some((t) => t.length > MAX_OPTION_CHARS)) {
-      throw new Error(`a poll option is at most ${MAX_OPTION_CHARS} characters`);
-    }
-    if (expiresAt) {
-      const ends = Date.parse(expiresAt);
-      if (!Number.isFinite(ends)) throw new Error("the closing time is not a date");
-      const seconds = (ends - Date.now()) / 1e3;
-      if (seconds < MIN_SECONDS || seconds > MAX_SECONDS) {
-        throw new Error(`a poll runs between ${MIN_SECONDS} and ${MAX_SECONDS} seconds`);
-      }
-    }
-    const published = (/* @__PURE__ */ new Date()).toISOString();
-    const slug = published.slice(0, 10) + "-" + node_crypto_default.randomBytes(4).toString("hex");
-    const mentions = await this._mentionsFor(content, inReplyTo);
-    const poll = {
-      multiple: !!multiple,
-      expiresAt: expiresAt || null,
-      closed: null,
-      options: titles.map((title) => ({ title, votes: 0 })),
-      votersCount: 0,
-      // Resolved once, here: a tally rewrite must not cost a webfinger lookup
-      // per vote for people the poll named.
-      mentionInboxes: [...new Set(mentions.map((m) => m.inbox).filter(Boolean))]
-    };
-    const question = questionDoc({
-      urls,
-      slug,
-      content,
-      published,
-      inReplyTo,
-      attachments: [],
-      mentions,
-      visibility,
-      summary: spoilerText,
-      container: priv ? urls.privateNotes : urls.notes,
-      options: poll.options,
-      multiple: poll.multiple,
-      endTime: poll.expiresAt,
-      votersCount: 0
-    });
-    await write5(this.remote, question.id, question);
-    await writeEmptyReplies(
-      this.remote,
-      repliesId(question.id),
-      collection(repliesId(question.id), [])
-    );
-    if (!priv) await this.recordOutbox(question.id);
-    this.store.addStatus({
-      noteId: question.id,
-      actor: urls.actor,
-      content: question.content,
-      published,
-      kind: "post",
-      slug,
-      text: content,
-      visibility,
-      poll,
-      inReplyTo,
-      ...spoilerText ? { spoiler: spoilerText } : {},
-      ...question.tag?.length ? { mentions: question.tag.map((t) => ({ href: t.href, name: t.name })) } : {}
-    });
-    const create = this._pollActivity("Create", question, createActivityId(question.id));
-    await writeCreate(this.remote, create.id, create);
-    const contacts = this.store.getContacts();
-    const inboxes = [...new Set([
-      ...visibility === "direct" ? [] : contacts.followers.map((f) => f.sharedInbox || f.inbox),
-      ...poll.mentionInboxes
-    ].filter(Boolean))];
-    await this.deliverer.deliverToAll(inboxes, create);
-    this.log(`poll published: ${question.id} (${titles.length} options) \u2192 ${inboxes.length} inbox(es)`);
-    return question;
+  publishFeatured(...a) {
+    return publishFeatured(this, ...a);
   }
-  // The Create or Update carrying a Question. The context is hoisted onto the
-  // activity and the embedded object keeps none: a nested @context is legal
-  // JSON-LD but not every server reads one, and votersCount is declared there.
-  _pollActivity(type, question, id) {
-    const { "@context": ctx, ...object } = question;
-    return {
-      "@context": ctx,
-      id,
-      type,
-      actor: this.urls.actor,
-      published: question.published,
-      to: question.to,
-      cc: question.cc,
-      object
-    };
+  // restore.mjs
+  reconcileFollowers(...a) {
+    return reconcileFollowers(this, ...a);
   }
-  /**
-   * One vote on one of OUR polls, named by the option's title. Returns true
-   * when it counted — a second answer to a single-choice poll, an option we do
-   * not offer, or a poll that has closed all count for nothing.
-   */
-  async recordVote(questionId, actor, optionName) {
-    const s = this.store.getStatuses().find((x) => x.noteId === questionId);
-    if (!s?.poll || s.kind !== "post" || s.actor !== this.urls.actor) return false;
-    if (pollClosed(s.poll)) return false;
-    const index = optionIndex(s.poll, optionName);
-    if (index < 0) return false;
-    const all = this.store.read(VOTES_DOC, {});
-    const { roster, changed } = addVote(
-      all[questionId] || {},
-      voterKey(actor),
-      index,
-      { multiple: !!s.poll.multiple }
-    );
-    if (!changed) return false;
-    this.store.write(VOTES_DOC, { ...all, [questionId]: roster });
-    this.store.updateStatus(questionId, { poll: withTally(s.poll, roster) });
-    this._pollDirty(questionId);
-    return true;
+  reconcileOutbox(...a) {
+    return reconcileOutbox(this, ...a);
   }
-  // Open the rewrite window for a poll whose count moved. Already open is
-  // already enough: the whole point is that a burst costs one rewrite.
-  _pollDirty(questionId) {
-    if (this.pollTimers.has(questionId)) return;
-    const t = setTimeout(() => {
-      this.pollTimers.delete(questionId);
-      this.republishPoll(questionId).catch((e) => this.log(`poll rewrite: ${e.message}`));
-    }, POLL_REWRITE_MS);
-    t.unref?.();
-    this.pollTimers.set(questionId, t);
+  rebuildStatuses(...a) {
+    return rebuildStatuses(this, ...a);
   }
-  /**
-   * Write the poll's current count back to the pod and tell everyone who has
-   * it. `closing` stamps it shut, which is a one-way door.
-   */
-  async republishPoll(questionId, { closing = null } = {}) {
-    const s = this.store.getStatuses().find((x) => x.noteId === questionId);
-    if (!s?.poll) return null;
-    const { urls } = this;
-    const roster = this.store.read(VOTES_DOC, {})[questionId] || {};
-    const shut = closing || s.poll.closed;
-    const counted = shut && !Object.keys(roster).length ? s.poll : withTally(s.poll, roster);
-    const poll = { ...counted, ...closing ? { closed: closing } : {} };
-    const container = String(s.noteId).startsWith(urls.privateNotes) ? urls.privateNotes : urls.notes;
-    const slug = s.slug || String(s.noteId).slice(container.length);
-    const mentions = (s.mentions || []).map((m) => ({
-      handle: String(m.name || "").replace(/^@/, ""),
-      actor: m.href,
-      page: null,
-      inbox: null
-    }));
-    const question = questionDoc({
-      urls,
-      slug,
-      content: s.text ?? "",
-      published: s.published,
-      inReplyTo: s.inReplyTo,
-      attachments: [],
-      mentions,
-      visibility: s.visibility || "public",
-      summary: s.spoiler || null,
-      container,
-      options: poll.options,
-      multiple: !!poll.multiple,
-      endTime: poll.expiresAt,
-      closed: poll.closed,
-      votersCount: poll.votersCount || 0
-    });
-    await write5(this.remote, question.id, question);
-    await writeCreate(
-      this.remote,
-      createActivityId(question.id),
-      this._pollActivity("Create", question, createActivityId(question.id))
-    );
-    this.store.updateStatus(questionId, { poll });
-    const stamp = node_crypto_default.createHash("sha256").update(JSON.stringify([
-      poll.options.map((o) => o.votes || 0),
-      poll.votersCount || 0,
-      poll.closed || ""
-    ])).digest("hex").slice(0, 12);
-    const update = this._pollActivity("Update", question, `${question.id}#poll-${stamp}`);
-    const contacts = this.store.getContacts();
-    const inboxes = [...new Set([
-      ...s.visibility === "direct" ? [] : contacts.followers.map((f) => f.sharedInbox || f.inbox),
-      ...s.poll.mentionInboxes || []
-    ].filter(Boolean))];
-    await this.deliverer.deliverToAll(inboxes, update);
-    this.log(`poll ${closing ? "closed" : "count published"}: ${question.id} \u2192 ${inboxes.length} inbox(es)`);
-    return poll;
+  // notes.mjs
+  ensureMediaContainer(...a) {
+    return ensureMediaContainer(this, ...a);
   }
-  /**
-   * Shut any poll whose time is up. Called from the agent's sweep. Closing is
-   * recorded BEFORE the republish, so a failed republish cannot leave a poll
-   * open and collecting votes it has already refused.
-   */
-  async closeDuePolls(now = Date.now()) {
-    const due = this.store.getStatuses().filter((s) => s.kind === "post" && s.poll && !s.poll.closed && s.poll.expiresAt && Date.parse(s.poll.expiresAt) <= now);
-    for (const s of due) {
-      const closed = new Date(Math.min(now, Date.parse(s.poll.expiresAt) || now)).toISOString();
-      clearTimeout(this.pollTimers.get(s.noteId));
-      this.pollTimers.delete(s.noteId);
-      this.store.updateStatus(s.noteId, { poll: { ...s.poll, closed } });
-      const done = await this.republishPoll(s.noteId, { closing: closed }).catch((e) => {
-        this.log(`poll close ${s.noteId}: ${e.message}`);
-        return null;
-      });
-      if (done) {
-        const all = this.store.read(VOTES_DOC, {});
-        if (all[s.noteId]) {
-          delete all[s.noteId];
-          this.store.write(VOTES_DOC, all);
-        }
-      }
-    }
-    return due.length;
+  _containerExists(...a) {
+    return containerExists(this, ...a);
   }
-  /** Stop the pending rewrite windows. Called at shutdown. */
-  stopPolls() {
-    for (const t of this.pollTimers.values()) clearTimeout(t);
-    this.pollTimers.clear();
+  ensurePrivateContainer(...a) {
+    return ensurePrivateContainer(this, ...a);
   }
-  // The pinned posts, as the actor's featured collection — the one document a
-  // remote server reads when it shows this profile's pins.
-  async publishFeatured() {
-    const ids = this.store.getStatuses().filter((s) => s.kind === "post" && s.pinned).map((s) => s.noteId);
-    await write3(this.remote, this.urls, orderedCollection(this.urls.featured, ids));
-    return ids.length;
+  privateReady(...a) {
+    return privateReady(this, ...a);
   }
-  // An edit keeps the note's id, slug and published time; `updated` is the
-  // edit's own stamp. The pod documents are overwritten in place — the Create
-  // too, so a group's Announce resolves to the edited text — and an Update
-  // goes everywhere the Create went.
-  async updateNote(s, { content, spoilerText = null, attachments = null } = {}) {
-    const { urls } = this;
-    const updated = (/* @__PURE__ */ new Date()).toISOString();
-    const inText = new Set(mentionsIn(content));
-    const mentions = [];
-    for (const handle of inText) {
-      if (!this.resolveMention) break;
-      const doc = await this.resolveMention(handle).catch(() => null);
-      if (!doc?.id) {
-        this.log(`mention @${handle} did not resolve \u2014 left as text`);
-        continue;
-      }
-      mentions.push({ handle, actor: doc.id, page: doc.url || null, inbox: doc.endpoints?.sharedInbox || doc.inbox });
-    }
-    const atts = attachments ?? s.attachments ?? [];
-    const container = String(s.noteId).startsWith(urls.privateNotes) ? urls.privateNotes : urls.notes;
-    const slug = s.slug || String(s.noteId).slice(container.length);
-    const note = noteDoc({
-      urls,
-      slug,
-      content,
-      published: s.published,
-      inReplyTo: s.inReplyTo,
-      attachments: atts,
-      mentions,
-      visibility: s.visibility || "public",
-      summary: spoilerText,
-      updated,
-      container
-    });
-    await write5(this.remote, note.id, note);
-    await writeCreate(this.remote, createActivityId(note.id), createActivity(note, urls));
-    const patched = this.store.updateStatus(s.noteId, {
-      content: note.content,
-      text: content,
-      editedAt: updated,
-      spoiler: spoilerText || void 0,
-      attachments: atts.length ? atts : void 0,
-      mentions: note.tag?.length ? note.tag.map((t) => ({ href: t.href, name: t.name })) : void 0
-    });
-    const update = updateActivity(note, urls);
-    const contacts = this.store.getContacts();
-    const inboxes = [...new Set([
-      ...s.visibility === "direct" ? [] : contacts.followers.map((f) => f.sharedInbox || f.inbox),
-      ...mentions.map((m) => m.inbox)
-    ].filter(Boolean))];
-    await this.deliverer.deliverToAll(inboxes, update);
-    this.log(`note edited: ${note.id} \u2192 ${inboxes.length} inbox(es)`);
-    return patched;
+  _mentionsFor(...a) {
+    return mentionsFor(this, ...a);
+  }
+  publishNote(...a) {
+    return publishNote(this, ...a);
+  }
+  updateNote(...a) {
+    return updateNote(this, ...a);
+  }
+  // questions.mjs
+  publishQuestion(...a) {
+    return publishQuestion(this, ...a);
+  }
+  _pollActivity(...a) {
+    return pollActivity(this, ...a);
+  }
+  recordVote(...a) {
+    return recordVote(this, ...a);
+  }
+  _pollDirty(...a) {
+    return pollDirty(this, ...a);
+  }
+  republishPoll(...a) {
+    return republishPoll(this, ...a);
+  }
+  closeDuePolls(...a) {
+    return closeDuePolls(this, ...a);
+  }
+  stopPolls(...a) {
+    return stopPolls(this, ...a);
   }
 };
 
@@ -47056,6 +47003,9 @@ var Lease = class {
 // lib/client/mastoapi.mjs
 init_node_crypto();
 
+// lib/pod/media.mjs
+var write6 = (pod, url, bytes, contentType) => pod.put(url, bytes, contentType);
+
 // lib/core/social.mjs
 var social_exports = {};
 __export(social_exports, {
@@ -47357,7 +47307,7 @@ async function votePoll(agent2, s, choices) {
       to: [s.actor],
       object: note
     };
-    await write5(agent2.remote, id, note);
+    await write4(agent2.remote, id, note);
     await writeCreate(agent2.remote, create.id, create);
     await agent2.deliverer.deliverToAll([inbox], create);
   }
