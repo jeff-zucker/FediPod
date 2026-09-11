@@ -1,5 +1,13 @@
 # The Admin interface
 
+<!-- CLAUDE 2026-09-11 — one paragraph for the browser version. Review
+     pending; delete this marker when done. -->
+In the browser version at fedipod.net, `manage account` in the bar opens this
+same page for your account. The rest of this page describes it as the
+installed agent serves it; the controls are the same, minus the manual inbox
+drain and the local log, which a browser does not have.
+<!-- /CLAUDE -->
+
 Open `https://localhost:8030/` while any agent is running — it forwards you to the agent — then choose `manage account` and select the actor you want from the local actors dropdown.
 Picking an actor marked "(stopped)" starts its agent, then opens its page.
 
