@@ -645,7 +645,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     'which writes a page and the head, not one document carrying everything');
 
   // Every caller that knows what it changed says so.
-  for (const [file, fn] of [['lib/core/intake.mjs', 'intake'], ['lib/core/social.mjs', 'social']]) {
+  for (const [file, fn] of [['lib/core/intake/index.mjs', 'intake'], ['lib/core/social.mjs', 'social']]) {
     const src = fs.readFileSync(path.join(root, file), 'utf8');
     check(!/publishCollections\(\)/.test(src),
       `${fn} never publishes the whole surface for a single event`);
@@ -966,7 +966,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
 // --- 5c1c. replies are collected so a server can discover what it was not sent ---
 {
-  const { Intake: IntakeCls } = await import(path.join(root, 'lib/core/intake.mjs'));
+  const { Intake: IntakeCls } = await import(path.join(root, 'lib/core/intake/index.mjs'));
   const rUrls = wire.apUrls('https://pod.example/');
   const OURS = rUrls.notes + 'n1';
   const put = {};
@@ -1332,7 +1332,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   check(isTimeout && /setTimeout\(/.test(src) && !/setInterval\(/.test(src),
     'lease renewal is a jittered self-scheduling timer, not setInterval');
 
-  for (const f of ['lib/core/intake.mjs', 'lib/connections/tagfeed.mjs']) {
+  for (const f of ['lib/core/intake/index.mjs', 'lib/connections/tagfeed.mjs']) {
     const body = fs.readFileSync(path.join(root, f), 'utf8');
     check(/0\.85 \+ Math\.random\(\) \* 0\.3/.test(body) && !/setInterval\(/.test(body),
       `${f} schedules its own next run with jitter`);
@@ -1341,7 +1341,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
 // --- 5k. a failing inbox is left alone, and the agent says what it is doing ---
 {
-  const { Intake } = await import(path.join(root, 'lib/core/intake.mjs'));
+  const { Intake } = await import(path.join(root, 'lib/core/intake/index.mjs'));
   const logs = [];
   const intake = new Intake({
     config: {}, urls: { inbox: 'https://p.example/in/', base: 'https://p.example/' },
@@ -1366,7 +1366,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
 // --- 5k-bis. a pod that will not give us an item has not told us to bin it ---
 {
-  const { Intake } = await import(path.join(root, 'lib/core/intake.mjs'));
+  const { Intake } = await import(path.join(root, 'lib/core/intake/index.mjs'));
   const mk = (itemStatus) => {
     const deleted = [];
     const state = {};
@@ -1515,7 +1515,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 {
   const { Deliverer } = await import(path.join(root, 'lib/core/deliver.mjs'));
   const { Lease } = await import(path.join(root, 'lib/core/lease.mjs'));
-  const { Intake } = await import(path.join(root, 'lib/core/intake.mjs'));
+  const { Intake } = await import(path.join(root, 'lib/core/intake/index.mjs'));
 
   // --- the static jail: %2f decoded BEFORE the split made '..' a mount name ---
   const admin = fs.readFileSync(path.join(root, 'lib/device/admin.mjs'), 'utf8');
@@ -1613,20 +1613,21 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     'a lease whose TTL passed unrenewed stands the agent down rather than draining on');
 
   // --- intake: bare-string Undo, redelivery, oversized item ---
-  const isrc = fs.readFileSync(path.join(root, 'lib/core/intake.mjs'), 'utf8');
-  const undo = isrc.slice(isrc.indexOf('async onUndo('), isrc.indexOf('concernsUs('));
+  const isrc = fs.readFileSync(path.join(root, 'lib/core/intake/activities.mjs'), 'utf8');
+  const undo = isrc.slice(isrc.indexOf('function onUndo('), isrc.indexOf('function onCreate('));
   check(/typeof activity\.object === 'string' \? activity\.object/.test(undo),
     'an Undo naming its Follow as a bare IRI is understood');
   check(/typeof activity\.object === 'object'/.test(undo),
     'and only a TYPED non-Follow is dismissed as not ours');
-  const create = isrc.slice(isrc.indexOf('async onCreate('), isrc.indexOf('async amplify('));
+  const create = isrc.slice(isrc.indexOf('function onCreate('), isrc.indexOf('function onAnnouncedDelete('));
   check(/x\.kind === 'timeline' \|\| x\.kind === 'mention'/.test(create),
     'onCreate skips the dereference only for a note it has actually ingested');
   check(!/some\(x => x\.noteId === objectId\)\s*\)/.test(create),
     "and not for a tag-feed placeholder, which has no note, notification or reply entry");
   check(create.indexOf('amplify(') > create.indexOf('ingestNote('),
     'while a group still reaches amplify, which is idempotent on its own');
-  check(/MAX_ITEM_BYTES/.test(isrc) && /size > MAX_ITEM_BYTES/.test(isrc),
+  const drainSrc = fs.readFileSync(path.join(root, 'lib/core/intake/index.mjs'), 'utf8');
+  check(/MAX_ITEM_BYTES/.test(drainSrc) && /size > MAX_ITEM_BYTES/.test(drainSrc),
     'an oversized inbox item is dead-lettered on the size the listing already gave us');
 }
 
@@ -2007,14 +2008,14 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   const sf = read('lib/shared/safefetch.mjs');
   check(/export const HTTP_TIMEOUT_MS/.test(sf),
     'AP_HTTP_TIMEOUT_MS has one default, exported once');
-  for (const f of ['lib/core/publisher.mjs', 'lib/core/intake.mjs', 'lib/core/deliver.mjs']) {
+  for (const f of ['lib/core/publisher.mjs', 'lib/core/intake/index.mjs', 'lib/core/deliver.mjs']) {
     check(!/AP_HTTP_TIMEOUT_MS/.test(read(f)), `${f} reads it rather than redeclaring it`);
   }
   check(/signal: init\.signal \|\| AbortSignal\.timeout\(HTTP_TIMEOUT_MS\)/.test(sf),
     'and safeFetch itself now has the deadline it never had');
 
   // An Accept has to answer the Follow we sent.
-  const { Intake } = await import(path.join(root, 'lib/core/intake.mjs'));
+  const { Intake } = await import(path.join(root, 'lib/core/intake/index.mjs'));
   const mkA = (rec) => {
     const state = { contacts: { followers: [], following: [rec] } };
     const intake = new Intake({
@@ -2042,7 +2043,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
 // --- 5a-quater. the fediverse posts more than Notes, and a tag is not a hole ---
 {
-  const { isContentType } = await import(path.join(root, 'lib/core/intake.mjs'));
+  const { isContentType } = await import(path.join(root, 'lib/core/intake/index.mjs'));
   const { TagFeed } = await import(path.join(root, 'lib/connections/tagfeed.mjs'));
 
   // Insisting on Note dead-lettered an Article, a poll, a PeerTube video and a
@@ -2053,7 +2054,8 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   for (const t of ['Person', 'Follow', 'Collection', undefined]) {
     check(!isContentType(t), `${t} is not, and is still refused`);
   }
-  const isrc = fs.readFileSync(path.join(root, 'lib/core/intake.mjs'), 'utf8');
+  const isrc = fs.readFileSync(path.join(root, 'lib/core/intake/notes.mjs'), 'utf8')
+    + fs.readFileSync(path.join(root, 'lib/core/intake/activities.mjs'), 'utf8');
   check(!/note\.type !== 'Note'/.test(isrc),
     'and neither ingestNote nor onUpdate insists on Note any more');
 
@@ -2167,7 +2169,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
   // --- a sweep publishes the collections once, not once per event ---
   {
-    const { Intake } = await import(path.join(root, 'lib/core/intake.mjs'));
+    const { Intake } = await import(path.join(root, 'lib/core/intake/index.mjs'));
     let published = [];
     const intake = new Intake({
       config: {}, urls: {}, remote: {}, 
@@ -2196,7 +2198,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
   // --- one inbound Delete{actor} is one outbox publish ---
   {
-    const { Intake } = await import(path.join(root, 'lib/core/intake.mjs'));
+    const { Intake } = await import(path.join(root, 'lib/core/intake/index.mjs'));
     const GONE = 'https://gone.example/u/x';
     const statuses = Array.from({ length: 12 }, (_, i) => ({
       noteId: `${GONE.replace('/u/x', '')}/n/${i}`, actor: GONE,
@@ -2285,7 +2287,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
   // --- the push socket has to be the pod's own ---
   {
-    const { sameSocketOrigin } = await import(path.join(root, 'lib/core/intake.mjs'));
+    const { sameSocketOrigin } = await import(path.join(root, 'lib/core/intake/index.mjs'));
     check(sameSocketOrigin('wss://pod.example/ws/abc', 'https://pod.example/')
       && sameSocketOrigin('ws://localhost:3000/ws', 'http://localhost:3000/'),
       'the pod\'s own socket is accepted, including a pod on this machine');
@@ -2366,7 +2368,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   // --- a flood of forged favourites cannot erase real notifications ---
   {
     const { PodStore } = await import(path.join(root, 'lib/core/store.mjs'));
-    const { httpUrl } = await import(path.join(root, 'lib/core/intake.mjs'));
+    const { httpUrl } = await import(path.join(root, 'lib/core/intake/index.mjs'));
     check(httpUrl('https://a.example/u/x') && httpUrl('http://localhost:3000/x')
       && !httpUrl('javascript:alert(1)') && !httpUrl('data:text/html,x')
       && !httpUrl('') && !httpUrl(null),
@@ -2396,7 +2398,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
   // --- a document may only speak for its own origin ---
   {
-    const { authorOf } = await import(path.join(root, 'lib/core/intake.mjs'));
+    const { authorOf } = await import(path.join(root, 'lib/core/intake/index.mjs'));
     const NOTE = 'https://evil.example/n/1';
     const ALICE = 'https://mastodon.example/users/alice';
     check(authorOf({ id: NOTE, attributedTo: ALICE }) === null,
@@ -2420,7 +2422,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
   // --- the actor cache is keyed on who vouched, not on who claimed ---
   {
-    const { Intake } = await import(path.join(root, 'lib/core/intake.mjs'));
+    const { Intake } = await import(path.join(root, 'lib/core/intake/index.mjs'));
     const cached = {};
     const intake = new Intake({
       config: {}, urls: {}, remote: {}, 
@@ -2585,7 +2587,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   check(held.stillHeld() === true, 'stillHeld is true inside the TTL');
   held.heldUntil = Date.now() - 1;
   check(held.stillHeld() === false, 'and false once it has passed');
-  const isrc = fs.readFileSync(path.join(root, 'lib/core/intake.mjs'), 'utf8');
+  const isrc = fs.readFileSync(path.join(root, 'lib/core/intake/index.mjs'), 'utf8');
   check(/this\.lease && !this\.lease\.stillHeld\(\)/.test(isrc),
     'and the drain asks before it deletes anything from the pod');
 }
@@ -2643,7 +2645,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
 // --- 5c-bis. the answers to a Follow that were dropped on the floor ---
 {
-  const { Intake } = await import(path.join(root, 'lib/core/intake.mjs'));
+  const { Intake } = await import(path.join(root, 'lib/core/intake/index.mjs'));
   const mk = (following, origin = {}) => {
     const state = { contacts: { followers: [], following }, notes: [] };
     let published = 0;
@@ -2740,7 +2742,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
 // --- 5c-quater. the envelope is not the note, and an Undo must name what it undoes ---
 {
-  const { Intake } = await import(path.join(root, 'lib/core/intake.mjs'));
+  const { Intake } = await import(path.join(root, 'lib/core/intake/index.mjs'));
   const OURS = 'https://p.example/ap/notes/';
   const mkIn = ({ following = [], followers = [], requests = [], kind = 'person', origin = {} } = {}) => {
     const state = { contacts: { followers, following }, requests, notes: [], statuses: [] };
@@ -2876,7 +2878,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
 // --- 5d-ter. an inbound Follow cannot be bound to the actor it names ---
 {
-  const { Intake } = await import(path.join(root, 'lib/core/intake.mjs'));
+  const { Intake } = await import(path.join(root, 'lib/core/intake/index.mjs'));
   const mk = (config) => {
     const state = { contacts: { followers: [], following: [] }, requests: [] };
     const sent = [];
@@ -3324,18 +3326,18 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     'run-agent reuses its TagFeed rather than orphaning a live one');
 
   // The push socket's backoff must not treat "opened, then dropped" as success.
-  const intakeSrc = fs.readFileSync(path.join(root, 'lib/core/intake.mjs'), 'utf8');
-  const onopen = intakeSrc.slice(intakeSrc.indexOf('this.ws.onopen'), intakeSrc.indexOf('this.ws.onmessage'));
+  const intakeSrc = fs.readFileSync(path.join(root, 'lib/core/intake/channel.mjs'), 'utf8');
+  const onopen = intakeSrc.slice(intakeSrc.indexOf('intake.ws.onopen'), intakeSrc.indexOf('intake.ws.onmessage'));
   check(!/reconnectTries = 0/.test(onopen),
     'a bare open no longer resets the reconnect backoff to its 2s floor');
-  const onclose = intakeSrc.slice(intakeSrc.indexOf('this.ws.onclose'), intakeSrc.indexOf('this.ws.onerror'));
+  const onclose = intakeSrc.slice(intakeSrc.indexOf('intake.ws.onclose'), intakeSrc.indexOf('intake.ws.onerror'));
   check(/RECONNECT_STABLE_MS/.test(onclose) && /reconnectTries = 0/.test(onclose),
     'only a socket that stayed up for a while does');
 }
 
 // --- 5l-bis. a stranger cannot spend our requests, or evict our followers ---
 {
-  const { Intake } = await import(path.join(root, 'lib/core/intake.mjs'));
+  const { Intake } = await import(path.join(root, 'lib/core/intake/index.mjs'));
   const mk = (contacts) => {
     const state = { contacts };
     const fetched = [];
@@ -3555,8 +3557,8 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     'a genuine 404 is still reported as absent');
 
   // The caller that rewrites what it read must not treat a failure as empty.
-  const intakeSrc = fs.readFileSync(path.join(root, 'lib/core/intake.mjs'), 'utf8');
-  const addReply = intakeSrc.slice(intakeSrc.indexOf('async addReply('), intakeSrc.indexOf('async onAccept('));
+  const intakeSrc = fs.readFileSync(path.join(root, 'lib/core/intake/notes.mjs'), 'utf8');
+  const addReply = intakeSrc.slice(intakeSrc.indexOf('function addReply('));
   check(!/getJson\([^)]*\)\.catch/.test(addReply),
     'addReply does not swallow a failed read into an empty replies collection');
 
@@ -3581,7 +3583,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
 // --- 5p. the poll stands down while push is up ---
 {
-  const body = fs.readFileSync(path.join(root, 'lib/core/intake.mjs'), 'utf8');
+  const body = fs.readFileSync(path.join(root, 'lib/core/intake/index.mjs'), 'utf8');
   const fallback = Number((body.match(/const POLL_MS = (\d+) \* 60_000/) || [])[1]);
   const pushOk = Number((body.match(/const POLL_PUSH_OK_MS = (\d+) \* 60_000/) || [])[1]);
   check(fallback === 2 && pushOk === 10
@@ -3601,7 +3603,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
 // --- 5q. a dropped socket reuses its channel instead of making another ---
 {
-  const { Intake } = await import(path.join(root, 'lib/core/intake.mjs'));
+  const { Intake } = await import(path.join(root, 'lib/core/intake/index.mjs'));
   const docs = new Map([['inbox-channel.json',
     { receiveFrom: 'wss://p.example/ch/abc', endAt: new Date(Date.now() + 3600_000).toISOString() }]]);
   let posted = 0, openedWith = null;
@@ -3626,7 +3628,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 // pod cannot grant read on, and the pod answered 403: push off, mail arriving
 // only on the poll.
 {
-  const { Intake } = await import(path.join(root, 'lib/core/intake.mjs'));
+  const { Intake } = await import(path.join(root, 'lib/core/intake/index.mjs'));
   const { apUrls } = await import(path.join(root, 'lib/core/wire.mjs'));
   const urls = apUrls('https://apfed.pod.example/', 'activitypods-js/',
     { publicBase: 'https://front.example/u/jeff/' });
@@ -3903,7 +3905,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
 // --- 5g. a flapping socket backs off instead of re-subscribing every 2s ---
 {
-  const { Intake } = await import(path.join(root, 'lib/core/intake.mjs'));
+  const { Intake } = await import(path.join(root, 'lib/core/intake/index.mjs'));
   const intake = new Intake({
     config: {}, urls: { inbox: 'https://p.example/in/', base: 'https://p.example/' },
     remote: {}, store: {}, deliverer: {}, publisher: {}, log: () => {},
@@ -3964,7 +3966,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
 // --- 5m. inbox attempt counts survive a restart ---
 {
-  const { Intake } = await import(path.join(root, 'lib/core/intake.mjs'));
+  const { Intake } = await import(path.join(root, 'lib/core/intake/index.mjs'));
   const docs = new Map();
   const store = {
     read: (n, d) => (docs.has(n) ? docs.get(n) : d),
@@ -4002,7 +4004,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
 // --- 5n. a failed subscribe schedules another, it does not end push ---
 {
-  const { Intake } = await import(path.join(root, 'lib/core/intake.mjs'));
+  const { Intake } = await import(path.join(root, 'lib/core/intake/index.mjs'));
   const logs = [];
   const intake = new Intake({
     config: {}, urls: { inbox: 'https://p.example/in/', base: 'https://p.example/' },
@@ -4506,7 +4508,7 @@ check(fed.json.length >= local.json.length && trend.json.length === fed.json.len
   'public + trends serve known statuses');
 
 // --- 8. Announce ingestion + tag feed ---
-const { Intake } = await import(path.join(root, 'lib/core/intake.mjs'));
+const { Intake } = await import(path.join(root, 'lib/core/intake/index.mjs'));
 const { TagFeed } = await import(path.join(root, 'lib/connections/tagfeed.mjs'));
 
 const BOB = 'https://m.example/u/bob';
@@ -4869,7 +4871,7 @@ if (up) {
 
 // --- 8g2. inbox spam policy: strangers are mentions, not timeline ---
 {
-  const { Intake } = await import(path.join(root, 'lib/core/intake.mjs'));
+  const { Intake } = await import(path.join(root, 'lib/core/intake/index.mjs'));
   const spamIntake = new Intake({
     config: {}, urls: urls2, remote: {}, store: store2, deliverer: {}, publisher: {},
     log: () => {},
@@ -7621,7 +7623,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
     publisher: { urls: {}, config: {} },
   });
   check(intake15.strictCommit === undefined
-    && !/strictCommit/.test(fs.readFileSync(path.join(root, 'lib/core/intake.mjs'), 'utf8')),
+    && !/strictCommit/.test(fs.readFileSync(path.join(root, 'lib/core/intake/index.mjs'), 'utf8')),
     'the drain commits before it deletes unconditionally — no same-origin exemption');
 
   refuse = true;
@@ -8610,7 +8612,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
 
 // --- 21c. drained mail keeps its original bytes; export emits the paged-collection layout ---
 {
-  const { Intake } = await import(path.join(root, 'lib/core/intake.mjs'));
+  const { Intake } = await import(path.join(root, 'lib/core/intake/index.mjs'));
   const { storageFor } = await import(path.join(root, 'lib/core/storage.mjs'));
   const { exportCollections, DIR_BASE } = await import(path.join(root, 'lib/device/export-collections.mjs'));
   const { createHash } = await import('node:crypto');
@@ -8861,7 +8863,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
 
   // Submission through the real amplify: review holds, approval reposts, retract deletes.
   {
-    const { Intake } = await import(path.join(root, 'lib/core/intake.mjs'));
+    const { Intake } = await import(path.join(root, 'lib/core/intake/index.mjs'));
     const store = mkStore({});
     const ap = mkAtproto();
     const announced = [];
@@ -8958,7 +8960,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
 
 // --- 21f. inbox forwarding (§7.1.2): a reply into our thread reaches followers ---
 {
-  const { Intake } = await import(path.join(root, 'lib/core/intake.mjs'));
+  const { Intake } = await import(path.join(root, 'lib/core/intake/index.mjs'));
   const OURS = 'https://me.example/ap/notes/';
   const FOLLOWERS = 'https://me.example/ap/followers';
   const PUBLIC = 'https://www.w3.org/ns/activitystreams#Public';
@@ -9070,7 +9072,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
 
 // --- 21g. Add/Remove are acknowledged, never dead-lettered (§7.6/§7.9) ---
 {
-  const { Intake } = await import(path.join(root, 'lib/core/intake.mjs'));
+  const { Intake } = await import(path.join(root, 'lib/core/intake/index.mjs'));
   const it = new Intake({
     config: { handle: 'me', kind: 'person' },
     urls: { actor: 'https://me.example/ap/actor', inbox: 'https://me.example/ap/inbox/',
@@ -9090,7 +9092,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
 
 // --- 22a. a co-member of a group we are in is not a stranger ---
 {
-  const { Intake } = await import(path.join(root, 'lib/core/intake.mjs'));
+  const { Intake } = await import(path.join(root, 'lib/core/intake/index.mjs'));
   const GROUP = 'https://g.example/ap/actor';
   const MEMBER = 'https://f.example/users/vincent';
   const docs = {};
@@ -9140,7 +9142,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
 
 // --- 22b. a group's carry promotes a note we only held as a mention ---
 {
-  const { Intake } = await import(path.join(root, 'lib/core/intake.mjs'));
+  const { Intake } = await import(path.join(root, 'lib/core/intake/index.mjs'));
   const GROUP = 'https://g.example/ap/actor';
   const NOTE = 'https://f.example/users/v/statuses/1';
   const st = [{ noteId: NOTE, actor: 'https://f.example/users/v', kind: 'mention' }];
@@ -9496,7 +9498,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
     'a pod that serves private documents to strangers gets NO pending/blocked collections');
 
   // A followed group announcing a Delete moderates away only what it carried.
-  const { Intake } = await import(path.join(root, 'lib/core/intake.mjs'));
+  const { Intake } = await import(path.join(root, 'lib/core/intake/index.mjs'));
   const GROUP25 = 'https://g.example/u/group';
   const removed = [];
   const st25 = {
@@ -9530,7 +9532,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
   const wire26 = await import(path.join(root, 'lib/core/wire.mjs'));
   const social26 = await import(path.join(root, 'lib/core/social.mjs'));
   const { PodStore: PodStore26 } = await import(path.join(root, 'lib/core/store.mjs'));
-  const { Intake } = await import(path.join(root, 'lib/core/intake.mjs'));
+  const { Intake } = await import(path.join(root, 'lib/core/intake/index.mjs'));
   const urls26 = wire26.apUrls('https://pod.example/');
   const MOD = 'https://m.example/u/mod';
   const MEMBER = 'https://m.example/u/member';
@@ -9790,7 +9792,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
 
   // The drain acts on a receipt ONLY in trust mode.
   const { PodStore: PS28 } = await import(path.join(root, 'lib/core/store.mjs'));
-  const { Intake: IK28 } = await import(path.join(root, 'lib/core/intake.mjs'));
+  const { Intake: IK28 } = await import(path.join(root, 'lib/core/intake/index.mjs'));
   const wire28 = await import(path.join(root, 'lib/core/wire.mjs'));
   const urls28 = wire28.apUrls('https://pod.example/');
   const FOLLOWER = 'https://m.example/u/joiner';
@@ -9868,7 +9870,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
 
 // --- 28y. a Bluesky member who bridges later becomes one member, not two ---
 {
-  const { Intake } = await import(path.join(root, 'lib/core/intake.mjs'));
+  const { Intake } = await import(path.join(root, 'lib/core/intake/index.mjs'));
   const DID = 'did:plc:wren99';
   const store28 = new PodStore({ log: () => {} });
   store28.setConfig({ remotePod: 'https://g.example/', handle: 'g', kind: 'group' });
@@ -10475,7 +10477,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
 // --- 29. the rest of the fediverse: type lists, bare Links, signed queries,
 //        and an actor document that admits its own follow policy ---
 {
-  const { isContentType, Intake: IK29 } = await import(path.join(root, 'lib/core/intake.mjs'));
+  const { isContentType, Intake: IK29 } = await import(path.join(root, 'lib/core/intake/index.mjs'));
   const wire29 = await import(path.join(root, 'lib/core/wire.mjs'));
 
   // AS2 lets `type` be a list, and implementations use both forms.
@@ -10954,7 +10956,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
 // too, and the well-known path is only where a pod that states nothing has
 // always been found.
 {
-  const { Intake } = await import(path.join(root, 'lib/core/intake.mjs'));
+  const { Intake } = await import(path.join(root, 'lib/core/intake/index.mjs'));
   const intake = Object.create(Intake.prototype);
   intake.urls = { base: 'https://p.example/' };
   const realFetch = globalThis.fetch;
@@ -11095,7 +11097,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
 //     and shutting it when its time is up.
 {
   const { Publisher } = await import(path.join(root, 'lib/core/publisher.mjs'));
-  const { Intake } = await import(path.join(root, 'lib/core/intake.mjs'));
+  const { Intake } = await import(path.join(root, 'lib/core/intake/index.mjs'));
   const wire35 = await import(path.join(root, 'lib/core/wire.mjs'));
   const polls35 = await import(path.join(root, 'lib/core/polls.mjs'));
   const { pollParams } = await import(path.join(root, 'lib/client/mastoapi.mjs'));

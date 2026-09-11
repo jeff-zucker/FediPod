@@ -22135,8 +22135,8 @@ var require_Permuter = __commonJS({
 var require_NQuads = __commonJS({
   "node_modules/rdf-canonize/lib/NQuads.js"(exports, module2) {
     "use strict";
-    var RDF6 = "http://www.w3.org/1999/02/22-rdf-syntax-ns#";
-    var RDF_LANGSTRING = RDF6 + "langString";
+    var RDF5 = "http://www.w3.org/1999/02/22-rdf-syntax-ns#";
+    var RDF_LANGSTRING = RDF5 + "langString";
     var XSD_STRING = "http://www.w3.org/2001/XMLSchema#string";
     var TYPE_NAMED_NODE = "NamedNode";
     var TYPE_BLANK_NODE = "BlankNode";
@@ -23508,23 +23508,23 @@ var require_util = __commonJS({
 var require_constants = __commonJS({
   "node_modules/jsonld/lib/constants.js"(exports, module2) {
     "use strict";
-    var RDF6 = "http://www.w3.org/1999/02/22-rdf-syntax-ns#";
+    var RDF5 = "http://www.w3.org/1999/02/22-rdf-syntax-ns#";
     var XSD2 = "http://www.w3.org/2001/XMLSchema#";
     module2.exports = {
       // TODO: Deprecated and will be removed later. Use LINK_HEADER_CONTEXT.
       LINK_HEADER_REL: "http://www.w3.org/ns/json-ld#context",
       LINK_HEADER_CONTEXT: "http://www.w3.org/ns/json-ld#context",
-      RDF: RDF6,
-      RDF_LIST: RDF6 + "List",
-      RDF_FIRST: RDF6 + "first",
-      RDF_REST: RDF6 + "rest",
-      RDF_NIL: RDF6 + "nil",
-      RDF_TYPE: RDF6 + "type",
-      RDF_PLAIN_LITERAL: RDF6 + "PlainLiteral",
-      RDF_XML_LITERAL: RDF6 + "XMLLiteral",
-      RDF_JSON_LITERAL: RDF6 + "JSON",
-      RDF_OBJECT: RDF6 + "object",
-      RDF_LANGSTRING: RDF6 + "langString",
+      RDF: RDF5,
+      RDF_LIST: RDF5 + "List",
+      RDF_FIRST: RDF5 + "first",
+      RDF_REST: RDF5 + "rest",
+      RDF_NIL: RDF5 + "nil",
+      RDF_TYPE: RDF5 + "type",
+      RDF_PLAIN_LITERAL: RDF5 + "PlainLiteral",
+      RDF_XML_LITERAL: RDF5 + "XMLLiteral",
+      RDF_JSON_LITERAL: RDF5 + "JSON",
+      RDF_OBJECT: RDF5 + "object",
+      RDF_LANGSTRING: RDF5 + "langString",
       XSD: XSD2,
       XSD_BOOLEAN: XSD2 + "boolean",
       XSD_DOUBLE: XSD2 + "double",
@@ -33267,8 +33267,8 @@ var PodStore = class {
   // oldest — and with no stream event, which would show the post twice.
   _mergeStatus(all, at, s) {
     const row = all[at];
-    const known = new Set((row.sourceAccts || []).map((v) => v.acct));
-    const fresh = (s.sourceAccts || []).filter((v) => v && !known.has(v.acct));
+    const known2 = new Set((row.sourceAccts || []).map((v) => v.acct));
+    const fresh = (s.sourceAccts || []).filter((v) => v && !known2.has(v.acct));
     const first = (k) => k === "post" || k === "timeline";
     const raise = first(s.kind) && !first(row.kind);
     if (!fresh.length && !raise) return { added: false, merged: false, status: row };
@@ -44575,9 +44575,9 @@ var Publisher = class {
     } catch {
       return 0;
     }
-    const known = new Set(contacts.followers.map((f) => f.actor));
+    const known2 = new Set(contacts.followers.map((f) => f.actor));
     const removed = new Set((contacts.removedFollowers || []).map((r) => r.actor));
-    const missing = published.filter((a) => typeof a === "string" && !known.has(a) && !removed.has(a));
+    const missing = published.filter((a) => typeof a === "string" && !known2.has(a) && !removed.has(a));
     if (!missing.length) return 0;
     let recovered = 0;
     for (const actor of missing.slice(0, 200)) {
@@ -44625,11 +44625,11 @@ var Publisher = class {
     }
     if (!Array.isArray(published) || !published.length) return 0;
     const idOf = (i) => typeof i === "string" ? i : i?.id || null;
-    const known = new Set(outbox.map(idOf).filter(Boolean));
+    const known2 = new Set(outbox.map(idOf).filter(Boolean));
     const removed = new Set(this.store.read("outbox-removed.json", []).map((r) => r.id));
     const missing = published.filter((i) => {
       const id = idOf(i);
-      return id && !known.has(id) && !removed.has(id);
+      return id && !known2.has(id) && !removed.has(id);
     });
     if (!missing.length) return 0;
     outbox.push(...missing);
@@ -44869,8 +44869,8 @@ var Publisher = class {
     if (which.blocked) await this.publishBlocked();
     if (which.outbox) {
       const outbox = this.store.read("outbox.json", []);
-      const known = this.store.read("published.json", {}).outboxIndex;
-      if (which.force || !Array.isArray(known)) await this.reconcileOutbox(outbox);
+      const known2 = this.store.read("published.json", {}).outboxIndex;
+      if (which.force || !Array.isArray(known2)) await this.reconcileOutbox(outbox);
       await this.publishOutbox(outbox, { acls: which.acls, force: which.force });
     }
   }
@@ -45397,95 +45397,10 @@ var Publisher = class {
   }
 };
 
-// lib/pod/links.mjs
-function linkTargets(headerValue, rel, baseUrl) {
-  if (!headerValue) return [];
-  const wanted = String(rel).toLowerCase();
-  const out = [];
-  for (const part of String(headerValue).split(/,(?![^<]*>)/u)) {
-    const link = /^\s*<([^>]*)>\s*(.*)$/u.exec(part);
-    if (!link) continue;
-    const relParam = /(?:^|;)\s*rel\s*=\s*(?:"([^"]*)"|([^;"\s]+))/iu.exec(link[2]);
-    const names = (relParam?.[1] ?? relParam?.[2] ?? "").toLowerCase().split(/\s+/u);
-    if (!names.includes(wanted)) continue;
-    try {
-      out.push(new URL(link[1], baseUrl).href);
-    } catch {
-    }
-  }
-  return out;
-}
-var REL = {
-  acl: "acl",
-  storageDescription: "http://www.w3.org/ns/solid/terms#storageDescription",
-  owner: "http://www.w3.org/ns/solid/terms#owner"
-};
-
-// lib/pod/notifications.mjs
-var RDF3 = Namespace("http://www.w3.org/1999/02/22-rdf-syntax-ns#");
-var NOTIFY = Namespace("http://www.w3.org/ns/solid/notifications#");
-var WS_CHANNEL = "WebSocketChannel2023";
-async function storageDescriptionUrl(podBase, { fetchImpl = fetch, headers = {}, timeoutMs = 2e4 } = {}) {
-  try {
-    const head = await fetchImpl(podBase, {
-      method: "HEAD",
-      headers,
-      signal: AbortSignal.timeout(timeoutMs)
-    });
-    const [found] = linkTargets(head.headers.get("link"), REL.storageDescription, podBase);
-    if (found) return found;
-  } catch {
-  }
-  return podBase + ".well-known/solid";
-}
-async function readWebSocketChannel(descUrl, { fetchImpl = fetch, headers = {}, timeoutMs = 2e4 } = {}) {
-  const res = await fetchImpl(descUrl, {
-    headers: { accept: "text/turtle", ...headers },
-    signal: AbortSignal.timeout(timeoutMs)
-  });
-  const g = graph();
-  try {
-    parse2(await readCapped2(res), g, descUrl, "text/turtle");
-  } catch (e) {
-    return { channel: null, error: `service description unparsable (${e.message})` };
-  }
-  const channel = g.each(null, RDF3("type"), NOTIFY(WS_CHANNEL), null).map((n) => n.value).find(Boolean) || g.each(null, NOTIFY("channelType"), NOTIFY(WS_CHANNEL), null).map((n) => n.value).find(Boolean);
-  return { channel: channel || null, error: channel ? null : `no ${WS_CHANNEL} service` };
-}
-async function subscribeToInbox(pod, { channelUrl, podTopicUrl, ...rest }) {
-  return pod.fetch(channelUrl, {
-    method: "POST",
-    headers: { "content-type": "application/ld+json" },
-    body: JSON.stringify({
-      "@context": ["https://www.w3.org/ns/solid/notification/v1"],
-      type: `http://www.w3.org/ns/solid/notifications#${WS_CHANNEL}`,
-      topic: podTopicUrl,
-      ...rest
-    })
-  });
-}
-
-// lib/core/intake.mjs
-init_wire();
+// lib/core/intake/index.mjs
 init_safefetch();
-var RDF4 = Namespace("http://www.w3.org/1999/02/22-rdf-syntax-ns#");
-var NOTIFY2 = Namespace("http://www.w3.org/ns/solid/notifications#");
-var POLL_MS = 2 * 6e4;
-var POLL_PUSH_OK_MS = 10 * 6e4;
-var CHANNEL_DOC = "inbox-channel.json";
-var RECONNECT_MIN_MS = 2e3;
-var RECONNECT_MAX_MS = 5 * 6e4;
-var RECONNECT_STABLE_MS = 6e4;
-var OPEN_DRAIN_MIN_GAP_MS = 3e4;
-var DRAIN_COOLDOWN_MIN_MS = 2 * 6e4;
-var DRAIN_COOLDOWN_MAX_MS = 30 * 6e4;
-var DELETE_GAP_MS = 150;
-var CHAIN_GAP_MS = 5e3;
-var DELETE_BATCH = 10;
-var ATTEMPTS_DOC = "intake-attempts.json";
-var ATTEMPTS_TTL_MS = 7 * 24 * 60 * 6e4;
-var MAX_ITEM_ATTEMPTS = 5;
-var MAX_ITEMS_PER_DRAIN = 50;
+
+// lib/core/intake/activity.mjs
 var MAX_REPLIES_RECORDED = 500;
 var MAX_FORWARDED = 2e3;
 var MAX_PENDING_REVIEW = 500;
@@ -45597,6 +45512,843 @@ function authorOf(note, delivered = null) {
   if (!author) return null;
   return sameIdentity(note?.id, author) ? author : null;
 }
+
+// lib/pod/links.mjs
+function linkTargets(headerValue, rel, baseUrl) {
+  if (!headerValue) return [];
+  const wanted = String(rel).toLowerCase();
+  const out = [];
+  for (const part of String(headerValue).split(/,(?![^<]*>)/u)) {
+    const link = /^\s*<([^>]*)>\s*(.*)$/u.exec(part);
+    if (!link) continue;
+    const relParam = /(?:^|;)\s*rel\s*=\s*(?:"([^"]*)"|([^;"\s]+))/iu.exec(link[2]);
+    const names = (relParam?.[1] ?? relParam?.[2] ?? "").toLowerCase().split(/\s+/u);
+    if (!names.includes(wanted)) continue;
+    try {
+      out.push(new URL(link[1], baseUrl).href);
+    } catch {
+    }
+  }
+  return out;
+}
+var REL = {
+  acl: "acl",
+  storageDescription: "http://www.w3.org/ns/solid/terms#storageDescription",
+  owner: "http://www.w3.org/ns/solid/terms#owner"
+};
+
+// lib/pod/notifications.mjs
+var RDF3 = Namespace("http://www.w3.org/1999/02/22-rdf-syntax-ns#");
+var NOTIFY = Namespace("http://www.w3.org/ns/solid/notifications#");
+var WS_CHANNEL = "WebSocketChannel2023";
+async function storageDescriptionUrl(podBase, { fetchImpl = fetch, headers = {}, timeoutMs = 2e4 } = {}) {
+  try {
+    const head = await fetchImpl(podBase, {
+      method: "HEAD",
+      headers,
+      signal: AbortSignal.timeout(timeoutMs)
+    });
+    const [found] = linkTargets(head.headers.get("link"), REL.storageDescription, podBase);
+    if (found) return found;
+  } catch {
+  }
+  return podBase + ".well-known/solid";
+}
+async function readWebSocketChannel(descUrl, { fetchImpl = fetch, headers = {}, timeoutMs = 2e4 } = {}) {
+  const res = await fetchImpl(descUrl, {
+    headers: { accept: "text/turtle", ...headers },
+    signal: AbortSignal.timeout(timeoutMs)
+  });
+  const g = graph();
+  try {
+    parse2(await readCapped2(res), g, descUrl, "text/turtle");
+  } catch (e) {
+    return { channel: null, error: `service description unparsable (${e.message})` };
+  }
+  const channel = g.each(null, RDF3("type"), NOTIFY(WS_CHANNEL), null).map((n) => n.value).find(Boolean) || g.each(null, NOTIFY("channelType"), NOTIFY(WS_CHANNEL), null).map((n) => n.value).find(Boolean);
+  return { channel: channel || null, error: channel ? null : `no ${WS_CHANNEL} service` };
+}
+async function subscribeToInbox(pod, { channelUrl, podTopicUrl, ...rest }) {
+  return pod.fetch(channelUrl, {
+    method: "POST",
+    headers: { "content-type": "application/ld+json" },
+    body: JSON.stringify({
+      "@context": ["https://www.w3.org/ns/solid/notification/v1"],
+      type: `http://www.w3.org/ns/solid/notifications#${WS_CHANNEL}`,
+      topic: podTopicUrl,
+      ...rest
+    })
+  });
+}
+
+// lib/core/intake/channel.mjs
+init_safefetch();
+var CHANNEL_DOC = "inbox-channel.json";
+var RECONNECT_MIN_MS = 2e3;
+var RECONNECT_MAX_MS = 5 * 6e4;
+var RECONNECT_STABLE_MS = 6e4;
+var OPEN_DRAIN_MIN_GAP_MS = 3e4;
+function reconnectDelay(intake) {
+  const capped = Math.min(RECONNECT_MIN_MS * 2 ** intake.reconnectTries, RECONNECT_MAX_MS);
+  intake.reconnectTries++;
+  return Math.round(capped * (0.8 + Math.random() * 0.4));
+}
+async function subscribe(intake) {
+  try {
+    await intake._subscribeOnce();
+  } catch (e) {
+    intake.wsState = "subscribe-error";
+    const wait = intake._reconnectDelay();
+    intake.log(`subscribe failed (${e.message}) \u2014 retrying in ${Math.round(wait / 1e3)}s (polling meanwhile)`);
+    if (!intake.stopped) {
+      intake.resubTimer = setTimeout(() => intake.subscribe().catch(() => {
+      }), wait);
+      intake.resubTimer.unref?.();
+    }
+  }
+}
+async function storageDescriptionUrl2(intake) {
+  return storageDescriptionUrl(
+    intake.urls.base,
+    { headers: { "user-agent": USER_AGENT }, timeoutMs: HTTP_TIMEOUT_MS }
+  );
+}
+async function subscribeOnce(intake) {
+  const saved = intake.store.read(CHANNEL_DOC, null);
+  if (saved?.receiveFrom && (!saved.endAt || Date.parse(saved.endAt) - Date.now() > 6e4)) {
+    intake._openSocket(saved.receiveFrom, true);
+    return;
+  }
+  const descUrl = await intake._storageDescriptionUrl();
+  const { channel, error } = await readWebSocketChannel(
+    descUrl,
+    { headers: { "user-agent": USER_AGENT }, timeoutMs: HTTP_TIMEOUT_MS }
+  );
+  if (!channel) {
+    intake.wsState = "unavailable";
+    intake.log(`${error} \u2014 polling only`);
+    return;
+  }
+  const topic = intake.urls.toPod ? intake.urls.toPod(intake.urls.inbox) : intake.urls.inbox;
+  const sub = await subscribeToInbox(
+    intake.remote,
+    { channelUrl: channel, podTopicUrl: topic }
+  );
+  const body = await readCapped(sub).then(JSON.parse).catch(() => null);
+  if (!body?.receiveFrom) {
+    intake.wsState = `subscribe-failed-${sub.status}`;
+    const wait = intake._reconnectDelay();
+    intake.log(`subscription failed (${sub.status}) \u2014 retrying in ${Math.round(wait / 1e3)}s (polling meanwhile)`);
+    if (!intake.stopped) {
+      intake.resubTimer = setTimeout(() => intake.subscribe().catch((e) => intake.log(`resubscribe: ${e.message}`)), wait);
+      intake.resubTimer.unref?.();
+    }
+    return;
+  }
+  intake.store.write(CHANNEL_DOC, { receiveFrom: body.receiveFrom, endAt: body.endAt || null });
+  intake._openSocket(body.receiveFrom, false);
+}
+function openSocket(intake, receiveFrom, reused) {
+  if (!sameSocketOrigin(receiveFrom, intake.urls.base)) {
+    intake.wsState = "refused";
+    intake.log(`subscription named ${receiveFrom}, which is not this pod \u2014 polling only`);
+    if (reused) intake.store.write(CHANNEL_DOC, null);
+    return;
+  }
+  intake.ws = new WebSocket(receiveFrom);
+  intake.ws.onopen = () => {
+    intake.wsState = "open";
+    if (!intake._announcedPush) {
+      intake.log("inbox push subscription active");
+      intake._announcedPush = true;
+    }
+    intake._openedAt = Date.now();
+    if (Date.now() - intake.lastDrainAtMs > OPEN_DRAIN_MIN_GAP_MS) {
+      intake.drain().catch((e) => intake.log(`drain: ${e.message}`));
+    }
+  };
+  intake.ws.onmessage = () => intake.drain().catch((e) => intake.log(`drain: ${e.message}`));
+  intake.ws.onclose = () => {
+    intake.wsState = "closed";
+    if (intake._openedAt && Date.now() - intake._openedAt >= RECONNECT_STABLE_MS) intake.reconnectTries = 0;
+    intake._openedAt = 0;
+    if (!intake.stopped) {
+      intake.resubTimer = setTimeout(() => intake.subscribe().catch((e) => intake.log(`resubscribe: ${e.message}`)), intake._reconnectDelay());
+      intake.resubTimer.unref?.();
+    }
+  };
+  intake.ws.onerror = () => {
+    intake.wsState = "error";
+    if (reused) intake.store.write(CHANNEL_DOC, null);
+  };
+}
+
+// lib/core/intake/verify.mjs
+init_safefetch();
+async function fetchAP(intake, url) {
+  const res = await intake.deliverer.signedFetch(url, { headers: { accept: ACCEPT_AP2 } });
+  if (res.status >= 400) return null;
+  const { readCapped: readCapped3 } = await Promise.resolve().then(() => (init_safefetch(), safefetch_exports));
+  const ct = (res.headers.get("content-type") || "").split(";")[0].trim().toLowerCase();
+  if (ct && !ct.endsWith("json")) return null;
+  let doc = null;
+  try {
+    doc = JSON.parse(await readCapped3(res));
+  } catch (e) {
+    intake.log(`fetch ${url}: unreadable as JSON \u2014 ${e.message}`);
+    return null;
+  }
+  const landed = res.finalUrl || url;
+  if (!sameOrigin(landed, url) && doc && doc.id && !sameOrigin(doc.id, landed)) {
+    intake.log(`fetch ${url}: redirected to ${landed}, which is not where ${doc.id} lives \u2014 refused`);
+    return null;
+  }
+  if (isActorType(doc?.type) && doc.id && sameOrigin(doc.id, url)) {
+    intake.store.cacheActor(doc.id, doc);
+  }
+  return doc;
+}
+function known(intake, id) {
+  const c = intake.store.getContacts();
+  return c.followers.some((f) => f.actor === id) || c.following.some((f) => f.actor === id) || intake.store.getStatuses().some((s) => s.noteId === id || s.actor === id) || !!intake.store.getActors()[id];
+}
+function gatewaySecret(intake) {
+  return intake.store.getConfig()?.gateway?.hmacSecret || null;
+}
+function bumpGatewayStat(intake, verified) {
+  const s = intake.store.read("gateway-stats.json", { verified: 0, unverified: 0 });
+  if (verified) s.verified++;
+  else s.unverified++;
+  s.lastAt = (/* @__PURE__ */ new Date()).toISOString();
+  intake.store.write("gateway-stats.json", s);
+}
+async function readReceipt(intake, itemUrl) {
+  const secret = intake.gatewaySecret();
+  if (!secret) return null;
+  try {
+    const { readCapped: cap } = await Promise.resolve().then(() => (init_safefetch(), safefetch_exports));
+    const receipt = await readDeliveryReceipt(intake.remote, itemUrl, { maxBytes: 64 * 1024, readCapped: cap });
+    if (!receipt) return null;
+    const { verifyReceipt: verifyReceipt2 } = await Promise.resolve().then(() => (init_httpsig(), httpsig_exports));
+    return verifyReceipt2(receipt, secret) ? receipt : null;
+  } catch {
+    return null;
+  }
+}
+function receiptVouchesFor(intake, receipt, actor) {
+  if (!receipt?.verified) return false;
+  if (!receipt.actor || receipt.actor !== actor) return false;
+  if (!receipt.keyId || !sameOrigin(receipt.keyId, actor)) return false;
+  return true;
+}
+async function isGone(intake, url) {
+  let res;
+  try {
+    res = await intake.deliverer.signedFetch(url, { headers: { accept: ACCEPT_AP2 } });
+  } catch {
+    return null;
+  }
+  if (res.status === 404 || res.status === 410) return true;
+  if (res.status < 400) {
+    try {
+      const { readCapped: readCapped3 } = await Promise.resolve().then(() => (init_safefetch(), safefetch_exports));
+      return JSON.parse(await readCapped3(res))?.type === "Tombstone";
+    } catch {
+      return false;
+    }
+  }
+  return null;
+}
+
+// lib/core/intake/group.mjs
+function isModerationAsk(intake, activity) {
+  if (activity.type === "Block") return true;
+  if (activity.type === "Undo") {
+    return typeof activity.object === "object" && activity.object?.type === "Block";
+  }
+  if (activity.type === "Delete") {
+    const id = typeof activity.object === "string" ? activity.object : activity.object?.id;
+    const s = id && intake.store.getStatuses().find((x) => x.noteId === id);
+    return !!s && s.kind !== "post";
+  }
+  if (activity.type === "Add" || activity.type === "Remove") {
+    const target = typeof activity.target === "string" ? activity.target : activity.target?.id;
+    return target === intake.urls.moderators;
+  }
+  return false;
+}
+function queueModeration(intake, activity, actor, { trusted = false } = {}) {
+  const q = intake.store.read("modqueue.json", []);
+  const objectId = typeof activity.object === "string" ? activity.object : activity.object?.id;
+  const key = [activity.type, actor, objectId || JSON.stringify(activity.object || null)].join(" ");
+  const seen = q.find((e) => e.key === key);
+  if (seen) {
+    if (trusted && !seen.verified) {
+      seen.verified = true;
+      intake.store.write("modqueue.json", q);
+    }
+    return;
+  }
+  q.unshift({
+    key,
+    id: (intake.serial++).toString(36) + "-" + q.length,
+    type: activity.type,
+    moderator: actor,
+    activity: trimActivity(activity),
+    verified: !!trusted,
+    at: (/* @__PURE__ */ new Date()).toISOString()
+  });
+  let kept = q;
+  if (kept.length > MAX_MODQUEUE) {
+    const verified = kept.filter((e) => e.verified);
+    const rest = kept.filter((e) => !e.verified);
+    kept = [...verified, ...rest].slice(0, MAX_MODQUEUE);
+  }
+  intake.store.write("modqueue.json", kept);
+  intake.log(`moderation queued from ${actor}${trusted ? "" : " (unverified)"}: ${activity.type} ${objectId || ""}`);
+}
+async function amplify(intake, noteId, { approved = false, activity = null } = {}) {
+  const s = intake.store.getStatuses().find((x) => x.noteId === noteId);
+  if (!s) return;
+  if (s.announcedAt) return;
+  if (s.direct || s.nonPublic) {
+    intake.log(`not amplified \u2014 ${noteId} was not addressed publicly, and a group never widens a post's audience`);
+    return;
+  }
+  const contacts = intake.store.getContacts();
+  if (!contacts.followers.some((f) => f.actor === s.actor)) {
+    intake.log(`not amplified \u2014 ${s.actor} is not a member`);
+    return;
+  }
+  if (intake.store.getMuted().actors.includes(s.actor)) {
+    intake.log(`not amplified \u2014 ${s.actor} is muted`);
+    return;
+  }
+  if (intake.config.review && !approved) {
+    const pending = intake.store.getPending();
+    if (!pending.some((p) => p.noteId === noteId)) {
+      if (pending.length >= MAX_PENDING_REVIEW) {
+        intake.log(`review queue is full (${MAX_PENDING_REVIEW}) \u2014 ${noteId} not held. Approve or decline what is waiting and it will be carried on redelivery.`);
+        return;
+      }
+      pending.unshift({ noteId, actor: s.actor, activity, at: (/* @__PURE__ */ new Date()).toISOString() });
+      intake.store.setPending(pending);
+    }
+    intake.log(`held for review: ${noteId}`);
+    return;
+  }
+  if (s.kind === "bsky") {
+    if (!intake.bskyGroup) {
+      intake.log(`not amplified \u2014 ${noteId} is a bluesky post and no account is connected`);
+      return;
+    }
+    return intake.bskyGroup.carry(s);
+  }
+  const held = intake.store.getPending().find((p) => p.noteId === noteId);
+  const inboxes = intake.announceTargets(s.actor);
+  const { announceActivity: announceActivity2 } = await Promise.resolve().then(() => (init_wire(), wire_exports));
+  const wrapperObject = (a) => {
+    const inner = a?.object;
+    const id = typeof inner === "string" ? inner : inner?.id;
+    return id === noteId ? a : null;
+  };
+  const act = announceActivity2({
+    urls: intake.urls,
+    object: wrapperObject(activity) || wrapperObject(held?.activity) || noteId,
+    serial: intake.serial++,
+    audience: intake.urls.actor
+  });
+  await intake.deliverer.deliverToAll(inboxes, act);
+  intake.store.updateStatus(noteId, { announcedAt: (/* @__PURE__ */ new Date()).toISOString(), announceActivity: act });
+  await intake.publisher.recordOutbox(act);
+  intake.store.setPending(intake.store.getPending().filter((p) => p.noteId !== noteId));
+  intake.log(`amplified ${noteId} \u2192 ${inboxes.length} inbox(es)`);
+  await intake.bskyGroup?.mirrorCarry(s).catch((e) => intake.log(`bluesky mirror of the carry failed: ${e.message}`));
+}
+async function isCoMember(intake, actor) {
+  if (intake.config.kind === "group") return false;
+  const groups = intake.store.getContacts().following.filter((f) => f.accepted && intake.store.getActors()[f.actor]?.type === "Group").map((f) => f.actor);
+  if (!groups.length) return false;
+  const cache = intake.store.read("comembers.json", {});
+  const fresh = Date.now() - CO_MEMBER_TTL_MS;
+  let changed = false;
+  for (const g of groups) {
+    const held = cache[g];
+    if (held && Date.parse(held.at || 0) > fresh) continue;
+    const doc = await intake.fetchAP(g).catch(() => null);
+    const list3 = doc?.followers ? await intake.collectionMembers(doc.followers) : null;
+    if (!list3) continue;
+    cache[g] = { at: (/* @__PURE__ */ new Date()).toISOString(), members: list3 };
+    changed = true;
+  }
+  if (changed) intake.store.write("comembers.json", cache);
+  return groups.some((g) => cache[g]?.members?.includes(actor));
+}
+async function collectionMembers(intake, url) {
+  const out = [];
+  let next = url;
+  for (let page = 0; next && page < 10 && out.length < CO_MEMBER_MAX; page++) {
+    const doc = await intake.fetchAP(next).catch(() => null);
+    if (!doc) return out.length ? out : null;
+    for (const item of doc.orderedItems || doc.items || []) {
+      if (typeof item === "string") out.push(item);
+    }
+    next = doc.first && page === 0 ? doc.first : doc.next;
+    if (typeof next === "object") next = next?.id;
+  }
+  return out;
+}
+function announceTargets(intake, author) {
+  const byTarget = /* @__PURE__ */ new Map();
+  for (const f of intake.store.getContacts().followers) {
+    const t = f.sharedInbox || f.inbox;
+    if (!t) continue;
+    if (!byTarget.has(t)) byTarget.set(t, /* @__PURE__ */ new Set());
+    byTarget.get(t).add(f.actor);
+  }
+  return [...byTarget].filter(([, who]) => !(who.size === 1 && who.has(author))).map(([t]) => t);
+}
+
+// lib/core/intake/activities.mjs
+function onAddRemove(intake, activity, actor) {
+  const target = typeof activity.target === "string" ? activity.target : activity.target?.id;
+  const ours = target && [intake.urls.followers, intake.urls.following, intake.urls.featured].filter(Boolean).includes(target);
+  intake.log(ours ? `${activity.type} from ${actor} targets our ${target} \u2014 no remote may modify it; acknowledged` : `${activity.type} from ${actor} targets ${target || "no collection of ours"}; nothing here to change`);
+  return;
+}
+async function onFollow(intake, activity, actor, { trusted = false } = {}) {
+  const doc = await intake.fetchAP(actor);
+  if (!doc) return `actor fetch failed (${actor})`;
+  if (doc.id !== actor) return `actor id mismatch (${actor} vs ${doc.id})`;
+  if (!doc.inbox) return `actor has no inbox (${actor})`;
+  const contacts = intake.store.getContacts();
+  const existing = contacts.followers.find((f) => f.actor === actor);
+  const unverifiedNeedsOk = intake.config.kind !== "group" && !intake.config.autoAcceptFollows && !trusted;
+  const mustApprove = intake.config.approveJoins || unverifiedNeedsOk;
+  if (mustApprove && !existing) {
+    const reqs = intake.store.getRequests();
+    if (!reqs.some((r) => r.actor === actor)) {
+      reqs.unshift({
+        actor,
+        inbox: doc.inbox,
+        sharedInbox: doc.endpoints?.sharedInbox,
+        activity: trimActivity(activity),
+        at: (/* @__PURE__ */ new Date()).toISOString()
+      });
+      intake.store.setRequests(reqs.slice(0, 500));
+      intake.store.addNotification({ type: "follow-request", actor });
+      await intake.republish({ pending: true });
+    }
+    intake.log(`join requested: ${actor}`);
+    return;
+  }
+  if (existing) {
+  } else {
+    const bridgedDid = /^https:\/\/bsky\.brid\.gy\/ap\/(did:[^/]+)$/.exec(actor)?.[1];
+    if (bridgedDid) {
+      const before = contacts.followers.length;
+      contacts.followers = contacts.followers.filter((f) => f.bsky?.did !== bridgedDid);
+      if (contacts.followers.length < before) {
+        intake.log(`bluesky member ${bridgedDid} is bridged now \u2014 the native record gives way to it`);
+      }
+    }
+    contacts.followers.push({
+      actor,
+      inbox: doc.inbox,
+      sharedInbox: doc.endpoints?.sharedInbox,
+      followId: activity.id,
+      ...bridgedDid ? { bsky: { did: bridgedDid, bridged: true } } : {}
+    });
+    intake.store.setContacts(contacts);
+    intake.store.addNotification({ type: "follow", actor });
+    await intake.republish({ followers: true });
+    intake.log(`new follower: ${actor}`);
+  }
+  const { acceptActivity: acceptActivity2 } = await Promise.resolve().then(() => (init_wire(), wire_exports));
+  await intake.deliverer.deliver(
+    doc.inbox,
+    acceptActivity2({ urls: intake.urls, followActivity: activity, serial: intake.serial++ })
+  );
+  intake.log(`Accept sent \u2192 ${doc.inbox}`);
+}
+async function onUndo(intake, activity, actor, { trusted = false } = {}) {
+  if (typeof activity.object === "object" && activity.object?.type && activity.object.type !== "Follow") return;
+  const named = typeof activity.object === "string" ? activity.object : activity.object?.id;
+  if (!named && !trusted) return;
+  const undoneId = typeof activity.object === "string" ? activity.object : activity.object?.id;
+  const contacts = intake.store.getContacts();
+  const rec = contacts.followers.find((f) => f.actor === actor);
+  if (!rec) {
+    const reqs = intake.store.getRequests();
+    const pending = reqs.find((r) => r.actor === actor);
+    if (pending) {
+      const theirs = pending.activity?.id;
+      if (!trusted && (!theirs || named !== theirs)) {
+        intake.log(`Undo from ${actor} does not name the request we hold \u2014 ignored`);
+        return;
+      }
+      intake.store.setRequests(reqs.filter((r) => r.actor !== actor));
+      await intake.republish({ pending: true });
+      intake.log(`join request withdrawn: ${actor}`);
+    }
+    return;
+  }
+  if (trusted) {
+    dropFollower(contacts, actor, "undo-follow");
+    intake.store.setContacts(contacts);
+    await intake.republish({ followers: true });
+    intake.log(`unfollowed by ${actor} (gateway-verified)`);
+    return;
+  }
+  if (!rec.followId) {
+    intake.log(`Undo from ${actor} cannot be matched \u2014 this follower was ${rec.recovered ? "recovered from the pod" : "recorded before follow ids were kept"}, so its follow id is unknown. Ignored; \`fedipod eject ${actor}\` if they did leave.`);
+    return;
+  }
+  if (undoneId !== rec.followId) {
+    intake.log(`Undo from ${actor} does not name the follow we hold (revokes ${undoneId || "nothing"}, current is ${rec.followId}) \u2014 ignored`);
+    return;
+  }
+  dropFollower(contacts, actor, "undo-follow");
+  intake.store.setContacts(contacts);
+  await intake.republish({ followers: true });
+  intake.log(`unfollowed by ${actor}`);
+}
+async function onCreate(intake, activity, actor) {
+  const objectId = typeof activity.object === "string" ? activity.object : activity.object?.id;
+  if (!objectId) return "Create without object id";
+  if (intake.store.isBlocked(objectId)) return `blocked domain (${objectId})`;
+  if (!intake.sameIdentity(objectId, actor)) return `object/actor identity mismatch (${objectId})`;
+  const envelope = typeof activity.object === "object" ? { ...activity, ...activity.object } : activity;
+  if (!intake.concernsUs(envelope, actor)) return `not addressed to us (${objectId})`;
+  const ingested = intake.store.getStatuses().some((x) => x.noteId === objectId && (x.kind === "timeline" || x.kind === "mention"));
+  if (!ingested) {
+    const rejected = await intake.ingestNote(objectId, actor);
+    if (rejected) return rejected;
+  }
+  if (intake.config.kind === "group") await intake.amplify(objectId, { activity });
+}
+async function onAnnouncedDelete(intake, actor, del) {
+  const followed = intake.store.getContacts().following.some((f) => f.actor === actor && f.accepted);
+  if (!followed) {
+    intake.log(`announced Delete from unfollowed ${actor} \u2014 ignored`);
+    return;
+  }
+  const targetId = typeof del.object === "string" ? del.object : del.object?.id;
+  if (!targetId) return "announced Delete without an object";
+  const s = intake.store.getStatuses().find((x) => x.noteId === targetId);
+  if (!s || s.kind === "post" || s.via !== actor) return;
+  await intake.forget(s);
+  intake.log(`moderated away by ${actor}: ${targetId}`);
+}
+async function onAnnounce(intake, activity, actor, objectId) {
+  if (!objectId) return "Announce without object id";
+  const followed = intake.store.getContacts().following.some((f) => f.actor === actor && f.accepted);
+  if (!followed) {
+    intake.log(`Announce from unfollowed ${actor} \u2014 ignored`);
+    return;
+  }
+  if (intake.store.isBlocked(objectId)) return `blocked domain (${objectId})`;
+  const existing = intake.store.getStatuses().find((s) => s.noteId === objectId);
+  if (existing) {
+    if (!["timeline", "post"].includes(existing.kind)) {
+      intake.store.updateStatus(objectId, { kind: "timeline", via: actor });
+      intake.log(`promoted to timeline (carried by ${actor}): ${objectId}`);
+    }
+    return;
+  }
+  return intake.ingestNote(objectId, actor, { via: actor });
+}
+async function onDelete(intake, activity, actor) {
+  const objectId = typeof activity.object === "string" ? activity.object : activity.object?.id;
+  if (!objectId) return "Delete without object id";
+  if (!intake.sameIdentity(objectId, actor)) return `Delete crosses identities (${objectId})`;
+  if (!intake.known(objectId)) return;
+  const gone = await intake.isGone(objectId);
+  if (gone === null) throw new Error(`cannot confirm ${objectId} is gone \u2014 will retry`);
+  if (!gone) return `Delete for something still published (${objectId})`;
+  if (objectId === actor) {
+    const contacts = intake.store.getContacts();
+    dropFollower(contacts, actor, "account-deleted");
+    contacts.following = contacts.following.filter((f) => f.actor !== actor);
+    intake.store.setContacts(contacts);
+    const retracted = [];
+    for (const s2 of intake.store.getStatuses().filter((s3) => s3.actor === actor)) {
+      await intake.forget(s2, { collect: retracted });
+    }
+    if (retracted.length) {
+      const gone2 = new Set(retracted);
+      await intake.publisher.unrecordOutbox((i) => gone2.has(i?.id));
+    }
+    await intake.republish({ followers: true, following: true });
+    intake.log(`account deleted upstream: ${actor}`);
+    return;
+  }
+  const s = intake.store.getStatuses().find((x) => x.noteId === objectId);
+  if (s) await intake.forget(s);
+  intake.log(`deleted upstream: ${objectId}`);
+}
+async function onUpdate(intake, activity, actor) {
+  const objectId = typeof activity.object === "string" ? activity.object : activity.object?.id;
+  if (!objectId) return "Update without object id";
+  if (!intake.sameIdentity(objectId, actor)) return `Update crosses identities (${objectId})`;
+  if (objectId === actor) {
+    if (!intake.known(actor)) return;
+    const doc = await intake.fetchAP(actor);
+    if (!doc) throw new Error(`cannot refetch ${actor} \u2014 will retry`);
+    intake.store.cacheActor(actor, doc);
+    intake.log(`profile updated: ${actor}`);
+    return;
+  }
+  const s = intake.store.getStatuses().find((x) => x.noteId === objectId);
+  if (!s) return;
+  const note = await intake.fetchAP(objectId);
+  if (!note) throw new Error(`cannot refetch ${objectId} \u2014 will retry`);
+  if (note.id !== objectId || !isContentType(note.type)) return `object not verifiable content (${objectId}, ${note.type})`;
+  const { attachmentsOf: attachmentsOf2, titledContent: titledContent2 } = await Promise.resolve().then(() => (init_wire(), wire_exports));
+  const content = titledContent2(note);
+  const attachments = attachmentsOf2(note);
+  const freshPoll = pollOf(note);
+  const freshEmojis = emojisOf(note);
+  intake.store.updateStatus(objectId, {
+    content,
+    ...attachments.length ? { attachments } : {},
+    emojis: freshEmojis.length ? freshEmojis : void 0,
+    // The edit's own stamp when the note carries one; tallies and the
+    // content warning follow the edit too. A poll refresh keeps our vote.
+    editedAt: note.updated || (/* @__PURE__ */ new Date()).toISOString(),
+    spoiler: note.summary ? String(note.summary).replace(/<[^>]*>/g, "") : void 0,
+    ...freshPoll ? {
+      poll: { ...freshPoll, voted: !!s.poll?.voted, ownVotes: s.poll?.ownVotes || [] }
+    } : {}
+  });
+  intake.log(`edited upstream: ${objectId}`);
+}
+async function onReject(intake, activity, actor, { trusted = false } = {}) {
+  if (activity.object?.type && activity.object.type !== "Follow") return;
+  const contacts = intake.store.getContacts();
+  const rec = contacts.following.find((f) => f.actor === actor);
+  if (!rec) return;
+  const named = typeof activity.object === "string" ? activity.object : activity.object?.id;
+  const ours = rec.followActivity?.id;
+  if (!trusted) {
+    if (!ours) {
+      intake.log(`Reject from ${actor}: no follow id on record to match it against \u2014 ignored`);
+      return;
+    }
+    if (named !== ours) {
+      intake.log(`Reject from ${actor} answers ${named || "nothing"}, not the follow we sent \u2014 ignored`);
+      return;
+    }
+  }
+  contacts.following = contacts.following.filter((f) => f.actor !== actor);
+  intake.store.setContacts(contacts);
+  await intake.republish({ following: true, pending: true });
+  intake.log(`follow rejected by ${actor}`);
+}
+async function onMove(intake, activity, actor) {
+  const target = typeof activity.target === "string" ? activity.target : activity.target?.id;
+  if (!target) return "Move without a target";
+  const contacts = intake.store.getContacts();
+  const rec = contacts.following.find((f) => f.actor === actor);
+  if (!rec) return;
+  const doc = await intake.fetchAP(actor);
+  if (!doc) throw new Error(`cannot confirm ${actor} moved \u2014 will retry`);
+  const movedTo = typeof doc.movedTo === "string" ? doc.movedTo : doc.movedTo?.id;
+  if (movedTo !== target) return `Move not corroborated by ${actor} (says ${movedTo || "nothing"})`;
+  rec.movedTo = target;
+  intake.store.setContacts(contacts);
+  intake.store.addNotification({ type: "move", actor, target });
+  intake.log(`${actor} moved to ${target} \u2014 follow the new account to keep seeing them`);
+}
+async function onAccept(intake, activity, actor, { trusted = false } = {}) {
+  const contacts = intake.store.getContacts();
+  const rec = contacts.following.find((f) => f.actor === actor);
+  const named = typeof activity.object === "string" ? activity.object : activity.object?.id;
+  const ours = rec?.followActivity?.id;
+  if (ours && named !== ours && !trusted) {
+    intake.log(`Accept from ${actor} answers ${named || "nothing"}, not the follow we sent \u2014 ignored`);
+    return;
+  }
+  if (rec && !rec.accepted) {
+    rec.accepted = true;
+    intake.store.setContacts(contacts);
+    await intake.republish({ following: true, pending: true });
+    intake.log(`follow accepted by ${actor}`);
+  }
+}
+
+// lib/core/intake/notes.mjs
+init_wire();
+function concernsUs(intake, doc, actor) {
+  if (intake.store.getContacts().following.some((f) => f.actor === actor && f.accepted)) return true;
+  const audience = [].concat(doc?.to || [], doc?.cc || [], doc?.bto || [], doc?.bcc || [], doc?.audience || []).map((v) => typeof v === "string" ? v : v?.id).filter(Boolean);
+  if (audience.includes(intake.urls.actor) || audience.includes(intake.urls.followers)) return true;
+  const tagged = [].concat(doc?.tag || []).some((t) => t?.type === "Mention" && (t.href === intake.urls.actor || t.name?.includes(intake.urls.actor)));
+  if (tagged) return true;
+  const inReplyTo = typeof doc?.inReplyTo === "string" ? doc.inReplyTo : doc?.inReplyTo?.id;
+  if (!inReplyTo) return false;
+  if (String(inReplyTo).startsWith(intake.urls.notes)) return true;
+  return intake.config.kind === "group" && intake.store.getStatuses().some((s) => s.noteId === String(inReplyTo));
+}
+async function maybeForward(intake, activity) {
+  if (!activity || typeof activity !== "object") return;
+  if (!FORWARDABLE.has(activity.type)) return;
+  if (!FORWARD_TYPES.has(activity.type)) return;
+  try {
+    const audience = [].concat(activity.to || [], activity.cc || [], activity.audience || []).map((v) => typeof v === "string" ? v : v?.id).filter(Boolean);
+    if (!audience.includes(intake.urls.followers)) return;
+    if (!intake._referencesOurObject(activity)) return;
+    const actor = typeof activity.actor === "string" ? activity.actor : activity.actor?.id;
+    if (actor === intake.urls.actor) return;
+    if (!intake.known(actor)) {
+      intake.log(`not forwarding ${activity.type} from ${actor}: nobody we know of`);
+      return;
+    }
+    if (intake._forwardBudget <= 0) {
+      intake.log(`not forwarding ${activity.type}: this drain's forwarding budget is spent`);
+      return;
+    }
+    const id = typeof activity.id === "string" ? activity.id : null;
+    if (!id) return;
+    const forwarded = intake.store.read("forwarded.json", []);
+    if (forwarded.includes(id)) return;
+    const inboxes = [...new Set(intake.store.getContacts().followers.filter((f) => !f.bsky).map((f) => f.sharedInbox || f.inbox).filter(Boolean))];
+    if (!inboxes.length) return;
+    intake._forwardBudget -= 1;
+    await intake.deliverer.deliverToAll(inboxes, activity);
+    intake.store.write("forwarded.json", [...forwarded, id].slice(-MAX_FORWARDED));
+    intake.log(`forwarded ${activity.type} ${id} to ${inboxes.length} follower inbox(es)`);
+  } catch (e) {
+    intake.log(`inbox forwarding: ${e.message}`);
+  }
+}
+function referencesOurObject(intake, activity) {
+  const refs = [];
+  const add = (v) => {
+    const id = typeof v === "string" ? v : v?.id;
+    if (id) refs.push(String(id));
+  };
+  const obj = activity.object;
+  if (obj && typeof obj === "object") add(obj.inReplyTo);
+  add(activity.inReplyTo);
+  add(activity.object);
+  add(activity.target);
+  if (refs.some((r) => r.startsWith(intake.urls.notes))) return true;
+  return intake.config.kind === "group" && refs.some((r) => intake.store.getStatuses().some((s) => s.noteId === r));
+}
+async function ingestNote(intake, objectId, actor, { via } = {}) {
+  const note = await intake.fetchAP(objectId);
+  if (!note) return `object fetch failed (${objectId})`;
+  if (note.id !== objectId || !isContentType(note.type)) return `object not verifiable content (${objectId}, ${note.type})`;
+  const { attachmentsOf: attachmentsOf2, titledContent: titledContent2 } = await Promise.resolve().then(() => (init_wire(), wire_exports));
+  const attachments = attachmentsOf2(note);
+  const content = titledContent2(note);
+  const author = authorOf(note, actor);
+  if (!author) return `object names an author its origin does not vouch for (${objectId})`;
+  if (intake.store.isBlocked(author)) return `blocked author (${author})`;
+  if (!via && !intake.concernsUs(note, author)) {
+    return `the note its own server serves does not address us (${objectId})`;
+  }
+  const asked = note.inReplyTo && intake.store.getStatuses().find((x) => x.noteId === String(note.inReplyTo) && x.kind === "post" && x.poll);
+  if (asked && isVoteShape(note)) {
+    const counted = await intake.publisher.recordVote(asked.noteId, author, note.name).catch((e) => {
+      intake.log(`vote on ${asked.noteId}: ${e.message}`);
+      return false;
+    });
+    intake.log(counted ? `vote counted (${note.name}): ${asked.noteId}` : `vote not counted (${note.name}) from ${author}: ${asked.noteId}`);
+    return;
+  }
+  const contacts = intake.store.getContacts();
+  const known2 = intake.config.kind === "group" ? contacts.followers.some((f) => f.actor === author) : contacts.following.some((f) => f.actor === author && f.accepted);
+  const followed = via || known2 || !known2 && await intake.isCoMember(author);
+  const kind = followed ? "timeline" : "mention";
+  const mentions = [].concat(note.tag || []).filter((t) => t?.type === "Mention" && t.href && t.name).slice(0, MAX_MENTIONS).map((t) => ({ href: httpOnly(String(t.href).slice(0, MAX_URL_CHARS)), name: String(t.name).slice(0, 256) })).filter((m) => m.href);
+  const emojis = emojisOf(note);
+  const poll = pollOf(note);
+  const audience = [].concat(note.to || [], note.cc || []).map(String);
+  const direct = audience.length > 0 && !audience.includes(PUBLIC) && !audience.some((a) => a.endsWith("/followers"));
+  const nonPublic = audience.length > 0 && !audience.includes(PUBLIC);
+  intake.store.addStatus({
+    noteId: note.id,
+    actor: author,
+    content,
+    published: note.published,
+    inReplyTo: note.inReplyTo,
+    kind,
+    ...direct ? { direct: true } : {},
+    ...nonPublic ? { nonPublic: true } : {},
+    // The author's content warning, shown as one: plain text only.
+    ...note.summary ? { spoiler: String(note.summary).replace(/<[^>]*>/g, "") } : {},
+    ...poll ? { poll } : {},
+    ...emojis.length ? { emojis } : {},
+    ...mentions.length ? { mentions } : {},
+    ...attachments.length ? { attachments } : {},
+    ...via ? { via } : {}
+  });
+  if (!followed || note.inReplyTo && String(note.inReplyTo).startsWith(intake.urls.notes)) {
+    intake.store.addNotification({ type: "mention", actor: author, noteId: note.id });
+  }
+  if (note.inReplyTo && String(note.inReplyTo).startsWith(intake.urls.notes)) {
+    await intake.addReply(String(note.inReplyTo), note.id).catch((e) => intake.log(`replies collection: ${e.message}`));
+  }
+  intake.log(`${kind}: ${note.id}${via ? ` (boosted by ${via})` : ""}`);
+}
+async function forget(intake, s, { collect = null } = {}) {
+  if (s.announceActivity) {
+    await intake.retract(s.noteId, { collect }).catch((e) => intake.log(`retract: ${e.message}`));
+  }
+  intake.store.removeStatus(s.noteId);
+}
+async function retract(intake, noteId, { collect = null } = {}) {
+  const s = intake.store.getStatuses().find((x) => x.noteId === noteId);
+  if (!s) throw new Error("no such post");
+  if (s.repostUri) {
+    if (!intake.bskyGroup) throw new Error("no bluesky account connected");
+    return intake.bskyGroup.retract(s);
+  }
+  if (!s.announceActivity) throw new Error("that post was never carried");
+  const { undoActivity: undoActivity2 } = await Promise.resolve().then(() => (init_wire(), wire_exports));
+  const inboxes = intake.announceTargets(s.actor);
+  await intake.deliverer.deliverToAll(
+    inboxes,
+    undoActivity2({ urls: intake.urls, activity: s.announceActivity, serial: intake.serial++ })
+  );
+  if (collect) collect.push(s.announceActivity.id);
+  else await intake.publisher.unrecordOutbox((i) => i?.id === s.announceActivity.id);
+  intake.store.updateStatus(noteId, {
+    announcedAt: void 0,
+    announceActivity: void 0,
+    retractedAt: (/* @__PURE__ */ new Date()).toISOString()
+  });
+  return { ok: true, noteId, inboxes: inboxes.length };
+}
+async function addReply(intake, parentId, replyId) {
+  if (!intake.store.getStatuses().some((s) => s.noteId === parentId && s.kind === "post")) {
+    intake.log(`reply names ${parentId}, which is not a post of ours \u2014 not recorded`);
+    return;
+  }
+  const { repliesId: repliesId2, collection: collection2 } = await Promise.resolve().then(() => (init_wire(), wire_exports));
+  const url = repliesId2(parentId);
+  const cur = await readReplies(intake.remote, url);
+  const items = Array.isArray(cur?.items) ? cur.items : [];
+  if (items.includes(replyId)) return;
+  items.push(replyId);
+  await writeReplies(intake.remote, url, collection2(url, items.slice(-MAX_REPLIES_RECORDED)));
+  intake.log(`reply recorded on ${parentId}`);
+}
+
+// lib/core/intake/index.mjs
+var POLL_MS = 2 * 6e4;
+var POLL_PUSH_OK_MS = 10 * 6e4;
+var DRAIN_COOLDOWN_MIN_MS = 2 * 6e4;
+var DRAIN_COOLDOWN_MAX_MS = 30 * 6e4;
+var DELETE_GAP_MS = 150;
+var CHAIN_GAP_MS = 5e3;
+var DELETE_BATCH = 10;
+var ATTEMPTS_DOC = "intake-attempts.json";
+var ATTEMPTS_TTL_MS = 7 * 24 * 60 * 6e4;
+var MAX_ITEM_ATTEMPTS = 5;
+var MAX_ITEMS_PER_DRAIN = 50;
 var Intake = class {
   constructor({ config, urls, remote, store, deliverer, publisher, log: log2 = console.log, lease = null, archive = null, push = true, pollSeconds = null }) {
     Object.assign(this, { config, urls, remote, store, deliverer, publisher, log: log2, lease, archive, push, pollSeconds });
@@ -45692,120 +46444,6 @@ var Intake = class {
       this.store.write(ATTEMPTS_DOC, all);
       this.log(`pruned ${dropped} stale inbox attempt record(s)`);
     }
-  }
-  // Jittered exponential, floor to ceiling, reset by a successful open.
-  _reconnectDelay() {
-    const capped = Math.min(RECONNECT_MIN_MS * 2 ** this.reconnectTries, RECONNECT_MAX_MS);
-    this.reconnectTries++;
-    return Math.round(capped * (0.8 + Math.random() * 0.4));
-  }
-  // --- push ---
-  // Any failure in here used to end push for the life of the process: the
-  // retry lived only in the "server refused the subscription" branch, so a
-  // network blip left wsState at never-connected and the agent silently on
-  // polling. Every path now schedules a retry on the same backoff.
-  async subscribe() {
-    try {
-      await this._subscribeOnce();
-    } catch (e) {
-      this.wsState = "subscribe-error";
-      const wait = this._reconnectDelay();
-      this.log(`subscribe failed (${e.message}) \u2014 retrying in ${Math.round(wait / 1e3)}s (polling meanwhile)`);
-      if (!this.stopped) {
-        this.resubTimer = setTimeout(() => this.subscribe().catch(() => {
-        }), wait);
-        this.resubTimer.unref?.();
-      }
-    }
-  }
-  /**
-   * Where this pod describes the services it offers. The pod says so on any
-   * response about one of its resources; the well-known path is only what a
-   * pod that says nothing has always used.
-   */
-  async _storageDescriptionUrl() {
-    return storageDescriptionUrl(
-      this.urls.base,
-      { headers: { "user-agent": USER_AGENT }, timeoutMs: HTTP_TIMEOUT_MS }
-    );
-  }
-  async _subscribeOnce() {
-    const saved = this.store.read(CHANNEL_DOC, null);
-    if (saved?.receiveFrom && (!saved.endAt || Date.parse(saved.endAt) - Date.now() > 6e4)) {
-      this._openSocket(saved.receiveFrom, true);
-      return;
-    }
-    const descUrl = await this._storageDescriptionUrl();
-    const { channel, error } = await readWebSocketChannel(
-      descUrl,
-      { headers: { "user-agent": USER_AGENT }, timeoutMs: HTTP_TIMEOUT_MS }
-    );
-    if (!channel) {
-      this.wsState = "unavailable";
-      this.log(`${error} \u2014 polling only`);
-      return;
-    }
-    const topic = this.urls.toPod ? this.urls.toPod(this.urls.inbox) : this.urls.inbox;
-    const sub = await subscribeToInbox(
-      this.remote,
-      { channelUrl: channel, podTopicUrl: topic }
-    );
-    const body = await readCapped(sub).then(JSON.parse).catch(() => null);
-    if (!body?.receiveFrom) {
-      this.wsState = `subscribe-failed-${sub.status}`;
-      const wait = this._reconnectDelay();
-      this.log(`subscription failed (${sub.status}) \u2014 retrying in ${Math.round(wait / 1e3)}s (polling meanwhile)`);
-      if (!this.stopped) {
-        this.resubTimer = setTimeout(() => this.subscribe().catch((e) => this.log(`resubscribe: ${e.message}`)), wait);
-        this.resubTimer.unref?.();
-      }
-      return;
-    }
-    this.store.write(CHANNEL_DOC, { receiveFrom: body.receiveFrom, endAt: body.endAt || null });
-    this._openSocket(body.receiveFrom, false);
-  }
-  // The socket URL arrives in the pod's own subscription response, and it was
-  // the one outbound address in the project that reached the network without
-  // passing anything — safefetch guards every fetch, and `new WebSocket()` is
-  // not a fetch. A pod that answered with somebody else's address had us open a
-  // long-lived connection there and treat what came back as our inbox waking up.
-  //
-  // Same origin as the pod, not assertPublicUrl: a pod on this machine is a
-  // documented setup and its socket is legitimately ws://localhost:3000, which
-  // a public-address check would refuse.
-  _openSocket(receiveFrom, reused) {
-    if (!sameSocketOrigin(receiveFrom, this.urls.base)) {
-      this.wsState = "refused";
-      this.log(`subscription named ${receiveFrom}, which is not this pod \u2014 polling only`);
-      if (reused) this.store.write(CHANNEL_DOC, null);
-      return;
-    }
-    this.ws = new WebSocket(receiveFrom);
-    this.ws.onopen = () => {
-      this.wsState = "open";
-      if (!this._announcedPush) {
-        this.log("inbox push subscription active");
-        this._announcedPush = true;
-      }
-      this._openedAt = Date.now();
-      if (Date.now() - this.lastDrainAtMs > OPEN_DRAIN_MIN_GAP_MS) {
-        this.drain().catch((e) => this.log(`drain: ${e.message}`));
-      }
-    };
-    this.ws.onmessage = () => this.drain().catch((e) => this.log(`drain: ${e.message}`));
-    this.ws.onclose = () => {
-      this.wsState = "closed";
-      if (this._openedAt && Date.now() - this._openedAt >= RECONNECT_STABLE_MS) this.reconnectTries = 0;
-      this._openedAt = 0;
-      if (!this.stopped) {
-        this.resubTimer = setTimeout(() => this.subscribe().catch((e) => this.log(`resubscribe: ${e.message}`)), this._reconnectDelay());
-        this.resubTimer.unref?.();
-      }
-    };
-    this.ws.onerror = () => {
-      this.wsState = "error";
-      if (reused) this.store.write(CHANNEL_DOC, null);
-    };
   }
   // --- drain + dispatch ---
   // Serialized: push events, polls, and manual /drain calls can fire
@@ -46070,85 +46708,12 @@ var Intake = class {
     if (!this._inSweep) return this.publisher.publishCollections(which);
     this._republish = { ...this._republish || {}, ...which };
   }
-  async fetchAP(url) {
-    const res = await this.deliverer.signedFetch(url, { headers: { accept: ACCEPT_AP2 } });
-    if (res.status >= 400) return null;
-    const { readCapped: readCapped3 } = await Promise.resolve().then(() => (init_safefetch(), safefetch_exports));
-    const ct = (res.headers.get("content-type") || "").split(";")[0].trim().toLowerCase();
-    if (ct && !ct.endsWith("json")) return null;
-    let doc = null;
-    try {
-      doc = JSON.parse(await readCapped3(res));
-    } catch (e) {
-      this.log(`fetch ${url}: unreadable as JSON \u2014 ${e.message}`);
-      return null;
-    }
-    const landed = res.finalUrl || url;
-    if (!sameOrigin(landed, url) && doc && doc.id && !sameOrigin(doc.id, landed)) {
-      this.log(`fetch ${url}: redirected to ${landed}, which is not where ${doc.id} lives \u2014 refused`);
-      return null;
-    }
-    if (isActorType(doc?.type) && doc.id && sameOrigin(doc.id, url)) {
-      this.store.cacheActor(doc.id, doc);
-    }
-    return doc;
-  }
   sameOrigin(a, b) {
     return sameOrigin(a, b);
   }
   // Overridable in tests the same way sameOrigin is.
   sameIdentity(a, b) {
     return sameIdentity(a, b);
-  }
-  // Have we ever heard of this actor or object? Answered entirely from local
-  // state, so asking costs nothing. It is what stops a stranger's Delete or
-  // Update — of which Mastodon broadcasts a great many, and of which anyone at
-  // all can Append one — turning into a signed request to a host they chose.
-  known(id) {
-    const c = this.store.getContacts();
-    return c.followers.some((f) => f.actor === id) || c.following.some((f) => f.actor === id) || this.store.getStatuses().some((s) => s.noteId === id || s.actor === id) || !!this.store.getActors()[id];
-  }
-  // Returns a rejection reason string, or undefined when handled.
-  // The gateway's shared HMAC secret, or null when no gateway is configured.
-  // Its absence is what makes the whole receipt path dormant by default.
-  gatewaySecret() {
-    return this.store.getConfig()?.gateway?.hmacSecret || null;
-  }
-  // Shadow-mode measurement: how much real traffic actually verified. The one
-  // number an operator needs before trusting receipts. Only touched while a
-  // gateway is configured, so it costs a non-gateway install nothing.
-  _bumpGatewayStat(verified) {
-    const s = this.store.read("gateway-stats.json", { verified: 0, unverified: 0 });
-    if (verified) s.verified++;
-    else s.unverified++;
-    s.lastAt = (/* @__PURE__ */ new Date()).toISOString();
-    this.store.write("gateway-stats.json", s);
-  }
-  // Read and authenticate the receipt a gateway wrote beside an inbox item.
-  // Returns the receipt object only when its HMAC verifies against our secret;
-  // null otherwise (no gateway, no receipt, a stranger's forged one, or a read
-  // failure) — and null means "unverified", the pre-gateway behavior.
-  async _readReceipt(itemUrl) {
-    const secret = this.gatewaySecret();
-    if (!secret) return null;
-    try {
-      const { readCapped: cap } = await Promise.resolve().then(() => (init_safefetch(), safefetch_exports));
-      const receipt = await readDeliveryReceipt(this.remote, itemUrl, { maxBytes: 64 * 1024, readCapped: cap });
-      if (!receipt) return null;
-      const { verifyReceipt: verifyReceipt2 } = await Promise.resolve().then(() => (init_httpsig(), httpsig_exports));
-      return verifyReceipt2(receipt, secret) ? receipt : null;
-    } catch {
-      return null;
-    }
-  }
-  // Whether a receipt says anything about THIS actor. Verified-and-about-someone
-  // -else is worth exactly as much as unverified, and is treated the same way:
-  // the drain's verify-by-dereference still stands behind it.
-  receiptVouchesFor(receipt, actor) {
-    if (!receipt?.verified) return false;
-    if (!receipt.actor || receipt.actor !== actor) return false;
-    if (!receipt.keyId || !sameOrigin(receipt.keyId, actor)) return false;
-    return true;
   }
   async handle(activity, receipt = null) {
     const actor = typeof activity.actor === "string" ? activity.actor : activity.actor?.id;
@@ -46204,691 +46769,118 @@ var Intake = class {
         this.log(`ignored ${activity.type} from ${actor}`);
     }
   }
-  // Which inbound activities count as a moderator's ask: a ban, an unban, a
-  // post removal, or a roster change naming OUR moderators collection. A
-  // moderator's ordinary traffic (their posts, likes, follows) is not
-  // moderation and takes the normal arms.
-  isModerationAsk(activity) {
-    if (activity.type === "Block") return true;
-    if (activity.type === "Undo") {
-      return typeof activity.object === "object" && activity.object?.type === "Block";
-    }
-    if (activity.type === "Delete") {
-      const id = typeof activity.object === "string" ? activity.object : activity.object?.id;
-      const s = id && this.store.getStatuses().find((x) => x.noteId === id);
-      return !!s && s.kind !== "post";
-    }
-    if (activity.type === "Add" || activity.type === "Remove") {
-      const target = typeof activity.target === "string" ? activity.target : activity.target?.id;
-      return target === this.urls.moderators;
-    }
-    return false;
+  // channel.mjs
+  _reconnectDelay(...a) {
+    return reconnectDelay(this, ...a);
   }
-  // Held, not run: one entry per distinct ask, capped, waiting for the
-  // operator to apply or dismiss it (social.applyModeration).
-  // A moderator's WORD, not their proof. `actor` is a field in an unsigned
-  // body and a moderator's URL is public, so anyone can claim to be one — which
-  // is exactly why these are QUEUED for the operator rather than run. What was
-  // missing is that the queue did not say which is which, and a stranger could
-  // fill all 200 slots and push the real asks out.
-  //
-  // So: the entry records whether the door vouched for the sender, and when the
-  // queue is full the UNVERIFIED entries are what get dropped. A real
-  // moderator's ask cannot be crowded out by someone impersonating them.
-  queueModeration(activity, actor, { trusted = false } = {}) {
-    const q = this.store.read("modqueue.json", []);
-    const objectId = typeof activity.object === "string" ? activity.object : activity.object?.id;
-    const key = [activity.type, actor, objectId || JSON.stringify(activity.object || null)].join(" ");
-    const seen = q.find((e) => e.key === key);
-    if (seen) {
-      if (trusted && !seen.verified) {
-        seen.verified = true;
-        this.store.write("modqueue.json", q);
-      }
-      return;
-    }
-    q.unshift({
-      key,
-      id: (this.serial++).toString(36) + "-" + q.length,
-      type: activity.type,
-      moderator: actor,
-      activity: trimActivity(activity),
-      verified: !!trusted,
-      at: (/* @__PURE__ */ new Date()).toISOString()
-    });
-    let kept = q;
-    if (kept.length > MAX_MODQUEUE) {
-      const verified = kept.filter((e) => e.verified);
-      const rest = kept.filter((e) => !e.verified);
-      kept = [...verified, ...rest].slice(0, MAX_MODQUEUE);
-    }
-    this.store.write("modqueue.json", kept);
-    this.log(`moderation queued from ${actor}${trusted ? "" : " (unverified)"}: ${activity.type} ${objectId || ""}`);
+  subscribe(...a) {
+    return subscribe(this, ...a);
   }
-  // §7.6 Add / §7.9 Remove. The side effect would be to add or remove the object
-  // to/from the collection named in `target` — but only a collection we own AND
-  // that the sender is authorised to modify. No remote is granted write to our
-  // collections (membership is Follow/Undo, pins are ours to set), so there is
-  // nothing an inbound Add or Remove may change here. It is a valid activity,
-  // not garbage: acknowledge it, make no change, and never dead-letter it.
-  onAddRemove(activity, actor) {
-    const target = typeof activity.target === "string" ? activity.target : activity.target?.id;
-    const ours = target && [this.urls.followers, this.urls.following, this.urls.featured].filter(Boolean).includes(target);
-    this.log(ours ? `${activity.type} from ${actor} targets our ${target} \u2014 no remote may modify it; acknowledged` : `${activity.type} from ${actor} targets ${target || "no collection of ours"}; nothing here to change`);
-    return;
+  _storageDescriptionUrl(...a) {
+    return storageDescriptionUrl2(this, ...a);
   }
-  async onFollow(activity, actor, { trusted = false } = {}) {
-    const doc = await this.fetchAP(actor);
-    if (!doc) return `actor fetch failed (${actor})`;
-    if (doc.id !== actor) return `actor id mismatch (${actor} vs ${doc.id})`;
-    if (!doc.inbox) return `actor has no inbox (${actor})`;
-    const contacts = this.store.getContacts();
-    const existing = contacts.followers.find((f) => f.actor === actor);
-    const unverifiedNeedsOk = this.config.kind !== "group" && !this.config.autoAcceptFollows && !trusted;
-    const mustApprove = this.config.approveJoins || unverifiedNeedsOk;
-    if (mustApprove && !existing) {
-      const reqs = this.store.getRequests();
-      if (!reqs.some((r) => r.actor === actor)) {
-        reqs.unshift({
-          actor,
-          inbox: doc.inbox,
-          sharedInbox: doc.endpoints?.sharedInbox,
-          activity: trimActivity(activity),
-          at: (/* @__PURE__ */ new Date()).toISOString()
-        });
-        this.store.setRequests(reqs.slice(0, 500));
-        this.store.addNotification({ type: "follow-request", actor });
-        await this.republish({ pending: true });
-      }
-      this.log(`join requested: ${actor}`);
-      return;
-    }
-    if (existing) {
-    } else {
-      const bridgedDid = /^https:\/\/bsky\.brid\.gy\/ap\/(did:[^/]+)$/.exec(actor)?.[1];
-      if (bridgedDid) {
-        const before = contacts.followers.length;
-        contacts.followers = contacts.followers.filter((f) => f.bsky?.did !== bridgedDid);
-        if (contacts.followers.length < before) {
-          this.log(`bluesky member ${bridgedDid} is bridged now \u2014 the native record gives way to it`);
-        }
-      }
-      contacts.followers.push({
-        actor,
-        inbox: doc.inbox,
-        sharedInbox: doc.endpoints?.sharedInbox,
-        followId: activity.id,
-        ...bridgedDid ? { bsky: { did: bridgedDid, bridged: true } } : {}
-      });
-      this.store.setContacts(contacts);
-      this.store.addNotification({ type: "follow", actor });
-      await this.republish({ followers: true });
-      this.log(`new follower: ${actor}`);
-    }
-    const { acceptActivity: acceptActivity2 } = await Promise.resolve().then(() => (init_wire(), wire_exports));
-    await this.deliverer.deliver(
-      doc.inbox,
-      acceptActivity2({ urls: this.urls, followActivity: activity, serial: this.serial++ })
-    );
-    this.log(`Accept sent \u2192 ${doc.inbox}`);
+  _subscribeOnce(...a) {
+    return subscribeOnce(this, ...a);
   }
-  async onUndo(activity, actor, { trusted = false } = {}) {
-    if (typeof activity.object === "object" && activity.object?.type && activity.object.type !== "Follow") return;
-    const named = typeof activity.object === "string" ? activity.object : activity.object?.id;
-    if (!named && !trusted) return;
-    const undoneId = typeof activity.object === "string" ? activity.object : activity.object?.id;
-    const contacts = this.store.getContacts();
-    const rec = contacts.followers.find((f) => f.actor === actor);
-    if (!rec) {
-      const reqs = this.store.getRequests();
-      const pending = reqs.find((r) => r.actor === actor);
-      if (pending) {
-        const theirs = pending.activity?.id;
-        if (!trusted && (!theirs || named !== theirs)) {
-          this.log(`Undo from ${actor} does not name the request we hold \u2014 ignored`);
-          return;
-        }
-        this.store.setRequests(reqs.filter((r) => r.actor !== actor));
-        await this.republish({ pending: true });
-        this.log(`join request withdrawn: ${actor}`);
-      }
-      return;
-    }
-    if (trusted) {
-      dropFollower(contacts, actor, "undo-follow");
-      this.store.setContacts(contacts);
-      await this.republish({ followers: true });
-      this.log(`unfollowed by ${actor} (gateway-verified)`);
-      return;
-    }
-    if (!rec.followId) {
-      this.log(`Undo from ${actor} cannot be matched \u2014 this follower was ${rec.recovered ? "recovered from the pod" : "recorded before follow ids were kept"}, so its follow id is unknown. Ignored; \`fedipod eject ${actor}\` if they did leave.`);
-      return;
-    }
-    if (undoneId !== rec.followId) {
-      this.log(`Undo from ${actor} does not name the follow we hold (revokes ${undoneId || "nothing"}, current is ${rec.followId}) \u2014 ignored`);
-      return;
-    }
-    dropFollower(contacts, actor, "undo-follow");
-    this.store.setContacts(contacts);
-    await this.republish({ followers: true });
-    this.log(`unfollowed by ${actor}`);
+  _openSocket(...a) {
+    return openSocket(this, ...a);
   }
-  // Does this activity/note concern us at all? Either it comes from someone
-  // we follow, or it names us (to/cc, mention tag) or replies to one of our
-  // notes. Anything else is a stranger blasting inboxes — refuse it before
-  // spending a dereference on it.
-  concernsUs(doc, actor) {
-    if (this.store.getContacts().following.some((f) => f.actor === actor && f.accepted)) return true;
-    const audience = [].concat(doc?.to || [], doc?.cc || [], doc?.bto || [], doc?.bcc || [], doc?.audience || []).map((v) => typeof v === "string" ? v : v?.id).filter(Boolean);
-    if (audience.includes(this.urls.actor) || audience.includes(this.urls.followers)) return true;
-    const tagged = [].concat(doc?.tag || []).some((t) => t?.type === "Mention" && (t.href === this.urls.actor || t.name?.includes(this.urls.actor)));
-    if (tagged) return true;
-    const inReplyTo = typeof doc?.inReplyTo === "string" ? doc.inReplyTo : doc?.inReplyTo?.id;
-    if (!inReplyTo) return false;
-    if (String(inReplyTo).startsWith(this.urls.notes)) return true;
-    return this.config.kind === "group" && this.store.getStatuses().some((s) => s.noteId === String(inReplyTo));
+  // verify.mjs
+  fetchAP(...a) {
+    return fetchAP(this, ...a);
   }
-  // §7.1.2 Forwarding from the inbox. A reply into one of our threads reaches
-  // only the servers the replier's server chose to deliver to — never our
-  // followers on servers it has never heard of. As the actor those followers
-  // follow, WE close that gap: an activity addressed to our followers collection
-  // that names one of our objects is re-delivered to our followers' inboxes.
-  //
-  // Only what was addressed to the followers COLLECTION is carried — bto/bcc are
-  // never read here, so a direct message (addressed to a person) never qualifies
-  // and is never rebroadcast. And this runs only after handle() accepted the
-  // activity, so anything blocked or muted was already refused upstream and is
-  // never forwarded.
-  async _maybeForward(activity) {
-    if (!activity || typeof activity !== "object") return;
-    if (!FORWARDABLE.has(activity.type)) return;
-    if (!FORWARD_TYPES.has(activity.type)) return;
-    try {
-      const audience = [].concat(activity.to || [], activity.cc || [], activity.audience || []).map((v) => typeof v === "string" ? v : v?.id).filter(Boolean);
-      if (!audience.includes(this.urls.followers)) return;
-      if (!this._referencesOurObject(activity)) return;
-      const actor = typeof activity.actor === "string" ? activity.actor : activity.actor?.id;
-      if (actor === this.urls.actor) return;
-      if (!this.known(actor)) {
-        this.log(`not forwarding ${activity.type} from ${actor}: nobody we know of`);
-        return;
-      }
-      if (this._forwardBudget <= 0) {
-        this.log(`not forwarding ${activity.type}: this drain's forwarding budget is spent`);
-        return;
-      }
-      const id = typeof activity.id === "string" ? activity.id : null;
-      if (!id) return;
-      const forwarded = this.store.read("forwarded.json", []);
-      if (forwarded.includes(id)) return;
-      const inboxes = [...new Set(this.store.getContacts().followers.filter((f) => !f.bsky).map((f) => f.sharedInbox || f.inbox).filter(Boolean))];
-      if (!inboxes.length) return;
-      this._forwardBudget -= 1;
-      await this.deliverer.deliverToAll(inboxes, activity);
-      this.store.write("forwarded.json", [...forwarded, id].slice(-MAX_FORWARDED));
-      this.log(`forwarded ${activity.type} ${id} to ${inboxes.length} follower inbox(es)`);
-    } catch (e) {
-      this.log(`inbox forwarding: ${e.message}`);
-    }
+  known(...a) {
+    return known(this, ...a);
   }
-  // The "objects owned by the server" half of §7.1.2: does the activity reply
-  // to, like, boost or otherwise name one of our own objects?
-  _referencesOurObject(activity) {
-    const refs = [];
-    const add = (v) => {
-      const id = typeof v === "string" ? v : v?.id;
-      if (id) refs.push(String(id));
-    };
-    const obj = activity.object;
-    if (obj && typeof obj === "object") add(obj.inReplyTo);
-    add(activity.inReplyTo);
-    add(activity.object);
-    add(activity.target);
-    if (refs.some((r) => r.startsWith(this.urls.notes))) return true;
-    return this.config.kind === "group" && refs.some((r) => this.store.getStatuses().some((s) => s.noteId === r));
+  gatewaySecret(...a) {
+    return gatewaySecret(this, ...a);
   }
-  async onCreate(activity, actor) {
-    const objectId = typeof activity.object === "string" ? activity.object : activity.object?.id;
-    if (!objectId) return "Create without object id";
-    if (this.store.isBlocked(objectId)) return `blocked domain (${objectId})`;
-    if (!this.sameIdentity(objectId, actor)) return `object/actor identity mismatch (${objectId})`;
-    const envelope = typeof activity.object === "object" ? { ...activity, ...activity.object } : activity;
-    if (!this.concernsUs(envelope, actor)) return `not addressed to us (${objectId})`;
-    const ingested = this.store.getStatuses().some((x) => x.noteId === objectId && (x.kind === "timeline" || x.kind === "mention"));
-    if (!ingested) {
-      const rejected = await this.ingestNote(objectId, actor);
-      if (rejected) return rejected;
-    }
-    if (this.config.kind === "group") await this.amplify(objectId, { activity });
+  _bumpGatewayStat(...a) {
+    return bumpGatewayStat(this, ...a);
   }
-  // Anyone can Append to a public inbox, so arriving is not the same as being
-  // carried to every follower. Membership is the gate: you cannot post to a
-  // group you have not joined, and declining to carry a member is the only
-  // moderation a group can actually enforce.
-  async amplify(noteId, { approved = false, activity = null } = {}) {
-    const s = this.store.getStatuses().find((x) => x.noteId === noteId);
-    if (!s) return;
-    if (s.announcedAt) return;
-    if (s.direct || s.nonPublic) {
-      this.log(`not amplified \u2014 ${noteId} was not addressed publicly, and a group never widens a post's audience`);
-      return;
-    }
-    const contacts = this.store.getContacts();
-    if (!contacts.followers.some((f) => f.actor === s.actor)) {
-      this.log(`not amplified \u2014 ${s.actor} is not a member`);
-      return;
-    }
-    if (this.store.getMuted().actors.includes(s.actor)) {
-      this.log(`not amplified \u2014 ${s.actor} is muted`);
-      return;
-    }
-    if (this.config.review && !approved) {
-      const pending = this.store.getPending();
-      if (!pending.some((p) => p.noteId === noteId)) {
-        if (pending.length >= MAX_PENDING_REVIEW) {
-          this.log(`review queue is full (${MAX_PENDING_REVIEW}) \u2014 ${noteId} not held. Approve or decline what is waiting and it will be carried on redelivery.`);
-          return;
-        }
-        pending.unshift({ noteId, actor: s.actor, activity, at: (/* @__PURE__ */ new Date()).toISOString() });
-        this.store.setPending(pending);
-      }
-      this.log(`held for review: ${noteId}`);
-      return;
-    }
-    if (s.kind === "bsky") {
-      if (!this.bskyGroup) {
-        this.log(`not amplified \u2014 ${noteId} is a bluesky post and no account is connected`);
-        return;
-      }
-      return this.bskyGroup.carry(s);
-    }
-    const held = this.store.getPending().find((p) => p.noteId === noteId);
-    const inboxes = this.announceTargets(s.actor);
-    const { announceActivity: announceActivity2 } = await Promise.resolve().then(() => (init_wire(), wire_exports));
-    const wrapperObject = (a) => {
-      const inner = a?.object;
-      const id = typeof inner === "string" ? inner : inner?.id;
-      return id === noteId ? a : null;
-    };
-    const act = announceActivity2({
-      urls: this.urls,
-      object: wrapperObject(activity) || wrapperObject(held?.activity) || noteId,
-      serial: this.serial++,
-      audience: this.urls.actor
-    });
-    await this.deliverer.deliverToAll(inboxes, act);
-    this.store.updateStatus(noteId, { announcedAt: (/* @__PURE__ */ new Date()).toISOString(), announceActivity: act });
-    await this.publisher.recordOutbox(act);
-    this.store.setPending(this.store.getPending().filter((p) => p.noteId !== noteId));
-    this.log(`amplified ${noteId} \u2192 ${inboxes.length} inbox(es)`);
-    await this.bskyGroup?.mirrorCarry(s).catch((e) => this.log(`bluesky mirror of the carry failed: ${e.message}`));
+  _readReceipt(...a) {
+    return readReceipt(this, ...a);
   }
-  // Is this actor in a group we are in? Each followed Group's membership is a
-  // public collection, read at most once a day and cached — a membership list
-  // is slow-moving, and this runs on arriving mail.
-  async isCoMember(actor) {
-    if (this.config.kind === "group") return false;
-    const groups = this.store.getContacts().following.filter((f) => f.accepted && this.store.getActors()[f.actor]?.type === "Group").map((f) => f.actor);
-    if (!groups.length) return false;
-    const cache = this.store.read("comembers.json", {});
-    const fresh = Date.now() - CO_MEMBER_TTL_MS;
-    let changed = false;
-    for (const g of groups) {
-      const held = cache[g];
-      if (held && Date.parse(held.at || 0) > fresh) continue;
-      const doc = await this.fetchAP(g).catch(() => null);
-      const list3 = doc?.followers ? await this.collectionMembers(doc.followers) : null;
-      if (!list3) continue;
-      cache[g] = { at: (/* @__PURE__ */ new Date()).toISOString(), members: list3 };
-      changed = true;
-    }
-    if (changed) this.store.write("comembers.json", cache);
-    return groups.some((g) => cache[g]?.members?.includes(actor));
+  receiptVouchesFor(...a) {
+    return receiptVouchesFor(this, ...a);
   }
-  // The actor ids in a (possibly paged) public collection, capped.
-  async collectionMembers(url) {
-    const out = [];
-    let next = url;
-    for (let page = 0; next && page < 10 && out.length < CO_MEMBER_MAX; page++) {
-      const doc = await this.fetchAP(next).catch(() => null);
-      if (!doc) return out.length ? out : null;
-      for (const item of doc.orderedItems || doc.items || []) {
-        if (typeof item === "string") out.push(item);
-      }
-      next = doc.first && page === 0 ? doc.first : doc.next;
-      if (typeof next === "object") next = next?.id;
-    }
-    return out;
+  isGone(...a) {
+    return isGone(this, ...a);
   }
-  // Who an Announce for `author` goes to. Shared with the retract path: an Undo
-  // that reached a different set than the Announce did would leave the post
-  // standing for whoever the two sets disagreed about.
-  // The author's own target is dropped only when it serves nobody else — a
-  // shared inbox carries the whole server's members.
-  announceTargets(author) {
-    const byTarget = /* @__PURE__ */ new Map();
-    for (const f of this.store.getContacts().followers) {
-      const t = f.sharedInbox || f.inbox;
-      if (!t) continue;
-      if (!byTarget.has(t)) byTarget.set(t, /* @__PURE__ */ new Set());
-      byTarget.get(t).add(f.actor);
-    }
-    return [...byTarget].filter(([, who]) => !(who.size === 1 && who.has(author))).map(([t]) => t);
+  // group.mjs
+  isModerationAsk(...a) {
+    return isModerationAsk(this, ...a);
   }
-  // A boost: ingest the boosted note when the booster is someone we follow —
-  // that's what following means, their boosts widen the timeline. Anything
-  // else is unsolicited and only logged.
-  // A group we follow announces a Delete: the carrier moderating away a post
-  // it carried. Honored only within what the carry itself established — the
-  // announcer is a group we follow AND the post reached us via that same
-  // group — so no new party is trusted and nothing is dereferenced. Our own
-  // posts are never removed by anyone's moderation.
-  async onAnnouncedDelete(actor, del) {
-    const followed = this.store.getContacts().following.some((f) => f.actor === actor && f.accepted);
-    if (!followed) {
-      this.log(`announced Delete from unfollowed ${actor} \u2014 ignored`);
-      return;
-    }
-    const targetId = typeof del.object === "string" ? del.object : del.object?.id;
-    if (!targetId) return "announced Delete without an object";
-    const s = this.store.getStatuses().find((x) => x.noteId === targetId);
-    if (!s || s.kind === "post" || s.via !== actor) return;
-    await this.forget(s);
-    this.log(`moderated away by ${actor}: ${targetId}`);
+  queueModeration(...a) {
+    return queueModeration(this, ...a);
   }
-  async onAnnounce(activity, actor, objectId) {
-    if (!objectId) return "Announce without object id";
-    const followed = this.store.getContacts().following.some((f) => f.actor === actor && f.accepted);
-    if (!followed) {
-      this.log(`Announce from unfollowed ${actor} \u2014 ignored`);
-      return;
-    }
-    if (this.store.isBlocked(objectId)) return `blocked domain (${objectId})`;
-    const existing = this.store.getStatuses().find((s) => s.noteId === objectId);
-    if (existing) {
-      if (!["timeline", "post"].includes(existing.kind)) {
-        this.store.updateStatus(objectId, { kind: "timeline", via: actor });
-        this.log(`promoted to timeline (carried by ${actor}): ${objectId}`);
-      }
-      return;
-    }
-    return this.ingestNote(objectId, actor, { via: actor });
+  amplify(...a) {
+    return amplify(this, ...a);
   }
-  // Shared tail of Create/Announce: deref the note at its origin (never trust
-  // the delivered copy), mirror it into pod RDF + statuses, notify on replies
-  // to our own notes. Returns a rejection reason string, or undefined.
-  async ingestNote(objectId, actor, { via } = {}) {
-    const note = await this.fetchAP(objectId);
-    if (!note) return `object fetch failed (${objectId})`;
-    if (note.id !== objectId || !isContentType(note.type)) return `object not verifiable content (${objectId}, ${note.type})`;
-    const { attachmentsOf: attachmentsOf2, titledContent: titledContent2 } = await Promise.resolve().then(() => (init_wire(), wire_exports));
-    const attachments = attachmentsOf2(note);
-    const content = titledContent2(note);
-    const author = authorOf(note, actor);
-    if (!author) return `object names an author its origin does not vouch for (${objectId})`;
-    if (this.store.isBlocked(author)) return `blocked author (${author})`;
-    if (!via && !this.concernsUs(note, author)) {
-      return `the note its own server serves does not address us (${objectId})`;
-    }
-    const asked = note.inReplyTo && this.store.getStatuses().find((x) => x.noteId === String(note.inReplyTo) && x.kind === "post" && x.poll);
-    if (asked && isVoteShape(note)) {
-      const counted = await this.publisher.recordVote(asked.noteId, author, note.name).catch((e) => {
-        this.log(`vote on ${asked.noteId}: ${e.message}`);
-        return false;
-      });
-      this.log(counted ? `vote counted (${note.name}): ${asked.noteId}` : `vote not counted (${note.name}) from ${author}: ${asked.noteId}`);
-      return;
-    }
-    const contacts = this.store.getContacts();
-    const known = this.config.kind === "group" ? contacts.followers.some((f) => f.actor === author) : contacts.following.some((f) => f.actor === author && f.accepted);
-    const followed = via || known || !known && await this.isCoMember(author);
-    const kind = followed ? "timeline" : "mention";
-    const mentions = [].concat(note.tag || []).filter((t) => t?.type === "Mention" && t.href && t.name).slice(0, MAX_MENTIONS).map((t) => ({ href: httpOnly(String(t.href).slice(0, MAX_URL_CHARS)), name: String(t.name).slice(0, 256) })).filter((m) => m.href);
-    const emojis = emojisOf(note);
-    const poll = pollOf(note);
-    const audience = [].concat(note.to || [], note.cc || []).map(String);
-    const direct = audience.length > 0 && !audience.includes(PUBLIC) && !audience.some((a) => a.endsWith("/followers"));
-    const nonPublic = audience.length > 0 && !audience.includes(PUBLIC);
-    this.store.addStatus({
-      noteId: note.id,
-      actor: author,
-      content,
-      published: note.published,
-      inReplyTo: note.inReplyTo,
-      kind,
-      ...direct ? { direct: true } : {},
-      ...nonPublic ? { nonPublic: true } : {},
-      // The author's content warning, shown as one: plain text only.
-      ...note.summary ? { spoiler: String(note.summary).replace(/<[^>]*>/g, "") } : {},
-      ...poll ? { poll } : {},
-      ...emojis.length ? { emojis } : {},
-      ...mentions.length ? { mentions } : {},
-      ...attachments.length ? { attachments } : {},
-      ...via ? { via } : {}
-    });
-    if (!followed || note.inReplyTo && String(note.inReplyTo).startsWith(this.urls.notes)) {
-      this.store.addNotification({ type: "mention", actor: author, noteId: note.id });
-    }
-    if (note.inReplyTo && String(note.inReplyTo).startsWith(this.urls.notes)) {
-      await this.addReply(String(note.inReplyTo), note.id).catch((e) => this.log(`replies collection: ${e.message}`));
-    }
-    this.log(`${kind}: ${note.id}${via ? ` (boosted by ${via})` : ""}`);
+  isCoMember(...a) {
+    return isCoMember(this, ...a);
   }
-  // Is this really gone at its origin? true / false / null when the origin
-  // could not be asked. Delivered bodies carry no signature, so this is how a
-  // Delete is verified — the same verify-by-dereference the rest of intake uses.
-  async isGone(url) {
-    let res;
-    try {
-      res = await this.deliverer.signedFetch(url, { headers: { accept: ACCEPT_AP2 } });
-    } catch {
-      return null;
-    }
-    if (res.status === 404 || res.status === 410) return true;
-    if (res.status < 400) {
-      try {
-        const { readCapped: readCapped3 } = await Promise.resolve().then(() => (init_safefetch(), safefetch_exports));
-        return JSON.parse(await readCapped3(res))?.type === "Tombstone";
-      } catch {
-        return false;
-      }
-    }
-    return null;
+  collectionMembers(...a) {
+    return collectionMembers(this, ...a);
   }
-  // Mastodon sends these constantly; ignoring them left deleted posts standing
-  // for good. Two guards, because a forged Delete would otherwise erase anyone's
-  // content: it must come from the object's own origin, and the object must
-  // really be gone there. An origin we cannot reach is a retry, never a delete.
-  async onDelete(activity, actor) {
-    const objectId = typeof activity.object === "string" ? activity.object : activity.object?.id;
-    if (!objectId) return "Delete without object id";
-    if (!this.sameIdentity(objectId, actor)) return `Delete crosses identities (${objectId})`;
-    if (!this.known(objectId)) return;
-    const gone = await this.isGone(objectId);
-    if (gone === null) throw new Error(`cannot confirm ${objectId} is gone \u2014 will retry`);
-    if (!gone) return `Delete for something still published (${objectId})`;
-    if (objectId === actor) {
-      const contacts = this.store.getContacts();
-      dropFollower(contacts, actor, "account-deleted");
-      contacts.following = contacts.following.filter((f) => f.actor !== actor);
-      this.store.setContacts(contacts);
-      const retracted = [];
-      for (const s2 of this.store.getStatuses().filter((s3) => s3.actor === actor)) {
-        await this.forget(s2, { collect: retracted });
-      }
-      if (retracted.length) {
-        const gone2 = new Set(retracted);
-        await this.publisher.unrecordOutbox((i) => gone2.has(i?.id));
-      }
-      await this.republish({ followers: true, following: true });
-      this.log(`account deleted upstream: ${actor}`);
-      return;
-    }
-    const s = this.store.getStatuses().find((x) => x.noteId === objectId);
-    if (s) await this.forget(s);
-    this.log(`deleted upstream: ${objectId}`);
+  announceTargets(...a) {
+    return announceTargets(this, ...a);
   }
-  // Drop a post we were holding. A group that carried it also unsays its own
-  // Announce — forwarding the author's Delete would be signed by us and not by
-  // them, which receivers are right to refuse.
-  // `collect` batches the outbox side: retract pushes the Announce id onto it
-  // instead of republishing, and the caller writes once for all of them.
-  async forget(s, { collect = null } = {}) {
-    if (s.announceActivity) {
-      await this.retract(s.noteId, { collect }).catch((e) => this.log(`retract: ${e.message}`));
-    }
-    this.store.removeStatus(s.noteId);
+  // activities.mjs
+  onAddRemove(...a) {
+    return onAddRemove(this, ...a);
   }
-  // Undo an Announce this group made. Shared with the operator's `retract`.
-  async retract(noteId, { collect = null } = {}) {
-    const s = this.store.getStatuses().find((x) => x.noteId === noteId);
-    if (!s) throw new Error("no such post");
-    if (s.repostUri) {
-      if (!this.bskyGroup) throw new Error("no bluesky account connected");
-      return this.bskyGroup.retract(s);
-    }
-    if (!s.announceActivity) throw new Error("that post was never carried");
-    const { undoActivity: undoActivity2 } = await Promise.resolve().then(() => (init_wire(), wire_exports));
-    const inboxes = this.announceTargets(s.actor);
-    await this.deliverer.deliverToAll(
-      inboxes,
-      undoActivity2({ urls: this.urls, activity: s.announceActivity, serial: this.serial++ })
-    );
-    if (collect) collect.push(s.announceActivity.id);
-    else await this.publisher.unrecordOutbox((i) => i?.id === s.announceActivity.id);
-    this.store.updateStatus(noteId, {
-      announcedAt: void 0,
-      announceActivity: void 0,
-      retractedAt: (/* @__PURE__ */ new Date()).toISOString()
-    });
-    return { ok: true, noteId, inboxes: inboxes.length };
+  onFollow(...a) {
+    return onFollow(this, ...a);
   }
-  // An edited post, or a changed profile. Verified the only way we can: by
-  // refetching at the origin and believing that, not the delivered copy.
-  async onUpdate(activity, actor) {
-    const objectId = typeof activity.object === "string" ? activity.object : activity.object?.id;
-    if (!objectId) return "Update without object id";
-    if (!this.sameIdentity(objectId, actor)) return `Update crosses identities (${objectId})`;
-    if (objectId === actor) {
-      if (!this.known(actor)) return;
-      const doc = await this.fetchAP(actor);
-      if (!doc) throw new Error(`cannot refetch ${actor} \u2014 will retry`);
-      this.store.cacheActor(actor, doc);
-      this.log(`profile updated: ${actor}`);
-      return;
-    }
-    const s = this.store.getStatuses().find((x) => x.noteId === objectId);
-    if (!s) return;
-    const note = await this.fetchAP(objectId);
-    if (!note) throw new Error(`cannot refetch ${objectId} \u2014 will retry`);
-    if (note.id !== objectId || !isContentType(note.type)) return `object not verifiable content (${objectId}, ${note.type})`;
-    const { attachmentsOf: attachmentsOf2, titledContent: titledContent2 } = await Promise.resolve().then(() => (init_wire(), wire_exports));
-    const content = titledContent2(note);
-    const attachments = attachmentsOf2(note);
-    const freshPoll = pollOf(note);
-    const freshEmojis = emojisOf(note);
-    this.store.updateStatus(objectId, {
-      content,
-      ...attachments.length ? { attachments } : {},
-      emojis: freshEmojis.length ? freshEmojis : void 0,
-      // The edit's own stamp when the note carries one; tallies and the
-      // content warning follow the edit too. A poll refresh keeps our vote.
-      editedAt: note.updated || (/* @__PURE__ */ new Date()).toISOString(),
-      spoiler: note.summary ? String(note.summary).replace(/<[^>]*>/g, "") : void 0,
-      ...freshPoll ? {
-        poll: { ...freshPoll, voted: !!s.poll?.voted, ownVotes: s.poll?.ownVotes || [] }
-      } : {}
-    });
-    this.log(`edited upstream: ${objectId}`);
+  onUndo(...a) {
+    return onUndo(this, ...a);
   }
-  // Read-modify-write, and the drain is serialized, so two replies in one sweep
-  // do not race. Nothing else writes this document.
-  // MAX_REPLIES_RECORDED caps the collection. It is a discovery aid — a client
-  // reading a thread — and the statuses index is what actually holds the
-  // replies, so dropping the oldest costs a hop, not a record.
-  async addReply(parentId, replyId) {
-    if (!this.store.getStatuses().some((s) => s.noteId === parentId && s.kind === "post")) {
-      this.log(`reply names ${parentId}, which is not a post of ours \u2014 not recorded`);
-      return;
-    }
-    const { repliesId: repliesId2, collection: collection2 } = await Promise.resolve().then(() => (init_wire(), wire_exports));
-    const url = repliesId2(parentId);
-    const cur = await readReplies(this.remote, url);
-    const items = Array.isArray(cur?.items) ? cur.items : [];
-    if (items.includes(replyId)) return;
-    items.push(replyId);
-    await writeReplies(this.remote, url, collection2(url, items.slice(-MAX_REPLIES_RECORDED)));
-    this.log(`reply recorded on ${parentId}`);
+  onCreate(...a) {
+    return onCreate(this, ...a);
   }
-  // The other answer to a Follow, and it was dropped on the floor. Their server
-  // has recorded that we do not follow them; ours went on saying we did, and
-  // published it — so the two disagreed permanently, and a retry would never
-  // come because as far as they are concerned the question was answered.
-  //
-  // It has to answer the Follow we actually SENT. Only the type was checked, so
-  // one Append per account you follow — from anyone, naming no particular
-  // follow — severed every one of them at once, and silently: their server
-  // never hears about it, so nothing ever retries and nothing looks wrong until
-  // the timeline goes quiet. `followActivity` is stored by followActor
-  // (lib/social.mjs) for exactly this kind of comparison.
-  async onReject(activity, actor, { trusted = false } = {}) {
-    if (activity.object?.type && activity.object.type !== "Follow") return;
-    const contacts = this.store.getContacts();
-    const rec = contacts.following.find((f) => f.actor === actor);
-    if (!rec) return;
-    const named = typeof activity.object === "string" ? activity.object : activity.object?.id;
-    const ours = rec.followActivity?.id;
-    if (!trusted) {
-      if (!ours) {
-        this.log(`Reject from ${actor}: no follow id on record to match it against \u2014 ignored`);
-        return;
-      }
-      if (named !== ours) {
-        this.log(`Reject from ${actor} answers ${named || "nothing"}, not the follow we sent \u2014 ignored`);
-        return;
-      }
-    }
-    contacts.following = contacts.following.filter((f) => f.actor !== actor);
-    this.store.setContacts(contacts);
-    await this.republish({ following: true, pending: true });
-    this.log(`follow rejected by ${actor}`);
+  onAnnouncedDelete(...a) {
+    return onAnnouncedDelete(this, ...a);
   }
-  // Someone we follow has moved. Their server will stop delivering from the old
-  // actor, so without this we keep an entry that can never produce another post
-  // and never learn where they went. The new account is not followed
-  // automatically — that is a Follow only the owner should send — but it is
-  // recorded and raised, so it can be acted on.
-  async onMove(activity, actor) {
-    const target = typeof activity.target === "string" ? activity.target : activity.target?.id;
-    if (!target) return "Move without a target";
-    const contacts = this.store.getContacts();
-    const rec = contacts.following.find((f) => f.actor === actor);
-    if (!rec) return;
-    const doc = await this.fetchAP(actor);
-    if (!doc) throw new Error(`cannot confirm ${actor} moved \u2014 will retry`);
-    const movedTo = typeof doc.movedTo === "string" ? doc.movedTo : doc.movedTo?.id;
-    if (movedTo !== target) return `Move not corroborated by ${actor} (says ${movedTo || "nothing"})`;
-    rec.movedTo = target;
-    this.store.setContacts(contacts);
-    this.store.addNotification({ type: "move", actor, target });
-    this.log(`${actor} moved to ${target} \u2014 follow the new account to keep seeing them`);
+  onAnnounce(...a) {
+    return onAnnounce(this, ...a);
   }
-  async onAccept(activity, actor, { trusted = false } = {}) {
-    const contacts = this.store.getContacts();
-    const rec = contacts.following.find((f) => f.actor === actor);
-    const named = typeof activity.object === "string" ? activity.object : activity.object?.id;
-    const ours = rec?.followActivity?.id;
-    if (ours && named !== ours && !trusted) {
-      this.log(`Accept from ${actor} answers ${named || "nothing"}, not the follow we sent \u2014 ignored`);
-      return;
-    }
-    if (rec && !rec.accepted) {
-      rec.accepted = true;
-      this.store.setContacts(contacts);
-      await this.republish({ following: true, pending: true });
-      this.log(`follow accepted by ${actor}`);
-    }
+  onDelete(...a) {
+    return onDelete(this, ...a);
+  }
+  onUpdate(...a) {
+    return onUpdate(this, ...a);
+  }
+  onReject(...a) {
+    return onReject(this, ...a);
+  }
+  onMove(...a) {
+    return onMove(this, ...a);
+  }
+  onAccept(...a) {
+    return onAccept(this, ...a);
+  }
+  // notes.mjs
+  concernsUs(...a) {
+    return concernsUs(this, ...a);
+  }
+  _maybeForward(...a) {
+    return maybeForward(this, ...a);
+  }
+  _referencesOurObject(...a) {
+    return referencesOurObject(this, ...a);
+  }
+  ingestNote(...a) {
+    return ingestNote(this, ...a);
+  }
+  forget(...a) {
+    return forget(this, ...a);
+  }
+  retract(...a) {
+    return retract(this, ...a);
+  }
+  addReply(...a) {
+    return addReply(this, ...a);
   }
 };
 
@@ -48085,12 +48077,12 @@ var MastoApi = class _MastoApi {
     if ((rec.challengeMethod || "plain") === "S256") {
       const made = node_crypto_default.createHash("sha256").update(v).digest("base64url");
       const given2 = Buffer.from(made);
-      const known2 = Buffer.from(String(rec.challenge));
-      return given2.length === known2.length && node_crypto_default.timingSafeEqual(given2, known2);
+      const known3 = Buffer.from(String(rec.challenge));
+      return given2.length === known3.length && node_crypto_default.timingSafeEqual(given2, known3);
     }
     const given = Buffer.from(v);
-    const known = Buffer.from(String(rec.challenge));
-    return given.length === known.length && node_crypto_default.timingSafeEqual(given, known);
+    const known2 = Buffer.from(String(rec.challenge));
+    return given.length === known2.length && node_crypto_default.timingSafeEqual(given, known2);
   }
   consumeCode(code) {
     const now = Date.now();
@@ -48792,8 +48784,8 @@ var MastoApi = class _MastoApi {
       }
       if (app && body.client_secret) {
         const given = Buffer.from(String(body.client_secret));
-        const known = Buffer.from(app.clientSecret);
-        const okSecret = given.length === known.length && node_crypto_default.timingSafeEqual(given, known);
+        const known2 = Buffer.from(app.clientSecret);
+        const okSecret = given.length === known2.length && node_crypto_default.timingSafeEqual(given, known2);
         if (!okSecret) {
           this.log("token refused: client secret mismatch");
           return send(401, { error: "invalid_client" });
@@ -49901,7 +49893,7 @@ var TagFeed = class {
       return;
     }
     this.lastSweep = (/* @__PURE__ */ new Date()).toISOString();
-    const known = new Set(this.store.getStatuses().map((s) => s.noteId));
+    const known2 = new Set(this.store.getStatuses().map((s) => s.noteId));
     let budget = MAX_NEW_PER_SWEEP;
     let added = 0;
     this.store.hold?.();
@@ -49925,7 +49917,7 @@ var TagFeed = class {
         this.failures = 0;
         for (const st2 of Array.isArray(list3) ? list3 : []) {
           const noteId = st2?.uri;
-          if (!noteId || known.has(noteId) || this.store.isBlocked(noteId)) continue;
+          if (!noteId || known2.has(noteId) || this.store.isBlocked(noteId)) continue;
           if (budget-- <= 0) break;
           const note = await this.intake.fetchAP(noteId).catch(() => null);
           if (!note || note.id !== noteId || !isContentType(note.type)) continue;
@@ -49947,7 +49939,7 @@ var TagFeed = class {
             tag,
             ...attachments.length ? { attachments } : {}
           });
-          known.add(noteId);
+          known2.add(noteId);
           added++;
         }
       }
@@ -50008,7 +50000,7 @@ async function makeDpopSession({ clientId, secret, tokenEndpoint }) {
 var LDP2 = Namespace("http://www.w3.org/ns/ldp#");
 var DC = Namespace("http://purl.org/dc/terms/");
 var POSIX = Namespace("http://www.w3.org/ns/posix/stat#");
-var RDF5 = Namespace("http://www.w3.org/1999/02/22-rdf-syntax-ns#");
+var RDF4 = Namespace("http://www.w3.org/1999/02/22-rdf-syntax-ns#");
 var ACL = Namespace("http://www.w3.org/ns/auth/acl#");
 var FOAF = Namespace("http://xmlns.com/foaf/0.1/");
 var AS = Namespace("https://www.w3.org/ns/activitystreams#");
@@ -50210,8 +50202,8 @@ var PodTransport = class {
    * at the usual suffix, which is what every server this runs against does.
    */
   async aclUrlFor(targetUrl) {
-    const known = this.aclUrls.get(targetUrl);
-    if (known) return known;
+    const known2 = this.aclUrls.get(targetUrl);
+    if (known2) return known2;
     try {
       const res = await this.fetch(targetUrl, { method: "HEAD" });
       this.noteAclLink(targetUrl, res);
@@ -50260,7 +50252,7 @@ var PodTransport = class {
     const target = namedNode2(targetUrl);
     const g = graph();
     const authorize = (subject, agentPred, agent2, modes) => {
-      g.add(subject, RDF5("type"), ACL("Authorization"), doc);
+      g.add(subject, RDF4("type"), ACL("Authorization"), doc);
       g.add(subject, agentPred, agent2, doc);
       g.add(subject, ACL("accessTo"), target, doc);
       g.add(subject, ACL("default"), target, doc);
@@ -50288,18 +50280,18 @@ var PodTransport = class {
   // unchanged, so ask conditionally and let the server answer 304.
   async listContainer(url) {
     this._listCache ||= /* @__PURE__ */ new Map();
-    const known = this._listCache.get(url);
+    const known2 = this._listCache.get(url);
     const res = await this.fetch(url, {
-      headers: { accept: "text/turtle", ...known?.etag ? { "if-none-match": known.etag } : {} }
+      headers: { accept: "text/turtle", ...known2?.etag ? { "if-none-match": known2.etag } : {} }
     });
-    if (res.status === 304 && known) return known.children;
+    if (res.status === 304 && known2) return known2.children;
     if (res.status >= 400) return [];
     let body;
     try {
       body = await readCapped2(res, LISTING_MAX_BYTES);
     } catch (e) {
       this.log(`[${this.label}] listing at ${url}: ${e.message} \u2014 using the last known listing`);
-      return known?.children ?? [];
+      return known2?.children ?? [];
     }
     const g = graph();
     parse2(body, g, url, "text/turtle");
@@ -50342,8 +50334,8 @@ var PodTransport = class {
     const actor = namedNode2(actorUrl);
     const wanted = [
       [me, FOAF("account"), actor],
-      [actor, RDF5("type"), FOAF("OnlineAccount")],
-      [actor, RDF5("type"), kind === "group" ? AS("Group") : AS("Person")],
+      [actor, RDF4("type"), FOAF("OnlineAccount")],
+      [actor, RDF4("type"), kind === "group" ? AS("Group") : AS("Person")],
       [actor, FOAF("accountName"), literal2(accountName)]
     ];
     const missing = wanted.filter(([s, p, o]) => !g.holds(s, p, o, doc));
@@ -51230,8 +51222,8 @@ var ImportWorker = class {
     const agent2 = this.agent;
     const host = clean.slice(clean.lastIndexOf("@") + 1);
     if (agent2.store.isBlocked(`https://${host}/`)) throw new Error("domain is blocked");
-    const known = agent2.store.getContacts().following.find((f) => f.handle === clean && f.actor);
-    if (known) return { id: known.actor, inbox: known.inbox };
+    const known2 = agent2.store.getContacts().following.find((f) => f.handle === clean && f.actor);
+    if (known2) return { id: known2.actor, inbox: known2.inbox };
     const jrd2 = await lookupWebFinger("acct:" + clean);
     const href = selfLink(jrd2)?.href;
     if (!href) throw new Error("webfinger found no actor");

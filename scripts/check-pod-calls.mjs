@@ -53,7 +53,9 @@ const podFiles = fs.readdirSync(POD).filter((f) => f.endsWith('.mjs'));
 // The files that run the browser agent and the gateway. Node-only code is
 // deliberately out of scope for this pass and must not fail the check.
 const IN_SCOPE = [
-  'lib/core/publisher.mjs', 'lib/core/intake.mjs', 'lib/core/social.mjs', 'lib/client/mastoapi.mjs',
+  'lib/core/publisher.mjs', 'lib/core/social.mjs', 'lib/client/mastoapi.mjs',
+  'lib/core/intake/index.mjs', 'lib/core/intake/verify.mjs', 'lib/core/intake/notes.mjs',
+  'lib/core/intake/channel.mjs', 'lib/core/intake/group.mjs', 'lib/core/intake/activities.mjs',
   'lib/gateway/gateway-core.mjs', 'lib/gateway/front-core.mjs',
   'web/app/agent.mjs', 'web/app/signup.mjs', 'web/app/boot.mjs',
   'web/app/admin-facade.mjs', 'web/app/keys-browser.mjs',
