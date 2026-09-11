@@ -831,7 +831,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
 // --- 5c0. the websocket origins the CSP allows ---
 {
-  const { wsOrigins } = await import(path.join(root, 'lib/device/admin.mjs'));
+  const { wsOrigins } = await import(path.join(root, 'lib/device/admin/index.mjs'));
   const plain = wsOrigins(8041);
   check(plain.includes('wss://localhost:8041') && plain.includes('wss://127.0.0.1:8041'),
     'the loopback websocket origins are allowed');
@@ -1518,7 +1518,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   const { Intake } = await import(path.join(root, 'lib/core/intake/index.mjs'));
 
   // --- the static jail: %2f decoded BEFORE the split made '..' a mount name ---
-  const admin = fs.readFileSync(path.join(root, 'lib/device/admin.mjs'), 'utf8');
+  const admin = ['', 'routes'].flatMap((d) => fs.readdirSync(path.join(root, 'lib/device/admin', d)).filter((f) => f.endsWith('.mjs')).map((f) => fs.readFileSync(path.join(root, 'lib/device/admin', d, f), 'utf8'))).join('\n');
   const ss = admin.slice(admin.indexOf('function serveStatic'), admin.indexOf('function webDirRedirect'));
   check(/path\.resolve\(UI_DIR, uiName\)/.test(ss) && /startsWith\(UI_DIR \+ path\.sep\)/.test(ss),
     'the static mount is resolved and contained, not just joined');
@@ -1861,11 +1861,11 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
   // portFree/freePortFrom lived twice and had already drifted — one returned
   // null on exhaustion, the other threw, and both spawn agents.
-  for (const f of ['lib/device/admin.mjs', 'bin/fedipod.mjs']) {
+  for (const f of ['lib/device/admin/server.mjs', 'bin/fedipod.mjs']) {
     const src = fs.readFileSync(path.join(root, f), 'utf8');
     check(!/^(async )?function (portFree|freePortFrom)/m.test(src),
       `${f} no longer carries its own copy`);
-    check(/from '(\.\.\/lib\/device|\.)\/ports\.mjs'/.test(src), `${f} imports the shared one`);
+    check(/from '(\.\.\/lib\/device|\.|\.\.)\/ports\.mjs'/.test(src), `${f} imports the shared one`);
   }
   const { freePortFrom } = await import(path.join(root, 'lib/device/ports.mjs'));
   check(await freePortFrom(1, 1) === null, 'the shared helper returns null rather than throwing');
@@ -1925,14 +1925,14 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
   check(/publishProfile\(\{ force: true \}\)/.test(fs.readFileSync(path.join(root, 'run-agent.mjs'), 'utf8')),
     'the repair path forces, because it publishes BECAUSE the pod is missing it');
-  check(/publishProfile\(\{ force: true \}\)/.test(fs.readFileSync(path.join(root, 'lib/device/admin.mjs'), 'utf8')),
+  check(/publishProfile\(\{ force: true \}\)/.test(['', 'routes'].flatMap((d) => fs.readdirSync(path.join(root, 'lib/device/admin', d)).filter((f) => f.endsWith('.mjs')).map((f) => fs.readFileSync(path.join(root, 'lib/device/admin', d, f), 'utf8'))).join('\n')),
     'and so does the explicit republish control');
 }
 
 // --- 5a-quinquies. the low tail ---
 {
   const read = (f) => fs.readFileSync(path.join(root, f), 'utf8');
-  const admin = read('lib/device/admin.mjs');
+  const admin = ['', 'routes'].flatMap((d) => fs.readdirSync(path.join(root, 'lib/device/admin', d)).filter((f) => f.endsWith('.mjs')).map((f) => fs.readFileSync(path.join(root, 'lib/device/admin', d, f), 'utf8'))).join('\n');
   const masto = fs.readdirSync(path.join(root, 'lib/client/masto')).map((f) => read('lib/client/masto/' + f)).join('\n');
 
   // The mount check was lexical while sendFile's has always been realpath, so
@@ -2929,7 +2929,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   check(gatedGroup.state.requests.length === 1, 'and a gated one still queues');
 
   // A queue nobody can answer is worse than no queue.
-  const admin = fs.readFileSync(path.join(root, 'lib/device/admin.mjs'), 'utf8');
+  const admin = ['', 'routes'].flatMap((d) => fs.readdirSync(path.join(root, 'lib/device/admin', d)).filter((f) => f.endsWith('.mjs')).map((f) => fs.readFileSync(path.join(root, 'lib/device/admin', d, f), 'utf8'))).join('\n');
   const gated = (route) => {
     const at = admin.indexOf(route);
     return admin.slice(at, at + 300).includes("error: 'not a group'");
@@ -3595,7 +3595,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 // --- 5p2. the directory door belongs to a configured agent ---
 {
   const door = fs.readFileSync(path.join(root, 'lib/gateway/directory.mjs'), 'utf8');
-  const admin5p2 = fs.readFileSync(path.join(root, 'lib/device/admin.mjs'), 'utf8');
+  const admin5p2 = ['', 'routes'].flatMap((d) => fs.readdirSync(path.join(root, 'lib/device/admin', d)).filter((f) => f.endsWith('.mjs')).map((f) => fs.readFileSync(path.join(root, 'lib/device/admin', d, f), 'utf8'))).join('\n');
   check(/if \(held \|\| !eligible\(\) \|\| Date\.now\(\) < pausedUntil\) return;/.test(door),
     'the door is only claimed while eligible');
   check(/eligible: \(\) => agent\.configured\(\)/.test(admin5p2),
@@ -5694,7 +5694,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
 
 // --- 10. a group agent serves the group admin API and no client ---
 {
-  const { startAdmin } = await import(path.join(root, 'lib/device/admin.mjs'));
+  const { startAdmin } = await import(path.join(root, 'lib/device/admin/index.mjs'));
   const GPORT = 18624;
   const GHOME = fs.mkdtempSync('/tmp/fedipod-group-');
   // A set-up group: without the credential FILE the bare URL is a trip to
@@ -6103,7 +6103,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
 
 // --- 13. setup runs in the server, outlives the page, and leaks no password ---
 {
-  const { startAdmin } = await import(path.join(root, 'lib/device/admin.mjs'));
+  const { startAdmin } = await import(path.join(root, 'lib/device/admin/index.mjs'));
   const { default: net13 } = await import('node:tls');
   const SPORT = 18626;
   const RPORT = 18627;
@@ -6343,7 +6343,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
 
 // --- 14. the record can be read back and edited, and a merge stays a merge ---
 {
-  const { startAdmin } = await import(path.join(root, 'lib/device/admin.mjs'));
+  const { startAdmin } = await import(path.join(root, 'lib/device/admin/index.mjs'));
   const CPORT = 18628;
   const CHOME = fs.mkdtempSync('/tmp/fedipod-config-');
   // CHOME is the ROOT; the identity itself is a profile under it. /new-actor
@@ -7121,7 +7121,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
 
   // The route half: resolve to the canonical id, dedup, republish; removal
   // asks first; a pod nobody can WebFinger is refused as a Move target.
-  const { startAdmin: startAdminA } = await import(path.join(root, 'lib/device/admin.mjs'));
+  const { startAdmin: startAdminA } = await import(path.join(root, 'lib/device/admin/index.mjs'));
   const APORT = 18661;
   const astore = new PodStore({ log: () => {} });
   astore.setConfig({ remotePod: 'https://solo.example/', handle: 'solo', name: 'solo',
@@ -7397,7 +7397,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
     'clear() during an in-flight row stays cleared — nothing resurrects');
 
   // ---- the route: CSV text in, staged counts out, progress readable ----
-  const { startAdmin: startAdminI } = await import(path.join(root, 'lib/device/admin.mjs'));
+  const { startAdmin: startAdminI } = await import(path.join(root, 'lib/device/admin/index.mjs'));
   const IPORT = 18662;
   const rstore = new PodStore({ log: () => {} });
   rstore.setConfig({ remotePod: 'https://imp.example/', handle: 'imp', name: 'imp',
@@ -7505,7 +7505,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
     'trust mode is sticky — later boots keep the CA-signed certificate');
 
   // The listener: one port, https, its authority the machine's own.
-  const { startAdmin: startAdminH } = await import(path.join(root, 'lib/device/admin.mjs'));
+  const { startAdmin: startAdminH } = await import(path.join(root, 'lib/device/admin/index.mjs'));
   const HPORT = 18671;
   const hstore = new PodStore({ log: () => {} });
   hstore.setConfig({ remotePod: 'https://h.example/', handle: 'h', name: 'h',
@@ -8077,7 +8077,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
   // The route the record page calls, over a real Agent whose private half is
   // the directory seeded above. No pod behind it: connect is stubbed, because
   // what is under test is quiesce → copy → repoint → reconnect, not the pod.
-  const { startAdmin: startAdmin18 } = await import(path.join(root, 'lib/device/admin.mjs'));
+  const { startAdmin: startAdmin18 } = await import(path.join(root, 'lib/device/admin/index.mjs'));
   const { Agent: Agent18 } = await import(path.join(root, 'run-agent.mjs'));
   const AHOME18 = path.join(MDIR, 'home');
   fs.mkdirSync(AHOME18, { recursive: true });
