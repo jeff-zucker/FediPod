@@ -8,7 +8,7 @@ one timeline. Your posts, followers and settings stay on your pod.
 
 The easiest way to run FediPod is to use it in any browser at https://fedipod.net. Nothing to install. A wizard will walk you through getting a pod (you can also bring your own) and creating a Fediverse identity attached to the pod.  
 
-There are also a number of [other ways to run FediPod](#other-ways-to-run-fedipod) which offer a variety of scenarios.  If interested in the code, see also : [architecture overview]((architecture.md) and [files overview](files-overivew.md).
+There are also a number of [other ways to run FediPod](#other-ways-to-run-fedipod) which offer a variety of scenarios.  If interested in the code, see also : [architecture overview](architecture.md) and [files overview](files-overview.md).
 
 ## Requirements
 
