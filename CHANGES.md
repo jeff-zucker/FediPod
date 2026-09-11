@@ -1,5 +1,15 @@
 # Changes
 
+## 2026-09-11 (fedipod.net accounts run in the browser — version 1.0.0)
+
+The front page at fedipod.net signs you up for an account that runs in your
+browser: one handle, one password, nothing installed. Your pod is created at
+the provider you choose, your key lives on the pod encrypted under your
+password, and the same account opens from any browser that has the password.
+
+An account run by an agent on your own machine is still offered, at
+fedipod.net/new-account, and fedipod.net/install still installs that agent.
+
 ## 2026-09-10 (mail arrives at once from a pod on your own machine)
 
 A pod served from a subdomain of `localhost` — which is how a Solid server with
