@@ -98,8 +98,7 @@ is marked **sign in again** rather than quietly dropped.
 New followers appear under **Follow requests** with **Accept** and **Refuse**
 beside them; nothing is accepted without you.
 They show in any Mastodon client as well, now that the client API serves the
-queue and takes both answers — before this they were visible on this page
-alone.
+queue and takes both answers.
 Groups are different — joining
 follows the group's own moderation settings; see [Groups](groups.md).
 
