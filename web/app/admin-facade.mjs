@@ -17,7 +17,7 @@
 import { publicHandle, webfingerHost } from '../../lib/core/wire.mjs';
 import * as podInbox from '../../lib/pod/inbox.mjs';
 import { normalizeImport, IMPORT_KINDS } from '../../lib/connections/import.mjs';
-import { hashPassword } from '../../lib/client/mastoapi.mjs';
+import { hashPassword } from '../../lib/client/masto/index.mjs';
 
 // The identity itself — changing any means a different actor, i.e. a new setup.
 const PERMANENT_CONFIG = ['handle', 'remotePod', 'issuer', 'root', 'kind'];
