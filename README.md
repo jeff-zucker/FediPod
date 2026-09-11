@@ -6,7 +6,9 @@ FediPod gives you a Fediverse account whose data lives on a Solid pod. You
 follow people on Mastodon, Bluesky, and other Fediverse or ATProto servers in
 one timeline. Your posts, followers and settings stay on your pod.
 
-The easiest way to run FediPod is to use it in any browser at https://fedipod.net. Nothing to install. A wizard will walk you through getting a pod (you can also bring your own) and creating a Fediverse identity attached to the pod.  There are also a number of [other ways to run FediPod](#other-ways-to-run-fedipod) which offer a variety of scenarios.
+The easiest way to run FediPod is to use it in any browser at https://fedipod.net. Nothing to install. A wizard will walk you through getting a pod (you can also bring your own) and creating a Fediverse identity attached to the pod.  
+
+There are also a number of [other ways to run FediPod](#other-ways-to-run-fedipod) which offer a variety of scenarios.  If interested in the code, see also : [architecture overview]((architecture.md) and [files overview](files-overivew.md).
 
 ## Requirements
 
@@ -104,8 +106,7 @@ to a gateway of your own. Your address and your data do not change.
 - [FediPod Server](packages/fedipod-server/README.md): a full ActivityPub
   server as a Community Solid Server component, giving every pod on the server
   the option of a Fediverse account.
-- [Architecture](architecture.md): how the pieces fit, and which protocols
-  FediPod speaks.
+
 
 ## Acknowledgements
 
