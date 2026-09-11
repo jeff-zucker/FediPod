@@ -1,7 +1,7 @@
 // accessor.test.mjs — the accessor over in-memory pod stores: what a
 // Community Solid Server asks of a DataAccessor, answered from a container's
 // two documents. Nothing here opens a socket or loads the SDK; the live
-// behaviour is proven by claude/validation/nextgraph-spike/css-live.mjs.
+// behaviour is proven by css-live.mjs beside this file.
 //
 //   node --test   (from packages/css-nextgraph, after npm run build)
 import { test } from 'node:test';

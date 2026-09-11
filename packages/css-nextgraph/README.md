@@ -140,7 +140,11 @@ npm test          # builds, then the accessor over in-memory stores
 ```
 
 The live behaviour, a real CSS over a local daemon, is proven by
-`claude/validation/nextgraph-spike/css-live.mjs` in the FediPod repository:
-PUT and GET of Turtle, a JPEG and an ActivityPub document, listings, the
-409, deletes, then both daemon and server restarted and everything read
-back, and the hand-over command.
+`test/css-live.mjs`: PUT and GET of Turtle, a JPEG and an ActivityPub
+document, listings, the 409, deletes, then both daemon and server restarted
+and everything read back, and the hand-over command. It is not part of
+`npm test`; it needs a daemon running and is started with
+
+```
+node test/css-live.mjs
+```
