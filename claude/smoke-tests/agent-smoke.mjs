@@ -1633,7 +1633,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
 // --- 5a-nonies. both setup paths produce the same install ---
 {
-  const bin = fs.readFileSync(path.join(root, 'bin/fedipod.mjs'), 'utf8');
+  const bin = [path.join(root, 'bin/fedipod.mjs'), path.join(root, 'lib/device/cli/context.mjs'), ...fs.readdirSync(path.join(root, 'lib/device/cli/commands')).map((f) => path.join(root, 'lib/device/cli/commands', f))].map((f) => fs.readFileSync(f, 'utf8')).join('\n');
   const setupJs = fs.readFileSync(path.join(root, 'lib/device/setup.mjs'), 'utf8');
 
   // They diverged: the browser path defaulted privateRoot to a local file: URL
@@ -1861,11 +1861,11 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
   // portFree/freePortFrom lived twice and had already drifted — one returned
   // null on exhaustion, the other threw, and both spawn agents.
-  for (const f of ['lib/device/admin/server.mjs', 'bin/fedipod.mjs']) {
+  for (const f of ['lib/device/admin/server.mjs', 'lib/device/cli/context.mjs']) {
     const src = fs.readFileSync(path.join(root, f), 'utf8');
     check(!/^(async )?function (portFree|freePortFrom)/m.test(src),
       `${f} no longer carries its own copy`);
-    check(/from '(\.\.\/lib\/device|\.|\.\.)\/ports\.mjs'/.test(src), `${f} imports the shared one`);
+    check(/from '((\.\.\/)+lib\/device|\.|\.\.)\/ports\.mjs'/.test(src), `${f} imports the shared one`);
   }
   const { freePortFrom } = await import(path.join(root, 'lib/device/ports.mjs'));
   check(await freePortFrom(1, 1) === null, 'the shared helper returns null rather than throwing');
@@ -1874,7 +1874,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   check(/REBUILD_MAX_PER_RUN/.test(fs.readFileSync(path.join(root, 'lib/core/publisher/restore.mjs'), 'utf8')),
     'rebuild is capped per run and says so when it stops');
   // and an empty state migration used to report success
-  check(/NOTHING WAS COPIED/.test(fs.readFileSync(path.join(root, 'bin/fedipod.mjs'), 'utf8')),
+  check(/NOTHING WAS COPIED/.test([path.join(root, 'bin/fedipod.mjs'), path.join(root, 'lib/device/cli/context.mjs'), ...fs.readdirSync(path.join(root, 'lib/device/cli/commands')).map((f) => path.join(root, 'lib/device/cli/commands', f))].map((f) => fs.readFileSync(f, 'utf8')).join('\n')),
     '`state --to` says when it moved nothing rather than reporting a move');
 }
 
@@ -2639,7 +2639,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     privateRoot: 'http://192.168.1.50/private/' }),
     'but an http one off this machine is refused');
 
-  const bin = fs.readFileSync(path.join(root, 'bin/fedipod.mjs'), 'utf8');
+  const bin = [path.join(root, 'bin/fedipod.mjs'), path.join(root, 'lib/device/cli/context.mjs'), ...fs.readdirSync(path.join(root, 'lib/device/cli/commands')).map((f) => path.join(root, 'lib/device/cli/commands', f))].map((f) => fs.readFileSync(f, 'utf8')).join('\n');
   check((bin.match(/insecureUrlReason/g) || []).length >= 2,
     'the CLI checks it too — setup and `state --to` both take these addresses');
 }
@@ -3165,7 +3165,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
 // --- 5g-bis. a command you decline should not have acted already ---
 {
-  const bin = fs.readFileSync(path.join(root, 'bin/fedipod.mjs'), 'utf8');
+  const bin = [path.join(root, 'bin/fedipod.mjs'), path.join(root, 'lib/device/cli/context.mjs'), ...fs.readdirSync(path.join(root, 'lib/device/cli/commands')).map((f) => path.join(root, 'lib/device/cli/commands', f))].map((f) => fs.readFileSync(f, 'utf8')).join('\n');
   const ra = fs.readFileSync(path.join(root, 'run-agent.mjs'), 'utf8');
 
   check(/async connect\(\{ name = null, repair = true, act = true \} = \{\}\)/.test(ra)
@@ -3245,7 +3245,8 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   fs.rmSync(dir, { recursive: true, force: true });
 
   // No irreplaceable file is still written with a truncating writeFileSync.
-  for (const f of ['lib/core/keys.mjs', 'lib/device/setup.mjs', 'lib/device/home.mjs', 'run-agent.mjs', 'bin/fedipod.mjs']) {
+  for (const f of ['lib/core/keys.mjs', 'lib/device/setup.mjs', 'lib/device/home.mjs', 'run-agent.mjs', 'bin/fedipod.mjs',
+    'lib/device/cli/context.mjs', ...fs.readdirSync(path.join(root, 'lib/device/cli/commands')).map((f) => 'lib/device/cli/commands/' + f)]) {
     const src = fs.readFileSync(path.join(root, f), 'utf8');
     const bad = src.split('\n').filter(l => /writeFileSync/.test(l) && /JSON\.stringify/.test(l));
     check(bad.length === 0, `${f} writes no JSON state non-atomically${bad.length ? ': ' + bad[0].trim() : ''}`);
@@ -3256,7 +3257,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   // refusal that sent you there.
   const keysSrc = fs.readFileSync(path.join(root, 'lib/core/keys.mjs'), 'utf8');
   check(/rotate-key --force/.test(keysSrc), 'the no-key error points at a command that works');
-  const binSrc = fs.readFileSync(path.join(root, 'bin/fedipod.mjs'), 'utf8');
+  const binSrc = [path.join(root, 'bin/fedipod.mjs'), path.join(root, 'lib/device/cli/context.mjs'), ...fs.readdirSync(path.join(root, 'lib/device/cli/commands')).map((f) => path.join(root, 'lib/device/cli/commands', f))].map((f) => fs.readFileSync(f, 'utf8')).join('\n');
   check(/const forced = has\('force'\)/.test(binSrc) && /rotateKeyOnce: true/.test(binSrc),
     'and rotate-key --force arms the one-shot rotation so connect can get past it');
 }
