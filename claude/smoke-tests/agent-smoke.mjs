@@ -1824,7 +1824,8 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
 // --- 5a-septies. paging, revocation, and two helpers that were two ---
 {
-  const masto = fs.readFileSync(path.join(root, 'lib/client/mastoapi.mjs'), 'utf8');
+  const masto = fs.readdirSync(path.join(root, 'lib/client/masto'))
+    .map((f) => fs.readFileSync(path.join(root, 'lib/client/masto', f), 'utf8')).join('\n');
 
   // A client walks a timeline by following the Link header. Nothing emitted
   // one, so an account's posts stopped at the first page whatever it asked for.
@@ -1833,7 +1834,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   check(/max_id/.test(masto) && /since_id/.test(masto) && /min_id/.test(masto),
     'and honours all three cursors, not just max_id');
   const accStatuses = masto.slice(masto.indexOf('mAccStatuses'), masto.indexOf('mAccStatuses') + 600);
-  check(/this\.page\(/.test(accStatuses),
+  check(/(this|api)\.page\(/.test(accStatuses),
     "an account's own statuses paginate rather than stopping at 20");
 
   // Logging out of a client left a working 90-day bearer behind.
@@ -1932,7 +1933,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 {
   const read = (f) => fs.readFileSync(path.join(root, f), 'utf8');
   const admin = read('lib/device/admin.mjs');
-  const masto = read('lib/client/mastoapi.mjs');
+  const masto = fs.readdirSync(path.join(root, 'lib/client/masto')).map((f) => read('lib/client/masto/' + f)).join('\n');
 
   // The mount check was lexical while sendFile's has always been realpath, so
   // a mount that IS a symlink out of ui/ still escaped it.
@@ -1999,7 +2000,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     'an oversized body is rejected rather than left hanging');
   // status() clones the whole array for its reply count, so every render of
   // more than one status has to pass `all`.
-  check(!/\.map\(s => this\.status\(s\)\)/.test(masto),
+  check(!/\.map\(s => (this|api)\.status\(s\)\)/.test(masto),
     'no timeline render clones the statuses array once per status');
   check(/published\?\.unreachable/.test(masto),
     'and a save that left the actor unreadable says so rather than reporting success');
@@ -2269,7 +2270,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   // served from that identity. A bearer is not "only you": the facade exists so
   // third-party clients can connect, tokens last 90 days, no scope is enforced.
   {
-    const { attachmentType, extensionFor } = await import(path.join(root, 'lib/client/mastoapi.mjs'));
+    const { attachmentType, extensionFor } = await import(path.join(root, 'lib/client/masto/index.mjs'));
     const stored = (t) => attachmentType(t);
     check(stored('image/jpeg') === 'image/jpeg' && stored('video/mp4') === 'video/mp4'
       && stored('audio/ogg') === 'audio/ogg',
@@ -2944,7 +2945,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   const read = (f) => fs.readFileSync(path.join(root, f), 'utf8');
   const record = read('web/admin/index.html');
   const setup = read('web/admin/setup/index.html');
-  const masto = read('lib/client/mastoapi.mjs');
+  const masto = fs.readdirSync(path.join(root, 'lib/client/masto')).map((f) => read('lib/client/masto/' + f)).join('\n');
   // Colours moved to the shared token sheet; the record page inherits them.
   const tokens = read('web/admin/tokens.css');
 
@@ -4284,7 +4285,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 }
 
 // --- 7. facade M1–M3 on a seeded in-memory PodStore, faked delivery ---
-const { MastoApi } = await import(path.join(root, 'lib/client/mastoapi.mjs'));
+const { MastoApi } = await import(path.join(root, 'lib/client/masto/index.mjs'));
 
 const store2 = new PodStore({ log: () => {} });
 const urls2 = wire.apUrls('https://pod.example/');
@@ -4648,7 +4649,7 @@ if (up) {
 
 // --- 8b4. no password + not this machine = no bearer ---
 {
-  const { MastoApi } = await import(path.join(root, 'lib/client/mastoapi.mjs'));
+  const { MastoApi } = await import(path.join(root, 'lib/client/masto/index.mjs'));
   const { Authorities } = await import(path.join(root, 'lib/shared/guard.mjs'));
   const allowed = new Authorities(8030, 'me');
   const st = new PodStore({ log: () => {} });
@@ -4707,7 +4708,7 @@ if (up) {
 
 // --- 8c. real OAuth when a UI password is set ---
 {
-  const { hashPassword } = await import(path.join(root, 'lib/client/mastoapi.mjs'));
+  const { hashPassword } = await import(path.join(root, 'lib/client/masto/index.mjs'));
   const cfg = store2.getConfig();
   store2.setConfig({ ...cfg, uiPassword: hashPassword('sesame') });
   const form = await call('/oauth/authorize?client_id=dk-ap-client&redirect_uri=http%3A%2F%2Fx%2Fcb&response_type=code&state=st1');
@@ -6638,7 +6639,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
   // a group searched for by name came back as @actor@host with no name.
   {
     const { PodStore } = await import(path.join(root, 'lib/core/store.mjs'));
-    const { MastoApi } = await import(path.join(root, 'lib/client/mastoapi.mjs'));
+    const { MastoApi } = await import(path.join(root, 'lib/client/masto/index.mjs'));
     const gurls = (await import(path.join(root, 'lib/core/wire.mjs'))).apUrls('https://me.example/');
     const gs = new PodStore({ log: () => {} });
     gs.setConfig({ handle: 'me', remotePod: 'https://me.example/' });
@@ -6973,7 +6974,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
   // uploads, and the extra-field rows. The pictures must end up in the pod's
   // media container, because the actor document carries a URL, not bytes.
   {
-    const { MastoApi } = await import(path.join(root, 'lib/client/mastoapi.mjs'));
+    const { MastoApi } = await import(path.join(root, 'lib/client/masto/index.mjs'));
     const wire2 = await import(path.join(root, 'lib/core/wire.mjs'));
     const purls = wire2.apUrls('https://solo.example/');
     let pcfg = { handle: 'solo', name: 'solo', kind: 'person' };
@@ -8344,7 +8345,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
 // --- 21. bluesky feed mixing: mirror, notifications, and the read-only guards ---
 {
   const { BskyFeed, postUrl } = await import('../../lib/connections/bskyfeed.mjs');
-  const { MastoApi } = await import(path.join(root, 'lib/client/mastoapi.mjs'));
+  const { MastoApi } = await import(path.join(root, 'lib/client/masto/index.mjs'));
   const wire21 = await import(path.join(root, 'lib/core/wire.mjs'));
 
   const statuses21 = [{
@@ -10683,7 +10684,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
   const { FediAccounts, safeId, cleanHost } = await import(path.join(root, 'lib/connections/fediacct.mjs'));
   const { AcctFeed } = await import(path.join(root, 'lib/connections/acctfeed.mjs'));
   const { PodStore } = await import(path.join(root, 'lib/core/store.mjs'));
-  const { MastoApi } = await import(path.join(root, 'lib/client/mastoapi.mjs'));
+  const { MastoApi } = await import(path.join(root, 'lib/client/masto/index.mjs'));
   const wire31 = await import(path.join(root, 'lib/core/wire.mjs'));
 
   const reply = (status, body, headers = {}) => ({
@@ -11069,7 +11070,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
 // 33d. A client named by its own published document, rather than by anything
 //      registered here.
 {
-  const { MastoApi } = await import(path.join(root, 'lib/client/mastoapi.mjs'));
+  const { MastoApi } = await import(path.join(root, 'lib/client/masto/index.mjs'));
   const M = MastoApi.redirectMatches;
 
   check(M('https://app.example/cb', 'https://app.example/cb'), 'an exact redirect matches');
@@ -11100,7 +11101,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
   const { Intake } = await import(path.join(root, 'lib/core/intake/index.mjs'));
   const wire35 = await import(path.join(root, 'lib/core/wire.mjs'));
   const polls35 = await import(path.join(root, 'lib/core/polls.mjs'));
-  const { pollParams } = await import(path.join(root, 'lib/client/mastoapi.mjs'));
+  const { pollParams } = await import(path.join(root, 'lib/client/masto/index.mjs'));
 
   const urls35 = wire35.apUrls('https://pod.example/');
 

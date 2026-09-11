@@ -178,14 +178,29 @@ async function serve(request, url) {
   // the origin and saw nothing past the first screen.
   reqHeaders.host = url.host;
   const listeners = {};
+  // The body's events fire on the next microtask. A route that reads the body
+  // may only register for them after an await or two — the facade dispatches
+  // through its area modules first — so a listener that arrives after the
+  // events have fired is given them at once, in the order it asks.
+  let fired = false;
   const req = { method: request.method, url: url.pathname + url.search, headers: reqHeaders,
     // notAllowed() above let this through, so it came from this origin. Said
     // out loud rather than left implicit: MastoApi asks (through the
     // authorities object in agent.mjs) whether a request is the owner's own,
     // and in a browser that question means exactly this.
     sameOrigin: true,
-    socket: { encrypted: url.protocol === 'https:' }, on(ev, cb) { (listeners[ev] ||= []).push(cb); return req; }, destroy() {} };
-  queueMicrotask(() => { if (bodyBytes?.length) (listeners.data || []).forEach((cb) => cb(bodyBytes)); (listeners.end || []).forEach((cb) => cb()); });
+    socket: { encrypted: url.protocol === 'https:' },
+    on(ev, cb) {
+      (listeners[ev] ||= []).push(cb);
+      if (fired) { if (ev === 'data' && bodyBytes?.length) cb(bodyBytes); else if (ev === 'end') cb(); }
+      return req;
+    },
+    destroy() {} };
+  queueMicrotask(() => {
+    fired = true;
+    if (bodyBytes?.length) (listeners.data || []).forEach((cb) => cb(bodyBytes));
+    (listeners.end || []).forEach((cb) => cb());
+  });
   let status = 200; const outHeaders = {}; const chunks = [];
   const res = {
     writeHead(s, h) { status = s; if (h) Object.assign(outHeaders, h); return res; },

@@ -6458,16 +6458,16 @@ var require_parser = __commonJS({
       empty: true,
       space: true
     };
-    function findLastWithPosition(tokens) {
-      for (let i = tokens.length - 1; i >= 0; i--) {
-        let token = tokens[i];
+    function findLastWithPosition(tokens2) {
+      for (let i = tokens2.length - 1; i >= 0; i--) {
+        let token = tokens2[i];
         let pos = token[3] || token[2];
         if (pos) return pos;
       }
     }
-    function tokensToString(tokens, from, to) {
+    function tokensToString(tokens2, from, to) {
       let result = "";
-      for (let i = from; i < to; i++) result += tokens[i][1];
+      for (let i = from; i < to; i++) result += tokens2[i][1];
       return result;
     }
     var Parser2 = class {
@@ -6558,13 +6558,13 @@ var require_parser = __commonJS({
           this.current = node;
         }
       }
-      checkMissedSemicolon(tokens) {
-        let colon = this.colon(tokens);
+      checkMissedSemicolon(tokens2) {
+        let colon = this.colon(tokens2);
         if (colon === false) return;
         let founded = 0;
         let token;
         for (let j = colon - 1; j >= 0; j--) {
-          token = tokens[j];
+          token = tokens2[j];
           if (token[0] !== "space") {
             founded += 1;
             if (founded === 2) break;
@@ -6575,10 +6575,10 @@ var require_parser = __commonJS({
           token[0] === "word" ? token[3] + 1 : token[2]
         );
       }
-      colon(tokens) {
+      colon(tokens2) {
         let brackets = 0;
         let prev, token, type;
-        for (let [i, element] of tokens.entries()) {
+        for (let [i, element] of tokens2.entries()) {
           token = element;
           type = token[0];
           if (type === "(") {
@@ -6620,68 +6620,68 @@ var require_parser = __commonJS({
       createTokenizer() {
         this.tokenizer = tokenizer(this.input);
       }
-      decl(tokens, customProperty) {
+      decl(tokens2, customProperty) {
         let node = new Declaration();
-        this.init(node, tokens[0][2]);
-        let last = tokens[tokens.length - 1];
+        this.init(node, tokens2[0][2]);
+        let last = tokens2[tokens2.length - 1];
         if (last[0] === ";") {
           this.semicolon = true;
-          tokens.pop();
+          tokens2.pop();
         }
         node.source.end = this.getPosition(
-          last[3] || last[2] || findLastWithPosition(tokens)
+          last[3] || last[2] || findLastWithPosition(tokens2)
         );
         node.source.end.offset++;
         let start = 0;
-        while (tokens[start][0] !== "word") {
-          if (start === tokens.length - 1) this.unknownWord([tokens[start]]);
+        while (tokens2[start][0] !== "word") {
+          if (start === tokens2.length - 1) this.unknownWord([tokens2[start]]);
           start++;
         }
-        node.raws.before += tokensToString(tokens, 0, start);
-        node.source.start = this.getPosition(tokens[start][2]);
+        node.raws.before += tokensToString(tokens2, 0, start);
+        node.source.start = this.getPosition(tokens2[start][2]);
         let propStart = start;
-        while (start < tokens.length) {
-          let type = tokens[start][0];
+        while (start < tokens2.length) {
+          let type = tokens2[start][0];
           if (type === ":" || type === "space" || type === "comment") {
             break;
           }
           start++;
         }
-        node.prop = tokensToString(tokens, propStart, start);
+        node.prop = tokensToString(tokens2, propStart, start);
         let betweenStart = start;
         let token;
-        while (start < tokens.length) {
-          token = tokens[start];
+        while (start < tokens2.length) {
+          token = tokens2[start];
           start++;
           if (token[0] === ":") break;
           if (token[0] === "word" && /\w/.test(token[1])) {
             this.unknownWord([token]);
           }
         }
-        node.raws.between = tokensToString(tokens, betweenStart, start);
+        node.raws.between = tokensToString(tokens2, betweenStart, start);
         if (node.prop[0] === "_" || node.prop[0] === "*") {
           node.raws.before += node.prop[0];
           node.prop = node.prop.slice(1);
         }
         let firstSpacesStart = start;
-        while (start < tokens.length) {
-          let next = tokens[start][0];
+        while (start < tokens2.length) {
+          let next = tokens2[start][0];
           if (next !== "space" && next !== "comment") break;
           start++;
         }
-        let firstSpaces = tokens.slice(firstSpacesStart, start);
-        tokens = tokens.slice(start);
-        this.precheckMissedSemicolon(tokens);
-        for (let i = tokens.length - 1; i >= 0; i--) {
-          token = tokens[i];
+        let firstSpaces = tokens2.slice(firstSpacesStart, start);
+        tokens2 = tokens2.slice(start);
+        this.precheckMissedSemicolon(tokens2);
+        for (let i = tokens2.length - 1; i >= 0; i--) {
+          token = tokens2[i];
           if (token[1].toLowerCase() === "!important") {
             node.important = true;
-            let string = this.stringFrom(tokens, i);
-            string = this.spacesFromEnd(tokens) + string;
+            let string = this.stringFrom(tokens2, i);
+            string = this.spacesFromEnd(tokens2) + string;
             if (string !== " !important") node.raws.important = string;
             break;
           } else if (token[1].toLowerCase() === "important") {
-            let cache = tokens.slice(0);
+            let cache = tokens2.slice(0);
             let str = "";
             for (let j = i; j > 0; j--) {
               let type = cache[j][0];
@@ -6693,21 +6693,21 @@ var require_parser = __commonJS({
             if (str.trim().startsWith("!")) {
               node.important = true;
               node.raws.important = str;
-              tokens = cache;
+              tokens2 = cache;
             }
           }
           if (token[0] !== "space" && token[0] !== "comment") {
             break;
           }
         }
-        let hasWord = tokens.some((i) => i[0] !== "space" && i[0] !== "comment");
+        let hasWord = tokens2.some((i) => i[0] !== "space" && i[0] !== "comment");
         if (hasWord) {
           node.raws.between += firstSpaces.map((i) => i[1]).join("");
           firstSpaces = [];
         }
-        this.raw(node, "value", firstSpaces.concat(tokens), customProperty);
+        this.raw(node, "value", firstSpaces.concat(tokens2), customProperty);
         if (node.value.includes(":") && !customProperty) {
-          this.checkMissedSemicolon(tokens);
+          this.checkMissedSemicolon(tokens2);
         }
       }
       doubleColon(token) {
@@ -6785,11 +6785,11 @@ var require_parser = __commonJS({
         let bracket = null;
         let brackets = [];
         let customProperty = start[1].startsWith("--");
-        let tokens = [];
+        let tokens2 = [];
         let token = start;
         while (token) {
           type = token[0];
-          tokens.push(token);
+          tokens2.push(token);
           if (type === "(" || type === "[") {
             if (!bracket) bracket = token;
             brackets.push(type === "(" ? ")" : "]");
@@ -6799,16 +6799,16 @@ var require_parser = __commonJS({
           } else if (brackets.length === 0) {
             if (type === ";") {
               if (colon) {
-                this.decl(tokens, customProperty);
+                this.decl(tokens2, customProperty);
                 return;
               } else {
                 break;
               }
             } else if (type === "{") {
-              this.rule(tokens);
+              this.rule(tokens2);
               return;
             } else if (type === "}") {
-              this.tokenizer.back(tokens.pop());
+              this.tokenizer.back(tokens2.pop());
               end = true;
               break;
             } else if (type === ":") {
@@ -6824,15 +6824,15 @@ var require_parser = __commonJS({
         if (brackets.length > 0) this.unclosedBracket(bracket);
         if (end && colon) {
           if (!customProperty) {
-            while (tokens.length) {
-              token = tokens[tokens.length - 1][0];
+            while (tokens2.length) {
+              token = tokens2[tokens2.length - 1][0];
               if (token !== "space" && token !== "comment") break;
-              this.tokenizer.back(tokens.pop());
+              this.tokenizer.back(tokens2.pop());
             }
           }
-          this.decl(tokens, customProperty);
+          this.decl(tokens2, customProperty);
         } else {
-          this.unknownWord(tokens);
+          this.unknownWord(tokens2);
         }
       }
       parse() {
@@ -6867,20 +6867,20 @@ var require_parser = __commonJS({
       }
       precheckMissedSemicolon() {
       }
-      raw(node, prop, tokens, customProperty) {
+      raw(node, prop, tokens2, customProperty) {
         let token, type;
-        let length = tokens.length;
+        let length = tokens2.length;
         let value = "";
         let clean = true;
         let next, prev;
         for (let i = 0; i < length; i += 1) {
-          token = tokens[i];
+          token = tokens2[i];
           type = token[0];
           if (type === "space" && i === length - 1 && !customProperty) {
             clean = false;
           } else if (type === "comment") {
-            prev = tokens[i - 1] ? tokens[i - 1][0] : "empty";
-            next = tokens[i + 1] ? tokens[i + 1][0] : "empty";
+            prev = tokens2[i - 1] ? tokens2[i - 1][0] : "empty";
+            next = tokens2[i + 1] ? tokens2[i + 1][0] : "empty";
             if (!SAFE_COMMENT_NEIGHBOR[prev] && !SAFE_COMMENT_NEIGHBOR[next]) {
               if (value.slice(-1) === ",") {
                 clean = false;
@@ -6895,56 +6895,56 @@ var require_parser = __commonJS({
           }
         }
         if (!clean) {
-          let raw = tokens.reduce((all, i) => all + i[1], "");
+          let raw = tokens2.reduce((all, i) => all + i[1], "");
           node.raws[prop] = { raw, value };
         }
         node[prop] = value;
       }
-      rule(tokens) {
-        tokens.pop();
+      rule(tokens2) {
+        tokens2.pop();
         let node = new Rule();
-        this.init(node, tokens[0][2]);
-        node.raws.between = this.spacesAndCommentsFromEnd(tokens);
-        this.raw(node, "selector", tokens);
+        this.init(node, tokens2[0][2]);
+        node.raws.between = this.spacesAndCommentsFromEnd(tokens2);
+        this.raw(node, "selector", tokens2);
         this.current = node;
       }
-      spacesAndCommentsFromEnd(tokens) {
+      spacesAndCommentsFromEnd(tokens2) {
         let lastTokenType;
         let spaces = "";
-        while (tokens.length) {
-          lastTokenType = tokens[tokens.length - 1][0];
+        while (tokens2.length) {
+          lastTokenType = tokens2[tokens2.length - 1][0];
           if (lastTokenType !== "space" && lastTokenType !== "comment") break;
-          spaces = tokens.pop()[1] + spaces;
+          spaces = tokens2.pop()[1] + spaces;
         }
         return spaces;
       }
       // Errors
-      spacesAndCommentsFromStart(tokens) {
+      spacesAndCommentsFromStart(tokens2) {
         let next;
         let spaces = "";
-        while (tokens.length) {
-          next = tokens[0][0];
+        while (tokens2.length) {
+          next = tokens2[0][0];
           if (next !== "space" && next !== "comment") break;
-          spaces += tokens.shift()[1];
+          spaces += tokens2.shift()[1];
         }
         return spaces;
       }
-      spacesFromEnd(tokens) {
+      spacesFromEnd(tokens2) {
         let lastTokenType;
         let spaces = "";
-        while (tokens.length) {
-          lastTokenType = tokens[tokens.length - 1][0];
+        while (tokens2.length) {
+          lastTokenType = tokens2[tokens2.length - 1][0];
           if (lastTokenType !== "space") break;
-          spaces = tokens.pop()[1] + spaces;
+          spaces = tokens2.pop()[1] + spaces;
         }
         return spaces;
       }
-      stringFrom(tokens, from) {
+      stringFrom(tokens2, from) {
         let result = "";
-        for (let i = from; i < tokens.length; i++) {
-          result += tokens[i][1];
+        for (let i = from; i < tokens2.length; i++) {
+          result += tokens2[i][1];
         }
-        tokens.splice(from, tokens.length - from);
+        tokens2.splice(from, tokens2.length - from);
         return result;
       }
       unclosedBlock() {
@@ -6965,11 +6965,11 @@ var require_parser = __commonJS({
           { offset: token[2] + 1 }
         );
       }
-      unknownWord(tokens) {
+      unknownWord(tokens2) {
         throw this.input.error(
-          "Unknown word " + tokens[0][1],
-          { offset: tokens[0][2] },
-          { offset: tokens[0][2] + tokens[0][1].length }
+          "Unknown word " + tokens2[0][1],
+          { offset: tokens2[0][2] },
+          { offset: tokens2[0][2] + tokens2[0][1].length }
         );
       }
       unnamedAtrule(node, token) {
@@ -9651,9 +9651,9 @@ function hostMeta(base) {
 </XRD>
 `;
 }
-function jrd({ handle, host, actor }) {
+function jrd({ handle: handle7, host, actor }) {
   return {
-    subject: `acct:${handle}@${host}`,
+    subject: `acct:${handle7}@${host}`,
     links: [{ rel: "self", type: "application/activity+json", href: actor }]
   };
 }
@@ -9662,7 +9662,7 @@ function followsNeedApproval(config = {}) {
 }
 function actorDoc({
   urls,
-  handle,
+  handle: handle7,
   name,
   publicKeyPem,
   assertionKey = null,
@@ -9721,8 +9721,8 @@ function actorDoc({
     }] } : {},
     ...movedTo ? { movedTo } : {},
     ...webId || aliases.length ? { alsoKnownAs: [...webId ? [webId] : [], ...aliases] } : {},
-    preferredUsername: handle,
-    name: name || handle,
+    preferredUsername: handle7,
+    name: name || handle7,
     // The bio, and the avatar. For a group, `summary` is where what the group
     // is for goes — there is nowhere else for it.
     ...summary ? { summary: contentHtml(summary) } : {},
@@ -21878,8 +21878,8 @@ var require_setImmediate = __commonJS({
         registerImmediate(nextHandle);
         return nextHandle++;
       }
-      function clearImmediate(handle) {
-        delete tasksByHandle[handle];
+      function clearImmediate(handle7) {
+        delete tasksByHandle[handle7];
       }
       function run(task) {
         var callback = task.callback;
@@ -21902,26 +21902,26 @@ var require_setImmediate = __commonJS({
             break;
         }
       }
-      function runIfPresent(handle) {
+      function runIfPresent(handle7) {
         if (currentlyRunningATask) {
-          setTimeout(runIfPresent, 0, handle);
+          setTimeout(runIfPresent, 0, handle7);
         } else {
-          var task = tasksByHandle[handle];
+          var task = tasksByHandle[handle7];
           if (task) {
             currentlyRunningATask = true;
             try {
               run(task);
             } finally {
-              clearImmediate(handle);
+              clearImmediate(handle7);
               currentlyRunningATask = false;
             }
           }
         }
       }
       function installNextTickImplementation() {
-        registerImmediate = function(handle) {
+        registerImmediate = function(handle7) {
           process.nextTick(function() {
-            runIfPresent(handle);
+            runIfPresent(handle7);
           });
         };
       }
@@ -21949,26 +21949,26 @@ var require_setImmediate = __commonJS({
         } else {
           global2.attachEvent("onmessage", onGlobalMessage);
         }
-        registerImmediate = function(handle) {
-          global2.postMessage(messagePrefix + handle, "*");
+        registerImmediate = function(handle7) {
+          global2.postMessage(messagePrefix + handle7, "*");
         };
       }
       function installMessageChannelImplementation() {
         var channel = new MessageChannel();
         channel.port1.onmessage = function(event) {
-          var handle = event.data;
-          runIfPresent(handle);
+          var handle7 = event.data;
+          runIfPresent(handle7);
         };
-        registerImmediate = function(handle) {
-          channel.port2.postMessage(handle);
+        registerImmediate = function(handle7) {
+          channel.port2.postMessage(handle7);
         };
       }
       function installReadyStateChangeImplementation() {
         var html = doc.documentElement;
-        registerImmediate = function(handle) {
+        registerImmediate = function(handle7) {
           var script = doc.createElement("script");
           script.onreadystatechange = function() {
-            runIfPresent(handle);
+            runIfPresent(handle7);
             script.onreadystatechange = null;
             html.removeChild(script);
             script = null;
@@ -21977,8 +21977,8 @@ var require_setImmediate = __commonJS({
         };
       }
       function installSetTimeoutImplementation() {
-        registerImmediate = function(handle) {
-          setTimeout(runIfPresent, 0, handle);
+        registerImmediate = function(handle7) {
+          setTimeout(runIfPresent, 0, handle7);
         };
       }
       var attachTo = Object.getPrototypeOf && Object.getPrototypeOf(global2);
@@ -30163,12 +30163,12 @@ var require_base64_js = __commonJS({
     exports.byteLength = byteLength;
     exports.toByteArray = toByteArray;
     exports.fromByteArray = fromByteArray;
-    var lookup = [];
+    var lookup2 = [];
     var revLookup = [];
     var Arr = typeof Uint8Array !== "undefined" ? Uint8Array : Array;
     var code = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     for (i = 0, len = code.length; i < len; ++i) {
-      lookup[i] = code[i];
+      lookup2[i] = code[i];
       revLookup[code.charCodeAt(i)] = i;
     }
     var i;
@@ -30221,7 +30221,7 @@ var require_base64_js = __commonJS({
       return arr;
     }
     function tripletToBase64(num) {
-      return lookup[num >> 18 & 63] + lookup[num >> 12 & 63] + lookup[num >> 6 & 63] + lookup[num & 63];
+      return lookup2[num >> 18 & 63] + lookup2[num >> 12 & 63] + lookup2[num >> 6 & 63] + lookup2[num & 63];
     }
     function encodeChunk(uint8, start, end) {
       var tmp;
@@ -30244,12 +30244,12 @@ var require_base64_js = __commonJS({
       if (extraBytes === 1) {
         tmp = uint8[len2 - 1];
         parts.push(
-          lookup[tmp >> 2] + lookup[tmp << 4 & 63] + "=="
+          lookup2[tmp >> 2] + lookup2[tmp << 4 & 63] + "=="
         );
       } else if (extraBytes === 2) {
         tmp = (uint8[len2 - 2] << 8) + uint8[len2 - 1];
         parts.push(
-          lookup[tmp >> 10] + lookup[tmp >> 4 & 63] + lookup[tmp << 2 & 63] + "="
+          lookup2[tmp >> 10] + lookup2[tmp >> 4 & 63] + lookup2[tmp << 2 & 63] + "="
         );
       }
       return parts.join("");
@@ -32353,11 +32353,11 @@ var require_browser_ponyfill = __commonJS({
           return response;
         };
         var redirectStatuses = [301, 302, 303, 307, 308];
-        Response2.redirect = function(url, status) {
-          if (redirectStatuses.indexOf(status) === -1) {
+        Response2.redirect = function(url, status2) {
+          if (redirectStatuses.indexOf(status2) === -1) {
             throw new RangeError("Invalid status code");
           }
-          return new Response2(null, { status, headers: { location: url } });
+          return new Response2(null, { status: status2, headers: { location: url } });
         };
         exports2.DOMException = g.DOMException;
         try {
@@ -37403,9 +37403,9 @@ var IndexedFormula = class _IndexedFormula extends Formula {
       const request = requests[r];
       if (request != void 0) {
         let sts;
-        const status = this.any(request, this.sym(`${linkNamespaceURI}status`), null, meta);
-        if (status != void 0) {
-          sts = this.statementsMatching(status, this.sym(`${linkNamespaceURI}status`), null, meta).slice();
+        const status2 = this.any(request, this.sym(`${linkNamespaceURI}status`), null, meta);
+        if (status2 != void 0) {
+          sts = this.statementsMatching(status2, this.sym(`${linkNamespaceURI}status`), null, meta).slice();
           for (var i = 0; i < sts.length; i++) {
             this.removeStatement(sts[i]);
           }
@@ -39610,11 +39610,11 @@ var N3Lexer = class {
       if (typeof callback === "function")
         queueMicrotask(() => this._tokenizeToEnd(callback, true));
       else {
-        const tokens = [];
+        const tokens2 = [];
         let error;
-        this._tokenizeToEnd((e, t) => e ? error = e : tokens.push(t), true);
+        this._tokenizeToEnd((e, t) => e ? error = e : tokens2.push(t), true);
         if (error) throw error;
-        return tokens;
+        return tokens2;
       }
     } else {
       this._pendingBuffer = null;
@@ -42816,7 +42816,7 @@ var Fetcher = class _Fetcher {
     }
     if (typeof $SolidTestEnvironment !== "undefined" && $SolidTestEnvironment.localSiteMap) {
       let hostpath = uri.split("/").slice(2);
-      const lookup = (parts, index) => {
+      const lookup2 = (parts, index) => {
         let z = index[parts.shift()];
         if (!z) {
           return null;
@@ -42827,9 +42827,9 @@ var Fetcher = class _Fetcher {
         if (!parts) {
           return null;
         }
-        return lookup(parts, z);
+        return lookup2(parts, z);
       };
-      const y = lookup(hostpath, $SolidTestEnvironment.localSiteMap);
+      const y = lookup2(hostpath, $SolidTestEnvironment.localSiteMap);
       if (y) {
         return y;
       }
@@ -44078,10 +44078,10 @@ async function readPaged(pod, headUrl, { max = 1e4, alsoItems = false } = {}) {
   let next = head.first;
   while (next && !seen.has(next) && items.length < max) {
     seen.add(next);
-    const page = await pod.getJson(next).catch(() => null);
-    if (!page) break;
-    items.push(...page.orderedItems || []);
-    next = page.next;
+    const page2 = await pod.getJson(next).catch(() => null);
+    if (!page2) break;
+    items.push(...page2.orderedItems || []);
+    next = page2.next;
   }
   return items;
 }
@@ -44521,15 +44521,15 @@ async function mentionsFor(publisher, content, inReplyTo) {
   const inText = new Set(mentionsIn(content));
   const carried = inReplyTo ? (publisher.store.getStatuses().find((s) => s.noteId === inReplyTo)?.mentions || []).map((m) => String(m.name || "").replace(/^@/, "")).filter(Boolean) : [];
   const mentions = [];
-  for (const handle of [.../* @__PURE__ */ new Set([...inText, ...carried])]) {
+  for (const handle7 of [.../* @__PURE__ */ new Set([...inText, ...carried])]) {
     if (!publisher.resolveMention) break;
-    const doc = await publisher.resolveMention(handle).catch(() => null);
+    const doc = await publisher.resolveMention(handle7).catch(() => null);
     if (!doc?.id) {
-      publisher.log(`mention @${handle} did not resolve \u2014 left as text`);
+      publisher.log(`mention @${handle7} did not resolve \u2014 left as text`);
       continue;
     }
-    if (!inText.has(handle) && doc.type !== "Group") continue;
-    mentions.push({ handle, actor: doc.id, page: doc.url || null, inbox: doc.endpoints?.sharedInbox || doc.inbox });
+    if (!inText.has(handle7) && doc.type !== "Group") continue;
+    mentions.push({ handle: handle7, actor: doc.id, page: doc.url || null, inbox: doc.endpoints?.sharedInbox || doc.inbox });
   }
   return mentions;
 }
@@ -44605,14 +44605,14 @@ async function updateNote(publisher, s, { content, spoilerText = null, attachmen
   const updated = (/* @__PURE__ */ new Date()).toISOString();
   const inText = new Set(mentionsIn(content));
   const mentions = [];
-  for (const handle of inText) {
+  for (const handle7 of inText) {
     if (!publisher.resolveMention) break;
-    const doc = await publisher.resolveMention(handle).catch(() => null);
+    const doc = await publisher.resolveMention(handle7).catch(() => null);
     if (!doc?.id) {
-      publisher.log(`mention @${handle} did not resolve \u2014 left as text`);
+      publisher.log(`mention @${handle7} did not resolve \u2014 left as text`);
       continue;
     }
-    mentions.push({ handle, actor: doc.id, page: doc.url || null, inbox: doc.endpoints?.sharedInbox || doc.inbox });
+    mentions.push({ handle: handle7, actor: doc.id, page: doc.url || null, inbox: doc.endpoints?.sharedInbox || doc.inbox });
   }
   const atts = attachments ?? s.attachments ?? [];
   const container = String(s.noteId).startsWith(urls.privateNotes) ? urls.privateNotes : urls.notes;
@@ -45834,13 +45834,13 @@ async function isCoMember(intake, actor) {
 async function collectionMembers(intake, url) {
   const out = [];
   let next = url;
-  for (let page = 0; next && page < 10 && out.length < CO_MEMBER_MAX; page++) {
+  for (let page2 = 0; next && page2 < 10 && out.length < CO_MEMBER_MAX; page2++) {
     const doc = await intake.fetchAP(next).catch(() => null);
     if (!doc) return out.length ? out : null;
     for (const item of doc.orderedItems || doc.items || []) {
       if (typeof item === "string") out.push(item);
     }
-    next = doc.first && page === 0 ? doc.first : doc.next;
+    next = doc.first && page2 === 0 ? doc.first : doc.next;
     if (typeof next === "object") next = next?.id;
   }
   return out;
@@ -47000,11 +47000,633 @@ var Lease = class {
   }
 };
 
-// lib/client/mastoapi.mjs
+// lib/client/webpush.mjs
 init_node_crypto();
 
-// lib/pod/media.mjs
-var write6 = (pod, url, bytes, contentType) => pod.put(url, bytes, contentType);
+// web/app/shims/web-push.mjs
+var b64u = (u) => btoa(String.fromCharCode(...u)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+function generateVAPIDKeys() {
+  const pub = new Uint8Array(65);
+  pub[0] = 4;
+  crypto.getRandomValues(pub.subarray(1));
+  const priv = new Uint8Array(32);
+  crypto.getRandomValues(priv);
+  return { publicKey: b64u(pub), privateKey: b64u(priv) };
+}
+function setVapidDetails() {
+}
+async function sendNotification() {
+  return { statusCode: 201, body: "", headers: {} };
+}
+var web_push_default = { generateVAPIDKeys, setVapidDetails, sendNotification };
+
+// lib/client/webpush.mjs
+var Push = class {
+  constructor({ store, subject, log: log2 = () => {
+  } }) {
+    this.store = store;
+    this.subject = subject;
+    this.log = log2;
+  }
+  state() {
+    return this.store.read("webpush.json", { subs: {} });
+  }
+  save(s) {
+    this.store.write("webpush.json", s);
+  }
+  vapid() {
+    const st2 = this.state();
+    if (!st2.vapid) {
+      st2.vapid = web_push_default.generateVAPIDKeys();
+      this.save(st2);
+      this.log("webpush: VAPID keypair minted");
+    }
+    return st2.vapid;
+  }
+  publicKey() {
+    return this.vapid().publicKey;
+  }
+  // One subscription per client login, keyed by a hash of its bearer token —
+  // the token itself is never written down twice.
+  keyOf(token) {
+    return node_crypto_default.createHash("sha256").update(String(token)).digest("hex").slice(0, 16);
+  }
+  get(token) {
+    return this.state().subs[this.keyOf(token)] || null;
+  }
+  set(token, { endpoint, keys, alerts }) {
+    if (!/^https:\/\//.test(String(endpoint || ""))) return null;
+    if (!keys?.p256dh || !keys?.auth) return null;
+    const st2 = this.state();
+    st2.subs[this.keyOf(token)] = { endpoint, keys: { p256dh: keys.p256dh, auth: keys.auth }, alerts: alerts || {} };
+    this.save(st2);
+    return st2.subs[this.keyOf(token)];
+  }
+  setAlerts(token, alerts) {
+    const st2 = this.state();
+    const sub = st2.subs[this.keyOf(token)];
+    if (!sub) return null;
+    sub.alerts = { ...sub.alerts, ...alerts || {} };
+    this.save(st2);
+    return sub;
+  }
+  drop(token) {
+    const st2 = this.state();
+    delete st2.subs[this.keyOf(token)];
+    this.save(st2);
+  }
+  json(token, sub) {
+    return {
+      id: this.keyOf(token),
+      endpoint: sub.endpoint,
+      alerts: sub.alerts || {},
+      policy: "all",
+      server_key: this.publicKey()
+    };
+  }
+  // Push one notification to every subscription whose alerts allow the type.
+  // A push service answering 404/410 means the browser dropped the
+  // subscription — it is removed rather than retried forever.
+  async notify(n, payload) {
+    const st2 = this.state();
+    const entries = Object.entries(st2.subs);
+    if (!entries.length) return;
+    const { publicKey, privateKey } = this.vapid();
+    const details = { subject: this.subject(), publicKey, privateKey };
+    let dropped = false;
+    for (const [key, sub] of entries) {
+      if (sub.alerts && sub.alerts[n.type] === false) continue;
+      try {
+        await web_push_default.sendNotification(
+          { endpoint: sub.endpoint, keys: sub.keys },
+          JSON.stringify(payload),
+          { vapidDetails: details, contentEncoding: "aes128gcm", TTL: 3600 }
+        );
+      } catch (e) {
+        if (e?.statusCode === 404 || e?.statusCode === 410) {
+          delete st2.subs[key];
+          dropped = true;
+        } else {
+          this.log(`webpush: ${e?.statusCode || ""} ${e?.message || e}`);
+        }
+      }
+    }
+    if (dropped) this.save(st2);
+  }
+};
+
+// lib/client/masto/oauth.mjs
+init_node_crypto();
+
+// lib/shared/guard.mjs
+function isCrossSiteNavigation(req) {
+  const site = req.headers["sec-fetch-site"];
+  return site === "cross-site";
+}
+
+// lib/client/masto/oauth.mjs
+init_safefetch();
+
+// lib/client/masto/body.mjs
+function pollParams(body) {
+  const nested = body?.poll && typeof body.poll === "object" ? body.poll : null;
+  const options = [].concat(nested?.options ?? body?.["poll[options][]"] ?? []).map((o) => String(o ?? "").trim()).filter(Boolean);
+  const rawExpiry = nested?.expires_in ?? body?.["poll[expires_in]"];
+  const rawMultiple = nested?.multiple ?? body?.["poll[multiple]"];
+  if (!options.length && rawExpiry === void 0) return null;
+  return {
+    options,
+    expiresIn: rawExpiry === void 0 || rawExpiry === null || rawExpiry === "" ? null : Number(rawExpiry),
+    multiple: rawMultiple === true || rawMultiple === "true" || rawMultiple === "1"
+  };
+}
+function htmlToText(html) {
+  return String(html).replace(/<br\s*\/?>/gi, "\n").replace(/<\/p>\s*<p[^>]*>/gi, "\n\n").replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").trim();
+}
+function readBody(req) {
+  return new Promise((resolve2, reject) => {
+    let data = "";
+    req.on("data", (c) => {
+      data += c;
+      if (data.length > 1e6) {
+        req.destroy();
+        reject(new Error("request body too large"));
+      }
+    });
+    req.on("end", () => {
+      const ct = String(req.headers["content-type"] || "");
+      try {
+        if (ct.includes("application/json")) return resolve2(data ? JSON.parse(data) : {});
+        const form = new URLSearchParams(data);
+        const out = {};
+        for (const key of new Set(form.keys())) {
+          out[key] = key.endsWith("[]") ? form.getAll(key) : form.get(key);
+        }
+        resolve2(out);
+      } catch (e) {
+        reject(e);
+      }
+    });
+    req.on("error", reject);
+  });
+}
+
+// lib/client/masto/oauth.mjs
+var TOKEN_TTL_MS = 90 * 24 * 60 * 60 * 1e3;
+var AUTHZ_WINDOW_MS = 6e4;
+var AUTHZ_MAX_ATTEMPTS = 5;
+var CODE_TTL_MS = 5 * 6e4;
+var MAX_APPS = 200;
+var CLIENT_DOC_TTL_MS = 10 * 6e4;
+var CLIENT_DOC_MAX_CACHED = 200;
+var CLIENT_DOC_WINDOW_MS = 6e4;
+var CLIENT_DOC_MAX_FETCHES = 20;
+var CLIENT_DOC_MAX = 64 * 1024;
+function hashPassword(password) {
+  const salt = node_crypto_default.randomBytes(16);
+  const hash = node_crypto_default.scryptSync(String(password), salt, 32);
+  return { saltHex: salt.toString("hex"), hashHex: hash.toString("hex") };
+}
+function checkPassword(rec, password) {
+  try {
+    const hash = node_crypto_default.scryptSync(String(password), Buffer.from(rec.saltHex, "hex"), 32);
+    return node_crypto_default.timingSafeEqual(hash, Buffer.from(rec.hashHex, "hex"));
+  } catch {
+    return false;
+  }
+}
+var escapeHtml = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+var parseRedirects = (v) => (Array.isArray(v) ? v : String(v || "").split(/\s+/)).map((s) => s.trim()).filter(Boolean);
+function sendLoginForm(res, params, error = "", client = null, status2 = null, headers = {}) {
+  const hidden = [...params.entries()].filter(([k]) => k !== "password").map(([k, v]) => `<input type="hidden" name="${escapeHtml(k)}" value="${escapeHtml(v)}">`).join("\n");
+  let asking = "<p>Enter the agent password to authorize this client.</p>";
+  if (client && (client.name || client.redirect)) {
+    let where = "";
+    try {
+      where = client.redirect ? new URL(client.redirect).host : "";
+    } catch {
+    }
+    const who = client.name ? escapeHtml(client.name) : where ? escapeHtml(where) : "A client";
+    asking = `<p><strong>${who}</strong> is asking to access your account${where ? `, sending the authorization to <code>${escapeHtml(where)}</code>` : ""}.</p><p>Scope: <code>${escapeHtml(client.scope || "read")}</code>. Enter the agent password to allow it.</p>`;
+  }
+  res.writeHead(
+    status2 || (error ? 401 : 200),
+    { "content-type": "text/html; charset=utf-8", ...headers }
+  );
+  res.end(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FediPod \u2014 authorize</title>
+<style>:root{color-scheme:light dark;font-size:125%;--heading:#1a4f8a}
+body{font:1rem system-ui,sans-serif;max-width:22rem;margin:15vh auto;padding:0 1rem}
+h1{color:var(--heading)}
+code{word-break:break-all}
+@media (prefers-color-scheme:dark){:root{--heading:#7fb3e8}}
+input,button{font:inherit;width:100%;padding:.5rem;margin:.3rem 0;box-sizing:border-box}
+.err{color:#b00020}
+@media (prefers-color-scheme:dark){.err{color:#ff8a8a}}</style></head><body>
+<main>
+<h1>FediPod</h1>
+${asking}
+${error ? `<p class="err" id="login-err" role="alert">${escapeHtml(error)}</p>` : ""}
+<form method="POST" action="/oauth/authorize">
+${hidden}
+<label for="password">Agent password</label>
+<input type="password" id="password" name="password" autofocus autocomplete="current-password"
+  ${error ? 'aria-invalid="true" aria-describedby="login-err"' : ""}>
+<button type="submit">Authorize</button>
+</form>
+</main></body></html>`);
+  return true;
+}
+function scopeFor(method, pathname) {
+  if (/^\/api\/v\d\/push\//u.test(pathname)) return "push";
+  const relationship2 = /^\/api\/v1\/(accounts\/[a-f0-9]+\/(follow|unfollow|block|unblock|mute|unmute|remove_from_followers)|follow_requests\/)/u;
+  if (method !== "GET" && method !== "HEAD") {
+    return relationship2.test(pathname) ? "follow" : "write";
+  }
+  return "read";
+}
+function scopeAllows(granted, need) {
+  if (granted == null) return true;
+  const have = String(granted).split(/[\s,+]+/u).filter(Boolean);
+  if (!have.length) return true;
+  if (need === "follow") {
+    return have.some((g) => g === "follow" || g === "write" || g.startsWith("write:"));
+  }
+  return have.some((g) => g === need || g.startsWith(`${need}:`));
+}
+function redirectMatches(published, asked) {
+  if (published === asked) return true;
+  try {
+    const a = new URL(published);
+    const b = new URL(asked);
+    const loopback = (h) => h === "127.0.0.1" || h === "[::1]" || h === "localhost";
+    if (!loopback(a.hostname) || a.hostname !== b.hostname) return false;
+    return a.protocol === b.protocol && a.pathname.replace(/\/$/u, "") === b.pathname.replace(/\/$/u, "");
+  } catch {
+    return false;
+  }
+}
+function provesCode(rec, verifier) {
+  const v = String(verifier || "");
+  if (v.length < 43 || v.length > 128) return false;
+  if ((rec.challengeMethod || "plain") === "S256") {
+    const made = node_crypto_default.createHash("sha256").update(v).digest("base64url");
+    const given2 = Buffer.from(made);
+    const known3 = Buffer.from(String(rec.challenge));
+    return given2.length === known3.length && node_crypto_default.timingSafeEqual(given2, known3);
+  }
+  const given = Buffer.from(v);
+  const known2 = Buffer.from(String(rec.challenge));
+  return given.length === known2.length && node_crypto_default.timingSafeEqual(given, known2);
+}
+function tokenRecords(api) {
+  const raw = api.store.read("masto-tokens.json", []);
+  return raw.map((r) => typeof r === "string" ? { token: r, createdAt: Date.now() } : r);
+}
+function tokens(api) {
+  const now = Date.now();
+  return api.tokenRecords().filter((r) => now - (r.createdAt || 0) < TOKEN_TTL_MS).map((r) => r.token);
+}
+function mintToken(api, scope = null) {
+  const t = node_crypto_default.randomBytes(24).toString("hex");
+  const now = Date.now();
+  const kept = api.tokenRecords().filter((r) => now - (r.createdAt || 0) < TOKEN_TTL_MS);
+  api.store.write(
+    "masto-tokens.json",
+    [...kept, { token: t, createdAt: now, ...scope ? { scope } : {} }].slice(-20)
+  );
+  return t;
+}
+function apps(api) {
+  return api.store.read("oauth-apps.json", []);
+}
+function authorizationServerMetadata(api, origin) {
+  const at = (p) => `${origin.replace(/\/$/u, "")}${p}`;
+  return {
+    issuer: origin.replace(/\/$/u, ""),
+    authorization_endpoint: at("/oauth/authorize"),
+    token_endpoint: at("/oauth/token"),
+    revocation_endpoint: at("/oauth/revoke"),
+    registration_endpoint: at("/api/v1/apps"),
+    response_types_supported: ["code"],
+    grant_types_supported: ["authorization_code"],
+    code_challenge_methods_supported: ["S256", "plain"],
+    token_endpoint_auth_methods_supported: ["client_secret_post", "none"],
+    scopes_supported: ["read", "write", "follow", "push"]
+  };
+}
+function findApp(api, clientId) {
+  return clientId ? api.apps().find((a) => a.clientId === clientId) || null : null;
+}
+async function resolveClientDocument(api, clientId) {
+  if (!/^https:\/\//iu.test(String(clientId || ""))) return null;
+  api.clientDocs = api.clientDocs || /* @__PURE__ */ new Map();
+  const seen = api.clientDocs.get(clientId);
+  if (seen && Date.now() - seen.at < CLIENT_DOC_TTL_MS) return seen.client;
+  if (!api._clientDocFetches || Date.now() - api._clientDocWindow > CLIENT_DOC_WINDOW_MS) {
+    api._clientDocWindow = Date.now();
+    api._clientDocFetches = 0;
+  }
+  if (api._clientDocFetches >= CLIENT_DOC_MAX_FETCHES) {
+    api.log(`client document ${clientId} not fetched: too many lookups this minute`);
+    return null;
+  }
+  api._clientDocFetches += 1;
+  if (api.clientDocs.size >= CLIENT_DOC_MAX_CACHED) {
+    api.clientDocs.delete(api.clientDocs.keys().next().value);
+  }
+  const remember = (client2) => {
+    api.clientDocs.set(clientId, { at: Date.now(), client: client2 });
+    return client2;
+  };
+  let doc;
+  try {
+    const res = await safeFetch(clientId, { headers: { accept: "application/json" } });
+    if (res.status >= 400) {
+      api.log(`client document ${clientId} \u2192 ${res.status}`);
+      return remember(null);
+    }
+    doc = JSON.parse(await readCapped(res, CLIENT_DOC_MAX));
+  } catch (e) {
+    api.log(`client document ${clientId} could not be read: ${e.message}`);
+    return remember(null);
+  }
+  if (doc?.client_id !== clientId) {
+    api.log(`client document ${clientId} names ${doc?.client_id ?? "nothing"} \u2014 refused`);
+    return remember(null);
+  }
+  const redirectUris = [].concat(doc.redirect_uris || []).filter((u) => typeof u === "string");
+  if (!redirectUris.length) {
+    api.log(`client document ${clientId} names no redirect \u2014 refused`);
+    return remember(null);
+  }
+  const client = {
+    clientId,
+    redirectUris,
+    name: String(doc.client_name || clientId).slice(0, 200),
+    scopes: "read write follow"
+  };
+  return remember(client);
+}
+function registerApp(api, { name, website, redirectUris, scopes }) {
+  const app = {
+    clientId: node_crypto_default.randomBytes(16).toString("hex"),
+    clientSecret: node_crypto_default.randomBytes(32).toString("base64url"),
+    name: String(name || "client").slice(0, 200),
+    website: String(website || "").slice(0, 500),
+    redirectUris,
+    scopes: String(scopes || "read"),
+    createdAt: Date.now()
+  };
+  api.store.write("oauth-apps.json", [...api.apps(), app].slice(-MAX_APPS));
+  return app;
+}
+function mintCode(api, { clientId, redirectUri, scope, challenge = null, challengeMethod = null }) {
+  const code = node_crypto_default.randomBytes(24).toString("hex");
+  const now = Date.now();
+  const kept = api.store.read("oauth-codes.json", []).filter((c) => now - c.createdAt < CODE_TTL_MS);
+  api.store.write("oauth-codes.json", [...kept, {
+    code,
+    clientId,
+    redirectUri,
+    scope,
+    createdAt: now,
+    // What the client promised to prove when it comes back for the token.
+    // A client that cannot keep a secret — anything running in a browser —
+    // has this instead, and it is the only thing standing between a stolen
+    // code and a token.
+    ...challenge ? { challenge, challengeMethod: challengeMethod || "plain" } : {}
+  }].slice(-50));
+  return code;
+}
+function consumeCode(api, code) {
+  const now = Date.now();
+  const all = api.store.read("oauth-codes.json", []);
+  const rec = all.find((c) => c.code === code && now - c.createdAt < CODE_TTL_MS);
+  if (rec) api.store.write("oauth-codes.json", all.filter((c) => c.code !== code));
+  return rec || null;
+}
+function tokenOf(api, req) {
+  const m = /^Bearer (.+)$/.exec(req.headers.authorization || "");
+  if (!m) return null;
+  const now = Date.now();
+  return api.tokenRecords().find(
+    (r) => r.token === m[1] && now - (r.createdAt || 0) < TOKEN_TTL_MS
+  ) || null;
+}
+function authed(api, req) {
+  return !!api.tokenOf(req);
+}
+function redirectAllowed(api, redirect) {
+  if (!redirect || redirect === "urn:ietf:wg:oauth:2.0:oob") return true;
+  if (!api.allowed) return true;
+  try {
+    const u = new URL(redirect);
+    if (u.protocol !== "http:" && u.protocol !== "https:") return false;
+    return api.allowed.has(u.host.toLowerCase());
+  } catch {
+    return false;
+  }
+}
+function rateLimited(api) {
+  const now = Date.now();
+  api.authzAttempts = api.authzAttempts.filter((t) => now - t < AUTHZ_WINDOW_MS);
+  if (api.authzAttempts.length >= AUTHZ_MAX_ATTEMPTS) return true;
+  api.authzAttempts.push(now);
+  return false;
+}
+async function handle(api, ctx) {
+  const { req, res, pathname, url, send } = ctx;
+  if (pathname === "/api/v1/apps" && req.method === "POST") {
+    const body = await readBody(req);
+    const redirectUris = parseRedirects(body.redirect_uris);
+    const app = api.registerApp({
+      name: body.client_name,
+      website: body.website,
+      redirectUris,
+      scopes: body.scopes
+    });
+    return send(200, {
+      id: app.clientId,
+      name: app.name,
+      website: app.website,
+      client_id: app.clientId,
+      client_secret: app.clientSecret,
+      redirect_uri: redirectUris.join(" ") || "urn:ietf:wg:oauth:2.0:oob",
+      ...api.webPush ? { vapid_key: api.push.publicKey() } : {}
+    });
+  }
+  if (pathname === "/oauth/authorize" && (req.method === "GET" || req.method === "POST")) {
+    const pw = api.store.getConfig()?.uiPassword;
+    let params = url.searchParams;
+    let body = null;
+    if (req.method === "POST") {
+      body = await readBody(req);
+      params = new URLSearchParams(body);
+    }
+    const redirect = params.get("redirect_uri") || "";
+    const app = api.findApp(params.get("client_id") || "");
+    const doc = app ? null : await api.resolveClientDocument(params.get("client_id") || "");
+    const external = !!app || !!doc;
+    if (isCrossSiteNavigation(req)) {
+      api.log(`authorize refused: cross-site navigation to the mint from ${req.headers.referer || "nowhere"}`);
+      return send(403, { error: "a cross-site navigation may not authorize a client" });
+    }
+    if (external && !api.store.getConfig()?.uiPassword && !api.redirectAllowed(redirect)) {
+      api.log(`authorize refused: no UI password, and "${redirect}" is not an address of this agent`);
+      return send(403, {
+        error: "this client asks to be sent somewhere other than this agent, and no password is set to approve that with. Run `fedipod passwd` and try again."
+      });
+    }
+    const client = { name: app?.name || doc?.name || null, redirect, scope: params.get("scope") || "read" };
+    if (app) {
+      if (!app.redirectUris.includes(redirect)) {
+        api.log(`authorize refused: redirect_uri "${redirect}" not registered for ${app.clientId}`);
+        return send(400, { error: "redirect_uri was not registered by this client" });
+      }
+    } else if (doc) {
+      if (!doc.redirectUris.some((u) => redirectMatches(u, redirect))) {
+        api.log(`authorize refused: redirect_uri "${redirect}" is not one ${doc.clientId} published`);
+        return send(400, { error: "redirect_uri is not one this client published" });
+      }
+      if (!params.get("code_challenge")) {
+        api.log(`authorize refused: ${doc.clientId} keeps no secret and offered no challenge`);
+        return send(400, { error: "a client identified by its own document must send a code_challenge" });
+      }
+    } else if (!api.redirectAllowed(redirect)) {
+      api.log(`authorize refused: redirect_uri "${redirect}" is not this agent`);
+      return send(400, { error: "redirect_uri must be an address of this agent" });
+    }
+    if (req.method === "POST") {
+      if (api.rateLimited()) {
+        api.log("authorize rate limited");
+        return sendLoginForm(
+          res,
+          params,
+          "too many attempts \u2014 wait a minute",
+          client,
+          429,
+          { "retry-after": String(Math.ceil(AUTHZ_WINDOW_MS / 1e3)) }
+        );
+      }
+      if (!pw || !checkPassword(pw, body.password || "")) {
+        return sendLoginForm(res, params, "wrong password \u2014 try again", client);
+      }
+    } else if (pw) {
+      return sendLoginForm(res, params, "", client);
+    } else if (api.allowed && !api.allowed.isLocalRequest(req)) {
+      api.log(`authorize refused: no UI password, and "${req.headers.host}" is not this machine`);
+      return send(403, {
+        error: "this agent answers on an address outside this machine and has no password set \u2014 " + (api.embedded ? `POST {"password":"\u2026"} to the owner door's /config with its door secret before logging in` : "run `fedipod passwd` before logging in over that address")
+      });
+    }
+    const code = external ? api.mintCode({
+      clientId: (app || doc).clientId,
+      redirectUri: redirect,
+      scope: client.scope,
+      challenge: params.get("code_challenge") || null,
+      challengeMethod: params.get("code_challenge_method") || null
+    }) : api.mintToken(client.scope);
+    if (!redirect || redirect === "urn:ietf:wg:oauth:2.0:oob") return send(200, { code });
+    const target = new URL(redirect);
+    target.searchParams.set("code", code);
+    if (params.get("state")) target.searchParams.set("state", params.get("state"));
+    res.writeHead(302, { location: target.href });
+    res.end();
+    return true;
+  }
+  if (pathname === "/oauth/token" && req.method === "POST") {
+    const body = await readBody(req);
+    const app = api.findApp(body.client_id || "");
+    if (!app && body.code_verifier && /^https:\/\//iu.test(String(body.client_id || ""))) {
+      const rec = api.consumeCode(body.code || "");
+      if (!rec || rec.clientId !== body.client_id || body.redirect_uri && rec.redirectUri !== body.redirect_uri) {
+        api.log("token refused: code is not a live authorization for that client document");
+        return send(400, { error: "invalid_grant" });
+      }
+      if (!rec.challenge || !provesCode(rec, body.code_verifier)) {
+        api.log("token refused: the verifier does not answer the challenge this code was made with");
+        return send(400, { error: "invalid_grant" });
+      }
+      return send(200, {
+        access_token: api.mintToken(rec.scope || "read"),
+        token_type: "Bearer",
+        scope: rec.scope || "read",
+        created_at: Math.floor(Date.now() / 1e3),
+        ...api.urls?.actor ? { activitypub_actor_id: api.urls.actor } : {}
+      });
+    }
+    if (app && body.code_verifier) {
+      const rec = api.consumeCode(body.code || "");
+      if (!rec || rec.clientId !== app.clientId || body.redirect_uri && rec.redirectUri !== body.redirect_uri) {
+        api.log("token refused: code is not a live authorization for this client");
+        return send(400, { error: "invalid_grant" });
+      }
+      if (!rec.challenge || !provesCode(rec, body.code_verifier)) {
+        api.log("token refused: the verifier does not answer the challenge this code was made with");
+        return send(400, { error: "invalid_grant" });
+      }
+      return send(200, {
+        access_token: api.mintToken(rec.scope || "read"),
+        token_type: "Bearer",
+        scope: rec.scope || "read",
+        created_at: Math.floor(Date.now() / 1e3),
+        ...api.urls?.actor ? { activitypub_actor_id: api.urls.actor } : {}
+      });
+    }
+    if (app && body.client_secret) {
+      const given = Buffer.from(String(body.client_secret));
+      const known2 = Buffer.from(app.clientSecret);
+      const okSecret = given.length === known2.length && node_crypto_default.timingSafeEqual(given, known2);
+      if (!okSecret) {
+        api.log("token refused: client secret mismatch");
+        return send(401, { error: "invalid_client" });
+      }
+      const rec = api.consumeCode(body.code || "");
+      if (!rec || rec.clientId !== app.clientId || body.redirect_uri && rec.redirectUri !== body.redirect_uri) {
+        api.log("token refused: code is not a live authorization for this client");
+        return send(400, { error: "invalid_grant" });
+      }
+      if (rec.challenge && !provesCode(rec, body.code_verifier)) {
+        api.log("token refused: this code was made with a challenge and the verifier does not answer it");
+        return send(400, { error: "invalid_grant" });
+      }
+      return send(200, {
+        access_token: api.mintToken(rec.scope || "read"),
+        token_type: "Bearer",
+        scope: rec.scope || "read",
+        created_at: Math.floor(Date.now() / 1e3),
+        // Which actor the token acts for. A Mastodon client ignores it; an
+        // ActivityPub API client needs it, and asking for it separately
+        // would mean a second round trip before it knows who it is.
+        ...api.urls?.actor ? { activitypub_actor_id: api.urls.actor } : {}
+      });
+    }
+    if (!body.code || !api.tokens().includes(body.code)) {
+      api.log("token refused: code is not a live authorization");
+      return send(400, { error: "invalid_grant" });
+    }
+    const granted = api.tokenRecords().find((r) => r.token === body.code)?.scope || "read write follow push";
+    return send(200, {
+      access_token: body.code,
+      token_type: "Bearer",
+      scope: granted,
+      created_at: Math.floor(Date.now() / 1e3),
+      ...api.urls?.actor ? { activitypub_actor_id: api.urls.actor } : {}
+    });
+  }
+  if (pathname === "/oauth/revoke" && req.method === "POST") {
+    const body = await readBody(req).catch(() => ({}));
+    const gone = body?.token;
+    if (gone) {
+      const kept = api.tokenRecords().filter((r) => r.token !== gone);
+      api.store.write("masto-tokens.json", kept);
+      api.log("client token revoked");
+    }
+    return send(200, {});
+  }
+  return false;
+}
 
 // lib/core/social.mjs
 var social_exports = {};
@@ -47059,7 +47681,7 @@ async function lookupWebFinger(acct) {
   return jrd2;
 }
 var selfLink = (jrd2) => jrd2?.links?.find((l) => l.rel === "self" && /application\/(activity\+json|ld\+json)/.test(l.type || ""));
-async function confirmDelegation(asked, doc, lookup = lookupWebFinger) {
+async function confirmDelegation(asked, doc, lookup2 = lookupWebFinger) {
   let home;
   try {
     home = new URL(doc.id).host.toLowerCase();
@@ -47071,13 +47693,13 @@ async function confirmDelegation(asked, doc, lookup = lookupWebFinger) {
   if (!user) {
     throw new Error(`${asked} points at ${doc.id} on another host, which names no username to confirm it by`);
   }
-  const back = await lookup(`acct:${user}@${home}`);
+  const back = await lookup2(`acct:${user}@${home}`);
   if (selfLink(back)?.href !== doc.id) {
     throw new Error(`${asked} claims ${doc.id}, but ${home} does not agree that is @${user}@${home} \u2014 refusing to take one host's word for another's actor`);
   }
 }
-async function resolveHandle(agent2, handle) {
-  const clean = String(handle || "").replace(/^@/, "");
+async function resolveHandle(agent2, handle7) {
+  const clean = String(handle7 || "").replace(/^@/, "");
   if (!/^[^@]+@[^@]+$/.test(clean)) throw new Error("handle must look like user@host");
   if (agent2.store.isBlocked("https://" + clean.split("@")[1] + "/")) throw new Error("domain is blocked");
   const jrd2 = await lookupWebFinger("acct:" + clean);
@@ -47124,10 +47746,10 @@ async function followActor(agent2, actorUrl, { publish = true, doc: fetched = nu
   if (publish) await agent2.publisher.publishCollections({ following: true, pending: true });
   return doc;
 }
-async function followHandle(agent2, handle) {
-  const doc = await resolveHandle(agent2, handle);
+async function followHandle(agent2, handle7) {
+  const doc = await resolveHandle(agent2, handle7);
   await followActor(agent2, doc.id);
-  const clean = String(handle || "").replace(/^@/, "");
+  const clean = String(handle7 || "").replace(/^@/, "");
   const contacts = agent2.store.getContacts();
   const rec = contacts.following.find((f) => f.actor === doc.id);
   if (rec && !rec.handle) {
@@ -47441,13 +48063,7 @@ async function pinStatus(agent2, s, pinned) {
   return updated || s;
 }
 
-// lib/shared/guard.mjs
-function isCrossSiteNavigation(req) {
-  const site = req.headers["sec-fetch-site"];
-  return site === "cross-site";
-}
-
-// lib/client/mastoapi.mjs
+// lib/client/masto/render.mjs
 init_wire();
 
 // lib/connections/bskyfeed.mjs
@@ -47495,12 +48111,12 @@ var BskyFeed = class {
     this.stopped = true;
     clearTimeout(this.timer);
   }
-  _backOff(status, retryAfter) {
+  _backOff(status2, retryAfter) {
     this.failures = (this.failures || 0) + 1;
     const ladder = Math.min(BACKOFF_MIN_MS * 2 ** (this.failures - 1), BACKOFF_MAX_MS);
     const wait = retryAfter || Math.round(ladder * (0.85 + Math.random() * 0.3));
     this.quietUntil = Date.now() + wait;
-    this.log(`bskyfeed: ${status ? `bluesky answered ${status}` : "bluesky did not answer"} \u2014 not asking again for ${Math.round(wait / 6e4)} min`);
+    this.log(`bskyfeed: ${status2 ? `bluesky answered ${status2}` : "bluesky did not answer"} \u2014 not asking again for ${Math.round(wait / 6e4)} min`);
   }
   // One author into the shared actor cache, under a page anyone can open.
   _rememberAuthor(a) {
@@ -47600,149 +48216,467 @@ var BskyFeed = class {
   }
 };
 
-// lib/client/webpush.mjs
-init_node_crypto();
-
-// web/app/shims/web-push.mjs
-var b64u = (u) => btoa(String.fromCharCode(...u)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-function generateVAPIDKeys() {
-  const pub = new Uint8Array(65);
-  pub[0] = 4;
-  crypto.getRandomValues(pub.subarray(1));
-  const priv = new Uint8Array(32);
-  crypto.getRandomValues(priv);
-  return { publicKey: b64u(pub), privateKey: b64u(priv) };
+// lib/client/masto/render.mjs
+var TRANSPARENT_PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
+var selfIcon = (api, self2, cached) => (self2 ? api.store.getConfig()?.icon : null) || cached.icon;
+function selfAccount(api) {
+  return api.account(api.urls.actor, { selfAcct: publicHandle(api.store.getConfig()) });
 }
-function setVapidDetails() {
-}
-async function sendNotification() {
-  return { statusCode: 201, body: "", headers: {} };
-}
-var web_push_default = { generateVAPIDKeys, setVapidDetails, sendNotification };
-
-// lib/client/webpush.mjs
-var Push = class {
-  constructor({ store, subject, log: log2 = () => {
-  } }) {
-    this.store = store;
-    this.subject = subject;
-    this.log = log2;
+function account(api, actorUrl, { selfAcct } = {}) {
+  const cached = api.store.getActors()[actorUrl] || {};
+  let host = "", user = cached.preferredUsername || "";
+  try {
+    host = new URL(actorUrl).host;
+    if (!user) user = new URL(actorUrl).pathname.split("/").pop();
+  } catch {
   }
-  state() {
-    return this.store.read("webpush.json", { subs: {} });
-  }
-  save(s) {
-    this.store.write("webpush.json", s);
-  }
-  vapid() {
-    const st2 = this.state();
-    if (!st2.vapid) {
-      st2.vapid = web_push_default.generateVAPIDKeys();
-      this.save(st2);
-      this.log("webpush: VAPID keypair minted");
-    }
-    return st2.vapid;
-  }
-  publicKey() {
-    return this.vapid().publicKey;
-  }
-  // One subscription per client login, keyed by a hash of its bearer token —
-  // the token itself is never written down twice.
-  keyOf(token) {
-    return node_crypto_default.createHash("sha256").update(String(token)).digest("hex").slice(0, 16);
-  }
-  get(token) {
-    return this.state().subs[this.keyOf(token)] || null;
-  }
-  set(token, { endpoint, keys, alerts }) {
-    if (!/^https:\/\//.test(String(endpoint || ""))) return null;
-    if (!keys?.p256dh || !keys?.auth) return null;
-    const st2 = this.state();
-    st2.subs[this.keyOf(token)] = { endpoint, keys: { p256dh: keys.p256dh, auth: keys.auth }, alerts: alerts || {} };
-    this.save(st2);
-    return st2.subs[this.keyOf(token)];
-  }
-  setAlerts(token, alerts) {
-    const st2 = this.state();
-    const sub = st2.subs[this.keyOf(token)];
-    if (!sub) return null;
-    sub.alerts = { ...sub.alerts, ...alerts || {} };
-    this.save(st2);
-    return sub;
-  }
-  drop(token) {
-    const st2 = this.state();
-    delete st2.subs[this.keyOf(token)];
-    this.save(st2);
-  }
-  json(token, sub) {
-    return {
-      id: this.keyOf(token),
-      endpoint: sub.endpoint,
-      alerts: sub.alerts || {},
-      policy: "all",
-      server_key: this.publicKey()
-    };
-  }
-  // Push one notification to every subscription whose alerts allow the type.
-  // A push service answering 404/410 means the browser dropped the
-  // subscription — it is removed rather than retried forever.
-  async notify(n, payload) {
-    const st2 = this.state();
-    const entries = Object.entries(st2.subs);
-    if (!entries.length) return;
-    const { publicKey, privateKey } = this.vapid();
-    const details = { subject: this.subject(), publicKey, privateKey };
-    let dropped = false;
-    for (const [key, sub] of entries) {
-      if (sub.alerts && sub.alerts[n.type] === false) continue;
-      try {
-        await web_push_default.sendNotification(
-          { endpoint: sub.endpoint, keys: sub.keys },
-          JSON.stringify(payload),
-          { vapidDetails: details, contentEncoding: "aes128gcm", TTL: 3600 }
-        );
-      } catch (e) {
-        if (e?.statusCode === 404 || e?.statusCode === 410) {
-          delete st2.subs[key];
-          dropped = true;
-        } else {
-          this.log(`webpush: ${e?.statusCode || ""} ${e?.message || e}`);
-        }
-      }
-    }
-    if (dropped) this.save(st2);
-  }
-};
-
-// lib/client/mastoapi.mjs
-init_safefetch();
-var ATTACHMENT_KINDS = /* @__PURE__ */ new Set(["image", "video", "audio"]);
-var NEVER = /* @__PURE__ */ new Set(["image/svg+xml", "image/svg"]);
-var OPAQUE = "application/octet-stream";
-function pollParams(body) {
-  const nested = body?.poll && typeof body.poll === "object" ? body.poll : null;
-  const options = [].concat(nested?.options ?? body?.["poll[options][]"] ?? []).map((o) => String(o ?? "").trim()).filter(Boolean);
-  const rawExpiry = nested?.expires_in ?? body?.["poll[expires_in]"];
-  const rawMultiple = nested?.multiple ?? body?.["poll[multiple]"];
-  if (!options.length && rawExpiry === void 0) return null;
+  const self2 = actorUrl === api.urls?.actor;
+  if (self2) user = selfAcct || publicHandle(api.store.getConfig()) || user;
   return {
-    options,
-    expiresIn: rawExpiry === void 0 || rawExpiry === null || rawExpiry === "" ? null : Number(rawExpiry),
-    multiple: rawMultiple === true || rawMultiple === "true" || rawMultiple === "1"
+    id: api.store.idFor(actorUrl),
+    username: user,
+    // Self gets the FULL acct (Mastodon proper returns the bare local part
+    // here): the client's login domain is the loopback agent, so the bare
+    // form would display as user@127.0.0.1 — the full form shows the real
+    // fediverse identity, and every client renders @-containing accts as-is.
+    acct: `${self2 ? selfAcct || user : user}@${host}`,
+    // Our own profile is not in the actor cache — the cache is for other
+    // people — so read it from config, or the editor opens empty and saving
+    // wipes what was there.
+    display_name: (self2 ? api.store.getConfig()?.name : cached.name) || cached.name || user,
+    locked: self2 ? followsNeedApproval(api.store.getConfig() || {}) : false,
+    // Read from config for self, like the fields above it: our own actor is
+    // not in the actor cache — the cache is for other people — so a group
+    // asking about itself would be told it was a person.
+    bot: false,
+    discoverable: true,
+    group: self2 ? api.store.getConfig()?.kind === "group" : cached.type === "Group",
+    created_at: "2026-01-01T00:00:00.000Z",
+    note: (self2 ? api.store.getConfig()?.summary : cached.summary) || "",
+    url: actorUrl,
+    uri: actorUrl,
+    avatar: selfIcon(api, self2, cached) || TRANSPARENT_PNG,
+    avatar_static: selfIcon(api, self2, cached) || TRANSPARENT_PNG,
+    header: (self2 ? api.store.getConfig()?.image : null) || TRANSPARENT_PNG,
+    header_static: (self2 ? api.store.getConfig()?.image : null) || TRANSPARENT_PNG,
+    // A remote actor's counts are whatever its own collections said when we
+    // last asked; unknown stays 0 because the API has no way to say "unknown".
+    followers_count: self2 ? api.store.getContacts().followers.length : cached.counts?.followers ?? 0,
+    // Accepted only, matching both the published `following` collection and
+    // the list this number opens — a pending Follow is not yet a following.
+    following_count: self2 ? api.store.getContacts().following.filter((f) => f.accepted).length : cached.counts?.following ?? 0,
+    statuses_count: self2 ? api.store.getStatuses().filter((s) => s.kind === "post").length : 0,
+    last_status_at: null,
+    emojis: [],
+    fields: (self2 ? api.store.getConfig()?.fields : cached.fields) || []
   };
 }
-function attachmentType(claimed) {
-  const t = String(claimed || "").split(";")[0].trim().toLowerCase();
-  if (!/^[a-z0-9.+-]+\/[a-z0-9.+-]+$/.test(t) || NEVER.has(t)) return OPAQUE;
-  return ATTACHMENT_KINDS.has(t.split("/")[0]) ? t : OPAQUE;
+function page(api, items, url, { limit = 20, max = 40, idOf = (s) => api.store.idFor(s.noteId) } = {}) {
+  const n = Math.min(Number(url.searchParams.get("limit")) || limit, max);
+  const ids = /* @__PURE__ */ new Map();
+  const idAt = (s) => {
+    if (!ids.has(s)) ids.set(s, idOf(s));
+    return ids.get(s);
+  };
+  const cut = (param) => {
+    const v = url.searchParams.get(param);
+    if (!v) return null;
+    const i = items.findIndex((s) => idAt(s) === v);
+    return i < 0 ? null : i;
+  };
+  const maxAt = cut("max_id");
+  if (maxAt != null) items = items.slice(maxAt + 1);
+  for (const p of ["since_id", "min_id"]) {
+    const at = cut(p);
+    if (at != null) items = items.slice(0, at);
+  }
+  const pageItems2 = items.slice(0, n);
+  if (!pageItems2.length) return { items: pageItems2, headers: {} };
+  const base = `http://${api.host}${url.pathname}`;
+  const q = (extra) => {
+    const u = new URL(base);
+    for (const [k, v] of url.searchParams) if (!["max_id", "since_id", "min_id"].includes(k)) u.searchParams.set(k, v);
+    for (const [k, v] of Object.entries(extra)) u.searchParams.set(k, v);
+    return u.href;
+  };
+  const links = [`<${q({ max_id: idOf(pageItems2[pageItems2.length - 1]) })}>; rel="next"`];
+  if (pageItems2.length) links.push(`<${q({ min_id: idOf(pageItems2[0]) })}>; rel="prev"`);
+  return { items: pageItems2, headers: { link: links.join(", ") } };
 }
-function extensionFor(mediaType, filename = "") {
-  if (mediaType === OPAQUE) return "bin";
-  const sub = mediaType.split("/")[1].replace(/[^a-z0-9]/g, "");
-  const given = String(filename || "").includes(".") ? filename.split(".").pop().toLowerCase().replace(/[^a-z0-9]/g, "") : "";
-  return given && (given === sub || sub.startsWith(given) || given.startsWith(sub)) ? given : sub || "bin";
+async function bskyReply(api, send, body, parent, visibility) {
+  const at = api.agent.atproto;
+  if (!at?.connected()) return send(422, { error: "this is a Bluesky post \u2014 no Bluesky account is connected to reply from" });
+  if (visibility !== "public" && visibility !== "unlisted") {
+    return send(422, { error: "a Bluesky reply is public \u2014 pick public visibility" });
+  }
+  if (body.scheduled_at) return send(422, { error: "a Bluesky reply cannot be scheduled" });
+  if ([].concat(body.media_ids || body["media_ids[]"] || []).filter(Boolean).length) {
+    return send(422, { error: "images on a Bluesky reply are not supported" });
+  }
+  try {
+    const out = await at.reply(body.status, parent.noteId);
+    const rec = at.read();
+    const actor = profileUrl(rec.did);
+    if (!api.store.getActors()[actor]) {
+      api.store.cacheActor(actor, { name: rec.handle, preferredUsername: rec.handle, type: "Person" });
+    }
+    const text = String(body.status).trim();
+    api.store.addStatus({
+      noteId: out.uri,
+      actor,
+      inReplyTo: parent.noteId,
+      content: `<p>${text.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c])}</p>`,
+      published: (/* @__PURE__ */ new Date()).toISOString(),
+      kind: "bsky",
+      ...out.cid ? { cid: out.cid } : {},
+      link: postUrl(out.uri)
+    });
+    return send(200, api.status(api.store.getStatuses().find((x) => x.noteId === out.uri)));
+  } catch (e) {
+    return send(422, { error: e.message });
+  }
 }
+async function acctAction(api, send, s, verb) {
+  const accounts = api.agent.fediaccts;
+  const held = s.sourceAccts || [];
+  if (!accounts || !held.length) {
+    return send(422, { error: "this post came from a connected account, and none is connected now" });
+  }
+  const flag = verb.endsWith("favourite") ? "favourited" : "reblogged";
+  const undo = verb.startsWith("un");
+  const targets = (undo ? held.filter((v) => v[flag]) : [held[0]]).filter((v) => v?.remoteId);
+  if (!targets.length) return send(200, api.status(s));
+  try {
+    const acted = /* @__PURE__ */ new Set();
+    for (const v of targets) {
+      await accounts.api(
+        v.acct,
+        `/api/v1/statuses/${encodeURIComponent(v.remoteId)}/${verb}`,
+        { method: "POST" }
+      );
+      acted.add(v.acct);
+    }
+    const next = held.map((v) => acted.has(v.acct) ? { ...v, [flag]: !undo } : v);
+    return send(200, api.status(api.store.updateStatus(s.noteId, { sourceAccts: next }) || s));
+  } catch (e) {
+    return send(e.status === 401 ? 401 : 422, { error: e.message });
+  }
+}
+async function acctReply(api, send, body, parent, visibility) {
+  const accounts = api.agent.fediaccts;
+  const held = (parent.sourceAccts || [])[0];
+  if (!accounts || !held?.remoteId) {
+    return send(422, { error: "this post came from a connected account, and none is connected now" });
+  }
+  if (visibility !== "public" && visibility !== "unlisted") {
+    return send(422, { error: "a reply from a connected account is public \u2014 pick public or unlisted" });
+  }
+  if (body.scheduled_at) return send(422, { error: "a reply from a connected account cannot be scheduled" });
+  if ([].concat(body.media_ids || body["media_ids[]"] || []).filter(Boolean).length) {
+    return send(422, { error: "images on a reply from a connected account are not supported" });
+  }
+  try {
+    const out = await accounts.apiJson(held.acct, "/api/v1/statuses", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        status: body.status,
+        in_reply_to_id: held.remoteId,
+        visibility,
+        ...body.spoiler_text ? { spoiler_text: String(body.spoiler_text) } : {}
+      })
+    });
+    if (!out?.uri) return send(502, { error: "that server accepted the reply but did not say where it is" });
+    const rec = accounts.read(held.acct);
+    const actor = out.account?.uri || out.account?.url || rec?.actorUrl;
+    if (actor && !api.store.getActors()[actor]) {
+      api.store.cacheActor(actor, {
+        name: out.account?.display_name || rec?.name,
+        preferredUsername: out.account?.username || rec?.acct,
+        type: "Person"
+      });
+    }
+    api.store.addStatus({
+      noteId: out.uri,
+      actor,
+      inReplyTo: parent.noteId,
+      content: sanitizeHtml(out.content || ""),
+      published: out.created_at || (/* @__PURE__ */ new Date()).toISOString(),
+      kind: "acct",
+      sourceAccts: [{ acct: held.acct, remoteId: String(out.id) }],
+      ...out.url && out.url !== out.uri ? { link: out.url } : {}
+    });
+    return send(200, api.status(api.store.getStatuses().find((x) => x.noteId === out.uri)));
+  } catch (e) {
+    return send(422, { error: e.message });
+  }
+}
+function status(api, s, { all } = {}) {
+  const replies = (all || api.store.getStatuses()).filter((x) => x.inReplyTo === s.noteId).length;
+  return {
+    id: api.store.idFor(s.noteId),
+    created_at: s.published || (/* @__PURE__ */ new Date()).toISOString(),
+    in_reply_to_id: s.inReplyTo ? api.store.idFor(s.inReplyTo) : null,
+    in_reply_to_account_id: null,
+    sensitive: !!s.spoiler,
+    spoiler_text: s.spoiler || "",
+    visibility: s.visibility || "public",
+    language: null,
+    edited_at: s.editedAt || null,
+    uri: s.noteId,
+    url: s.link || s.noteId,
+    replies_count: replies,
+    reblogs_count: 0,
+    favourites_count: 0,
+    // True when ANY of the owner's accounts holds it. The flag is really
+    // what the next tap will do: an empty star on a post one account has
+    // already liked invites a second outward like from a second identity.
+    favourited: !!s.favourited || (s.sourceAccts || []).some((v) => v.favourited),
+    reblogged: !!s.reblogged || (s.sourceAccts || []).some((v) => v.reblogged),
+    muted: false,
+    bookmarked: !!s.bookmarked,
+    pinned: !!s.pinned,
+    content: s.content || "",
+    reblog: null,
+    application: null,
+    account: api.account(s.actor),
+    media_attachments: (s.attachments || []).map((a) => api.mediaJson(a)),
+    // The mention entities are how a client knows a link is an ACCOUNT —
+    // without them, clicking a mentioned group lands on the raw actor doc.
+    mentions: (s.mentions || []).map((m) => {
+      const bare = String(m.name || "").replace(/^@/, "");
+      const user = bare.split("@")[0];
+      let host = "";
+      try {
+        host = new URL(m.href).host;
+      } catch {
+      }
+      return {
+        id: api.store.idFor(m.href),
+        username: user || bare,
+        url: m.href,
+        acct: bare.includes("@") ? bare : host ? `${user}@${host}` : bare
+      };
+    }),
+    tags: [],
+    emojis: (s.emojis || []).map((e) => ({
+      shortcode: e.shortcode,
+      url: e.url,
+      static_url: e.url,
+      visible_in_picker: false
+    })),
+    card: null,
+    poll: s.poll ? api.pollJson(s) : null,
+    // What a filter matched, if any. Mastodon's clients read this and do the
+    // hiding or warning; they do NOT match keywords themselves — Phanpy does
+    // not — so filters that were stored and served but never applied were a
+    // setting that did nothing. The README named them as a feature.
+    filtered: api.filtersFor(s)
+  };
+}
+function filtersFor(api, s) {
+  const now = Date.now();
+  const hay = `${s.content || ""} ${s.spoiler || ""}`.replace(/<[^>]*>/gu, " ").toLowerCase();
+  if (!hay.trim()) return [];
+  const out = [];
+  for (const f of api.store.getFilters?.() || []) {
+    if (f.expiresAt && Date.parse(f.expiresAt) <= now) continue;
+    const hit = (f.keywords || []).filter((k) => {
+      const word = String(k.keyword || "").toLowerCase().trim();
+      if (!word) return false;
+      if (!k.wholeWord) return hay.includes(word);
+      const esc = word.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+      return new RegExp(`(?:^|[^\\p{L}\\p{N}_])${esc}(?:[^\\p{L}\\p{N}_]|$)`, "u").test(hay);
+    }).map((k) => k.keyword);
+    if (!hit.length) continue;
+    out.push({
+      filter: {
+        id: f.id,
+        title: f.title,
+        context: f.context || ["home"],
+        expires_at: f.expiresAt || null,
+        filter_action: f.action || "warn"
+      },
+      keyword_matches: hit,
+      status_matches: []
+    });
+  }
+  return out;
+}
+function lookup(api, id) {
+  const raw = api.store.urlFor(id);
+  if (typeof raw !== "string") return { s: null, wrapped: false };
+  const wrapped = raw.startsWith("via:");
+  const noteId = wrapped ? raw.slice(4) : raw;
+  return { s: api.store.getStatuses().find((x) => x.noteId === noteId) || null, wrapped };
+}
+function statusOrBoost(api, s, opts = {}) {
+  if (!s.via || s.via === s.actor) return api.status(s, opts);
+  const inner = api.status(s, opts);
+  return {
+    id: api.store.idFor("via:" + s.noteId),
+    created_at: s.announcedAt || s.published || inner.created_at,
+    in_reply_to_id: null,
+    in_reply_to_account_id: null,
+    sensitive: false,
+    spoiler_text: "",
+    visibility: inner.visibility,
+    language: null,
+    edited_at: null,
+    uri: s.announceActivity?.id || s.noteId + "#announce",
+    url: inner.url,
+    replies_count: 0,
+    reblogs_count: 0,
+    favourites_count: 0,
+    favourited: false,
+    reblogged: false,
+    muted: false,
+    bookmarked: false,
+    pinned: false,
+    content: "",
+    reblog: inner,
+    application: null,
+    account: api.account(s.via),
+    media_attachments: [],
+    mentions: [],
+    tags: [],
+    emojis: [],
+    card: null,
+    poll: null
+  };
+}
+function pushNotify(api, n) {
+  const acct = api.account(n.actor);
+  const verbs = {
+    mention: "mentioned you",
+    favourite: "favourited your post",
+    reblog: "boosted your post",
+    follow: "followed you",
+    "follow-request": "asked to follow you",
+    move: "moved account"
+  };
+  const s = n.noteId && api.store.getStatuses().find((x) => x.noteId === n.noteId);
+  return api.push.notify(n, {
+    notification_id: n.id,
+    notification_type: n.type,
+    preferred_locale: "en",
+    title: `${acct.display_name || acct.acct} ${verbs[n.type] || n.type}`,
+    body: s ? htmlToText(s.content || "").slice(0, 140) : "",
+    icon: acct.avatar || ""
+  });
+}
+function scheduledJson(api, e) {
+  return {
+    id: e.id,
+    scheduled_at: e.scheduledAt,
+    params: {
+      text: e.params.status,
+      visibility: e.params.visibility || "public",
+      spoiler_text: e.params.spoilerText || null,
+      sensitive: !!e.params.spoilerText,
+      in_reply_to_id: e.params.inReplyTo ? api.store.idFor(e.params.inReplyTo) : null,
+      media_ids: (e.params.attachments || []).map((a) => a.id),
+      poll: null,
+      idempotency: null,
+      scheduled_at: e.scheduledAt,
+      application_id: null
+    },
+    media_attachments: (e.params.attachments || []).map((a) => api.mediaJson(a))
+  };
+}
+function pollJson(api, s) {
+  const opts = s.poll.options || [];
+  const votes = opts.reduce((n, o) => n + (o.votes || 0), 0);
+  return {
+    id: api.store.idFor(s.noteId),
+    expires_at: s.poll.expiresAt || null,
+    expired: !!s.poll.closed || !!s.poll.expiresAt && Date.parse(s.poll.expiresAt) < Date.now(),
+    multiple: !!s.poll.multiple,
+    votes_count: votes,
+    voters_count: s.poll.votersCount ?? null,
+    options: opts.map((o) => ({ title: o.title, votes_count: o.votes || 0 })),
+    voted: !!s.poll.voted,
+    own_votes: s.poll.ownVotes || [],
+    emojis: []
+  };
+}
+function mediaJson(api, a) {
+  const kind = /^video\//.test(a.mediaType) ? "video" : /^audio\//.test(a.mediaType) ? "audio" : "image";
+  return {
+    id: a.id || api.store.idFor(a.url),
+    type: kind,
+    url: a.url,
+    preview_url: a.url,
+    remote_url: null,
+    description: a.description || null,
+    blurhash: null,
+    meta: {}
+  };
+}
+function relationship(api, actorUrl) {
+  const c = api.store.getContacts();
+  const fol = c.following.find((f) => f.actor === actorUrl);
+  return {
+    id: api.store.idFor(actorUrl),
+    following: !!fol?.accepted,
+    requested: !!fol && !fol.accepted,
+    followed_by: c.followers.some((f) => f.actor === actorUrl),
+    showing_reblogs: true,
+    notifying: false,
+    languages: null,
+    blocking: api.store.getBlocklist().actors.includes(actorUrl),
+    blocked_by: false,
+    domain_blocking: false,
+    muting: api.store.getMuted().actors.includes(actorUrl),
+    muting_notifications: false,
+    endorsed: false,
+    note: ""
+  };
+}
+function notificationType(api, t) {
+  return t === "follow-request" ? "follow_request" : t;
+}
+function notification(api, n) {
+  const out = { id: n.id, type: api.notificationType(n.type), created_at: n.at, account: api.account(n.actor) };
+  if (n.noteId) {
+    const s = api.store.getStatuses().find((x) => x.noteId === n.noteId);
+    if (s) out.status = api.status(s);
+  }
+  return out;
+}
+async function accountSearch(api, q) {
+  const needle = String(q || "").replace(/^@/, "").toLowerCase().trim();
+  if (!needle) return [];
+  if (/^[^@\s]+@[^@\s.]+\.[^@\s]+$/.test(needle)) {
+    try {
+      const doc = await resolveHandle(api.agent, needle);
+      return [api.account(doc.id)];
+    } catch (e) {
+      api.log(`account search resolve ${needle}: ${e.message}`);
+    }
+    return [];
+  }
+  const cfg = api.store.getConfig();
+  const seen = /* @__PURE__ */ new Set();
+  const out = [];
+  const add = (actorUrl) => {
+    if (actorUrl && !seen.has(actorUrl)) {
+      seen.add(actorUrl);
+      out.push(api.account(actorUrl));
+    }
+  };
+  if ((cfg?.handle || "").toLowerCase().includes(needle) || (cfg?.name || "").toLowerCase().includes(needle)) add(api.urls.actor);
+  const contacts = api.store.getContacts();
+  for (const rec of [...contacts.followers, ...contacts.following]) {
+    if ((rec.handle || rec.actor || "").toLowerCase().includes(needle)) add(rec.actor);
+  }
+  for (const [u, a] of Object.entries(api.store.getActors())) {
+    if ((a.preferredUsername + " " + a.name + " " + u).toLowerCase().includes(needle)) add(u);
+  }
+  return out.slice(0, 20);
+}
+
+// lib/client/masto/instance.mjs
 var STUBS = new Map(Object.entries({
   "/api/v1/filters": [],
   "/api/v1/custom_emojis": [],
@@ -47753,1854 +48687,6 @@ var STUBS = new Map(Object.entries({
   "/api/v2/suggestions": [],
   "/api/v1/preferences": {}
 }));
-var TOKEN_TTL_MS = 90 * 24 * 60 * 60 * 1e3;
-var AUTHZ_WINDOW_MS = 6e4;
-var AUTHZ_MAX_ATTEMPTS = 5;
-var CODE_TTL_MS = 5 * 6e4;
-var MAX_APPS = 200;
-var CLIENT_DOC_TTL_MS = 10 * 6e4;
-var CLIENT_DOC_MAX_CACHED = 200;
-var CLIENT_DOC_WINDOW_MS = 6e4;
-var CLIENT_DOC_MAX_FETCHES = 20;
-var CLIENT_DOC_MAX = 64 * 1024;
-var MastoApi = class _MastoApi {
-  constructor({
-    agent: agent2,
-    log: log2 = console.log,
-    allowed = null,
-    scheme = null,
-    embedded = false,
-    streaming = true,
-    webPush = true,
-    scheduling = true
-  }) {
-    this.agent = agent2;
-    this.embedded = embedded;
-    this.log = log2;
-    this.allowed = allowed;
-    this.scheme = scheme;
-    this.streaming = streaming;
-    this.webPush = webPush;
-    this.scheduling = scheduling;
-    this.authzAttempts = [];
-  }
-  get store() {
-    return this.agent.store;
-  }
-  get urls() {
-    return this.agent.publisher?.urls;
-  }
-  get push() {
-    this._push ||= new Push({
-      store: this.store,
-      subject: () => this.urls?.actor || "https://localhost/",
-      log: this.log
-    });
-    return this._push;
-  }
-  get host() {
-    return this.urls ? new URL(this.urls.base).host : "unconfigured.invalid";
-  }
-  // Where the live feed is, as the CLIENT must address it: this agent's own
-  // origin, taken from the request, not the pod's host. An instance document
-  // that leaves it empty is not merely unhelpful — clients read it without a
-  // guard and fall over, and every one of them loses live updates.
-  streamingUrl(req) {
-    if (!this.streaming) return null;
-    const host = req?.headers?.host || `localhost:${this.port || ""}`;
-    const secure = this.scheme ? this.scheme.startsWith("https") : req?.headers?.["x-forwarded-proto"] === "https" || !!req?.socket?.encrypted;
-    return `${secure ? "wss" : "ws"}://${host}/api/v1/streaming`;
-  }
-  // ---- tokens ----
-  // Tokens are records {token, createdAt} and expire; legacy bare strings
-  // are read as undated and treated as expired-on-sight only if older
-  // formats can't be dated (they get an epoch of now on first migration).
-  tokenRecords() {
-    const raw = this.store.read("masto-tokens.json", []);
-    return raw.map((r) => typeof r === "string" ? { token: r, createdAt: Date.now() } : r);
-  }
-  tokens() {
-    const now = Date.now();
-    return this.tokenRecords().filter((r) => now - (r.createdAt || 0) < TOKEN_TTL_MS).map((r) => r.token);
-  }
-  // `scope` is what the owner actually granted at /oauth/authorize. It used to
-  // be discarded: every token was full authority, so a client that asked for
-  // `read` could post, delete, and edit the profile. Recorded now, and enforced
-  // at the one gate every client route passes (see scopeFor / authed).
-  mintToken(scope = null) {
-    const t = node_crypto_default.randomBytes(24).toString("hex");
-    const now = Date.now();
-    const kept = this.tokenRecords().filter((r) => now - (r.createdAt || 0) < TOKEN_TTL_MS);
-    this.store.write(
-      "masto-tokens.json",
-      [...kept, { token: t, createdAt: now, ...scope ? { scope } : {} }].slice(-20)
-    );
-    return t;
-  }
-  // What one request needs. Mastodon's four coarse scopes; a client that was
-  // granted a granular `write:statuses` satisfies `write` here, which is the
-  // direction that cannot let anything through that `write` would not.
-  //
-  // Reads are `read`, writes are `write`, and the two Mastodon carves out are
-  // kept: relationship changes accept the legacy `follow`, and push
-  // subscriptions want `push`. Nothing here grants across: `write` does NOT
-  // imply `read`, exactly as on Mastodon, so a write-only client cannot read
-  // the owner's direct messages.
-  static scopeFor(method, pathname) {
-    if (/^\/api\/v\d\/push\//u.test(pathname)) return "push";
-    const relationship = /^\/api\/v1\/(accounts\/[a-f0-9]+\/(follow|unfollow|block|unblock|mute|unmute|remove_from_followers)|follow_requests\/)/u;
-    if (method !== "GET" && method !== "HEAD") {
-      return relationship.test(pathname) ? "follow" : "write";
-    }
-    return "read";
-  }
-  // Whether a token's granted scopes satisfy `need`.
-  //
-  // A record with NO scope is a token minted before scopes were kept — it is
-  // full authority, because that is what it was granted, and quietly demoting
-  // live 90-day tokens would sign people out of working clients for a bug that
-  // was ours. New tokens all carry one.
-  static scopeAllows(granted, need) {
-    if (granted == null) return true;
-    const have = String(granted).split(/[\s,+]+/u).filter(Boolean);
-    if (!have.length) return true;
-    if (need === "follow") {
-      return have.some((g) => g === "follow" || g === "write" || g.startsWith("write:"));
-    }
-    return have.some((g) => g === need || g.startsWith(`${need}:`));
-  }
-  // Registered OAuth apps. A third-party (browser) client registers here, and
-  // the authorization code it later receives is bound to the client_id and the
-  // redirect_uri it registered — so the code reaches only where that client
-  // said, and only that client, presenting its secret, can exchange it for a
-  // bearer. A redirect back to this agent's own origin keeps the local flow.
-  apps() {
-    return this.store.read("oauth-apps.json", []);
-  }
-  /**
-   * What a client needs to know before it can sign in, at the address RFC 8414
-   * puts it. The actor carries the same two endpoints; a client that looks
-   * here first finds everything rather than the minimum.
-   *
-   * `none` among the authentication methods is what says a client keeping no
-   * secret is welcome, which is the whole of what a browser app needs to hear.
-   */
-  authorizationServerMetadata(origin) {
-    const at = (p) => `${origin.replace(/\/$/u, "")}${p}`;
-    return {
-      issuer: origin.replace(/\/$/u, ""),
-      authorization_endpoint: at("/oauth/authorize"),
-      token_endpoint: at("/oauth/token"),
-      revocation_endpoint: at("/oauth/revoke"),
-      registration_endpoint: at("/api/v1/apps"),
-      response_types_supported: ["code"],
-      grant_types_supported: ["authorization_code"],
-      code_challenge_methods_supported: ["S256", "plain"],
-      token_endpoint_auth_methods_supported: ["client_secret_post", "none"],
-      scopes_supported: ["read", "write", "follow", "push"]
-    };
-  }
-  findApp(clientId) {
-    return clientId ? this.apps().find((a) => a.clientId === clientId) || null : null;
-  }
-  /**
-   * A client that publishes its own metadata document is named by that
-   * document's URL and registers nothing here: the document says who it is
-   * and where it may be sent back to. Such a client keeps no secret, so it
-   * always proves itself with a challenge instead.
-   *
-   * The fetch is the guarded one — a client id is a URL a stranger chose, and
-   * an unguarded fetch of it would ask this machine to reach wherever they
-   * pointed.
-   */
-  async resolveClientDocument(clientId) {
-    if (!/^https:\/\//iu.test(String(clientId || ""))) return null;
-    this.clientDocs = this.clientDocs || /* @__PURE__ */ new Map();
-    const seen = this.clientDocs.get(clientId);
-    if (seen && Date.now() - seen.at < CLIENT_DOC_TTL_MS) return seen.client;
-    if (!this._clientDocFetches || Date.now() - this._clientDocWindow > CLIENT_DOC_WINDOW_MS) {
-      this._clientDocWindow = Date.now();
-      this._clientDocFetches = 0;
-    }
-    if (this._clientDocFetches >= CLIENT_DOC_MAX_FETCHES) {
-      this.log(`client document ${clientId} not fetched: too many lookups this minute`);
-      return null;
-    }
-    this._clientDocFetches += 1;
-    if (this.clientDocs.size >= CLIENT_DOC_MAX_CACHED) {
-      this.clientDocs.delete(this.clientDocs.keys().next().value);
-    }
-    const remember = (client2) => {
-      this.clientDocs.set(clientId, { at: Date.now(), client: client2 });
-      return client2;
-    };
-    let doc;
-    try {
-      const res = await safeFetch(clientId, { headers: { accept: "application/json" } });
-      if (res.status >= 400) {
-        this.log(`client document ${clientId} \u2192 ${res.status}`);
-        return remember(null);
-      }
-      doc = JSON.parse(await readCapped(res, CLIENT_DOC_MAX));
-    } catch (e) {
-      this.log(`client document ${clientId} could not be read: ${e.message}`);
-      return remember(null);
-    }
-    if (doc?.client_id !== clientId) {
-      this.log(`client document ${clientId} names ${doc?.client_id ?? "nothing"} \u2014 refused`);
-      return remember(null);
-    }
-    const redirectUris = [].concat(doc.redirect_uris || []).filter((u) => typeof u === "string");
-    if (!redirectUris.length) {
-      this.log(`client document ${clientId} names no redirect \u2014 refused`);
-      return remember(null);
-    }
-    const client = {
-      clientId,
-      redirectUris,
-      name: String(doc.client_name || clientId).slice(0, 200),
-      scopes: "read write follow"
-    };
-    return remember(client);
-  }
-  /**
-   * Whether a redirect the client asked for is one it published.
-   *
-   * A native client listens on whatever port the machine gave it, so it can
-   * only publish the loopback address without one (RFC 8252). The port is
-   * therefore not part of the match there, and nowhere else.
-   */
-  static redirectMatches(published, asked) {
-    if (published === asked) return true;
-    try {
-      const a = new URL(published);
-      const b = new URL(asked);
-      const loopback = (h) => h === "127.0.0.1" || h === "[::1]" || h === "localhost";
-      if (!loopback(a.hostname) || a.hostname !== b.hostname) return false;
-      return a.protocol === b.protocol && a.pathname.replace(/\/$/u, "") === b.pathname.replace(/\/$/u, "");
-    } catch {
-      return false;
-    }
-  }
-  registerApp({ name, website, redirectUris, scopes }) {
-    const app = {
-      clientId: node_crypto_default.randomBytes(16).toString("hex"),
-      clientSecret: node_crypto_default.randomBytes(32).toString("base64url"),
-      name: String(name || "client").slice(0, 200),
-      website: String(website || "").slice(0, 500),
-      redirectUris,
-      scopes: String(scopes || "read"),
-      createdAt: Date.now()
-    };
-    this.store.write("oauth-apps.json", [...this.apps(), app].slice(-MAX_APPS));
-    return app;
-  }
-  // A short-lived, single-use authorization code for a registered client, kept
-  // apart from masto-tokens.json so the code is NOT a bearer until it is
-  // exchanged with the client secret.
-  mintCode({ clientId, redirectUri, scope, challenge = null, challengeMethod = null }) {
-    const code = node_crypto_default.randomBytes(24).toString("hex");
-    const now = Date.now();
-    const kept = this.store.read("oauth-codes.json", []).filter((c) => now - c.createdAt < CODE_TTL_MS);
-    this.store.write("oauth-codes.json", [...kept, {
-      code,
-      clientId,
-      redirectUri,
-      scope,
-      createdAt: now,
-      // What the client promised to prove when it comes back for the token.
-      // A client that cannot keep a secret — anything running in a browser —
-      // has this instead, and it is the only thing standing between a stolen
-      // code and a token.
-      ...challenge ? { challenge, challengeMethod: challengeMethod || "plain" } : {}
-    }].slice(-50));
-    return code;
-  }
-  /**
-   * Whether this verifier is the one the challenge was made from (RFC 7636).
-   * Length is checked because a short verifier is guessable, which is the
-   * whole thing this is here to prevent.
-   */
-  static provesCode(rec, verifier) {
-    const v = String(verifier || "");
-    if (v.length < 43 || v.length > 128) return false;
-    if ((rec.challengeMethod || "plain") === "S256") {
-      const made = node_crypto_default.createHash("sha256").update(v).digest("base64url");
-      const given2 = Buffer.from(made);
-      const known3 = Buffer.from(String(rec.challenge));
-      return given2.length === known3.length && node_crypto_default.timingSafeEqual(given2, known3);
-    }
-    const given = Buffer.from(v);
-    const known2 = Buffer.from(String(rec.challenge));
-    return given.length === known2.length && node_crypto_default.timingSafeEqual(given, known2);
-  }
-  consumeCode(code) {
-    const now = Date.now();
-    const all = this.store.read("oauth-codes.json", []);
-    const rec = all.find((c) => c.code === code && now - c.createdAt < CODE_TTL_MS);
-    if (rec) this.store.write("oauth-codes.json", all.filter((c) => c.code !== code));
-    return rec || null;
-  }
-  // The live record for the bearer on this request, or null.
-  tokenOf(req) {
-    const m = /^Bearer (.+)$/.exec(req.headers.authorization || "");
-    if (!m) return null;
-    const now = Date.now();
-    return this.tokenRecords().find(
-      (r) => r.token === m[1] && now - (r.createdAt || 0) < TOKEN_TTL_MS
-    ) || null;
-  }
-  authed(req) {
-    return !!this.tokenOf(req);
-  }
-  // A redirect_uri must name an authority this agent answers on — otherwise
-  // a visited page could navigate to /oauth/authorize and have the freshly
-  // minted code delivered to itself.
-  redirectAllowed(redirect) {
-    if (!redirect || redirect === "urn:ietf:wg:oauth:2.0:oob") return true;
-    if (!this.allowed) return true;
-    try {
-      const u = new URL(redirect);
-      if (u.protocol !== "http:" && u.protocol !== "https:") return false;
-      return this.allowed.has(u.host.toLowerCase());
-    } catch {
-      return false;
-    }
-  }
-  rateLimited() {
-    const now = Date.now();
-    this.authzAttempts = this.authzAttempts.filter((t) => now - t < AUTHZ_WINDOW_MS);
-    if (this.authzAttempts.length >= AUTHZ_MAX_ATTEMPTS) return true;
-    this.authzAttempts.push(now);
-    return false;
-  }
-  // Every agent used to report title 'solid-activitypub', so a client holding two
-  // of them showed two identical instances and you had to read the acct to tell
-  // them apart. The title is free text no client parses — make it say who.
-  instanceTitle() {
-    const cfg = this.store.getConfig();
-    return cfg?.handle ? `@${cfg.handle}@${this.host}` : "FediPod";
-  }
-  // A Mastodon Tag object. The client reads `following` in its Followed
-  // Hashtags view and toggles it with the follow/unfollow endpoints. No usage
-  // history — a single-actor instance has no firehose stats to report.
-  tagObject(name, following, req) {
-    const host = req?.headers?.host || this.host;
-    return { name, url: `https://${host}/tags/${name}`, history: [], following: !!following };
-  }
-  instanceBlurb() {
-    const kind = this.store.getConfig()?.kind === "group" ? "group" : "actor";
-    return `Solid pod ActivityPub ${kind}`;
-  }
-  // ---- object rendering ----
-  selfAccount() {
-    return this.account(this.urls.actor, { selfAcct: publicHandle(this.store.getConfig()) });
-  }
-  account(actorUrl, { selfAcct } = {}) {
-    const cached = this.store.getActors()[actorUrl] || {};
-    let host = "", user = cached.preferredUsername || "";
-    try {
-      host = new URL(actorUrl).host;
-      if (!user) user = new URL(actorUrl).pathname.split("/").pop();
-    } catch {
-    }
-    const self2 = actorUrl === this.urls?.actor;
-    if (self2) user = selfAcct || publicHandle(this.store.getConfig()) || user;
-    return {
-      id: this.store.idFor(actorUrl),
-      username: user,
-      // Self gets the FULL acct (Mastodon proper returns the bare local part
-      // here): the client's login domain is the loopback agent, so the bare
-      // form would display as user@127.0.0.1 — the full form shows the real
-      // fediverse identity, and every client renders @-containing accts as-is.
-      acct: `${self2 ? selfAcct || user : user}@${host}`,
-      // Our own profile is not in the actor cache — the cache is for other
-      // people — so read it from config, or the editor opens empty and saving
-      // wipes what was there.
-      display_name: (self2 ? this.store.getConfig()?.name : cached.name) || cached.name || user,
-      locked: self2 ? followsNeedApproval(this.store.getConfig() || {}) : false,
-      // Read from config for self, like the fields above it: our own actor is
-      // not in the actor cache — the cache is for other people — so a group
-      // asking about itself would be told it was a person.
-      bot: false,
-      discoverable: true,
-      group: self2 ? this.store.getConfig()?.kind === "group" : cached.type === "Group",
-      created_at: "2026-01-01T00:00:00.000Z",
-      note: (self2 ? this.store.getConfig()?.summary : cached.summary) || "",
-      url: actorUrl,
-      uri: actorUrl,
-      avatar: selfIcon(this, self2, cached) || TRANSPARENT_PNG,
-      avatar_static: selfIcon(this, self2, cached) || TRANSPARENT_PNG,
-      header: (self2 ? this.store.getConfig()?.image : null) || TRANSPARENT_PNG,
-      header_static: (self2 ? this.store.getConfig()?.image : null) || TRANSPARENT_PNG,
-      // A remote actor's counts are whatever its own collections said when we
-      // last asked; unknown stays 0 because the API has no way to say "unknown".
-      followers_count: self2 ? this.store.getContacts().followers.length : cached.counts?.followers ?? 0,
-      // Accepted only, matching both the published `following` collection and
-      // the list this number opens — a pending Follow is not yet a following.
-      following_count: self2 ? this.store.getContacts().following.filter((f) => f.accepted).length : cached.counts?.following ?? 0,
-      statuses_count: self2 ? this.store.getStatuses().filter((s) => s.kind === "post").length : 0,
-      last_status_at: null,
-      emojis: [],
-      fields: (self2 ? this.store.getConfig()?.fields : cached.fields) || []
-    };
-  }
-  // `all` is not an optimisation, it is the difference between one clone and
-  // one per status: store.getStatuses() structuredClones the entire array, so
-  // rendering a 40-status timeline without it cloned a 1000-entry array 40
-  // times purely to count replies. Every caller that renders more than one
-  // status passes it; this fallback is for the single-status paths.
-  // Mastodon's cursor paging, over an array already in newest-first order.
-  // Clients do not read a `next` out of the body — they follow the Link header,
-  // which nothing here emitted, so a client could only ever see the first page.
-  // `idOf` is what a cursor names. Statuses are cursored by note, account lists
-  // by actor, so the caller says which field carries the id.
-  page(items, url, { limit = 20, max = 40, idOf = (s) => this.store.idFor(s.noteId) } = {}) {
-    const n = Math.min(Number(url.searchParams.get("limit")) || limit, max);
-    const ids = /* @__PURE__ */ new Map();
-    const idAt = (s) => {
-      if (!ids.has(s)) ids.set(s, idOf(s));
-      return ids.get(s);
-    };
-    const cut = (param) => {
-      const v = url.searchParams.get(param);
-      if (!v) return null;
-      const i = items.findIndex((s) => idAt(s) === v);
-      return i < 0 ? null : i;
-    };
-    const maxAt = cut("max_id");
-    if (maxAt != null) items = items.slice(maxAt + 1);
-    for (const p of ["since_id", "min_id"]) {
-      const at = cut(p);
-      if (at != null) items = items.slice(0, at);
-    }
-    const pageItems2 = items.slice(0, n);
-    if (!pageItems2.length) return { items: pageItems2, headers: {} };
-    const base = `http://${this.host}${url.pathname}`;
-    const q = (extra) => {
-      const u = new URL(base);
-      for (const [k, v] of url.searchParams) if (!["max_id", "since_id", "min_id"].includes(k)) u.searchParams.set(k, v);
-      for (const [k, v] of Object.entries(extra)) u.searchParams.set(k, v);
-      return u.href;
-    };
-    const links = [`<${q({ max_id: idOf(pageItems2[pageItems2.length - 1]) })}>; rel="next"`];
-    if (pageItems2.length) links.push(`<${q({ min_id: idOf(pageItems2[0]) })}>; rel="prev"`);
-    return { items: pageItems2, headers: { link: links.join(", ") } };
-  }
-  // A reply to a mirrored Bluesky post: a native reply from the connected
-  // account, threaded under the original. It exists only on Bluesky, so the
-  // row added here is its one local copy.
-  async bskyReply(send, body, parent, visibility) {
-    const at = this.agent.atproto;
-    if (!at?.connected()) return send(422, { error: "this is a Bluesky post \u2014 no Bluesky account is connected to reply from" });
-    if (visibility !== "public" && visibility !== "unlisted") {
-      return send(422, { error: "a Bluesky reply is public \u2014 pick public visibility" });
-    }
-    if (body.scheduled_at) return send(422, { error: "a Bluesky reply cannot be scheduled" });
-    if ([].concat(body.media_ids || body["media_ids[]"] || []).filter(Boolean).length) {
-      return send(422, { error: "images on a Bluesky reply are not supported" });
-    }
-    try {
-      const out = await at.reply(body.status, parent.noteId);
-      const rec = at.read();
-      const actor = profileUrl(rec.did);
-      if (!this.store.getActors()[actor]) {
-        this.store.cacheActor(actor, { name: rec.handle, preferredUsername: rec.handle, type: "Person" });
-      }
-      const text = String(body.status).trim();
-      this.store.addStatus({
-        noteId: out.uri,
-        actor,
-        inReplyTo: parent.noteId,
-        content: `<p>${text.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c])}</p>`,
-        published: (/* @__PURE__ */ new Date()).toISOString(),
-        kind: "bsky",
-        ...out.cid ? { cid: out.cid } : {},
-        link: postUrl(out.uri)
-      });
-      return send(200, this.status(this.store.getStatuses().find((x) => x.noteId === out.uri)));
-    } catch (e) {
-      return send(422, { error: e.message });
-    }
-  }
-  // Which account acts: the one that saw the post, and the first of them when
-  // several did. Undo inverts that — a like fans IN to one account, an unlike
-  // fans OUT to every account holding one, because a stray like left behind
-  // after the owner asked for it to go is the worse failure.
-  async acctAction(send, s, verb) {
-    const accounts = this.agent.fediaccts;
-    const held = s.sourceAccts || [];
-    if (!accounts || !held.length) {
-      return send(422, { error: "this post came from a connected account, and none is connected now" });
-    }
-    const flag = verb.endsWith("favourite") ? "favourited" : "reblogged";
-    const undo = verb.startsWith("un");
-    const targets = (undo ? held.filter((v) => v[flag]) : [held[0]]).filter((v) => v?.remoteId);
-    if (!targets.length) return send(200, this.status(s));
-    try {
-      const acted = /* @__PURE__ */ new Set();
-      for (const v of targets) {
-        await accounts.api(
-          v.acct,
-          `/api/v1/statuses/${encodeURIComponent(v.remoteId)}/${verb}`,
-          { method: "POST" }
-        );
-        acted.add(v.acct);
-      }
-      const next = held.map((v) => acted.has(v.acct) ? { ...v, [flag]: !undo } : v);
-      return send(200, this.status(this.store.updateStatus(s.noteId, { sourceAccts: next }) || s));
-    } catch (e) {
-      return send(e.status === 401 ? 401 : 422, { error: e.message });
-    }
-  }
-  // The reply exists only on that account's server, so the row added here is
-  // its one local copy — the same shape bskyReply uses for the same reason.
-  async acctReply(send, body, parent, visibility) {
-    const accounts = this.agent.fediaccts;
-    const held = (parent.sourceAccts || [])[0];
-    if (!accounts || !held?.remoteId) {
-      return send(422, { error: "this post came from a connected account, and none is connected now" });
-    }
-    if (visibility !== "public" && visibility !== "unlisted") {
-      return send(422, { error: "a reply from a connected account is public \u2014 pick public or unlisted" });
-    }
-    if (body.scheduled_at) return send(422, { error: "a reply from a connected account cannot be scheduled" });
-    if ([].concat(body.media_ids || body["media_ids[]"] || []).filter(Boolean).length) {
-      return send(422, { error: "images on a reply from a connected account are not supported" });
-    }
-    try {
-      const out = await accounts.apiJson(held.acct, "/api/v1/statuses", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          status: body.status,
-          in_reply_to_id: held.remoteId,
-          visibility,
-          ...body.spoiler_text ? { spoiler_text: String(body.spoiler_text) } : {}
-        })
-      });
-      if (!out?.uri) return send(502, { error: "that server accepted the reply but did not say where it is" });
-      const rec = accounts.read(held.acct);
-      const actor = out.account?.uri || out.account?.url || rec?.actorUrl;
-      if (actor && !this.store.getActors()[actor]) {
-        this.store.cacheActor(actor, {
-          name: out.account?.display_name || rec?.name,
-          preferredUsername: out.account?.username || rec?.acct,
-          type: "Person"
-        });
-      }
-      this.store.addStatus({
-        noteId: out.uri,
-        actor,
-        inReplyTo: parent.noteId,
-        content: sanitizeHtml(out.content || ""),
-        published: out.created_at || (/* @__PURE__ */ new Date()).toISOString(),
-        kind: "acct",
-        sourceAccts: [{ acct: held.acct, remoteId: String(out.id) }],
-        ...out.url && out.url !== out.uri ? { link: out.url } : {}
-      });
-      return send(200, this.status(this.store.getStatuses().find((x) => x.noteId === out.uri)));
-    } catch (e) {
-      return send(422, { error: e.message });
-    }
-  }
-  status(s, { all } = {}) {
-    const replies = (all || this.store.getStatuses()).filter((x) => x.inReplyTo === s.noteId).length;
-    return {
-      id: this.store.idFor(s.noteId),
-      created_at: s.published || (/* @__PURE__ */ new Date()).toISOString(),
-      in_reply_to_id: s.inReplyTo ? this.store.idFor(s.inReplyTo) : null,
-      in_reply_to_account_id: null,
-      sensitive: !!s.spoiler,
-      spoiler_text: s.spoiler || "",
-      visibility: s.visibility || "public",
-      language: null,
-      edited_at: s.editedAt || null,
-      uri: s.noteId,
-      url: s.link || s.noteId,
-      replies_count: replies,
-      reblogs_count: 0,
-      favourites_count: 0,
-      // True when ANY of the owner's accounts holds it. The flag is really
-      // what the next tap will do: an empty star on a post one account has
-      // already liked invites a second outward like from a second identity.
-      favourited: !!s.favourited || (s.sourceAccts || []).some((v) => v.favourited),
-      reblogged: !!s.reblogged || (s.sourceAccts || []).some((v) => v.reblogged),
-      muted: false,
-      bookmarked: !!s.bookmarked,
-      pinned: !!s.pinned,
-      content: s.content || "",
-      reblog: null,
-      application: null,
-      account: this.account(s.actor),
-      media_attachments: (s.attachments || []).map((a) => this.mediaJson(a)),
-      // The mention entities are how a client knows a link is an ACCOUNT —
-      // without them, clicking a mentioned group lands on the raw actor doc.
-      mentions: (s.mentions || []).map((m) => {
-        const bare = String(m.name || "").replace(/^@/, "");
-        const user = bare.split("@")[0];
-        let host = "";
-        try {
-          host = new URL(m.href).host;
-        } catch {
-        }
-        return {
-          id: this.store.idFor(m.href),
-          username: user || bare,
-          url: m.href,
-          acct: bare.includes("@") ? bare : host ? `${user}@${host}` : bare
-        };
-      }),
-      tags: [],
-      emojis: (s.emojis || []).map((e) => ({
-        shortcode: e.shortcode,
-        url: e.url,
-        static_url: e.url,
-        visible_in_picker: false
-      })),
-      card: null,
-      poll: s.poll ? this.pollJson(s) : null,
-      // What a filter matched, if any. Mastodon's clients read this and do the
-      // hiding or warning; they do NOT match keywords themselves — Phanpy does
-      // not — so filters that were stored and served but never applied were a
-      // setting that did nothing. The README named them as a feature.
-      filtered: this.filtersFor(s)
-    };
-  }
-  // v2 filters against one status. `context` is the timeline the client is
-  // showing, which we do not know here, so every non-expired filter is offered
-  // and the client drops the ones whose context does not match — the same
-  // information it uses to decide anyway.
-  filtersFor(s) {
-    const now = Date.now();
-    const hay = `${s.content || ""} ${s.spoiler || ""}`.replace(/<[^>]*>/gu, " ").toLowerCase();
-    if (!hay.trim()) return [];
-    const out = [];
-    for (const f of this.store.getFilters?.() || []) {
-      if (f.expiresAt && Date.parse(f.expiresAt) <= now) continue;
-      const hit = (f.keywords || []).filter((k) => {
-        const word = String(k.keyword || "").toLowerCase().trim();
-        if (!word) return false;
-        if (!k.wholeWord) return hay.includes(word);
-        const esc = word.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
-        return new RegExp(`(?:^|[^\\p{L}\\p{N}_])${esc}(?:[^\\p{L}\\p{N}_]|$)`, "u").test(hay);
-      }).map((k) => k.keyword);
-      if (!hit.length) continue;
-      out.push({
-        filter: {
-          id: f.id,
-          title: f.title,
-          context: f.context || ["home"],
-          expires_at: f.expiresAt || null,
-          filter_action: f.action || "warn"
-        },
-        keyword_matches: hit,
-        status_matches: []
-      });
-    }
-    return out;
-  }
-  // A timeline row's id may name the CARRY rather than the post — statusOrBoost
-  // mints `via:<noteId>` for the envelope. A client that asks about a row it
-  // was served has to get an answer: a 404 there makes it drop the row, which
-  // is how carried posts vanished from the home column while every other view
-  // still had them.
-  lookup(id) {
-    const raw = this.store.urlFor(id);
-    if (typeof raw !== "string") return { s: null, wrapped: false };
-    const wrapped = raw.startsWith("via:");
-    const noteId = wrapped ? raw.slice(4) : raw;
-    return { s: this.store.getStatuses().find((x) => x.noteId === noteId) || null, wrapped };
-  }
-  // A carried post, the way clients expect to see one: the carrier "boosts"
-  // the inner post, so the feed says who brought it. Timeline views only —
-  // fetching the post by its own id still returns the post itself.
-  statusOrBoost(s, opts = {}) {
-    if (!s.via || s.via === s.actor) return this.status(s, opts);
-    const inner = this.status(s, opts);
-    return {
-      id: this.store.idFor("via:" + s.noteId),
-      created_at: s.announcedAt || s.published || inner.created_at,
-      in_reply_to_id: null,
-      in_reply_to_account_id: null,
-      sensitive: false,
-      spoiler_text: "",
-      visibility: inner.visibility,
-      language: null,
-      edited_at: null,
-      uri: s.announceActivity?.id || s.noteId + "#announce",
-      url: inner.url,
-      replies_count: 0,
-      reblogs_count: 0,
-      favourites_count: 0,
-      favourited: false,
-      reblogged: false,
-      muted: false,
-      bookmarked: false,
-      pinned: false,
-      content: "",
-      reblog: inner,
-      application: null,
-      account: this.account(s.via),
-      media_attachments: [],
-      mentions: [],
-      tags: [],
-      emojis: [],
-      card: null,
-      poll: null
-    };
-  }
-  // A notification, pushed. Fire-and-forget from the store's event hook.
-  pushNotify(n) {
-    const acct = this.account(n.actor);
-    const verbs = {
-      mention: "mentioned you",
-      favourite: "favourited your post",
-      reblog: "boosted your post",
-      follow: "followed you",
-      "follow-request": "asked to follow you",
-      move: "moved account"
-    };
-    const s = n.noteId && this.store.getStatuses().find((x) => x.noteId === n.noteId);
-    return this.push.notify(n, {
-      notification_id: n.id,
-      notification_type: n.type,
-      preferred_locale: "en",
-      title: `${acct.display_name || acct.acct} ${verbs[n.type] || n.type}`,
-      body: s ? htmlToText(s.content || "").slice(0, 140) : "",
-      icon: acct.avatar || ""
-    });
-  }
-  scheduledJson(e) {
-    return {
-      id: e.id,
-      scheduled_at: e.scheduledAt,
-      params: {
-        text: e.params.status,
-        visibility: e.params.visibility || "public",
-        spoiler_text: e.params.spoilerText || null,
-        sensitive: !!e.params.spoilerText,
-        in_reply_to_id: e.params.inReplyTo ? this.store.idFor(e.params.inReplyTo) : null,
-        media_ids: (e.params.attachments || []).map((a) => a.id),
-        poll: null,
-        idempotency: null,
-        scheduled_at: e.scheduledAt,
-        application_id: null
-      },
-      media_attachments: (e.params.attachments || []).map((a) => this.mediaJson(a))
-    };
-  }
-  pollJson(s) {
-    const opts = s.poll.options || [];
-    const votes = opts.reduce((n, o) => n + (o.votes || 0), 0);
-    return {
-      id: this.store.idFor(s.noteId),
-      expires_at: s.poll.expiresAt || null,
-      expired: !!s.poll.closed || !!s.poll.expiresAt && Date.parse(s.poll.expiresAt) < Date.now(),
-      multiple: !!s.poll.multiple,
-      votes_count: votes,
-      voters_count: s.poll.votersCount ?? null,
-      options: opts.map((o) => ({ title: o.title, votes_count: o.votes || 0 })),
-      voted: !!s.poll.voted,
-      own_votes: s.poll.ownVotes || [],
-      emojis: []
-    };
-  }
-  mediaJson(a) {
-    const kind = /^video\//.test(a.mediaType) ? "video" : /^audio\//.test(a.mediaType) ? "audio" : "image";
-    return {
-      id: a.id || this.store.idFor(a.url),
-      type: kind,
-      url: a.url,
-      preview_url: a.url,
-      remote_url: null,
-      description: a.description || null,
-      blurhash: null,
-      meta: {}
-    };
-  }
-  relationship(actorUrl) {
-    const c = this.store.getContacts();
-    const fol = c.following.find((f) => f.actor === actorUrl);
-    return {
-      id: this.store.idFor(actorUrl),
-      following: !!fol?.accepted,
-      requested: !!fol && !fol.accepted,
-      followed_by: c.followers.some((f) => f.actor === actorUrl),
-      showing_reblogs: true,
-      notifying: false,
-      languages: null,
-      blocking: this.store.getBlocklist().actors.includes(actorUrl),
-      blocked_by: false,
-      domain_blocking: false,
-      muting: this.store.getMuted().actors.includes(actorUrl),
-      muting_notifications: false,
-      endorsed: false,
-      note: ""
-    };
-  }
-  // Ours is stored with a hyphen; Mastodon's API spells it with an underscore,
-  // and a client that does not know the type shows "Unknown notification type"
-  // — which is what every Mastodon client did with a follow request here. The
-  // stored spelling is left alone so existing state keeps reading.
-  notificationType(t) {
-    return t === "follow-request" ? "follow_request" : t;
-  }
-  notification(n) {
-    const out = { id: n.id, type: this.notificationType(n.type), created_at: n.at, account: this.account(n.actor) };
-    if (n.noteId) {
-      const s = this.store.getStatuses().find((x) => x.noteId === n.noteId);
-      if (s) out.status = this.status(s);
-    }
-    return out;
-  }
-  // Every account this instance knows whose handle or name matches: self,
-  // contacts, cached actor docs. Handle-shaped queries resolve via webfinger.
-  async accountSearch(q) {
-    const needle = String(q || "").replace(/^@/, "").toLowerCase().trim();
-    if (!needle) return [];
-    if (/^[^@\s]+@[^@\s.]+\.[^@\s]+$/.test(needle)) {
-      try {
-        const doc = await resolveHandle(this.agent, needle);
-        return [this.account(doc.id)];
-      } catch (e) {
-        this.log(`account search resolve ${needle}: ${e.message}`);
-      }
-      return [];
-    }
-    const cfg = this.store.getConfig();
-    const seen = /* @__PURE__ */ new Set();
-    const out = [];
-    const add = (actorUrl) => {
-      if (actorUrl && !seen.has(actorUrl)) {
-        seen.add(actorUrl);
-        out.push(this.account(actorUrl));
-      }
-    };
-    if ((cfg?.handle || "").toLowerCase().includes(needle) || (cfg?.name || "").toLowerCase().includes(needle)) add(this.urls.actor);
-    const contacts = this.store.getContacts();
-    for (const rec of [...contacts.followers, ...contacts.following]) {
-      if ((rec.handle || rec.actor || "").toLowerCase().includes(needle)) add(rec.actor);
-    }
-    for (const [u, a] of Object.entries(this.store.getActors())) {
-      if ((a.preferredUsername + " " + a.name + " " + u).toLowerCase().includes(needle)) add(u);
-    }
-    return out.slice(0, 20);
-  }
-  // ---- request handling; returns true when handled ----
-  async handle(req, res, pathname, url) {
-    const send = (status, obj, headers = {}) => {
-      const body = JSON.stringify(obj);
-      res.writeHead(status, { "content-type": "application/json", ...headers });
-      res.end(body);
-      return true;
-    };
-    if (pathname === "/api/v1/apps" && req.method === "POST") {
-      const body = await readBody(req);
-      const redirectUris = parseRedirects(body.redirect_uris);
-      const app = this.registerApp({
-        name: body.client_name,
-        website: body.website,
-        redirectUris,
-        scopes: body.scopes
-      });
-      return send(200, {
-        id: app.clientId,
-        name: app.name,
-        website: app.website,
-        client_id: app.clientId,
-        client_secret: app.clientSecret,
-        redirect_uri: redirectUris.join(" ") || "urn:ietf:wg:oauth:2.0:oob",
-        ...this.webPush ? { vapid_key: this.push.publicKey() } : {}
-      });
-    }
-    if (pathname === "/oauth/authorize" && (req.method === "GET" || req.method === "POST")) {
-      const pw = this.store.getConfig()?.uiPassword;
-      let params = url.searchParams;
-      let body = null;
-      if (req.method === "POST") {
-        body = await readBody(req);
-        params = new URLSearchParams(body);
-      }
-      const redirect = params.get("redirect_uri") || "";
-      const app = this.findApp(params.get("client_id") || "");
-      const doc = app ? null : await this.resolveClientDocument(params.get("client_id") || "");
-      const external = !!app || !!doc;
-      if (isCrossSiteNavigation(req)) {
-        this.log(`authorize refused: cross-site navigation to the mint from ${req.headers.referer || "nowhere"}`);
-        return send(403, { error: "a cross-site navigation may not authorize a client" });
-      }
-      if (external && !this.store.getConfig()?.uiPassword && !this.redirectAllowed(redirect)) {
-        this.log(`authorize refused: no UI password, and "${redirect}" is not an address of this agent`);
-        return send(403, {
-          error: "this client asks to be sent somewhere other than this agent, and no password is set to approve that with. Run `fedipod passwd` and try again."
-        });
-      }
-      const client = { name: app?.name || doc?.name || null, redirect, scope: params.get("scope") || "read" };
-      if (app) {
-        if (!app.redirectUris.includes(redirect)) {
-          this.log(`authorize refused: redirect_uri "${redirect}" not registered for ${app.clientId}`);
-          return send(400, { error: "redirect_uri was not registered by this client" });
-        }
-      } else if (doc) {
-        if (!doc.redirectUris.some((u) => _MastoApi.redirectMatches(u, redirect))) {
-          this.log(`authorize refused: redirect_uri "${redirect}" is not one ${doc.clientId} published`);
-          return send(400, { error: "redirect_uri is not one this client published" });
-        }
-        if (!params.get("code_challenge")) {
-          this.log(`authorize refused: ${doc.clientId} keeps no secret and offered no challenge`);
-          return send(400, { error: "a client identified by its own document must send a code_challenge" });
-        }
-      } else if (!this.redirectAllowed(redirect)) {
-        this.log(`authorize refused: redirect_uri "${redirect}" is not this agent`);
-        return send(400, { error: "redirect_uri must be an address of this agent" });
-      }
-      if (req.method === "POST") {
-        if (this.rateLimited()) {
-          this.log("authorize rate limited");
-          return sendLoginForm(
-            res,
-            params,
-            "too many attempts \u2014 wait a minute",
-            client,
-            429,
-            { "retry-after": String(Math.ceil(AUTHZ_WINDOW_MS / 1e3)) }
-          );
-        }
-        if (!pw || !checkPassword(pw, body.password || "")) {
-          return sendLoginForm(res, params, "wrong password \u2014 try again", client);
-        }
-      } else if (pw) {
-        return sendLoginForm(res, params, "", client);
-      } else if (this.allowed && !this.allowed.isLocalRequest(req)) {
-        this.log(`authorize refused: no UI password, and "${req.headers.host}" is not this machine`);
-        return send(403, {
-          error: "this agent answers on an address outside this machine and has no password set \u2014 " + (this.embedded ? `POST {"password":"\u2026"} to the owner door's /config with its door secret before logging in` : "run `fedipod passwd` before logging in over that address")
-        });
-      }
-      const code = external ? this.mintCode({
-        clientId: (app || doc).clientId,
-        redirectUri: redirect,
-        scope: client.scope,
-        challenge: params.get("code_challenge") || null,
-        challengeMethod: params.get("code_challenge_method") || null
-      }) : this.mintToken(client.scope);
-      if (!redirect || redirect === "urn:ietf:wg:oauth:2.0:oob") return send(200, { code });
-      const target = new URL(redirect);
-      target.searchParams.set("code", code);
-      if (params.get("state")) target.searchParams.set("state", params.get("state"));
-      res.writeHead(302, { location: target.href });
-      res.end();
-      return true;
-    }
-    if (pathname === "/oauth/token" && req.method === "POST") {
-      const body = await readBody(req);
-      const app = this.findApp(body.client_id || "");
-      if (!app && body.code_verifier && /^https:\/\//iu.test(String(body.client_id || ""))) {
-        const rec = this.consumeCode(body.code || "");
-        if (!rec || rec.clientId !== body.client_id || body.redirect_uri && rec.redirectUri !== body.redirect_uri) {
-          this.log("token refused: code is not a live authorization for that client document");
-          return send(400, { error: "invalid_grant" });
-        }
-        if (!rec.challenge || !_MastoApi.provesCode(rec, body.code_verifier)) {
-          this.log("token refused: the verifier does not answer the challenge this code was made with");
-          return send(400, { error: "invalid_grant" });
-        }
-        return send(200, {
-          access_token: this.mintToken(rec.scope || "read"),
-          token_type: "Bearer",
-          scope: rec.scope || "read",
-          created_at: Math.floor(Date.now() / 1e3),
-          ...this.urls?.actor ? { activitypub_actor_id: this.urls.actor } : {}
-        });
-      }
-      if (app && body.code_verifier) {
-        const rec = this.consumeCode(body.code || "");
-        if (!rec || rec.clientId !== app.clientId || body.redirect_uri && rec.redirectUri !== body.redirect_uri) {
-          this.log("token refused: code is not a live authorization for this client");
-          return send(400, { error: "invalid_grant" });
-        }
-        if (!rec.challenge || !_MastoApi.provesCode(rec, body.code_verifier)) {
-          this.log("token refused: the verifier does not answer the challenge this code was made with");
-          return send(400, { error: "invalid_grant" });
-        }
-        return send(200, {
-          access_token: this.mintToken(rec.scope || "read"),
-          token_type: "Bearer",
-          scope: rec.scope || "read",
-          created_at: Math.floor(Date.now() / 1e3),
-          ...this.urls?.actor ? { activitypub_actor_id: this.urls.actor } : {}
-        });
-      }
-      if (app && body.client_secret) {
-        const given = Buffer.from(String(body.client_secret));
-        const known2 = Buffer.from(app.clientSecret);
-        const okSecret = given.length === known2.length && node_crypto_default.timingSafeEqual(given, known2);
-        if (!okSecret) {
-          this.log("token refused: client secret mismatch");
-          return send(401, { error: "invalid_client" });
-        }
-        const rec = this.consumeCode(body.code || "");
-        if (!rec || rec.clientId !== app.clientId || body.redirect_uri && rec.redirectUri !== body.redirect_uri) {
-          this.log("token refused: code is not a live authorization for this client");
-          return send(400, { error: "invalid_grant" });
-        }
-        if (rec.challenge && !_MastoApi.provesCode(rec, body.code_verifier)) {
-          this.log("token refused: this code was made with a challenge and the verifier does not answer it");
-          return send(400, { error: "invalid_grant" });
-        }
-        return send(200, {
-          access_token: this.mintToken(rec.scope || "read"),
-          token_type: "Bearer",
-          scope: rec.scope || "read",
-          created_at: Math.floor(Date.now() / 1e3),
-          // Which actor the token acts for. A Mastodon client ignores it; an
-          // ActivityPub API client needs it, and asking for it separately
-          // would mean a second round trip before it knows who it is.
-          ...this.urls?.actor ? { activitypub_actor_id: this.urls.actor } : {}
-        });
-      }
-      if (!body.code || !this.tokens().includes(body.code)) {
-        this.log("token refused: code is not a live authorization");
-        return send(400, { error: "invalid_grant" });
-      }
-      const granted = this.tokenRecords().find((r) => r.token === body.code)?.scope || "read write follow push";
-      return send(200, {
-        access_token: body.code,
-        token_type: "Bearer",
-        scope: granted,
-        created_at: Math.floor(Date.now() / 1e3),
-        ...this.urls?.actor ? { activitypub_actor_id: this.urls.actor } : {}
-      });
-    }
-    if (pathname === "/oauth/revoke" && req.method === "POST") {
-      const body = await readBody(req).catch(() => ({}));
-      const gone = body?.token;
-      if (gone) {
-        const kept = this.tokenRecords().filter((r) => r.token !== gone);
-        this.store.write("masto-tokens.json", kept);
-        this.log("client token revoked");
-      }
-      return send(200, {});
-    }
-    if (!pathname.startsWith("/api/")) return false;
-    if (pathname === "/api/v1/instance") {
-      const su = this.streamingUrl(req);
-      return send(200, {
-        uri: this.host,
-        title: this.instanceTitle(),
-        short_description: this.instanceBlurb(),
-        description: this.instanceBlurb(),
-        email: "",
-        version: "4.2.0 (compatible; fedipod)",
-        urls: su ? { streaming_api: su } : {},
-        stats: { user_count: 1, status_count: this.store.countStatuses(), domain_count: 1 },
-        languages: ["en"],
-        registrations: false,
-        approval_required: false,
-        invites_enabled: false,
-        configuration: instanceConfig(),
-        contact_account: null,
-        rules: []
-      });
-    }
-    if (pathname === "/api/v2/instance") {
-      const su = this.streamingUrl(req);
-      return send(200, {
-        domain: this.host,
-        title: this.instanceTitle(),
-        version: "4.2.0 (compatible; fedipod)",
-        source_url: "https://github.com/jeff-zucker/FediPod",
-        description: this.instanceBlurb(),
-        usage: { users: { active_month: 1 } },
-        thumbnail: { url: TRANSPARENT_PNG },
-        languages: ["en"],
-        // Both spellings: v2 clients read configuration.urls.streaming, older
-        // ones the top-level urls.streaming_api, and some fall back blindly.
-        // Omitted entirely when there is no streaming, so the client polls.
-        urls: su ? { streaming_api: su } : {},
-        configuration: {
-          ...instanceConfig(),
-          ...su ? { urls: { streaming: su } } : {},
-          ...this.webPush ? { vapid: { public_key: this.push.publicKey() } } : {}
-        },
-        registrations: { enabled: false, approval_required: false, message: null },
-        contact: { email: "", account: null },
-        rules: []
-      });
-    }
-    const stub = STUBS.get(pathname);
-    if (stub !== void 0 && req.method === "GET") return send(200, stub);
-    const bearer = this.tokenOf(req);
-    if (!bearer) return send(401, { error: "The access token is invalid" });
-    const need = _MastoApi.scopeFor(req.method, pathname);
-    if (!_MastoApi.scopeAllows(bearer.scope, need)) {
-      this.log(`refused ${req.method} ${pathname}: token has "${bearer.scope}", needs "${need}"`);
-      return send(403, { error: `This action is outside the authorized scopes (needs ${need})` });
-    }
-    if (!this.agent.configured()) return send(503, { error: "agent not configured" });
-    if (this.agent.viewer && req.method !== "GET" && req.method !== "HEAD") {
-      const took = await this.agent.requestTakeover?.();
-      if (!took) return send(503, { error: "another agent is active for this pod \u2014 takeover failed, try again" });
-    }
-    if (pathname === "/api/v1/accounts/verify_credentials") {
-      const cfg0 = this.store.getConfig() || {};
-      return send(200, {
-        ...this.selfAccount(),
-        // `source` is what the editor fills its inputs from: the raw text it
-        // will send back, not the HTML the profile renders.
-        source: {
-          privacy: "public",
-          sensitive: false,
-          language: "en",
-          note: cfg0.summary || "",
-          fields: (cfg0.fields || []).map((f) => ({ name: f.name, value: f.value }))
-        }
-      });
-    }
-    if (pathname === "/api/v1/accounts/update_credentials") {
-      if (req.method !== "PATCH" && req.method !== "POST") return send(405, { error: "PATCH expected" });
-      const ct = String(req.headers["content-type"] || "");
-      let form = {}, files = {};
-      if (ct.includes("multipart/form-data")) ({ fields: form, files } = await readMultipart(req));
-      else form = await readBody(req);
-      const cfg = { ...this.store.getConfig() };
-      const putImage = async (f) => {
-        const ext = (f.filename || "").includes(".") ? f.filename.split(".").pop().replace(/[^\w]/g, "") : "bin";
-        const slug = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10) + "-" + node_crypto_default.randomBytes(4).toString("hex") + "." + ext;
-        const url2 = this.urls.media + slug;
-        await this.agent.publisher.ensureMediaContainer();
-        await write6(this.agent.remote, url2, f.data, f.contentType);
-        return url2;
-      };
-      if ("display_name" in form) cfg.name = String(form.display_name).trim() || cfg.handle;
-      if ("note" in form) cfg.summary = String(form.note) || void 0;
-      if ("locked" in form) cfg.approveJoins = form.locked === "true" || form.locked === true;
-      if (files.avatar?.data?.length) cfg.icon = await putImage(files.avatar);
-      if (files.header?.data?.length) cfg.image = await putImage(files.header);
-      const rows = [];
-      for (const [k, v] of Object.entries(form)) {
-        const m = /^fields_attributes\[(\d+)\]\[(name|value)\]$/.exec(k);
-        if (!m) continue;
-        (rows[Number(m[1])] ||= {})[m[2]] = String(v);
-      }
-      if (rows.length) cfg.fields = rows.filter((r) => r && r.name?.trim()).map((r) => ({ name: r.name.trim(), value: (r.value || "").trim() }));
-      this.store.setConfig(cfg);
-      Object.assign(this.agent.publisher.config, {
-        name: cfg.name,
-        summary: cfg.summary,
-        icon: cfg.icon,
-        image: cfg.image,
-        fields: cfg.fields,
-        approveJoins: !!cfg.approveJoins
-      });
-      await this.store.flush();
-      const published = await this.agent.publisher.publishProfile();
-      const unreachable = published?.unreachable;
-      if (unreachable?.length) {
-        this.log(`profile saved but NOT publicly readable: ${unreachable.join(", ")}`);
-      }
-      this.log(`profile updated from a client: ${Object.keys(form).join(", ") || "(files only)"}`);
-      return send(200, this.selfAccount());
-    }
-    if (pathname === "/api/v1/timelines/home" || pathname === "/api/v1/timelines/public" || pathname === "/api/v1/trends/statuses") {
-      const localOnly = pathname === "/api/v1/timelines/public" && url.searchParams.get("local") === "true";
-      const all = this.store.getStatuses();
-      const muted = new Set(this.store.getMuted().actors);
-      let items = all.filter((s) => s.kind !== "remote" && s.kind !== "mention").filter((s) => !s.direct && s.visibility !== "direct").filter((s) => !muted.has(s.actor) && !muted.has(s.via)).filter((s) => !localOnly || s.kind === "post" && s.visibility !== "private").sort((a, b) => String(b.published || "").localeCompare(String(a.published || "")));
-      const { items: page, headers } = this.page(items, url);
-      return send(200, page.map((s) => this.statusOrBoost(s, { all })), headers);
-    }
-    if (pathname === "/api/v1/followed_tags") {
-      const tags = this.agent.tagfeed?.config().tags || [];
-      return send(200, tags.map((t) => this.tagObject(t, true, req)));
-    }
-    const mTagFollow = pathname.match(/^\/api\/v1\/tags\/([^/]+)\/(follow|unfollow)$/);
-    if (mTagFollow && req.method === "POST") {
-      const name = decodeURIComponent(mTagFollow[1]).replace(/^#/, "").toLowerCase();
-      const follow = mTagFollow[2] === "follow";
-      const tf = this.agent.tagfeed;
-      if (tf) {
-        const cur = tf.config().tags;
-        tf.setConfig({ tags: follow ? [.../* @__PURE__ */ new Set([...cur, name])] : cur.filter((t) => t !== name) });
-      }
-      return send(200, this.tagObject(name, follow, req));
-    }
-    const mTagGet = pathname.match(/^\/api\/v1\/tags\/([^/]+)$/);
-    if (mTagGet && req.method === "GET") {
-      const name = decodeURIComponent(mTagGet[1]).replace(/^#/, "").toLowerCase();
-      const following = (this.agent.tagfeed?.config().tags || []).includes(name);
-      return send(200, this.tagObject(name, following, req));
-    }
-    const mTagTl = pathname.match(/^\/api\/v1\/timelines\/tag\/([^/]+)$/);
-    if (mTagTl && req.method === "GET") {
-      const name = decodeURIComponent(mTagTl[1]).replace(/^#/, "").toLowerCase();
-      const all = this.store.getStatuses();
-      const items = all.filter((s) => s.kind === "tag" && s.tag === name).sort((a, b) => String(b.published || "").localeCompare(String(a.published || "")));
-      const { items: page, headers } = this.page(items, url);
-      return send(200, page.map((s) => this.statusOrBoost(s, { all })), headers);
-    }
-    if (pathname === "/api/v1/statuses" && req.method === "POST") {
-      const body = await readBody(req);
-      if (!body.status) return send(422, { error: "status text required" });
-      const visibility = body.visibility || "public";
-      if (!["public", "unlisted", "private", "direct"].includes(visibility)) {
-        return send(422, { error: `unknown visibility "${visibility}"` });
-      }
-      const inReplyTo = body.in_reply_to_id ? this.store.urlFor(body.in_reply_to_id) : void 0;
-      const bskyParent = inReplyTo && this.store.getStatuses().find((x) => x.noteId === inReplyTo && x.kind === "bsky");
-      if (bskyParent) return this.bskyReply(send, body, bskyParent, visibility);
-      const acctParent = inReplyTo && this.store.getStatuses().find((x) => x.noteId === inReplyTo && x.kind === "acct");
-      if (acctParent) return this.acctReply(send, body, acctParent, visibility);
-      if (visibility === "private" || visibility === "direct") {
-        const ready = await this.agent.publisher.privateReady();
-        if (ready !== true) return send(422, { error: ready });
-      }
-      const spoilerText = String(body.spoiler_text || "").trim() || null;
-      const mediaIds = [].concat(body.media_ids || body["media_ids[]"] || []).filter(Boolean);
-      const media = this.store.getMedia();
-      const attachments = mediaIds.map((id) => media[id] && { id, ...media[id] }).filter(Boolean);
-      const asking = pollParams(body);
-      if (asking) {
-        if (attachments.length) return send(422, { error: "a poll cannot carry media" });
-        if (body.scheduled_at) return send(422, { error: "a poll cannot be scheduled" });
-        if (asking.options.length < 2) return send(422, { error: "a poll needs at least two options" });
-        if (asking.options.length > MAX_OPTIONS) {
-          return send(422, { error: `a poll takes at most ${MAX_OPTIONS} options` });
-        }
-        if (asking.options.some((o) => o.length > MAX_OPTION_CHARS)) {
-          return send(422, { error: `a poll option is at most ${MAX_OPTION_CHARS} characters` });
-        }
-        if (new Set(asking.options).size !== asking.options.length) {
-          return send(422, { error: "a poll\u2019s options must differ from one another" });
-        }
-        const seconds = asking.expiresIn ?? MAX_SECONDS;
-        if (!Number.isFinite(seconds) || seconds < MIN_SECONDS || seconds > MAX_SECONDS) {
-          return send(422, {
-            error: `a poll runs between ${MIN_SECONDS} and ${MAX_SECONDS} seconds`
-          });
-        }
-        try {
-          const q = await this.agent.publisher.publishQuestion(body.status, {
-            options: asking.options,
-            multiple: asking.multiple,
-            expiresAt: new Date(Date.now() + seconds * 1e3).toISOString(),
-            inReplyTo,
-            visibility,
-            spoilerText
-          });
-          return send(200, this.status(this.store.getStatuses().find((x) => x.noteId === q.id)));
-        } catch (e) {
-          return send(422, { error: e.message });
-        }
-      }
-      if (body.scheduled_at) {
-        if (!this.scheduling) {
-          return send(422, { error: "this instance cannot schedule posts \u2014 it has no process running between now and then to publish one. Post it when you want it sent." });
-        }
-        const at = Date.parse(body.scheduled_at);
-        if (!Number.isFinite(at) || at < Date.now() + 6e4) {
-          return send(422, { error: "scheduled_at must be at least a minute from now" });
-        }
-        const sched = this.store.getScheduled();
-        const entry = {
-          id: node_crypto_default.randomBytes(8).toString("hex"),
-          scheduledAt: new Date(at).toISOString(),
-          params: { status: body.status, visibility, spoilerText, inReplyTo, attachments }
-        };
-        sched.push(entry);
-        this.store.setScheduled(sched);
-        return send(200, this.scheduledJson(entry));
-      }
-      const note = await this.agent.publisher.publishNote(
-        body.status,
-        { inReplyTo, attachments, visibility, spoilerText }
-      );
-      const s = this.store.getStatuses().find((x) => x.noteId === note.id);
-      return send(200, this.status(s));
-    }
-    const mSource = /^\/api\/v1\/statuses\/([a-f0-9]+)\/source$/.exec(pathname);
-    if (mSource && req.method === "GET") {
-      const noteUrl = this.store.urlFor(mSource[1]);
-      const s = noteUrl && this.store.getStatuses().find((x) => x.noteId === noteUrl);
-      if (!s) return send(404, { error: "Record not found" });
-      return send(200, { id: mSource[1], text: s.text ?? htmlToText(s.content || ""), spoiler_text: s.spoiler || "" });
-    }
-    const mHistory = /^\/api\/v1\/statuses\/([a-f0-9]+)\/history$/.exec(pathname);
-    if (mHistory && req.method === "GET") {
-      const noteUrl = this.store.urlFor(mHistory[1]);
-      const s = noteUrl && this.store.getStatuses().find((x) => x.noteId === noteUrl);
-      if (!s) return send(404, { error: "Record not found" });
-      return send(200, [{
-        content: s.content || "",
-        spoiler_text: s.spoiler || "",
-        sensitive: !!s.spoiler,
-        created_at: s.editedAt || s.published,
-        account: this.account(s.actor),
-        media_attachments: (s.attachments || []).map((a) => this.mediaJson(a)),
-        emojis: [],
-        poll: null
-      }]);
-    }
-    const mStatus = /^\/api\/v1\/statuses\/([a-f0-9]+)$/.exec(pathname);
-    if (mStatus && req.method === "GET") {
-      const { s, wrapped } = this.lookup(mStatus[1]);
-      if (!s) return send(404, { error: "Record not found" });
-      return send(200, wrapped ? this.statusOrBoost(s) : this.status(s));
-    }
-    if (mStatus && req.method === "PUT") {
-      const noteUrl = this.store.urlFor(mStatus[1]);
-      const s = noteUrl && this.store.getStatuses().find((x) => x.noteId === noteUrl);
-      if (!s) return send(404, { error: "Record not found" });
-      if (s.actor !== this.urls.actor) return send(403, { error: "not your status" });
-      const body = await readBody(req);
-      if (!body.status) return send(422, { error: "status text required" });
-      const mediaIds = [].concat(body.media_ids || body["media_ids[]"] || []).filter(Boolean);
-      const media = this.store.getMedia();
-      const attachments = mediaIds.length ? mediaIds.map((id) => media[id] && { id, ...media[id] }).filter(Boolean) : null;
-      const spoilerText = String(body.spoiler_text || "").trim() || null;
-      const patched = await this.agent.publisher.updateNote(
-        s,
-        { content: body.status, spoilerText, attachments }
-      );
-      return send(200, this.status(patched || s));
-    }
-    if (mStatus && req.method === "DELETE") {
-      const noteUrl = this.store.urlFor(mStatus[1]);
-      const s = noteUrl && this.store.getStatuses().find((x) => x.noteId === noteUrl);
-      if (!s) return send(404, { error: "Record not found" });
-      const onAcct = s.actor !== this.urls.actor ? (this.agent.fediaccts?.list() || []).find((r) => r.actorUrl && r.actorUrl === s.actor) : null;
-      if (s.actor !== this.urls.actor && !onAcct) return send(403, { error: "not your status" });
-      const rendered = this.status(s);
-      if (onAcct) {
-        const held = (s.sourceAccts || []).find((v) => v.acct === onAcct.id);
-        if (!held?.remoteId) return send(422, { error: `we do not know where ${onAcct.handle} keeps that post` });
-        try {
-          await this.agent.fediaccts.api(
-            onAcct.id,
-            `/api/v1/statuses/${encodeURIComponent(held.remoteId)}`,
-            { method: "DELETE" }
-          );
-        } catch (e) {
-          return send(502, { error: e.message });
-        }
-        this.store.removeStatus(s.noteId);
-        return send(200, { ...rendered, text: s.content || "" });
-      }
-      const gone = await deleteNote(this.agent, s);
-      if (!gone.ok) return send(502, { error: gone.error });
-      return send(200, { ...rendered, text: s.content || "" });
-    }
-    const mContext = /^\/api\/v1\/statuses\/([a-f0-9]+)\/context$/.exec(pathname);
-    if (mContext) {
-      const noteUrl = this.lookup(mContext[1]).s?.noteId;
-      const all = this.store.getStatuses();
-      const byId = new Map(all.map((s) => [s.noteId, s]));
-      const ancestors = [];
-      let cur = noteUrl && byId.get(noteUrl)?.inReplyTo;
-      while (cur && byId.has(cur) && ancestors.length < 40) {
-        const s = byId.get(cur);
-        ancestors.unshift(s);
-        cur = s.inReplyTo;
-      }
-      const descendants = [];
-      const queue = noteUrl ? [noteUrl] : [];
-      while (queue.length && descendants.length < 60) {
-        const id = queue.shift();
-        for (const s of all) if (s.inReplyTo === id) {
-          descendants.push(s);
-          queue.push(s.noteId);
-        }
-      }
-      return send(200, {
-        ancestors: ancestors.map((s) => this.status(s, { all })),
-        descendants: descendants.map((s) => this.status(s, { all }))
-      });
-    }
-    const mWho = /^\/api\/v1\/statuses\/([a-f0-9]+)\/(reblogged_by|favourited_by)$/.exec(pathname);
-    if (mWho && req.method === "GET") {
-      const noteUrl = this.store.urlFor(mWho[1]);
-      if (!noteUrl) return send(404, { error: "Record not found" });
-      const type = mWho[2] === "reblogged_by" ? "reblog" : "favourite";
-      const actors = [...new Set(this.store.getNotifications().filter((n) => n.noteId === noteUrl && n.type === type).map((n) => n.actor))];
-      return send(200, actors.map((a) => this.account(a)));
-    }
-    const mPin = /^\/api\/v1\/statuses\/([a-f0-9]+)\/(pin|unpin)$/.exec(pathname);
-    if (mPin && req.method === "POST") {
-      const noteUrl = this.store.urlFor(mPin[1]);
-      const s = noteUrl && this.store.getStatuses().find((x) => x.noteId === noteUrl);
-      if (!s) return send(404, { error: "Record not found" });
-      if (s.actor !== this.urls.actor) return send(403, { error: "not your status" });
-      const updated = await pinStatus(this.agent, s, mPin[2] === "pin");
-      return send(200, this.status(updated));
-    }
-    if (pathname === "/api/v1/reports" && req.method === "POST") {
-      return send(422, {
-        error: "this is your own single-user server, so there is no moderation team to receive a report. Blocking the account is the action that takes effect here."
-      });
-    }
-    const mBookmark = /^\/api\/v1\/statuses\/([a-f0-9]+)\/(bookmark|unbookmark)$/.exec(pathname);
-    if (mBookmark && req.method === "POST") {
-      const noteUrl = this.store.urlFor(mBookmark[1]);
-      const s = noteUrl && this.store.getStatuses().find((x) => x.noteId === noteUrl);
-      if (!s) return send(404, { error: "Record not found" });
-      const updated = this.store.updateStatus(s.noteId, { bookmarked: mBookmark[2] === "bookmark" });
-      return send(200, this.status(updated || s));
-    }
-    if (pathname === "/api/v1/bookmarks" || pathname === "/api/v1/favourites") {
-      const key = pathname.endsWith("bookmarks") ? "bookmarked" : "favourited";
-      const all = this.store.getStatuses();
-      const items = all.filter((s) => s[key]).sort((a, b) => String(b.published || "").localeCompare(String(a.published || "")));
-      const { items: page, headers } = this.page(items, url);
-      return send(200, page.map((s) => this.status(s, { all })), headers);
-    }
-    const listJson = (l) => ({ id: l.id, title: l.title, replies_policy: l.repliesPolicy || "list", exclusive: false });
-    if (pathname === "/api/v1/lists" && req.method === "GET") {
-      return send(200, this.store.getLists().map(listJson));
-    }
-    if (pathname === "/api/v1/lists" && req.method === "POST") {
-      const body = await readBody(req);
-      const title = String(body.title || "").trim();
-      if (!title) return send(422, { error: "a title is required" });
-      const lists = this.store.getLists();
-      const l = { id: node_crypto_default.randomBytes(8).toString("hex"), title, repliesPolicy: body.replies_policy || "list", members: [] };
-      lists.push(l);
-      this.store.setLists(lists);
-      return send(200, listJson(l));
-    }
-    const mList = /^\/api\/v1\/lists\/([a-f0-9]+)$/.exec(pathname);
-    if (mList) {
-      const lists = this.store.getLists();
-      const l = lists.find((x) => x.id === mList[1]);
-      if (!l) return send(404, { error: "Record not found" });
-      if (req.method === "DELETE") {
-        this.store.setLists(lists.filter((x) => x.id !== mList[1]));
-        return send(200, {});
-      }
-      if (req.method === "PUT") {
-        const body = await readBody(req);
-        if (body.title) l.title = String(body.title);
-        if (body.replies_policy) l.repliesPolicy = body.replies_policy;
-        this.store.setLists(lists);
-      }
-      return send(200, listJson(l));
-    }
-    const mListAcc = /^\/api\/v1\/lists\/([a-f0-9]+)\/accounts$/.exec(pathname);
-    if (mListAcc) {
-      const lists = this.store.getLists();
-      const l = lists.find((x) => x.id === mListAcc[1]);
-      if (!l) return send(404, { error: "Record not found" });
-      if (req.method === "GET") return send(200, (l.members || []).map((a) => this.account(a)));
-      const body = await readBody(req).catch(() => ({}));
-      const ids = [].concat(body.account_ids || body["account_ids[]"] || url.searchParams.getAll("account_ids[]")).filter(Boolean);
-      const actors = ids.map((id) => this.store.urlFor(id)).filter(Boolean);
-      if (req.method === "POST") l.members = [.../* @__PURE__ */ new Set([...l.members || [], ...actors])];
-      if (req.method === "DELETE") l.members = (l.members || []).filter((a) => !actors.includes(a));
-      this.store.setLists(lists);
-      return send(200, {});
-    }
-    const mListTl = /^\/api\/v1\/timelines\/list\/([a-f0-9]+)$/.exec(pathname);
-    if (mListTl) {
-      const l = this.store.getLists().find((x) => x.id === mListTl[1]);
-      if (!l) return send(404, { error: "Record not found" });
-      const members = new Set(l.members || []);
-      const all = this.store.getStatuses();
-      const items = all.filter((s) => members.has(s.actor) || members.has(s.via)).sort((a, b) => String(b.published || "").localeCompare(String(a.published || "")));
-      const { items: page, headers } = this.page(items, url);
-      return send(200, page.map((s) => this.statusOrBoost(s, { all })), headers);
-    }
-    const filterJson = (f) => ({
-      id: f.id,
-      title: f.title,
-      context: f.context || ["home"],
-      expires_at: f.expiresAt || null,
-      filter_action: f.action || "warn",
-      keywords: (f.keywords || []).map((k, i) => ({ id: `${f.id}-${i}`, keyword: k.keyword, whole_word: !!k.wholeWord })),
-      statuses: []
-    });
-    const keywordsOf = (attrs) => [].concat(attrs || []).filter((k) => k?.keyword && !(k._destroy === true || k._destroy === "true")).map((k) => ({ keyword: String(k.keyword), wholeWord: k.whole_word === true || k.whole_word === "true" }));
-    if (pathname === "/api/v2/filters" && req.method === "GET") {
-      return send(200, this.store.getFilters().map(filterJson));
-    }
-    if (pathname === "/api/v2/filters" && req.method === "POST") {
-      const body = await readBody(req);
-      const title = String(body.title || "").trim();
-      if (!title) return send(422, { error: "a title is required" });
-      const filters = this.store.getFilters();
-      const f = {
-        id: node_crypto_default.randomBytes(8).toString("hex"),
-        title,
-        context: [].concat(body.context || ["home"]),
-        action: body.filter_action || "warn",
-        expiresAt: null,
-        keywords: keywordsOf(body.keywords_attributes)
-      };
-      filters.push(f);
-      this.store.setFilters(filters);
-      return send(200, filterJson(f));
-    }
-    const mFilter = /^\/api\/v2\/filters\/([a-f0-9]+)$/.exec(pathname);
-    if (mFilter) {
-      const filters = this.store.getFilters();
-      const f = filters.find((x) => x.id === mFilter[1]);
-      if (!f) return send(404, { error: "Record not found" });
-      if (req.method === "DELETE") {
-        this.store.setFilters(filters.filter((x) => x.id !== mFilter[1]));
-        return send(200, {});
-      }
-      if (req.method === "PUT") {
-        const body = await readBody(req);
-        if (body.title) f.title = String(body.title);
-        if (body.context) f.context = [].concat(body.context);
-        if (body.filter_action) f.action = body.filter_action;
-        if (body.keywords_attributes) f.keywords = keywordsOf(body.keywords_attributes);
-        this.store.setFilters(filters);
-      }
-      return send(200, filterJson(f));
-    }
-    if (pathname === "/api/v1/scheduled_statuses" && req.method === "GET") {
-      return send(200, this.store.getScheduled().map((e) => this.scheduledJson(e)));
-    }
-    const mSched = /^\/api\/v1\/scheduled_statuses\/([a-f0-9]+)$/.exec(pathname);
-    if (mSched) {
-      const sched = this.store.getScheduled();
-      const e = sched.find((x) => x.id === mSched[1]);
-      if (!e) return send(404, { error: "Record not found" });
-      if (req.method === "DELETE") {
-        this.store.setScheduled(sched.filter((x) => x.id !== mSched[1]));
-        return send(200, {});
-      }
-      if (req.method === "PUT") {
-        const body = await readBody(req);
-        const at = Date.parse(body.scheduled_at || "");
-        if (!Number.isFinite(at)) return send(422, { error: "scheduled_at required" });
-        e.scheduledAt = new Date(at).toISOString();
-        this.store.setScheduled(sched);
-      }
-      return send(200, this.scheduledJson(e));
-    }
-    if (pathname === "/api/v1/conversations" && req.method === "GET") {
-      const all = this.store.getStatuses();
-      const me = this.urls.actor;
-      const convos = /* @__PURE__ */ new Map();
-      for (const s of all) {
-        if (!(s.direct || s.visibility === "direct")) continue;
-        const others = [.../* @__PURE__ */ new Set([
-          ...s.actor !== me ? [s.actor] : [],
-          ...(s.mentions || []).map((m) => m.href).filter((a) => a && a !== me)
-        ])];
-        const key = others.sort().join(" ") || me;
-        const c = convos.get(key) || { accounts: /* @__PURE__ */ new Set(), last: s };
-        for (const o of others) c.accounts.add(o);
-        if (String(s.published || "") > String(c.last.published || "")) c.last = s;
-        convos.set(key, c);
-      }
-      const items = [...convos.entries()].sort((a, b) => String(b[1].last.published || "").localeCompare(String(a[1].last.published || "")));
-      return send(200, items.map(([key, c]) => ({
-        id: this.store.idFor("conversation:" + key),
-        unread: false,
-        accounts: [...c.accounts.size ? c.accounts : [me]].map((a) => this.account(a)),
-        last_status: this.status(c.last, { all })
-      })));
-    }
-    const mPoll = /^\/api\/v1\/polls\/([a-f0-9]+)(\/votes)?$/.exec(pathname);
-    if (mPoll) {
-      const noteUrl = this.store.urlFor(mPoll[1]);
-      const s = noteUrl && this.store.getStatuses().find((x) => x.noteId === noteUrl);
-      if (!s?.poll) return send(404, { error: "Record not found" });
-      if (mPoll[2] && req.method === "POST") {
-        const body = await readBody(req);
-        const choices = [].concat(body.choices || body["choices[]"] || []).map(Number).filter(Number.isInteger);
-        if (!choices.length) return send(422, { error: "choices required" });
-        const r = await votePoll(this.agent, s, choices);
-        if (!r.ok) return send(422, { error: r.error });
-        return send(200, this.pollJson(this.store.getStatuses().find((x) => x.noteId === noteUrl)));
-      }
-      return send(200, this.pollJson(s));
-    }
-    const mAction = /^\/api\/v1\/statuses\/([a-f0-9]+)\/(favourite|unfavourite|reblog|unreblog)$/.exec(pathname);
-    if (mAction && req.method === "POST") {
-      const { s } = this.lookup(mAction[1]);
-      if (!s) return send(404, { error: "Record not found" });
-      if (s.kind === "bsky") {
-        const at = this.agent.atproto;
-        if (!at?.connected()) return send(422, { error: "this is a Bluesky post \u2014 no Bluesky account is connected to act from" });
-        try {
-          let patch = null;
-          if (mAction[2] === "favourite" && !s.favourited) {
-            patch = { favourited: true, bskyLike: (await at.like(s.noteId, s.cid || null)).uri };
-          } else if (mAction[2] === "unfavourite" && s.favourited) {
-            if (s.bskyLike) await at.deleteCrossPost(s.bskyLike);
-            patch = { favourited: false, bskyLike: void 0 };
-          } else if (mAction[2] === "reblog" && !s.reblogged) {
-            patch = { reblogged: true, bskyRepost: (await at.repost(s.noteId, s.cid || null)).uri };
-          } else if (mAction[2] === "unreblog" && s.reblogged) {
-            if (s.bskyRepost) await at.deleteCrossPost(s.bskyRepost);
-            patch = { reblogged: false, bskyRepost: void 0 };
-          }
-          return send(200, this.status(patch ? this.store.updateStatus(s.noteId, patch) || s : s));
-        } catch (e) {
-          return send(422, { error: e.message });
-        }
-      }
-      if (s.kind === "acct") return this.acctAction(send, s, mAction[2]);
-      const updated = await social_exports[mAction[2]](this.agent, s);
-      return send(200, this.status(updated || s));
-    }
-    if (pathname === "/api/v1/follow_requests" && req.method === "GET") {
-      const limit = Math.min(Number(url.searchParams.get("limit")) || 40, 80);
-      return send(200, this.store.getRequests().slice(0, limit).map((r) => this.account(r.actor)));
-    }
-    const mReq = /^\/api\/v1\/follow_requests\/([a-f0-9]+)\/(authorize|reject)$/.exec(pathname);
-    if (mReq && req.method === "POST") {
-      const actorUrl = this.store.urlFor(mReq[1]);
-      if (!actorUrl) return send(404, { error: "Record not found" });
-      if (!this.store.getRequests().some((r) => r.actor === actorUrl)) {
-        return send(404, { error: "Record not found" });
-      }
-      try {
-        if (mReq[2] === "authorize") await admitRequest(this.agent, actorUrl);
-        else await refuseRequest(this.agent, actorUrl);
-      } catch (e) {
-        return send(422, { error: e.message });
-      }
-      await this.store.flush();
-      return send(200, this.relationship(actorUrl));
-    }
-    if (pathname === "/api/v1/notifications") {
-      const limit = Math.min(Number(url.searchParams.get("limit")) || 30, 60);
-      const q = url.searchParams;
-      let items = this.store.getNotifications();
-      const listParam = (name) => {
-        const all = [...q.getAll(`${name}[]`), ...q.getAll(name)].flatMap((v) => String(v).split(",")).map((v) => v.trim()).filter(Boolean);
-        return all.length ? new Set(all) : null;
-      };
-      const want = listParam("types");
-      const skip = listParam("exclude_types");
-      const shown = (n) => this.notificationType(n.type);
-      if (want) items = items.filter((n) => want.has(shown(n)));
-      if (skip) items = items.filter((n) => !skip.has(shown(n)));
-      const cut = (id, keepNewer) => {
-        const i = items.findIndex((n) => n.id === id);
-        if (i < 0) return;
-        items = keepNewer ? items.slice(0, i) : items.slice(i + 1);
-      };
-      const maxId = q.get("max_id");
-      if (maxId) cut(maxId, false);
-      const sinceId = q.get("since_id") || q.get("min_id");
-      if (sinceId) cut(sinceId, true);
-      const page = q.get("min_id") && !q.get("since_id") ? items.slice(Math.max(0, items.length - limit)) : items.slice(0, limit);
-      if (page.length) {
-        const base = `${this.scheme || (req.socket?.encrypted ? "https" : "http")}://${req.headers.host}${pathname}`;
-        const link = (params) => {
-          const u = new URL(base);
-          for (const [k, v] of q) if (k !== "max_id" && k !== "since_id" && k !== "min_id") u.searchParams.append(k, v);
-          for (const [k, v] of Object.entries(params)) u.searchParams.set(k, v);
-          return u.href;
-        };
-        return send(200, page.map((n) => this.notification(n)), {
-          link: `<${link({ max_id: page[page.length - 1].id })}>; rel="next", <${link({ min_id: page[0].id })}>; rel="prev"`
-        });
-      }
-      return send(200, []);
-    }
-    if (pathname === "/api/v1/markers") {
-      if (req.method === "POST") {
-        const body = await readBody(req);
-        const markers = this.store.read("masto-markers.json", {});
-        for (const [k, v] of Object.entries(body)) {
-          const lastId = v?.last_read_id || v;
-          if (typeof lastId === "string") {
-            markers[k] = { last_read_id: lastId, version: (markers[k]?.version || 0) + 1, updated_at: (/* @__PURE__ */ new Date()).toISOString() };
-          }
-        }
-        this.store.write("masto-markers.json", markers);
-        return send(200, markers);
-      }
-      return send(200, this.store.read("masto-markers.json", {}));
-    }
-    if (pathname === "/api/v1/accounts/relationships") {
-      const ids = [...url.searchParams.getAll("id[]"), ...url.searchParams.getAll("id")];
-      const rels = ids.map((id) => this.store.urlFor(id)).filter(Boolean).map((u) => this.relationship(u));
-      return send(200, rels);
-    }
-    if (pathname === "/api/v1/accounts/search") {
-      return send(200, await this.accountSearch(url.searchParams.get("q")));
-    }
-    if (pathname === "/api/v1/accounts/lookup") {
-      const acct = String(url.searchParams.get("acct") || "").replace(/^@/, "");
-      const cfg = this.store.getConfig();
-      if (acct === cfg?.handle || acct === `${cfg?.handle}@${this.host}`) {
-        return send(200, this.selfAccount());
-      }
-      const hit = Object.entries(this.store.getActors()).find(([u, a]) => {
-        try {
-          return `${a.preferredUsername}@${new URL(u).host}` === acct;
-        } catch {
-          return false;
-        }
-      });
-      return hit ? send(200, this.account(hit[0])) : send(404, { error: "Record not found" });
-    }
-    const mRel = /^\/api\/v1\/accounts\/([a-f0-9]+)\/(block|unblock|mute|unmute)$/.exec(pathname);
-    if (mRel && req.method === "POST") {
-      const actorUrl = this.store.urlFor(mRel[1]);
-      if (!actorUrl) return send(404, { error: "Record not found" });
-      if (mRel[2] === "block" || mRel[2] === "unblock") {
-        if (mRel[2] === "block") await blockActor(this.agent, actorUrl);
-        else await unblockActor(this.agent, actorUrl);
-      } else {
-        const m = this.store.getMuted();
-        if (mRel[2] === "mute" && !m.actors.includes(actorUrl)) m.actors.push(actorUrl);
-        if (mRel[2] === "unmute") m.actors = m.actors.filter((a) => a !== actorUrl);
-        this.store.setMuted(m);
-      }
-      return send(200, this.relationship(actorUrl));
-    }
-    const mFollow = /^\/api\/v1\/accounts\/([a-f0-9]+)\/(follow|unfollow)$/.exec(pathname);
-    if (mFollow && req.method === "POST") {
-      const actorUrl = this.store.urlFor(mFollow[1]);
-      if (!actorUrl) return send(404, { error: "Record not found" });
-      if (mFollow[2] === "follow") await followActor(this.agent, actorUrl);
-      else await unfollowActor(this.agent, actorUrl).catch(() => {
-      });
-      return send(200, this.relationship(actorUrl));
-    }
-    const mAccount = /^\/api\/v1\/accounts\/([a-f0-9]+)$/.exec(pathname);
-    if (mAccount && req.method === "GET") {
-      const actorUrl = this.store.urlFor(mAccount[1]);
-      return actorUrl ? send(200, this.account(actorUrl)) : send(404, { error: "Record not found" });
-    }
-    if (pathname === "/api/v1/push/subscription") {
-      const token = (/^Bearer (.+)$/.exec(req.headers.authorization || "") || [])[1];
-      if (!token) return send(401, { error: "The access token is invalid" });
-      if (!this.webPush) return send(422, { error: "this instance does not send web push" });
-      if (req.method === "GET") {
-        const sub = this.push.get(token);
-        return sub ? send(200, this.push.json(token, sub)) : send(404, { error: "Record not found" });
-      }
-      if (req.method === "POST") {
-        const body = await readBody(req);
-        const sub = this.push.set(token, {
-          endpoint: body.subscription?.endpoint,
-          keys: body.subscription?.keys,
-          alerts: body.data?.alerts
-        });
-        if (!sub) return send(422, { error: "a https endpoint and p256dh/auth keys are required" });
-        return send(200, this.push.json(token, sub));
-      }
-      if (req.method === "PUT") {
-        const body = await readBody(req);
-        const sub = this.push.setAlerts(token, body.data?.alerts);
-        return sub ? send(200, this.push.json(token, sub)) : send(404, { error: "Record not found" });
-      }
-      if (req.method === "DELETE") {
-        this.push.drop(token);
-        return send(200, {});
-      }
-    }
-    if (/^\/api\/v1\/accounts\/[a-f0-9]+\/featured_tags$/.test(pathname)) return send(200, []);
-    const mAccList = /^\/api\/v1\/accounts\/([a-f0-9]+)\/(following|followers)$/.exec(pathname);
-    if (mAccList && req.method === "GET") {
-      const actorUrl = this.store.urlFor(mAccList[1]);
-      if (!actorUrl) return send(404, { error: "Record not found" });
-      const mine = actorUrl === this.urls?.actor;
-      const c = this.store.getContacts();
-      const recs = (!mine ? [] : mAccList[2] === "followers" ? c.followers : c.following.filter((f) => f.accepted)).slice().reverse();
-      const { items, headers } = this.page(
-        recs,
-        url,
-        { limit: 40, max: 80, idOf: (r) => this.store.idFor(r.actor) }
-      );
-      return send(200, items.map((r) => this.account(r.actor)), headers);
-    }
-    if (pathname === "/api/v1/accounts/familiar_followers") {
-      const ids = [...url.searchParams.getAll("id[]"), ...url.searchParams.getAll("id")];
-      return send(200, ids.map((id) => ({ id, accounts: [] })));
-    }
-    const mAccStatuses = /^\/api\/v1\/accounts\/([a-f0-9]+)\/statuses$/.exec(pathname);
-    if (mAccStatuses) {
-      const actorUrl = this.store.urlFor(mAccStatuses[1]);
-      const all = this.store.getStatuses();
-      const pinnedOnly = url.searchParams.get("pinned") === "true";
-      const { items, headers } = this.page(
-        all.filter((s) => s.actor === actorUrl && (!pinnedOnly || s.pinned)),
-        url
-      );
-      return send(200, items.map((s) => this.statusOrBoost(s, { all })), headers);
-    }
-    if (pathname === "/api/v2/search" || pathname === "/api/v1/search") {
-      const q = String(url.searchParams.get("q") || "").trim();
-      const type = url.searchParams.get("type");
-      const out = { accounts: [], statuses: [], hashtags: [] };
-      const asHandle = /^@?[^@\s]+@[^@\s.]+\.[^@\s]+$/.test(q);
-      if (asHandle && type !== "statuses") {
-        try {
-          const doc = await resolveHandle(this.agent, q);
-          out.accounts.push(this.account(doc.id));
-        } catch (e) {
-          this.log(`search resolve ${q}: ${e.message}`);
-        }
-      } else if (/^https?:\/\//.test(q)) {
-        const doc = await this.agent.intake.fetchAP(q).catch(() => null);
-        if (doc?.type === "Person" && doc.id) out.accounts.push(this.account(doc.id));
-        else if (doc?.type === "Note" && doc.id) {
-          let s = this.store.getStatuses().find((x) => x.noteId === doc.id);
-          const author = authorOf(doc);
-          if (!s && author) {
-            s = {
-              noteId: doc.id,
-              actor: author,
-              content: sanitizeHtml(doc.content),
-              published: doc.published,
-              inReplyTo: doc.inReplyTo,
-              kind: "remote"
-            };
-            this.store.addStatus(s);
-          }
-          if (s) out.statuses.push(this.status(s));
-        }
-      } else if (q) {
-        const needle = q.toLowerCase();
-        if (type !== "accounts") {
-          const all = this.store.getStatuses();
-          out.statuses = all.filter((s) => (s.content || "").toLowerCase().includes(needle)).slice(0, 20).map((s) => this.status(s, { all }));
-        }
-        if (type !== "statuses") out.accounts = await this.accountSearch(q);
-      }
-      return send(200, out);
-    }
-    if ((pathname === "/api/v2/media" || pathname === "/api/v1/media") && req.method === "POST") {
-      const { fields, file } = await readMultipart(req);
-      if (!file?.data?.length) return send(422, { error: "file required" });
-      const mediaType = attachmentType(file.contentType);
-      const ext = extensionFor(mediaType, file.filename);
-      const slug = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10) + "-" + node_crypto_default.randomBytes(4).toString("hex") + "." + ext;
-      const mediaUrl = this.urls.media + slug;
-      await this.agent.publisher.ensureMediaContainer();
-      await write6(this.agent.remote, mediaUrl, file.data, mediaType);
-      const entry = { url: mediaUrl, mediaType, description: fields.description || "" };
-      const id = this.store.idFor(mediaUrl);
-      this.store.setMedia(id, entry);
-      return send(200, this.mediaJson({ id, ...entry }));
-    }
-    const mMedia = /^\/api\/v1\/media\/([a-f0-9]+)$/.exec(pathname);
-    if (mMedia) {
-      const entry = this.store.getMedia()[mMedia[1]];
-      if (!entry) return send(404, { error: "Record not found" });
-      if (req.method === "PUT") {
-        const body = await readBody(req);
-        if (typeof body.description === "string") {
-          entry.description = body.description;
-          this.store.setMedia(mMedia[1], entry);
-        }
-      }
-      return send(200, this.mediaJson({ id: mMedia[1], ...entry }));
-    }
-    this.log(`mastoapi: unhandled ${req.method} ${pathname} \u2014 punch list`);
-    return send(404, { error: `Unimplemented: ${req.method} ${pathname}` });
-  }
-};
 function instanceConfig() {
   return {
     statuses: { max_characters: 5e3, max_media_attachments: 4, characters_reserved_per_url: 23 },
@@ -49629,63 +48715,103 @@ function instanceConfig() {
     accounts: { max_featured_tags: 0 }
   };
 }
-var TRANSPARENT_PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
-function hashPassword(password) {
-  const salt = node_crypto_default.randomBytes(16);
-  const hash = node_crypto_default.scryptSync(String(password), salt, 32);
-  return { saltHex: salt.toString("hex"), hashHex: hash.toString("hex") };
+function instanceTitle(api) {
+  const cfg = api.store.getConfig();
+  return cfg?.handle ? `@${cfg.handle}@${api.host}` : "FediPod";
 }
-function checkPassword(rec, password) {
-  try {
-    const hash = node_crypto_default.scryptSync(String(password), Buffer.from(rec.saltHex, "hex"), 32);
-    return node_crypto_default.timingSafeEqual(hash, Buffer.from(rec.hashHex, "hex"));
-  } catch {
-    return false;
+function tagObject(api, name, following, req) {
+  const host = req?.headers?.host || api.host;
+  return { name, url: `https://${host}/tags/${name}`, history: [], following: !!following };
+}
+function instanceBlurb(api) {
+  const kind = api.store.getConfig()?.kind === "group" ? "group" : "actor";
+  return `Solid pod ActivityPub ${kind}`;
+}
+async function handle2(api, ctx) {
+  const { req, res, pathname, url, send } = ctx;
+  if (pathname === "/api/v1/instance") {
+    const su = api.streamingUrl(req);
+    return send(200, {
+      uri: api.host,
+      title: api.instanceTitle(),
+      short_description: api.instanceBlurb(),
+      description: api.instanceBlurb(),
+      email: "",
+      version: "4.2.0 (compatible; fedipod)",
+      urls: su ? { streaming_api: su } : {},
+      stats: { user_count: 1, status_count: api.store.countStatuses(), domain_count: 1 },
+      languages: ["en"],
+      registrations: false,
+      approval_required: false,
+      invites_enabled: false,
+      configuration: instanceConfig(),
+      contact_account: null,
+      rules: []
+    });
   }
-}
-var escapeHtml = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
-var parseRedirects = (v) => (Array.isArray(v) ? v : String(v || "").split(/\s+/)).map((s) => s.trim()).filter(Boolean);
-function sendLoginForm(res, params, error = "", client = null, status = null, headers = {}) {
-  const hidden = [...params.entries()].filter(([k]) => k !== "password").map(([k, v]) => `<input type="hidden" name="${escapeHtml(k)}" value="${escapeHtml(v)}">`).join("\n");
-  let asking = "<p>Enter the agent password to authorize this client.</p>";
-  if (client && (client.name || client.redirect)) {
-    let where = "";
-    try {
-      where = client.redirect ? new URL(client.redirect).host : "";
-    } catch {
-    }
-    const who = client.name ? escapeHtml(client.name) : where ? escapeHtml(where) : "A client";
-    asking = `<p><strong>${who}</strong> is asking to access your account${where ? `, sending the authorization to <code>${escapeHtml(where)}</code>` : ""}.</p><p>Scope: <code>${escapeHtml(client.scope || "read")}</code>. Enter the agent password to allow it.</p>`;
+  if (pathname === "/api/v2/instance") {
+    const su = api.streamingUrl(req);
+    return send(200, {
+      domain: api.host,
+      title: api.instanceTitle(),
+      version: "4.2.0 (compatible; fedipod)",
+      source_url: "https://github.com/jeff-zucker/FediPod",
+      description: api.instanceBlurb(),
+      usage: { users: { active_month: 1 } },
+      thumbnail: { url: TRANSPARENT_PNG },
+      languages: ["en"],
+      // Both spellings: v2 clients read configuration.urls.streaming, older
+      // ones the top-level urls.streaming_api, and some fall back blindly.
+      // Omitted entirely when there is no streaming, so the client polls.
+      urls: su ? { streaming_api: su } : {},
+      configuration: {
+        ...instanceConfig(),
+        ...su ? { urls: { streaming: su } } : {},
+        ...api.webPush ? { vapid: { public_key: api.push.publicKey() } } : {}
+      },
+      registrations: { enabled: false, approval_required: false, message: null },
+      contact: { email: "", account: null },
+      rules: []
+    });
   }
-  res.writeHead(
-    status || (error ? 401 : 200),
-    { "content-type": "text/html; charset=utf-8", ...headers }
-  );
-  res.end(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>FediPod \u2014 authorize</title>
-<style>:root{color-scheme:light dark;font-size:125%;--heading:#1a4f8a}
-body{font:1rem system-ui,sans-serif;max-width:22rem;margin:15vh auto;padding:0 1rem}
-h1{color:var(--heading)}
-code{word-break:break-all}
-@media (prefers-color-scheme:dark){:root{--heading:#7fb3e8}}
-input,button{font:inherit;width:100%;padding:.5rem;margin:.3rem 0;box-sizing:border-box}
-.err{color:#b00020}
-@media (prefers-color-scheme:dark){.err{color:#ff8a8a}}</style></head><body>
-<main>
-<h1>FediPod</h1>
-${asking}
-${error ? `<p class="err" id="login-err" role="alert">${escapeHtml(error)}</p>` : ""}
-<form method="POST" action="/oauth/authorize">
-${hidden}
-<label for="password">Agent password</label>
-<input type="password" id="password" name="password" autofocus autocomplete="current-password"
-  ${error ? 'aria-invalid="true" aria-describedby="login-err"' : ""}>
-<button type="submit">Authorize</button>
-</form>
-</main></body></html>`);
-  return true;
+  const stub = STUBS.get(pathname);
+  if (stub !== void 0 && req.method === "GET") return send(200, stub);
+  return false;
 }
-var selfIcon = (api, self2, cached) => (self2 ? api.store.getConfig()?.icon : null) || cached.icon;
+
+// lib/client/masto/accounts.mjs
+var accounts_exports = {};
+__export(accounts_exports, {
+  handle: () => handle4
+});
+init_node_crypto();
+
+// lib/pod/media.mjs
+var write6 = (pod, url, bytes, contentType) => pod.put(url, bytes, contentType);
+
+// lib/client/masto/media.mjs
+var media_exports = {};
+__export(media_exports, {
+  attachmentType: () => attachmentType,
+  extensionFor: () => extensionFor,
+  handle: () => handle3,
+  readMultipart: () => readMultipart
+});
+init_node_crypto();
+var ATTACHMENT_KINDS = /* @__PURE__ */ new Set(["image", "video", "audio"]);
+var NEVER = /* @__PURE__ */ new Set(["image/svg+xml", "image/svg"]);
+var OPAQUE = "application/octet-stream";
+function attachmentType(claimed) {
+  const t = String(claimed || "").split(";")[0].trim().toLowerCase();
+  if (!/^[a-z0-9.+-]+\/[a-z0-9.+-]+$/.test(t) || NEVER.has(t)) return OPAQUE;
+  return ATTACHMENT_KINDS.has(t.split("/")[0]) ? t : OPAQUE;
+}
+function extensionFor(mediaType, filename = "") {
+  if (mediaType === OPAQUE) return "bin";
+  const sub = mediaType.split("/")[1].replace(/[^a-z0-9]/g, "");
+  const given = String(filename || "").includes(".") ? filename.split(".").pop().toLowerCase().replace(/[^a-z0-9]/g, "") : "";
+  return given && (given === sub || sub.startsWith(given) || given.startsWith(sub)) ? given : sub || "bin";
+}
 function readMultipart(req, limit = 12e6) {
   return new Promise((resolve2, reject) => {
     const chunks = [];
@@ -49740,36 +48866,994 @@ function readMultipart(req, limit = 12e6) {
     });
   });
 }
-function htmlToText(html) {
-  return String(html).replace(/<br\s*\/?>/gi, "\n").replace(/<\/p>\s*<p[^>]*>/gi, "\n\n").replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").trim();
+async function handle3(api, ctx) {
+  const { req, res, pathname, url, send } = ctx;
+  if ((pathname === "/api/v2/media" || pathname === "/api/v1/media") && req.method === "POST") {
+    const { fields, file } = await readMultipart(req);
+    if (!file?.data?.length) return send(422, { error: "file required" });
+    const mediaType = attachmentType(file.contentType);
+    const ext = extensionFor(mediaType, file.filename);
+    const slug = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10) + "-" + node_crypto_default.randomBytes(4).toString("hex") + "." + ext;
+    const mediaUrl = api.urls.media + slug;
+    await api.agent.publisher.ensureMediaContainer();
+    await write6(api.agent.remote, mediaUrl, file.data, mediaType);
+    const entry = { url: mediaUrl, mediaType, description: fields.description || "" };
+    const id = api.store.idFor(mediaUrl);
+    api.store.setMedia(id, entry);
+    return send(200, api.mediaJson({ id, ...entry }));
+  }
+  const mMedia = /^\/api\/v1\/media\/([a-f0-9]+)$/.exec(pathname);
+  if (mMedia) {
+    const entry = api.store.getMedia()[mMedia[1]];
+    if (!entry) return send(404, { error: "Record not found" });
+    if (req.method === "PUT") {
+      const body = await readBody(req);
+      if (typeof body.description === "string") {
+        entry.description = body.description;
+        api.store.setMedia(mMedia[1], entry);
+      }
+    }
+    return send(200, api.mediaJson({ id: mMedia[1], ...entry }));
+  }
+  return false;
 }
-function readBody(req) {
-  return new Promise((resolve2, reject) => {
-    let data = "";
-    req.on("data", (c) => {
-      data += c;
-      if (data.length > 1e6) {
-        req.destroy();
-        reject(new Error("request body too large"));
+
+// lib/client/masto/accounts.mjs
+async function handle4(api, ctx) {
+  const { req, res, pathname, url, send } = ctx;
+  if (pathname === "/api/v1/accounts/verify_credentials") {
+    const cfg0 = api.store.getConfig() || {};
+    return send(200, {
+      ...api.selfAccount(),
+      // `source` is what the editor fills its inputs from: the raw text it
+      // will send back, not the HTML the profile renders.
+      source: {
+        privacy: "public",
+        sensitive: false,
+        language: "en",
+        note: cfg0.summary || "",
+        fields: (cfg0.fields || []).map((f) => ({ name: f.name, value: f.value }))
       }
     });
-    req.on("end", () => {
-      const ct = String(req.headers["content-type"] || "");
-      try {
-        if (ct.includes("application/json")) return resolve2(data ? JSON.parse(data) : {});
-        const form = new URLSearchParams(data);
-        const out = {};
-        for (const key of new Set(form.keys())) {
-          out[key] = key.endsWith("[]") ? form.getAll(key) : form.get(key);
+  }
+  if (pathname === "/api/v1/accounts/update_credentials") {
+    if (req.method !== "PATCH" && req.method !== "POST") return send(405, { error: "PATCH expected" });
+    const ct = String(req.headers["content-type"] || "");
+    let form = {}, files = {};
+    if (ct.includes("multipart/form-data")) ({ fields: form, files } = await readMultipart(req));
+    else form = await readBody(req);
+    const cfg = { ...api.store.getConfig() };
+    const putImage = async (f) => {
+      const ext = (f.filename || "").includes(".") ? f.filename.split(".").pop().replace(/[^\w]/g, "") : "bin";
+      const slug = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10) + "-" + node_crypto_default.randomBytes(4).toString("hex") + "." + ext;
+      const url2 = api.urls.media + slug;
+      await api.agent.publisher.ensureMediaContainer();
+      await write6(api.agent.remote, url2, f.data, f.contentType);
+      return url2;
+    };
+    if ("display_name" in form) cfg.name = String(form.display_name).trim() || cfg.handle;
+    if ("note" in form) cfg.summary = String(form.note) || void 0;
+    if ("locked" in form) cfg.approveJoins = form.locked === "true" || form.locked === true;
+    if (files.avatar?.data?.length) cfg.icon = await putImage(files.avatar);
+    if (files.header?.data?.length) cfg.image = await putImage(files.header);
+    const rows = [];
+    for (const [k, v] of Object.entries(form)) {
+      const m = /^fields_attributes\[(\d+)\]\[(name|value)\]$/.exec(k);
+      if (!m) continue;
+      (rows[Number(m[1])] ||= {})[m[2]] = String(v);
+    }
+    if (rows.length) cfg.fields = rows.filter((r) => r && r.name?.trim()).map((r) => ({ name: r.name.trim(), value: (r.value || "").trim() }));
+    api.store.setConfig(cfg);
+    Object.assign(api.agent.publisher.config, {
+      name: cfg.name,
+      summary: cfg.summary,
+      icon: cfg.icon,
+      image: cfg.image,
+      fields: cfg.fields,
+      approveJoins: !!cfg.approveJoins
+    });
+    await api.store.flush();
+    const published = await api.agent.publisher.publishProfile();
+    const unreachable = published?.unreachable;
+    if (unreachable?.length) {
+      api.log(`profile saved but NOT publicly readable: ${unreachable.join(", ")}`);
+    }
+    api.log(`profile updated from a client: ${Object.keys(form).join(", ") || "(files only)"}`);
+    return send(200, api.selfAccount());
+  }
+  if (pathname === "/api/v1/follow_requests" && req.method === "GET") {
+    const limit = Math.min(Number(url.searchParams.get("limit")) || 40, 80);
+    return send(200, api.store.getRequests().slice(0, limit).map((r) => api.account(r.actor)));
+  }
+  const mReq = /^\/api\/v1\/follow_requests\/([a-f0-9]+)\/(authorize|reject)$/.exec(pathname);
+  if (mReq && req.method === "POST") {
+    const actorUrl = api.store.urlFor(mReq[1]);
+    if (!actorUrl) return send(404, { error: "Record not found" });
+    if (!api.store.getRequests().some((r) => r.actor === actorUrl)) {
+      return send(404, { error: "Record not found" });
+    }
+    try {
+      if (mReq[2] === "authorize") await admitRequest(api.agent, actorUrl);
+      else await refuseRequest(api.agent, actorUrl);
+    } catch (e) {
+      return send(422, { error: e.message });
+    }
+    await api.store.flush();
+    return send(200, api.relationship(actorUrl));
+  }
+  if (pathname === "/api/v1/markers") {
+    if (req.method === "POST") {
+      const body = await readBody(req);
+      const markers = api.store.read("masto-markers.json", {});
+      for (const [k, v] of Object.entries(body)) {
+        const lastId = v?.last_read_id || v;
+        if (typeof lastId === "string") {
+          markers[k] = { last_read_id: lastId, version: (markers[k]?.version || 0) + 1, updated_at: (/* @__PURE__ */ new Date()).toISOString() };
         }
-        resolve2(out);
-      } catch (e) {
-        reject(e);
+      }
+      api.store.write("masto-markers.json", markers);
+      return send(200, markers);
+    }
+    return send(200, api.store.read("masto-markers.json", {}));
+  }
+  if (pathname === "/api/v1/accounts/relationships") {
+    const ids = [...url.searchParams.getAll("id[]"), ...url.searchParams.getAll("id")];
+    const rels = ids.map((id) => api.store.urlFor(id)).filter(Boolean).map((u) => api.relationship(u));
+    return send(200, rels);
+  }
+  if (pathname === "/api/v1/accounts/search") {
+    return send(200, await api.accountSearch(url.searchParams.get("q")));
+  }
+  if (pathname === "/api/v1/accounts/lookup") {
+    const acct = String(url.searchParams.get("acct") || "").replace(/^@/, "");
+    const cfg = api.store.getConfig();
+    if (acct === cfg?.handle || acct === `${cfg?.handle}@${api.host}`) {
+      return send(200, api.selfAccount());
+    }
+    const hit = Object.entries(api.store.getActors()).find(([u, a]) => {
+      try {
+        return `${a.preferredUsername}@${new URL(u).host}` === acct;
+      } catch {
+        return false;
       }
     });
-    req.on("error", reject);
-  });
+    return hit ? send(200, api.account(hit[0])) : send(404, { error: "Record not found" });
+  }
+  const mRel = /^\/api\/v1\/accounts\/([a-f0-9]+)\/(block|unblock|mute|unmute)$/.exec(pathname);
+  if (mRel && req.method === "POST") {
+    const actorUrl = api.store.urlFor(mRel[1]);
+    if (!actorUrl) return send(404, { error: "Record not found" });
+    if (mRel[2] === "block" || mRel[2] === "unblock") {
+      if (mRel[2] === "block") await blockActor(api.agent, actorUrl);
+      else await unblockActor(api.agent, actorUrl);
+    } else {
+      const m = api.store.getMuted();
+      if (mRel[2] === "mute" && !m.actors.includes(actorUrl)) m.actors.push(actorUrl);
+      if (mRel[2] === "unmute") m.actors = m.actors.filter((a) => a !== actorUrl);
+      api.store.setMuted(m);
+    }
+    return send(200, api.relationship(actorUrl));
+  }
+  const mFollow = /^\/api\/v1\/accounts\/([a-f0-9]+)\/(follow|unfollow)$/.exec(pathname);
+  if (mFollow && req.method === "POST") {
+    const actorUrl = api.store.urlFor(mFollow[1]);
+    if (!actorUrl) return send(404, { error: "Record not found" });
+    if (mFollow[2] === "follow") await followActor(api.agent, actorUrl);
+    else await unfollowActor(api.agent, actorUrl).catch(() => {
+    });
+    return send(200, api.relationship(actorUrl));
+  }
+  const mAccount = /^\/api\/v1\/accounts\/([a-f0-9]+)$/.exec(pathname);
+  if (mAccount && req.method === "GET") {
+    const actorUrl = api.store.urlFor(mAccount[1]);
+    return actorUrl ? send(200, api.account(actorUrl)) : send(404, { error: "Record not found" });
+  }
+  if (pathname === "/api/v1/push/subscription") {
+    const token = (/^Bearer (.+)$/.exec(req.headers.authorization || "") || [])[1];
+    if (!token) return send(401, { error: "The access token is invalid" });
+    if (!api.webPush) return send(422, { error: "this instance does not send web push" });
+    if (req.method === "GET") {
+      const sub = api.push.get(token);
+      return sub ? send(200, api.push.json(token, sub)) : send(404, { error: "Record not found" });
+    }
+    if (req.method === "POST") {
+      const body = await readBody(req);
+      const sub = api.push.set(token, {
+        endpoint: body.subscription?.endpoint,
+        keys: body.subscription?.keys,
+        alerts: body.data?.alerts
+      });
+      if (!sub) return send(422, { error: "a https endpoint and p256dh/auth keys are required" });
+      return send(200, api.push.json(token, sub));
+    }
+    if (req.method === "PUT") {
+      const body = await readBody(req);
+      const sub = api.push.setAlerts(token, body.data?.alerts);
+      return sub ? send(200, api.push.json(token, sub)) : send(404, { error: "Record not found" });
+    }
+    if (req.method === "DELETE") {
+      api.push.drop(token);
+      return send(200, {});
+    }
+  }
+  if (/^\/api\/v1\/accounts\/[a-f0-9]+\/featured_tags$/.test(pathname)) return send(200, []);
+  const mAccList = /^\/api\/v1\/accounts\/([a-f0-9]+)\/(following|followers)$/.exec(pathname);
+  if (mAccList && req.method === "GET") {
+    const actorUrl = api.store.urlFor(mAccList[1]);
+    if (!actorUrl) return send(404, { error: "Record not found" });
+    const mine = actorUrl === api.urls?.actor;
+    const c = api.store.getContacts();
+    const recs = (!mine ? [] : mAccList[2] === "followers" ? c.followers : c.following.filter((f) => f.accepted)).slice().reverse();
+    const { items, headers } = api.page(
+      recs,
+      url,
+      { limit: 40, max: 80, idOf: (r) => api.store.idFor(r.actor) }
+    );
+    return send(200, items.map((r) => api.account(r.actor)), headers);
+  }
+  if (pathname === "/api/v1/accounts/familiar_followers") {
+    const ids = [...url.searchParams.getAll("id[]"), ...url.searchParams.getAll("id")];
+    return send(200, ids.map((id) => ({ id, accounts: [] })));
+  }
+  const mAccStatuses = /^\/api\/v1\/accounts\/([a-f0-9]+)\/statuses$/.exec(pathname);
+  if (mAccStatuses) {
+    const actorUrl = api.store.urlFor(mAccStatuses[1]);
+    const all = api.store.getStatuses();
+    const pinnedOnly = url.searchParams.get("pinned") === "true";
+    const { items, headers } = api.page(
+      all.filter((s) => s.actor === actorUrl && (!pinnedOnly || s.pinned)),
+      url
+    );
+    return send(200, items.map((s) => api.statusOrBoost(s, { all })), headers);
+  }
+  return false;
 }
+
+// lib/client/masto/timelines.mjs
+var timelines_exports = {};
+__export(timelines_exports, {
+  handle: () => handle5
+});
+init_node_crypto();
+init_wire();
+async function handle5(api, ctx) {
+  const { req, res, pathname, url, send } = ctx;
+  if (pathname === "/api/v1/timelines/home" || pathname === "/api/v1/timelines/public" || pathname === "/api/v1/trends/statuses") {
+    const localOnly = pathname === "/api/v1/timelines/public" && url.searchParams.get("local") === "true";
+    const all = api.store.getStatuses();
+    const muted = new Set(api.store.getMuted().actors);
+    let items = all.filter((s) => s.kind !== "remote" && s.kind !== "mention").filter((s) => !s.direct && s.visibility !== "direct").filter((s) => !muted.has(s.actor) && !muted.has(s.via)).filter((s) => !localOnly || s.kind === "post" && s.visibility !== "private").sort((a, b) => String(b.published || "").localeCompare(String(a.published || "")));
+    const { items: page2, headers } = api.page(items, url);
+    return send(200, page2.map((s) => api.statusOrBoost(s, { all })), headers);
+  }
+  if (pathname === "/api/v1/followed_tags") {
+    const tags = api.agent.tagfeed?.config().tags || [];
+    return send(200, tags.map((t) => api.tagObject(t, true, req)));
+  }
+  const mTagFollow = pathname.match(/^\/api\/v1\/tags\/([^/]+)\/(follow|unfollow)$/);
+  if (mTagFollow && req.method === "POST") {
+    const name = decodeURIComponent(mTagFollow[1]).replace(/^#/, "").toLowerCase();
+    const follow = mTagFollow[2] === "follow";
+    const tf = api.agent.tagfeed;
+    if (tf) {
+      const cur = tf.config().tags;
+      tf.setConfig({ tags: follow ? [.../* @__PURE__ */ new Set([...cur, name])] : cur.filter((t) => t !== name) });
+    }
+    return send(200, api.tagObject(name, follow, req));
+  }
+  const mTagGet = pathname.match(/^\/api\/v1\/tags\/([^/]+)$/);
+  if (mTagGet && req.method === "GET") {
+    const name = decodeURIComponent(mTagGet[1]).replace(/^#/, "").toLowerCase();
+    const following = (api.agent.tagfeed?.config().tags || []).includes(name);
+    return send(200, api.tagObject(name, following, req));
+  }
+  const mTagTl = pathname.match(/^\/api\/v1\/timelines\/tag\/([^/]+)$/);
+  if (mTagTl && req.method === "GET") {
+    const name = decodeURIComponent(mTagTl[1]).replace(/^#/, "").toLowerCase();
+    const all = api.store.getStatuses();
+    const items = all.filter((s) => s.kind === "tag" && s.tag === name).sort((a, b) => String(b.published || "").localeCompare(String(a.published || "")));
+    const { items: page2, headers } = api.page(items, url);
+    return send(200, page2.map((s) => api.statusOrBoost(s, { all })), headers);
+  }
+  const listJson = (l) => ({ id: l.id, title: l.title, replies_policy: l.repliesPolicy || "list", exclusive: false });
+  if (pathname === "/api/v1/lists" && req.method === "GET") {
+    return send(200, api.store.getLists().map(listJson));
+  }
+  if (pathname === "/api/v1/lists" && req.method === "POST") {
+    const body = await readBody(req);
+    const title = String(body.title || "").trim();
+    if (!title) return send(422, { error: "a title is required" });
+    const lists = api.store.getLists();
+    const l = { id: node_crypto_default.randomBytes(8).toString("hex"), title, repliesPolicy: body.replies_policy || "list", members: [] };
+    lists.push(l);
+    api.store.setLists(lists);
+    return send(200, listJson(l));
+  }
+  const mList = /^\/api\/v1\/lists\/([a-f0-9]+)$/.exec(pathname);
+  if (mList) {
+    const lists = api.store.getLists();
+    const l = lists.find((x) => x.id === mList[1]);
+    if (!l) return send(404, { error: "Record not found" });
+    if (req.method === "DELETE") {
+      api.store.setLists(lists.filter((x) => x.id !== mList[1]));
+      return send(200, {});
+    }
+    if (req.method === "PUT") {
+      const body = await readBody(req);
+      if (body.title) l.title = String(body.title);
+      if (body.replies_policy) l.repliesPolicy = body.replies_policy;
+      api.store.setLists(lists);
+    }
+    return send(200, listJson(l));
+  }
+  const mListAcc = /^\/api\/v1\/lists\/([a-f0-9]+)\/accounts$/.exec(pathname);
+  if (mListAcc) {
+    const lists = api.store.getLists();
+    const l = lists.find((x) => x.id === mListAcc[1]);
+    if (!l) return send(404, { error: "Record not found" });
+    if (req.method === "GET") return send(200, (l.members || []).map((a) => api.account(a)));
+    const body = await readBody(req).catch(() => ({}));
+    const ids = [].concat(body.account_ids || body["account_ids[]"] || url.searchParams.getAll("account_ids[]")).filter(Boolean);
+    const actors = ids.map((id) => api.store.urlFor(id)).filter(Boolean);
+    if (req.method === "POST") l.members = [.../* @__PURE__ */ new Set([...l.members || [], ...actors])];
+    if (req.method === "DELETE") l.members = (l.members || []).filter((a) => !actors.includes(a));
+    api.store.setLists(lists);
+    return send(200, {});
+  }
+  const mListTl = /^\/api\/v1\/timelines\/list\/([a-f0-9]+)$/.exec(pathname);
+  if (mListTl) {
+    const l = api.store.getLists().find((x) => x.id === mListTl[1]);
+    if (!l) return send(404, { error: "Record not found" });
+    const members = new Set(l.members || []);
+    const all = api.store.getStatuses();
+    const items = all.filter((s) => members.has(s.actor) || members.has(s.via)).sort((a, b) => String(b.published || "").localeCompare(String(a.published || "")));
+    const { items: page2, headers } = api.page(items, url);
+    return send(200, page2.map((s) => api.statusOrBoost(s, { all })), headers);
+  }
+  const filterJson = (f) => ({
+    id: f.id,
+    title: f.title,
+    context: f.context || ["home"],
+    expires_at: f.expiresAt || null,
+    filter_action: f.action || "warn",
+    keywords: (f.keywords || []).map((k, i) => ({ id: `${f.id}-${i}`, keyword: k.keyword, whole_word: !!k.wholeWord })),
+    statuses: []
+  });
+  const keywordsOf = (attrs) => [].concat(attrs || []).filter((k) => k?.keyword && !(k._destroy === true || k._destroy === "true")).map((k) => ({ keyword: String(k.keyword), wholeWord: k.whole_word === true || k.whole_word === "true" }));
+  if (pathname === "/api/v2/filters" && req.method === "GET") {
+    return send(200, api.store.getFilters().map(filterJson));
+  }
+  if (pathname === "/api/v2/filters" && req.method === "POST") {
+    const body = await readBody(req);
+    const title = String(body.title || "").trim();
+    if (!title) return send(422, { error: "a title is required" });
+    const filters = api.store.getFilters();
+    const f = {
+      id: node_crypto_default.randomBytes(8).toString("hex"),
+      title,
+      context: [].concat(body.context || ["home"]),
+      action: body.filter_action || "warn",
+      expiresAt: null,
+      keywords: keywordsOf(body.keywords_attributes)
+    };
+    filters.push(f);
+    api.store.setFilters(filters);
+    return send(200, filterJson(f));
+  }
+  const mFilter = /^\/api\/v2\/filters\/([a-f0-9]+)$/.exec(pathname);
+  if (mFilter) {
+    const filters = api.store.getFilters();
+    const f = filters.find((x) => x.id === mFilter[1]);
+    if (!f) return send(404, { error: "Record not found" });
+    if (req.method === "DELETE") {
+      api.store.setFilters(filters.filter((x) => x.id !== mFilter[1]));
+      return send(200, {});
+    }
+    if (req.method === "PUT") {
+      const body = await readBody(req);
+      if (body.title) f.title = String(body.title);
+      if (body.context) f.context = [].concat(body.context);
+      if (body.filter_action) f.action = body.filter_action;
+      if (body.keywords_attributes) f.keywords = keywordsOf(body.keywords_attributes);
+      api.store.setFilters(filters);
+    }
+    return send(200, filterJson(f));
+  }
+  if (pathname === "/api/v1/conversations" && req.method === "GET") {
+    const all = api.store.getStatuses();
+    const me = api.urls.actor;
+    const convos = /* @__PURE__ */ new Map();
+    for (const s of all) {
+      if (!(s.direct || s.visibility === "direct")) continue;
+      const others = [.../* @__PURE__ */ new Set([
+        ...s.actor !== me ? [s.actor] : [],
+        ...(s.mentions || []).map((m) => m.href).filter((a) => a && a !== me)
+      ])];
+      const key = others.sort().join(" ") || me;
+      const c = convos.get(key) || { accounts: /* @__PURE__ */ new Set(), last: s };
+      for (const o of others) c.accounts.add(o);
+      if (String(s.published || "") > String(c.last.published || "")) c.last = s;
+      convos.set(key, c);
+    }
+    const items = [...convos.entries()].sort((a, b) => String(b[1].last.published || "").localeCompare(String(a[1].last.published || "")));
+    return send(200, items.map(([key, c]) => ({
+      id: api.store.idFor("conversation:" + key),
+      unread: false,
+      accounts: [...c.accounts.size ? c.accounts : [me]].map((a) => api.account(a)),
+      last_status: api.status(c.last, { all })
+    })));
+  }
+  if (pathname === "/api/v1/notifications") {
+    const limit = Math.min(Number(url.searchParams.get("limit")) || 30, 60);
+    const q = url.searchParams;
+    let items = api.store.getNotifications();
+    const listParam = (name) => {
+      const all = [...q.getAll(`${name}[]`), ...q.getAll(name)].flatMap((v) => String(v).split(",")).map((v) => v.trim()).filter(Boolean);
+      return all.length ? new Set(all) : null;
+    };
+    const want = listParam("types");
+    const skip = listParam("exclude_types");
+    const shown = (n) => api.notificationType(n.type);
+    if (want) items = items.filter((n) => want.has(shown(n)));
+    if (skip) items = items.filter((n) => !skip.has(shown(n)));
+    const cut = (id, keepNewer) => {
+      const i = items.findIndex((n) => n.id === id);
+      if (i < 0) return;
+      items = keepNewer ? items.slice(0, i) : items.slice(i + 1);
+    };
+    const maxId = q.get("max_id");
+    if (maxId) cut(maxId, false);
+    const sinceId = q.get("since_id") || q.get("min_id");
+    if (sinceId) cut(sinceId, true);
+    const page2 = q.get("min_id") && !q.get("since_id") ? items.slice(Math.max(0, items.length - limit)) : items.slice(0, limit);
+    if (page2.length) {
+      const base = `${api.scheme || (req.socket?.encrypted ? "https" : "http")}://${req.headers.host}${pathname}`;
+      const link = (params) => {
+        const u = new URL(base);
+        for (const [k, v] of q) if (k !== "max_id" && k !== "since_id" && k !== "min_id") u.searchParams.append(k, v);
+        for (const [k, v] of Object.entries(params)) u.searchParams.set(k, v);
+        return u.href;
+      };
+      return send(200, page2.map((n) => api.notification(n)), {
+        link: `<${link({ max_id: page2[page2.length - 1].id })}>; rel="next", <${link({ min_id: page2[0].id })}>; rel="prev"`
+      });
+    }
+    return send(200, []);
+  }
+  if (pathname === "/api/v2/search" || pathname === "/api/v1/search") {
+    const q = String(url.searchParams.get("q") || "").trim();
+    const type = url.searchParams.get("type");
+    const out = { accounts: [], statuses: [], hashtags: [] };
+    const asHandle = /^@?[^@\s]+@[^@\s.]+\.[^@\s]+$/.test(q);
+    if (asHandle && type !== "statuses") {
+      try {
+        const doc = await resolveHandle(api.agent, q);
+        out.accounts.push(api.account(doc.id));
+      } catch (e) {
+        api.log(`search resolve ${q}: ${e.message}`);
+      }
+    } else if (/^https?:\/\//.test(q)) {
+      const doc = await api.agent.intake.fetchAP(q).catch(() => null);
+      if (doc?.type === "Person" && doc.id) out.accounts.push(api.account(doc.id));
+      else if (doc?.type === "Note" && doc.id) {
+        let s = api.store.getStatuses().find((x) => x.noteId === doc.id);
+        const author = authorOf(doc);
+        if (!s && author) {
+          s = {
+            noteId: doc.id,
+            actor: author,
+            content: sanitizeHtml(doc.content),
+            published: doc.published,
+            inReplyTo: doc.inReplyTo,
+            kind: "remote"
+          };
+          api.store.addStatus(s);
+        }
+        if (s) out.statuses.push(api.status(s));
+      }
+    } else if (q) {
+      const needle = q.toLowerCase();
+      if (type !== "accounts") {
+        const all = api.store.getStatuses();
+        out.statuses = all.filter((s) => (s.content || "").toLowerCase().includes(needle)).slice(0, 20).map((s) => api.status(s, { all }));
+      }
+      if (type !== "statuses") out.accounts = await api.accountSearch(q);
+    }
+    return send(200, out);
+  }
+  return false;
+}
+
+// lib/client/masto/statuses.mjs
+var statuses_exports = {};
+__export(statuses_exports, {
+  handle: () => handle6
+});
+init_node_crypto();
+async function handle6(api, ctx) {
+  const { req, res, pathname, url, send } = ctx;
+  if (pathname === "/api/v1/statuses" && req.method === "POST") {
+    const body = await readBody(req);
+    if (!body.status) return send(422, { error: "status text required" });
+    const visibility = body.visibility || "public";
+    if (!["public", "unlisted", "private", "direct"].includes(visibility)) {
+      return send(422, { error: `unknown visibility "${visibility}"` });
+    }
+    const inReplyTo = body.in_reply_to_id ? api.store.urlFor(body.in_reply_to_id) : void 0;
+    const bskyParent = inReplyTo && api.store.getStatuses().find((x) => x.noteId === inReplyTo && x.kind === "bsky");
+    if (bskyParent) return api.bskyReply(send, body, bskyParent, visibility);
+    const acctParent = inReplyTo && api.store.getStatuses().find((x) => x.noteId === inReplyTo && x.kind === "acct");
+    if (acctParent) return api.acctReply(send, body, acctParent, visibility);
+    if (visibility === "private" || visibility === "direct") {
+      const ready = await api.agent.publisher.privateReady();
+      if (ready !== true) return send(422, { error: ready });
+    }
+    const spoilerText = String(body.spoiler_text || "").trim() || null;
+    const mediaIds = [].concat(body.media_ids || body["media_ids[]"] || []).filter(Boolean);
+    const media = api.store.getMedia();
+    const attachments = mediaIds.map((id) => media[id] && { id, ...media[id] }).filter(Boolean);
+    const asking = pollParams(body);
+    if (asking) {
+      if (attachments.length) return send(422, { error: "a poll cannot carry media" });
+      if (body.scheduled_at) return send(422, { error: "a poll cannot be scheduled" });
+      if (asking.options.length < 2) return send(422, { error: "a poll needs at least two options" });
+      if (asking.options.length > MAX_OPTIONS) {
+        return send(422, { error: `a poll takes at most ${MAX_OPTIONS} options` });
+      }
+      if (asking.options.some((o) => o.length > MAX_OPTION_CHARS)) {
+        return send(422, { error: `a poll option is at most ${MAX_OPTION_CHARS} characters` });
+      }
+      if (new Set(asking.options).size !== asking.options.length) {
+        return send(422, { error: "a poll\u2019s options must differ from one another" });
+      }
+      const seconds = asking.expiresIn ?? MAX_SECONDS;
+      if (!Number.isFinite(seconds) || seconds < MIN_SECONDS || seconds > MAX_SECONDS) {
+        return send(422, {
+          error: `a poll runs between ${MIN_SECONDS} and ${MAX_SECONDS} seconds`
+        });
+      }
+      try {
+        const q = await api.agent.publisher.publishQuestion(body.status, {
+          options: asking.options,
+          multiple: asking.multiple,
+          expiresAt: new Date(Date.now() + seconds * 1e3).toISOString(),
+          inReplyTo,
+          visibility,
+          spoilerText
+        });
+        return send(200, api.status(api.store.getStatuses().find((x) => x.noteId === q.id)));
+      } catch (e) {
+        return send(422, { error: e.message });
+      }
+    }
+    if (body.scheduled_at) {
+      if (!api.scheduling) {
+        return send(422, { error: "this instance cannot schedule posts \u2014 it has no process running between now and then to publish one. Post it when you want it sent." });
+      }
+      const at = Date.parse(body.scheduled_at);
+      if (!Number.isFinite(at) || at < Date.now() + 6e4) {
+        return send(422, { error: "scheduled_at must be at least a minute from now" });
+      }
+      const sched = api.store.getScheduled();
+      const entry = {
+        id: node_crypto_default.randomBytes(8).toString("hex"),
+        scheduledAt: new Date(at).toISOString(),
+        params: { status: body.status, visibility, spoilerText, inReplyTo, attachments }
+      };
+      sched.push(entry);
+      api.store.setScheduled(sched);
+      return send(200, api.scheduledJson(entry));
+    }
+    const note = await api.agent.publisher.publishNote(
+      body.status,
+      { inReplyTo, attachments, visibility, spoilerText }
+    );
+    const s = api.store.getStatuses().find((x) => x.noteId === note.id);
+    return send(200, api.status(s));
+  }
+  const mSource = /^\/api\/v1\/statuses\/([a-f0-9]+)\/source$/.exec(pathname);
+  if (mSource && req.method === "GET") {
+    const noteUrl = api.store.urlFor(mSource[1]);
+    const s = noteUrl && api.store.getStatuses().find((x) => x.noteId === noteUrl);
+    if (!s) return send(404, { error: "Record not found" });
+    return send(200, { id: mSource[1], text: s.text ?? htmlToText(s.content || ""), spoiler_text: s.spoiler || "" });
+  }
+  const mHistory = /^\/api\/v1\/statuses\/([a-f0-9]+)\/history$/.exec(pathname);
+  if (mHistory && req.method === "GET") {
+    const noteUrl = api.store.urlFor(mHistory[1]);
+    const s = noteUrl && api.store.getStatuses().find((x) => x.noteId === noteUrl);
+    if (!s) return send(404, { error: "Record not found" });
+    return send(200, [{
+      content: s.content || "",
+      spoiler_text: s.spoiler || "",
+      sensitive: !!s.spoiler,
+      created_at: s.editedAt || s.published,
+      account: api.account(s.actor),
+      media_attachments: (s.attachments || []).map((a) => api.mediaJson(a)),
+      emojis: [],
+      poll: null
+    }]);
+  }
+  const mStatus = /^\/api\/v1\/statuses\/([a-f0-9]+)$/.exec(pathname);
+  if (mStatus && req.method === "GET") {
+    const { s, wrapped } = api.lookup(mStatus[1]);
+    if (!s) return send(404, { error: "Record not found" });
+    return send(200, wrapped ? api.statusOrBoost(s) : api.status(s));
+  }
+  if (mStatus && req.method === "PUT") {
+    const noteUrl = api.store.urlFor(mStatus[1]);
+    const s = noteUrl && api.store.getStatuses().find((x) => x.noteId === noteUrl);
+    if (!s) return send(404, { error: "Record not found" });
+    if (s.actor !== api.urls.actor) return send(403, { error: "not your status" });
+    const body = await readBody(req);
+    if (!body.status) return send(422, { error: "status text required" });
+    const mediaIds = [].concat(body.media_ids || body["media_ids[]"] || []).filter(Boolean);
+    const media = api.store.getMedia();
+    const attachments = mediaIds.length ? mediaIds.map((id) => media[id] && { id, ...media[id] }).filter(Boolean) : null;
+    const spoilerText = String(body.spoiler_text || "").trim() || null;
+    const patched = await api.agent.publisher.updateNote(
+      s,
+      { content: body.status, spoilerText, attachments }
+    );
+    return send(200, api.status(patched || s));
+  }
+  if (mStatus && req.method === "DELETE") {
+    const noteUrl = api.store.urlFor(mStatus[1]);
+    const s = noteUrl && api.store.getStatuses().find((x) => x.noteId === noteUrl);
+    if (!s) return send(404, { error: "Record not found" });
+    const onAcct = s.actor !== api.urls.actor ? (api.agent.fediaccts?.list() || []).find((r) => r.actorUrl && r.actorUrl === s.actor) : null;
+    if (s.actor !== api.urls.actor && !onAcct) return send(403, { error: "not your status" });
+    const rendered = api.status(s);
+    if (onAcct) {
+      const held = (s.sourceAccts || []).find((v) => v.acct === onAcct.id);
+      if (!held?.remoteId) return send(422, { error: `we do not know where ${onAcct.handle} keeps that post` });
+      try {
+        await api.agent.fediaccts.api(
+          onAcct.id,
+          `/api/v1/statuses/${encodeURIComponent(held.remoteId)}`,
+          { method: "DELETE" }
+        );
+      } catch (e) {
+        return send(502, { error: e.message });
+      }
+      api.store.removeStatus(s.noteId);
+      return send(200, { ...rendered, text: s.content || "" });
+    }
+    const gone = await deleteNote(api.agent, s);
+    if (!gone.ok) return send(502, { error: gone.error });
+    return send(200, { ...rendered, text: s.content || "" });
+  }
+  const mContext = /^\/api\/v1\/statuses\/([a-f0-9]+)\/context$/.exec(pathname);
+  if (mContext) {
+    const noteUrl = api.lookup(mContext[1]).s?.noteId;
+    const all = api.store.getStatuses();
+    const byId = new Map(all.map((s) => [s.noteId, s]));
+    const ancestors = [];
+    let cur = noteUrl && byId.get(noteUrl)?.inReplyTo;
+    while (cur && byId.has(cur) && ancestors.length < 40) {
+      const s = byId.get(cur);
+      ancestors.unshift(s);
+      cur = s.inReplyTo;
+    }
+    const descendants = [];
+    const queue = noteUrl ? [noteUrl] : [];
+    while (queue.length && descendants.length < 60) {
+      const id = queue.shift();
+      for (const s of all) if (s.inReplyTo === id) {
+        descendants.push(s);
+        queue.push(s.noteId);
+      }
+    }
+    return send(200, {
+      ancestors: ancestors.map((s) => api.status(s, { all })),
+      descendants: descendants.map((s) => api.status(s, { all }))
+    });
+  }
+  const mWho = /^\/api\/v1\/statuses\/([a-f0-9]+)\/(reblogged_by|favourited_by)$/.exec(pathname);
+  if (mWho && req.method === "GET") {
+    const noteUrl = api.store.urlFor(mWho[1]);
+    if (!noteUrl) return send(404, { error: "Record not found" });
+    const type = mWho[2] === "reblogged_by" ? "reblog" : "favourite";
+    const actors = [...new Set(api.store.getNotifications().filter((n) => n.noteId === noteUrl && n.type === type).map((n) => n.actor))];
+    return send(200, actors.map((a) => api.account(a)));
+  }
+  const mPin = /^\/api\/v1\/statuses\/([a-f0-9]+)\/(pin|unpin)$/.exec(pathname);
+  if (mPin && req.method === "POST") {
+    const noteUrl = api.store.urlFor(mPin[1]);
+    const s = noteUrl && api.store.getStatuses().find((x) => x.noteId === noteUrl);
+    if (!s) return send(404, { error: "Record not found" });
+    if (s.actor !== api.urls.actor) return send(403, { error: "not your status" });
+    const updated = await pinStatus(api.agent, s, mPin[2] === "pin");
+    return send(200, api.status(updated));
+  }
+  if (pathname === "/api/v1/reports" && req.method === "POST") {
+    return send(422, {
+      error: "this is your own single-user server, so there is no moderation team to receive a report. Blocking the account is the action that takes effect here."
+    });
+  }
+  const mBookmark = /^\/api\/v1\/statuses\/([a-f0-9]+)\/(bookmark|unbookmark)$/.exec(pathname);
+  if (mBookmark && req.method === "POST") {
+    const noteUrl = api.store.urlFor(mBookmark[1]);
+    const s = noteUrl && api.store.getStatuses().find((x) => x.noteId === noteUrl);
+    if (!s) return send(404, { error: "Record not found" });
+    const updated = api.store.updateStatus(s.noteId, { bookmarked: mBookmark[2] === "bookmark" });
+    return send(200, api.status(updated || s));
+  }
+  if (pathname === "/api/v1/bookmarks" || pathname === "/api/v1/favourites") {
+    const key = pathname.endsWith("bookmarks") ? "bookmarked" : "favourited";
+    const all = api.store.getStatuses();
+    const items = all.filter((s) => s[key]).sort((a, b) => String(b.published || "").localeCompare(String(a.published || "")));
+    const { items: page2, headers } = api.page(items, url);
+    return send(200, page2.map((s) => api.status(s, { all })), headers);
+  }
+  if (pathname === "/api/v1/scheduled_statuses" && req.method === "GET") {
+    return send(200, api.store.getScheduled().map((e) => api.scheduledJson(e)));
+  }
+  const mSched = /^\/api\/v1\/scheduled_statuses\/([a-f0-9]+)$/.exec(pathname);
+  if (mSched) {
+    const sched = api.store.getScheduled();
+    const e = sched.find((x) => x.id === mSched[1]);
+    if (!e) return send(404, { error: "Record not found" });
+    if (req.method === "DELETE") {
+      api.store.setScheduled(sched.filter((x) => x.id !== mSched[1]));
+      return send(200, {});
+    }
+    if (req.method === "PUT") {
+      const body = await readBody(req);
+      const at = Date.parse(body.scheduled_at || "");
+      if (!Number.isFinite(at)) return send(422, { error: "scheduled_at required" });
+      e.scheduledAt = new Date(at).toISOString();
+      api.store.setScheduled(sched);
+    }
+    return send(200, api.scheduledJson(e));
+  }
+  const mPoll = /^\/api\/v1\/polls\/([a-f0-9]+)(\/votes)?$/.exec(pathname);
+  if (mPoll) {
+    const noteUrl = api.store.urlFor(mPoll[1]);
+    const s = noteUrl && api.store.getStatuses().find((x) => x.noteId === noteUrl);
+    if (!s?.poll) return send(404, { error: "Record not found" });
+    if (mPoll[2] && req.method === "POST") {
+      const body = await readBody(req);
+      const choices = [].concat(body.choices || body["choices[]"] || []).map(Number).filter(Number.isInteger);
+      if (!choices.length) return send(422, { error: "choices required" });
+      const r = await votePoll(api.agent, s, choices);
+      if (!r.ok) return send(422, { error: r.error });
+      return send(200, api.pollJson(api.store.getStatuses().find((x) => x.noteId === noteUrl)));
+    }
+    return send(200, api.pollJson(s));
+  }
+  const mAction = /^\/api\/v1\/statuses\/([a-f0-9]+)\/(favourite|unfavourite|reblog|unreblog)$/.exec(pathname);
+  if (mAction && req.method === "POST") {
+    const { s } = api.lookup(mAction[1]);
+    if (!s) return send(404, { error: "Record not found" });
+    if (s.kind === "bsky") {
+      const at = api.agent.atproto;
+      if (!at?.connected()) return send(422, { error: "this is a Bluesky post \u2014 no Bluesky account is connected to act from" });
+      try {
+        let patch = null;
+        if (mAction[2] === "favourite" && !s.favourited) {
+          patch = { favourited: true, bskyLike: (await at.like(s.noteId, s.cid || null)).uri };
+        } else if (mAction[2] === "unfavourite" && s.favourited) {
+          if (s.bskyLike) await at.deleteCrossPost(s.bskyLike);
+          patch = { favourited: false, bskyLike: void 0 };
+        } else if (mAction[2] === "reblog" && !s.reblogged) {
+          patch = { reblogged: true, bskyRepost: (await at.repost(s.noteId, s.cid || null)).uri };
+        } else if (mAction[2] === "unreblog" && s.reblogged) {
+          if (s.bskyRepost) await at.deleteCrossPost(s.bskyRepost);
+          patch = { reblogged: false, bskyRepost: void 0 };
+        }
+        return send(200, api.status(patch ? api.store.updateStatus(s.noteId, patch) || s : s));
+      } catch (e) {
+        return send(422, { error: e.message });
+      }
+    }
+    if (s.kind === "acct") return api.acctAction(send, s, mAction[2]);
+    const updated = await social_exports[mAction[2]](api.agent, s);
+    return send(200, api.status(updated || s));
+  }
+  return false;
+}
+
+// lib/client/masto/index.mjs
+var MastoApi = class _MastoApi {
+  constructor({
+    agent: agent2,
+    log: log2 = console.log,
+    allowed = null,
+    scheme = null,
+    embedded = false,
+    streaming = true,
+    webPush = true,
+    scheduling = true
+  }) {
+    this.agent = agent2;
+    this.embedded = embedded;
+    this.log = log2;
+    this.allowed = allowed;
+    this.scheme = scheme;
+    this.streaming = streaming;
+    this.webPush = webPush;
+    this.scheduling = scheduling;
+    this.authzAttempts = [];
+  }
+  get store() {
+    return this.agent.store;
+  }
+  get urls() {
+    return this.agent.publisher?.urls;
+  }
+  get push() {
+    this._push ||= new Push({
+      store: this.store,
+      subject: () => this.urls?.actor || "https://localhost/",
+      log: this.log
+    });
+    return this._push;
+  }
+  get host() {
+    return this.urls ? new URL(this.urls.base).host : "unconfigured.invalid";
+  }
+  // Where the live feed is, as the CLIENT must address it: this agent's own
+  // origin, taken from the request, not the pod's host. An instance document
+  // that leaves it empty is not merely unhelpful — clients read it without a
+  // guard and fall over, and every one of them loses live updates.
+  streamingUrl(req) {
+    if (!this.streaming) return null;
+    const host = req?.headers?.host || `localhost:${this.port || ""}`;
+    const secure = this.scheme ? this.scheme.startsWith("https") : req?.headers?.["x-forwarded-proto"] === "https" || !!req?.socket?.encrypted;
+    return `${secure ? "wss" : "ws"}://${host}/api/v1/streaming`;
+  }
+  static scopeFor(...a) {
+    return scopeFor(...a);
+  }
+  static scopeAllows(...a) {
+    return scopeAllows(...a);
+  }
+  static redirectMatches(...a) {
+    return redirectMatches(...a);
+  }
+  static provesCode(...a) {
+    return provesCode(...a);
+  }
+  // ---- request handling; returns true when handled ----
+  async handle(req, res, pathname, url) {
+    const send = (status2, obj, headers = {}) => {
+      const body = JSON.stringify(obj);
+      res.writeHead(status2, { "content-type": "application/json", ...headers });
+      res.end(body);
+      return true;
+    };
+    const ctx = { req, res, pathname, url, send };
+    if (await handle(this, ctx)) return true;
+    if (!pathname.startsWith("/api/")) return false;
+    if (await handle2(this, ctx)) return true;
+    const bearer = this.tokenOf(req);
+    if (!bearer) return send(401, { error: "The access token is invalid" });
+    const need = _MastoApi.scopeFor(req.method, pathname);
+    if (!_MastoApi.scopeAllows(bearer.scope, need)) {
+      this.log(`refused ${req.method} ${pathname}: token has "${bearer.scope}", needs "${need}"`);
+      return send(403, { error: `This action is outside the authorized scopes (needs ${need})` });
+    }
+    if (!this.agent.configured()) return send(503, { error: "agent not configured" });
+    if (this.agent.viewer && req.method !== "GET" && req.method !== "HEAD") {
+      const took = await this.agent.requestTakeover?.();
+      if (!took) return send(503, { error: "another agent is active for this pod \u2014 takeover failed, try again" });
+    }
+    for (const area of [accounts_exports, timelines_exports, statuses_exports, media_exports]) {
+      if (await area.handle(this, ctx)) return true;
+    }
+    this.log(`mastoapi: unhandled ${req.method} ${pathname} \u2014 punch list`);
+    return send(404, { error: `Unimplemented: ${req.method} ${pathname}` });
+  }
+  // oauth.mjs
+  tokenRecords(...a) {
+    return tokenRecords(this, ...a);
+  }
+  tokens(...a) {
+    return tokens(this, ...a);
+  }
+  mintToken(...a) {
+    return mintToken(this, ...a);
+  }
+  apps(...a) {
+    return apps(this, ...a);
+  }
+  authorizationServerMetadata(...a) {
+    return authorizationServerMetadata(this, ...a);
+  }
+  findApp(...a) {
+    return findApp(this, ...a);
+  }
+  resolveClientDocument(...a) {
+    return resolveClientDocument(this, ...a);
+  }
+  registerApp(...a) {
+    return registerApp(this, ...a);
+  }
+  mintCode(...a) {
+    return mintCode(this, ...a);
+  }
+  consumeCode(...a) {
+    return consumeCode(this, ...a);
+  }
+  tokenOf(...a) {
+    return tokenOf(this, ...a);
+  }
+  authed(...a) {
+    return authed(this, ...a);
+  }
+  redirectAllowed(...a) {
+    return redirectAllowed(this, ...a);
+  }
+  rateLimited(...a) {
+    return rateLimited(this, ...a);
+  }
+  // render.mjs
+  selfAccount(...a) {
+    return selfAccount(this, ...a);
+  }
+  account(...a) {
+    return account(this, ...a);
+  }
+  page(...a) {
+    return page(this, ...a);
+  }
+  bskyReply(...a) {
+    return bskyReply(this, ...a);
+  }
+  acctAction(...a) {
+    return acctAction(this, ...a);
+  }
+  acctReply(...a) {
+    return acctReply(this, ...a);
+  }
+  status(...a) {
+    return status(this, ...a);
+  }
+  filtersFor(...a) {
+    return filtersFor(this, ...a);
+  }
+  lookup(...a) {
+    return lookup(this, ...a);
+  }
+  statusOrBoost(...a) {
+    return statusOrBoost(this, ...a);
+  }
+  pushNotify(...a) {
+    return pushNotify(this, ...a);
+  }
+  scheduledJson(...a) {
+    return scheduledJson(this, ...a);
+  }
+  pollJson(...a) {
+    return pollJson(this, ...a);
+  }
+  mediaJson(...a) {
+    return mediaJson(this, ...a);
+  }
+  relationship(...a) {
+    return relationship(this, ...a);
+  }
+  notificationType(...a) {
+    return notificationType(this, ...a);
+  }
+  notification(...a) {
+    return notification(this, ...a);
+  }
+  accountSearch(...a) {
+    return accountSearch(this, ...a);
+  }
+  // instance.mjs
+  instanceTitle(...a) {
+    return instanceTitle(this, ...a);
+  }
+  tagObject(...a) {
+    return tagObject(this, ...a);
+  }
+  instanceBlurb(...a) {
+    return instanceBlurb(this, ...a);
+  }
+};
 
 // lib/connections/tagfeed.mjs
 var MAX_TIMELINE_BYTES = 2 * 1024 * 1024;
@@ -49783,7 +49867,7 @@ var MAX_NEW_PER_SWEEP = 12;
 var MAX_TAG_ENTRIES = 200;
 var BACKOFF_MIN_MS2 = 15 * 6e4;
 var BACKOFF_MAX_MS2 = 6 * 60 * 6e4;
-var instanceRefusal = (status) => status ? `the instance answered ${status}` : "the instance did not answer";
+var instanceRefusal = (status2) => status2 ? `the instance answered ${status2}` : "the instance did not answer";
 var TagFeed = class {
   constructor({ store, intake, log: log2 = console.log, fetcher: fetcher2 = globalThis.fetch }) {
     Object.assign(this, { store, intake, log: log2, fetcher: fetcher2 });
@@ -49828,12 +49912,12 @@ var TagFeed = class {
   // Jittered exponential, capped, and cleared by an instance that answers.
   // The next sweep is skipped rather than the timer stretched, so the tag
   // config keeps meaning what it says once the far end is well again.
-  _backOff(status, retryAfter) {
+  _backOff(status2, retryAfter) {
     this.failures = (this.failures || 0) + 1;
     const ladder = Math.min(BACKOFF_MIN_MS2 * 2 ** (this.failures - 1), BACKOFF_MAX_MS2);
     const wait = retryAfter || Math.round(ladder * (0.85 + Math.random() * 0.3));
     this.quietUntil = Date.now() + wait;
-    this.log(`tagfeed: ${instanceRefusal(status)} \u2014 not asking again for ${Math.round(wait / 6e4)} min`);
+    this.log(`tagfeed: ${instanceRefusal(status2)} \u2014 not asking again for ${Math.round(wait / 6e4)} min`);
   }
   async sweep() {
     const { instance, tags } = this.config();
@@ -50909,15 +50993,15 @@ var RelayDeliverer = class extends Deliverer {
     }
     const out = await res.json().catch(() => ({}));
     const r0 = out.results && out.results[0] || {};
-    const status = r0.status || 0;
-    if (status === 0) {
+    const status2 = r0.status || 0;
+    if (status2 === 0) {
       const err = new Error(r0.error || "relay could not send");
       err.status = 502;
       throw err;
     }
-    if (status >= 400) {
-      const err = new Error(`${init.method || "POST"} ${url} \u2192 ${status}`);
-      err.status = status;
+    if (status2 >= 400) {
+      const err = new Error(`${init.method || "POST"} ${url} \u2192 ${status2}`);
+      err.status = status2;
       if (r0.retryAfter) {
         const secs = Number(r0.retryAfter);
         const ms = Number.isFinite(secs) ? Math.max(secs, 1) * 1e3 : Math.max(Date.parse(r0.retryAfter) - Date.now(), 1e3);
@@ -50927,7 +51011,7 @@ var RelayDeliverer = class extends Deliverer {
     }
     const headers = new Headers();
     if (r0.contentType) headers.set("content-type", r0.contentType);
-    return new Response(typeof r0.body === "string" ? r0.body : null, { status, headers });
+    return new Response(typeof r0.body === "string" ? r0.body : null, { status: status2, headers });
   }
 };
 
@@ -50991,12 +51075,12 @@ function normalizeImport(kind, text) {
       if (DOMAIN.test(d)) values.push(d);
       else invalid.push(first);
     } else if (kind === "list") {
-      const handle = cleanHandle(cols[1]);
-      if (first && HANDLE.test(handle)) values.push({ value: handle, list: first });
+      const handle7 = cleanHandle(cols[1]);
+      if (first && HANDLE.test(handle7)) values.push({ value: handle7, list: first });
       else invalid.push(cols.join(","));
     } else {
-      const handle = cleanHandle(first);
-      if (HANDLE.test(handle)) values.push(handle);
+      const handle7 = cleanHandle(first);
+      if (HANDLE.test(handle7)) values.push(handle7);
       else invalid.push(first);
     }
   }
@@ -51372,8 +51456,8 @@ var AdminFacade = class {
   /** Answer an admin data request. Returns true when it owns the path. */
   async handle(req, res, p, url, bodyText) {
     const a = this.agent;
-    const json2 = (status, obj) => {
-      res.writeHead(status, { "content-type": "application/json" });
+    const json2 = (status2, obj) => {
+      res.writeHead(status2, { "content-type": "application/json" });
       res.end(JSON.stringify(obj));
       return true;
     };
@@ -51470,19 +51554,19 @@ var AdminFacade = class {
         // shows the result with a way back to the record page.
         case "/fediacct/callback": {
           const q = url.searchParams;
-          const page = (ok, msg) => {
+          const page2 = (ok, msg) => {
             res.writeHead(ok ? 200 : 400, { "content-type": "text/html; charset=utf-8" });
             res.end(callbackHtml(ok, msg));
             return true;
           };
-          if (q.get("error")) return page(false, q.get("error_description") || q.get("error"));
-          if (!q.get("code") || !q.get("state")) return page(false, "that sign-in came back incomplete");
+          if (q.get("error")) return page2(false, q.get("error_description") || q.get("error"));
+          if (!q.get("code") || !q.get("state")) return page2(false, "that sign-in came back incomplete");
           try {
             const row = await a.fediaccts.complete({ state: q.get("state"), code: q.get("code") });
             a.startAccts?.();
-            return page(true, `${row.handle} is connected.`);
+            return page2(true, `${row.handle} is connected.`);
           } catch (e) {
-            return page(false, e.message);
+            return page2(false, e.message);
           }
         }
         default:
@@ -51708,36 +51792,36 @@ var AdminFacade = class {
           if (fu.protocol !== "https:" && !/^(localhost|127\.0\.0\.1)$|\.localhost$/.test(fu.hostname)) return json2(400, { error: "front must be https" });
           if (body.fronted === true) return json2(400, { error: "a fronted @you@front identity is not the browser model \u2014 the browser uses the mail-door form @you@yourpod" });
           const named = !!String(body.handle || "").trim();
-          let handle = String(body.handle || cfg.handle || "").toLowerCase().trim();
-          if (!handle) return json2(400, { error: "a name at the gateway is required" });
+          let handle7 = String(body.handle || cfg.handle || "").toLowerCase().trim();
+          if (!handle7) return json2(400, { error: "a name at the gateway is required" });
           const avail = async (h) => fetch(
             `${front}/api/handle?handle=${encodeURIComponent(h)}`,
             { headers: { accept: "application/json" } }
           ).then((r) => r.json()).catch(() => null);
-          let chk = await avail(handle);
+          let chk = await avail(handle7);
           if (!chk) return json2(502, { error: `${front} did not answer its handle check` });
           if (!chk.available && !named) {
             for (let i = 2; i <= 9 && !chk.available; i++) {
-              const cand = `${handle}${i}`;
+              const cand = `${handle7}${i}`;
               const c = await avail(cand);
               if (c?.available) {
-                handle = cand;
+                handle7 = cand;
                 chk = c;
               }
             }
           }
-          if (!chk.available) return json2(409, { error: chk.reason || `the name ${handle} is taken at ${front}` });
+          if (!chk.available) return json2(409, { error: chk.reason || `the name ${handle7} is taken at ${front}` });
           const attach = await a.remote.session.fetch(`${front}/api/attach`, {
             method: "POST",
             headers: { "content-type": "application/json" },
-            body: JSON.stringify({ handle, podHome: a.urls.home, kind: cfg.kind || "person", fronted: false })
+            body: JSON.stringify({ handle: handle7, podHome: a.urls.home, kind: cfg.kind || "person", fronted: false })
           }).catch(() => null);
           if (!attach) return json2(502, { error: `${front} did not answer the attach` });
           const d = await attach.json().catch(() => ({}));
           if (attach.status !== 201) {
             return json2(attach.status >= 400 && attach.status < 500 ? attach.status : 502, { error: d.error || `attach failed (HTTP ${attach.status})` });
           }
-          g.url = String(d.doorInbox || `${front}/u/${handle}/ap/inbox/`);
+          g.url = String(d.doorInbox || `${front}/u/${handle7}/ap/inbox/`);
           if (d.hmacSecret) g.hmacSecret = String(d.hmacSecret);
           if (!g.mode || g.mode === "off") g.mode = "shadow";
           await persist();
@@ -52775,13 +52859,13 @@ var AcctFeed = class {
     if (!this.state.has(id)) this.state.set(id, { failures: 0, quietUntil: 0 });
     return this.state.get(id);
   }
-  _backOff(id, handle, status, retryAfter) {
+  _backOff(id, handle7, status2, retryAfter) {
     const st2 = this._stateOf(id);
     st2.failures += 1;
     const ladder = Math.min(BACKOFF_MIN_MS3 * 2 ** (st2.failures - 1), BACKOFF_MAX_MS3);
     const wait = retryAfter || Math.round(ladder * (0.85 + Math.random() * 0.3));
     st2.quietUntil = Date.now() + wait;
-    this.log(`acctfeed: ${handle} ${status ? `answered ${status}` : "did not answer"} \u2014 not asking again for ${Math.round(wait / 6e4)} min`);
+    this.log(`acctfeed: ${handle7} ${status2 ? `answered ${status2}` : "did not answer"} \u2014 not asking again for ${Math.round(wait / 6e4)} min`);
   }
   // One author into the shared actor cache. `uri` is the ActivityPub id, so a
   // person the pod already knows from its own inbox stays one actor here.
@@ -52840,13 +52924,13 @@ var AcctFeed = class {
     }
     return map;
   }
-  _rateGuard(id, handle, res) {
+  _rateGuard(id, handle7, res) {
     const left = Number(res.headers.get("x-ratelimit-remaining"));
     if (!Number.isFinite(left) || left > RATE_FLOOR) return false;
     const reset = Date.parse(res.headers.get("x-ratelimit-reset") || "");
     const wait = Number.isFinite(reset) ? Math.max(0, reset - Date.now()) : BACKOFF_MIN_MS3;
     this._stateOf(id).quietUntil = Date.now() + wait;
-    this.log(`acctfeed: ${handle} has ${left} requests left \u2014 waiting ${Math.round(wait / 1e3)}s`);
+    this.log(`acctfeed: ${handle7} has ${left} requests left \u2014 waiting ${Math.round(wait / 1e3)}s`);
     return true;
   }
   async sweep() {
@@ -53541,6 +53625,7 @@ async function serve(request, url) {
   for (const [k, v] of request.headers) reqHeaders[k.toLowerCase()] = v;
   reqHeaders.host = url.host;
   const listeners = {};
+  let fired = false;
   const req = {
     method: request.method,
     url: url.pathname + url.search,
@@ -53553,21 +53638,26 @@ async function serve(request, url) {
     socket: { encrypted: url.protocol === "https:" },
     on(ev, cb) {
       (listeners[ev] ||= []).push(cb);
+      if (fired) {
+        if (ev === "data" && bodyBytes?.length) cb(bodyBytes);
+        else if (ev === "end") cb();
+      }
       return req;
     },
     destroy() {
     }
   };
   queueMicrotask(() => {
+    fired = true;
     if (bodyBytes?.length) (listeners.data || []).forEach((cb) => cb(bodyBytes));
     (listeners.end || []).forEach((cb) => cb());
   });
-  let status = 200;
+  let status2 = 200;
   const outHeaders = {};
   const chunks = [];
   const res = {
     writeHead(s, h) {
-      status = s;
+      status2 = s;
       if (h) Object.assign(outHeaders, h);
       return res;
     },
@@ -53587,12 +53677,12 @@ async function serve(request, url) {
   try {
     const handled = isAdmin(url.pathname) ? await agent.admin.handle(req, res, url.pathname, url, bodyText) : await agent.masto.handle(req, res, url.pathname, url);
     if (!handled) return fetch(request);
-    return new Response(chunks.join(""), { status, headers: { "content-type": "application/json", ...outHeaders } });
+    return new Response(chunks.join(""), { status: status2, headers: { "content-type": "application/json", ...outHeaders } });
   } catch (err) {
     return json(500, { error: err.message });
   }
 }
-var json = (status, obj) => new Response(JSON.stringify(obj), { status, headers: { "content-type": "application/json" } });
+var json = (status2, obj) => new Response(JSON.stringify(obj), { status: status2, headers: { "content-type": "application/json" } });
 /*! Bundled license information:
 
 is-plain-object/dist/is-plain-object.js:
