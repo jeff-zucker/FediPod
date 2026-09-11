@@ -17,7 +17,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import httpsMod from 'node:https';
-import { ensureLocalTls } from '../../lib/certs.mjs';
+import { ensureLocalTls } from '../../lib/device/certs.mjs';
 import { Readable } from 'node:stream';
 
 // Every listener this project starts is https. Every scratch install the suite makes is remembered, so a probe can be
@@ -458,11 +458,11 @@ if (up) {
 }
 
 // --- 4. keys + signing round-trip on PodStore (in-memory) ---
-const { PodStore } = await import(path.join(root, 'lib/store.mjs'));
-const { HttpStorage, FileStorage } = await import(path.join(root, 'lib/storage.mjs'));
+const { PodStore } = await import(path.join(root, 'lib/core/store.mjs'));
+const { HttpStorage, FileStorage } = await import(path.join(root, 'lib/core/storage.mjs'));
 // Production attaches a Storage; most of these tests think in (url, fetch).
 const attachHttp = (s, base, fetchImpl) => s.attach(new HttpStorage(base, fetchImpl));
-const { resolveKeys } = await import(path.join(root, 'lib/keys.mjs'));
+const { resolveKeys } = await import(path.join(root, 'lib/core/keys.mjs'));
 const store = new PodStore({ log: () => {} });
 const keys = await resolveKeys(store);                       // no localDir → pod mode
 check(/^-----BEGIN PUBLIC KEY-----/.test(keys.rsaPublicPem), 'RSA public PEM present');
@@ -525,7 +525,7 @@ check(verified && !(verified instanceof Error),
   `verifyRequest round-trip (${verified instanceof Error ? verified.message : 'signature valid'})`);
 
 // --- 5. wire builders (nested layout) ---
-const wire = await import(path.join(root, 'lib/wire.mjs'));
+const wire = await import(path.join(root, 'lib/core/wire.mjs'));
 const urls = wire.apUrls('https://pod.example/');
 check(urls.webfinger === 'https://pod.example/.well-known/webfinger'
   && urls.actor === 'https://pod.example/activitypods-js/ap/actor'
@@ -555,7 +555,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
 // --- 5c. the private trees are re-checked and repaired on every start ---
 {
-  const { Publisher } = await import(path.join(root, 'lib/publisher.mjs'));
+  const { Publisher } = await import(path.join(root, 'lib/core/publisher.mjs'));
   const config = { remotePod: 'https://pod.example/', handle: 'you', name: 'You' };
   const mkPub = (probeStatus) => {
     const acls = [];
@@ -585,7 +585,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
 // --- 5c0. a follower event publishes what it changed, and nothing else ---
 {
-  const { Publisher } = await import(path.join(root, 'lib/publisher.mjs'));
+  const { Publisher } = await import(path.join(root, 'lib/core/publisher.mjs'));
   const mk = () => {
     const seen = [];
     const pub = new Publisher({
@@ -645,7 +645,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     'which writes a page and the head, not one document carrying everything');
 
   // Every caller that knows what it changed says so.
-  for (const [file, fn] of [['lib/intake.mjs', 'intake'], ['lib/social.mjs', 'social']]) {
+  for (const [file, fn] of [['lib/core/intake.mjs', 'intake'], ['lib/core/social.mjs', 'social']]) {
     const src = fs.readFileSync(path.join(root, file), 'utf8');
     check(!/publishCollections\(\)/.test(src),
       `${fn} never publishes the whole surface for a single event`);
@@ -654,7 +654,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
 // --- 5c1. a Create is a document of its own, so a group's Announce resolves ---
 {
-  const { Publisher } = await import(path.join(root, 'lib/publisher.mjs'));
+  const { Publisher } = await import(path.join(root, 'lib/core/publisher.mjs'));
   const put = [];
   const pub = new Publisher({
     config: { remotePod: 'https://pod.example/', handle: 'you', name: 'You' },
@@ -738,7 +738,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
 // --- 5b2. editing, visibility and content warnings ---
 {
-  const { Publisher } = await import(path.join(root, 'lib/publisher.mjs'));
+  const { Publisher } = await import(path.join(root, 'lib/core/publisher.mjs'));
   const PUB = 'https://www.w3.org/ns/activitystreams#Public';
   const putDocs = {};
   const statuses = [];
@@ -803,7 +803,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
 // --- 5b3. voting: one bare Note per choice, to the poll's author alone ---
 {
-  const social = await import(path.join(root, 'lib/social.mjs'));
+  const social = await import(path.join(root, 'lib/core/social.mjs'));
   const sent = [];
   let patched = null;
   const agent = {
@@ -831,7 +831,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
 // --- 5c0. the websocket origins the CSP allows ---
 {
-  const { wsOrigins } = await import(path.join(root, 'lib/admin.mjs'));
+  const { wsOrigins } = await import(path.join(root, 'lib/device/admin.mjs'));
   const plain = wsOrigins(8041);
   check(plain.includes('wss://localhost:8041') && plain.includes('wss://127.0.0.1:8041'),
     'the loopback websocket origins are allowed');
@@ -851,7 +851,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
   // --- the agent's own name, without AP_ALLOWED_HOSTS ---
   const { hostLabel, allowedAuthorities, Authorities, checkRequest } =
-    await import(path.join(root, 'lib/guard.mjs'));
+    await import(path.join(root, 'lib/shared/guard.mjs'));
   check(hostLabel('solo') === 'solo' && hostLabel('jeff-zucker') === 'jeff-zucker',
     'a clean handle is a host label');
   check([null, 'a_b', 'A B', 'x@y', '-lead', 'trail-', ''].every(h => hostLabel(h) === null),
@@ -891,7 +891,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     'a deliberately exposed host is allowed but is not "this machine"');
 
   // --- locality is a property of the connection too, not the header alone ---
-  const { isLoopbackSocket, exposureProblem } = await import(path.join(root, 'lib/guard.mjs'));
+  const { isLoopbackSocket, exposureProblem } = await import(path.join(root, 'lib/shared/guard.mjs'));
   const req = (host, addr) => ({ headers: { host }, socket: { remoteAddress: addr } });
   check(isLoopbackSocket(req('x', '127.0.0.1')) && isLoopbackSocket(req('x', '::1'))
     && isLoopbackSocket(req('x', '::ffff:127.0.0.1'))
@@ -966,7 +966,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
 // --- 5c1c. replies are collected so a server can discover what it was not sent ---
 {
-  const { Intake: IntakeCls } = await import(path.join(root, 'lib/intake.mjs'));
+  const { Intake: IntakeCls } = await import(path.join(root, 'lib/core/intake.mjs'));
   const rUrls = wire.apUrls('https://pod.example/');
   const OURS = rUrls.notes + 'n1';
   const put = {};
@@ -1006,7 +1006,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
 // --- 5c2. the public surface is verified, not assumed ---
 {
-  const { Publisher } = await import(path.join(root, 'lib/publisher.mjs'));
+  const { Publisher } = await import(path.join(root, 'lib/core/publisher.mjs'));
   const config = { remotePod: 'https://pod.example/', handle: 'you', name: 'You' };
   const mkPub = (probeStatus) => new Publisher({
     config, remote: { setAcl: async () => {} }, store: { getStatuses: () => [] },
@@ -1056,7 +1056,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
 // --- 5d. a pod that says 429/503 is left alone until Retry-After passes ---
 {
-  const { RemotePod } = await import(path.join(root, 'lib/remote.mjs'));
+  const { RemotePod } = await import(path.join(root, 'lib/device/remote.mjs'));
   const mkRes = (status, headers = {}, body = '') => ({
     status, headers: { get: (h) => headers[h.toLowerCase()] ?? null },
     text: async () => body,
@@ -1191,7 +1191,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
 // --- 5e2. retiring an actor tells the fediverse and leaves a Tombstone ---
 {
-  const { Publisher } = await import(path.join(root, 'lib/publisher.mjs'));
+  const { Publisher } = await import(path.join(root, 'lib/core/publisher.mjs'));
   const config = { remotePod: 'https://pod.example/', handle: 'you', name: 'You' };
   const delivered = [];
   const written = new Map();
@@ -1241,7 +1241,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   const { createRequire } = await import('node:module');
   const req = createRequire(path.join(root, 'vendor/idp-grant.cjs'));
   const { createGrantSession } = req(path.join(root, 'vendor/idp-grant.cjs'));
-  const { USER_AGENT } = await import(path.join(root, 'lib/ua.mjs'));
+  const { USER_AGENT } = await import(path.join(root, 'lib/shared/ua.mjs'));
   const rec = { clientId: 'c', secret: 's', webId: 'https://p.example/profile/card#me',
     tokenEndpoint: 'https://p.example/.oidc/token', issuerOrigin: 'https://p.example' };
   const realFetch = globalThis.fetch;
@@ -1317,8 +1317,8 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
 // --- 5j. periodic work is stretched and jittered, not a shared beat ---
 {
-  const { Lease } = await import(path.join(root, 'lib/lease.mjs'));
-  const src = fs.readFileSync(path.join(root, 'lib/lease.mjs'), 'utf8');
+  const { Lease } = await import(path.join(root, 'lib/core/lease.mjs'));
+  const src = fs.readFileSync(path.join(root, 'lib/core/lease.mjs'), 'utf8');
   const ttl = Number((src.match(/const TTL_MS = ([\d_]+)/) || [])[1]?.replace(/_/g, ''));
   const renew = Number((src.match(/const RENEW_MS = ([\d_]+)/) || [])[1]?.replace(/_/g, ''));
   check(renew === 90_000 && ttl === 300_000 && ttl / renew >= 3,
@@ -1332,7 +1332,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   check(isTimeout && /setTimeout\(/.test(src) && !/setInterval\(/.test(src),
     'lease renewal is a jittered self-scheduling timer, not setInterval');
 
-  for (const f of ['lib/intake.mjs', 'lib/tagfeed.mjs']) {
+  for (const f of ['lib/core/intake.mjs', 'lib/connections/tagfeed.mjs']) {
     const body = fs.readFileSync(path.join(root, f), 'utf8');
     check(/0\.85 \+ Math\.random\(\) \* 0\.3/.test(body) && !/setInterval\(/.test(body),
       `${f} schedules its own next run with jitter`);
@@ -1341,7 +1341,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
 // --- 5k. a failing inbox is left alone, and the agent says what it is doing ---
 {
-  const { Intake } = await import(path.join(root, 'lib/intake.mjs'));
+  const { Intake } = await import(path.join(root, 'lib/core/intake.mjs'));
   const logs = [];
   const intake = new Intake({
     config: {}, urls: { inbox: 'https://p.example/in/', base: 'https://p.example/' },
@@ -1366,7 +1366,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
 // --- 5k-bis. a pod that will not give us an item has not told us to bin it ---
 {
-  const { Intake } = await import(path.join(root, 'lib/intake.mjs'));
+  const { Intake } = await import(path.join(root, 'lib/core/intake.mjs'));
   const mk = (itemStatus) => {
     const deleted = [];
     const state = {};
@@ -1443,7 +1443,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
 // --- 5o. an idle agent asks for as little as the design allows ---
 {
-  const { Lease } = await import(path.join(root, 'lib/lease.mjs'));
+  const { Lease } = await import(path.join(root, 'lib/core/lease.mjs'));
   const res = (status, headers = {}, body = '') => ({
     status, headers: { get: (h) => headers[h.toLowerCase()] ?? null }, text: async () => body,
   });
@@ -1513,12 +1513,12 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
 // --- 5a-bis. section E: the eight that were verified and fixed ---
 {
-  const { Deliverer } = await import(path.join(root, 'lib/deliver.mjs'));
-  const { Lease } = await import(path.join(root, 'lib/lease.mjs'));
-  const { Intake } = await import(path.join(root, 'lib/intake.mjs'));
+  const { Deliverer } = await import(path.join(root, 'lib/core/deliver.mjs'));
+  const { Lease } = await import(path.join(root, 'lib/core/lease.mjs'));
+  const { Intake } = await import(path.join(root, 'lib/core/intake.mjs'));
 
   // --- the static jail: %2f decoded BEFORE the split made '..' a mount name ---
-  const admin = fs.readFileSync(path.join(root, 'lib/admin.mjs'), 'utf8');
+  const admin = fs.readFileSync(path.join(root, 'lib/device/admin.mjs'), 'utf8');
   const ss = admin.slice(admin.indexOf('function serveStatic'), admin.indexOf('function webDirRedirect'));
   check(/path\.resolve\(UI_DIR, uiName\)/.test(ss) && /startsWith\(UI_DIR \+ path\.sep\)/.test(ss),
     'the static mount is resolved and contained, not just joined');
@@ -1555,7 +1555,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     'the whole host is deferred by the Retry-After it asked for');
   d.stop();
 
-  const dsrc = fs.readFileSync(path.join(root, 'lib/deliver.mjs'), 'utf8');
+  const dsrc = fs.readFileSync(path.join(root, 'lib/core/deliver.mjs'), 'utf8');
   check(/const ra = retryAfterMs\(res/.test(dsrc) && /if \(ra != null\) err\.retryAfterMs = ra/.test(dsrc),
     'deliverNow carries a Retry-After only when the server actually sent one');
   check(/retryAfterMs\(res, 24 \* 60 \* 60_000\)/.test(dsrc),
@@ -1613,7 +1613,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     'a lease whose TTL passed unrenewed stands the agent down rather than draining on');
 
   // --- intake: bare-string Undo, redelivery, oversized item ---
-  const isrc = fs.readFileSync(path.join(root, 'lib/intake.mjs'), 'utf8');
+  const isrc = fs.readFileSync(path.join(root, 'lib/core/intake.mjs'), 'utf8');
   const undo = isrc.slice(isrc.indexOf('async onUndo('), isrc.indexOf('concernsUs('));
   check(/typeof activity\.object === 'string' \? activity\.object/.test(undo),
     'an Undo naming its Follow as a bare IRI is understood');
@@ -1633,7 +1633,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 // --- 5a-nonies. both setup paths produce the same install ---
 {
   const bin = fs.readFileSync(path.join(root, 'bin/fedipod.mjs'), 'utf8');
-  const setupJs = fs.readFileSync(path.join(root, 'lib/setup.mjs'), 'utf8');
+  const setupJs = fs.readFileSync(path.join(root, 'lib/device/setup.mjs'), 'utf8');
 
   // They diverged: the browser path defaulted privateRoot to a local file: URL
   // and the CLI path left it unset, so the same answers produced two different
@@ -1650,8 +1650,8 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
 // --- 5a-octies. the outbox is paged, so posting costs the same at 5000 posts ---
 {
-  const wireM = await import(path.join(root, 'lib/wire.mjs'));
-  const { Publisher } = await import(path.join(root, 'lib/publisher.mjs'));
+  const wireM = await import(path.join(root, 'lib/core/wire.mjs'));
+  const { Publisher } = await import(path.join(root, 'lib/core/publisher.mjs'));
 
   // Pages are anchored at the OLDEST end. Number them from the newest and every
   // boundary shifts each time you post, which is the original problem again.
@@ -1823,7 +1823,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
 // --- 5a-septies. paging, revocation, and two helpers that were two ---
 {
-  const masto = fs.readFileSync(path.join(root, 'lib/mastoapi.mjs'), 'utf8');
+  const masto = fs.readFileSync(path.join(root, 'lib/client/mastoapi.mjs'), 'utf8');
 
   // A client walks a timeline by following the Link header. Nothing emitted
   // one, so an account's posts stopped at the first page whatever it asked for.
@@ -1845,11 +1845,11 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
   // idFor scanned the whole map on the status-render path, once per status,
   // for a mapping the hash already determines.
-  const store = fs.readFileSync(path.join(root, 'lib/store.mjs'), 'utf8');
+  const store = fs.readFileSync(path.join(root, 'lib/core/store.mjs'), 'utf8');
   const idFor = store.slice(store.indexOf('idFor(url)'), store.indexOf('urlFor(id)'));
   check(idFor.indexOf('createHash') < idFor.indexOf('Object.entries'),
     'idFor computes the id before it considers scanning for a legacy one');
-  const { PodStore } = await import(path.join(root, 'lib/store.mjs'));
+  const { PodStore } = await import(path.join(root, 'lib/core/store.mjs'));
   const st = new PodStore({ log: () => {} });
   const a = st.idFor('https://x.example/n/1');
   check(st.idFor('https://x.example/n/1') === a, 'and is stable for the same url');
@@ -1859,17 +1859,17 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
   // portFree/freePortFrom lived twice and had already drifted — one returned
   // null on exhaustion, the other threw, and both spawn agents.
-  for (const f of ['lib/admin.mjs', 'bin/fedipod.mjs']) {
+  for (const f of ['lib/device/admin.mjs', 'bin/fedipod.mjs']) {
     const src = fs.readFileSync(path.join(root, f), 'utf8');
     check(!/^(async )?function (portFree|freePortFrom)/m.test(src),
       `${f} no longer carries its own copy`);
-    check(/from '(\.\.\/lib|\.)\/ports\.mjs'/.test(src), `${f} imports the shared one`);
+    check(/from '(\.\.\/lib\/device|\.)\/ports\.mjs'/.test(src), `${f} imports the shared one`);
   }
-  const { freePortFrom } = await import(path.join(root, 'lib/ports.mjs'));
+  const { freePortFrom } = await import(path.join(root, 'lib/device/ports.mjs'));
   check(await freePortFrom(1, 1) === null, 'the shared helper returns null rather than throwing');
 
   // rebuild is one pod GET per post ever made, in one burst.
-  check(/REBUILD_MAX_PER_RUN/.test(fs.readFileSync(path.join(root, 'lib/publisher.mjs'), 'utf8')),
+  check(/REBUILD_MAX_PER_RUN/.test(fs.readFileSync(path.join(root, 'lib/core/publisher.mjs'), 'utf8')),
     'rebuild is capped per run and says so when it stops');
   // and an empty state migration used to report success
   check(/NOTHING WAS COPIED/.test(fs.readFileSync(path.join(root, 'bin/fedipod.mjs'), 'utf8')),
@@ -1878,7 +1878,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
 // --- 5a-sexies. a profile save that changes nothing costs nothing ---
 {
-  const { Publisher } = await import(path.join(root, 'lib/publisher.mjs'));
+  const { Publisher } = await import(path.join(root, 'lib/core/publisher.mjs'));
   const seen = [];
   const state = {};
   const pub = new Publisher({
@@ -1923,15 +1923,15 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
   check(/publishProfile\(\{ force: true \}\)/.test(fs.readFileSync(path.join(root, 'run-agent.mjs'), 'utf8')),
     'the repair path forces, because it publishes BECAUSE the pod is missing it');
-  check(/publishProfile\(\{ force: true \}\)/.test(fs.readFileSync(path.join(root, 'lib/admin.mjs'), 'utf8')),
+  check(/publishProfile\(\{ force: true \}\)/.test(fs.readFileSync(path.join(root, 'lib/device/admin.mjs'), 'utf8')),
     'and so does the explicit republish control');
 }
 
 // --- 5a-quinquies. the low tail ---
 {
   const read = (f) => fs.readFileSync(path.join(root, f), 'utf8');
-  const admin = read('lib/admin.mjs');
-  const masto = read('lib/mastoapi.mjs');
+  const admin = read('lib/device/admin.mjs');
+  const masto = read('lib/client/mastoapi.mjs');
 
   // The mount check was lexical while sendFile's has always been realpath, so
   // a mount that IS a symlink out of ui/ still escaped it.
@@ -2004,17 +2004,17 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     'and a save that left the actor unreadable says so rather than reporting success');
 
   // One timeout default, in one place.
-  const sf = read('lib/safefetch.mjs');
+  const sf = read('lib/shared/safefetch.mjs');
   check(/export const HTTP_TIMEOUT_MS/.test(sf),
     'AP_HTTP_TIMEOUT_MS has one default, exported once');
-  for (const f of ['lib/publisher.mjs', 'lib/intake.mjs', 'lib/deliver.mjs']) {
+  for (const f of ['lib/core/publisher.mjs', 'lib/core/intake.mjs', 'lib/core/deliver.mjs']) {
     check(!/AP_HTTP_TIMEOUT_MS/.test(read(f)), `${f} reads it rather than redeclaring it`);
   }
   check(/signal: init\.signal \|\| AbortSignal\.timeout\(HTTP_TIMEOUT_MS\)/.test(sf),
     'and safeFetch itself now has the deadline it never had');
 
   // An Accept has to answer the Follow we sent.
-  const { Intake } = await import(path.join(root, 'lib/intake.mjs'));
+  const { Intake } = await import(path.join(root, 'lib/core/intake.mjs'));
   const mkA = (rec) => {
     const state = { contacts: { followers: [], following: [rec] } };
     const intake = new Intake({
@@ -2042,8 +2042,8 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
 // --- 5a-quater. the fediverse posts more than Notes, and a tag is not a hole ---
 {
-  const { isContentType } = await import(path.join(root, 'lib/intake.mjs'));
-  const { TagFeed } = await import(path.join(root, 'lib/tagfeed.mjs'));
+  const { isContentType } = await import(path.join(root, 'lib/core/intake.mjs'));
+  const { TagFeed } = await import(path.join(root, 'lib/connections/tagfeed.mjs'));
 
   // Insisting on Note dead-lettered an Article, a poll, a PeerTube video and a
   // Lemmy post from people the owner had chosen to follow — silently.
@@ -2053,14 +2053,14 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   for (const t of ['Person', 'Follow', 'Collection', undefined]) {
     check(!isContentType(t), `${t} is not, and is still refused`);
   }
-  const isrc = fs.readFileSync(path.join(root, 'lib/intake.mjs'), 'utf8');
+  const isrc = fs.readFileSync(path.join(root, 'lib/core/intake.mjs'), 'utf8');
   check(!/note\.type !== 'Note'/.test(isrc),
     'and neither ingestNote nor onUpdate insists on Note any more');
 
   // --- the steady-state writes that changed nothing ---
   {
-    const { PodStore } = await import(path.join(root, 'lib/store.mjs'));
-    const { Deliverer } = await import(path.join(root, 'lib/deliver.mjs'));
+    const { PodStore } = await import(path.join(root, 'lib/core/store.mjs'));
+    const { Deliverer } = await import(path.join(root, 'lib/core/deliver.mjs'));
     const puts = [];
     const st = new PodStore({ log: () => {} });
     st.attach({
@@ -2167,7 +2167,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
   // --- a sweep publishes the collections once, not once per event ---
   {
-    const { Intake } = await import(path.join(root, 'lib/intake.mjs'));
+    const { Intake } = await import(path.join(root, 'lib/core/intake.mjs'));
     let published = [];
     const intake = new Intake({
       config: {}, urls: {}, remote: {}, 
@@ -2196,7 +2196,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
   // --- one inbound Delete{actor} is one outbox publish ---
   {
-    const { Intake } = await import(path.join(root, 'lib/intake.mjs'));
+    const { Intake } = await import(path.join(root, 'lib/core/intake.mjs'));
     const GONE = 'https://gone.example/u/x';
     const statuses = Array.from({ length: 12 }, (_, i) => ({
       noteId: `${GONE.replace('/u/x', '')}/n/${i}`, actor: GONE,
@@ -2231,7 +2231,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
   // --- a publish that could not be confirmed does not record its digest ---
   {
-    const { Publisher } = await import(path.join(root, 'lib/publisher.mjs'));
+    const { Publisher } = await import(path.join(root, 'lib/core/publisher.mjs'));
     const state = {};
     const mkPub = (readable) => new Publisher({
       config: { remotePod: 'https://pod.example/', handle: 'you', name: 'You' },
@@ -2267,7 +2267,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   // served from that identity. A bearer is not "only you": the facade exists so
   // third-party clients can connect, tokens last 90 days, no scope is enforced.
   {
-    const { attachmentType, extensionFor } = await import(path.join(root, 'lib/mastoapi.mjs'));
+    const { attachmentType, extensionFor } = await import(path.join(root, 'lib/client/mastoapi.mjs'));
     const stored = (t) => attachmentType(t);
     check(stored('image/jpeg') === 'image/jpeg' && stored('video/mp4') === 'video/mp4'
       && stored('audio/ogg') === 'audio/ogg',
@@ -2285,7 +2285,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
   // --- the push socket has to be the pod's own ---
   {
-    const { sameSocketOrigin } = await import(path.join(root, 'lib/intake.mjs'));
+    const { sameSocketOrigin } = await import(path.join(root, 'lib/core/intake.mjs'));
     check(sameSocketOrigin('wss://pod.example/ws/abc', 'https://pod.example/')
       && sameSocketOrigin('ws://localhost:3000/ws', 'http://localhost:3000/'),
       'the pod\'s own socket is accepted, including a pod on this machine');
@@ -2326,7 +2326,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   // elsewhere got that actor addressed, tagged and delivered to, over our
   // signature, in a thread they had nothing to do with.
   {
-    const { confirmDelegation } = await import(path.join(root, 'lib/social.mjs'));
+    const { confirmDelegation } = await import(path.join(root, 'lib/core/social.mjs'));
     const jrdFor = (href) => ({ links: [{ rel: 'self', type: 'application/activity+json', href }] });
     const ok = async (p) => { await p; return true; };
     const threw = async (p) => { try { await p; return false; } catch { return true; } };
@@ -2365,8 +2365,8 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
   // --- a flood of forged favourites cannot erase real notifications ---
   {
-    const { PodStore } = await import(path.join(root, 'lib/store.mjs'));
-    const { httpUrl } = await import(path.join(root, 'lib/intake.mjs'));
+    const { PodStore } = await import(path.join(root, 'lib/core/store.mjs'));
+    const { httpUrl } = await import(path.join(root, 'lib/core/intake.mjs'));
     check(httpUrl('https://a.example/u/x') && httpUrl('http://localhost:3000/x')
       && !httpUrl('javascript:alert(1)') && !httpUrl('data:text/html,x')
       && !httpUrl('') && !httpUrl(null),
@@ -2396,7 +2396,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
   // --- a document may only speak for its own origin ---
   {
-    const { authorOf } = await import(path.join(root, 'lib/intake.mjs'));
+    const { authorOf } = await import(path.join(root, 'lib/core/intake.mjs'));
     const NOTE = 'https://evil.example/n/1';
     const ALICE = 'https://mastodon.example/users/alice';
     check(authorOf({ id: NOTE, attributedTo: ALICE }) === null,
@@ -2420,7 +2420,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
   // --- the actor cache is keyed on who vouched, not on who claimed ---
   {
-    const { Intake } = await import(path.join(root, 'lib/intake.mjs'));
+    const { Intake } = await import(path.join(root, 'lib/core/intake.mjs'));
     const cached = {};
     const intake = new Intake({
       config: {}, urls: {}, remote: {}, 
@@ -2508,15 +2508,15 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   await refused.tf.sweep();
   check(asked === first, 'and the next sweep does not ask again while it is backing off');
 
-  const src = fs.readFileSync(path.join(root, 'lib/tagfeed.mjs'), 'utf8');
+  const src = fs.readFileSync(path.join(root, 'lib/connections/tagfeed.mjs'), 'utf8');
   check(/retryAfterMs\(res\)/.test(src), 'a Retry-After it sends is honoured');
   check(/this\.failures = 0/.test(src), 'and an instance that answers clears the ladder');
 }
 
 // --- 5a-ter. the regressions the first cut of those fixes introduced ---
 {
-  const { Deliverer } = await import(path.join(root, 'lib/deliver.mjs'));
-  const { Lease } = await import(path.join(root, 'lib/lease.mjs'));
+  const { Deliverer } = await import(path.join(root, 'lib/core/deliver.mjs'));
+  const { Lease } = await import(path.join(root, 'lib/core/lease.mjs'));
   const res = (status, headers = {}, body = '') => ({
     status, headers: { get: (h) => headers[h.toLowerCase()] ?? null }, text: async () => body,
   });
@@ -2551,7 +2551,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
   // Deferred siblings must ADVANCE, or only the item that opened the socket
   // ever climbs the ladder and a queue of K takes K times as long to give up.
-  const dsrc = fs.readFileSync(path.join(root, 'lib/deliver.mjs'), 'utf8');
+  const dsrc = fs.readFileSync(path.join(root, 'lib/core/deliver.mjs'), 'utf8');
   // From the cooled-sibling branch to the next `try {` AFTER it — searching the
   // whole file for the first one instead made this depend on nothing else in
   // deliver.mjs ever growing a try block above line ~280, which is not a
@@ -2585,15 +2585,15 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   check(held.stillHeld() === true, 'stillHeld is true inside the TTL');
   held.heldUntil = Date.now() - 1;
   check(held.stillHeld() === false, 'and false once it has passed');
-  const isrc = fs.readFileSync(path.join(root, 'lib/intake.mjs'), 'utf8');
+  const isrc = fs.readFileSync(path.join(root, 'lib/core/intake.mjs'), 'utf8');
   check(/this\.lease && !this\.lease\.stillHeld\(\)/.test(isrc),
     'and the drain asks before it deletes anything from the pod');
 }
 
 // --- 5b-bis. a password does not go out in clear over a real network ---
 {
-  const { insecureUrlReason } = await import(path.join(root, 'lib/safefetch.mjs'));
-  const { setupInputError } = await import(path.join(root, 'lib/setup.mjs'));
+  const { insecureUrlReason } = await import(path.join(root, 'lib/shared/safefetch.mjs'));
+  const { setupInputError } = await import(path.join(root, 'lib/device/setup.mjs'));
 
   // Loopback cannot leak: it never reaches a network interface, so plaintext
   // there crosses nothing — and a pod on this machine is a documented way to
@@ -2643,7 +2643,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
 // --- 5c-bis. the answers to a Follow that were dropped on the floor ---
 {
-  const { Intake } = await import(path.join(root, 'lib/intake.mjs'));
+  const { Intake } = await import(path.join(root, 'lib/core/intake.mjs'));
   const mk = (following, origin = {}) => {
     const state = { contacts: { followers: [], following }, notes: [] };
     let published = 0;
@@ -2740,7 +2740,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
 // --- 5c-quater. the envelope is not the note, and an Undo must name what it undoes ---
 {
-  const { Intake } = await import(path.join(root, 'lib/intake.mjs'));
+  const { Intake } = await import(path.join(root, 'lib/core/intake.mjs'));
   const OURS = 'https://p.example/ap/notes/';
   const mkIn = ({ following = [], followers = [], requests = [], kind = 'person', origin = {} } = {}) => {
     const state = { contacts: { followers, following }, requests, notes: [], statuses: [] };
@@ -2876,7 +2876,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
 // --- 5d-ter. an inbound Follow cannot be bound to the actor it names ---
 {
-  const { Intake } = await import(path.join(root, 'lib/intake.mjs'));
+  const { Intake } = await import(path.join(root, 'lib/core/intake.mjs'));
   const mk = (config) => {
     const state = { contacts: { followers: [], following: [] }, requests: [] };
     const sent = [];
@@ -2926,7 +2926,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   check(gatedGroup.state.requests.length === 1, 'and a gated one still queues');
 
   // A queue nobody can answer is worse than no queue.
-  const admin = fs.readFileSync(path.join(root, 'lib/admin.mjs'), 'utf8');
+  const admin = fs.readFileSync(path.join(root, 'lib/device/admin.mjs'), 'utf8');
   const gated = (route) => {
     const at = admin.indexOf(route);
     return admin.slice(at, at + 300).includes("error: 'not a group'");
@@ -2942,7 +2942,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   const read = (f) => fs.readFileSync(path.join(root, f), 'utf8');
   const record = read('web/admin/index.html');
   const setup = read('web/admin/setup/index.html');
-  const masto = read('lib/mastoapi.mjs');
+  const masto = read('lib/client/mastoapi.mjs');
   // Colours moved to the shared token sheet; the record page inherits them.
   const tokens = read('web/admin/tokens.css');
 
@@ -3137,7 +3137,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
 // --- 5f-bis. the unauthenticated probes are still this pod's traffic ---
 {
-  const { RemotePod } = await import(path.join(root, 'lib/remote.mjs'));
+  const { RemotePod } = await import(path.join(root, 'lib/device/remote.mjs'));
   const pod = new RemotePod({ webId: 'https://p.example/profile/card#me' }, { log: () => {} });
   check(pod.stats().probes === 0, 'probes are counted, so /status stops under-reporting by design');
 
@@ -3149,7 +3149,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   check(refused && pod.stats().probes === 0,
     'and are refused inside the pod cooldown, without opening a socket');
 
-  const pub = fs.readFileSync(path.join(root, 'lib/publisher.mjs'), 'utf8');
+  const pub = fs.readFileSync(path.join(root, 'lib/core/publisher.mjs'), 'utf8');
   check(/this\.remote\.probe\(u, i\)/.test(pub) && !/probeFetch = \(u, i\) => fetch/.test(pub),
     'publisher probes through the pod rather than round the side of it');
   // Still credential-free: it asks what a STRANGER sees, and answering that
@@ -3182,7 +3182,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   check(/if \(promoted\) await this\.refreshBeforeActing\(\)/.test(ra)
     && (ra.match(/startActive\(\{ promoted: true \}\)/g) || []).length === 2,
     'state is re-read when a viewer is promoted, not on every start');
-  const store = fs.readFileSync(path.join(root, 'lib/store.mjs'), 'utf8');
+  const store = fs.readFileSync(path.join(root, 'lib/core/store.mjs'), 'utf8');
   check(/async load\(\{ force = false \} = \{\}\)/.test(store)
     && (store.match(/force \? null : this\.etags/g) || []).length === 2,
     'load({ force }) sends no ETag, for the container or for any document under it');
@@ -3190,7 +3190,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
 // --- 5h-bis. a pod container is a boundary, in both implementations ---
 {
-  const { HttpStorage, FileStorage } = await import(path.join(root, 'lib/storage.mjs'));
+  const { HttpStorage, FileStorage } = await import(path.join(root, 'lib/core/storage.mjs'));
   const asked = [];
   const st = new HttpStorage('https://pod.example/ap-state/',
     async (u, i) => { asked.push(`${i?.method || 'GET'} ${u}`); return { status: 200, text: async () => '', headers: { get: () => null } }; });
@@ -3222,7 +3222,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
 // --- 5i-bis. what cannot be replaced is not written in place ---
 {
-  const { writeJsonAtomic, writeFileAtomic } = await import(path.join(root, 'lib/home.mjs'));
+  const { writeJsonAtomic, writeFileAtomic } = await import(path.join(root, 'lib/device/home.mjs'));
   const dir = fs.mkdtempSync('/tmp/ap-atomic-');
   const file = path.join(dir, 'keys.json');
 
@@ -3242,7 +3242,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   fs.rmSync(dir, { recursive: true, force: true });
 
   // No irreplaceable file is still written with a truncating writeFileSync.
-  for (const f of ['lib/keys.mjs', 'lib/setup.mjs', 'lib/home.mjs', 'run-agent.mjs', 'bin/fedipod.mjs']) {
+  for (const f of ['lib/core/keys.mjs', 'lib/device/setup.mjs', 'lib/device/home.mjs', 'run-agent.mjs', 'bin/fedipod.mjs']) {
     const src = fs.readFileSync(path.join(root, f), 'utf8');
     const bad = src.split('\n').filter(l => /writeFileSync/.test(l) && /JSON\.stringify/.test(l));
     check(bad.length === 0, `${f} writes no JSON state non-atomically${bad.length ? ': ' + bad[0].trim() : ''}`);
@@ -3251,7 +3251,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   // The advice a missing key prints has to name a command that can run —
   // rotate-key connects before it rotates, so the bare form meets the same
   // refusal that sent you there.
-  const keysSrc = fs.readFileSync(path.join(root, 'lib/keys.mjs'), 'utf8');
+  const keysSrc = fs.readFileSync(path.join(root, 'lib/core/keys.mjs'), 'utf8');
   check(/rotate-key --force/.test(keysSrc), 'the no-key error points at a command that works');
   const binSrc = fs.readFileSync(path.join(root, 'bin/fedipod.mjs'), 'utf8');
   check(/const forced = has\('force'\)/.test(binSrc) && /rotateKeyOnce: true/.test(binSrc),
@@ -3260,7 +3260,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
 // --- 5j-bis. the ACL document is built by rdflib, and round-trips ---
 {
-  const { RemotePod } = await import(path.join(root, 'lib/remote.mjs'));
+  const { RemotePod } = await import(path.join(root, 'lib/device/remote.mjs'));
   const $rdf = await import('rdflib');
   const ACL = $rdf.Namespace('http://www.w3.org/ns/auth/acl#');
   const pod = Object.create(RemotePod.prototype);
@@ -3305,7 +3305,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
 // --- 5k-ter. every self-scheduling loop stops when it is told to ---
 {
-  const { TagFeed } = await import(path.join(root, 'lib/tagfeed.mjs'));
+  const { TagFeed } = await import(path.join(root, 'lib/connections/tagfeed.mjs'));
   const store = { read: (_n, d) => d, write: () => {}, getStatuses: () => [], isBlocked: () => false };
 
   // stop() read `this.stopped` in its `finally` and never wrote it, so a stop
@@ -3324,7 +3324,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     'run-agent reuses its TagFeed rather than orphaning a live one');
 
   // The push socket's backoff must not treat "opened, then dropped" as success.
-  const intakeSrc = fs.readFileSync(path.join(root, 'lib/intake.mjs'), 'utf8');
+  const intakeSrc = fs.readFileSync(path.join(root, 'lib/core/intake.mjs'), 'utf8');
   const onopen = intakeSrc.slice(intakeSrc.indexOf('this.ws.onopen'), intakeSrc.indexOf('this.ws.onmessage'));
   check(!/reconnectTries = 0/.test(onopen),
     'a bare open no longer resets the reconnect backoff to its 2s floor');
@@ -3335,7 +3335,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
 // --- 5l-bis. a stranger cannot spend our requests, or evict our followers ---
 {
-  const { Intake } = await import(path.join(root, 'lib/intake.mjs'));
+  const { Intake } = await import(path.join(root, 'lib/core/intake.mjs'));
   const mk = (contacts) => {
     const state = { contacts };
     const fetched = [];
@@ -3439,7 +3439,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
 // --- 5m-bis. commit() reports on writes that fired their own debounce ---
 {
-  const { PodStore } = await import(path.join(root, 'lib/store.mjs'));
+  const { PodStore } = await import(path.join(root, 'lib/core/store.mjs'));
   const mk = (ok) => new PodStore({
     storage: { base: 'https://p.example/st/', write: async () => ({ ok, retry: false, why: 'refused' }) },
     log: () => {},
@@ -3473,8 +3473,8 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
 // --- 5n-bis. outbound delivery: bounded, and one drain at a time ---
 {
-  const { Deliverer } = await import(path.join(root, 'lib/deliver.mjs'));
-  const src = fs.readFileSync(path.join(root, 'lib/deliver.mjs'), 'utf8');
+  const { Deliverer } = await import(path.join(root, 'lib/core/deliver.mjs'));
+  const src = fs.readFileSync(path.join(root, 'lib/core/deliver.mjs'), 'utf8');
 
   // The deadline is on the object built ONCE, above the redirect loop, so four
   // hops share it rather than each getting a fresh 15s.
@@ -3511,7 +3511,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
 // --- 5o-ter. a pod asking to be left alone is left alone by EVERY method ---
 {
-  const { RemotePod } = await import(path.join(root, 'lib/remote.mjs'));
+  const { RemotePod } = await import(path.join(root, 'lib/device/remote.mjs'));
   const res = (status, headers = {}, body = '') => ({
     status, headers: { get: (h) => headers[h.toLowerCase()] ?? null },
     text: async () => body, json: async () => JSON.parse(body),
@@ -3555,7 +3555,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     'a genuine 404 is still reported as absent');
 
   // The caller that rewrites what it read must not treat a failure as empty.
-  const intakeSrc = fs.readFileSync(path.join(root, 'lib/intake.mjs'), 'utf8');
+  const intakeSrc = fs.readFileSync(path.join(root, 'lib/core/intake.mjs'), 'utf8');
   const addReply = intakeSrc.slice(intakeSrc.indexOf('async addReply('), intakeSrc.indexOf('async onAccept('));
   check(!/getJson\([^)]*\)\.catch/.test(addReply),
     'addReply does not swallow a failed read into an empty replies collection');
@@ -3581,7 +3581,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
 // --- 5p. the poll stands down while push is up ---
 {
-  const body = fs.readFileSync(path.join(root, 'lib/intake.mjs'), 'utf8');
+  const body = fs.readFileSync(path.join(root, 'lib/core/intake.mjs'), 'utf8');
   const fallback = Number((body.match(/const POLL_MS = (\d+) \* 60_000/) || [])[1]);
   const pushOk = Number((body.match(/const POLL_PUSH_OK_MS = (\d+) \* 60_000/) || [])[1]);
   check(fallback === 2 && pushOk === 10
@@ -3591,8 +3591,8 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
 // --- 5p2. the directory door belongs to a configured agent ---
 {
-  const door = fs.readFileSync(path.join(root, 'lib/directory.mjs'), 'utf8');
-  const admin5p2 = fs.readFileSync(path.join(root, 'lib/admin.mjs'), 'utf8');
+  const door = fs.readFileSync(path.join(root, 'lib/gateway/directory.mjs'), 'utf8');
+  const admin5p2 = fs.readFileSync(path.join(root, 'lib/device/admin.mjs'), 'utf8');
   check(/if \(held \|\| !eligible\(\) \|\| Date\.now\(\) < pausedUntil\) return;/.test(door),
     'the door is only claimed while eligible');
   check(/eligible: \(\) => agent\.configured\(\)/.test(admin5p2),
@@ -3601,7 +3601,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
 // --- 5q. a dropped socket reuses its channel instead of making another ---
 {
-  const { Intake } = await import(path.join(root, 'lib/intake.mjs'));
+  const { Intake } = await import(path.join(root, 'lib/core/intake.mjs'));
   const docs = new Map([['inbox-channel.json',
     { receiveFrom: 'wss://p.example/ch/abc', endAt: new Date(Date.now() + 3600_000).toISOString() }]]);
   let posted = 0, openedWith = null;
@@ -3626,8 +3626,8 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 // pod cannot grant read on, and the pod answered 403: push off, mail arriving
 // only on the poll.
 {
-  const { Intake } = await import(path.join(root, 'lib/intake.mjs'));
-  const { apUrls } = await import(path.join(root, 'lib/wire.mjs'));
+  const { Intake } = await import(path.join(root, 'lib/core/intake.mjs'));
+  const { apUrls } = await import(path.join(root, 'lib/core/wire.mjs'));
   const urls = apUrls('https://apfed.pod.example/', 'activitypods-js/',
     { publicBase: 'https://front.example/u/jeff/' });
   const DESC = 'https://apfed.pod.example/.well-known/solid';
@@ -3668,7 +3668,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 // route around it, and it is a DENY-list: the next script will have a different
 // allow-prefix and the same things it must never touch.
 {
-  const { protectedFromDeletion } = await import(path.join(root, 'lib/remote.mjs'));
+  const { protectedFromDeletion } = await import(path.join(root, 'lib/device/remote.mjs'));
   const refuses = (u) => { try { protectedFromDeletion(u); return false; } catch { return true; } };
   const P = 'https://pod.example';
   check(refuses(`${P}/profile/card`) && refuses(`${P}/profile/`),
@@ -3691,7 +3691,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 // --- 5s. standing an actor down keeps the handle and stops the mail ---
 {
   const { Agent } = await import(path.join(root, 'run-agent.mjs'));
-  const { Publisher } = await import(path.join(root, 'lib/publisher.mjs'));
+  const { Publisher } = await import(path.join(root, 'lib/core/publisher.mjs'));
   const config = { remotePod: 'https://pod.example/', handle: 'you', name: 'You' };
 
   const build = () => {
@@ -3808,7 +3808,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 // --- 5t. parking is quiet AND revivable ---
 {
   const { Agent } = await import(path.join(root, 'run-agent.mjs'));
-  const { Publisher } = await import(path.join(root, 'lib/publisher.mjs'));
+  const { Publisher } = await import(path.join(root, 'lib/core/publisher.mjs'));
   const config = { remotePod: 'https://pod.example/', handle: 'you', name: 'You' };
   const following = [
     { actor: 'https://m.example/users/b', handle: 'b@m.example' },
@@ -3903,7 +3903,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
 // --- 5g. a flapping socket backs off instead of re-subscribing every 2s ---
 {
-  const { Intake } = await import(path.join(root, 'lib/intake.mjs'));
+  const { Intake } = await import(path.join(root, 'lib/core/intake.mjs'));
   const intake = new Intake({
     config: {}, urls: { inbox: 'https://p.example/in/', base: 'https://p.example/' },
     remote: {}, store: {}, deliverer: {}, publisher: {}, log: () => {},
@@ -3964,7 +3964,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
 // --- 5m. inbox attempt counts survive a restart ---
 {
-  const { Intake } = await import(path.join(root, 'lib/intake.mjs'));
+  const { Intake } = await import(path.join(root, 'lib/core/intake.mjs'));
   const docs = new Map();
   const store = {
     read: (n, d) => (docs.has(n) ? docs.get(n) : d),
@@ -4002,7 +4002,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
 // --- 5n. a failed subscribe schedules another, it does not end push ---
 {
-  const { Intake } = await import(path.join(root, 'lib/intake.mjs'));
+  const { Intake } = await import(path.join(root, 'lib/core/intake.mjs'));
   const logs = [];
   const intake = new Intake({
     config: {}, urls: { inbox: 'https://p.example/in/', base: 'https://p.example/' },
@@ -4094,7 +4094,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
 // --- 5v-bis. the home root: an old install keeps its name until it is moved ---
 {
-  const { apRoot, CURRENT_ROOT, LEGACY_ROOTS } = await import(path.join(root, 'lib/home.mjs'));
+  const { apRoot, CURRENT_ROOT, LEGACY_ROOTS } = await import(path.join(root, 'lib/device/home.mjs'));
   const LEGACY_ROOT = LEGACY_ROOTS.at(-1);   // the oldest name, for the end-to-end move below
   const { execFileSync } = await import('node:child_process');
   const cli = path.join(root, 'bin/fedipod.mjs');
@@ -4183,7 +4183,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 // --- 5w. rotating a key republishes the actor that advertises it ---
 {
   const { Agent } = await import(path.join(root, 'run-agent.mjs'));
-  const { Publisher } = await import(path.join(root, 'lib/publisher.mjs'));
+  const { Publisher } = await import(path.join(root, 'lib/core/publisher.mjs'));
   const home = fs.mkdtempSync('/tmp/dk-ap-rot-');
   fs.writeFileSync(path.join(home, 'credential.json'), JSON.stringify({
     remotePod: 'https://pod.example/', webId: 'https://pod.example/profile/card#me',
@@ -4247,7 +4247,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
 // --- 5v. a signing key belongs to one actor ---
 {
-  const { resolveKeys } = await import(path.join(root, 'lib/keys.mjs'));
+  const { resolveKeys } = await import(path.join(root, 'lib/core/keys.mjs'));
   const store = { read: () => null, write: () => {}, remove: async () => true };
   const mine = 'https://a.example/activitypods-js/ap/actor';
   const theirs = 'https://b.example/activitypods-js/ap/actor';
@@ -4282,7 +4282,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 }
 
 // --- 7. facade M1–M3 on a seeded in-memory PodStore, faked delivery ---
-const { MastoApi } = await import(path.join(root, 'lib/mastoapi.mjs'));
+const { MastoApi } = await import(path.join(root, 'lib/client/mastoapi.mjs'));
 
 const store2 = new PodStore({ log: () => {} });
 const urls2 = wire.apUrls('https://pod.example/');
@@ -4506,8 +4506,8 @@ check(fed.json.length >= local.json.length && trend.json.length === fed.json.len
   'public + trends serve known statuses');
 
 // --- 8. Announce ingestion + tag feed ---
-const { Intake } = await import(path.join(root, 'lib/intake.mjs'));
-const { TagFeed } = await import(path.join(root, 'lib/tagfeed.mjs'));
+const { Intake } = await import(path.join(root, 'lib/core/intake.mjs'));
+const { TagFeed } = await import(path.join(root, 'lib/connections/tagfeed.mjs'));
 
 const BOB = 'https://m.example/u/bob';
 const intake3 = new Intake({
@@ -4556,7 +4556,7 @@ if (up) {
   check(health.status === 200 && (await health.text()) === 'OK', 'streaming health endpoint');
 }
 {
-  const { Streaming } = await import(path.join(root, 'lib/streaming.mjs'));
+  const { Streaming } = await import(path.join(root, 'lib/client/streaming.mjs'));
   const httpMod = await import('node:http');
   const netMod = await import('node:net');
   const cryptoMod = await import('node:crypto');
@@ -4602,7 +4602,7 @@ if (up) {
 
 // --- 8b2. AP_GATE_TOKEN must cover websocket upgrades too ---
 {
-  const { Streaming } = await import(path.join(root, 'lib/streaming.mjs'));
+  const { Streaming } = await import(path.join(root, 'lib/client/streaming.mjs'));
   const gateMod = await import(path.join(root, 'vendor/gate.cjs'));
   const makeGate = gateMod.makeGate || gateMod.default.makeGate;
   const httpMod = await import('node:http');
@@ -4646,8 +4646,8 @@ if (up) {
 
 // --- 8b4. no password + not this machine = no bearer ---
 {
-  const { MastoApi } = await import(path.join(root, 'lib/mastoapi.mjs'));
-  const { Authorities } = await import(path.join(root, 'lib/guard.mjs'));
+  const { MastoApi } = await import(path.join(root, 'lib/client/mastoapi.mjs'));
+  const { Authorities } = await import(path.join(root, 'lib/shared/guard.mjs'));
   const allowed = new Authorities(8030, 'me');
   const st = new PodStore({ log: () => {} });
   st.setConfig({ remotePod: 'https://p.example/', handle: 'me', name: 'me' });   // no uiPassword
@@ -4705,7 +4705,7 @@ if (up) {
 
 // --- 8c. real OAuth when a UI password is set ---
 {
-  const { hashPassword } = await import(path.join(root, 'lib/mastoapi.mjs'));
+  const { hashPassword } = await import(path.join(root, 'lib/client/mastoapi.mjs'));
   const cfg = store2.getConfig();
   store2.setConfig({ ...cfg, uiPassword: hashPassword('sesame') });
   const form = await call('/oauth/authorize?client_id=dk-ap-client&redirect_uri=http%3A%2F%2Fx%2Fcb&response_type=code&state=st1');
@@ -4753,7 +4753,7 @@ if (up) {
 
 // --- 8d. drain lease: one active, second is viewer, expiry hands over ---
 {
-  const { Lease } = await import(path.join(root, 'lib/lease.mjs'));
+  const { Lease } = await import(path.join(root, 'lib/core/lease.mjs'));
   let doc = null;
   const memFetch = async (u, init = {}) => {
     if (init.method === 'PUT') { doc = JSON.parse(init.body); return { status: 201, text: async () => '' }; }
@@ -4799,7 +4799,7 @@ if (up) {
 
 // --- 8g. SSRF guard + sanitizer ---
 {
-  const { assertPublicUrl, isPrivateAddress } = await import(path.join(root, 'lib/safefetch.mjs'));
+  const { assertPublicUrl, isPrivateAddress } = await import(path.join(root, 'lib/shared/safefetch.mjs'));
   const blocked = [];
   for (const u of ['http://127.0.0.1:8030/status', 'http://169.254.169.254/latest/meta-data/',
     'http://10.0.0.1/', 'http://192.168.1.1/', 'file:///etc/passwd', 'http://[::1]:8030/']) {
@@ -4834,7 +4834,7 @@ if (up) {
   const pinned = await assertPublicUrl('https://mastodon.social/api/v1/instance').catch(() => null);
   check(!!pinned?.address && !isPrivateAddress(pinned.address),
     `SSRF guard allows a public host and returns its address to pin (${pinned?.address || 'none'})`);
-  const { safeFetch, readCapped, pinnedFor } = await import(path.join(root, 'lib/safefetch.mjs'));
+  const { safeFetch, readCapped, pinnedFor } = await import(path.join(root, 'lib/shared/safefetch.mjs'));
   check(typeof (await pinnedFor('https://mastodon.social/')) === 'object',
     'connection is pinned to the validated address (undici dispatcher)');
   const live = await safeFetch('https://mastodon.social/api/v1/instance').catch(() => null);
@@ -4844,7 +4844,7 @@ if (up) {
     .then(r => readCapped(r, 10)).then(() => false).catch(e => /exceeded|too large/.test(e.message));
   check(capped, 'response size cap enforced');
 
-  const { sanitizeHtml } = await import(path.join(root, 'lib/wire.mjs'));
+  const { sanitizeHtml } = await import(path.join(root, 'lib/core/wire.mjs'));
   const dirty = '<p>hi <a href="https://ok/x">link</a></p><script>alert(1)</script>'
     + '<img src=x onerror=alert(1)><a href="javascript:evil()">j</a><p onclick="evil()">t</p>';
   const clean = sanitizeHtml(dirty);
@@ -4869,7 +4869,7 @@ if (up) {
 
 // --- 8g2. inbox spam policy: strangers are mentions, not timeline ---
 {
-  const { Intake } = await import(path.join(root, 'lib/intake.mjs'));
+  const { Intake } = await import(path.join(root, 'lib/core/intake.mjs'));
   const spamIntake = new Intake({
     config: {}, urls: urls2, remote: {}, store: store2, deliverer: {}, publisher: {},
     log: () => {},
@@ -5073,7 +5073,7 @@ if (up) {
 }
 
 // --- 9. --new-account flow vs a mock CSS v7 account API ---
-const { createAccountWithPod } = await import(path.join(root, 'lib/account.mjs'));
+const { createAccountWithPod } = await import(path.join(root, 'lib/device/account.mjs'));
 const http = await import('node:http');
 const seen9 = [];
 // Stateful on purpose: an account with no pod may create one, an account that
@@ -5275,7 +5275,7 @@ const announces = (sent) => sent.filter(x => x.a.type === 'Announce');
 }
 
 // --- 9b. eject, retract, hold for review ---
-const { ejectFollower, retractAnnouncement } = await import(path.join(root, 'lib/social.mjs'));
+const { ejectFollower, retractAnnouncement } = await import(path.join(root, 'lib/core/social.mjs'));
 const groupAgent = ({ st, intake, sent }) => ({
   store: st, intake, publisher: { urls: gUrls, publishCollections: async () => {},
       recordOutbox: async (i) => { gOutbox.unshift(i); },
@@ -5622,7 +5622,7 @@ const GTAG = { type: 'Mention', href: gUrls.actor, name: '@grp@grp.example' };
 }
 
 // --- 9c. request-to-join, optional like post review ---
-const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social.mjs'));
+const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/social.mjs'));
 {
   const open = wire.actorDoc({ urls: gUrls, handle: 'g', publicKeyPem: 'K', kind: 'group' });
   const gated = wire.actorDoc({ urls: gUrls, handle: 'g', publicKeyPem: 'K', kind: 'group', approveJoins: true });
@@ -5691,7 +5691,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
 
 // --- 10. a group agent serves the group admin API and no client ---
 {
-  const { startAdmin } = await import(path.join(root, 'lib/admin.mjs'));
+  const { startAdmin } = await import(path.join(root, 'lib/device/admin.mjs'));
   const GPORT = 18624;
   const GHOME = fs.mkdtempSync('/tmp/fedipod-group-');
   // A set-up group: without the credential FILE the bare URL is a trip to
@@ -6009,7 +6009,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
 
 // --- 12c. the pod check: reachable, and its WebID declares an issuer ---
 {
-  const { checkPodUsable } = await import(path.join(root, 'lib/setup.mjs'));
+  const { checkPodUsable } = await import(path.join(root, 'lib/device/setup.mjs'));
   const POD = 'https://p.example/';
   const CARD = 'https://p.example/profile/card';
   const fakeFetch = (map) => async (url) => {
@@ -6043,7 +6043,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
 
 // --- 12d. the pod check is wired into the run, both ways in ---
 {
-  const { runSetup, newRun } = await import(path.join(root, 'lib/setup.mjs'));
+  const { runSetup, newRun } = await import(path.join(root, 'lib/device/setup.mjs'));
   const stubAgent = (home) => {
     let bootstrapped = false;
     return {
@@ -6100,7 +6100,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
 
 // --- 13. setup runs in the server, outlives the page, and leaks no password ---
 {
-  const { startAdmin } = await import(path.join(root, 'lib/admin.mjs'));
+  const { startAdmin } = await import(path.join(root, 'lib/device/admin.mjs'));
   const { default: net13 } = await import('node:tls');
   const SPORT = 18626;
   const RPORT = 18627;
@@ -6340,7 +6340,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
 
 // --- 14. the record can be read back and edited, and a merge stays a merge ---
 {
-  const { startAdmin } = await import(path.join(root, 'lib/admin.mjs'));
+  const { startAdmin } = await import(path.join(root, 'lib/device/admin.mjs'));
   const CPORT = 18628;
   const CHOME = fs.mkdtempSync('/tmp/fedipod-config-');
   // CHOME is the ROOT; the identity itself is a profile under it. /new-actor
@@ -6606,7 +6606,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
 
   // And the behaviour behind that: a run with no privateRoot writes one anyway.
   {
-    const { runSetup, newRun } = await import(path.join(root, 'lib/setup.mjs'));
+    const { runSetup, newRun } = await import(path.join(root, 'lib/device/setup.mjs'));
     const shome = fs.mkdtempSync('/tmp/dk-ap-relay-default-');
     const fake = {
       urls: { actor: 'https://x.example/ap/actor' },
@@ -6635,9 +6635,9 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   // the actor URL — which for every actor here is the literal word `actor`, so
   // a group searched for by name came back as @actor@host with no name.
   {
-    const { PodStore } = await import(path.join(root, 'lib/store.mjs'));
-    const { MastoApi } = await import(path.join(root, 'lib/mastoapi.mjs'));
-    const gurls = (await import(path.join(root, 'lib/wire.mjs'))).apUrls('https://me.example/');
+    const { PodStore } = await import(path.join(root, 'lib/core/store.mjs'));
+    const { MastoApi } = await import(path.join(root, 'lib/client/mastoapi.mjs'));
+    const gurls = (await import(path.join(root, 'lib/core/wire.mjs'))).apUrls('https://me.example/');
     const gs = new PodStore({ log: () => {} });
     gs.setConfig({ handle: 'me', remotePod: 'https://me.example/' });
     const actorUrl = 'https://activitypub.example/activitypods-js/ap/actor';
@@ -6668,8 +6668,8 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
 
   // ---- unblock, and reconcile-on-restore ----
   {
-    const { PodStore, dropFollower } = await import(path.join(root, 'lib/store.mjs'));
-    const { Publisher } = await import(path.join(root, 'lib/publisher.mjs'));
+    const { PodStore, dropFollower } = await import(path.join(root, 'lib/core/store.mjs'));
+    const { Publisher } = await import(path.join(root, 'lib/core/publisher.mjs'));
 
     // Blocking without unblocking is a trap: the only way out was editing
     // blocklist.json by hand.
@@ -6734,8 +6734,8 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   // The other half of reconcile-on-restore. Followers came back; the posts did
   // not, and the pod was serving every one of them the whole time.
   {
-    const { PodStore } = await import(path.join(root, 'lib/store.mjs'));
-    const { Publisher } = await import(path.join(root, 'lib/publisher.mjs'));
+    const { PodStore } = await import(path.join(root, 'lib/core/store.mjs'));
+    const { Publisher } = await import(path.join(root, 'lib/core/publisher.mjs'));
     const POD = 'https://me.example/';
     const N = POD + 'activitypods-js/ap/notes/';
     const ACTOR = POD + 'activitypods-js/ap/actor';
@@ -6830,7 +6830,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   // wrong WebID. The refusal has to come BEFORE the create call, or the pod
   // exists and the account is left in the state that caused it.
   {
-    const { createAccountWithPod } = await import(path.join(root, 'lib/account.mjs'));
+    const { createAccountWithPod } = await import(path.join(root, 'lib/device/account.mjs'));
     const calls = [];
     const realFetch = globalThis.fetch;
     globalThis.fetch = async (url, init = {}) => {
@@ -6860,7 +6860,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   // authenticates fine and then 403s every write to the second — which reads as
   // a broken server rather than a mis-bound token, and cost a real setup.
   {
-    const { runSetup, newRun } = await import(path.join(root, 'lib/setup.mjs'));
+    const { runSetup, newRun } = await import(path.join(root, 'lib/device/setup.mjs'));
     const whome = fs.mkdtempSync('/tmp/dk-ap-webid-');
     let minted = null;
     const fakeAgent = {
@@ -6893,7 +6893,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
 
   // ---- the update check: ordering, and refusal outside a checkout ----
   {
-    const { newerThan, runUpdate, checkLatest } = await import(path.join(root, 'lib/update.mjs'));
+    const { newerThan, runUpdate, checkLatest } = await import(path.join(root, 'lib/device/update.mjs'));
     check(newerThan('0.8.0', '0.7.9') && newerThan('1.0.0', '0.9.9')
       && !newerThan('0.7.0', '0.7.0') && !newerThan('0.9.9', '1.0.0'),
     'version comparison orders dotted versions numerically');
@@ -6911,7 +6911,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
 
   // ---- trusted https: the boot path mints a name-constrained local CA ----
   {
-    const { ensureTrustedTls, certPaths } = await import(path.join(root, 'lib/certs.mjs'));
+    const { ensureTrustedTls, certPaths } = await import(path.join(root, 'lib/device/certs.mjs'));
     const cdir = fs.mkdtempSync('/tmp/dk-ap-certs-');
     const tls = ensureTrustedTls(cdir, { log: () => {} });
     check(tls.trust && fs.existsSync(certPaths(cdir).caCert),
@@ -6939,7 +6939,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
 
   // ---- a signup's gateway carry-over reaches bootstrap before first publish ----
   {
-    const { runSetup, newRun, setupInputError } = await import(path.join(root, 'lib/setup.mjs'));
+    const { runSetup, newRun, setupInputError } = await import(path.join(root, 'lib/device/setup.mjs'));
     const ghome = fs.mkdtempSync('/tmp/dk-ap-gwsetup-');
     let booted = null;
     const fakeAgent = {
@@ -6971,8 +6971,8 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   // uploads, and the extra-field rows. The pictures must end up in the pod's
   // media container, because the actor document carries a URL, not bytes.
   {
-    const { MastoApi } = await import(path.join(root, 'lib/mastoapi.mjs'));
-    const wire2 = await import(path.join(root, 'lib/wire.mjs'));
+    const { MastoApi } = await import(path.join(root, 'lib/client/mastoapi.mjs'));
+    const wire2 = await import(path.join(root, 'lib/core/wire.mjs'));
     const purls = wire2.apUrls('https://solo.example/');
     let pcfg = { handle: 'solo', name: 'solo', kind: 'person' };
     const uploaded = [];
@@ -7094,7 +7094,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
     'no WebID and no aliases → no alsoKnownAs and no stray term declaration');
 
   // publishMove builds its own actor doc, so an alias has to survive the move.
-  const { Publisher: PubM } = await import(path.join(root, 'lib/publisher.mjs'));
+  const { Publisher: PubM } = await import(path.join(root, 'lib/core/publisher.mjs'));
   const putDocs = {};
   const mpub = new PubM({
     config: { remotePod: 'https://you.example/', handle: 'you', name: 'You',
@@ -7118,7 +7118,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
 
   // The route half: resolve to the canonical id, dedup, republish; removal
   // asks first; a pod nobody can WebFinger is refused as a Move target.
-  const { startAdmin: startAdminA } = await import(path.join(root, 'lib/admin.mjs'));
+  const { startAdmin: startAdminA } = await import(path.join(root, 'lib/device/admin.mjs'));
   const APORT = 18661;
   const astore = new PodStore({ log: () => {} });
   astore.setConfig({ remotePod: 'https://solo.example/', handle: 'solo', name: 'solo',
@@ -7231,7 +7231,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
 // --- 14c. CSV import: parsing, staging, and the paced worker ---
 {
   const { parseCsv, normalizeImport, ImportWorker, IMPORT_STATE_DOC } =
-    await import(path.join(root, 'lib/import.mjs'));
+    await import(path.join(root, 'lib/connections/import.mjs'));
 
   // ---- parsing ----
   check(JSON.stringify(parseCsv('a,"b,c",d\r\n"say ""hi""",x\n'))
@@ -7394,7 +7394,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
     'clear() during an in-flight row stays cleared — nothing resurrects');
 
   // ---- the route: CSV text in, staged counts out, progress readable ----
-  const { startAdmin: startAdminI } = await import(path.join(root, 'lib/admin.mjs'));
+  const { startAdmin: startAdminI } = await import(path.join(root, 'lib/device/admin.mjs'));
   const IPORT = 18662;
   const rstore = new PodStore({ log: () => {} });
   rstore.setConfig({ remotePod: 'https://imp.example/', handle: 'imp', name: 'imp',
@@ -7440,7 +7440,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
 
 // --- 14d. multi-device keys and the inbox-only front ---
 {
-  const { moveKeysToPod } = await import(path.join(root, 'lib/keys.mjs'));
+  const { moveKeysToPod } = await import(path.join(root, 'lib/core/keys.mjs'));
   const kdir = fs.mkdtempSync('/tmp/fedipod-keys-');
   const krec = { rsa: { publicPem: 'PUB', privatePem: 'PRIV' }, ed25519: {}, mintedFor: 'https://a.example/ap/actor' };
   const kwrite = (dir) => fs.writeFileSync(path.join(dir, 'keys.json'), JSON.stringify(krec));
@@ -7478,7 +7478,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
 
 // --- 14e. https: a per-machine certificate, minted not packaged ---
 {
-  const { ensureLocalTls, enableTrust } = await import(path.join(root, 'lib/certs.mjs'));
+  const { ensureLocalTls, enableTrust } = await import(path.join(root, 'lib/device/certs.mjs'));
   const { X509Certificate } = await import('node:crypto');
   const cdir = fs.mkdtempSync('/tmp/fedipod-certs-');
 
@@ -7502,7 +7502,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
     'trust mode is sticky — later boots keep the CA-signed certificate');
 
   // The listener: one port, https, its authority the machine's own.
-  const { startAdmin: startAdminH } = await import(path.join(root, 'lib/admin.mjs'));
+  const { startAdmin: startAdminH } = await import(path.join(root, 'lib/device/admin.mjs'));
   const HPORT = 18671;
   const hstore = new PodStore({ log: () => {} });
   hstore.setConfig({ remotePod: 'https://h.example/', handle: 'h', name: 'h',
@@ -7621,7 +7621,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
     publisher: { urls: {}, config: {} },
   });
   check(intake15.strictCommit === undefined
-    && !/strictCommit/.test(fs.readFileSync(path.join(root, 'lib/intake.mjs'), 'utf8')),
+    && !/strictCommit/.test(fs.readFileSync(path.join(root, 'lib/core/intake.mjs'), 'utf8')),
     'the drain commits before it deletes unconditionally — no same-origin exemption');
 
   refuse = true;
@@ -7765,7 +7765,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   // nothing to show for it. A new default only fixes installs that do not exist
   // yet, which is why this is a numbered step with a runner rather than a note.
   {
-    const mig = await import(path.join(root, 'lib/migrate.mjs'));
+    const mig = await import(path.join(root, 'lib/device/migrate.mjs'));
     CURRENT_LAYOUT = mig.CURRENT_LAYOUT;
     check(mig.layoutOf({}) === 0 && mig.layoutOf({ layout: 1 }) === 1,
       'an unstamped install reads as layout 0 rather than as an error');
@@ -7789,7 +7789,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
 
     // The backstop under all of it: the lease is on the pod BECAUSE the private
     // half need not be, so a migration must never be able to take it.
-    const { protectedFromDeletion } = await import(path.join(root, 'lib/remote.mjs'));
+    const { protectedFromDeletion } = await import(path.join(root, 'lib/device/remote.mjs'));
     let refused = false;
     try { protectedFromDeletion(base + 'lease.json'); } catch { refused = true; }
     check(refused, 'and RemotePod.delete refuses the lease outright, wherever the call came from');
@@ -7909,7 +7909,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
     // A signup carry-over on a machine that already has identities: the new
     // profile comes up beside them, never instead of them — and a carried
     // name that already exists here is refused, not adopted.
-    const { CURRENT_ROOT: ROOT16 } = await import(path.join(root, 'lib/home.mjs'));
+    const { CURRENT_ROOT: ROOT16 } = await import(path.join(root, 'lib/device/home.mjs'));
     const FROOT = fs.mkdtempSync('/tmp/fedipod-up-carry-');
     const runRoot = (args, extra = {}) => new Promise((resolve) => {
       execFile(process.execPath, [path.join(root, 'bin/fedipod.mjs'), ...args],
@@ -8031,7 +8031,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
     + ` <http://www.w3.org/ns/posix/stat#size> 900.`
     + ` <${INBOX}a> <http://purl.org/dc/terms/modified> "2026-07-02T00:00:00.000Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> ;`
     + ` <http://www.w3.org/ns/posix/stat#size> 100.`;
-  const { RemotePod: RP17 } = await import(path.join(root, 'lib/remote.mjs'));
+  const { RemotePod: RP17 } = await import(path.join(root, 'lib/device/remote.mjs'));
   const pod17 = Object.create(RP17.prototype);
   pod17.pausedUntil = 0;
   pod17.log = () => {};
@@ -8047,7 +8047,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
 
 // --- 18. copyPrivateHalf between directories, and the page's /state-move route ---
 {
-  const { copyPrivateHalf, CURRENT_LAYOUT } = await import(path.join(root, 'lib/migrate.mjs'));
+  const { copyPrivateHalf, CURRENT_LAYOUT } = await import(path.join(root, 'lib/device/migrate.mjs'));
   const MDIR = fs.mkdtempSync('/tmp/fedipod-statemove-');
   const SRC18 = path.join(MDIR, 'src');
   const DST18 = path.join(MDIR, 'dst');
@@ -8074,7 +8074,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   // The route the record page calls, over a real Agent whose private half is
   // the directory seeded above. No pod behind it: connect is stubbed, because
   // what is under test is quiesce → copy → repoint → reconnect, not the pod.
-  const { startAdmin: startAdmin18 } = await import(path.join(root, 'lib/admin.mjs'));
+  const { startAdmin: startAdmin18 } = await import(path.join(root, 'lib/device/admin.mjs'));
   const { Agent: Agent18 } = await import(path.join(root, 'run-agent.mjs'));
   const AHOME18 = path.join(MDIR, 'home');
   fs.mkdirSync(AHOME18, { recursive: true });
@@ -8123,7 +8123,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
 
 // --- 19. bluesky connection: session, stamped guard, refresh, re-login, cooldown ---
 {
-  const { Atproto } = await import('../../lib/atproto.mjs');
+  const { Atproto } = await import('../../lib/connections/atproto.mjs');
   const http19 = await import('node:http');
   const BDIR = fs.mkdtempSync('/tmp/dk-ap-bsky-');
   const seen19 = [];
@@ -8207,9 +8207,9 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
 
 // --- 20. bluesky cross-posting: conversion, the public-only gate, delete propagation ---
 {
-  const { Atproto, bskyText } = await import('../../lib/atproto.mjs');
-  const { Publisher } = await import(path.join(root, 'lib/publisher.mjs'));
-  const social20 = await import(path.join(root, 'lib/social.mjs'));
+  const { Atproto, bskyText } = await import('../../lib/connections/atproto.mjs');
+  const { Publisher } = await import(path.join(root, 'lib/core/publisher.mjs'));
+  const social20 = await import(path.join(root, 'lib/core/social.mjs'));
   const http20 = await import('node:http');
 
   // Conversion. Byte offsets, not code units: the é before the URL is 2 bytes.
@@ -8341,9 +8341,9 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
 
 // --- 21. bluesky feed mixing: mirror, notifications, and the read-only guards ---
 {
-  const { BskyFeed, postUrl } = await import('../../lib/bskyfeed.mjs');
-  const { MastoApi } = await import(path.join(root, 'lib/mastoapi.mjs'));
-  const wire21 = await import(path.join(root, 'lib/wire.mjs'));
+  const { BskyFeed, postUrl } = await import('../../lib/connections/bskyfeed.mjs');
+  const { MastoApi } = await import(path.join(root, 'lib/client/mastoapi.mjs'));
+  const wire21 = await import(path.join(root, 'lib/core/wire.mjs'));
 
   const statuses21 = [{
     noteId: 'https://pod.example/ap/notes/mine', actor: 'https://pod.example/ap/actor',
@@ -8564,7 +8564,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
 
 // --- 21b. the Atproto records behind those taps: like, repost, threaded reply ---
 {
-  const { Atproto } = await import(path.join(root, 'lib/atproto.mjs'));
+  const { Atproto } = await import(path.join(root, 'lib/connections/atproto.mjs'));
   const dir21b = fs.mkdtempSync('/tmp/fedipod-bsky-actions-');
   const PARENT = 'at://did:plc:alice/app.bsky.feed.post/p9';
   const ROOT21B = { uri: 'at://did:plc:root/app.bsky.feed.post/r0', cid: 'cidRoot' };
@@ -8610,9 +8610,9 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
 
 // --- 21c. drained mail keeps its original bytes; export emits the paged-collection layout ---
 {
-  const { Intake } = await import(path.join(root, 'lib/intake.mjs'));
-  const { storageFor } = await import(path.join(root, 'lib/storage.mjs'));
-  const { exportCollections, DIR_BASE } = await import(path.join(root, 'lib/export-collections.mjs'));
+  const { Intake } = await import(path.join(root, 'lib/core/intake.mjs'));
+  const { storageFor } = await import(path.join(root, 'lib/core/storage.mjs'));
+  const { exportCollections, DIR_BASE } = await import(path.join(root, 'lib/device/export-collections.mjs'));
   const { createHash } = await import('node:crypto');
   const $rdf21c = await import('rdflib');
   const AS21C = 'https://www.w3.org/ns/activitystreams#';
@@ -8762,9 +8762,9 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
 
 // --- 22. bluesky members in a group: bridged-first, degrade to unbridged ---
 {
-  const { BskyGroup } = await import('../../lib/bskygroup.mjs');
-  const { Publisher } = await import(path.join(root, 'lib/publisher.mjs'));
-  const social22 = await import(path.join(root, 'lib/social.mjs'));
+  const { BskyGroup } = await import('../../lib/connections/bskygroup.mjs');
+  const { Publisher } = await import(path.join(root, 'lib/core/publisher.mjs'));
+  const social22 = await import(path.join(root, 'lib/core/social.mjs'));
 
   const mkStore = (cfg = {}) => {
     const docs = {};
@@ -8861,7 +8861,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
 
   // Submission through the real amplify: review holds, approval reposts, retract deletes.
   {
-    const { Intake } = await import(path.join(root, 'lib/intake.mjs'));
+    const { Intake } = await import(path.join(root, 'lib/core/intake.mjs'));
     const store = mkStore({});
     const ap = mkAtproto();
     const announced = [];
@@ -8958,7 +8958,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
 
 // --- 21f. inbox forwarding (§7.1.2): a reply into our thread reaches followers ---
 {
-  const { Intake } = await import(path.join(root, 'lib/intake.mjs'));
+  const { Intake } = await import(path.join(root, 'lib/core/intake.mjs'));
   const OURS = 'https://me.example/ap/notes/';
   const FOLLOWERS = 'https://me.example/ap/followers';
   const PUBLIC = 'https://www.w3.org/ns/activitystreams#Public';
@@ -9070,7 +9070,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
 
 // --- 21g. Add/Remove are acknowledged, never dead-lettered (§7.6/§7.9) ---
 {
-  const { Intake } = await import(path.join(root, 'lib/intake.mjs'));
+  const { Intake } = await import(path.join(root, 'lib/core/intake.mjs'));
   const it = new Intake({
     config: { handle: 'me', kind: 'person' },
     urls: { actor: 'https://me.example/ap/actor', inbox: 'https://me.example/ap/inbox/',
@@ -9090,7 +9090,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
 
 // --- 22a. a co-member of a group we are in is not a stranger ---
 {
-  const { Intake } = await import(path.join(root, 'lib/intake.mjs'));
+  const { Intake } = await import(path.join(root, 'lib/core/intake.mjs'));
   const GROUP = 'https://g.example/ap/actor';
   const MEMBER = 'https://f.example/users/vincent';
   const docs = {};
@@ -9140,7 +9140,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
 
 // --- 22b. a group's carry promotes a note we only held as a mention ---
 {
-  const { Intake } = await import(path.join(root, 'lib/intake.mjs'));
+  const { Intake } = await import(path.join(root, 'lib/core/intake.mjs'));
   const GROUP = 'https://g.example/ap/actor';
   const NOTE = 'https://f.example/users/v/statuses/1';
   const st = [{ noteId: NOTE, actor: 'https://f.example/users/v', kind: 'mention' }];
@@ -9165,7 +9165,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
 
 // --- 23. the human profile page: published beside the actor, escaped, followable ---
 {
-  const wire23 = await import(path.join(root, 'lib/wire.mjs'));
+  const wire23 = await import(path.join(root, 'lib/core/wire.mjs'));
   const page = wire23.profilePageHtml({
     name: 'Solid <script>alert(1)</script> Group',
     address: '@group@activitypub.example',
@@ -9194,10 +9194,10 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
 
 // --- 24. C2S (ActivityPub §6): auth, dispatch, addressing — offline, stub verifier ---
 {
-  const { C2S } = await import(path.join(root, 'lib/c2s.mjs'));
-  const { makeC2sAuth } = await import(path.join(root, 'lib/oidc-auth.mjs'));
-  const { PodStore: PodStore24 } = await import(path.join(root, 'lib/store.mjs'));
-  const wire24 = await import(path.join(root, 'lib/wire.mjs'));
+  const { C2S } = await import(path.join(root, 'lib/client/c2s.mjs'));
+  const { makeC2sAuth } = await import(path.join(root, 'lib/client/oidc-auth.mjs'));
+  const { PodStore: PodStore24 } = await import(path.join(root, 'lib/core/store.mjs'));
+  const wire24 = await import(path.join(root, 'lib/core/wire.mjs'));
 
   const OWNER = 'https://pod.example/profile/card#me';
   const urls24 = wire24.apUrls('https://pod.example/');
@@ -9417,7 +9417,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
 
 // --- 25. FEP conformance: moderators (1b12), pending (4ccd), blocked (c648), audience, announced Delete ---
 {
-  const wire25 = await import(path.join(root, 'lib/wire.mjs'));
+  const wire25 = await import(path.join(root, 'lib/core/wire.mjs'));
   const urls25 = wire25.apUrls('https://pod.example/');
 
   // The actor advertises the collections only when they are real.
@@ -9450,7 +9450,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   check(!('audience' in boost), 'a personal boost carries none');
 
   // Pending + blocked collections publish only where owner-only is REAL.
-  const { Publisher } = await import(path.join(root, 'lib/publisher.mjs'));
+  const { Publisher } = await import(path.join(root, 'lib/core/publisher.mjs'));
   const mkPub = (probeStatus) => {
     const puts = [];
     const pub = new Publisher({
@@ -9496,7 +9496,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
     'a pod that serves private documents to strangers gets NO pending/blocked collections');
 
   // A followed group announcing a Delete moderates away only what it carried.
-  const { Intake } = await import(path.join(root, 'lib/intake.mjs'));
+  const { Intake } = await import(path.join(root, 'lib/core/intake.mjs'));
   const GROUP25 = 'https://g.example/u/group';
   const removed = [];
   const st25 = {
@@ -9527,10 +9527,10 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
 
 // --- 26. FEP-1b12 moderation: announced bans, the moderator ask queue, apply ---
 {
-  const wire26 = await import(path.join(root, 'lib/wire.mjs'));
-  const social26 = await import(path.join(root, 'lib/social.mjs'));
-  const { PodStore: PodStore26 } = await import(path.join(root, 'lib/store.mjs'));
-  const { Intake } = await import(path.join(root, 'lib/intake.mjs'));
+  const wire26 = await import(path.join(root, 'lib/core/wire.mjs'));
+  const social26 = await import(path.join(root, 'lib/core/social.mjs'));
+  const { PodStore: PodStore26 } = await import(path.join(root, 'lib/core/store.mjs'));
+  const { Intake } = await import(path.join(root, 'lib/core/intake.mjs'));
   const urls26 = wire26.apUrls('https://pod.example/');
   const MOD = 'https://m.example/u/mod';
   const MEMBER = 'https://m.example/u/member';
@@ -9640,7 +9640,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
 // --- 27. httpsig: door verification, SSRF-safe key fetch, HMAC receipt ---
 {
   const { signRequest: sign27 } = await import(req.resolve('@fedify/fedify/sig'));
-  const httpsig = await import(path.join(root, 'lib/httpsig.mjs'));
+  const httpsig = await import(path.join(root, 'lib/gateway/httpsig.mjs'));
   const KID = 'https://pod.example/activitypods-js/ap/actor#main-key';
   const AID = 'https://pod.example/activitypods-js/ap/actor';
   const actorDoc27 = {
@@ -9713,8 +9713,8 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
 // --- 28. gateway-core edge decisions + drain trusts a receipt only in trust mode ---
 {
   const { signRequest: sign28 } = await import(req.resolve('@fedify/fedify/sig'));
-  const gw = await import(path.join(root, 'lib/gateway-core.mjs'));
-  const httpsig28 = await import(path.join(root, 'lib/httpsig.mjs'));
+  const gw = await import(path.join(root, 'lib/gateway/gateway-core.mjs'));
+  const httpsig28 = await import(path.join(root, 'lib/gateway/httpsig.mjs'));
   const KID = 'https://pod.example/activitypods-js/ap/actor#main-key';
   const AID = 'https://pod.example/activitypods-js/ap/actor';
   const actorDoc28 = {
@@ -9789,9 +9789,9 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   delete process.env.AP_ALLOW_PRIVATE_TARGETS;
 
   // The drain acts on a receipt ONLY in trust mode.
-  const { PodStore: PS28 } = await import(path.join(root, 'lib/store.mjs'));
-  const { Intake: IK28 } = await import(path.join(root, 'lib/intake.mjs'));
-  const wire28 = await import(path.join(root, 'lib/wire.mjs'));
+  const { PodStore: PS28 } = await import(path.join(root, 'lib/core/store.mjs'));
+  const { Intake: IK28 } = await import(path.join(root, 'lib/core/intake.mjs'));
+  const wire28 = await import(path.join(root, 'lib/core/wire.mjs'));
   const urls28 = wire28.apUrls('https://pod.example/');
   const FOLLOWER = 'https://m.example/u/joiner';
   const mkIntake = (mode) => {
@@ -9868,7 +9868,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
 
 // --- 28y. a Bluesky member who bridges later becomes one member, not two ---
 {
-  const { Intake } = await import(path.join(root, 'lib/intake.mjs'));
+  const { Intake } = await import(path.join(root, 'lib/core/intake.mjs'));
   const DID = 'did:plc:wren99';
   const store28 = new PodStore({ log: () => {} });
   store28.setConfig({ remotePod: 'https://g.example/', handle: 'g', kind: 'group' });
@@ -9894,7 +9894,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
 
 // --- 28z. the front filters from the person's own published policy ---
 {
-  const front = await import(path.join(root, 'lib/front-core.mjs'));
+  const front = await import(path.join(root, 'lib/gateway/front-core.mjs'));
   const { identFor, policyFor, policyCache } = front._internal;
   policyCache.clear();
   const rec = { handle: 'me', podHome: 'https://alice.pod/solid/',
@@ -9936,7 +9936,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
 
 // --- 29r. the relay: the front sends what the browser signed, and nothing else ---
 {
-  const front = await import(path.join(root, 'lib/front-core.mjs'));
+  const front = await import(path.join(root, 'lib/gateway/front-core.mjs'));
   const nodeCrypto = (await import('node:crypto')).default;
   const ORIGIN = 'https://fedipod.net';
   const dir = { me: { handle: 'me', podHome: 'https://alice.pod/solid/', webId: 'https://alice.pod/solid/profile/card#me',
@@ -10000,7 +10000,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
 
 // --- 29. multi-user front: WebFinger, per-user actor rewrite, inbox routing ---
 {
-  const front = await import(path.join(root, 'lib/front-core.mjs'));
+  const front = await import(path.join(root, 'lib/gateway/front-core.mjs'));
   const HOST = 'fedipod.net';
   const ORIGIN = 'https://fedipod.net';
   // Two users, each on their own pod, fronted under one domain.
@@ -10251,7 +10251,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
 
 // --- 30. fronted identity: apUrls publicBase split + agent publishes under it ---
 {
-  const wire30 = await import(path.join(root, 'lib/wire.mjs'));
+  const wire30 = await import(path.join(root, 'lib/core/wire.mjs'));
   const POD = 'https://alice.pod/solid/';
   const FRONT = 'https://fedipod.net/u/me/';
 
@@ -10277,7 +10277,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
 
   // RemotePod applies the map at its one choke point, so a write built from an
   // advertised id lands on the pod.
-  const { RemotePod } = await import(path.join(root, 'lib/remote.mjs'));
+  const { RemotePod } = await import(path.join(root, 'lib/device/remote.mjs'));
   const seen = [];
   const rp = Object.create(RemotePod.prototype);
   rp.pausedUntil = 0; rp.session = { fetch: async (url) => { seen.push(url); return { status: 201 }; } };
@@ -10291,7 +10291,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
 
   // A Publisher built for a fronted identity: its urls are fronted, it installs
   // the map on its remote, and a published note gets a fronted id.
-  const { Publisher } = await import(path.join(root, 'lib/publisher.mjs'));
+  const { Publisher } = await import(path.join(root, 'lib/core/publisher.mjs'));
   const podWrites = [];
   let mapInstalled = null;
   const remote30 = {
@@ -10329,7 +10329,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
 // provisions, and what it stops.
 {
   const $rdf = await import('rdflib');
-  const { startEmbeddedAgent, handleFor } = await import(path.join(root, 'lib/embed.mjs'));
+  const { startEmbeddedAgent, handleFor } = await import(path.join(root, 'lib/server/embed.mjs'));
 
   check(handleFor('http://alice.localhost:4000/') === 'alice', 'a subdomain pod is named by its label');
   check(handleFor('http://localhost:4000/bob/') === 'bob', 'a path pod by its last segment');
@@ -10475,8 +10475,8 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
 // --- 29. the rest of the fediverse: type lists, bare Links, signed queries,
 //        and an actor document that admits its own follow policy ---
 {
-  const { isContentType, Intake: IK29 } = await import(path.join(root, 'lib/intake.mjs'));
-  const wire29 = await import(path.join(root, 'lib/wire.mjs'));
+  const { isContentType, Intake: IK29 } = await import(path.join(root, 'lib/core/intake.mjs'));
+  const wire29 = await import(path.join(root, 'lib/core/wire.mjs'));
 
   // AS2 lets `type` be a list, and implementations use both forms.
   check(isContentType(['Note']) && isContentType(['Page', 'Object']),
@@ -10546,7 +10546,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
   // alone, which no correct verifier can reconstruct.
   {
     const { signRequest: sign29 } = await import(req.resolve('@fedify/fedify/sig'));
-    const { withQueryInTarget } = await import(path.join(root, 'lib/deliver.mjs'));
+    const { withQueryInTarget } = await import(path.join(root, 'lib/core/deliver.mjs'));
     const nodeCrypto29 = await import('node:crypto');
     const pair = nodeCrypto29.generateKeyPairSync('rsa', { modulusLength: 2048 });
     const jwk = pair.privateKey.export({ format: 'jwk' });
@@ -10592,9 +10592,9 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
 {
   const { verifyProof } = await import(req.resolve('@fedify/fedify/sig'));
   const { DataIntegrityProof, Person: P30 } = await import(req.resolve('@fedify/fedify/vocab'));
-  const proof30 = await import(path.join(root, 'lib/proof.mjs'));
-  const wire30 = await import(path.join(root, 'lib/wire.mjs'));
-  const { Deliverer: D30 } = await import(path.join(root, 'lib/deliver.mjs'));
+  const proof30 = await import(path.join(root, 'lib/core/proof.mjs'));
+  const wire30 = await import(path.join(root, 'lib/core/wire.mjs'));
+  const { Deliverer: D30 } = await import(path.join(root, 'lib/core/deliver.mjs'));
   const nc30 = await import('node:crypto');
 
   const ed = nc30.generateKeyPairSync('ed25519');
@@ -10678,11 +10678,11 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
 
 // --- 31. connected fediverse accounts: custody, the poll, and who acts ---
 {
-  const { FediAccounts, safeId, cleanHost } = await import(path.join(root, 'lib/fediacct.mjs'));
-  const { AcctFeed } = await import(path.join(root, 'lib/acctfeed.mjs'));
-  const { PodStore } = await import(path.join(root, 'lib/store.mjs'));
-  const { MastoApi } = await import(path.join(root, 'lib/mastoapi.mjs'));
-  const wire31 = await import(path.join(root, 'lib/wire.mjs'));
+  const { FediAccounts, safeId, cleanHost } = await import(path.join(root, 'lib/connections/fediacct.mjs'));
+  const { AcctFeed } = await import(path.join(root, 'lib/connections/acctfeed.mjs'));
+  const { PodStore } = await import(path.join(root, 'lib/core/store.mjs'));
+  const { MastoApi } = await import(path.join(root, 'lib/client/mastoapi.mjs'));
+  const wire31 = await import(path.join(root, 'lib/core/wire.mjs'));
 
   const reply = (status, body, headers = {}) => ({
     status, json: async () => body,
@@ -10861,7 +10861,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
 //     changed. Both are things the pod states and this agent reads, rather
 //     than things worked out from a URL or done by rewriting a document.
 {
-  const { RemotePod } = await import(path.join(root, 'lib/remote.mjs'));
+  const { RemotePod } = await import(path.join(root, 'lib/device/remote.mjs'));
   const cred = { webId: 'https://p.example/profile/card#me', remotePod: 'https://p.example/' };
   const podFor = (handler) => new RemotePod(cred, { log: () => {}, session: {
     fetch: async (url, init = {}) => handler(url, init),
@@ -10954,7 +10954,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
 // too, and the well-known path is only where a pod that states nothing has
 // always been found.
 {
-  const { Intake } = await import(path.join(root, 'lib/intake.mjs'));
+  const { Intake } = await import(path.join(root, 'lib/core/intake.mjs'));
   const intake = Object.create(Intake.prototype);
   intake.urls = { base: 'https://p.example/' };
   const realFetch = globalThis.fetch;
@@ -10975,7 +10975,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
 //     OAuth entries appear only where the surface answers somewhere a stranger
 //     can reach, so they are supplied by the caller rather than built here.
 {
-  const wire = await import(path.join(root, 'lib/wire.mjs'));
+  const wire = await import(path.join(root, 'lib/core/wire.mjs'));
   const urls = wire.apUrls('https://mei.example.org/');
   const base = { urls, handle: 'mei', name: 'Mei', publicKeyPem: 'x' };
 
@@ -11067,7 +11067,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
 // 33d. A client named by its own published document, rather than by anything
 //      registered here.
 {
-  const { MastoApi } = await import(path.join(root, 'lib/mastoapi.mjs'));
+  const { MastoApi } = await import(path.join(root, 'lib/client/mastoapi.mjs'));
   const M = MastoApi.redirectMatches;
 
   check(M('https://app.example/cb', 'https://app.example/cb'), 'an exact redirect matches');
@@ -11094,11 +11094,11 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/social
 // 35. Polls: publishing a Question, counting the answers that come back,
 //     and shutting it when its time is up.
 {
-  const { Publisher } = await import(path.join(root, 'lib/publisher.mjs'));
-  const { Intake } = await import(path.join(root, 'lib/intake.mjs'));
-  const wire35 = await import(path.join(root, 'lib/wire.mjs'));
-  const polls35 = await import(path.join(root, 'lib/polls.mjs'));
-  const { pollParams } = await import(path.join(root, 'lib/mastoapi.mjs'));
+  const { Publisher } = await import(path.join(root, 'lib/core/publisher.mjs'));
+  const { Intake } = await import(path.join(root, 'lib/core/intake.mjs'));
+  const wire35 = await import(path.join(root, 'lib/core/wire.mjs'));
+  const polls35 = await import(path.join(root, 'lib/core/polls.mjs'));
+  const { pollParams } = await import(path.join(root, 'lib/client/mastoapi.mjs'));
 
   const urls35 = wire35.apUrls('https://pod.example/');
 

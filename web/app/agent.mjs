@@ -5,16 +5,16 @@
 // the signing key comes from WebCrypto (keys-browser), and delivery goes through
 // the relay (deliver-relay). Everything between — wire, the store, the
 // publisher, intake, the Mastodon facade — is lib/, unchanged.
-import { apUrls } from '../../lib/wire.mjs';
+import { apUrls } from '../../lib/core/wire.mjs';
 import * as containers from '../../lib/pod/containers.mjs';
 import * as podState from '../../lib/pod/state.mjs';
-import { PodStore } from '../../lib/store.mjs';
-import { HttpStorage } from '../../lib/storage.mjs';
-import { Publisher } from '../../lib/publisher.mjs';
-import { Intake } from '../../lib/intake.mjs';
-import { Lease } from '../../lib/lease.mjs';
-import { MastoApi } from '../../lib/mastoapi.mjs';
-import { TagFeed } from '../../lib/tagfeed.mjs';
+import { PodStore } from '../../lib/core/store.mjs';
+import { HttpStorage } from '../../lib/core/storage.mjs';
+import { Publisher } from '../../lib/core/publisher.mjs';
+import { Intake } from '../../lib/core/intake.mjs';
+import { Lease } from '../../lib/core/lease.mjs';
+import { MastoApi } from '../../lib/client/mastoapi.mjs';
+import { TagFeed } from '../../lib/connections/tagfeed.mjs';
 import { makeDpopSession } from './pod-auth.mjs';
 import { BrowserRemotePod } from './pod-remote.mjs';
 import { importSigningKey, loadKeysFromPod, keyCacheKey } from './keys-browser.mjs';
@@ -23,11 +23,11 @@ import { kvPut } from './idb-kv.mjs';
 import { RelayDeliverer } from './deliver-relay.mjs';
 import { AdminFacade } from './admin-facade.mjs';
 import { BrowserAtproto } from './atproto-browser.mjs';
-import { BskyFeed } from '../../lib/bskyfeed.mjs';
+import { BskyFeed } from '../../lib/connections/bskyfeed.mjs';
 import { BrowserFediAccounts } from './fediacct-browser.mjs';
-import { AcctFeed } from '../../lib/acctfeed.mjs';
-import { followActor, unfollowActor } from '../../lib/social.mjs';
-import { ImportWorker } from '../../lib/import.mjs';
+import { AcctFeed } from '../../lib/connections/acctfeed.mjs';
+import { followActor, unfollowActor } from '../../lib/core/social.mjs';
+import { ImportWorker } from '../../lib/connections/import.mjs';
 
 // The authorities this identity answers on: exactly one, this origin. The Node
 // agent gets this from lib/guard.mjs, which is not in the browser bundle and

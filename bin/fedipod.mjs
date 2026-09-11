@@ -76,7 +76,7 @@
 //   fedipod uninstall-service  remove that registration
 
 import fs from 'node:fs';
-import { localFetch } from '../lib/localapi.mjs';
+import { localFetch } from '../lib/client/localapi.mjs';
 import os from 'node:os';
 import path from 'node:path';
 import net from 'node:net';
@@ -85,9 +85,9 @@ import { spawn } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { apRoot, profilesDir, identityHomes, isLegacyRoot, CURRENT_ROOT, tildify, rootOf,
   readRoot, writeRoot, defaultProfile, profileHome, rootHoldsIdentity, ROOT_FILE,
-  recordLastUsed, writeJsonAtomic } from '../lib/home.mjs';
-import { insecureUrlReason } from '../lib/safefetch.mjs';
-import { portFree, freePortFrom } from '../lib/ports.mjs';
+  recordLastUsed, writeJsonAtomic } from '../lib/device/home.mjs';
+import { insecureUrlReason } from '../lib/shared/safefetch.mjs';
+import { portFree, freePortFrom } from '../lib/device/ports.mjs';
 
 const args = process.argv.slice(2);
 const cmd = args[0];
@@ -328,8 +328,8 @@ async function runBrowserSetup() {
   recordAgent({ port, handle });
 
   const { Agent } = await import(new URL('../run-agent.mjs', import.meta.url));
-  const { startAdmin } = await import(new URL('../lib/admin.mjs', import.meta.url));
-  const { hostLabel } = await import(new URL('../lib/guard.mjs', import.meta.url));
+  const { startAdmin } = await import(new URL('../lib/device/admin.mjs', import.meta.url));
+  const { hostLabel } = await import(new URL('../lib/shared/guard.mjs', import.meta.url));
   const agent = new Agent({ home: HOME, log: (...a) => console.log('[ap]', ...a) });
   startAdmin({
     port, handle, agent,
@@ -409,7 +409,7 @@ if (cmd === 'up') {
   if (rootOf(HOME) === AP_ROOT) recordLastUsed(AP_ROOT, path.basename(HOME));
   const preferred = Number(portFlag() || process.env.AP_PORT || recordedPort() || 8030);
   const configured = fs.existsSync(path.join(HOME, 'credential.json'));
-  const { hostLabel } = await import(new URL('../lib/guard.mjs', import.meta.url));
+  const { hostLabel } = await import(new URL('../lib/shared/guard.mjs', import.meta.url));
 
   let port = preferred;
   let already = null;
@@ -419,7 +419,7 @@ if (cmd === 'up') {
     // owner of its port. Anything else is simply not this port; walking on is
     // what "occupied" has always meant here.
     if (!already) {
-      const { yieldDirectory } = await import(new URL('../lib/directory.mjs', import.meta.url));
+      const { yieldDirectory } = await import(new URL('../lib/gateway/directory.mjs', import.meta.url));
       if (!await yieldDirectory(preferred, { portFree })) {
         port = await freePortFrom(preferred + 1);
         // The shared helper returns null; the message is this command's to write.
@@ -544,7 +544,7 @@ if (cmd === 'up') {
   // A handle resolves through <host>/.well-known/webfinger, so it only works
   // when the pod owns the root of its host. Whether a NEW pod gets its own
   // subdomain is the server's call, so promise nothing here we cannot keep.
-  const { webfingerHost } = await import(new URL('../lib/wire.mjs', import.meta.url));
+  const { webfingerHost } = await import(new URL('../lib/core/wire.mjs', import.meta.url));
   const issuerHost = new URL(issuer).host;
   const wfHost = newAccount ? null : webfingerHost(pod);
   // A person warned about an unresolvable handle is the one who suffers, so a
@@ -583,7 +583,7 @@ if (cmd === 'up') {
   const password = process.env.AP_PASSWORD || await askHidden(`password for ${email} at ${issuer}: `);
 
   if (newAccount) {
-    const { createAccountWithPod } = await import(new URL('../lib/account.mjs', import.meta.url));
+    const { createAccountWithPod } = await import(new URL('../lib/device/account.mjs', import.meta.url));
     const made = await createAccountWithPod({ issuer, email, password, podName });
     pod = made.pod;
     console.log(`account + pod created: ${pod}`);
@@ -599,7 +599,7 @@ if (cmd === 'up') {
     }
   }
 
-  const { mintCredential } = await import(new URL('../lib/remote.mjs', import.meta.url));
+  const { mintCredential } = await import(new URL('../lib/device/remote.mjs', import.meta.url));
   // New credentials only: one already registered keeps the name it was minted
   // under, so existing pods stay as they are unless they are set up again.
   const credential = await mintCredential({ origin: issuer, email, password, name: 'fedipod' });
@@ -620,7 +620,7 @@ if (cmd === 'up') {
     ...(has('rotate-key') ? { rotateKeyOnce: true } : {}),
     // What shape this install is. Both setup paths stamp it, so `upgrade` can
     // tell an old install from a new one rather than inferring it.
-    layout: (await import(new URL('../lib/migrate.mjs', import.meta.url))).CURRENT_LAYOUT,
+    layout: (await import(new URL('../lib/device/migrate.mjs', import.meta.url))).CURRENT_LAYOUT,
   };
   fs.mkdirSync(HOME, { recursive: true, mode: 0o700 });
   writeJsonAtomic(path.join(HOME, 'credential.json'), rec);
@@ -642,8 +642,8 @@ if (cmd === 'up') {
     : `${what} published, but not reachable as a handle \u2014 ${rec.remotePod} is not a host root`);
 
   // Straight into serving — setup ends with a working client in the browser.
-  const { startAdmin } = await import(new URL('../lib/admin.mjs', import.meta.url));
-  const { hostLabel } = await import(new URL('../lib/guard.mjs', import.meta.url));
+  const { startAdmin } = await import(new URL('../lib/device/admin.mjs', import.meta.url));
+  const { hostLabel } = await import(new URL('../lib/shared/guard.mjs', import.meta.url));
   startAdmin({ port: PORT, handle, gateToken: process.env.AP_GATE_TOKEN || '', agent, log: (...a) => console.log('[ap]', ...a) });
   const shutdown = () => {
     setTimeout(() => process.exit(0), 1500).unref();   // never hang a stop on a slow pod
@@ -726,7 +726,7 @@ if (cmd === 'up') {
     handle: startHandle,            // the named origin, before pod state is read
   });
   {
-    const { hostLabel } = await import(new URL('../lib/guard.mjs', import.meta.url));
+    const { hostLabel } = await import(new URL('../lib/shared/guard.mjs', import.meta.url));
     const label = hostLabel(startHandle);
     const named = label ? `https://${label}.localhost:${PORT}/` : null;
     const plain = `https://localhost:${PORT}/`;
@@ -754,8 +754,8 @@ if (cmd === 'up') {
   // with the next one. A spawn per identity is a handful of processes for a
   // one-shot migration, and each is exactly the command you could have typed.
   const { execFile } = await import('node:child_process');
-  const { needsStateMove, pendingSteps } = await import(new URL('../lib/migrate.mjs', import.meta.url));
-  const { apUrls } = await import(new URL('../lib/wire.mjs', import.meta.url));
+  const { needsStateMove, pendingSteps } = await import(new URL('../lib/device/migrate.mjs', import.meta.url));
+  const { apUrls } = await import(new URL('../lib/core/wire.mjs', import.meta.url));
 
   const homes = identityHomes(AP_ROOT);
   if (!homes.length) {
@@ -799,8 +799,8 @@ if (cmd === 'up') {
     // Deliberately separate from the move, and second. While both copies exist
     // the move is reversible; this is the step that ends that, so it is never
     // something you get by accident.
-    const { RemotePod } = await import(new URL('../lib/remote.mjs', import.meta.url));
-    const { classifyRemoteState } = await import(new URL('../lib/migrate.mjs', import.meta.url));
+    const { RemotePod } = await import(new URL('../lib/device/remote.mjs', import.meta.url));
+    const { classifyRemoteState } = await import(new URL('../lib/device/migrate.mjs', import.meta.url));
     const apply = has('apply');
     for (const { name, dir, cred } of rows) {
       if (needsStateMove(cred)) {
@@ -857,7 +857,7 @@ if (cmd === 'up') {
   // One runner, every identity. The point is that being behind is a thing you
   // can ASK about rather than something you find out from a pod bill.
   const { pendingSteps, layoutOf, CURRENT_LAYOUT, isCurrent } =
-    await import(new URL('../lib/migrate.mjs', import.meta.url));
+    await import(new URL('../lib/device/migrate.mjs', import.meta.url));
   const homes = identityHomes(AP_ROOT);
   const behind = [];
   for (const { name, dir } of homes) {
@@ -893,7 +893,7 @@ if (cmd === 'up') {
   try { cred = JSON.parse(fs.readFileSync(credPath, 'utf8')); }
   catch { console.error(`no identity in ${HOME} — run setup first`); process.exit(2); }
 
-  const { apUrls } = await import(new URL('../lib/wire.mjs', import.meta.url));
+  const { apUrls } = await import(new URL('../lib/core/wire.mjs', import.meta.url));
   const { Agent } = await import(new URL('../run-agent.mjs', import.meta.url));
   const where = (c) => (c.privateRoot ? tildify(c.privateRoot) : `${apUrls(c.remotePod, c.root).home}(on the pod)`);
 
@@ -940,7 +940,7 @@ if (cmd === 'up') {
   // Only one of the two sides can be the pod, and moving between two local
   // pods needs no credential at all — so do not spend a token grant on it.
   if (!cred.privateRoot || !target) {
-    const { RemotePod } = await import(new URL('../lib/remote.mjs', import.meta.url));
+    const { RemotePod } = await import(new URL('../lib/device/remote.mjs', import.meta.url));
     agent.remote = new RemotePod(cred, { log: () => {}, home: HOME });
     // A pod that is not there is the ordinary case for an identity nobody has
     // run in a while, and it used to arrive as an unhandled rejection — 20
@@ -960,7 +960,7 @@ if (cmd === 'up') {
   const dest = agent.privateUrls(destCred);
   console.log(`moving the private half\n  from ${from.state.replace(/ap-state\/$/, '')}\n  to   ${dest.state.replace(/ap-state\/$/, '')}\n`);
 
-  const { copyPrivateHalf } = await import(new URL('../lib/migrate.mjs', import.meta.url));
+  const { copyPrivateHalf } = await import(new URL('../lib/device/migrate.mjs', import.meta.url));
   let copied;
   try {
     copied = await copyPrivateHalf({
@@ -989,7 +989,7 @@ if (cmd === 'up') {
   // honest rather than punitive: that is the old shape, and it should read as
   // the old shape whoever chose it.
   {
-    const { CURRENT_LAYOUT, isCurrent } = await import(new URL('../lib/migrate.mjs', import.meta.url));
+    const { CURRENT_LAYOUT, isCurrent } = await import(new URL('../lib/device/migrate.mjs', import.meta.url));
     if (isCurrent(cred)) cred.layout = CURRENT_LAYOUT; else delete cred.layout;
   }
   writeJsonAtomic(credPath, cred);
@@ -1323,7 +1323,7 @@ if (cmd === 'up') {
   // Without this an abandoned pod accepts fediverse deliveries forever into a
   // container nobody will ever drain, and no remote server can tell.
   const { Agent } = await import(new URL('../run-agent.mjs', import.meta.url));
-  const { resolveHandle } = await import(new URL('../lib/social.mjs', import.meta.url));
+  const { resolveHandle } = await import(new URL('../lib/core/social.mjs', import.meta.url));
   const agent = new Agent({ home: HOME, log: (...a) => console.log('[retire]', ...a) });
   // Read-only until you say yes: connecting for real acquires the lease and
   // starts the whole active agent — a destructive inbox drain, a channel
@@ -1386,7 +1386,7 @@ if (cmd === 'up') {
   // The credential file cannot be protected from anything running as you —
   // so the answer to a suspected leak is to kill it server-side, fast.
   const { Agent } = await import(new URL('../run-agent.mjs', import.meta.url));
-  const { revokeCredentialViaAccount } = await import(new URL('../lib/remote.mjs', import.meta.url));
+  const { revokeCredentialViaAccount } = await import(new URL('../lib/device/remote.mjs', import.meta.url));
   const agent = new Agent({ home: HOME, log: () => {} });
   const cred = agent.readCredential();
   if (!cred) { console.error('no credential to revoke'); process.exit(2); }
@@ -1406,8 +1406,8 @@ if (cmd === 'up') {
   }
 } else if (cmd === 'tokens') {
   const { Agent } = await import(new URL('../run-agent.mjs', import.meta.url));
-  const { RemotePod } = await import(new URL('../lib/remote.mjs', import.meta.url));
-  const { apUrls } = await import(new URL('../lib/wire.mjs', import.meta.url));
+  const { RemotePod } = await import(new URL('../lib/device/remote.mjs', import.meta.url));
+  const { apUrls } = await import(new URL('../lib/core/wire.mjs', import.meta.url));
   const agent = new Agent({ home: HOME, log: () => {} });
   const cred = agent.readCredential();
   if (!cred) { console.error('no credential — run setup first'); process.exit(2); }
@@ -1471,9 +1471,9 @@ if (cmd === 'up') {
 } else if (cmd === 'passwd') {
   requireIdentity();
   const { Agent } = await import(new URL('../run-agent.mjs', import.meta.url));
-  const { hashPassword } = await import(new URL('../lib/mastoapi.mjs', import.meta.url));
-  const { RemotePod } = await import(new URL('../lib/remote.mjs', import.meta.url));
-  const { apUrls } = await import(new URL('../lib/wire.mjs', import.meta.url));
+  const { hashPassword } = await import(new URL('../lib/client/mastoapi.mjs', import.meta.url));
+  const { RemotePod } = await import(new URL('../lib/device/remote.mjs', import.meta.url));
+  const { apUrls } = await import(new URL('../lib/core/wire.mjs', import.meta.url));
   const agent = new Agent({ home: HOME, log: () => {} });
   const cred = agent.readCredential();
   if (!cred) { console.error('no credential — run setup first'); process.exit(2); }
@@ -1557,8 +1557,8 @@ if (cmd === 'up') {
     process.exit(2);
   }
   const { Agent } = await import(new URL('../run-agent.mjs', import.meta.url));
-  const { RemotePod } = await import(new URL('../lib/remote.mjs', import.meta.url));
-  const { apUrls } = await import(new URL('../lib/wire.mjs', import.meta.url));
+  const { RemotePod } = await import(new URL('../lib/device/remote.mjs', import.meta.url));
+  const { apUrls } = await import(new URL('../lib/core/wire.mjs', import.meta.url));
   const agent = new Agent({ home: HOME, log: () => {} });
   const cred = agent.readCredential();
   if (!cred) { console.error('no credential — run setup first'); process.exit(2); }
@@ -1632,9 +1632,9 @@ if (cmd === 'up') {
     process.exit(0);
   }
   const { Agent } = await import(new URL('../run-agent.mjs', import.meta.url));
-  const { RemotePod } = await import(new URL('../lib/remote.mjs', import.meta.url));
-  const { apUrls } = await import(new URL('../lib/wire.mjs', import.meta.url));
-  const { moveKeysToPod } = await import(new URL('../lib/keys.mjs', import.meta.url));
+  const { RemotePod } = await import(new URL('../lib/device/remote.mjs', import.meta.url));
+  const { apUrls } = await import(new URL('../lib/core/wire.mjs', import.meta.url));
+  const { moveKeysToPod } = await import(new URL('../lib/core/keys.mjs', import.meta.url));
   const agent = new Agent({ home: HOME, log: () => {} });
   agent.remote = new RemotePod(cred);
   await agent.remote.warmup();
@@ -1659,7 +1659,7 @@ if (cmd === 'up') {
 } else if (cmd === 'update') {
   // Pull the latest published FediPod into this checkout and restart the
   // agents — what re-running the installer does, as one command.
-  const { checkLatest, runUpdate, restartAgents } = await import(new URL('../lib/update.mjs', import.meta.url));
+  const { checkLatest, runUpdate, restartAgents } = await import(new URL('../lib/device/update.mjs', import.meta.url));
   const u = await checkLatest();
   if (u && !u.available) console.log(`already current: ${u.current}`);
   const r = runUpdate({ log: console.log });
@@ -1675,7 +1675,7 @@ if (cmd === 'up') {
   // Plain: self-signed, a client may ask once. --trust: a local CA signs it,
   // and the CA certificate is what a trust store accepts — for clients that
   // refuse self-signed outright.
-  const { ensureLocalTls, enableTrust, certPaths } = await import(new URL('../lib/certs.mjs', import.meta.url));
+  const { ensureLocalTls, enableTrust, certPaths } = await import(new URL('../lib/device/certs.mjs', import.meta.url));
   const certDir = path.join(rootOf(HOME), 'certs');   // same resolution the agent uses
   if (has('trust')) {
     const t = enableTrust(certDir, { log: console.log });   // mints, signs, installs in NSS
@@ -2216,10 +2216,10 @@ WantedBy=default.target
     process.exit(2);
   }
   const { Agent } = await import(new URL('../run-agent.mjs', import.meta.url));
-  const { RemotePod } = await import(new URL('../lib/remote.mjs', import.meta.url));
-  const { apUrls } = await import(new URL('../lib/wire.mjs', import.meta.url));
-  const { exportCollections, DIR_BASE } = await import(new URL('../lib/export-collections.mjs', import.meta.url));
-  const { storageFor } = await import(new URL('../lib/storage.mjs', import.meta.url));
+  const { RemotePod } = await import(new URL('../lib/device/remote.mjs', import.meta.url));
+  const { apUrls } = await import(new URL('../lib/core/wire.mjs', import.meta.url));
+  const { exportCollections, DIR_BASE } = await import(new URL('../lib/device/export-collections.mjs', import.meta.url));
+  const { storageFor } = await import(new URL('../lib/core/storage.mjs', import.meta.url));
   const agent = new Agent({ home: HOME, log: () => {} });
   const cred = agent.readCredential();
   if (!cred) { console.error('no credential — run setup first'); process.exit(2); }
@@ -2228,7 +2228,7 @@ WantedBy=default.target
   agent.urls = apUrls(cred.remotePod, cred.root);
   agent.store.attach(agent.privateStorage(cred, 'state'));
   await agent.store.load();
-  const { Publisher } = await import(new URL('../lib/publisher.mjs', import.meta.url));
+  const { Publisher } = await import(new URL('../lib/core/publisher.mjs', import.meta.url));
   const outboxItems = (await Publisher.prototype.readPublishedOutbox.call(
     { remote: agent.remote, urls: agent.urls })) || [];
   // Only real AP actors, like the published followers collection.

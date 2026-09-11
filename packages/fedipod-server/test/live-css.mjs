@@ -16,8 +16,8 @@ import {
 } from '@solid/community-server';
 import { FediPodServerHandler } from '../dist/index.js';
 import { makeStoreSession } from '../dist/store-pod.js';
-import { RemotePod } from '../../../lib/remote.mjs';
-import { Lease } from '../../../lib/lease.mjs';
+import { RemotePod } from '../../../lib/device/remote.mjs';
+import { Lease } from '../../../lib/core/lease.mjs';
 
 let fails = 0;
 const check = (ok, label) => { console.log(`${ok ? 'PASS' : 'FAIL'}  ${label}`); if (!ok) fails++; };

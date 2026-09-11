@@ -14,10 +14,10 @@
 //
 // It mirrors lib/admin.mjs's handlers for those paths, calling the same agent
 // objects (store, publisher, intake, deliverer, remote) the Node agent does.
-import { publicHandle, webfingerHost } from '../../lib/wire.mjs';
+import { publicHandle, webfingerHost } from '../../lib/core/wire.mjs';
 import * as podInbox from '../../lib/pod/inbox.mjs';
-import { normalizeImport, IMPORT_KINDS } from '../../lib/import.mjs';
-import { hashPassword } from '../../lib/mastoapi.mjs';
+import { normalizeImport, IMPORT_KINDS } from '../../lib/connections/import.mjs';
+import { hashPassword } from '../../lib/client/mastoapi.mjs';
 
 // The identity itself — changing any means a different actor, i.e. a new setup.
 const PERMANENT_CONFIG = ['handle', 'remotePod', 'issuer', 'root', 'kind'];

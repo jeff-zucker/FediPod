@@ -79,9 +79,9 @@ interface EmbeddedIdentity {
 // Two layouts carry that tree: the published package ships its own copy of
 // lib/ beside dist/ (prepack puts it there), and a repo checkout reaches the
 // repo's lib/ three levels up. Prefer the package's own copy when it exists.
-const LIB_ROOT = existsSync(join(__dirname, '../lib/embed.mjs')) ? '../lib' : '../../../lib';
-const FRONT_CORE = `${LIB_ROOT}/front-core.mjs`;
-const EMBED = `${LIB_ROOT}/embed.mjs`;
+const LIB_ROOT = existsSync(join(__dirname, '../lib/server/embed.mjs')) ? '../lib' : '../../../lib';
+const FRONT_CORE = `${LIB_ROOT}/gateway/front-core.mjs`;
+const EMBED = `${LIB_ROOT}/server/embed.mjs`;
 const esmImport = new Function('s', 'return import(s)') as (s: string) => Promise<Record<string, Function>>;
 
 // The front's pages and the files they load, carried in the same two layouts

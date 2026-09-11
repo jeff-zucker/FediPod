@@ -110,7 +110,7 @@ const agent = mockAgent();
 // The real worker, over the mock store — the browser agent builds one the same
 // way (web/app/agent.mjs). Nothing is started: stage() arms a timer only when
 // the agent goes active, and this suite never does.
-const { ImportWorker } = await import('../../lib/import.mjs');
+const { ImportWorker } = await import('../../lib/connections/import.mjs');
 agent.importer = new ImportWorker({ agent, log: () => {} });
 const facade = new AdminFacade({ agent, log: () => {} });
 

@@ -28,28 +28,28 @@ import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-import { PodStore } from './lib/store.mjs';
-import { apRoot, rootOf, writeJsonAtomic } from './lib/home.mjs';
-import { ensureTrustedTls } from './lib/certs.mjs';
-import { storageFor } from './lib/storage.mjs';
-import { resolveKeys } from './lib/keys.mjs';
-import { RemotePod } from './lib/remote.mjs';
-import { Deliverer } from './lib/deliver.mjs';
-import { Publisher } from './lib/publisher.mjs';
-import { Intake } from './lib/intake.mjs';
-import { TagFeed } from './lib/tagfeed.mjs';
-import { ImportWorker } from './lib/import.mjs';
-import { Atproto } from './lib/atproto.mjs';
-import { FediAccounts } from './lib/fediacct.mjs';
-import { AcctFeed } from './lib/acctfeed.mjs';
-import { BskyFeed } from './lib/bskyfeed.mjs';
-import { BskyGroup } from './lib/bskygroup.mjs';
-import { Lease } from './lib/lease.mjs';
-import { startAdmin } from './lib/admin.mjs';
-import { exposureProblem, hostLabel } from './lib/guard.mjs';
-import { pendingSteps } from './lib/migrate.mjs';
-import { apUrls, assertionKeyId , publicHandle } from './lib/wire.mjs';
-import { followActor, unfollowActor, resolveHandle } from './lib/social.mjs';
+import { PodStore } from './lib/core/store.mjs';
+import { apRoot, rootOf, writeJsonAtomic } from './lib/device/home.mjs';
+import { ensureTrustedTls } from './lib/device/certs.mjs';
+import { storageFor } from './lib/core/storage.mjs';
+import { resolveKeys } from './lib/core/keys.mjs';
+import { RemotePod } from './lib/device/remote.mjs';
+import { Deliverer } from './lib/core/deliver.mjs';
+import { Publisher } from './lib/core/publisher.mjs';
+import { Intake } from './lib/core/intake.mjs';
+import { TagFeed } from './lib/connections/tagfeed.mjs';
+import { ImportWorker } from './lib/connections/import.mjs';
+import { Atproto } from './lib/connections/atproto.mjs';
+import { FediAccounts } from './lib/connections/fediacct.mjs';
+import { AcctFeed } from './lib/connections/acctfeed.mjs';
+import { BskyFeed } from './lib/connections/bskyfeed.mjs';
+import { BskyGroup } from './lib/connections/bskygroup.mjs';
+import { Lease } from './lib/core/lease.mjs';
+import { startAdmin } from './lib/device/admin.mjs';
+import { exposureProblem, hostLabel } from './lib/shared/guard.mjs';
+import { pendingSteps } from './lib/device/migrate.mjs';
+import { apUrls, assertionKeyId , publicHandle } from './lib/core/wire.mjs';
+import { followActor, unfollowActor, resolveHandle } from './lib/core/social.mjs';
 
 export class Agent {
   constructor({ home, log }) {
@@ -773,7 +773,7 @@ export async function startAgent({
   // Is a newer FediPod published? Once at boot and daily after; the answer
   // rides /status and the record page offers the update.
   const updateTick = async () => {
-    const { checkLatest } = await import('./lib/update.mjs');
+    const { checkLatest } = await import('./lib/device/update.mjs');
     const u = await checkLatest();
     if (u) {
       agent.updateInfo = u;

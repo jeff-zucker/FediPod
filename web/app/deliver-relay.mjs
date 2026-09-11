@@ -7,7 +7,7 @@
 // which sends it verbatim. Everything else — the retry queue, the cooling
 // hosts, the dead-letter, FEP-8b32 proofs — is the Node Deliverer, reused by
 // overriding only the one network step.
-import { Deliverer } from '../../lib/deliver.mjs';
+import { Deliverer } from '../../lib/core/deliver.mjs';
 import { sign } from './shims/fedify-sig.mjs';
 
 export class RelayDeliverer extends Deliverer {

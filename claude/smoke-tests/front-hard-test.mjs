@@ -12,7 +12,7 @@
 
 import http from 'node:http';
 import crypto from 'node:crypto';
-import { routeFront } from '../../lib/front-core.mjs';
+import { routeFront } from '../../lib/gateway/front-core.mjs';
 
 let fails = 0;
 const check = (ok, label) => { console.log(`${ok ? 'PASS' : 'FAIL'}  ${label}`); if (!ok) fails++; };

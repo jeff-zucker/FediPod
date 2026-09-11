@@ -10,7 +10,7 @@
 //  2. The mirror can be paused (feedPaused) without disconnecting.
 //
 // Bluesky's API answers CORS, so the fetches go direct, not through the relay.
-import { Atproto } from '../../lib/atproto.mjs';
+import { Atproto } from '../../lib/connections/atproto.mjs';
 import { kvGet, kvPut, kvDel } from './idb-kv.mjs';
 
 const IDB_KEY = 'atproto';

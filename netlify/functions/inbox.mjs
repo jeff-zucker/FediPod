@@ -14,7 +14,7 @@
 //   FEDIPOD_HMAC_SECRET  the receipt secret (matches the identity's config)
 //   FEDIPOD_GATEWAY_WEBID the WebID this gateway authenticates as
 
-import { handleDelivery } from '../../lib/gateway-core.mjs';
+import { handleDelivery } from '../../lib/gateway/gateway-core.mjs';
 import * as podInbox from '../../lib/pod/inbox.mjs';
 
 let cachedPolicy = null;

@@ -9576,7 +9576,7 @@ and ensure you are accounting for this risk.
   }
 });
 
-// lib/wire.mjs
+// lib/core/wire.mjs
 var wire_exports = {};
 __export(wire_exports, {
   AS_CTX: () => AS_CTX,
@@ -10264,7 +10264,7 @@ function addRemoveActivity({ urls, type, object, target, serial }) {
 }
 var import_sanitize_html, AS_CTX, SEC_CTX, PUBLIC, DEFAULT_ROOT, assertionKeyId, OUTBOX_PAGE_SIZE, outboxPageId, outboxPageCount, outboxItemId, FOLLOWERS_PAGE_SIZE, followersPageId, followersPageCount, ALLOWED_TAGS, ALLOWED_ATTRS, MAX_ATTACHMENTS, MAX_ATTACHMENT_URL, attachmentUrl, HTML_ESCAPES, MENTION_RE;
 var init_wire = __esm({
-  "lib/wire.mjs"() {
+  "lib/core/wire.mjs"() {
     init_urls();
     init_urls();
     import_sanitize_html = __toESM(require_sanitize_html(), 1);
@@ -32602,7 +32602,7 @@ var init_fedify_sig = __esm({
   }
 });
 
-// lib/httpsig.mjs
+// lib/gateway/httpsig.mjs
 var httpsig_exports = {};
 __export(httpsig_exports, {
   makeReceipt: () => makeReceipt,
@@ -32726,7 +32726,7 @@ function verifyReceipt(receipt, secret) {
   return matches(canonical(receipt)) || matches(canonicalLegacy(receipt));
 }
 var init_httpsig = __esm({
-  "lib/httpsig.mjs"() {
+  "lib/gateway/httpsig.mjs"() {
     init_node_crypto();
     init_fedify_sig();
     init_safefetch();
@@ -32916,7 +32916,7 @@ async function probePrivateEnforcement(probe, podKeepUrl) {
 var readWrappedKeys = (pod, urls) => pod.getJson(urls.state + "keys.json");
 var writeWrappedKeys = (pod, urls, envelope) => pod.putJson(urls.state + "keys.json", envelope, "application/json");
 
-// lib/store.mjs
+// lib/core/store.mjs
 init_node_crypto();
 init_wire();
 var plainText = (s) => sanitizeHtml(String(s || "")).replace(/<[^>]*>/g, "").trim();
@@ -43856,7 +43856,7 @@ var formula = new Formula();
 var term = node_default.fromValue;
 var NextId = BlankNode.nextId;
 
-// lib/storage.mjs
+// lib/core/storage.mjs
 var LDP = Namespace("http://www.w3.org/ns/ldp#");
 var slash = (u) => u.endsWith("/") ? u : u + "/";
 var HttpStorage = class {
@@ -43937,7 +43937,7 @@ var HttpStorage = class {
   }
 };
 
-// lib/publisher.mjs
+// lib/core/publisher.mjs
 init_node_crypto();
 
 // web/app/shims/node-fs.mjs
@@ -43958,10 +43958,10 @@ var unlinkSync = nope("unlinkSync");
 var rmSync = nope("rmSync");
 var node_fs_default = { readFileSync, existsSync, writeFileSync, mkdirSync, readdirSync, statSync, unlinkSync, rmSync };
 
-// lib/publisher.mjs
+// lib/core/publisher.mjs
 init_wire();
 
-// lib/polls.mjs
+// lib/core/polls.mjs
 init_node_crypto();
 var VOTES_DOC = "poll-votes.json";
 var MAX_OPTIONS = 4;
@@ -44016,11 +44016,11 @@ function withTally(poll, roster) {
   };
 }
 
-// lib/ua.mjs
+// lib/shared/ua.mjs
 var version = "0";
 try {
   ({ version } = JSON.parse(node_fs_default.readFileSync(
-    node_path_default.join(node_path_default.dirname(fileURLToPath(import.meta.url)), "../package.json"),
+    node_path_default.join(node_path_default.dirname(fileURLToPath(import.meta.url)), "../../package.json"),
     "utf8"
   )));
 } catch {
@@ -44034,7 +44034,7 @@ try {
 }
 var USER_AGENT = `fedipod/${version} (+https://github.com/jeff-zucker/FediPod)`;
 
-// lib/publisher.mjs
+// lib/core/publisher.mjs
 init_safefetch();
 
 // lib/pod/discovery.mjs
@@ -44238,7 +44238,7 @@ async function list2(pod, urls) {
 // lib/pod/media.mjs
 var write6 = (pod, url, bytes, contentType) => pod.put(url, bytes, contentType);
 
-// lib/publisher.mjs
+// lib/core/publisher.mjs
 var ACCEPT_AP = 'application/activity+json, application/ld+json; profile="https://www.w3.org/ns/activitystreams"';
 var REBUILD_MAX_PER_RUN = 200;
 var POLL_REWRITE_MS = 1e4;
@@ -44251,7 +44251,7 @@ var ALL_COLLECTIONS = {
   blocked: true
 };
 var AGENT_VERSION = JSON.parse(node_fs_default.readFileSync(
-  node_path_default.join(node_path_default.dirname(fileURLToPath(import.meta.url)), "../package.json"),
+  node_path_default.join(node_path_default.dirname(fileURLToPath(import.meta.url)), "../../package.json"),
   "utf8"
 )).version;
 var Publisher = class {
@@ -45465,7 +45465,7 @@ async function subscribeToInbox(pod, { channelUrl, podTopicUrl, ...rest }) {
   });
 }
 
-// lib/intake.mjs
+// lib/core/intake.mjs
 init_wire();
 init_safefetch();
 var RDF4 = Namespace("http://www.w3.org/1999/02/22-rdf-syntax-ns#");
@@ -46892,7 +46892,7 @@ var Intake = class {
   }
 };
 
-// lib/lease.mjs
+// lib/core/lease.mjs
 init_node_crypto();
 var TTL_MS = 3e5;
 var RENEW_MS = 9e4;
@@ -47061,10 +47061,10 @@ var Lease = class {
   }
 };
 
-// lib/mastoapi.mjs
+// lib/client/mastoapi.mjs
 init_node_crypto();
 
-// lib/social.mjs
+// lib/core/social.mjs
 var social_exports = {};
 __export(social_exports, {
   admitRequest: () => admitRequest,
@@ -47499,16 +47499,16 @@ async function pinStatus(agent2, s, pinned) {
   return updated || s;
 }
 
-// lib/guard.mjs
+// lib/shared/guard.mjs
 function isCrossSiteNavigation(req) {
   const site = req.headers["sec-fetch-site"];
   return site === "cross-site";
 }
 
-// lib/mastoapi.mjs
+// lib/client/mastoapi.mjs
 init_wire();
 
-// lib/bskyfeed.mjs
+// lib/connections/bskyfeed.mjs
 var DEFAULTS = { intervalMin: 5 };
 var PER_SWEEP = 30;
 var MAX_BSKY_ENTRIES = 200;
@@ -47658,7 +47658,7 @@ var BskyFeed = class {
   }
 };
 
-// lib/webpush.mjs
+// lib/client/webpush.mjs
 init_node_crypto();
 
 // web/app/shims/web-push.mjs
@@ -47678,7 +47678,7 @@ async function sendNotification() {
 }
 var web_push_default = { generateVAPIDKeys, setVapidDetails, sendNotification };
 
-// lib/webpush.mjs
+// lib/client/webpush.mjs
 var Push = class {
   constructor({ store, subject, log: log2 = () => {
   } }) {
@@ -47773,7 +47773,7 @@ var Push = class {
   }
 };
 
-// lib/mastoapi.mjs
+// lib/client/mastoapi.mjs
 init_safefetch();
 var ATTACHMENT_KINDS = /* @__PURE__ */ new Set(["image", "video", "audio"]);
 var NEVER = /* @__PURE__ */ new Set(["image/svg+xml", "image/svg"]);
@@ -49829,7 +49829,7 @@ function readBody(req) {
   });
 }
 
-// lib/tagfeed.mjs
+// lib/connections/tagfeed.mjs
 var MAX_TIMELINE_BYTES = 2 * 1024 * 1024;
 var DEFAULTS2 = {
   instance: "https://mastodon.social",
@@ -50602,11 +50602,11 @@ async function loadKeysFromPod(remote, urls) {
   return importSigningKey(doc);
 }
 
-// lib/deliver.mjs
+// lib/core/deliver.mjs
 init_fedify_sig();
 init_node_crypto();
 
-// lib/proof.mjs
+// lib/core/proof.mjs
 init_node_crypto();
 var import_json_canon = __toESM(require_src(), 1);
 var ED25519_PREFIX = Buffer.from([237, 1]);
@@ -50652,7 +50652,7 @@ async function attachProof(activity, { privateKey, verificationMethod, created =
   return { ...doc, proof: { ...emitted, proofValue: "z" + base58btc(Buffer.from(sig)) } };
 }
 
-// lib/deliver.mjs
+// lib/core/deliver.mjs
 init_safefetch();
 var MAX_REDIRECTS = 3;
 async function withQueryInTarget(signed, privateKey) {
@@ -50992,7 +50992,7 @@ var RelayDeliverer = class extends Deliverer {
 // web/app/admin-facade.mjs
 init_wire();
 
-// lib/import.mjs
+// lib/connections/import.mjs
 init_node_crypto();
 var IMPORT_STATE_DOC = "import-state.json";
 var IMPORT_KINDS = ["follow", "block", "mute", "list", "domain"];
@@ -51931,7 +51931,7 @@ var fail2 = () => {
 };
 var node_os_default = new Proxy({}, { get: () => fail2 });
 
-// lib/home.mjs
+// lib/device/home.mjs
 function writeFileAtomic(file, body, { mode = 384 } = {}) {
   const tmp = `${file}.${process.pid}.tmp`;
   node_fs_default.mkdirSync(node_path_default.dirname(file), { recursive: true, mode: 448 });
@@ -51948,7 +51948,7 @@ function writeJsonAtomic(file, obj, opts) {
   writeFileAtomic(file, JSON.stringify(obj, null, 2) + "\n", opts);
 }
 
-// lib/atproto.mjs
+// lib/connections/atproto.mjs
 init_safefetch();
 var FILE = "atproto.json";
 var POST_NSID = "app.bsky.feed.post";
@@ -52352,7 +52352,7 @@ var BrowserAtproto = class extends Atproto {
   }
 };
 
-// lib/fediacct.mjs
+// lib/connections/fediacct.mjs
 init_node_crypto();
 init_safefetch();
 var DIR = "fediaccts";
@@ -52768,7 +52768,7 @@ var BrowserFediAccounts = class extends FediAccounts {
   }
 };
 
-// lib/acctfeed.mjs
+// lib/connections/acctfeed.mjs
 init_wire();
 var DEFAULTS3 = { intervalMin: 5 };
 var PER_SWEEP2 = 40;

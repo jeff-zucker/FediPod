@@ -5,13 +5,13 @@ See `claude/plans/browser-agent.md` for the whole design and status.
 
 | file | what |
 |---|---|
-| `pod-auth.mjs` | The pod side of sign-in, browser-native: create a CSS account + pod, mint a client credential, and a DPoP-bound `fetch` that writes to the pod. The twin of `lib/account.mjs` + `vendor/idp-grant.cjs`. |
+| `pod-auth.mjs` | The pod side of sign-in, browser-native: create a CSS account + pod, mint a client credential, and a DPoP-bound `fetch` that writes to the pod. The twin of `lib/device/account.mjs` + `vendor/idp-grant.cjs`. |
 | `keystore.mjs` | WebCrypto RSA/Ed25519 key generation, and wrapping the keys under the account password (PBKDF2-SHA256 + AES-GCM-256). The pod holds only the wrapped form, so the pod's host cannot sign as you. |
 | `keys-browser.mjs` | Importing a keys record for signing, and finding one: this browser's opened copy in IndexedDB first, else the pod's. A wrapped one the browser has not opened yet raises `KeyPasswordNeeded`, which `boot.mjs` answers with the unlock pane — once per browser. |
 | `signup.mjs` | The `fedipod setup` flow, in the browser, up to publish: account, pod, credential, keys locked on the pod (owner-only ACL written *before* the key). Produces the credential/keys/config shapes the agent already reads. |
 | `shims/fedify-sig.mjs` | Browser stand-in for `@fedify/fedify/sig` (which will not bundle for a browser). `sign()` returns signed headers as data for the relay; `signRequest()` wraps it Fedify-shaped. Proven byte-identical to Fedify. |
 | `shims/node-crypto.mjs` | Browser stand-in for `node:crypto` — the small synchronous slice the agent uses, via crypto-browserify, plus native WebCrypto. |
-| `shims/safefetch.mjs` | Browser stand-in for `lib/safefetch.mjs`. Pinning and the private-address checks are unnecessary here (a browser closes DNS rebinding itself); the BYTE BUDGET is not, so `readCapped` streams and stops at the cap exactly as the Node one does. |
+| `shims/safefetch.mjs` | Browser stand-in for `lib/shared/safefetch.mjs`. Pinning and the private-address checks are unnecessary here (a browser closes DNS rebinding itself); the BYTE BUDGET is not, so `readCapped` streams and stops at the cap exactly as the Node one does. |
 | `dist/` | The bundled agent, built by `scripts/build-app.mjs`. Committed like `phanpy/dist`, regenerated on release. (Not present until the agent entry is built.) |
 
 Build: `node scripts/build-app.mjs`. Tests live in `claude/validation/`:
@@ -39,12 +39,12 @@ worker answers the data endpoints it calls. See
 
 | file | what |
 |---|---|
-| `admin-facade.mjs` | Answers the owner/manage endpoints (`/status`, `/config`, `/gateway`, `/alias`, `/rotate-key`, `/rebuild`, `/move`, `/retire`, `/inbox/prune`, `/deadletter`, `/blocks`, `/atproto*`, `/fediacct*`) over the browser agent, mirroring `lib/admin.mjs`. Personal only. |
-| `atproto-browser.mjs` | The Bluesky connection (`lib/atproto.mjs`) with a per-connection storage choice — IndexedDB (this browser) or owner-only pod state — plus pause. |
-| `fediacct-browser.mjs` | Connections to fediverse accounts on other servers (`lib/fediacct.mjs`): the OAuth dance, the same storage choice, and a best-effort server-side revoke on disconnect. |
+| `admin-facade.mjs` | Answers the owner/manage endpoints (`/status`, `/config`, `/gateway`, `/alias`, `/rotate-key`, `/rebuild`, `/move`, `/retire`, `/inbox/prune`, `/deadletter`, `/blocks`, `/atproto*`, `/fediacct*`) over the browser agent, mirroring `lib/device/admin.mjs`. Personal only. |
+| `atproto-browser.mjs` | The Bluesky connection (`lib/connections/atproto.mjs`) with a per-connection storage choice — IndexedDB (this browser) or owner-only pod state — plus pause. |
+| `fediacct-browser.mjs` | Connections to fediverse accounts on other servers (`lib/connections/fediacct.mjs`): the OAuth dance, the same storage choice, and a best-effort server-side revoke on disconnect. |
 | `idb-kv.mjs` | The per-origin IndexedDB key/value store the two connectors use for "on this device, never the pod" credentials. |
 
-`agent.mjs` also holds the single-active-agent **lease** (`lib/lease.mjs`) — a
+`agent.mjs` also holds the single-active-agent **lease** (`lib/core/lease.mjs`) — a
 second device runs read-only until it takes over — and starts the drain/mirrors
 only when it is the active holder.
 

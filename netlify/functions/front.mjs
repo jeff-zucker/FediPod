@@ -26,7 +26,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { getStore } from '@netlify/blobs';
-import { routeFront } from '../../lib/front-core.mjs';
+import { routeFront } from '../../lib/gateway/front-core.mjs';
 import * as podInbox from '../../lib/pod/inbox.mjs';
 
 // The new-account page and the vendored auth library, read once at cold start.

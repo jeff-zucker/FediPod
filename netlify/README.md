@@ -13,8 +13,8 @@ runtime-agnostic Node:
 
 | File | What it serves | Around |
 |---|---|---|
-| `functions/inbox.mjs` | One person's door: verify a delivery, forward it to their pod. | `lib/gateway-core.mjs` |
-| `functions/front.mjs` | A door for many people: WebFinger, each public face, per-person delivery routing, and the signup and attach flow. | `lib/front-core.mjs` |
+| `functions/inbox.mjs` | One person's door: verify a delivery, forward it to their pod. | `lib/gateway/gateway-core.mjs` |
+| `functions/front.mjs` | A door for many people: WebFinger, each public face, per-person delivery routing, and the signup and attach flow. | `lib/gateway/front-core.mjs` |
 
 Another host needs only its own adapter calling the same `handleDelivery`. A
 Community Solid Server can run the same door as a component of itself instead

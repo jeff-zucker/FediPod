@@ -14,7 +14,7 @@
 // short-lived OAuth "pending" state stay in IndexedDB (per browser), and the
 // pending state is persisted so a connection survives the worker being
 // idle-killed between the redirect out and the code coming back.
-import { FediAccounts } from '../../lib/fediacct.mjs';
+import { FediAccounts } from '../../lib/connections/fediacct.mjs';
 import { kvAll, kvPut, kvDel } from './idb-kv.mjs';
 
 const POD_DOC = 'fediaccts.json';   // { id: record } for pod-stored connections
