@@ -2936,7 +2936,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   };
   check(!gated("p === '/requests'") && !gated("case '/admit':"),
     'reading and answering the queue are not group-only routes');
-  check(/refreshRequests/.test(fs.readFileSync(path.join(root, 'web/admin/admin.js'), 'utf8')),
+  check(/refreshRequests/.test(fs.readdirSync(path.join(root, 'web/admin')).filter((f) => f.endsWith('.js')).map((f) => fs.readFileSync(path.join(root, 'web/admin', f), 'utf8')).join('\n')),
     'and the record page shows it to a person');
 }
 
@@ -3064,7 +3064,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   check(!/id="(form|run)-error"[^>]*hidden/.test(setup)
     && /#form-error:empty, #run-error:empty \{ display: none/.test(setup),
     'and so does setup');
-  const adminJs = read('web/admin/admin.js');
+  const adminJs = fs.readdirSync(path.join(root, 'web/admin')).filter((f) => f.endsWith('.js')).map((f) => fs.readFileSync(path.join(root, 'web/admin', f), 'utf8')).join('\n');
   check(!/\$\('say'\)[\s\S]{0,40}hidden = false/.test(adminJs)
     && !/\$\('fatal'\)\.hidden = false/.test(adminJs),
     'and nothing unhides one on its way to writing into it');

@@ -3,26 +3,15 @@
 // at localhost:<port> or at <handle>.localhost:<port>.
 //
 // External file, not an inline script: the CSP allows 'self' plus the hashes
-// of Phanpy's own inline bootstrap, and nothing else.
+// of Phanpy's own inline bootstrap, and nothing else. `$`, `BASE`, `api` and
+// `postJson` come from ../common.js, loaded first.
 
-const $ = (id) => document.getElementById(id);
 // Empty means gone, not a blank line where a sentence used to be.
 const strap = (t) => { const el = $('strap'); el.textContent = t || ''; el.hidden = !t; };
 // By id, not by position: these were `body > section` until a wrapper went
 // round them for layout, and the selector then matched nothing — every pane
 // kept whatever it started as and the page sat on "Reading this agent's state".
 const show = (id) => { for (const s of document.querySelectorAll('section[id^="pane-"]')) s.hidden = s.id !== id; };
-// The door this page is served behind: nothing when the agent runs on this
-// machine, `/app` when the identity is hosted by its own pod server. Read from
-// the page's own address, so one build serves both.
-const BASE = location.pathname.replace(/\/admin\/.*$/u, '');
-const api = async (path, init) => {
-  const res = await fetch(BASE + path, { ...init, headers: { ...(init?.headers || {}), 'x-fedipod-page': '1' } });
-  return { status: res.status, json: await res.json().catch(() => null) };
-};
-const postJson = (path, body) => api(path, {
-  method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
-});
 
 let state = null;
 
