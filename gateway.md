@@ -107,7 +107,7 @@ running behind a door.
 ## Running a gateway
 
 Any always-on box will do — a VPS, a home server behind a tunnel, a serverless
-host. The logic is plain Node in <!-- CLAUDE 2026-09-11 — path moved; delete marker when done -->`lib/gateway/gateway-core.mjs`<!-- /CLAUDE -->, and a host needs only
+host. The logic is plain Node in `lib/gateway/gateway-core.mjs`, and a host needs only
 a thin adapter that calls `handleDelivery`.
 
 Two ways are ready to use:
