@@ -28,7 +28,7 @@
 
     <text x="705" y="392" font-size="17" font-weight="bold">Any Browser</text>
     <text x="705" y="414" font-size="13">runs your FediPod Agent,</text>
-    <text x="705" y="431" font-size="13">a Mastodon API / AP C2S client</text>
+    <text x="705" y="431" font-size="13">a Mastodon API client</text>
   </g>
 
   <!-- arrows -->
