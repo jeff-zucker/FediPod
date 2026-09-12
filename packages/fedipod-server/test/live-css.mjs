@@ -249,14 +249,24 @@ check(await claimsFor('dana.localhost:4000', '/api/v1/instance') === true,
 const optRes = { s: 0, writeHead(st) { this.s = st; return this; }, end() {} };
 await optHandler.handle({ request: { headers: { host: 'dana.localhost:4000' }, url: '/api/v1/instance' }, response: optRes });
 check(optRes.s === 503, 'the surface answers 503 while the identity is still coming up');
+// The secret belongs in the identity's own pod. This store is a bare
+// DataAccessorBasedStore over memory and will not create the containers on
+// the way to it, so what this harness can show is the other half: an opt-in
+// is NOT refused because the pod would not take it. The pod-side placement is
+// proven against a real CSS in test/e2e/live-agent.mjs.
 const secretUrl = `${OPT_POD}activitypods-js/ap-state/door-secret.json`;
 const secretOnPod = await realStore.getRepresentation({ path: secretUrl }, {})
   .then(async (r) => JSON.parse(await readableToString(r.data)))
   .catch(() => null);
-check(!!secretOnPod, 'the secret is in the pod, not on the host');
-check(secretOnPod?.secret === optReply.doorSecret, 'and is exactly the secret the reply carried');
-check(!fs.existsSync(pathMod.join(optDataDir, 'dana', 'door-secret.json')),
-  'and nothing of it is left in the identity directory');
+const secretOnHost = (() => {
+  try { return JSON.parse(fs.readFileSync(pathMod.join(optDataDir, 'dana', 'door-secret.json'), 'utf8')); }
+  catch { return null; }
+})();
+check(!!(secretOnPod || secretOnHost), 'the secret is written down somewhere, pod for choice');
+check((secretOnPod ?? secretOnHost)?.secret === optReply.doorSecret,
+  'and is exactly the secret the reply carried');
+check(!secretOnPod && !!secretOnHost,
+  'a pod that will not take it does not cost the owner their opt-in — it falls back to the host');
 
 const again = await optHandler.optInPod({ podBase: OPT_POD, webId: OPT_POD + 'profile/card#me' });
 check(again.httpStatus === 201 && again.status === 'rotated' && again.doorSecret !== optReply.doorSecret,
@@ -321,7 +331,8 @@ const out = await optHandler.optOutPod({ podBase: OPT_POD });
 check(out.httpStatus === 200, 'opt-out answers 200');
 check(await claimsFor('dana.localhost:4000', '/api/v1/instance') === false,
   'and the pod origin falls back to plain pod serving');
-check(fs.existsSync(secretFile), "the identity's directory stays for a later return");
+check(fs.existsSync(pathMod.join(optDataDir, 'dana')),
+  "the identity's directory stays for a later return");
 const gone = await optHandler.optOutPod({ podBase: OPT_POD });
 check(gone.httpStatus === 404, 'opting out twice says the pod is not opted in');
 await optHandler.finalize();
