@@ -1,6 +1,6 @@
 # Changes
 
-## 2026-09-12 (an activity means what it says, however it was written)
+## 2026-09-12 (an activity means what it says, however it was written — version 1.2.0)
 
 ActivityStreams documents are read as the JSON-LD they are. Two servers can
 write the same Follow in different ways — one spelling the terms out, one
