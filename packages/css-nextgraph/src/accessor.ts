@@ -74,7 +74,7 @@ interface Pod {
   meta: Map<string, string>;
 }
 
-const VERSION = '0.1.0';
+const VERSION = '0.2.0';
 
 /** The media types stored as triples. ActivityPub's application/activity+json is not one: the Fediverse needs those bytes back exact. */
 export const RDF_TYPES = new Set([

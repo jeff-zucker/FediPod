@@ -1,5 +1,24 @@
 # Changes
 
+## 2026-09-12 (a pod-hosted identity travels whole — version 1.1.0)
+
+An account hosted inside a Solid server kept its signing key, the secret
+guarding its own pages, and the credentials for any accounts its owner had
+connected elsewhere on the server's disk rather than on its pod. Handing
+somebody their pod handed over an account that could not sign, whose pages
+would not open, and whose connections were left behind. All of it lives on the
+pod now, and an account set up before this moves them the next time its server
+starts.
+
+An account run from your own machine is unchanged: its key and its tokens stay
+on that machine, where the pod is somebody else's server.
+
+New: **css-nextgraph**, a storage component that keeps every pod in NextGraph,
+encrypted under a wallet of its own. Each wallet's record is sealed under one
+key for the server, so a copy of the wallets directory opens nothing. A host
+whose machine cannot hold that key for it pastes it into a page after each
+restart.
+
 ## 2026-09-11 (fedipod.net accounts run in the browser — version 1.0.0)
 
 The front page at fedipod.net signs you up for an account that runs in your

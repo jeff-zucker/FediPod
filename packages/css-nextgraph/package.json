@@ -1,6 +1,6 @@
 {
   "name": "css-nextgraph",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "A Community Solid Server storage component that keeps every pod in NextGraph, encrypted under a wallet of its own.",
   "license": "MIT",
   "main": "dist/index.js",
