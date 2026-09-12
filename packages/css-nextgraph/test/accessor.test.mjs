@@ -200,3 +200,36 @@ test('two pods are two stores, and one cannot see the other', async () => {
   assert.equal(pods.stores.size, 2);
   await assert.rejects(accessor.getMetadata(id(`${bob}profile/card`)), NotFoundHttpError);
 });
+
+// ---- a locked server: the key has not been supplied yet
+
+test('while the key is missing a pod answers 503 rather than holding the request', async () => {
+  const { MasterKey, newKey } = await import('../dist/masterkey.js');
+  const master = new MasterKey();
+  const pods = new MemoryPods();
+  const accessor = new NextGraphDataAccessor({
+    identifierStrategy: strategy, walletsDir: '/nowhere', ngdPeerId: 'x', masterKey: master,
+  }).useStores(pods);
+
+  // A request that waited instead would hold a connection for as long as
+  // nobody unlocks, and enough of them would be a server that cannot serve
+  // its own unlock page.
+  for (const call of [
+    () => accessor.getData(id(`${alice}notes/one`)),
+    () => accessor.getMetadata(id(`${alice}notes/one`)),
+    () => accessor.writeContainer(id(alice), containerMeta(alice)),
+  ]) {
+    await assert.rejects(call, (error) => {
+      assert.equal(error.statusCode, 503);
+      assert.match(error.message, /this server is locked/u);
+      return true;
+    });
+  }
+
+  // Starting a locked server does not open anything and does not throw.
+  await accessor.initialize();
+
+  master.supply(newKey());
+  await accessor.writeContainer(id(alice), containerMeta(alice));
+  assert.ok(await accessor.getMetadata(id(alice)), 'and once the key is here the pod is served');
+});

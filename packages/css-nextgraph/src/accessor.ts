@@ -22,7 +22,7 @@ import { DataFactory } from 'n3';
 import type { Quad } from '@rdfjs/types';
 import {
   BasicRepresentation, CONTENT_TYPE_TERM, ConflictHttpError, INTERNAL_QUADS, NotFoundHttpError, NotImplementedHttpError, POSIX,
-  RepresentationMetadata, UnsupportedMediaTypeHttpError, getLoggerFor, guardedStreamFrom, isContainerIdentifier,
+  RepresentationMetadata, UnsupportedMediaTypeHttpError, generateHttpErrorClass, getLoggerFor, guardedStreamFrom, isContainerIdentifier,
 } from '@solid/community-server';
 import type {
   DataAccessor, Guarded, IdentifierStrategy, Initializable, Representation, RepresentationConverter, ResourceIdentifier,
@@ -31,8 +31,16 @@ import { ABOUT_DATA, ABOUT_META, deskolemize, foreignSubject, ownSubjects, skole
 import type { PodStore } from './pod-store';
 import { WalletPods } from './wallets';
 import type { PodStores } from './wallets';
+import { MasterKey } from './masterkey';
 
 const { namedNode } = DataFactory;
+
+/**
+ * What a pod answers while this server is locked. A request that waited
+ * instead would hold a connection for as long as nobody unlocks, and enough
+ * of them would be a server that cannot serve its own unlock page.
+ */
+const LockedHttpError = generateHttpErrorClass(503, 'ServiceUnavailable');
 
 export interface NextGraphDataAccessorArgs {
   /** Decides roots and parents; a pod is everything under one root. */
@@ -43,6 +51,12 @@ export interface NextGraphDataAccessorArgs {
   ngdPeerId: string;
   /** The daemon's client port on this machine. */
   ngdPort?: number;
+  /**
+   * The key each pod's wallet record is sealed under. One instance for the
+   * server, so whatever offers the unlock hands the key to the same object
+   * the accessor waits on. Without one the records are written in the clear.
+   */
+  masterKey?: MasterKey;
   /**
    * The server's converter. What it can turn into quads (Turtle, JSON-LD and
    * the rest) is stored as triples; what it cannot (media, ActivityPub JSON)
@@ -93,16 +107,42 @@ export class NextGraphDataAccessor implements DataAccessor, Initializable {
    * logged and left for its first request to report.
    */
   public async initialize(): Promise<void> {
+    // A server whose key has not been supplied yet still starts: opening waits
+    // on the key, and a start that waited with it would never finish listening
+    // — which is the page the key is typed into.
+    if (this.args.masterKey && !this.args.masterKey.present) {
+      const waiting = this.podStores().roots?.().length ?? 0;
+      if (waiting) this.logger.warn(`${waiting} NextGraph wallet(s) stay closed until this server's master key is supplied`);
+      return;
+    }
+    await this.openAll();
+  }
+
+  /**
+   * Open every pod that has a wallet here. Called when the server starts, and
+   * again by the unlock the moment a key arrives — a pod nobody has opened is
+   * a pod that answers nothing.
+   */
+  public async openAll(): Promise<number> {
     const stores = this.podStores();
     const roots = stores.roots ? stores.roots() : [];
+    let open = 0;
     await Promise.all(roots.map(async (root): Promise<void> => {
       try {
         await this.podFor({ path: root }, false);
+        open += 1;
       } catch (error: unknown) {
-        this.logger.warn(`could not open the NextGraph wallet of ${root} at start: ${String(error)}`);
+        this.logger.warn(`could not open the NextGraph wallet of ${root}: ${String(error)}`);
       }
     }));
-    if (roots.length) this.logger.info(`${roots.length} NextGraph wallet(s) open`);
+    if (roots.length) this.logger.info(`${open} of ${roots.length} NextGraph wallet(s) open`);
+    return open;
+  }
+
+  /** Whether a key opens the records this server already holds — what the unlock asks before taking one. */
+  public opensWith(key: Buffer): boolean {
+    const stores = this.podStores();
+    return stores.opens ? stores.opens(key) : true;
   }
 
   public async canHandle(_representation: Representation): Promise<void> {
@@ -227,6 +267,9 @@ export class NextGraphDataAccessor implements DataAccessor, Initializable {
 
   private async podFor(identifier: ResourceIdentifier, create: boolean): Promise<Pod> {
     if (!this.strategy.supportsIdentifier(identifier)) throw new NotFoundHttpError();
+    if (this.args.masterKey && !this.args.masterKey.present) {
+      throw new LockedHttpError('this server is locked: its master key has not been supplied yet');
+    }
     let root = identifier;
     while (!this.strategy.isRootContainer(root)) root = this.strategy.getParentContainer(root);
     let pending = this.pods.get(root.path);
@@ -244,6 +287,7 @@ export class NextGraphDataAccessor implements DataAccessor, Initializable {
     if (!this.stores) {
       this.stores = new WalletPods({
         dir: this.args.walletsDir, peerId: this.args.ngdPeerId, port: this.args.ngdPort ?? 1440, version: VERSION,
+        masterKey: this.args.masterKey,
         log: (message): void => { this.logger.info(message); },
       });
     }

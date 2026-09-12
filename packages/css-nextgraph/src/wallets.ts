@@ -8,6 +8,8 @@ import type { PodStore } from './pod-store';
 import { SdkPodStore } from './sdk-store';
 import { createWallet, loadSdk, openWallet, reconnect, watchDisconnections } from './sdk';
 import type { WalletRecord } from './sdk';
+import { MasterKey, isSealed, seal, unseal } from './masterkey';
+import type { Sealed } from './masterkey';
 
 export interface PodStores {
   /**
@@ -17,6 +19,8 @@ export interface PodStores {
   open: (root: string, create: boolean) => Promise<PodStore | undefined>;
   /** The roots of the pods already known here, for opening them all at start. */
   roots?: () => string[];
+  /** Whether a key opens the records already here, asked before an unlock is taken. */
+  opens?: (key: Buffer) => boolean;
 }
 
 export interface WalletPodsOptions {
@@ -24,8 +28,29 @@ export interface WalletPodsOptions {
   peerId: string;
   port: number;
   version: string;
+  /** The key the records are sealed under. Without one they are written as they came, and the log says so. */
+  masterKey?: MasterKey;
   log?: (message: string) => void;
 }
+
+/**
+ * A record file. `root` and `user` stay readable — a pod's address and its
+ * public id are not secrets, and the roots are what the server opens at start.
+ * `sealed` holds the half that opens the wallet.
+ */
+interface RecordFile {
+  root?: string;
+  user?: string;
+  sealed?: Sealed;
+  /** Written before there was a master key: the record itself, in the clear. */
+  wallet_name?: string;
+  mnemonic?: string[];
+  pin?: number[];
+  password?: string;
+}
+
+/** The half of a record that is sealed. */
+type Secret = Pick<WalletRecord, 'wallet_name' | 'mnemonic' | 'pin' | 'password'>;
 
 /** The file stem a pod root gets under the wallets directory. */
 export function walletStem(root: string): string {
@@ -78,6 +103,75 @@ export class WalletPods implements PodStores {
     return { file: path.join(dir, `${stem}.ngw`), record: path.join(dir, `${stem}.json`) };
   }
 
+  /**
+   * Read one record. A sealed one waits for the master key — on a server with
+   * no key yet, that is a request holding until somebody unlocks it. A record
+   * written before there was a key is used as it is and sealed on the spot if
+   * a key is here now, so an existing server seals itself the next time it
+   * starts.
+   */
+  public async readRecord(file: string, root: string, log: (message: string) => void): Promise<WalletRecord> {
+    const onDisk = JSON.parse(fs.readFileSync(file, 'utf8')) as RecordFile;
+    if (isSealed(onDisk.sealed)) {
+      if (this.options.masterKey && !this.options.masterKey.present) log(`waiting for the master key to open ${root}`);
+      const key = await this.key();
+      if (!key) throw new Error(`the record for ${root} is sealed and this server has no master key`);
+      const secret = unseal<Secret>(key, onDisk.sealed);
+      return { ...secret, user: onDisk.user! };
+    }
+    if (!onDisk.mnemonic || !onDisk.pin) throw new Error(`the record for ${root} holds no way to open its wallet`);
+    const rec: WalletRecord = {
+      wallet_name: onDisk.wallet_name!, user: onDisk.user!, mnemonic: onDisk.mnemonic, pin: onDisk.pin, password: onDisk.password!,
+    };
+    if (this.options.masterKey?.present) {
+      await this.writeRecord(file, root, rec, log);
+      log(`sealed the wallet record for ${root} under this server's master key`);
+    }
+    return rec;
+  }
+
+  /** Write one record, sealed when there is a key and in the clear when there is not. */
+  public async writeRecord(file: string, root: string, rec: WalletRecord, log: (message: string) => void): Promise<void> {
+    const key = this.options.masterKey?.present ? await this.options.masterKey.ready() : undefined;
+    if (!key) {
+      log(`no master key on this server: the wallet record for ${root} is written in the clear beside its wallet`);
+      fs.writeFileSync(file, JSON.stringify({ root, ...rec }, null, 2), { mode: 0o600 });
+      return;
+    }
+    const secret: Secret = { wallet_name: rec.wallet_name, mnemonic: rec.mnemonic, pin: rec.pin, password: rec.password };
+    fs.writeFileSync(file, JSON.stringify({ root, user: rec.user, sealed: seal(key, secret) }, null, 2), { mode: 0o600 });
+  }
+
+  private async key(): Promise<Buffer | undefined> {
+    return this.options.masterKey ? this.options.masterKey.ready() : undefined;
+  }
+
+  /**
+   * Whether a key opens the records already here — what the unlock asks before
+   * accepting one. A server with nothing sealed yet accepts any well-formed
+   * key: there is nothing for it to be wrong about.
+   */
+  public opens(key: Buffer): boolean {
+    if (!fs.existsSync(this.options.dir)) return true;
+    for (const name of fs.readdirSync(this.options.dir)) {
+      if (!name.endsWith('.json')) continue;
+      let sealed: unknown;
+      try {
+        sealed = (JSON.parse(fs.readFileSync(path.join(this.options.dir, name), 'utf8')) as RecordFile).sealed;
+      } catch {
+        continue;
+      }
+      if (!isSealed(sealed)) continue;
+      try {
+        unseal<Secret>(key, sealed);
+        return true;
+      } catch {
+        return false;
+      }
+    }
+    return true;
+  }
+
   private hasWallet(stem: string): boolean {
     const { file, record } = WalletPods.filesFor(this.options.dir, stem);
     return fs.existsSync(file) && fs.existsSync(record);
@@ -91,7 +185,7 @@ export class WalletPods implements PodStores {
     let rec: WalletRecord;
     if (this.hasWallet(stem)) {
       source = fs.readFileSync(file);
-      rec = JSON.parse(fs.readFileSync(record, 'utf8')) as WalletRecord;
+      rec = await this.readRecord(record, root, log);
     } else {
       fs.mkdirSync(this.options.dir, { recursive: true });
       const invitationPath = path.join(this.options.dir, SETUP_INVITATION_FILE);
@@ -102,7 +196,7 @@ export class WalletPods implements PodStores {
       rec = made.record;
       // The record is written before the wallet is used: a wallet whose
       // mnemonic is lost is a pod that is lost.
-      fs.writeFileSync(record, JSON.stringify({ root, ...rec }, null, 2), { mode: 0o600 });
+      await this.writeRecord(record, root, rec, log);
       fs.writeFileSync(file, made.file, { mode: 0o600 });
       if (invitation) fs.renameSync(invitationPath, `${invitationPath}.used`);
     }

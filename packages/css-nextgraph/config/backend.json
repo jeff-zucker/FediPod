@@ -18,7 +18,13 @@
       "args_walletsDir": { "@id": "urn:css-nextgraph:default:variable:walletsDir" },
       "args_ngdPeerId": { "@id": "urn:css-nextgraph:default:variable:ngdPeerId" },
       "args_ngdPort": 1440,
+      "args_masterKey": { "@id": "urn:css-nextgraph:default:MasterKey" },
       "args_converter": { "@id": "urn:solid-server:default:RepresentationConverter" }
+    },
+    {
+      "comment": "The key every pod's wallet record is sealed under, so a copy of the wallets directory opens nothing. Read from the systemd credential named css-nextgraph-key when the unit supplies one, from CSS_NEXTGRAPH_KEY otherwise, and supplied while the server runs when there is neither. Never written down. `css-nextgraph key` mints one.",
+      "@id": "urn:css-nextgraph:default:MasterKey",
+      "@type": "MasterKey"
     },
     {
       "comment": "Set these two from the command line: --walletsDir and --ngdPeerId (see config/server.json for the variables).",
@@ -38,6 +44,27 @@
         {
           "@type": "InitializableHandler",
           "initializable": { "@id": "urn:css-nextgraph:default:DataAccessor" }
+        }
+      ]
+    },
+    {
+      "comment": "The unlock page, on the base URL only. A host whose machine cannot hold the key for it opens this after a restart and pastes the key; the pods open at once. The key itself is the credential — anyone holding it can already read every wallet record here — so there is nothing else to prove. args_path moves the page.",
+      "@id": "urn:css-nextgraph:default:UnlockHandler",
+      "@type": "UnlockHandler",
+      "args_baseUrl": { "@id": "urn:solid-server:default:variable:baseUrl" },
+      "args_masterKey": { "@id": "urn:css-nextgraph:default:MasterKey" },
+      "args_accessor": { "@id": "urn:css-nextgraph:default:DataAccessor" }
+    },
+    {
+      "comment": "Ahead of the LDP catch-all, so it claims its one path and everything else stays normal CSS.",
+      "@type": "Override",
+      "overrideInstance": { "@id": "urn:solid-server:default:BaseHttpHandler" },
+      "overrideSteps": [
+        {
+          "@type": "OverrideListInsertBefore",
+          "overrideParameter": { "@id": "https://linkedsoftwaredependencies.org/bundles/npm/@solid/community-server/^7.0.0/dist/util/handlers/WaterfallHandler.jsonld#WaterfallHandler_handlers" },
+          "overrideTarget": { "@id": "urn:solid-server:default:LdpHandler" },
+          "overrideValue": { "@id": "urn:css-nextgraph:default:UnlockHandler" }
         }
       ]
     },

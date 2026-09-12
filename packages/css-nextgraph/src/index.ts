@@ -5,3 +5,6 @@ export { NextGraphDataAccessor } from './accessor';
 export type { NextGraphDataAccessorArgs } from './accessor';
 export { InternalRouterRule } from './router';
 export type { InternalRouterRuleArgs } from './router';
+export { MasterKey } from './masterkey';
+export { UnlockHandler } from './unlock';
+export type { UnlockHandlerArgs } from './unlock';
