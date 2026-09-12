@@ -39,11 +39,23 @@ function headerReader(init?: RequestInit): (name: string) => string | null {
   return (n): string | null => lower[n.toLowerCase()] ?? null;
 }
 
-// Only Turtle needs asking for: a container's listing is quads until something
-// requests a syntax, and listContainer parses Turtle. Everything else is read
-// back exactly as it was written.
+// A container's listing is quads until something requests a syntax, and
+// listContainer parses Turtle, so Turtle has to be askable for. It must not be
+// the ONLY thing asked for: the state tree reads its own documents with
+// `text/turtle, application/json;q=0.9, */*;q=0.8`, and a JSON document
+// demanded as Turtle is refused outright — which is every state document an
+// identity has, the moment it starts on a pod that already holds some.
+// With no Turtle in the accept, no preference: read back as written.
 function preferencesFor(accept: string | null): RepresentationPreferences {
-  return accept?.includes('text/turtle') ? { type: { 'text/turtle': 1 }} : {};
+  if (!accept?.includes('text/turtle')) return {};
+  const type: Record<string, number> = {};
+  for (const part of accept.split(',')) {
+    const [media, ...params] = part.trim().split(';');
+    if (!media) continue;
+    const q = params.map((p) => (/^\s*q=([\d.]+)\s*$/u).exec(p)).find(Boolean);
+    type[media.trim()] = q ? Number(q[1]) : 1;
+  }
+  return { type };
 }
 
 function isNotFound(e: unknown): boolean {
