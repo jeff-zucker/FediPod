@@ -11425,6 +11425,150 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
   fs.rmSync(VDIR, { recursive: true, force: true });
 }
 
+// --- SHACL: what a document IS, checked against what arrived ---
+{
+  const as2 = await import(path.join(root, 'lib/core/as2.mjs'));
+  const shapes = await import(path.join(root, 'lib/core/shapes/index.mjs'));
+  const AS = 'https://www.w3.org/ns/activitystreams';
+  const fits = async (obj) => {
+    const { graph } = await as2.parseAS2(JSON.stringify(obj));
+    const failure = await shapes.checkShapes(graph);
+    return failure ? shapes.describeShapeFailure(failure) : null;
+  };
+
+  // The documents real implementations send must pass, or the record is noise.
+  check(await fits({ '@context': AS, id: 'https://m.example/f/1', type: 'Follow',
+    actor: 'https://m.example/u/s', object: 'https://p.example/a' }) === null,
+    'a well-formed Follow fits its shape');
+  check(await fits({ '@context': [AS, 'https://w3id.org/security/v1'],
+    id: 'https://m.social/users/a/statuses/1/activity', type: 'Create', actor: 'https://m.social/users/a',
+    published: '2026-09-12T00:00:00Z', to: [AS + '#Public'],
+    object: { id: 'https://m.social/users/a/statuses/1', type: 'Note', content: '<p>hi</p>',
+      attributedTo: 'https://m.social/users/a' } }) === null,
+    'and so does a Create shaped the way Mastodon sends one');
+  check(await fits({ '@context': [AS, 'https://w3id.org/security/v1'], id: 'https://m.social/users/a',
+    type: 'Person', preferredUsername: 'a', inbox: 'https://m.social/users/a/inbox',
+    outbox: 'https://m.social/users/a/outbox',
+    publicKey: { id: 'https://m.social/users/a#main-key', owner: 'https://m.social/users/a',
+      publicKeyPem: '-----BEGIN PUBLIC KEY-----' } }) === null,
+    'and an actor document shaped the way Mastodon serves one');
+
+  // An actor's inbox is ldp:inbox, not an as: term — ActivityPub reuses LDP's.
+  // A shape naming as:inbox passes every document and catches nothing, which
+  // is how this was wrong the first time.
+  check(/inbox/u.test(await fits({ '@context': AS, id: 'https://m.example/u/k', type: 'Person',
+    preferredUsername: 'kim' }) || ''),
+    'an actor with no inbox is caught, which means the shape names ldp:inbox');
+
+  check(/actor/u.test(await fits({ '@context': AS, id: 'https://m.example/f/2', type: 'Follow',
+    object: 'https://p.example/a' }) || ''),
+    'a Follow with nobody performing it is caught');
+  check(/object/u.test(await fits({ '@context': AS, id: 'https://m.example/c/2', type: 'Create',
+    actor: 'https://m.example/u/s' }) || ''),
+    'and a Create with nothing created');
+
+  // sh:BlankNodeOrIRI is SHACL's name for it; sh:IRIOrBlankNode is not a node
+  // kind, and a shape using one fails every document including good ones.
+  const ttl = (await import('node:fs')).readFileSync(path.join(root, 'lib/core/shapes/activitystreams.ttl'), 'utf8');
+  check(!/sh:IRIOrBlankNode/u.test(ttl), 'the shapes use a node kind SHACL actually defines');
+
+  // Checking is not deciding: a failure is recorded, never acted on.
+  const src = (await import('node:fs')).readFileSync(path.join(root, 'lib/core/intake/index.mjs'), 'utf8');
+  check(/shapeOnly: true/u.test(src) && !/checkShapes[\s\S]{0,400}?return\s+'/u.test(src),
+    'a shape failure is written down, and nothing is dropped for it');
+}
+
+// --- the drain reads an aliased delivery as the activity it is ---
+{
+  const as2 = await import(path.join(root, 'lib/core/as2.mjs'));
+  // Exactly what today's `switch (activity.type)` cannot match: the same
+  // Follow, written with the terms aliased instead of compacted.
+  const aliased = JSON.stringify({
+    '@context': { as: 'https://www.w3.org/ns/activitystreams#' },
+    '@id': 'https://m.example/f/1', '@type': 'as:Follow',
+    'as:actor': { '@id': 'https://m.example/u/sam' },
+    'as:object': { '@id': 'https://p.example/ap/actor' },
+  });
+  const { doc, degraded } = await as2.readLenient(aliased);
+  check(degraded === null, 'an aliased delivery is read as JSON-LD, not fallen back on');
+  check(doc.type === 'Follow', 'and reaches the drain as the Follow it is');
+  check(doc.actor === 'https://m.example/u/sam' && doc.object === 'https://p.example/ap/actor',
+    'with its actor and object where a handler looks for them');
+
+  // And the property that matters more than any of it: a delivery we cannot
+  // read as JSON-LD is still delivered.
+  const noCtx = JSON.stringify({ id: 'https://m.example/f/2', type: 'Follow', actor: 'https://m.example/u/kim' });
+  const fallback = await as2.readLenient(noCtx);
+  check(fallback.doc?.type === 'Follow' && fallback.degraded === 'no @context',
+    'a delivery with no @context is still handled, and the reason is carried');
+}
+
+// --- AS2 read as JSON-LD: what a document means, however it was written ---
+{
+  const as2 = await import(path.join(root, 'lib/core/as2.mjs'));
+
+  // The shape every real fediverse implementation sends.
+  const plain = JSON.stringify({
+    '@context': ['https://www.w3.org/ns/activitystreams', 'https://w3id.org/security/v1'],
+    id: 'https://m.example/act/1', type: 'Create', actor: 'https://m.example/u/sam',
+    to: ['https://www.w3.org/ns/activitystreams#Public'],
+    object: { id: 'https://m.example/n/1', type: 'Note', content: 'hello' },
+  });
+  const read = await as2.parseAS2(plain);
+  check(read.doc.type === 'Create' && read.doc.actor === 'https://m.example/u/sam',
+    'an ordinary activity comes back with the fields it went in with');
+  check(read.doc.object.type === 'Note' && read.doc.object.content === 'hello',
+    'and so does the object nested inside it');
+  check(Array.isArray(read.graph) && read.graph.some(q => q.object?.value?.endsWith('#Create')),
+    'and a graph comes with it, which is what a shape is checked against');
+
+  // The same statement, written the other legal way. This is the one that is
+  // dropped today: `switch (activity.type)` never matches 'as:Create'.
+  const aliased = JSON.stringify({
+    '@context': { as: 'https://www.w3.org/ns/activitystreams#' },
+    '@id': 'https://m.example/act/2', '@type': 'as:Create',
+    'as:actor': { '@id': 'https://m.example/u/sam' },
+  });
+  const other = await as2.parseAS2(aliased);
+  check(other.doc.type === 'Create',
+    'an activity whose terms are aliased means the same thing and arrives saying so');
+
+  // Refusals, each with a reason the caller can log.
+  const refused = async (label, input) => {
+    try { await as2.parseAS2(input); return null; }
+    catch (e) { return e; }
+  };
+  const unknown = await refused('unknown', JSON.stringify({ '@context': 'https://attacker.example/x', type: 'Create' }));
+  check(unknown?.name === 'AS2Error' && unknown.context === 'https://attacker.example/x',
+    'a context we do not hold is refused, and the refusal names it');
+  const bare = await refused('bare', JSON.stringify({ id: 'https://m.example/1', type: 'Create' }));
+  check(/no @context/u.test(bare?.message || ''),
+    'a document with no @context is refused rather than read as an empty graph');
+  check(/not JSON/u.test((await refused('junk', 'not json'))?.message || ''),
+    'and bytes that are not JSON are refused as that');
+
+  // The whole point of holding the contexts: a stranger's document can never
+  // make this process reach an address the stranger chose.
+  const attempts = [];
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = (...a) => { attempts.push(String(a[0])); throw new Error('blocked'); };
+  try {
+    await as2.parseAS2(plain).catch(() => {});
+    await as2.parseAS2(JSON.stringify({ '@context': 'https://attacker.example/x', type: 'Create' })).catch(() => {});
+  } finally { globalThis.fetch = realFetch; }
+  check(attempts.length === 0, 'reading an activity makes no request of its own, whatever context it names');
+
+  // Every context the fediverse actually uses is held, including the two that
+  // have never resolved (joinmastodon) or go down (purl.archive.org).
+  for (const url of [
+    'https://www.w3.org/ns/activitystreams',
+    'https://w3id.org/security/v1',
+    'http://joinmastodon.org/ns',
+    'https://join-lemmy.org/context.json',
+    'https://gotosocial.org/ns',
+  ]) check(!!as2.CONTEXTS[url], `the ${url} context is held here`);
+}
+
 child.kill('SIGTERM');
 fs.rmSync(HOME, { recursive: true, force: true });
 console.log(failures ? `\n${failures} FAILURE(S)` : '\nall green');

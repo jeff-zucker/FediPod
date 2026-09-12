@@ -32,6 +32,9 @@ const aliasPlugin = {
     build.onResolve({ filter: /^node:fs$/ }, () => ({ path: shim('node-fs.mjs') }));
     build.onResolve({ filter: /^web-push$/ }, () => ({ path: shim('web-push.mjs') }));
     build.onResolve({ filter: /\/safefetch\.mjs$/ }, () => ({ path: shim('safefetch.mjs') }));
+    // The shapes are one .ttl file for both agents; Node reads it, the browser
+    // gets it through the text loader below.
+    build.onResolve({ filter: /\/shapes\/text\.mjs$/ }, () => ({ path: shim('shapes-text.mjs') }));
     const stub = new RegExp(`^(${STUBBED.map((s) => s.replace('/', '\\/')).join('|')})$`);
     build.onResolve({ filter: stub }, (args) => ({ path: args.path, namespace: 'stub' }));
     build.onLoad({ filter: /.*/, namespace: 'stub' }, (args) => ({
@@ -48,6 +51,7 @@ export async function buildApp({ entry, out, minify = false, format = 'esm' } = 
     bundle: true, format, platform: 'browser', target: 'es2022',
     outfile: out, sourcemap: true, minify, logLevel: 'silent', metafile: true,
     plugins: [aliasPlugin],
+    loader: { '.ttl': 'text' },
     define: { 'process.env.NODE_ENV': '"production"' },
     banner: { js: fs.readFileSync(shim('prelude.js'), 'utf8') },
   });

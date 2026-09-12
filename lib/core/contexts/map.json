@@ -1,0 +1,16 @@
+{
+  "https://www.w3.org/ns/activitystreams": "activitystreams.json",
+  "https://w3id.org/security/v1": "security-v1.json",
+  "https://w3id.org/security/data-integrity/v1": "security-data-integrity-v1.json",
+  "https://w3id.org/security/data-integrity/v2": "security-data-integrity-v2.json",
+  "https://www.w3.org/ns/did/v1": "did-v1.json",
+  "https://w3id.org/security/multikey/v1": "security-multikey-v1.json",
+  "https://w3id.org/identity/v1": "identity-v1.json",
+  "https://purl.archive.org/socialweb/webfinger": "webfinger.json",
+  "http://schema.org/": "schemaorg.json",
+  "https://gotosocial.org/ns": "gotosocial.json",
+  "https://w3id.org/fep/5711": "fep-5711.json",
+  "https://join-lemmy.org/context.json": "join-lemmy.json",
+  "http://joinmastodon.org/ns": "joinmastodon.json",
+  "https://purl.archive.org/miscellany": "miscellany.json"
+}

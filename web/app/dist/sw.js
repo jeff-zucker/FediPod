@@ -2553,8 +2553,8 @@ var init_dist2 = __esm({
         this.parser = null;
         this.handleCallback(null);
       }
-      onerror(error) {
-        this.handleCallback(error);
+      onerror(error2) {
+        this.handleCallback(error2);
       }
       onclosetag() {
         this.lastNode = null;
@@ -2610,11 +2610,11 @@ var init_dist2 = __esm({
         const node = new ProcessingInstruction(name, data);
         this.addNode(node);
       }
-      handleCallback(error) {
+      handleCallback(error2) {
         if (typeof this.callback === "function") {
-          this.callback(error, this.dom);
-        } else if (error) {
-          throw error;
+          this.callback(error2, this.dom);
+        } else if (error2) {
+          throw error2;
         }
       }
       addNode(node) {
@@ -3466,13 +3466,13 @@ __export(dist_exports3, {
   parseFeed: () => parseFeed
 });
 function parseDocument(data, options) {
-  const handler = new DomHandler(void 0, options);
-  new Parser(handler, options).end(data);
-  return handler.root;
+  const handler2 = new DomHandler(void 0, options);
+  new Parser(handler2, options).end(data);
+  return handler2.root;
 }
 function createDocumentStream(callback, options, elementCallback) {
-  const handler = new DomHandler((error) => callback(error, handler.root), options, elementCallback);
-  return new Parser(handler, options);
+  const handler2 = new DomHandler((error2) => callback(error2, handler2.root), options, elementCallback);
+  return new Parser(handler2, options);
 }
 function parseFeed(feed, options = parseFeedDefaultOptions) {
   return getFeed(parseDocument(feed, options).children);
@@ -3636,13 +3636,13 @@ var require_cjs = __commonJS({
 // node_modules/parse-srcset/src/parse-srcset.js
 var require_parse_srcset = __commonJS({
   "node_modules/parse-srcset/src/parse-srcset.js"(exports, module2) {
-    (function(root, factory) {
+    (function(root, factory3) {
       if (typeof define === "function" && define.amd) {
-        define([], factory);
+        define([], factory3);
       } else if (typeof module2 === "object" && module2.exports) {
-        module2.exports = factory();
+        module2.exports = factory3();
       } else {
-        root.parseSrcset = factory();
+        root.parseSrcset = factory3();
       }
     })(exports, function() {
       return function(input) {
@@ -3989,8 +3989,8 @@ var require_stringifier = __commonJS({
       }
     }
     var Stringifier = class _Stringifier {
-      constructor(builder) {
-        this.builder = builder;
+      constructor(builder111) {
+        this.builder = builder111;
       }
       atrule(node, semicolon) {
         let start = atruleStart(this, node);
@@ -4291,8 +4291,8 @@ var require_stringify = __commonJS({
   "node_modules/postcss/lib/stringify.js"(exports, module2) {
     "use strict";
     var Stringifier = require_stringifier();
-    function stringify(node, builder) {
-      let str = new Stringifier(builder);
+    function stringify(node, builder111) {
+      let str = new Stringifier(builder111);
       str.stringify(node);
     }
     module2.exports = stringify;
@@ -4398,16 +4398,16 @@ var require_node = __commonJS({
           }
         }
       }
-      addToError(error) {
-        error.postcssNode = this;
-        if (error.stack && this.source && /\n\s{4}at /.test(error.stack)) {
+      addToError(error2) {
+        error2.postcssNode = this;
+        if (error2.stack && this.source && /\n\s{4}at /.test(error2.stack)) {
           let s = this.source;
-          error.stack = error.stack.replace(
+          error2.stack = error2.stack.replace(
             /\n\s{4}at /,
             `$&${s.input.from}:${s.start.line}:${s.start.column}$&`
           );
         }
-        return error;
+        return error2;
       }
       after(add) {
         this.parent.insertAfter(this, add);
@@ -7260,9 +7260,9 @@ var require_lazy_result = __commonJS({
           if (parser.parse) parser = parser.parse;
           try {
             root = parser(css, opts);
-          } catch (error) {
+          } catch (error2) {
             this.processed = true;
-            this.error = error;
+            this.error = error2;
           }
           if (root && !root[my]) {
             Container.rebuild(root);
@@ -7295,14 +7295,14 @@ var require_lazy_result = __commonJS({
       getAsyncError() {
         throw new Error("Use process(css).then(cb) to work with async plugins");
       }
-      handleError(error, node) {
+      handleError(error2, node) {
         let plugin = this.result.lastPlugin;
         try {
-          if (node) node.addToError(error);
-          this.error = error;
-          if (error.name === "CssSyntaxError" && !error.plugin) {
-            error.plugin = plugin.postcssPlugin;
-            error.setMessage();
+          if (node) node.addToError(error2);
+          this.error = error2;
+          if (error2.name === "CssSyntaxError" && !error2.plugin) {
+            error2.plugin = plugin.postcssPlugin;
+            error2.setMessage();
           } else if (plugin.postcssVersion) {
             if (false) {
               let pluginName = plugin.postcssPlugin;
@@ -7320,7 +7320,7 @@ var require_lazy_result = __commonJS({
         } catch (err) {
           if (console && console.error) console.error(err);
         }
-        return error;
+        return error2;
       }
       prepareVisitors() {
         this.listeners = {};
@@ -7366,8 +7366,8 @@ var require_lazy_result = __commonJS({
           if (isPromise(promise)) {
             try {
               await promise;
-            } catch (error) {
-              throw this.handleError(error);
+            } catch (error2) {
+              throw this.handleError(error2);
             }
           }
         }
@@ -7427,8 +7427,8 @@ var require_lazy_result = __commonJS({
           } else if (typeof plugin === "function") {
             return plugin(this.result.root, this.result);
           }
-        } catch (error) {
-          throw this.handleError(error);
+        } catch (error2) {
+          throw this.handleError(error2);
         }
       }
       stringify() {
@@ -7666,8 +7666,8 @@ var require_no_work_result = __commonJS({
         let parser = parse3;
         try {
           root = parser(this._css, this._opts);
-        } catch (error) {
-          this.error = error;
+        } catch (error2) {
+          this.error = error2;
         }
         if (this.error) {
           throw this.error;
@@ -9164,8 +9164,8 @@ and ensure you are accounting for this risk.
             return false;
           }
           const target = (attribs[attributeName] || "").trim().toLowerCase();
-          const localName = target.slice(target.lastIndexOf(":") + 1);
-          return alwaysUrlAttributes.indexOf(localName) !== -1 || schemeCheckedAttributes.indexOf(target) !== -1 || schemeCheckedAttributes.indexOf(localName) !== -1;
+          const localName2 = target.slice(target.lastIndexOf(":") + 1);
+          return alwaysUrlAttributes.indexOf(localName2) !== -1 || schemeCheckedAttributes.indexOf(target) !== -1 || schemeCheckedAttributes.indexOf(localName2) !== -1;
         });
       }
       function parseUrl(value) {
@@ -10557,13 +10557,13 @@ var init_node_crypto = __esm({
 // node_modules/@frogcat/ttl2jsonld/ttl2jsonld.js
 var require_ttl2jsonld = __commonJS({
   "node_modules/@frogcat/ttl2jsonld/ttl2jsonld.js"(exports, module2) {
-    (function(root, factory) {
+    (function(root, factory3) {
       if (typeof define === "function" && define.amd) {
-        define([], factory);
+        define([], factory3);
       } else if (typeof module2 === "object" && module2.exports) {
-        module2.exports = factory();
+        module2.exports = factory3();
       } else {
-        root.ttl2jsonld = factory();
+        root.ttl2jsonld = factory3();
       }
     })(exports, function() {
       "use strict";
@@ -10659,18 +10659,18 @@ var require_ttl2jsonld = __commonJS({
       function peg$parse(input, options) {
         options = options !== void 0 ? options : {};
         var peg$FAILED = {}, peg$startRuleFunctions = { turtleDoc: peg$parseturtleDoc }, peg$startRuleFunction = peg$parseturtleDoc, peg$c0 = function(statements) {
-          var jsonld = context.toJSON();
-          jsonld["@graph"] = [];
+          var jsonld2 = context.toJSON();
+          jsonld2["@graph"] = [];
           statements.filter((a) => Array.isArray(a)).forEach((a) => {
             a.forEach((b) => {
-              jsonld["@graph"].push(b);
+              jsonld2["@graph"].push(b);
             });
           });
-          if (jsonld["@graph"].length === 1) {
-            Object.assign(jsonld, jsonld["@graph"][0]);
-            delete jsonld["@graph"];
+          if (jsonld2["@graph"].length === 1) {
+            Object.assign(jsonld2, jsonld2["@graph"][0]);
+            delete jsonld2["@graph"];
           }
-          return jsonld;
+          return jsonld2;
         }, peg$c1 = "\uFEFF", peg$c2 = peg$literalExpectation("\uFEFF", false), peg$c3 = ".", peg$c4 = peg$literalExpectation(".", false), peg$c5 = function(a) {
           return a;
         }, peg$c6 = "#", peg$c7 = peg$literalExpectation("#", false), peg$c8 = /^[^\n]/, peg$c9 = peg$classExpectation(["\n"], true, false), peg$c10 = "\n", peg$c11 = peg$literalExpectation("\n", false), peg$c12 = function(a) {
@@ -10777,13 +10777,13 @@ var require_ttl2jsonld = __commonJS({
             try {
               return context.resolve(join3);
             } catch (e) {
-              error("Invalid IRIREF " + join3);
+              error2("Invalid IRIREF " + join3);
             }
-          } else error("Invalid IRIREF " + a.join("") + " / " + decoded);
+          } else error2("Invalid IRIREF " + a.join("") + " / " + decoded);
         }, peg$c82 = ":", peg$c83 = peg$literalExpectation(":", false), peg$c84 = function(a) {
           a = a || "0";
           if (context.hasPrefix(a) === false)
-            error("undefined prefix " + a);
+            error2("undefined prefix " + a);
           return a;
         }, peg$c85 = function(a) {
           return a || "";
@@ -10870,7 +10870,7 @@ var require_ttl2jsonld = __commonJS({
             location2
           );
         }
-        function error(message, location2) {
+        function error2(message, location2) {
           location2 = location2 !== void 0 ? location2 : peg$computeLocation(peg$savedPos, peg$currPos);
           throw peg$buildSimpleError(message, location2);
         }
@@ -15285,12 +15285,12 @@ var require_solid_namespace = __commonJS({
       wf: "http://www.w3.org/2005/01/wf/flow#",
       xsd: "http://www.w3.org/2001/XMLSchema#"
     };
-    function vocab(rdf3 = { namedNode: (u) => u }) {
+    function vocab(rdf4 = { namedNode: (u) => u }) {
       const namespaces = {};
       for (const alias in aliases) {
         const expansion = aliases[alias];
-        namespaces[alias] = function(localName = "") {
-          return rdf3.namedNode(expansion + localName);
+        namespaces[alias] = function(localName2 = "") {
+          return rdf4.namedNode(expansion + localName2);
         };
       }
       ;
@@ -15679,7 +15679,7 @@ var require_grammar = __commonJS({
         }
         var match = new RegExpImpl("\u{1D306}", "u").exec("\u{1D306}");
         return !!match && match[0].length === 2;
-      } catch (error) {
+      } catch (error2) {
       }
       return false;
     }
@@ -15925,35 +15925,35 @@ var require_dom = __commonJS({
         throw new DOMException(DOMException.INVALID_CHARACTER_ERR, 'invalid character in qualified name "' + qualifiedName + '"');
       }
     }
-    function validateAndExtract(namespace, qualifiedName) {
+    function validateAndExtract(namespace2, qualifiedName) {
       validateQualifiedName(qualifiedName);
-      namespace = namespace || null;
+      namespace2 = namespace2 || null;
       var prefix = null;
-      var localName = qualifiedName;
+      var localName2 = qualifiedName;
       if (qualifiedName.indexOf(":") >= 0) {
         var splitResult = qualifiedName.split(":");
         prefix = splitResult[0];
-        localName = splitResult[1];
+        localName2 = splitResult[1];
       }
-      if (prefix !== null && namespace === null) {
+      if (prefix !== null && namespace2 === null) {
         throw new DOMException(DOMException.NAMESPACE_ERR, "prefix is non-null and namespace is null");
       }
-      if (prefix === "xml" && namespace !== conventions.NAMESPACE.XML) {
+      if (prefix === "xml" && namespace2 !== conventions.NAMESPACE.XML) {
         throw new DOMException(DOMException.NAMESPACE_ERR, 'prefix is "xml" and namespace is not the XML namespace');
       }
-      if ((prefix === "xmlns" || qualifiedName === "xmlns") && namespace !== conventions.NAMESPACE.XMLNS) {
+      if ((prefix === "xmlns" || qualifiedName === "xmlns") && namespace2 !== conventions.NAMESPACE.XMLNS) {
         throw new DOMException(
           DOMException.NAMESPACE_ERR,
           'either qualifiedName or prefix is "xmlns" and namespace is not the XMLNS namespace'
         );
       }
-      if (namespace === conventions.NAMESPACE.XMLNS && prefix !== "xmlns" && qualifiedName !== "xmlns") {
+      if (namespace2 === conventions.NAMESPACE.XMLNS && prefix !== "xmlns" && qualifiedName !== "xmlns") {
         throw new DOMException(
           DOMException.NAMESPACE_ERR,
           'namespace is the XMLNS namespace and neither qualifiedName nor prefix is "xmlns"'
         );
       }
-      return [namespace, prefix, localName];
+      return [namespace2, prefix, localName2];
     }
     function copy(src, dest) {
       for (var p in src) {
@@ -16165,9 +16165,9 @@ var require_dom = __commonJS({
       }
       return bucket;
     }
-    function _nnmIndexFind(map, namespaceURI, localName) {
+    function _nnmIndexFind(map, namespaceURI, localName2) {
       var bucket = _nnmBucket(map, namespaceURI, false);
-      var found = bucket && bucket[localName];
+      var found = bucket && bucket[localName2];
       return found ? found : null;
     }
     function _nnmIndexAdd(map, attr) {
@@ -16227,14 +16227,14 @@ var require_dom = __commonJS({
        * The attribute with the given local name, or null if no such attribute exists.
        * @see https://dom.spec.whatwg.org/#concept-element-attributes-get-by-name
        */
-      getNamedItem: function(localName) {
+      getNamedItem: function(localName2) {
         if (this._ownerElement && this._ownerElement._isInHTMLDocumentAndNamespace()) {
-          localName = localName.toLowerCase();
+          localName2 = localName2.toLowerCase();
         }
         var i = 0;
         while (i < this.length) {
           var attr = this[i];
-          if (attr.nodeName === localName) {
+          if (attr.nodeName === localName2) {
             return attr;
           }
           i++;
@@ -16297,10 +16297,10 @@ var require_dom = __commonJS({
        * @see https://dom.spec.whatwg.org/#dom-namednodemap-removenameditem
        * @see https://dom.spec.whatwg.org/#concept-element-attributes-remove-by-name
        */
-      removeNamedItem: function(localName) {
-        var attr = this.getNamedItem(localName);
+      removeNamedItem: function(localName2) {
+        var attr = this.getNamedItem(localName2);
         if (!attr) {
-          throw new DOMException(DOMException.NOT_FOUND_ERR, localName);
+          throw new DOMException(DOMException.NOT_FOUND_ERR, localName2);
         }
         _removeNamedNode(this._ownerElement, this, attr);
         return attr;
@@ -16321,10 +16321,10 @@ var require_dom = __commonJS({
        * @see https://dom.spec.whatwg.org/#dom-namednodemap-removenameditemns
        * @see https://dom.spec.whatwg.org/#concept-element-attributes-remove-by-namespace
        */
-      removeNamedItemNS: function(namespaceURI, localName) {
-        var attr = this.getNamedItemNS(namespaceURI, localName);
+      removeNamedItemNS: function(namespaceURI, localName2) {
+        var attr = this.getNamedItemNS(namespaceURI, localName2);
         if (!attr) {
-          throw new DOMException(DOMException.NOT_FOUND_ERR, namespaceURI ? namespaceURI + " : " + localName : localName);
+          throw new DOMException(DOMException.NOT_FOUND_ERR, namespaceURI ? namespaceURI + " : " + localName2 : localName2);
         }
         _removeNamedNode(this._ownerElement, this, attr);
         return attr;
@@ -16341,14 +16341,14 @@ var require_dom = __commonJS({
        * exists.
        * @see https://dom.spec.whatwg.org/#concept-element-attributes-get-by-namespace
        */
-      getNamedItemNS: function(namespaceURI, localName) {
+      getNamedItemNS: function(namespaceURI, localName2) {
         if (!namespaceURI) {
           namespaceURI = null;
         }
         var i = 0;
         while (i < this.length) {
           var node = this[i];
-          if (node.localName === localName && node.namespaceURI === namespaceURI) {
+          if (node.localName === localName2 && node.namespaceURI === namespaceURI) {
             return node;
           }
           i++;
@@ -17186,15 +17186,15 @@ var require_dom = __commonJS({
     }
     function _onAddAttribute(doc, el, newAttr) {
       doc && doc._inc++;
-      var ns3 = newAttr.namespaceURI;
-      if (ns3 === NAMESPACE.XMLNS) {
+      var ns4 = newAttr.namespaceURI;
+      if (ns4 === NAMESPACE.XMLNS) {
         el._nsMap[newAttr.prefix ? newAttr.localName : ""] = newAttr.value;
       }
     }
     function _onRemoveAttribute(doc, el, newAttr, remove) {
       doc && doc._inc++;
-      var ns3 = newAttr.namespaceURI;
-      if (ns3 === NAMESPACE.XMLNS) {
+      var ns4 = newAttr.namespaceURI;
+      if (ns4 === NAMESPACE.XMLNS) {
         delete el._nsMap[newAttr.prefix ? newAttr.localName : ""];
       }
     }
@@ -17796,12 +17796,12 @@ var require_dom = __commonJS({
         return this.attributes.removeNamedItem(oldAttr.nodeName);
       },
       //get real attribute name,and remove it by removeAttributeNode
-      removeAttributeNS: function(namespaceURI, localName) {
-        var old = this.getAttributeNodeNS(namespaceURI, localName);
+      removeAttributeNS: function(namespaceURI, localName2) {
+        var old = this.getAttributeNodeNS(namespaceURI, localName2);
         old && this.removeAttributeNode(old);
       },
-      hasAttributeNS: function(namespaceURI, localName) {
-        return this.getAttributeNodeNS(namespaceURI, localName) != null;
+      hasAttributeNS: function(namespaceURI, localName2) {
+        return this.getAttributeNodeNS(namespaceURI, localName2) != null;
       },
       /**
        * Returns element’s attribute whose namespace is `namespaceURI` and local name is
@@ -17812,8 +17812,8 @@ var require_dom = __commonJS({
        * @param {string} localName
        * @returns {string | null}
        */
-      getAttributeNS: function(namespaceURI, localName) {
-        var attr = this.getAttributeNodeNS(namespaceURI, localName);
+      getAttributeNS: function(namespaceURI, localName2) {
+        var attr = this.getAttributeNodeNS(namespaceURI, localName2);
         return attr ? attr.value : null;
       },
       /**
@@ -17827,8 +17827,8 @@ var require_dom = __commonJS({
        */
       setAttributeNS: function(namespaceURI, qualifiedName, value) {
         var validated = validateAndExtract(namespaceURI, qualifiedName);
-        var localName = validated[2];
-        var attr = this.getAttributeNodeNS(namespaceURI, localName);
+        var localName2 = validated[2];
+        var attr = this.getAttributeNodeNS(namespaceURI, localName2);
         if (attr) {
           attr.value = attr.nodeValue = "" + value;
         } else {
@@ -17837,8 +17837,8 @@ var require_dom = __commonJS({
           this.setAttributeNode(attr);
         }
       },
-      getAttributeNodeNS: function(namespaceURI, localName) {
-        return this.attributes.getNamedItemNS(namespaceURI, localName);
+      getAttributeNodeNS: function(namespaceURI, localName2) {
+        return this.attributes.getNamedItemNS(namespaceURI, localName2);
       },
       /**
        * Returns a LiveNodeList of all child elements which have **all** of the given class name(s).
@@ -17928,11 +17928,11 @@ var require_dom = __commonJS({
           return ls;
         });
       },
-      getElementsByTagNameNS: function(namespaceURI, localName) {
+      getElementsByTagNameNS: function(namespaceURI, localName2) {
         return new LiveNodeList(this, function(base) {
           var ls = [];
           _visitNode(base, function(node) {
-            if (node !== base && node.nodeType === ELEMENT_NODE && (namespaceURI === "*" || node.namespaceURI === namespaceURI) && (localName === "*" || node.localName == localName)) {
+            if (node !== base && node.nodeType === ELEMENT_NODE && (namespaceURI === "*" || node.namespaceURI === namespaceURI) && (localName2 === "*" || node.localName == localName2)) {
               ls.push(node);
             }
           });
@@ -18093,9 +18093,9 @@ var require_dom = __commonJS({
       }
       var i = visibleNamespaces.length;
       while (i--) {
-        var ns3 = visibleNamespaces[i];
-        if (ns3.prefix === prefix) {
-          return ns3.namespace !== uri;
+        var ns4 = visibleNamespaces[i];
+        if (ns4.prefix === prefix) {
+          return ns4.namespace !== uri;
         }
       }
       return true;
@@ -21111,14 +21111,14 @@ var require_sax = __commonJS({
         var nsp = qName.indexOf(":");
         if (nsp > 0) {
           var prefix = a.prefix = qName.slice(0, nsp);
-          var localName = qName.slice(nsp + 1);
-          var nsPrefix = prefix === "xmlns" && localName;
+          var localName2 = qName.slice(nsp + 1);
+          var nsPrefix = prefix === "xmlns" && localName2;
         } else {
-          localName = qName;
+          localName2 = qName;
           prefix = null;
           nsPrefix = qName === "xmlns" && "";
         }
-        a.localName = localName;
+        a.localName = localName2;
         if (nsPrefix !== false) {
           if (localNSMap == null) {
             localNSMap = /* @__PURE__ */ Object.create(null);
@@ -21144,15 +21144,15 @@ var require_sax = __commonJS({
       var nsp = tagName.indexOf(":");
       if (nsp > 0) {
         prefix = el.prefix = tagName.slice(0, nsp);
-        localName = el.localName = tagName.slice(nsp + 1);
+        localName2 = el.localName = tagName.slice(nsp + 1);
       } else {
         prefix = null;
-        localName = el.localName = tagName;
+        localName2 = el.localName = tagName;
       }
-      var ns3 = el.uri = currentNSMap[prefix || ""];
-      domBuilder.startElement(ns3, localName, tagName, el);
+      var ns4 = el.uri = currentNSMap[prefix || ""];
+      domBuilder.startElement(ns4, localName2, tagName, el);
       if (el.closed) {
-        domBuilder.endElement(ns3, localName, tagName);
+        domBuilder.endElement(ns4, localName2, tagName);
         if (localNSMap) {
           for (prefix in localNSMap) {
             if (hasOwn(localNSMap, prefix)) {
@@ -21568,9 +21568,9 @@ var require_dom_parser = __commonJS({
         var impl = new DOMImplementation();
         this.doc = isHTMLMimeType(this.mimeType) ? impl.createHTMLDocument(false) : impl.createDocument(this.defaultNamespace, "");
       },
-      startElement: function(namespaceURI, localName, qName, attrs) {
+      startElement: function(namespaceURI, localName2, qName, attrs) {
         var doc = this.doc;
-        var el = doc.createElementNS(namespaceURI, qName || localName);
+        var el = doc.createElementNS(namespaceURI, qName || localName2);
         var len = attrs.length;
         appendElement(this, el);
         this.currentElement = el;
@@ -21585,7 +21585,7 @@ var require_dom_parser = __commonJS({
           el.setAttributeNode(attr);
         }
       },
-      endElement: function(namespaceURI, localName, qName) {
+      endElement: function(namespaceURI, localName2, qName) {
         this.currentElement = this.currentElement.parentNode;
       },
       startPrefixMapping: function(prefix, uri) {
@@ -21714,11 +21714,11 @@ var require_dom_parser = __commonJS({
         };
       }
     );
-    function appendElement(handler, node) {
-      if (!handler.currentElement) {
-        handler.doc.appendChild(node);
+    function appendElement(handler2, node) {
+      if (!handler2.currentElement) {
+        handler2.doc.appendChild(node);
       } else {
-        handler.currentElement.appendChild(node);
+        handler2.currentElement.appendChild(node);
       }
     }
     function onErrorStopParsing(level) {
@@ -22155,12 +22155,12 @@ var require_NQuads = __commonJS({
       const plain = '"([^"\\\\]*(?:\\\\.[^"\\\\]*)*)"';
       const datatype = "(?:\\^\\^" + IRI + ")";
       const language = "(?:@([a-zA-Z]+(?:-[a-zA-Z0-9]+)*))";
-      const literal3 = "(?:" + plain + "(?:" + datatype + "|" + language + ")?)";
+      const literal5 = "(?:" + plain + "(?:" + datatype + "|" + language + ")?)";
       const ws2 = "[ \\t]+";
       const wso = "[ \\t]*";
       const subject = "(?:" + IRI + "|" + bnode + ")" + ws2;
       const property = IRI + ws2;
-      const object = "(?:" + IRI + "|" + bnode + "|" + literal3 + ")" + wso;
+      const object = "(?:" + IRI + "|" + bnode + "|" + literal5 + ")" + wso;
       const graphName = "(?:\\.|(?:(?:" + IRI + "|" + bnode + ")" + wso + "\\.))";
       REGEX.eoln = /(?:\r\n)|(?:\n)|(?:\r)/g;
       REGEX.empty = new RegExp("^" + wso + "$");
@@ -22178,7 +22178,7 @@ var require_NQuads = __commonJS({
        *   https://rdf.js.org/).
        */
       static parse(input) {
-        const dataset = [];
+        const dataset2 = [];
         const graphs = {};
         const lines = input.split(REGEX.eoln);
         let lineNumber = 0;
@@ -22191,34 +22191,34 @@ var require_NQuads = __commonJS({
           if (match === null) {
             throw new Error("N-Quads parse error on line " + lineNumber + ".");
           }
-          const quad3 = { subject: null, predicate: null, object: null, graph: null };
+          const quad4 = { subject: null, predicate: null, object: null, graph: null };
           if (match[1] !== void 0) {
-            quad3.subject = {
+            quad4.subject = {
               termType: TYPE_NAMED_NODE,
               value: _iriUnescape(match[1])
             };
           } else {
-            quad3.subject = {
+            quad4.subject = {
               termType: TYPE_BLANK_NODE,
               value: match[2]
             };
           }
-          quad3.predicate = {
+          quad4.predicate = {
             termType: TYPE_NAMED_NODE,
             value: _iriUnescape(match[3])
           };
           if (match[4] !== void 0) {
-            quad3.object = {
+            quad4.object = {
               termType: TYPE_NAMED_NODE,
               value: _iriUnescape(match[4])
             };
           } else if (match[5] !== void 0) {
-            quad3.object = {
+            quad4.object = {
               termType: TYPE_BLANK_NODE,
               value: match[5]
             };
           } else {
-            quad3.object = {
+            quad4.object = {
               termType: TYPE_LITERAL,
               value: void 0,
               datatype: {
@@ -22226,50 +22226,50 @@ var require_NQuads = __commonJS({
               }
             };
             if (match[7] !== void 0) {
-              quad3.object.datatype.value = _iriUnescape(match[7]);
+              quad4.object.datatype.value = _iriUnescape(match[7]);
             } else if (match[8] !== void 0) {
-              quad3.object.datatype.value = RDF_LANGSTRING;
-              quad3.object.language = match[8];
+              quad4.object.datatype.value = RDF_LANGSTRING;
+              quad4.object.language = match[8];
             } else {
-              quad3.object.datatype.value = XSD_STRING;
+              quad4.object.datatype.value = XSD_STRING;
             }
-            quad3.object.value = _stringLiteralUnescape(match[6]);
+            quad4.object.value = _stringLiteralUnescape(match[6]);
           }
           if (match[9] !== void 0) {
-            quad3.graph = {
+            quad4.graph = {
               termType: TYPE_NAMED_NODE,
               value: _iriUnescape(match[9])
             };
           } else if (match[10] !== void 0) {
-            quad3.graph = {
+            quad4.graph = {
               termType: TYPE_BLANK_NODE,
               value: match[10]
             };
           } else {
-            quad3.graph = {
+            quad4.graph = {
               termType: TYPE_DEFAULT_GRAPH,
               value: ""
             };
           }
-          if (!(quad3.graph.value in graphs)) {
-            graphs[quad3.graph.value] = [quad3];
-            dataset.push(quad3);
+          if (!(quad4.graph.value in graphs)) {
+            graphs[quad4.graph.value] = [quad4];
+            dataset2.push(quad4);
           } else {
             let unique = true;
-            const quads = graphs[quad3.graph.value];
+            const quads = graphs[quad4.graph.value];
             for (const q of quads) {
-              if (_compareTriples(q, quad3)) {
+              if (_compareTriples(q, quad4)) {
                 unique = false;
                 break;
               }
             }
             if (unique) {
-              quads.push(quad3);
-              dataset.push(quad3);
+              quads.push(quad4);
+              dataset2.push(quad4);
             }
           }
         }
-        return dataset;
+        return dataset2;
       }
       /**
        * Converts an RDF dataset to N-Quads.
@@ -22278,10 +22278,10 @@ var require_NQuads = __commonJS({
        *
        * @returns {string} - The N-Quads string.
        */
-      static serialize(dataset) {
+      static serialize(dataset2) {
         const quads = [];
-        for (const quad3 of dataset) {
-          quads.push(NQuads.serializeQuad(quad3));
+        for (const quad4 of dataset2) {
+          quads.push(NQuads.serializeQuad(quad4));
         }
         return quads.sort().join("");
       }
@@ -22336,12 +22336,12 @@ var require_NQuads = __commonJS({
        *
        * @returns {string} - The N-Quad string.
        */
-      static serializeQuad(quad3) {
+      static serializeQuad(quad4) {
         return NQuads.serializeQuadComponents(
-          quad3.subject,
-          quad3.predicate,
-          quad3.object,
-          quad3.graph
+          quad4.subject,
+          quad4.predicate,
+          quad4.object,
+          quad4.graph
         );
       }
     };
@@ -22476,12 +22476,12 @@ var require_RDFC10 = __commonJS({
         this.quads = null;
       }
       // 4.4) Normalization Algorithm
-      async main(dataset) {
-        this.quads = dataset;
-        for (const quad3 of dataset) {
-          this._addBlankNodeQuadInfo({ quad: quad3, component: quad3.subject });
-          this._addBlankNodeQuadInfo({ quad: quad3, component: quad3.object });
-          this._addBlankNodeQuadInfo({ quad: quad3, component: quad3.graph });
+      async main(dataset2) {
+        this.quads = dataset2;
+        for (const quad4 of dataset2) {
+          this._addBlankNodeQuadInfo({ quad: quad4, component: quad4.subject });
+          this._addBlankNodeQuadInfo({ quad: quad4, component: quad4.object });
+          this._addBlankNodeQuadInfo({ quad: quad4, component: quad4.graph });
         }
         const hashToBlankNodes = /* @__PURE__ */ new Map();
         const nonNormalized = [...this.blankNodeInfo.keys()];
@@ -22537,12 +22537,12 @@ var require_RDFC10 = __commonJS({
           }
         }
         const normalized = [];
-        for (const quad3 of this.quads) {
+        for (const quad4 of this.quads) {
           const nQuad = NQuads.serializeQuadComponents(
-            this._componentWithCanonicalId(quad3.subject),
-            quad3.predicate,
-            this._componentWithCanonicalId(quad3.object),
-            this._componentWithCanonicalId(quad3.graph)
+            this._componentWithCanonicalId(quad4.subject),
+            quad4.predicate,
+            this._componentWithCanonicalId(quad4.object),
+            this._componentWithCanonicalId(quad4.graph)
           );
           normalized.push(nQuad);
         }
@@ -22554,12 +22554,12 @@ var require_RDFC10 = __commonJS({
         const nquads = [];
         const info = this.blankNodeInfo.get(id);
         const quads = info.quads;
-        for (const quad3 of quads) {
+        for (const quad4 of quads) {
           nquads.push(NQuads.serializeQuadComponents(
-            this.modifyFirstDegreeComponent(id, quad3.subject, "subject"),
-            quad3.predicate,
-            this.modifyFirstDegreeComponent(id, quad3.object, "object"),
-            this.modifyFirstDegreeComponent(id, quad3.graph, "graph")
+            this.modifyFirstDegreeComponent(id, quad4.subject, "subject"),
+            quad4.predicate,
+            this.modifyFirstDegreeComponent(id, quad4.object, "object"),
+            this.modifyFirstDegreeComponent(id, quad4.graph, "graph")
           ));
         }
         nquads.sort();
@@ -22571,11 +22571,11 @@ var require_RDFC10 = __commonJS({
         return info.hash;
       }
       // 4.7) Hash Related Blank Node
-      async hashRelatedBlankNode(related, quad3, issuer, position) {
+      async hashRelatedBlankNode(related, quad4, issuer, position) {
         const md = this.createMessageDigest();
         md.update(position);
         if (position !== "g") {
-          md.update(this.getRelatedPredicate(quad3));
+          md.update(this.getRelatedPredicate(quad4));
         }
         let id;
         if (this.canonicalIssuer.hasId(related)) {
@@ -22668,38 +22668,38 @@ var require_RDFC10 = __commonJS({
         };
       }
       // helper for getting a related predicate
-      getRelatedPredicate(quad3) {
-        return `<${quad3.predicate.value}>`;
+      getRelatedPredicate(quad4) {
+        return `<${quad4.predicate.value}>`;
       }
       // helper for creating hash to related blank nodes map
       async createHashToRelated(id, issuer) {
         const hashToRelated = /* @__PURE__ */ new Map();
         const quads = this.blankNodeInfo.get(id).quads;
         let i = 0;
-        for (const quad3 of quads) {
+        for (const quad4 of quads) {
           if (++i % 100 === 0) {
             await this._yield();
           }
           await Promise.all([
             this._addRelatedBlankNodeHash({
-              quad: quad3,
-              component: quad3.subject,
+              quad: quad4,
+              component: quad4.subject,
               position: "s",
               id,
               issuer,
               hashToRelated
             }),
             this._addRelatedBlankNodeHash({
-              quad: quad3,
-              component: quad3.object,
+              quad: quad4,
+              component: quad4.object,
               position: "o",
               id,
               issuer,
               hashToRelated
             }),
             this._addRelatedBlankNodeHash({
-              quad: quad3,
-              component: quad3.graph,
+              quad: quad4,
+              component: quad4.graph,
               position: "g",
               id,
               issuer,
@@ -22718,26 +22718,26 @@ var require_RDFC10 = __commonJS({
           idList.push(id);
         }
       }
-      _addBlankNodeQuadInfo({ quad: quad3, component }) {
+      _addBlankNodeQuadInfo({ quad: quad4, component }) {
         if (component.termType !== "BlankNode") {
           return;
         }
         const id = component.value;
         const info = this.blankNodeInfo.get(id);
         if (info) {
-          info.quads.add(quad3);
+          info.quads.add(quad4);
         } else {
-          this.blankNodeInfo.set(id, { quads: /* @__PURE__ */ new Set([quad3]), hash: null });
+          this.blankNodeInfo.set(id, { quads: /* @__PURE__ */ new Set([quad4]), hash: null });
         }
       }
-      async _addRelatedBlankNodeHash({ quad: quad3, component, position, id, issuer, hashToRelated }) {
+      async _addRelatedBlankNodeHash({ quad: quad4, component, position, id, issuer, hashToRelated }) {
         if (!(component.termType === "BlankNode" && component.value !== id)) {
           return;
         }
         const related = component.value;
         const hash = await this.hashRelatedBlankNode(
           related,
-          quad3,
+          quad4,
           issuer,
           position
         );
@@ -22799,12 +22799,12 @@ var require_RDFC10Sync = __commonJS({
         this.quads = null;
       }
       // 4.4) Normalization Algorithm
-      main(dataset) {
-        this.quads = dataset;
-        for (const quad3 of dataset) {
-          this._addBlankNodeQuadInfo({ quad: quad3, component: quad3.subject });
-          this._addBlankNodeQuadInfo({ quad: quad3, component: quad3.object });
-          this._addBlankNodeQuadInfo({ quad: quad3, component: quad3.graph });
+      main(dataset2) {
+        this.quads = dataset2;
+        for (const quad4 of dataset2) {
+          this._addBlankNodeQuadInfo({ quad: quad4, component: quad4.subject });
+          this._addBlankNodeQuadInfo({ quad: quad4, component: quad4.object });
+          this._addBlankNodeQuadInfo({ quad: quad4, component: quad4.graph });
         }
         const hashToBlankNodes = /* @__PURE__ */ new Map();
         const nonNormalized = [...this.blankNodeInfo.keys()];
@@ -22856,12 +22856,12 @@ var require_RDFC10Sync = __commonJS({
           }
         }
         const normalized = [];
-        for (const quad3 of this.quads) {
+        for (const quad4 of this.quads) {
           const nQuad = NQuads.serializeQuadComponents(
-            this._componentWithCanonicalId(quad3.subject),
-            quad3.predicate,
-            this._componentWithCanonicalId(quad3.object),
-            this._componentWithCanonicalId(quad3.graph)
+            this._componentWithCanonicalId(quad4.subject),
+            quad4.predicate,
+            this._componentWithCanonicalId(quad4.object),
+            this._componentWithCanonicalId(quad4.graph)
           );
           normalized.push(nQuad);
         }
@@ -22873,12 +22873,12 @@ var require_RDFC10Sync = __commonJS({
         const nquads = [];
         const info = this.blankNodeInfo.get(id);
         const quads = info.quads;
-        for (const quad3 of quads) {
+        for (const quad4 of quads) {
           nquads.push(NQuads.serializeQuadComponents(
-            this.modifyFirstDegreeComponent(id, quad3.subject, "subject"),
-            quad3.predicate,
-            this.modifyFirstDegreeComponent(id, quad3.object, "object"),
-            this.modifyFirstDegreeComponent(id, quad3.graph, "graph")
+            this.modifyFirstDegreeComponent(id, quad4.subject, "subject"),
+            quad4.predicate,
+            this.modifyFirstDegreeComponent(id, quad4.object, "object"),
+            this.modifyFirstDegreeComponent(id, quad4.graph, "graph")
           ));
         }
         nquads.sort();
@@ -22890,11 +22890,11 @@ var require_RDFC10Sync = __commonJS({
         return info.hash;
       }
       // 4.7) Hash Related Blank Node
-      hashRelatedBlankNode(related, quad3, issuer, position) {
+      hashRelatedBlankNode(related, quad4, issuer, position) {
         const md = this.createMessageDigest();
         md.update(position);
         if (position !== "g") {
-          md.update(this.getRelatedPredicate(quad3));
+          md.update(this.getRelatedPredicate(quad4));
         }
         let id;
         if (this.canonicalIssuer.hasId(related)) {
@@ -22986,33 +22986,33 @@ var require_RDFC10Sync = __commonJS({
         };
       }
       // helper for getting a related predicate
-      getRelatedPredicate(quad3) {
-        return `<${quad3.predicate.value}>`;
+      getRelatedPredicate(quad4) {
+        return `<${quad4.predicate.value}>`;
       }
       // helper for creating hash to related blank nodes map
       createHashToRelated(id, issuer) {
         const hashToRelated = /* @__PURE__ */ new Map();
         const quads = this.blankNodeInfo.get(id).quads;
-        for (const quad3 of quads) {
+        for (const quad4 of quads) {
           this._addRelatedBlankNodeHash({
-            quad: quad3,
-            component: quad3.subject,
+            quad: quad4,
+            component: quad4.subject,
             position: "s",
             id,
             issuer,
             hashToRelated
           });
           this._addRelatedBlankNodeHash({
-            quad: quad3,
-            component: quad3.object,
+            quad: quad4,
+            component: quad4.object,
             position: "o",
             id,
             issuer,
             hashToRelated
           });
           this._addRelatedBlankNodeHash({
-            quad: quad3,
-            component: quad3.graph,
+            quad: quad4,
+            component: quad4.graph,
             position: "g",
             id,
             issuer,
@@ -23030,26 +23030,26 @@ var require_RDFC10Sync = __commonJS({
           idList.push(id);
         }
       }
-      _addBlankNodeQuadInfo({ quad: quad3, component }) {
+      _addBlankNodeQuadInfo({ quad: quad4, component }) {
         if (component.termType !== "BlankNode") {
           return;
         }
         const id = component.value;
         const info = this.blankNodeInfo.get(id);
         if (info) {
-          info.quads.add(quad3);
+          info.quads.add(quad4);
         } else {
-          this.blankNodeInfo.set(id, { quads: /* @__PURE__ */ new Set([quad3]), hash: null });
+          this.blankNodeInfo.set(id, { quads: /* @__PURE__ */ new Set([quad4]), hash: null });
         }
       }
-      _addRelatedBlankNodeHash({ quad: quad3, component, position, id, issuer, hashToRelated }) {
+      _addRelatedBlankNodeHash({ quad: quad4, component, position, id, issuer, hashToRelated }) {
         if (!(component.termType === "BlankNode" && component.value !== id)) {
           return;
         }
         const related = component.value;
         const hash = this.hashRelatedBlankNode(
           related,
-          quad3,
+          quad4,
           issuer,
           position
         );
@@ -23114,34 +23114,34 @@ var require_lib2 = __commonJS({
     exports.NQuads = require_NQuads();
     exports.IdentifierIssuer = require_IdentifierIssuer();
     exports.canonize = async function(input, options = {}) {
-      const dataset = _inputToDataset(input, options);
+      const dataset2 = _inputToDataset(input, options);
       _checkOutputFormat(options);
       if (!("algorithm" in options)) {
         throw new Error("No RDF Dataset Canonicalization algorithm specified.");
       }
       if (options.algorithm === "RDFC-1.0") {
-        return new RDFC10(options).main(dataset);
+        return new RDFC10(options).main(dataset2);
       }
       if (options.algorithm === "URDNA2015" && !options.rejectURDNA2015) {
         _traceURDNA2015();
-        return new RDFC10(options).main(dataset);
+        return new RDFC10(options).main(dataset2);
       }
       throw new Error(
         "Invalid RDF Dataset Canonicalization algorithm: " + options.algorithm
       );
     };
     exports._canonizeSync = function(input, options = {}) {
-      const dataset = _inputToDataset(input, options);
+      const dataset2 = _inputToDataset(input, options);
       _checkOutputFormat(options);
       if (!("algorithm" in options)) {
         throw new Error("No RDF Dataset Canonicalization algorithm specified.");
       }
       if (options.algorithm === "RDFC-1.0") {
-        return new RDFC10Sync(options).main(dataset);
+        return new RDFC10Sync(options).main(dataset2);
       }
       if (options.algorithm === "URDNA2015" && !options.rejectURDNA2015) {
         _traceURDNA2015();
-        return new RDFC10Sync(options).main(dataset);
+        return new RDFC10Sync(options).main(dataset2);
       }
       throw new Error(
         "Invalid RDF Dataset Canonicalization algorithm: " + options.algorithm
@@ -23876,19 +23876,19 @@ var require_platform_browser2 = __commonJS({
     var xhrLoader = require_xhr();
     var api = {};
     module2.exports = api;
-    api.setupDocumentLoaders = function(jsonld) {
+    api.setupDocumentLoaders = function(jsonld2) {
       if (typeof XMLHttpRequest !== "undefined") {
-        jsonld.documentLoaders.xhr = xhrLoader;
-        jsonld.useDocumentLoader("xhr");
+        jsonld2.documentLoaders.xhr = xhrLoader;
+        jsonld2.useDocumentLoader("xhr");
       }
     };
-    api.setupGlobals = function(jsonld) {
+    api.setupGlobals = function(jsonld2) {
       if (typeof globalThis.JsonLdProcessor === "undefined") {
         Object.defineProperty(globalThis, "JsonLdProcessor", {
           writable: true,
           enumerable: false,
           configurable: true,
-          value: jsonld.JsonLdProcessor
+          value: jsonld2.JsonLdProcessor
         });
       }
     };
@@ -24774,8 +24774,8 @@ var require_ContextResolver = __commonJS({
       if (!_isObject(ctx)) {
         return;
       }
-      for (const term2 in ctx) {
-        _resolveContextUrls({ context: ctx[term2], base });
+      for (const term3 in ctx) {
+        _resolveContextUrls({ context: ctx[term3], base });
       }
     }
   }
@@ -24821,16 +24821,16 @@ var require_events = __commonJS({
       let doNext = true;
       for (let i = 0; doNext && i < handlers.length; ++i) {
         doNext = false;
-        const handler = handlers[i];
-        if (_isArray(handler)) {
-          doNext = _handle({ event, handlers: handler });
-        } else if (typeof handler === "function") {
-          handler({ event, next: () => {
+        const handler2 = handlers[i];
+        if (_isArray(handler2)) {
+          doNext = _handle({ event, handlers: handler2 });
+        } else if (typeof handler2 === "function") {
+          handler2({ event, next: () => {
             doNext = true;
           } });
-        } else if (typeof handler === "object") {
-          if (event.code in handler) {
-            handler[event.code]({ event, next: () => {
+        } else if (typeof handler2 === "object") {
+          if (event.code in handler2) {
+            handler2[event.code]({ event, next: () => {
               doNext = true;
             } });
           } else {
@@ -25268,43 +25268,43 @@ var require_context = __commonJS({
     api.createTermDefinition = ({
       activeCtx,
       localCtx,
-      term: term2,
+      term: term3,
       defined,
       options,
       overrideProtected = false
     }) => {
-      if (defined.has(term2)) {
-        if (defined.get(term2)) {
+      if (defined.has(term3)) {
+        if (defined.get(term3)) {
           return;
         }
         throw new JsonLdError(
           "Cyclical context definition detected.",
           "jsonld.CyclicalContext",
-          { code: "cyclic IRI mapping", context: localCtx, term: term2 }
+          { code: "cyclic IRI mapping", context: localCtx, term: term3 }
         );
       }
-      defined.set(term2, false);
+      defined.set(term3, false);
       let value;
-      if (localCtx.hasOwnProperty(term2)) {
-        value = localCtx[term2];
+      if (localCtx.hasOwnProperty(term3)) {
+        value = localCtx[term3];
       }
-      if (term2 === "@type" && _isObject(value) && (value["@container"] || "@set") === "@set" && api.processingMode(activeCtx, 1.1)) {
+      if (term3 === "@type" && _isObject(value) && (value["@container"] || "@set") === "@set" && api.processingMode(activeCtx, 1.1)) {
         const validKeys2 = ["@container", "@id", "@protected"];
         const keys = Object.keys(value);
         if (keys.length === 0 || keys.some((k) => !validKeys2.includes(k))) {
           throw new JsonLdError(
             "Invalid JSON-LD syntax; keywords cannot be overridden.",
             "jsonld.SyntaxError",
-            { code: "keyword redefinition", context: localCtx, term: term2 }
+            { code: "keyword redefinition", context: localCtx, term: term3 }
           );
         }
-      } else if (api.isKeyword(term2)) {
+      } else if (api.isKeyword(term3)) {
         throw new JsonLdError(
           "Invalid JSON-LD syntax; keywords cannot be overridden.",
           "jsonld.SyntaxError",
-          { code: "keyword redefinition", context: localCtx, term: term2 }
+          { code: "keyword redefinition", context: localCtx, term: term3 }
         );
-      } else if (term2.match(REGEX_KEYWORD)) {
+      } else if (term3.match(REGEX_KEYWORD)) {
         if (options.eventHandler) {
           _handleEvent({
             event: {
@@ -25313,23 +25313,23 @@ var require_context = __commonJS({
               level: "warning",
               message: 'Terms beginning with "@" are reserved for future use and dropped.',
               details: {
-                term: term2
+                term: term3
               }
             },
             options
           });
         }
         return;
-      } else if (term2 === "") {
+      } else if (term3 === "") {
         throw new JsonLdError(
           "Invalid JSON-LD syntax; a term cannot be an empty string.",
           "jsonld.SyntaxError",
           { code: "invalid term definition", context: localCtx }
         );
       }
-      const previousMapping = activeCtx.mappings.get(term2);
-      if (activeCtx.mappings.has(term2)) {
-        activeCtx.mappings.delete(term2);
+      const previousMapping = activeCtx.mappings.get(term3);
+      if (activeCtx.mappings.has(term3)) {
+        activeCtx.mappings.delete(term3);
       }
       let simpleTerm = false;
       if (_isString(value) || value === null) {
@@ -25344,7 +25344,7 @@ var require_context = __commonJS({
         );
       }
       const mapping = {};
-      activeCtx.mappings.set(term2, mapping);
+      activeCtx.mappings.set(term3, mapping);
       mapping.reverse = false;
       const validKeys = ["@container", "@id", "@language", "@reverse", "@type"];
       if (api.processingMode(activeCtx, 1.1)) {
@@ -25366,7 +25366,7 @@ var require_context = __commonJS({
           );
         }
       }
-      const colon = term2.indexOf(":");
+      const colon = term3.indexOf(":");
       mapping._termHasColon = colon > 0;
       if ("@reverse" in value) {
         if ("@id" in value) {
@@ -25407,9 +25407,9 @@ var require_context = __commonJS({
             });
           }
           if (previousMapping) {
-            activeCtx.mappings.set(term2, previousMapping);
+            activeCtx.mappings.set(term3, previousMapping);
           } else {
-            activeCtx.mappings.delete(term2);
+            activeCtx.mappings.delete(term3);
           }
           return;
         }
@@ -25457,12 +25457,12 @@ var require_context = __commonJS({
             });
           }
           if (previousMapping) {
-            activeCtx.mappings.set(term2, previousMapping);
+            activeCtx.mappings.set(term3, previousMapping);
           } else {
-            activeCtx.mappings.delete(term2);
+            activeCtx.mappings.delete(term3);
           }
           return;
-        } else if (id2 !== term2) {
+        } else if (id2 !== term3) {
           id2 = _expandIri(
             activeCtx,
             id2,
@@ -25478,11 +25478,11 @@ var require_context = __commonJS({
               { code: "invalid IRI mapping", context: localCtx }
             );
           }
-          if (term2.match(/(?::[^:])|\//)) {
-            const termDefined = new Map(defined).set(term2, true);
+          if (term3.match(/(?::[^:])|\//)) {
+            const termDefined = new Map(defined).set(term3, true);
             const termIri = _expandIri(
               activeCtx,
-              term2,
+              term3,
               { vocab: true, base: false },
               localCtx,
               termDefined,
@@ -25502,7 +25502,7 @@ var require_context = __commonJS({
       }
       if (!("@id" in mapping)) {
         if (mapping._termHasColon) {
-          const prefix = term2.substr(0, colon);
+          const prefix = term3.substr(0, colon);
           if (localCtx.hasOwnProperty(prefix)) {
             api.createTermDefinition({
               activeCtx,
@@ -25513,29 +25513,29 @@ var require_context = __commonJS({
             });
           }
           if (activeCtx.mappings.has(prefix)) {
-            const suffix = term2.substr(colon + 1);
+            const suffix = term3.substr(colon + 1);
             mapping["@id"] = activeCtx.mappings.get(prefix)["@id"] + suffix;
           } else {
-            mapping["@id"] = term2;
+            mapping["@id"] = term3;
           }
-        } else if (term2 === "@type") {
-          mapping["@id"] = term2;
+        } else if (term3 === "@type") {
+          mapping["@id"] = term3;
         } else {
           if (!("@vocab" in activeCtx)) {
             throw new JsonLdError(
               "Invalid JSON-LD syntax; @context terms must define an @id.",
               "jsonld.SyntaxError",
-              { code: "invalid IRI mapping", context: localCtx, term: term2 }
+              { code: "invalid IRI mapping", context: localCtx, term: term3 }
             );
           }
-          mapping["@id"] = activeCtx["@vocab"] + term2;
+          mapping["@id"] = activeCtx["@vocab"] + term3;
         }
       }
       if (value["@protected"] === true || defined.get("@protected") === true && value["@protected"] !== false) {
-        activeCtx.protected[term2] = true;
+        activeCtx.protected[term3] = true;
         mapping.protected = true;
       }
-      defined.set(term2, true);
+      defined.set(term3, true);
       if ("@type" in value) {
         let type = value["@type"];
         if (!_isString(type)) {
@@ -25640,14 +25640,14 @@ var require_context = __commonJS({
       if ("@index" in value) {
         if (!("@container" in value) || !mapping["@container"].includes("@index")) {
           throw new JsonLdError(
-            `Invalid JSON-LD syntax; @index without @index in @container: "${value["@index"]}" on term "${term2}".`,
+            `Invalid JSON-LD syntax; @index without @index in @container: "${value["@index"]}" on term "${term3}".`,
             "jsonld.SyntaxError",
             { code: "invalid term definition", context: localCtx }
           );
         }
         if (!_isString(value["@index"]) || value["@index"].indexOf("@") === 0) {
           throw new JsonLdError(
-            `Invalid JSON-LD syntax; @index must expand to an IRI: "${value["@index"]}" on term "${term2}".`,
+            `Invalid JSON-LD syntax; @index must expand to an IRI: "${value["@index"]}" on term "${term3}".`,
             "jsonld.SyntaxError",
             { code: "invalid term definition", context: localCtx }
           );
@@ -25672,7 +25672,7 @@ var require_context = __commonJS({
         mapping["@language"] = language;
       }
       if ("@prefix" in value) {
-        if (term2.match(/:|\//)) {
+        if (term3.match(/:|\//)) {
           throw new JsonLdError(
             "Invalid JSON-LD syntax; @context @prefix used on a compact IRI term",
             "jsonld.SyntaxError",
@@ -25727,13 +25727,13 @@ var require_context = __commonJS({
         );
       }
       if (previousMapping && previousMapping.protected && !overrideProtected) {
-        activeCtx.protected[term2] = true;
+        activeCtx.protected[term3] = true;
         mapping.protected = true;
         if (!_deepCompare(previousMapping, mapping)) {
           throw new JsonLdError(
             "Invalid JSON-LD syntax; tried to redefine a protected term.",
             "jsonld.SyntaxError",
-            { code: "protected term redefinition", context: localCtx, term: term2 }
+            { code: "protected term redefinition", context: localCtx, term: term3 }
           );
         }
       }
@@ -25852,8 +25852,8 @@ var require_context = __commonJS({
         const defaultDirection = activeCtx["@direction"];
         const mappings = activeCtx.mappings;
         const terms = [...mappings.keys()].sort(_compareShortestLeast);
-        for (const term2 of terms) {
-          const mapping = mappings.get(term2);
+        for (const term3 of terms) {
+          const mapping = mappings.get(term3);
           if (mapping === null) {
             continue;
           }
@@ -25869,7 +25869,7 @@ var require_context = __commonJS({
             if (!entry) {
               inverse[iri] = entry = {};
               if (!isKeyword && !mapping._termHasColon) {
-                irisToTerms[iri] = [term2];
+                irisToTerms[iri] = [term3];
                 const fastCurieEntry = { iri, terms: irisToTerms[iri] };
                 if (iri[0] in fastCurieMap) {
                   fastCurieMap[iri[0]].push(fastCurieEntry);
@@ -25878,7 +25878,7 @@ var require_context = __commonJS({
                 }
               }
             } else if (!isKeyword && !mapping._termHasColon) {
-              irisToTerms[iri].push(term2);
+              irisToTerms[iri].push(term3);
             }
             if (!entry[container]) {
               entry[container] = {
@@ -25888,55 +25888,55 @@ var require_context = __commonJS({
               };
             }
             entry = entry[container];
-            _addPreferredTerm(term2, entry["@any"], "@none");
+            _addPreferredTerm(term3, entry["@any"], "@none");
             if (mapping.reverse) {
-              _addPreferredTerm(term2, entry["@type"], "@reverse");
+              _addPreferredTerm(term3, entry["@type"], "@reverse");
             } else if (mapping["@type"] === "@none") {
-              _addPreferredTerm(term2, entry["@any"], "@none");
-              _addPreferredTerm(term2, entry["@language"], "@none");
-              _addPreferredTerm(term2, entry["@type"], "@none");
+              _addPreferredTerm(term3, entry["@any"], "@none");
+              _addPreferredTerm(term3, entry["@language"], "@none");
+              _addPreferredTerm(term3, entry["@type"], "@none");
             } else if ("@type" in mapping) {
-              _addPreferredTerm(term2, entry["@type"], mapping["@type"]);
+              _addPreferredTerm(term3, entry["@type"], mapping["@type"]);
             } else if ("@language" in mapping && "@direction" in mapping) {
               const language = mapping["@language"];
               const direction = mapping["@direction"];
               if (language && direction) {
                 _addPreferredTerm(
-                  term2,
+                  term3,
                   entry["@language"],
                   `${language}_${direction}`.toLowerCase()
                 );
               } else if (language) {
-                _addPreferredTerm(term2, entry["@language"], language.toLowerCase());
+                _addPreferredTerm(term3, entry["@language"], language.toLowerCase());
               } else if (direction) {
-                _addPreferredTerm(term2, entry["@language"], `_${direction}`);
+                _addPreferredTerm(term3, entry["@language"], `_${direction}`);
               } else {
-                _addPreferredTerm(term2, entry["@language"], "@null");
+                _addPreferredTerm(term3, entry["@language"], "@null");
               }
             } else if ("@language" in mapping) {
               _addPreferredTerm(
-                term2,
+                term3,
                 entry["@language"],
                 (mapping["@language"] || "@null").toLowerCase()
               );
             } else if ("@direction" in mapping) {
               if (mapping["@direction"]) {
                 _addPreferredTerm(
-                  term2,
+                  term3,
                   entry["@language"],
                   `_${mapping["@direction"]}`
                 );
               } else {
-                _addPreferredTerm(term2, entry["@language"], "@none");
+                _addPreferredTerm(term3, entry["@language"], "@none");
               }
             } else if (defaultDirection) {
-              _addPreferredTerm(term2, entry["@language"], `_${defaultDirection}`);
-              _addPreferredTerm(term2, entry["@language"], "@none");
-              _addPreferredTerm(term2, entry["@type"], "@none");
+              _addPreferredTerm(term3, entry["@language"], `_${defaultDirection}`);
+              _addPreferredTerm(term3, entry["@language"], "@none");
+              _addPreferredTerm(term3, entry["@type"], "@none");
             } else {
-              _addPreferredTerm(term2, entry["@language"], defaultLanguage);
-              _addPreferredTerm(term2, entry["@language"], "@none");
-              _addPreferredTerm(term2, entry["@type"], "@none");
+              _addPreferredTerm(term3, entry["@language"], defaultLanguage);
+              _addPreferredTerm(term3, entry["@language"], "@none");
+              _addPreferredTerm(term3, entry["@type"], "@none");
             }
           }
         }
@@ -25970,9 +25970,9 @@ var require_context = __commonJS({
           _buildIriMap(next, key3, idx + 1);
         }
       }
-      function _addPreferredTerm(term2, entry, typeOrLanguageValue) {
+      function _addPreferredTerm(term3, entry, typeOrLanguageValue) {
         if (!entry.hasOwnProperty(typeOrLanguageValue)) {
-          entry[typeOrLanguageValue] = term2;
+          entry[typeOrLanguageValue] = term3;
         }
       }
       function _cloneActiveContext() {
@@ -27371,16 +27371,16 @@ var require_nodeMap = __commonJS({
       return merged;
     };
     api.mergeNodeMaps = (graphs) => {
-      const defaultGraph5 = graphs["@default"];
+      const defaultGraph6 = graphs["@default"];
       const graphNames = Object.keys(graphs).sort();
       for (const graphName of graphNames) {
         if (graphName === "@default") {
           continue;
         }
         const nodeMap = graphs[graphName];
-        let subject = defaultGraph5[graphName];
+        let subject = defaultGraph6[graphName];
         if (!subject) {
-          defaultGraph5[graphName] = subject = {
+          defaultGraph6[graphName] = subject = {
             "@id": graphName,
             "@graph": []
           };
@@ -27395,7 +27395,7 @@ var require_nodeMap = __commonJS({
           }
         }
       }
-      return defaultGraph5;
+      return defaultGraph6;
     };
   }
 });
@@ -27413,11 +27413,11 @@ var require_flatten = __commonJS({
     var api = {};
     module2.exports = api;
     api.flatten = (input) => {
-      const defaultGraph5 = _createMergedNodeMap(input);
+      const defaultGraph6 = _createMergedNodeMap(input);
       const flattened = [];
-      const keys = Object.keys(defaultGraph5).sort();
+      const keys = Object.keys(defaultGraph6).sort();
       for (let ki = 0; ki < keys.length; ++ki) {
-        const node = defaultGraph5[keys[ki]];
+        const node = defaultGraph6[keys[ki]];
         if (!_isSubjectReference(node)) {
           flattened.push(node);
         }
@@ -27461,14 +27461,14 @@ var require_fromRdf = __commonJS({
     } = require_constants();
     var api = {};
     module2.exports = api;
-    api.fromRDF = async (dataset, options) => {
+    api.fromRDF = async (dataset2, options) => {
       const {
         useRdfType = false,
         useNativeTypes = false,
         rdfDirection = null
       } = options;
-      const defaultGraph5 = {};
-      const graphMap = { "@default": defaultGraph5 };
+      const defaultGraph6 = {};
+      const graphMap = { "@default": defaultGraph6 };
       const referencedOnce = {};
       if (rdfDirection) {
         if (rdfDirection === "compound-literal") {
@@ -27485,18 +27485,18 @@ var require_fromRdf = __commonJS({
           );
         }
       }
-      for (const quad3 of dataset) {
-        const name = quad3.graph.termType === "DefaultGraph" ? "@default" : quad3.graph.value;
+      for (const quad4 of dataset2) {
+        const name = quad4.graph.termType === "DefaultGraph" ? "@default" : quad4.graph.value;
         if (!(name in graphMap)) {
           graphMap[name] = {};
         }
-        if (name !== "@default" && !(name in defaultGraph5)) {
-          defaultGraph5[name] = { "@id": name };
+        if (name !== "@default" && !(name in defaultGraph6)) {
+          defaultGraph6[name] = { "@id": name };
         }
         const nodeMap = graphMap[name];
-        const s = _nodeId(quad3.subject);
-        const p = quad3.predicate.value;
-        const o = quad3.object;
+        const s = _nodeId(quad4.subject);
+        const p = quad4.predicate.value;
+        const o = quad4.object;
         if (!(s in nodeMap)) {
           nodeMap[s] = { "@id": s };
         }
@@ -27571,9 +27571,9 @@ var require_fromRdf = __commonJS({
         delete nil.usages;
       }
       const result = [];
-      const subjects = Object.keys(defaultGraph5).sort();
+      const subjects = Object.keys(defaultGraph6).sort();
       for (const subject of subjects) {
-        const node = defaultGraph5[subject];
+        const node = defaultGraph6[subject];
         if (subject in graphMap) {
           const graph2 = node["@graph"] = [];
           const graphObject = graphMap[subject];
@@ -27687,11 +27687,11 @@ var require_fromRdf = __commonJS({
       }
       return rval;
     }
-    function _nodeId(term2) {
-      if (term2.termType === "NamedNode") {
-        return term2.value;
-      } else if (term2.termType === "BlankNode") {
-        return "_:" + term2.value;
+    function _nodeId(term3) {
+      if (term3.termType === "NamedNode") {
+        return term3.value;
+      } else if (term3.termType === "BlankNode") {
+        return "_:" + term3.value;
       }
       return null;
     }
@@ -27776,7 +27776,7 @@ var require_toRdf = __commonJS({
       const issuer = new util.IdentifierIssuer("_:b");
       const nodeMap = { "@default": {} };
       createNodeMap(input, nodeMap, "@default", issuer);
-      const dataset = [];
+      const dataset2 = [];
       const graphNames = Object.keys(nodeMap).sort();
       for (const graphName of graphNames) {
         let graphTerm;
@@ -27801,11 +27801,11 @@ var require_toRdf = __commonJS({
           }
           continue;
         }
-        _graphToRDF(dataset, nodeMap[graphName], graphTerm, issuer, options);
+        _graphToRDF(dataset2, nodeMap[graphName], graphTerm, issuer, options);
       }
-      return dataset;
+      return dataset2;
     };
-    function _graphToRDF(dataset, graph2, graphTerm, issuer, options) {
+    function _graphToRDF(dataset2, graph2, graphTerm, issuer, options) {
       const ids = Object.keys(graph2).sort();
       for (const id of ids) {
         const node = graph2[id];
@@ -27875,13 +27875,13 @@ var require_toRdf = __commonJS({
             const object = _objectToRDF(
               item,
               issuer,
-              dataset,
+              dataset2,
               graphTerm,
               options.rdfDirection,
               options
             );
             if (object) {
-              dataset.push({
+              dataset2.push({
                 subject,
                 predicate,
                 object,
@@ -27892,7 +27892,7 @@ var require_toRdf = __commonJS({
         }
       }
     }
-    function _listToRDF(list3, issuer, dataset, graphTerm, rdfDirection, options) {
+    function _listToRDF(list3, issuer, dataset2, graphTerm, rdfDirection, options) {
       const first = { termType: "NamedNode", value: RDF_FIRST };
       const rest = { termType: "NamedNode", value: RDF_REST };
       const nil = { termType: "NamedNode", value: RDF_NIL };
@@ -27906,19 +27906,19 @@ var require_toRdf = __commonJS({
         const object = _objectToRDF(
           item,
           issuer,
-          dataset,
+          dataset2,
           graphTerm,
           rdfDirection,
           options
         );
         const next = { termType: "BlankNode", value: issuer.getId().slice(2) };
-        dataset.push({
+        dataset2.push({
           subject,
           predicate: first,
           object,
           graph: graphTerm
         });
-        dataset.push({
+        dataset2.push({
           subject,
           predicate: rest,
           object: next,
@@ -27930,18 +27930,18 @@ var require_toRdf = __commonJS({
         const object = _objectToRDF(
           last,
           issuer,
-          dataset,
+          dataset2,
           graphTerm,
           rdfDirection,
           options
         );
-        dataset.push({
+        dataset2.push({
           subject,
           predicate: first,
           object,
           graph: graphTerm
         });
-        dataset.push({
+        dataset2.push({
           subject,
           predicate: rest,
           object: nil,
@@ -27950,7 +27950,7 @@ var require_toRdf = __commonJS({
       }
       return result;
     }
-    function _objectToRDF(item, issuer, dataset, graphTerm, rdfDirection, options) {
+    function _objectToRDF(item, issuer, dataset2, graphTerm, rdfDirection, options) {
       let object;
       if (graphTypes.isValue(item)) {
         object = {
@@ -28039,7 +28039,7 @@ var require_toRdf = __commonJS({
         const _list = _listToRDF(
           item["@list"],
           issuer,
-          dataset,
+          dataset2,
           graphTerm,
           rdfDirection,
           options
@@ -29303,7 +29303,7 @@ var require_compact = __commonJS({
         if (_isValue(value) && Object.keys(value).length === 1) {
           containers.push("@language", "@language@set");
         }
-        const term2 = _selectTerm(
+        const term3 = _selectTerm(
           activeCtx,
           iri,
           value,
@@ -29311,8 +29311,8 @@ var require_compact = __commonJS({
           typeOrLanguage,
           typeOrLanguageValue
         );
-        if (term2 !== null) {
-          return term2;
+        if (term3 !== null) {
+          return term3;
         }
       }
       if (relativeTo.vocab) {
@@ -29339,9 +29339,9 @@ var require_compact = __commonJS({
       for (let i = partialMatches.length - 1; i >= 0; --i) {
         const entry = partialMatches[i];
         const terms = entry.terms;
-        for (const term2 of terms) {
-          const curie = term2 + ":" + iri.substr(entry.iri.length);
-          const isUsableCurie = activeCtx.mappings.get(term2)._prefix && (!activeCtx.mappings.has(curie) || value === null && activeCtx.mappings.get(curie)["@id"] === iri);
+        for (const term3 of terms) {
+          const curie = term3 + ":" + iri.substr(entry.iri.length);
+          const isUsableCurie = activeCtx.mappings.get(term3)._prefix && (!activeCtx.mappings.has(curie) || value === null && activeCtx.mappings.get(curie)["@id"] === iri);
           if (isUsableCurie && (choice === null || _compareShortestLeast(curie, choice) < 0)) {
             choice = curie;
           }
@@ -29350,10 +29350,10 @@ var require_compact = __commonJS({
       if (choice !== null) {
         return choice;
       }
-      for (const [term2, td] of activeCtx.mappings) {
-        if (td && td._prefix && iri.startsWith(term2 + ":")) {
+      for (const [term3, td] of activeCtx.mappings) {
+        if (td && td._prefix && iri.startsWith(term3 + ":")) {
           throw new JsonLdError(
-            `Absolute IRI "${iri}" confused with prefix "${term2}".`,
+            `Absolute IRI "${iri}" confused with prefix "${term3}".`,
             "jsonld.SyntaxError",
             { code: "IRI confused with prefix", context: activeCtx }
           );
@@ -29472,10 +29472,10 @@ var require_compact = __commonJS({
         if (typeOrLanguageValue === "@reverse") {
           prefs.push("@reverse");
         }
-        const term2 = api.compactIri(
+        const term3 = api.compactIri(
           { activeCtx, iri: value["@id"], relativeTo: { vocab: true } }
         );
-        if (activeCtx.mappings.has(term2) && activeCtx.mappings.get(term2) && activeCtx.mappings.get(term2)["@id"] === value["@id"]) {
+        if (activeCtx.mappings.has(term3) && activeCtx.mappings.get(term3) && activeCtx.mappings.get(term3)["@id"] === value["@id"]) {
           prefs.push.apply(prefs, ["@vocab", "@id"]);
         } else {
           prefs.push.apply(prefs, ["@id", "@vocab"]);
@@ -29519,7 +29519,7 @@ var require_compact = __commonJS({
 var require_JsonLdProcessor = __commonJS({
   "node_modules/jsonld/lib/JsonLdProcessor.js"(exports, module2) {
     "use strict";
-    module2.exports = (jsonld) => {
+    module2.exports = (jsonld2) => {
       class JsonLdProcessor {
         toString() {
           return "[object JsonLdProcessor]";
@@ -29541,7 +29541,7 @@ var require_JsonLdProcessor = __commonJS({
             new TypeError("Could not compact, too few arguments.")
           );
         }
-        return jsonld.compact(input, ctx);
+        return jsonld2.compact(input, ctx);
       };
       JsonLdProcessor.expand = function(input) {
         if (arguments.length < 1) {
@@ -29549,7 +29549,7 @@ var require_JsonLdProcessor = __commonJS({
             new TypeError("Could not expand, too few arguments.")
           );
         }
-        return jsonld.expand(input);
+        return jsonld2.expand(input);
       };
       JsonLdProcessor.flatten = function(input) {
         if (arguments.length < 1) {
@@ -29557,7 +29557,7 @@ var require_JsonLdProcessor = __commonJS({
             new TypeError("Could not flatten, too few arguments.")
           );
         }
-        return jsonld.flatten(input);
+        return jsonld2.flatten(input);
       };
       return JsonLdProcessor;
     };
@@ -29615,11 +29615,11 @@ var require_jsonld = __commonJS({
       strictEventHandler: _strictEventHandler,
       unhandledEventHandler: _unhandledEventHandler
     } = require_events();
-    var wrapper = function(jsonld) {
+    var wrapper = function(jsonld2) {
       const _rdfParsers = {};
       const RESOLVED_CONTEXT_CACHE_MAX_SIZE = 100;
       const _resolvedContextCache = new LRU({ max: RESOLVED_CONTEXT_CACHE_MAX_SIZE });
-      jsonld.compact = async function(input, ctx, options) {
+      jsonld2.compact = async function(input, ctx, options) {
         if (arguments.length < 2) {
           throw new TypeError("Could not compact, too few arguments.");
         }
@@ -29655,9 +29655,9 @@ var require_jsonld = __commonJS({
         if (options.skipExpansion) {
           expanded = input;
         } else {
-          expanded = await jsonld.expand(input, options);
+          expanded = await jsonld2.expand(input, options);
         }
-        const activeCtx = await jsonld.processContext(
+        const activeCtx = await jsonld2.processContext(
           _getInitialContext(options),
           ctx,
           options
@@ -29715,7 +29715,7 @@ var require_jsonld = __commonJS({
         }
         return compacted;
       };
-      jsonld.expand = async function(input, options) {
+      jsonld2.expand = async function(input, options) {
         if (arguments.length < 1) {
           throw new TypeError("Could not expand, too few arguments.");
         }
@@ -29740,7 +29740,7 @@ var require_jsonld = __commonJS({
         if (!_isString(input)) {
           toResolve.input = util.clone(input);
         } else {
-          const remoteDoc = await jsonld.get(input, options);
+          const remoteDoc = await jsonld2.get(input, options);
           defaultBase = remoteDoc.documentUrl;
           toResolve.input = remoteDoc.document;
           if (remoteDoc.contextUrl) {
@@ -29770,7 +29770,7 @@ var require_jsonld = __commonJS({
         }
         return expanded;
       };
-      jsonld.flatten = async function(input, ctx, options) {
+      jsonld2.flatten = async function(input, ctx, options) {
         if (arguments.length < 1) {
           return new TypeError("Could not flatten, too few arguments.");
         }
@@ -29785,17 +29785,17 @@ var require_jsonld = __commonJS({
             { sharedCache: _resolvedContextCache }
           )
         });
-        const expanded = await jsonld.expand(input, options);
+        const expanded = await jsonld2.expand(input, options);
         const flattened = _flatten(expanded);
         if (ctx === null) {
           return flattened;
         }
         options.graph = true;
         options.skipExpansion = true;
-        const compacted = await jsonld.compact(flattened, ctx, options);
+        const compacted = await jsonld2.compact(flattened, ctx, options);
         return compacted;
       };
-      jsonld.frame = async function(input, frame, options) {
+      jsonld2.frame = async function(input, frame, options) {
         if (arguments.length < 2) {
           throw new TypeError("Could not frame, too few arguments.");
         }
@@ -29811,7 +29811,7 @@ var require_jsonld = __commonJS({
           )
         });
         if (_isString(frame)) {
-          const remoteDoc = await jsonld.get(frame, options);
+          const remoteDoc = await jsonld2.get(frame, options);
           frame = remoteDoc.document;
           if (remoteDoc.contextUrl) {
             let ctx = frame["@context"];
@@ -29826,7 +29826,7 @@ var require_jsonld = __commonJS({
           }
         }
         const frameContext = frame ? frame["@context"] || {} : {};
-        const activeCtx = await jsonld.processContext(
+        const activeCtx = await jsonld2.processContext(
           _getInitialContext(options),
           frameContext,
           options
@@ -29837,11 +29837,11 @@ var require_jsonld = __commonJS({
         if (!options.hasOwnProperty("pruneBlankNodeIdentifiers")) {
           options.pruneBlankNodeIdentifiers = _processingMode(activeCtx, 1.1);
         }
-        const expanded = await jsonld.expand(input, options);
+        const expanded = await jsonld2.expand(input, options);
         const opts = { ...options };
         opts.isFrame = true;
         opts.keepFreeFloatingNodes = true;
-        const expandedFrame = await jsonld.expand(frame, opts);
+        const expandedFrame = await jsonld2.expand(frame, opts);
         const frameKeys = Object.keys(frame).map((key) => _expandIri(activeCtx, key, { vocab: true }));
         opts.merged = !frameKeys.includes("@graph");
         opts.is11 = _processingMode(activeCtx, 1.1);
@@ -29850,20 +29850,20 @@ var require_jsonld = __commonJS({
         opts.skipExpansion = true;
         opts.link = {};
         opts.framing = true;
-        let compacted = await jsonld.compact(framed, frameContext, opts);
+        let compacted = await jsonld2.compact(framed, frameContext, opts);
         opts.link = {};
         compacted = _cleanupNull(compacted, opts);
         return compacted;
       };
-      jsonld.link = async function(input, ctx, options) {
+      jsonld2.link = async function(input, ctx, options) {
         const frame = {};
         if (ctx) {
           frame["@context"] = ctx;
         }
         frame["@embed"] = "@link";
-        return jsonld.frame(input, frame, options);
+        return jsonld2.frame(input, frame, options);
       };
-      jsonld.normalize = jsonld.canonize = async function(input, options) {
+      jsonld2.normalize = jsonld2.canonize = async function(input, options) {
         if (arguments.length < 1) {
           throw new TypeError("Could not canonize, too few arguments.");
         }
@@ -29891,15 +29891,15 @@ var require_jsonld = __commonJS({
         delete opts.format;
         delete opts.canonizeOptions;
         opts.produceGeneralizedRdf = false;
-        const dataset = await jsonld.toRDF(input, opts);
-        return canonize.canonize(dataset, canonizeOptions);
+        const dataset2 = await jsonld2.toRDF(input, opts);
+        return canonize.canonize(dataset2, canonizeOptions);
       };
-      jsonld.fromRDF = async function(dataset, options) {
+      jsonld2.fromRDF = async function(dataset2, options) {
         if (arguments.length < 1) {
           throw new TypeError("Could not convert from RDF, too few arguments.");
         }
         options = _setDefaults(options, {
-          format: _isString(dataset) ? "application/n-quads" : void 0
+          format: _isString(dataset2) ? "application/n-quads" : void 0
         });
         const { format } = options;
         let { rdfParser } = options;
@@ -29913,12 +29913,12 @@ var require_jsonld = __commonJS({
             );
           }
         } else {
-          rdfParser = () => dataset;
+          rdfParser = () => dataset2;
         }
-        const parsedDataset = await rdfParser(dataset);
+        const parsedDataset = await rdfParser(dataset2);
         return _fromRDF(parsedDataset, options);
       };
-      jsonld.toRDF = async function(input, options) {
+      jsonld2.toRDF = async function(input, options) {
         if (arguments.length < 1) {
           throw new TypeError("Could not convert to RDF, too few arguments.");
         }
@@ -29932,12 +29932,12 @@ var require_jsonld = __commonJS({
         if (options.skipExpansion) {
           expanded = input;
         } else {
-          expanded = await jsonld.expand(input, options);
+          expanded = await jsonld2.expand(input, options);
         }
-        const dataset = _toRDF(expanded, options);
+        const dataset2 = _toRDF(expanded, options);
         if (options.format) {
           if (options.format === "application/n-quads") {
-            return NQuads.serialize(dataset);
+            return NQuads.serialize(dataset2);
           }
           throw new JsonLdError(
             "Unknown output format.",
@@ -29945,9 +29945,9 @@ var require_jsonld = __commonJS({
             { format: options.format }
           );
         }
-        return dataset;
+        return dataset2;
       };
-      jsonld.createNodeMap = async function(input, options) {
+      jsonld2.createNodeMap = async function(input, options) {
         if (arguments.length < 1) {
           throw new TypeError("Could not create node map, too few arguments.");
         }
@@ -29957,10 +29957,10 @@ var require_jsonld = __commonJS({
             { sharedCache: _resolvedContextCache }
           )
         });
-        const expanded = await jsonld.expand(input, options);
+        const expanded = await jsonld2.expand(input, options);
         return _createMergedNodeMap(expanded, options);
       };
-      jsonld.merge = async function(docs, ctx, options) {
+      jsonld2.merge = async function(docs, ctx, options) {
         if (arguments.length < 1) {
           throw new TypeError("Could not merge, too few arguments.");
         }
@@ -29979,7 +29979,7 @@ var require_jsonld = __commonJS({
         });
         const expanded = await Promise.all(docs.map((doc) => {
           const opts = { ...options };
-          return jsonld.expand(doc, opts);
+          return jsonld2.expand(doc, opts);
         }));
         let mergeNodes = true;
         if ("mergeNodes" in options) {
@@ -30009,11 +30009,11 @@ var require_jsonld = __commonJS({
             }
           }
         }
-        const defaultGraph5 = _mergeNodeMaps(graphs);
+        const defaultGraph6 = _mergeNodeMaps(graphs);
         const flattened = [];
-        const keys = Object.keys(defaultGraph5).sort();
+        const keys = Object.keys(defaultGraph6).sort();
         for (let ki = 0; ki < keys.length; ++ki) {
-          const node = defaultGraph5[keys[ki]];
+          const node = defaultGraph6[keys[ki]];
           if (!_isSubjectReference(node)) {
             flattened.push(node);
           }
@@ -30023,26 +30023,26 @@ var require_jsonld = __commonJS({
         }
         options.graph = true;
         options.skipExpansion = true;
-        const compacted = await jsonld.compact(flattened, ctx, options);
+        const compacted = await jsonld2.compact(flattened, ctx, options);
         return compacted;
       };
-      Object.defineProperty(jsonld, "documentLoader", {
-        get: () => jsonld._documentLoader,
-        set: (v) => jsonld._documentLoader = v
+      Object.defineProperty(jsonld2, "documentLoader", {
+        get: () => jsonld2._documentLoader,
+        set: (v) => jsonld2._documentLoader = v
       });
-      jsonld.documentLoader = async (url) => {
+      jsonld2.documentLoader = async (url) => {
         throw new JsonLdError(
           "Could not retrieve a JSON-LD document from the URL. URL dereferencing not implemented.",
           "jsonld.LoadDocumentError",
           { code: "loading document failed", url }
         );
       };
-      jsonld.get = async function(url, options) {
+      jsonld2.get = async function(url, options) {
         let load;
         if (typeof options.documentLoader === "function") {
           load = options.documentLoader;
         } else {
-          load = jsonld.documentLoader;
+          load = jsonld2.documentLoader;
         }
         const remoteDoc = await load(url);
         try {
@@ -30068,7 +30068,7 @@ var require_jsonld = __commonJS({
         }
         return remoteDoc;
       };
-      jsonld.processContext = async function(activeCtx, localCtx, options) {
+      jsonld2.processContext = async function(activeCtx, localCtx, options) {
         options = _setDefaults(options, {
           base: "",
           contextResolver: new ContextResolver(
@@ -30084,44 +30084,44 @@ var require_jsonld = __commonJS({
         }
         return _processContext({ activeCtx, localCtx, options });
       };
-      jsonld.getContextValue = require_context().getContextValue;
-      jsonld.documentLoaders = {};
-      jsonld.useDocumentLoader = function(type) {
-        if (!(type in jsonld.documentLoaders)) {
+      jsonld2.getContextValue = require_context().getContextValue;
+      jsonld2.documentLoaders = {};
+      jsonld2.useDocumentLoader = function(type) {
+        if (!(type in jsonld2.documentLoaders)) {
           throw new JsonLdError(
             'Unknown document loader type: "' + type + '"',
             "jsonld.UnknownDocumentLoader",
             { type }
           );
         }
-        jsonld.documentLoader = jsonld.documentLoaders[type].apply(
-          jsonld,
+        jsonld2.documentLoader = jsonld2.documentLoaders[type].apply(
+          jsonld2,
           Array.prototype.slice.call(arguments, 1)
         );
       };
-      jsonld.registerRDFParser = function(contentType, parser) {
+      jsonld2.registerRDFParser = function(contentType, parser) {
         _rdfParsers[contentType] = parser;
       };
-      jsonld.unregisterRDFParser = function(contentType) {
+      jsonld2.unregisterRDFParser = function(contentType) {
         delete _rdfParsers[contentType];
       };
-      jsonld.registerRDFParser("application/n-quads", NQuads.parse);
-      jsonld.url = require_url2();
-      jsonld.logEventHandler = _logEventHandler;
-      jsonld.logWarningEventHandler = _logWarningEventHandler;
-      jsonld.safeEventHandler = _safeEventHandler;
-      jsonld.setDefaultEventHandler = _setDefaultEventHandler;
-      jsonld.strictEventHandler = _strictEventHandler;
-      jsonld.unhandledEventHandler = _unhandledEventHandler;
-      jsonld.util = util;
-      Object.assign(jsonld, util);
-      jsonld.promises = jsonld;
-      jsonld.RequestQueue = require_RequestQueue();
-      jsonld.JsonLdProcessor = require_JsonLdProcessor()(jsonld);
-      platform.setupGlobals(jsonld);
-      platform.setupDocumentLoaders(jsonld);
+      jsonld2.registerRDFParser("application/n-quads", NQuads.parse);
+      jsonld2.url = require_url2();
+      jsonld2.logEventHandler = _logEventHandler;
+      jsonld2.logWarningEventHandler = _logWarningEventHandler;
+      jsonld2.safeEventHandler = _safeEventHandler;
+      jsonld2.setDefaultEventHandler = _setDefaultEventHandler;
+      jsonld2.strictEventHandler = _strictEventHandler;
+      jsonld2.unhandledEventHandler = _unhandledEventHandler;
+      jsonld2.util = util;
+      Object.assign(jsonld2, util);
+      jsonld2.promises = jsonld2;
+      jsonld2.RequestQueue = require_RequestQueue();
+      jsonld2.JsonLdProcessor = require_JsonLdProcessor()(jsonld2);
+      platform.setupGlobals(jsonld2);
+      platform.setupDocumentLoaders(jsonld2);
       function _setDefaults(options, {
-        documentLoader = jsonld.documentLoader,
+        documentLoader = jsonld2.documentLoader,
         ...defaults
       }) {
         if (options && "compactionMap" in options) {
@@ -30144,15 +30144,15 @@ var require_jsonld = __commonJS({
           { eventHandler: _setupEventHandler({ options }) }
         );
       }
-      return jsonld;
+      return jsonld2;
     };
-    var factory = function() {
+    var factory3 = function() {
       return wrapper(function() {
-        return factory();
+        return factory3();
       });
     };
-    wrapper(factory);
-    module2.exports = factory;
+    wrapper(factory3);
+    module2.exports = factory3;
   }
 });
 
@@ -32310,8 +32310,8 @@ var require_browser_ponyfill = __commonJS({
               var value = parts.join(":").trim();
               try {
                 headers.append(key, value);
-              } catch (error) {
-                console.warn("Response " + error.message);
+              } catch (error2) {
+                console.warn("Response " + error2.message);
               }
             }
           });
@@ -32366,8 +32366,8 @@ var require_browser_ponyfill = __commonJS({
           exports2.DOMException = function(message, name) {
             this.message = message;
             this.name = name;
-            var error = Error(message);
-            this.stack = error.stack;
+            var error2 = Error(message);
+            this.stack = error2.stack;
           };
           exports2.DOMException.prototype = Object.create(Error.prototype);
           exports2.DOMException.prototype.constructor = exports2.DOMException;
@@ -32733,6 +32733,1160 @@ var init_httpsig = __esm({
   }
 });
 
+// node_modules/ms/index.js
+var require_ms = __commonJS({
+  "node_modules/ms/index.js"(exports, module2) {
+    var s = 1e3;
+    var m = s * 60;
+    var h = m * 60;
+    var d = h * 24;
+    var w = d * 7;
+    var y = d * 365.25;
+    module2.exports = function(val, options) {
+      options = options || {};
+      var type = typeof val;
+      if (type === "string" && val.length > 0) {
+        return parse3(val);
+      } else if (type === "number" && isFinite(val)) {
+        return options.long ? fmtLong(val) : fmtShort(val);
+      }
+      throw new Error(
+        "val is not a non-empty string or a valid number. val=" + JSON.stringify(val)
+      );
+    };
+    function parse3(str) {
+      str = String(str);
+      if (str.length > 100) {
+        return;
+      }
+      var match = /^(-?(?:\d+)?\.?\d+) *(milliseconds?|msecs?|ms|seconds?|secs?|s|minutes?|mins?|m|hours?|hrs?|h|days?|d|weeks?|w|years?|yrs?|y)?$/i.exec(
+        str
+      );
+      if (!match) {
+        return;
+      }
+      var n = parseFloat(match[1]);
+      var type = (match[2] || "ms").toLowerCase();
+      switch (type) {
+        case "years":
+        case "year":
+        case "yrs":
+        case "yr":
+        case "y":
+          return n * y;
+        case "weeks":
+        case "week":
+        case "w":
+          return n * w;
+        case "days":
+        case "day":
+        case "d":
+          return n * d;
+        case "hours":
+        case "hour":
+        case "hrs":
+        case "hr":
+        case "h":
+          return n * h;
+        case "minutes":
+        case "minute":
+        case "mins":
+        case "min":
+        case "m":
+          return n * m;
+        case "seconds":
+        case "second":
+        case "secs":
+        case "sec":
+        case "s":
+          return n * s;
+        case "milliseconds":
+        case "millisecond":
+        case "msecs":
+        case "msec":
+        case "ms":
+          return n;
+        default:
+          return void 0;
+      }
+    }
+    function fmtShort(ms) {
+      var msAbs = Math.abs(ms);
+      if (msAbs >= d) {
+        return Math.round(ms / d) + "d";
+      }
+      if (msAbs >= h) {
+        return Math.round(ms / h) + "h";
+      }
+      if (msAbs >= m) {
+        return Math.round(ms / m) + "m";
+      }
+      if (msAbs >= s) {
+        return Math.round(ms / s) + "s";
+      }
+      return ms + "ms";
+    }
+    function fmtLong(ms) {
+      var msAbs = Math.abs(ms);
+      if (msAbs >= d) {
+        return plural(ms, msAbs, d, "day");
+      }
+      if (msAbs >= h) {
+        return plural(ms, msAbs, h, "hour");
+      }
+      if (msAbs >= m) {
+        return plural(ms, msAbs, m, "minute");
+      }
+      if (msAbs >= s) {
+        return plural(ms, msAbs, s, "second");
+      }
+      return ms + " ms";
+    }
+    function plural(ms, msAbs, n, name) {
+      var isPlural = msAbs >= n * 1.5;
+      return Math.round(ms / n) + " " + name + (isPlural ? "s" : "");
+    }
+  }
+});
+
+// node_modules/debug/src/common.js
+var require_common = __commonJS({
+  "node_modules/debug/src/common.js"(exports, module2) {
+    function setup(env) {
+      createDebug.debug = createDebug;
+      createDebug.default = createDebug;
+      createDebug.coerce = coerce;
+      createDebug.disable = disable;
+      createDebug.enable = enable;
+      createDebug.enabled = enabled;
+      createDebug.humanize = require_ms();
+      createDebug.destroy = destroy;
+      Object.keys(env).forEach((key) => {
+        createDebug[key] = env[key];
+      });
+      createDebug.names = [];
+      createDebug.skips = [];
+      createDebug.formatters = {};
+      function selectColor(namespace2) {
+        let hash = 0;
+        for (let i = 0; i < namespace2.length; i++) {
+          hash = (hash << 5) - hash + namespace2.charCodeAt(i);
+          hash |= 0;
+        }
+        return createDebug.colors[Math.abs(hash) % createDebug.colors.length];
+      }
+      createDebug.selectColor = selectColor;
+      function createDebug(namespace2) {
+        let prevTime;
+        let enableOverride = null;
+        let namespacesCache;
+        let enabledCache;
+        function debug2(...args) {
+          if (!debug2.enabled) {
+            return;
+          }
+          const self2 = debug2;
+          const curr = Number(/* @__PURE__ */ new Date());
+          const ms = curr - (prevTime || curr);
+          self2.diff = ms;
+          self2.prev = prevTime;
+          self2.curr = curr;
+          prevTime = curr;
+          args[0] = createDebug.coerce(args[0]);
+          if (typeof args[0] !== "string") {
+            args.unshift("%O");
+          }
+          let index = 0;
+          args[0] = args[0].replace(/%([a-zA-Z%])/g, (match, format) => {
+            if (match === "%%") {
+              return "%";
+            }
+            index++;
+            const formatter = createDebug.formatters[format];
+            if (typeof formatter === "function") {
+              const val = args[index];
+              match = formatter.call(self2, val);
+              args.splice(index, 1);
+              index--;
+            }
+            return match;
+          });
+          createDebug.formatArgs.call(self2, args);
+          const logFn = self2.log || createDebug.log;
+          logFn.apply(self2, args);
+        }
+        debug2.namespace = namespace2;
+        debug2.useColors = createDebug.useColors();
+        debug2.color = createDebug.selectColor(namespace2);
+        debug2.extend = extend;
+        debug2.destroy = createDebug.destroy;
+        Object.defineProperty(debug2, "enabled", {
+          enumerable: true,
+          configurable: false,
+          get: () => {
+            if (enableOverride !== null) {
+              return enableOverride;
+            }
+            if (namespacesCache !== createDebug.namespaces) {
+              namespacesCache = createDebug.namespaces;
+              enabledCache = createDebug.enabled(namespace2);
+            }
+            return enabledCache;
+          },
+          set: (v) => {
+            enableOverride = v;
+          }
+        });
+        if (typeof createDebug.init === "function") {
+          createDebug.init(debug2);
+        }
+        return debug2;
+      }
+      function extend(namespace2, delimiter) {
+        const newDebug = createDebug(this.namespace + (typeof delimiter === "undefined" ? ":" : delimiter) + namespace2);
+        newDebug.log = this.log;
+        return newDebug;
+      }
+      function enable(namespaces) {
+        createDebug.save(namespaces);
+        createDebug.namespaces = namespaces;
+        createDebug.names = [];
+        createDebug.skips = [];
+        const split = (typeof namespaces === "string" ? namespaces : "").trim().replace(/\s+/g, ",").split(",").filter(Boolean);
+        for (const ns4 of split) {
+          if (ns4[0] === "-") {
+            createDebug.skips.push(ns4.slice(1));
+          } else {
+            createDebug.names.push(ns4);
+          }
+        }
+      }
+      function matchesTemplate(search, template) {
+        let searchIndex = 0;
+        let templateIndex = 0;
+        let starIndex = -1;
+        let matchIndex = 0;
+        while (searchIndex < search.length) {
+          if (templateIndex < template.length && (template[templateIndex] === search[searchIndex] || template[templateIndex] === "*")) {
+            if (template[templateIndex] === "*") {
+              starIndex = templateIndex;
+              matchIndex = searchIndex;
+              templateIndex++;
+            } else {
+              searchIndex++;
+              templateIndex++;
+            }
+          } else if (starIndex !== -1) {
+            templateIndex = starIndex + 1;
+            matchIndex++;
+            searchIndex = matchIndex;
+          } else {
+            return false;
+          }
+        }
+        while (templateIndex < template.length && template[templateIndex] === "*") {
+          templateIndex++;
+        }
+        return templateIndex === template.length;
+      }
+      function disable() {
+        const namespaces = [
+          ...createDebug.names,
+          ...createDebug.skips.map((namespace2) => "-" + namespace2)
+        ].join(",");
+        createDebug.enable("");
+        return namespaces;
+      }
+      function enabled(name) {
+        for (const skip of createDebug.skips) {
+          if (matchesTemplate(name, skip)) {
+            return false;
+          }
+        }
+        for (const ns4 of createDebug.names) {
+          if (matchesTemplate(name, ns4)) {
+            return true;
+          }
+        }
+        return false;
+      }
+      function coerce(val) {
+        if (val instanceof Error) {
+          return val.stack || val.message;
+        }
+        return val;
+      }
+      function destroy() {
+        console.warn("Instance method `debug.destroy()` is deprecated and no longer does anything. It will be removed in the next major version of `debug`.");
+      }
+      createDebug.enable(createDebug.load());
+      return createDebug;
+    }
+    module2.exports = setup;
+  }
+});
+
+// node_modules/debug/src/browser.js
+var require_browser = __commonJS({
+  "node_modules/debug/src/browser.js"(exports, module2) {
+    exports.formatArgs = formatArgs;
+    exports.save = save;
+    exports.load = load;
+    exports.useColors = useColors;
+    exports.storage = localstorage();
+    exports.destroy = /* @__PURE__ */ (() => {
+      let warned = false;
+      return () => {
+        if (!warned) {
+          warned = true;
+          console.warn("Instance method `debug.destroy()` is deprecated and no longer does anything. It will be removed in the next major version of `debug`.");
+        }
+      };
+    })();
+    exports.colors = [
+      "#0000CC",
+      "#0000FF",
+      "#0033CC",
+      "#0033FF",
+      "#0066CC",
+      "#0066FF",
+      "#0099CC",
+      "#0099FF",
+      "#00CC00",
+      "#00CC33",
+      "#00CC66",
+      "#00CC99",
+      "#00CCCC",
+      "#00CCFF",
+      "#3300CC",
+      "#3300FF",
+      "#3333CC",
+      "#3333FF",
+      "#3366CC",
+      "#3366FF",
+      "#3399CC",
+      "#3399FF",
+      "#33CC00",
+      "#33CC33",
+      "#33CC66",
+      "#33CC99",
+      "#33CCCC",
+      "#33CCFF",
+      "#6600CC",
+      "#6600FF",
+      "#6633CC",
+      "#6633FF",
+      "#66CC00",
+      "#66CC33",
+      "#9900CC",
+      "#9900FF",
+      "#9933CC",
+      "#9933FF",
+      "#99CC00",
+      "#99CC33",
+      "#CC0000",
+      "#CC0033",
+      "#CC0066",
+      "#CC0099",
+      "#CC00CC",
+      "#CC00FF",
+      "#CC3300",
+      "#CC3333",
+      "#CC3366",
+      "#CC3399",
+      "#CC33CC",
+      "#CC33FF",
+      "#CC6600",
+      "#CC6633",
+      "#CC9900",
+      "#CC9933",
+      "#CCCC00",
+      "#CCCC33",
+      "#FF0000",
+      "#FF0033",
+      "#FF0066",
+      "#FF0099",
+      "#FF00CC",
+      "#FF00FF",
+      "#FF3300",
+      "#FF3333",
+      "#FF3366",
+      "#FF3399",
+      "#FF33CC",
+      "#FF33FF",
+      "#FF6600",
+      "#FF6633",
+      "#FF9900",
+      "#FF9933",
+      "#FFCC00",
+      "#FFCC33"
+    ];
+    function useColors() {
+      if (typeof window !== "undefined" && window.process && (window.process.type === "renderer" || window.process.__nwjs)) {
+        return true;
+      }
+      if (typeof navigator !== "undefined" && navigator.userAgent && navigator.userAgent.toLowerCase().match(/(edge|trident)\/(\d+)/)) {
+        return false;
+      }
+      let m;
+      return typeof document !== "undefined" && document.documentElement && document.documentElement.style && document.documentElement.style.WebkitAppearance || // Is firebug? http://stackoverflow.com/a/398120/376773
+      typeof window !== "undefined" && window.console && (window.console.firebug || window.console.exception && window.console.table) || // Is firefox >= v31?
+      // https://developer.mozilla.org/en-US/docs/Tools/Web_Console#Styling_messages
+      typeof navigator !== "undefined" && navigator.userAgent && (m = navigator.userAgent.toLowerCase().match(/firefox\/(\d+)/)) && parseInt(m[1], 10) >= 31 || // Double check webkit in userAgent just in case we are in a worker
+      typeof navigator !== "undefined" && navigator.userAgent && navigator.userAgent.toLowerCase().match(/applewebkit\/(\d+)/);
+    }
+    function formatArgs(args) {
+      args[0] = (this.useColors ? "%c" : "") + this.namespace + (this.useColors ? " %c" : " ") + args[0] + (this.useColors ? "%c " : " ") + "+" + module2.exports.humanize(this.diff);
+      if (!this.useColors) {
+        return;
+      }
+      const c = "color: " + this.color;
+      args.splice(1, 0, c, "color: inherit");
+      let index = 0;
+      let lastC = 0;
+      args[0].replace(/%[a-zA-Z%]/g, (match) => {
+        if (match === "%%") {
+          return;
+        }
+        index++;
+        if (match === "%c") {
+          lastC = index;
+        }
+      });
+      args.splice(lastC, 0, c);
+    }
+    exports.log = console.debug || console.log || (() => {
+    });
+    function save(namespaces) {
+      try {
+        if (namespaces) {
+          exports.storage.setItem("debug", namespaces);
+        } else {
+          exports.storage.removeItem("debug");
+        }
+      } catch (error2) {
+      }
+    }
+    function load() {
+      let r;
+      try {
+        r = exports.storage.getItem("debug") || exports.storage.getItem("DEBUG");
+      } catch (error2) {
+      }
+      if (!r && typeof process !== "undefined" && "env" in process) {
+        r = process.env.DEBUG;
+      }
+      return r;
+    }
+    function localstorage() {
+      try {
+        return localStorage;
+      } catch (error2) {
+      }
+    }
+    module2.exports = require_common()(exports);
+    var { formatters } = module2.exports;
+    formatters.j = function(v) {
+      try {
+        return JSON.stringify(v);
+      } catch (error2) {
+        return "[UnexpectedJSONParseError]: " + error2.message;
+      }
+    };
+  }
+});
+
+// node_modules/rdf-data-factory/lib/BlankNode.js
+var require_BlankNode = __commonJS({
+  "node_modules/rdf-data-factory/lib/BlankNode.js"(exports) {
+    "use strict";
+    Object.defineProperty(exports, "__esModule", { value: true });
+    exports.BlankNode = void 0;
+    var BlankNode4 = class {
+      constructor(value) {
+        this.termType = "BlankNode";
+        this.value = value;
+      }
+      equals(other) {
+        return !!other && other.termType === "BlankNode" && other.value === this.value;
+      }
+    };
+    exports.BlankNode = BlankNode4;
+  }
+});
+
+// node_modules/rdf-data-factory/lib/DefaultGraph.js
+var require_DefaultGraph = __commonJS({
+  "node_modules/rdf-data-factory/lib/DefaultGraph.js"(exports) {
+    "use strict";
+    Object.defineProperty(exports, "__esModule", { value: true });
+    exports.DefaultGraph = void 0;
+    var DefaultGraph4 = class {
+      constructor() {
+        this.termType = "DefaultGraph";
+        this.value = "";
+      }
+      equals(other) {
+        return !!other && other.termType === "DefaultGraph";
+      }
+    };
+    exports.DefaultGraph = DefaultGraph4;
+    DefaultGraph4.INSTANCE = new DefaultGraph4();
+  }
+});
+
+// node_modules/rdf-data-factory/lib/NamedNode.js
+var require_NamedNode = __commonJS({
+  "node_modules/rdf-data-factory/lib/NamedNode.js"(exports) {
+    "use strict";
+    Object.defineProperty(exports, "__esModule", { value: true });
+    exports.NamedNode = void 0;
+    var NamedNode4 = class {
+      constructor(value) {
+        this.termType = "NamedNode";
+        this.value = value;
+      }
+      equals(other) {
+        return !!other && other.termType === "NamedNode" && other.value === this.value;
+      }
+    };
+    exports.NamedNode = NamedNode4;
+  }
+});
+
+// node_modules/rdf-data-factory/lib/Literal.js
+var require_Literal = __commonJS({
+  "node_modules/rdf-data-factory/lib/Literal.js"(exports) {
+    "use strict";
+    Object.defineProperty(exports, "__esModule", { value: true });
+    exports.Literal = void 0;
+    var NamedNode_1 = require_NamedNode();
+    var Literal4 = class _Literal {
+      constructor(value, languageOrDatatype) {
+        this.termType = "Literal";
+        this.value = value;
+        if (typeof languageOrDatatype === "string") {
+          this.language = languageOrDatatype;
+          this.datatype = _Literal.RDF_LANGUAGE_STRING;
+          this.direction = "";
+        } else if (languageOrDatatype) {
+          if ("termType" in languageOrDatatype) {
+            this.language = "";
+            this.datatype = languageOrDatatype;
+            this.direction = "";
+          } else {
+            this.language = languageOrDatatype.language;
+            this.datatype = languageOrDatatype.direction ? _Literal.RDF_DIRECTIONAL_LANGUAGE_STRING : _Literal.RDF_LANGUAGE_STRING;
+            this.direction = languageOrDatatype.direction || "";
+          }
+        } else {
+          this.language = "";
+          this.datatype = _Literal.XSD_STRING;
+          this.direction = "";
+        }
+      }
+      equals(other) {
+        return !!other && other.termType === "Literal" && other.value === this.value && other.language === this.language && (other.direction === this.direction || !other.direction && this.direction === "") && this.datatype.equals(other.datatype);
+      }
+    };
+    exports.Literal = Literal4;
+    Literal4.RDF_LANGUAGE_STRING = new NamedNode_1.NamedNode("http://www.w3.org/1999/02/22-rdf-syntax-ns#langString");
+    Literal4.RDF_DIRECTIONAL_LANGUAGE_STRING = new NamedNode_1.NamedNode("http://www.w3.org/1999/02/22-rdf-syntax-ns#dirLangString");
+    Literal4.XSD_STRING = new NamedNode_1.NamedNode("http://www.w3.org/2001/XMLSchema#string");
+  }
+});
+
+// node_modules/rdf-data-factory/lib/Quad.js
+var require_Quad = __commonJS({
+  "node_modules/rdf-data-factory/lib/Quad.js"(exports) {
+    "use strict";
+    Object.defineProperty(exports, "__esModule", { value: true });
+    exports.Quad = void 0;
+    var Quad3 = class {
+      constructor(subject, predicate, object, graph2) {
+        this.termType = "Quad";
+        this.value = "";
+        this.subject = subject;
+        this.predicate = predicate;
+        this.object = object;
+        this.graph = graph2;
+      }
+      equals(other) {
+        return !!other && (other.termType === "Quad" || !other.termType) && this.subject.equals(other.subject) && this.predicate.equals(other.predicate) && this.object.equals(other.object) && this.graph.equals(other.graph);
+      }
+    };
+    exports.Quad = Quad3;
+  }
+});
+
+// node_modules/rdf-data-factory/lib/Variable.js
+var require_Variable = __commonJS({
+  "node_modules/rdf-data-factory/lib/Variable.js"(exports) {
+    "use strict";
+    Object.defineProperty(exports, "__esModule", { value: true });
+    exports.Variable = void 0;
+    var Variable4 = class {
+      constructor(value) {
+        this.termType = "Variable";
+        this.value = value;
+      }
+      equals(other) {
+        return !!other && other.termType === "Variable" && other.value === this.value;
+      }
+    };
+    exports.Variable = Variable4;
+  }
+});
+
+// node_modules/rdf-data-factory/lib/DataFactory.js
+var require_DataFactory = __commonJS({
+  "node_modules/rdf-data-factory/lib/DataFactory.js"(exports) {
+    "use strict";
+    Object.defineProperty(exports, "__esModule", { value: true });
+    exports.DataFactory = void 0;
+    var BlankNode_1 = require_BlankNode();
+    var DefaultGraph_1 = require_DefaultGraph();
+    var Literal_1 = require_Literal();
+    var NamedNode_1 = require_NamedNode();
+    var Quad_1 = require_Quad();
+    var Variable_1 = require_Variable();
+    var dataFactoryCounter = 0;
+    var DataFactory3 = class {
+      constructor(options) {
+        this.blankNodeCounter = 0;
+        options = options || {};
+        this.blankNodePrefix = options.blankNodePrefix || `df_${dataFactoryCounter++}_`;
+      }
+      /**
+       * @param value The IRI for the named node.
+       * @return A new instance of NamedNode.
+       * @see NamedNode
+       */
+      namedNode(value) {
+        return new NamedNode_1.NamedNode(value);
+      }
+      /**
+       * @param value The optional blank node identifier.
+       * @return A new instance of BlankNode.
+       *         If the `value` parameter is undefined a new identifier
+       *         for the blank node is generated for each call.
+       * @see BlankNode
+       */
+      blankNode(value) {
+        return new BlankNode_1.BlankNode(value || `${this.blankNodePrefix}${this.blankNodeCounter++}`);
+      }
+      /**
+       * @param value              The literal value.
+       * @param languageOrDatatype The optional language, datatype, or directional language.
+       *                           If `languageOrDatatype` is a NamedNode,
+       *                           then it is used for the value of `NamedNode.datatype`.
+       *                           If `languageOrDatatype` is a NamedNode, it is used for the value
+       *                           of `NamedNode.language`.
+       *                           Otherwise, it is used as a directional language,
+       *                           from which the language is set to `languageOrDatatype.language`
+       *                           and the direction to `languageOrDatatype.direction`.
+       * @return A new instance of Literal.
+       * @see Literal
+       */
+      literal(value, languageOrDatatype) {
+        return new Literal_1.Literal(value, languageOrDatatype);
+      }
+      /**
+       * This method is optional.
+       * @param value The variable name
+       * @return A new instance of Variable.
+       * @see Variable
+       */
+      variable(value) {
+        return new Variable_1.Variable(value);
+      }
+      /**
+       * @return An instance of DefaultGraph.
+       */
+      defaultGraph() {
+        return DefaultGraph_1.DefaultGraph.INSTANCE;
+      }
+      /**
+       * @param subject   The quad subject term.
+       * @param predicate The quad predicate term.
+       * @param object    The quad object term.
+       * @param graph     The quad graph term.
+       * @return A new instance of Quad.
+       * @see Quad
+       */
+      quad(subject, predicate, object, graph2) {
+        return new Quad_1.Quad(subject, predicate, object, graph2 || this.defaultGraph());
+      }
+      /**
+       * Create a deep copy of the given term using this data factory.
+       * @param original An RDF term.
+       * @return A deep copy of the given term.
+       */
+      fromTerm(original) {
+        switch (original.termType) {
+          case "NamedNode":
+            return this.namedNode(original.value);
+          case "BlankNode":
+            return this.blankNode(original.value);
+          case "Literal":
+            if (original.language) {
+              return this.literal(original.value, original.language);
+            }
+            if (!original.datatype.equals(Literal_1.Literal.XSD_STRING)) {
+              return this.literal(original.value, this.fromTerm(original.datatype));
+            }
+            return this.literal(original.value);
+          case "Variable":
+            return this.variable(original.value);
+          case "DefaultGraph":
+            return this.defaultGraph();
+          case "Quad":
+            return this.quad(this.fromTerm(original.subject), this.fromTerm(original.predicate), this.fromTerm(original.object), this.fromTerm(original.graph));
+        }
+      }
+      /**
+       * Create a deep copy of the given quad using this data factory.
+       * @param original An RDF quad.
+       * @return A deep copy of the given quad.
+       */
+      fromQuad(original) {
+        return this.fromTerm(original);
+      }
+      /**
+       * Reset the internal blank node counter.
+       */
+      resetBlankNodeCounter() {
+        this.blankNodeCounter = 0;
+      }
+    };
+    exports.DataFactory = DataFactory3;
+  }
+});
+
+// node_modules/rdf-data-factory/index.js
+var require_rdf_data_factory = __commonJS({
+  "node_modules/rdf-data-factory/index.js"(exports) {
+    "use strict";
+    var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
+      if (k2 === void 0) k2 = k;
+      var desc = Object.getOwnPropertyDescriptor(m, k);
+      if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+        desc = { enumerable: true, get: function() {
+          return m[k];
+        } };
+      }
+      Object.defineProperty(o, k2, desc);
+    }) : (function(o, m, k, k2) {
+      if (k2 === void 0) k2 = k;
+      o[k2] = m[k];
+    }));
+    var __exportStar = exports && exports.__exportStar || function(m, exports2) {
+      for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports2, p)) __createBinding(exports2, m, p);
+    };
+    Object.defineProperty(exports, "__esModule", { value: true });
+    __exportStar(require_BlankNode(), exports);
+    __exportStar(require_DataFactory(), exports);
+    __exportStar(require_DefaultGraph(), exports);
+    __exportStar(require_Literal(), exports);
+    __exportStar(require_NamedNode(), exports);
+    __exportStar(require_Quad(), exports);
+    __exportStar(require_Variable(), exports);
+  }
+});
+
+// node_modules/rdf-literal/lib/Translator.js
+var require_Translator = __commonJS({
+  "node_modules/rdf-literal/lib/Translator.js"(exports) {
+    "use strict";
+    Object.defineProperty(exports, "__esModule", { value: true });
+    exports.Translator = void 0;
+    var Translator = class {
+      constructor() {
+        this.supportedRdfDatatypes = [];
+        this.fromRdfHandlers = {};
+        this.toRdfHandlers = {};
+      }
+      static incorrectRdfDataType(literal5) {
+        throw new Error(`Invalid RDF ${literal5.datatype.value} value: '${literal5.value}'`);
+      }
+      registerHandler(handler2, rdfDatatypes, javaScriptDataTypes) {
+        for (const rdfDatatype of rdfDatatypes) {
+          this.supportedRdfDatatypes.push(rdfDatatype);
+          this.fromRdfHandlers[rdfDatatype.value] = handler2;
+        }
+        for (const javaScriptDataType of javaScriptDataTypes) {
+          let existingToRdfHandlers = this.toRdfHandlers[javaScriptDataType];
+          if (!existingToRdfHandlers) {
+            this.toRdfHandlers[javaScriptDataType] = existingToRdfHandlers = [];
+          }
+          existingToRdfHandlers.push(handler2);
+        }
+      }
+      fromRdf(literal5, validate) {
+        const handler2 = this.fromRdfHandlers[literal5.datatype.value];
+        if (handler2) {
+          return handler2.fromRdf(literal5, validate);
+        } else {
+          return literal5.value;
+        }
+      }
+      toRdf(value, options) {
+        const handlers = this.toRdfHandlers[typeof value];
+        if (handlers) {
+          for (const handler2 of handlers) {
+            const ret = handler2.toRdf(value, options);
+            if (ret) {
+              return ret;
+            }
+          }
+        }
+        throw new Error(`Invalid JavaScript value: '${value}'`);
+      }
+      /**
+       * @return {NamedNode[]} An array of all supported RDF datatypes.
+       */
+      getSupportedRdfDatatypes() {
+        return this.supportedRdfDatatypes;
+      }
+      /**
+       * @return {string[]} An array of all supported JavaScript types.
+       */
+      getSupportedJavaScriptPrimitives() {
+        return Object.keys(this.toRdfHandlers);
+      }
+    };
+    exports.Translator = Translator;
+  }
+});
+
+// node_modules/rdf-literal/lib/handler/TypeHandlerBoolean.js
+var require_TypeHandlerBoolean = __commonJS({
+  "node_modules/rdf-literal/lib/handler/TypeHandlerBoolean.js"(exports) {
+    "use strict";
+    Object.defineProperty(exports, "__esModule", { value: true });
+    exports.TypeHandlerBoolean = void 0;
+    var Translator_1 = require_Translator();
+    var TypeHandlerBoolean = class _TypeHandlerBoolean {
+      fromRdf(literal5, validate) {
+        switch (literal5.value) {
+          case "true":
+            return true;
+          case "false":
+            return false;
+          case "1":
+            return true;
+          case "0":
+            return false;
+        }
+        if (validate) {
+          Translator_1.Translator.incorrectRdfDataType(literal5);
+        }
+        return false;
+      }
+      toRdf(value, { datatype, dataFactory }) {
+        return dataFactory.literal(value ? "true" : "false", datatype || dataFactory.namedNode(_TypeHandlerBoolean.TYPE));
+      }
+    };
+    exports.TypeHandlerBoolean = TypeHandlerBoolean;
+    TypeHandlerBoolean.TYPE = "http://www.w3.org/2001/XMLSchema#boolean";
+  }
+});
+
+// node_modules/rdf-literal/lib/handler/TypeHandlerDate.js
+var require_TypeHandlerDate = __commonJS({
+  "node_modules/rdf-literal/lib/handler/TypeHandlerDate.js"(exports) {
+    "use strict";
+    Object.defineProperty(exports, "__esModule", { value: true });
+    exports.TypeHandlerDate = void 0;
+    var Translator_1 = require_Translator();
+    var TypeHandlerDate = class _TypeHandlerDate {
+      fromRdf(literal5, validate) {
+        if (validate && !literal5.value.match(_TypeHandlerDate.VALIDATORS[literal5.datatype.value.substr(33, literal5.datatype.value.length)])) {
+          Translator_1.Translator.incorrectRdfDataType(literal5);
+        }
+        switch (literal5.datatype.value) {
+          case "http://www.w3.org/2001/XMLSchema#gDay":
+            return new Date(0, 0, parseInt(literal5.value, 10));
+          case "http://www.w3.org/2001/XMLSchema#gMonthDay":
+            const partsMonthDay = literal5.value.split("-");
+            return new Date(0, parseInt(partsMonthDay[0], 10) - 1, parseInt(partsMonthDay[1], 10));
+          case "http://www.w3.org/2001/XMLSchema#gYear":
+            return /* @__PURE__ */ new Date(literal5.value + "-01-01");
+          case "http://www.w3.org/2001/XMLSchema#gYearMonth":
+            return /* @__PURE__ */ new Date(literal5.value + "-01");
+          default:
+            return new Date(literal5.value);
+        }
+      }
+      toRdf(value, { datatype, dataFactory }) {
+        datatype = datatype || dataFactory.namedNode(_TypeHandlerDate.TYPES[0]);
+        if (!(value instanceof Date)) {
+          return null;
+        }
+        const date = value;
+        let valueString;
+        switch (datatype.value) {
+          case "http://www.w3.org/2001/XMLSchema#gDay":
+            valueString = String(date.getUTCDate());
+            break;
+          case "http://www.w3.org/2001/XMLSchema#gMonthDay":
+            valueString = date.getUTCMonth() + 1 + "-" + date.getUTCDate();
+            break;
+          case "http://www.w3.org/2001/XMLSchema#gYear":
+            valueString = String(date.getUTCFullYear());
+            break;
+          case "http://www.w3.org/2001/XMLSchema#gYearMonth":
+            valueString = date.getUTCFullYear() + "-" + (date.getUTCMonth() + 1);
+            break;
+          case "http://www.w3.org/2001/XMLSchema#date":
+            valueString = date.toISOString().replace(/T.*$/, "");
+            break;
+          default:
+            valueString = date.toISOString();
+        }
+        return dataFactory.literal(valueString, datatype);
+      }
+    };
+    exports.TypeHandlerDate = TypeHandlerDate;
+    TypeHandlerDate.TYPES = [
+      "http://www.w3.org/2001/XMLSchema#dateTime",
+      "http://www.w3.org/2001/XMLSchema#date",
+      "http://www.w3.org/2001/XMLSchema#gDay",
+      "http://www.w3.org/2001/XMLSchema#gMonthDay",
+      "http://www.w3.org/2001/XMLSchema#gYear",
+      "http://www.w3.org/2001/XMLSchema#gYearMonth"
+    ];
+    TypeHandlerDate.VALIDATORS = {
+      date: /^[0-9]+-[0-9][0-9]-[0-9][0-9]Z?$/,
+      dateTime: /^[0-9]+-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9](\.[0-9][0-9][0-9])?((Z?)|([\+-][0-9][0-9]:[0-9][0-9]))$/,
+      gDay: /^[0-9]+$/,
+      gMonthDay: /^[0-9]+-[0-9][0-9]$/,
+      gYear: /^[0-9]+$/,
+      gYearMonth: /^[0-9]+-[0-9][0-9]$/
+    };
+  }
+});
+
+// node_modules/rdf-literal/lib/handler/TypeHandlerNumberDouble.js
+var require_TypeHandlerNumberDouble = __commonJS({
+  "node_modules/rdf-literal/lib/handler/TypeHandlerNumberDouble.js"(exports) {
+    "use strict";
+    Object.defineProperty(exports, "__esModule", { value: true });
+    exports.TypeHandlerNumberDouble = void 0;
+    var Translator_1 = require_Translator();
+    var TypeHandlerNumberDouble = class _TypeHandlerNumberDouble {
+      fromRdf(literal5, validate) {
+        const parsed = parseFloat(literal5.value);
+        if (validate) {
+          if (isNaN(parsed)) {
+            Translator_1.Translator.incorrectRdfDataType(literal5);
+          }
+        }
+        return parsed;
+      }
+      toRdf(value, { datatype, dataFactory }) {
+        datatype = datatype || dataFactory.namedNode(_TypeHandlerNumberDouble.TYPES[0]);
+        if (isNaN(value)) {
+          return dataFactory.literal("NaN", datatype);
+        }
+        if (!isFinite(value)) {
+          return dataFactory.literal(value > 0 ? "INF" : "-INF", datatype);
+        }
+        if (value % 1 === 0) {
+          return null;
+        }
+        return dataFactory.literal(value.toExponential(15).replace(/(\d)0*e\+?/, "$1E"), datatype);
+      }
+    };
+    exports.TypeHandlerNumberDouble = TypeHandlerNumberDouble;
+    TypeHandlerNumberDouble.TYPES = [
+      "http://www.w3.org/2001/XMLSchema#double",
+      "http://www.w3.org/2001/XMLSchema#decimal",
+      "http://www.w3.org/2001/XMLSchema#float"
+    ];
+  }
+});
+
+// node_modules/rdf-literal/lib/handler/TypeHandlerNumberInteger.js
+var require_TypeHandlerNumberInteger = __commonJS({
+  "node_modules/rdf-literal/lib/handler/TypeHandlerNumberInteger.js"(exports) {
+    "use strict";
+    Object.defineProperty(exports, "__esModule", { value: true });
+    exports.TypeHandlerNumberInteger = void 0;
+    var Translator_1 = require_Translator();
+    var TypeHandlerNumberInteger = class _TypeHandlerNumberInteger {
+      fromRdf(literal5, validate) {
+        const parsed = parseInt(literal5.value, 10);
+        if (validate) {
+          if (isNaN(parsed) || literal5.value.indexOf(".") >= 0) {
+            Translator_1.Translator.incorrectRdfDataType(literal5);
+          }
+        }
+        return parsed;
+      }
+      toRdf(value, { datatype, dataFactory }) {
+        return dataFactory.literal(String(value), datatype || (value <= _TypeHandlerNumberInteger.MAX_INT && value >= _TypeHandlerNumberInteger.MIN_INT ? dataFactory.namedNode(_TypeHandlerNumberInteger.TYPES[0]) : dataFactory.namedNode(_TypeHandlerNumberInteger.TYPES[1])));
+      }
+    };
+    exports.TypeHandlerNumberInteger = TypeHandlerNumberInteger;
+    TypeHandlerNumberInteger.TYPES = [
+      "http://www.w3.org/2001/XMLSchema#integer",
+      "http://www.w3.org/2001/XMLSchema#long",
+      "http://www.w3.org/2001/XMLSchema#int",
+      "http://www.w3.org/2001/XMLSchema#byte",
+      "http://www.w3.org/2001/XMLSchema#short",
+      "http://www.w3.org/2001/XMLSchema#negativeInteger",
+      "http://www.w3.org/2001/XMLSchema#nonNegativeInteger",
+      "http://www.w3.org/2001/XMLSchema#nonPositiveInteger",
+      "http://www.w3.org/2001/XMLSchema#positiveInteger",
+      "http://www.w3.org/2001/XMLSchema#unsignedByte",
+      "http://www.w3.org/2001/XMLSchema#unsignedInt",
+      "http://www.w3.org/2001/XMLSchema#unsignedLong",
+      "http://www.w3.org/2001/XMLSchema#unsignedShort"
+    ];
+    TypeHandlerNumberInteger.MAX_INT = 2147483647;
+    TypeHandlerNumberInteger.MIN_INT = -2147483648;
+  }
+});
+
+// node_modules/rdf-literal/lib/handler/TypeHandlerString.js
+var require_TypeHandlerString = __commonJS({
+  "node_modules/rdf-literal/lib/handler/TypeHandlerString.js"(exports) {
+    "use strict";
+    Object.defineProperty(exports, "__esModule", { value: true });
+    exports.TypeHandlerString = void 0;
+    var TypeHandlerString = class {
+      fromRdf(literal5) {
+        return literal5.value;
+      }
+      toRdf(value, { datatype, dataFactory }) {
+        return dataFactory.literal(value, datatype);
+      }
+    };
+    exports.TypeHandlerString = TypeHandlerString;
+    TypeHandlerString.TYPES = [
+      "http://www.w3.org/2001/XMLSchema#string",
+      "http://www.w3.org/2001/XMLSchema#normalizedString",
+      "http://www.w3.org/2001/XMLSchema#anyURI",
+      "http://www.w3.org/2001/XMLSchema#base64Binary",
+      "http://www.w3.org/2001/XMLSchema#language",
+      "http://www.w3.org/2001/XMLSchema#Name",
+      "http://www.w3.org/2001/XMLSchema#NCName",
+      "http://www.w3.org/2001/XMLSchema#NMTOKEN",
+      "http://www.w3.org/2001/XMLSchema#token",
+      "http://www.w3.org/2001/XMLSchema#hexBinary",
+      "http://www.w3.org/1999/02/22-rdf-syntax-ns#langString",
+      "http://www.w3.org/1999/02/22-rdf-syntax-ns#dirLangString",
+      "http://www.w3.org/2001/XMLSchema#time",
+      "http://www.w3.org/2001/XMLSchema#duration"
+    ];
+  }
+});
+
+// node_modules/rdf-literal/lib/handler/index.js
+var require_handler = __commonJS({
+  "node_modules/rdf-literal/lib/handler/index.js"(exports) {
+    "use strict";
+    var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
+      if (k2 === void 0) k2 = k;
+      var desc = Object.getOwnPropertyDescriptor(m, k);
+      if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+        desc = { enumerable: true, get: function() {
+          return m[k];
+        } };
+      }
+      Object.defineProperty(o, k2, desc);
+    }) : (function(o, m, k, k2) {
+      if (k2 === void 0) k2 = k;
+      o[k2] = m[k];
+    }));
+    var __exportStar = exports && exports.__exportStar || function(m, exports2) {
+      for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports2, p)) __createBinding(exports2, m, p);
+    };
+    Object.defineProperty(exports, "__esModule", { value: true });
+    __exportStar(require_TypeHandlerBoolean(), exports);
+    __exportStar(require_TypeHandlerDate(), exports);
+    __exportStar(require_TypeHandlerNumberDouble(), exports);
+    __exportStar(require_TypeHandlerNumberInteger(), exports);
+    __exportStar(require_TypeHandlerString(), exports);
+  }
+});
+
+// node_modules/rdf-literal/lib/ITypeHandler.js
+var require_ITypeHandler = __commonJS({
+  "node_modules/rdf-literal/lib/ITypeHandler.js"(exports) {
+    "use strict";
+    Object.defineProperty(exports, "__esModule", { value: true });
+  }
+});
+
+// node_modules/rdf-literal/index.js
+var require_rdf_literal = __commonJS({
+  "node_modules/rdf-literal/index.js"(exports) {
+    "use strict";
+    var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
+      if (k2 === void 0) k2 = k;
+      var desc = Object.getOwnPropertyDescriptor(m, k);
+      if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+        desc = { enumerable: true, get: function() {
+          return m[k];
+        } };
+      }
+      Object.defineProperty(o, k2, desc);
+    }) : (function(o, m, k, k2) {
+      if (k2 === void 0) k2 = k;
+      o[k2] = m[k];
+    }));
+    var __exportStar = exports && exports.__exportStar || function(m, exports2) {
+      for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports2, p)) __createBinding(exports2, m, p);
+    };
+    Object.defineProperty(exports, "__esModule", { value: true });
+    exports.fromRdf = fromRdf2;
+    exports.toRdf = toRdf;
+    exports.getTermRaw = getTermRaw;
+    exports.getSupportedRdfDatatypes = getSupportedRdfDatatypes;
+    exports.getSupportedJavaScriptPrimitives = getSupportedJavaScriptPrimitives;
+    var rdf_data_factory_1 = require_rdf_data_factory();
+    var handler_1 = require_handler();
+    var Translator_1 = require_Translator();
+    __exportStar(require_handler(), exports);
+    __exportStar(require_ITypeHandler(), exports);
+    __exportStar(require_Translator(), exports);
+    var DF = new rdf_data_factory_1.DataFactory();
+    var translator = new Translator_1.Translator();
+    translator.registerHandler(new handler_1.TypeHandlerString(), handler_1.TypeHandlerString.TYPES.map((t) => DF.namedNode(t)), ["string"]);
+    translator.registerHandler(new handler_1.TypeHandlerBoolean(), [handler_1.TypeHandlerBoolean.TYPE].map((t) => DF.namedNode(t)), ["boolean"]);
+    translator.registerHandler(new handler_1.TypeHandlerNumberDouble(), handler_1.TypeHandlerNumberDouble.TYPES.map((t) => DF.namedNode(t)), ["number"]);
+    translator.registerHandler(new handler_1.TypeHandlerNumberInteger(), handler_1.TypeHandlerNumberInteger.TYPES.map((t) => DF.namedNode(t)), ["number"]);
+    translator.registerHandler(new handler_1.TypeHandlerDate(), handler_1.TypeHandlerDate.TYPES.map((t) => DF.namedNode(t)), ["object"]);
+    function fromRdf2(literal5, validate) {
+      return translator.fromRdf(literal5, validate);
+    }
+    function toRdf(value, options) {
+      if (options && "namedNode" in options) {
+        options = { dataFactory: options };
+      }
+      options = options || {};
+      if (options && !options.dataFactory) {
+        options.dataFactory = DF;
+      }
+      return translator.toRdf(value, options);
+    }
+    function getTermRaw(term3, validate) {
+      if (term3.termType === "Literal") {
+        return fromRdf2(term3, validate);
+      }
+      return term3.value;
+    }
+    function getSupportedRdfDatatypes() {
+      return translator.getSupportedRdfDatatypes();
+    }
+    function getSupportedJavaScriptPrimitives() {
+      return translator.getSupportedJavaScriptPrimitives();
+    }
+  }
+});
+
 // node_modules/json-canon/src/index.js
 var require_src = __commonJS({
   "node_modules/json-canon/src/index.js"(exports, module2) {
@@ -33024,6 +34178,11 @@ var PodStore = class {
   }
   has(name) {
     return this.cache.has(name);
+  }
+  // The documents held here. Callers that keep one document per thing — a
+  // connected account, say — list them with this rather than a fixed name.
+  names() {
+    return [...this.cache.keys()];
   }
   read(name, fallback) {
     return this.cache.has(name) ? structuredClone(this.cache.get(name)) : fallback;
@@ -33880,22 +35039,22 @@ var Literal = class _Literal extends Node3 {
     return _Literal.toNT(this);
   }
   /** Serializes a literal to an N-Triples string */
-  static toNT(literal3) {
-    if (typeof literal3.value === "number") {
-      return "" + literal3.value;
-    } else if (typeof literal3.value !== "string") {
-      throw new Error("Value of RDF literal is not string or number: " + literal3.value);
+  static toNT(literal5) {
+    if (typeof literal5.value === "number") {
+      return "" + literal5.value;
+    } else if (typeof literal5.value !== "string") {
+      throw new Error("Value of RDF literal is not string or number: " + literal5.value);
     }
-    var str = literal3.value;
+    var str = literal5.value;
     str = str.replace(/\\/g, "\\\\");
     str = str.replace(/\"/g, '\\"');
     str = str.replace(/\n/g, "\\n");
     str = str.replace(/\r/g, "\\r");
     str = '"' + str + '"';
-    if (literal3.language) {
-      str += "@" + literal3.language;
-    } else if (!literal3.datatype.equals(xsd_internal_default.string)) {
-      str += "^^" + literal3.datatype.toCanonical();
+    if (literal5.language) {
+      str += "@" + literal5.language;
+    } else if (!literal5.datatype.equals(xsd_internal_default.string)) {
+      str += "^^" + literal5.datatype.toCanonical();
     }
     return str;
   }
@@ -34348,11 +35507,11 @@ var Variable = class _Variable extends Node3 {
   toString() {
     return _Variable.toString(this);
   }
-  static toString(variable3) {
-    if (variable3.uri.slice(0, variable3.base.length) === variable3.base) {
-      return `?${variable3.uri.slice(variable3.base.length)}`;
+  static toString(variable4) {
+    if (variable4.uri.slice(0, variable4.base.length) === variable4.base) {
+      return `?${variable4.uri.slice(variable4.base.length)}`;
     }
-    return `?${variable3.uri}`;
+    return `?${variable4.uri}`;
   }
 };
 
@@ -34414,26 +35573,26 @@ var CanonicalDataFactory = {
    * @example Use this to associate data with a term in an object
    *   { obj[id(term)] = "myData" }
    */
-  id(term2) {
-    if (!term2) {
+  id(term3) {
+    if (!term3) {
       return "undefined";
     }
-    if (isQuad(term2)) {
-      return this.quadToNQ(term2);
+    if (isQuad(term3)) {
+      return this.quadToNQ(term3);
     }
-    switch (term2.termType) {
+    switch (term3.termType) {
       case DefaultGraphTermType:
         return "defaultGraph";
       case CollectionTermType:
-        return Collection.toNT(term2);
+        return Collection.toNT(term3);
       case VariableTermType:
-        return Variable.toString(term2);
+        return Variable.toString(term3);
       default:
-        const nq = this.termToNQ(term2);
+        const nq = this.termToNQ(term3);
         if (nq) {
           return nq;
         }
-        throw new Error(`Can't id term with type '${term2.termType}'`);
+        throw new Error(`Can't id term with type '${term3.termType}'`);
     }
   },
   isQuad(obj) {
@@ -34490,31 +35649,31 @@ var CanonicalDataFactory = {
     return `${this.termToNQ(q.subject)} ${this.termToNQ(q.predicate)} ${this.termToNQ(q.object)} ${this.termToNQ(q.graph)} .`;
   },
   /** Stringify a {term} to n-quads serialization. */
-  termToNQ(term2) {
-    switch (term2.termType) {
+  termToNQ(term3) {
+    switch (term3.termType) {
       case BlankNodeTermType:
-        return "_:" + term2.value;
+        return "_:" + term3.value;
       case DefaultGraphTermType:
         return "";
       case EmptyTermType:
         return "<http://www.w3.org/1999/02/22-rdf-syntax-ns#nil>";
       case LiteralTermType:
-        return Literal.toNT(term2);
+        return Literal.toNT(term3);
       case GraphTermType:
       case NamedNodeTermType:
-        return "<" + term2.value + ">";
+        return "<" + term3.value + ">";
       case CollectionTermType:
-        return "(" + term2.elements.map((t) => this.termToNQ(t)).join(" ") + ")";
+        return "(" + term3.elements.map((t) => this.termToNQ(t)).join(" ") + ")";
       default:
-        throw new Error(`Can't serialize nonstandard term type (was '${term2.termType}')`);
+        throw new Error(`Can't serialize nonstandard term type (was '${term3.termType}')`);
     }
   },
   /** Convert an rdf object (term or quad) to n-quads serialization. */
-  toNQ(term2) {
-    if (this.isQuad(term2)) {
-      return this.quadToNQ(term2);
+  toNQ(term3) {
+    if (this.isQuad(term3)) {
+      return this.quadToNQ(term3);
     }
-    return this.termToNQ(term2);
+    return this.termToNQ(term3);
   },
   /**
    * Creates a new variable
@@ -34544,8 +35703,8 @@ var log = {
 var log_default = log;
 
 // node_modules/rdflib/esm/namespace.js
-function Namespace(nsuri, factory) {
-  const dataFactory = factory || {
+function Namespace(nsuri, factory3) {
+  const dataFactory = factory3 || {
     namedNode: (value) => new NamedNode(value)
   };
   return function(ln) {
@@ -34857,15 +36016,15 @@ var Serializer = class _Serializer {
     return this;
   }
   checkIntegrity() {
-    var p, ns3;
+    var p, ns4;
     for (p in this.namespaces) {
       if (this.prefixes[this.namespaces[p]] !== p) {
         throw new Error("Serializer integity error 1: " + p + ", " + this.namespaces[p] + ", " + this.prefixes[this.namespaces[p]] + "!");
       }
     }
-    for (ns3 in this.prefixes) {
-      if (this.namespaces[this.prefixes[ns3]] !== ns3) {
-        throw new Error("Serializer integity error 2: " + ns3 + ", " + this.prefixs[ns3] + ", " + this.namespaces[this.prefixes[ns3]] + "!");
+    for (ns4 in this.prefixes) {
+      if (this.namespaces[this.prefixes[ns4]] !== ns4) {
+        throw new Error("Serializer integity error 2: " + ns4 + ", " + this.prefixs[ns4] + ", " + this.namespaces[this.prefixes[ns4]] + "!");
       }
     }
   }
@@ -34987,7 +36146,7 @@ var Serializer = class _Serializer {
     var rdfns = "http://www.w3.org/1999/02/22-rdf-syntax-ns#";
     var self2 = this;
     var kb = this.store;
-    var factory = this.rdfFactory;
+    var factory3 = this.rdfFactory;
     var termToNT = function(x) {
       if (x.termType !== "Collection") {
         return self2.atomicTermToN3(x);
@@ -34995,7 +36154,7 @@ var Serializer = class _Serializer {
       var list3 = x.elements;
       var rest = kb.sym(rdfns + "nill");
       for (var i2 = list3.length - 1; i2 >= 0; i2--) {
-        var bnode = factory.blankNode();
+        var bnode = factory3.blankNode();
         str += termToNT(bnode) + " " + termToNT(kb.sym(rdfns + "first")) + " " + termToNT(list3[i2]) + ".\n";
         str += termToNT(bnode) + " " + termToNT(kb.sym(rdfns + "rest")) + " " + termToNT(rest) + ".\n";
         rest = bnode;
@@ -35189,10 +36348,10 @@ var Serializer = class _Serializer {
       if (this.flags.indexOf("d") < 0 && this.defaultNamespace) {
         str += "@prefix : " + this.explicitURI(this.defaultNamespace) + ".\n";
       }
-      for (var ns3 in this.prefixes) {
-        if (!this.prefixes.hasOwnProperty(ns3)) continue;
-        if (!this.namespacesUsed[ns3]) continue;
-        str += "@prefix " + this.prefixes[ns3] + ": " + this.explicitURI(ns3) + ".\n";
+      for (var ns4 in this.prefixes) {
+        if (!this.prefixes.hasOwnProperty(ns4)) continue;
+        if (!this.namespacesUsed[ns4]) continue;
+        str += "@prefix " + this.prefixes[ns4] + ": " + this.explicitURI(ns4) + ".\n";
       }
       return str + "\n";
     }
@@ -35424,8 +36583,8 @@ var Serializer = class _Serializer {
         }
       });
     }
-    function relURIMethod(term2) {
-      return escapeForXML(this.base ? uri_exports.refTo(this.base, term2.uri) : term2.uri);
+    function relURIMethod(term3) {
+      return escapeForXML(this.base ? uri_exports.refTo(this.base, term3.uri) : term3.uri);
     }
     var relURI = relURIMethod.bind(this);
     function subjectXMLTreeMethod(subject, stats) {
@@ -35536,8 +36695,8 @@ var Serializer = class _Serializer {
       return results;
     }
     var propertyXMLTree = propertyXMLTreeMethod.bind(this);
-    function qnameMethod(term2) {
-      var uri = term2.uri;
+    function qnameMethod(term3) {
+      var uri = term3.uri;
       var j = uri.indexOf("#");
       if (j < 0 && this.flags.indexOf("/") < 0) {
         j = uri.lastIndexOf("/");
@@ -35564,10 +36723,10 @@ var Serializer = class _Serializer {
     if (this.defaultNamespace) {
       str += ' xmlns="' + escapeForXML(this.defaultNamespace) + '"';
     }
-    for (var ns3 in namespaceCounts) {
-      if (!namespaceCounts.hasOwnProperty(ns3)) continue;
-      var ns22 = this.base && this.flags.includes("z") ? uri_exports.refTo(this.base, ns3) : ns3;
-      str += "\n xmlns:" + this.prefixes[ns3] + '="' + escapeForXML(ns22) + '"';
+    for (var ns4 in namespaceCounts) {
+      if (!namespaceCounts.hasOwnProperty(ns4)) continue;
+      var ns22 = this.base && this.flags.includes("z") ? uri_exports.refTo(this.base, ns4) : ns4;
+      str += "\n xmlns:" + this.prefixes[ns4] + '="' + escapeForXML(ns22) + '"';
     }
     str += ">";
     var tree2 = [str, tree, "</rdf:RDF>"];
@@ -35753,8 +36912,8 @@ var Formula = class _Formula extends Node3 {
    * @param statements - A collection of statements
    */
   addAll(statements) {
-    statements.forEach((quad3) => {
-      this.add(quad3.subject, quad3.predicate, quad3.object, quad3.graph);
+    statements.forEach((quad4) => {
+      this.add(quad4.subject, quad4.predicate, quad4.object, quad4.graph);
     });
   }
   /** Follow link from one node, using one wildcard, looking for one
@@ -35819,8 +36978,8 @@ var Formula = class _Formula extends Node3 {
    *
    * Falls back to the rdflib hashString implementation if the given factory doesn't support id.
    */
-  id(term2) {
-    return this.rdfFactory.id(term2);
+  id(term3) {
+    return this.rdfFactory.id(term3);
   }
   /**
    * Search the Store
@@ -36378,21 +37537,21 @@ var node_default = Node3;
 var ns = {
   xsd: Namespace("http://www.w3.org/2001/XMLSchema#")
 };
-Node3.toJS = function(term2) {
-  if (isCollection(term2)) {
-    return term2.elements.map(Node3.toJS);
+Node3.toJS = function(term3) {
+  if (isCollection(term3)) {
+    return term3.elements.map(Node3.toJS);
   }
-  if (!isLiteral(term2)) return term2;
-  if (term2.datatype.equals(ns.xsd("boolean"))) {
-    return term2.value === "1" || term2.value === "true";
+  if (!isLiteral(term3)) return term3;
+  if (term3.datatype.equals(ns.xsd("boolean"))) {
+    return term3.value === "1" || term3.value === "true";
   }
-  if (term2.datatype.equals(ns.xsd("dateTime")) || term2.datatype.equals(ns.xsd("date"))) {
-    return new Date(term2.value);
+  if (term3.datatype.equals(ns.xsd("dateTime")) || term3.datatype.equals(ns.xsd("date"))) {
+    return new Date(term3.value);
   }
-  if (term2.datatype.equals(ns.xsd("integer")) || term2.datatype.equals(ns.xsd("float")) || term2.datatype.equals(ns.xsd("decimal"))) {
-    return Number(term2.value);
+  if (term3.datatype.equals(ns.xsd("integer")) || term3.datatype.equals(ns.xsd("float")) || term3.datatype.equals(ns.xsd("decimal"))) {
+    return Number(term3.value);
   }
-  return term2.value;
+  return term3.value;
 };
 
 // node_modules/rdflib/esm/query.js
@@ -37082,34 +38241,34 @@ var IndexedFormula = class _IndexedFormula extends Formula {
    * Returns the symbol with canonical URI as smushed
    * @param term - An RDF node
    */
-  canon(term2) {
-    if (!term2) {
-      return term2;
+  canon(term3) {
+    if (!term3) {
+      return term3;
     }
-    const y = this.redirections[this.id(term2)];
+    const y = this.redirections[this.id(term3)];
     if (y) {
       return y;
     }
-    switch (term2.termType) {
+    switch (term3.termType) {
       case BlankNodeTermType:
-        return new BlankNode(term2.value);
+        return new BlankNode(term3.value);
       case CollectionTermType:
-        return term2;
+        return term3;
       // non-RDF/JS type, should just need to cast
       case DefaultGraphTermType:
         return new DefaultGraph();
       case EmptyTermType:
-        return term2;
+        return term3;
       case GraphTermType:
-        return term2;
+        return term3;
       case LiteralTermType:
-        return new Literal(term2.value, term2.language, term2.datatype);
+        return new Literal(term3.value, term3.language, term3.datatype);
       case NamedNodeTermType:
-        return new NamedNode(term2.value);
+        return new NamedNode(term3.value);
       case VariableTermType:
-        return new Variable(term2.value);
+        return new Variable(term3.value);
       default:
-        throw new Error(`Term Type not recognized for canonization: ${term2.termType}`);
+        throw new Error(`Term Type not recognized for canonization: ${term3.termType}`);
     }
   }
   /**
@@ -37140,7 +38299,7 @@ var IndexedFormula = class _IndexedFormula extends Formula {
     var st2;
     for (var j = 0; j < sts.length; j++) {
       st2 = sts[j];
-      var term2 = [st2.subject, st2.predicate, st2.object, st2.graph];
+      var term3 = [st2.subject, st2.predicate, st2.object, st2.graph];
       var arrayContains = function(a, x) {
         for (var i = 0; i < a.length; i++) {
           if (a[i].subject.equals(x.subject) && a[i].predicate.equals(x.predicate) && a[i].object.equals(x.object) && a[i].why.equals(x.graph)) {
@@ -37149,7 +38308,7 @@ var IndexedFormula = class _IndexedFormula extends Formula {
         }
       };
       for (var p = 0; p < 4; p++) {
-        var c = this.canon(term2[p]);
+        var c = this.canon(term3[p]);
         var h = this.id(c);
         if (!this.index[p][h]) {
         } else {
@@ -37460,9 +38619,9 @@ var IndexedFormula = class _IndexedFormula extends Formula {
    *        Otherwise, you should use remove() above.
    */
   removeStatement(st2) {
-    var term2 = [st2.subject, st2.predicate, st2.object, st2.graph];
+    var term3 = [st2.subject, st2.predicate, st2.object, st2.graph];
     for (var p = 0; p < 4; p++) {
-      var c = this.canon(term2[p]);
+      var c = this.canon(term3[p]);
       var h = this.id(c);
       if (!this.index[p][h]) {
       } else {
@@ -37644,8 +38803,8 @@ var IndexedFormula = class _IndexedFormula extends Formula {
    * A list of all the URIs by which this thing is known
    * @param term
    */
-  uris(term2) {
-    var cterm = this.canon(term2);
+  uris(term3) {
+    var cterm = this.canon(term3);
     var terms = this.aliases[this.id(cterm)];
     if (!cterm.value) return [];
     var res = [cterm.value];
@@ -37676,32 +38835,32 @@ IndexedFormula.handleRDFType = handleRDFType;
 // node_modules/rdflib/esm/lists.js
 var RDF = Namespace("http://www.w3.org/1999/02/22-rdf-syntax-ns#");
 function substituteInDoc(store, x, y, doc) {
-  for (const quad3 of store.statementsMatching(y, null, null, doc)) {
-    const newStatement = new Statement(x, quad3.predicate, quad3.object, doc);
-    store.remove(quad3);
+  for (const quad4 of store.statementsMatching(y, null, null, doc)) {
+    const newStatement = new Statement(x, quad4.predicate, quad4.object, doc);
+    store.remove(quad4);
     store.add(newStatement);
   }
-  for (const quad3 of store.statementsMatching(null, y, null, doc)) {
-    store.remove(quad3);
-    store.add(new Statement(quad3.subject, x, quad3.object, doc));
+  for (const quad4 of store.statementsMatching(null, y, null, doc)) {
+    store.remove(quad4);
+    store.add(new Statement(quad4.subject, x, quad4.object, doc));
   }
-  for (const quad3 of store.statementsMatching(null, null, y, doc)) {
-    store.remove(quad3);
-    store.add(new Statement(quad3.subject, quad3.predicate, x, doc));
+  for (const quad4 of store.statementsMatching(null, null, y, doc)) {
+    store.remove(quad4);
+    store.add(new Statement(quad4.subject, quad4.predicate, x, doc));
   }
 }
 function substituteNillsInDoc(store, doc) {
   const x = RDF("nil");
-  for (const quad3 of store.statementsMatching(x, null, null, doc)) {
-    store.remove(quad3);
+  for (const quad4 of store.statementsMatching(x, null, null, doc)) {
+    store.remove(quad4);
     const y = new Collection();
-    store.add(new Statement(y, quad3.predicate, quad3.object, doc));
+    store.add(new Statement(y, quad4.predicate, quad4.object, doc));
   }
-  for (const quad3 of store.statementsMatching(null, null, x, doc)) {
-    if (!quad3.predicate.sameTerm(RDF("rest"))) {
-      store.remove(quad3);
+  for (const quad4 of store.statementsMatching(null, null, x, doc)) {
+    if (!quad4.predicate.sameTerm(RDF("rest"))) {
+      store.remove(quad4);
       const y = new Collection();
-      store.add(new Statement(quad3.subject, quad3.predicate, y, doc));
+      store.add(new Statement(quad4.subject, quad4.predicate, y, doc));
     }
   }
 }
@@ -38062,15 +39221,15 @@ var SinkParser = class {
       if (j < 0) {
         throw BadSyntax(this._thisDoc, this.lines, str, i, "expected <uriref> after @prefix _qname_");
       }
-      var ns3 = t[1].uri;
+      var ns4 = t[1].uri;
       if (this._baseURI) {
-        var ns3 = uripath_join(this._baseURI, ns3);
+        var ns4 = uripath_join(this._baseURI, ns4);
       } else {
-        assertFudge(ns3.indexOf(":") >= 0, "With no base URI, cannot handle relative URI for NS");
+        assertFudge(ns4.indexOf(":") >= 0, "With no base URI, cannot handle relative URI for NS");
       }
-      assertFudge(ns3.indexOf(":") >= 0);
-      this._bindings[t[0][0]] = ns3;
-      this.bind(t[0][0], hexify2(ns3));
+      assertFudge(ns4.indexOf(":") >= 0);
+      this._bindings[t[0][0]] = ns4;
+      this.bind(t[0][0], hexify2(ns4));
       return j;
     }
     var j = this.tok("base", str, i);
@@ -38080,14 +39239,14 @@ var SinkParser = class {
       if (i < 0) {
         throw BadSyntax(this._thisDoc, this.lines, str, j, "expected <uri> after @base ");
       }
-      var ns3 = t[0].uri;
+      var ns4 = t[0].uri;
       if (this._baseURI) {
-        var ns3 = uripath_join(this._baseURI, ns3);
+        var ns4 = uripath_join(this._baseURI, ns4);
       } else {
-        throw BadSyntax(this._thisDoc, this.lines, str, j, "With no previous base URI, cannot use relative URI in @base  <" + ns3 + ">");
+        throw BadSyntax(this._thisDoc, this.lines, str, j, "With no previous base URI, cannot use relative URI in @base  <" + ns4 + ">");
       }
-      assertFudge(ns3.indexOf(":") >= 0);
-      this._baseURI = ns3;
+      assertFudge(ns4.indexOf(":") >= 0);
+      this._baseURI = ns4;
       return i;
     }
     return -1;
@@ -38115,9 +39274,9 @@ var SinkParser = class {
     }
     return this._formula;
   }
-  makeStatement(quad3) {
-    quad3[0].add(quad3[2], quad3[1], quad3[3], this.source);
-    if (quad3[2].uri && quad3[2].uri === RDF_nil_URI || quad3[3].uri && quad3[3].uri === RDF_nil_URI) {
+  makeStatement(quad4) {
+    quad4[0].add(quad4[2], quad4[1], quad4[3], this.source);
+    if (quad4[2].uri && quad4[2].uri === RDF_nil_URI || quad4[3].uri && quad4[3].uri === RDF_nil_URI) {
       this.hasNil = true;
     }
     this.statementCount += 1;
@@ -38240,13 +39399,13 @@ var SinkParser = class {
     return j;
   }
   anonymousNode(ln) {
-    var term2 = this._anonymousNodes[ln];
-    if (term2) {
-      return term2;
+    var term3 = this._anonymousNodes[ln];
+    if (term3) {
+      return term3;
     }
-    var term2 = this._store.bnode(ln);
-    this._anonymousNodes[ln] = term2;
-    return term2;
+    var term3 = this._store.bnode(ln);
+    this._anonymousNodes[ln] = term3;
+    return term3;
   }
   node(str, i, res, subjectAlready) {
     if (typeof subjectAlready == "undefined") subjectAlready = null;
@@ -38582,10 +39741,10 @@ var SinkParser = class {
       var ln = pairFudge[1];
       if (pfx == null) {
         assertFudge(0, "not used?");
-        var ns3 = this._baseURI + ADDED_HASH;
+        var ns4 = this._baseURI + ADDED_HASH;
       } else {
-        var ns3 = this._bindings[pfx];
-        if (!ns3) {
+        var ns4 = this._bindings[pfx];
+        if (!ns4) {
           if (pfx == "_") {
             res.push(this.anonymousNode(ln));
             return j;
@@ -38593,7 +39752,7 @@ var SinkParser = class {
           throw BadSyntax(this._thisDoc, this.lines, str, i, "Prefix " + pfx + " not bound.");
         }
       }
-      var symb = this._store.sym(ns3 + ln);
+      var symb = this._store.sym(ns4 + ln);
       if (ArrayIndexOf(this._variables, symb) >= 0) {
         res.push(this._variables[symb]);
       } else {
@@ -39052,20 +40211,20 @@ var ExtendedTermFactory = {
   collection(elements) {
     return new Collection(elements);
   },
-  id(term2) {
-    if (isCollection(term2)) {
-      return Collection.toNT(term2);
+  id(term3) {
+    if (isCollection(term3)) {
+      return Collection.toNT(term3);
     }
-    if (isVariable(term2)) {
-      return Variable.toString(term2);
+    if (isVariable(term3)) {
+      return Variable.toString(term3);
     }
-    return canonical_data_factory_default.id(term2);
+    return canonical_data_factory_default.id(term3);
   },
-  termToNQ(term2) {
-    if (term2.termType === CollectionTermType) {
-      return Collection.toNT(term2);
+  termToNQ(term3) {
+    if (term3.termType === CollectionTermType) {
+      return Collection.toNT(term3);
     }
-    return canonical_data_factory_default.termToNQ(term2);
+    return canonical_data_factory_default.termToNQ(term3);
   }
 };
 var extended_term_factory_default = ExtendedTermFactory;
@@ -39110,8 +40269,8 @@ function listToCollection(kb, obj) {
 }
 async function jsonldParser(str, kb, base) {
   const baseString = base && Object.prototype.hasOwnProperty.call(base, "termType") ? base.value : base;
-  const jsonld = await Promise.resolve().then(() => __toESM(require_jsonld()));
-  const jsonldLib = jsonld.default || jsonld;
+  const jsonld2 = await Promise.resolve().then(() => __toESM(require_jsonld()));
+  const jsonldLib = jsonld2.default || jsonld2;
   const flattened = await jsonldLib.flatten(JSON.parse(str), null, {
     base: baseString
   });
@@ -39611,9 +40770,9 @@ var N3Lexer = class {
         queueMicrotask(() => this._tokenizeToEnd(callback, true));
       else {
         const tokens2 = [];
-        let error;
-        this._tokenizeToEnd((e, t) => e ? error = e : tokens2.push(t), true);
-        if (error) throw error;
+        let error2;
+        this._tokenizeToEnd((e, t) => e ? error2 = e : tokens2.push(t), true);
+        if (error2) throw error2;
         return tokens2;
       }
     } else {
@@ -39864,24 +41023,24 @@ function defaultGraph3() {
 function quad(subject, predicate, object, graph2) {
   return new Quad(subject, predicate, object, graph2);
 }
-function fromTerm(term2) {
-  if (term2 instanceof Term)
-    return term2;
-  switch (term2.termType) {
+function fromTerm(term3) {
+  if (term3 instanceof Term)
+    return term3;
+  switch (term3.termType) {
     case "NamedNode":
-      return namedNode(term2.value);
+      return namedNode(term3.value);
     case "BlankNode":
-      return blankNode(term2.value);
+      return blankNode(term3.value);
     case "Variable":
-      return variable(term2.value);
+      return variable(term3.value);
     case "DefaultGraph":
       return DEFAULTGRAPH;
     case "Literal":
-      return literal(term2.value, term2.language || term2.datatype);
+      return literal(term3.value, term3.language || term3.datatype);
     case "Quad":
-      return fromQuad(term2);
+      return fromQuad(term3);
     default:
-      throw new Error(`Unexpected termType: ${term2.termType}`);
+      throw new Error(`Unexpected termType: ${term3.termType}`);
   }
 }
 function fromQuad(inQuad) {
@@ -40376,7 +41535,7 @@ var N3Parser = class _N3Parser {
   }
   // ### `_completeLiteral` completes a literal with an optional datatype or language
   _completeLiteral(token, component) {
-    let literal3 = this._factory.literal(this._literalValue);
+    let literal5 = this._factory.literal(this._literalValue);
     let readCb;
     switch (token.type) {
       // Create a datatyped literal
@@ -40387,28 +41546,28 @@ var N3Parser = class _N3Parser {
         if (datatype.value === IRIs_default.rdf.langString || datatype.value === IRIs_default.rdf.dirLangString) {
           return this._error("Detected illegal (directional) languaged-tagged string with explicit datatype", token);
         }
-        literal3 = this._factory.literal(this._literalValue, datatype);
+        literal5 = this._factory.literal(this._literalValue, datatype);
         token = null;
         break;
       // Create a language-tagged string
       case "langcode":
         if (token.value.split("-").some((t) => t.length > 8))
           return this._error("Detected language tag with subtag longer than 8 characters", token);
-        literal3 = this._factory.literal(this._literalValue, token.value);
+        literal5 = this._factory.literal(this._literalValue, token.value);
         this._literalLanguage = token.value;
         token = null;
         readCb = this._readDirCode.bind(this, component);
         break;
     }
-    return { token, literal: literal3, readCb };
+    return { token, literal: literal5, readCb };
   }
   _readDirCode(component, listItem, token) {
     if (token.type === "dircode") {
-      const term2 = this._factory.literal(this._literalValue, { language: this._literalLanguage, direction: token.value });
+      const term3 = this._factory.literal(this._literalValue, { language: this._literalLanguage, direction: token.value });
       if (component === "subject")
-        this._subject = term2;
+        this._subject = term3;
       else
-        this._object = term2;
+        this._object = term3;
       this._literalLanguage = void 0;
       token = null;
     }
@@ -40714,7 +41873,7 @@ var N3Parser = class _N3Parser {
   _readTripleTermTail(token) {
     if (token.type !== ")>>")
       return this._error(`Expected )>> but got ${token.type}`, token);
-    const quad3 = this._factory.quad(
+    const quad4 = this._factory.quad(
       this._subject,
       this._predicate,
       this._object,
@@ -40722,10 +41881,10 @@ var N3Parser = class _N3Parser {
     );
     this._restoreContext("<<(", token);
     if (this._subject === null) {
-      this._subject = quad3;
+      this._subject = quad4;
       return this._readPredicate;
     } else {
-      this._object = quad3;
+      this._object = quad4;
       return this._getContextEndReader();
     }
   }
@@ -40921,27 +42080,27 @@ var N3Parser = class _N3Parser {
     this._quantified = /* @__PURE__ */ Object.create(null);
     if (!onQuad) {
       const quads = [];
-      let error;
+      let error2;
       this._callback = (e, t) => {
-        e ? error = e : t && quads.push(t);
+        e ? error2 = e : t && quads.push(t);
       };
       this._lexer.tokenize(input).every((token) => {
         return this._readCallback = this._readCallback(token);
       });
-      if (error) throw error;
+      if (error2) throw error2;
       return quads;
     }
-    let processNextToken = (error, token) => {
-      if (error !== null)
-        this._callback(error), this._callback = noop;
+    let processNextToken = (error2, token) => {
+      if (error2 !== null)
+        this._callback(error2), this._callback = noop;
       else if (this._readCallback)
         this._readCallback = this._readCallback(token);
     };
     if (onComment) {
       this._lexer.comments = true;
-      processNextToken = (error, token) => {
-        if (error !== null)
-          this._callback(error), this._callback = noop;
+      processNextToken = (error2, token) => {
+        if (error2 !== null)
+          this._callback(error2), this._callback = noop;
         else if (this._readCallback) {
           if (token.type === "comment")
             onComment(token.value);
@@ -40956,22 +42115,22 @@ var N3Parser = class _N3Parser {
 };
 function noop() {
 }
-function initDataFactory(parser, factory) {
-  parser._factory = factory;
-  parser.DEFAULTGRAPH = factory.defaultGraph();
-  parser.RDF_FIRST = factory.namedNode(IRIs_default.rdf.first);
-  parser.RDF_REST = factory.namedNode(IRIs_default.rdf.rest);
-  parser.RDF_NIL = factory.namedNode(IRIs_default.rdf.nil);
-  parser.RDF_REIFIES = factory.namedNode(IRIs_default.rdf.reifies);
-  parser.N3_FORALL = factory.namedNode(IRIs_default.r.forAll);
-  parser.N3_FORSOME = factory.namedNode(IRIs_default.r.forSome);
+function initDataFactory(parser, factory3) {
+  parser._factory = factory3;
+  parser.DEFAULTGRAPH = factory3.defaultGraph();
+  parser.RDF_FIRST = factory3.namedNode(IRIs_default.rdf.first);
+  parser.RDF_REST = factory3.namedNode(IRIs_default.rdf.rest);
+  parser.RDF_NIL = factory3.namedNode(IRIs_default.rdf.nil);
+  parser.RDF_REIFIES = factory3.namedNode(IRIs_default.rdf.reifies);
+  parser.N3_FORALL = factory3.namedNode(IRIs_default.r.forAll);
+  parser.N3_FORSOME = factory3.namedNode(IRIs_default.r.forSome);
   parser.ABBREVIATIONS = {
-    "a": factory.namedNode(IRIs_default.rdf.type),
-    "=": factory.namedNode(IRIs_default.owl.sameAs),
-    ">": factory.namedNode(IRIs_default.log.implies),
-    "<": factory.namedNode(IRIs_default.log.isImpliedBy)
+    "a": factory3.namedNode(IRIs_default.rdf.type),
+    "=": factory3.namedNode(IRIs_default.owl.sameAs),
+    ">": factory3.namedNode(IRIs_default.log.implies),
+    "<": factory3.namedNode(IRIs_default.log.isImpliedBy)
   };
-  parser.QUANTIFIERS_GRAPH = factory.namedNode("urn:n3:quantifiers");
+  parser.QUANTIFIERS_GRAPH = factory3.namedNode("urn:n3:quantifiers");
 }
 N3Parser.SUPPORTED_VERSIONS = [
   "1.2",
@@ -41156,14 +42315,14 @@ var RDFaProcessor = class _RDFaProcessor {
       if (defaultVocabulary && !this.absURIRE.exec(value)) {
         return defaultVocabulary + value;
       }
-      var term2 = terms[value];
-      if (term2) {
-        return term2;
+      var term3 = terms[value];
+      if (term3) {
+        return term3;
       }
       var lcvalue = value.toLowerCase();
-      term2 = terms[lcvalue];
-      if (term2) {
-        return term2;
+      term3 = terms[lcvalue];
+      if (term3) {
+        return term3;
       }
     }
     if (this.absURIRE.exec(value)) {
@@ -41177,14 +42336,14 @@ var RDFaProcessor = class _RDFaProcessor {
     if (curie) {
       return curie;
     } else {
-      var term2 = terms[value];
-      if (term2) {
-        return term2;
+      var term3 = terms[value];
+      if (term3) {
+        return term3;
       }
       var lcvalue = value.toLowerCase();
-      term2 = terms[lcvalue];
-      if (term2) {
-        return term2;
+      term3 = terms[lcvalue];
+      if (term3) {
+        return term3;
       }
       if (defaultVocabulary && !this.absURIRE.exec(value)) {
         return defaultVocabulary + value;
@@ -42449,16 +43608,16 @@ var CONTENT_TYPE_BY_EXT = {
   "html": "text/html",
   "xml": "text/xml"
 };
-var getNS = (factory) => {
+var getNS = (factory3) => {
   return {
-    link: Namespace("http://www.w3.org/2007/ont/link#", factory),
-    http: Namespace("http://www.w3.org/2007/ont/http#", factory),
-    httph: Namespace("http://www.w3.org/2007/ont/httph#", factory),
+    link: Namespace("http://www.w3.org/2007/ont/link#", factory3),
+    http: Namespace("http://www.w3.org/2007/ont/http#", factory3),
+    httph: Namespace("http://www.w3.org/2007/ont/httph#", factory3),
     // headers
-    rdf: Namespace("http://www.w3.org/1999/02/22-rdf-syntax-ns#", factory),
-    rdfs: Namespace("http://www.w3.org/2000/01/rdf-schema#", factory),
-    dc: Namespace("http://purl.org/dc/elements/1.1/", factory),
-    ldp: Namespace("http://www.w3.org/ns/ldp#", factory)
+    rdf: Namespace("http://www.w3.org/1999/02/22-rdf-syntax-ns#", factory3),
+    rdfs: Namespace("http://www.w3.org/2000/01/rdf-schema#", factory3),
+    dc: Namespace("http://purl.org/dc/elements/1.1/", factory3),
+    ldp: Namespace("http://www.w3.org/ns/ldp#", factory3)
   };
 };
 var ns2 = getNS();
@@ -42576,8 +43735,8 @@ var XMLHandler = class _XMLHandler extends Handler {
     for (let c = 0; c < dom.childNodes.length; c++) {
       const node = dom.childNodes[c];
       if (_XMLHandler.isElement(node)) {
-        let ns3 = node.namespaceURI;
-        if (ns3 && ns3 === ns3["rdf"]) {
+        let ns4 = node.namespaceURI;
+        if (ns4 && ns4 === ns4["rdf"]) {
           fetcher2.addStatus(options.req, "Has XML root element in the RDF namespace, so assume RDF/XML.");
           let rdfHandler = new RDFXMLHandler(this.response, dom);
           return rdfHandler.parse(fetcher2, responseText, options);
@@ -42923,8 +44082,8 @@ var Fetcher = class _Fetcher {
     for (const request of requests) {
       const response = kb.any(request, this.ns.link("response"), null, meta);
       if (response != void 0) {
-        const quad3 = kb.statementsMatching(response, this.ns.link("outOfDate"), true, meta);
-        kb.remove(quad3);
+        const quad4 = kb.statementsMatching(response, this.ns.link("outOfDate"), true, meta);
+        kb.remove(quad4);
         options.force = true;
         options.clearPreviousData = true;
       }
@@ -43047,13 +44206,13 @@ var Fetcher = class _Fetcher {
     let {
       actualProxyURI
     } = options;
-    return this._fetch(actualProxyURI, options).then((response) => this.handleResponse(response, docuri, options), (error) => {
+    return this._fetch(actualProxyURI, options).then((response) => this.handleResponse(response, docuri, options), (error2) => {
       let dummyResponse = {
         url: actualProxyURI,
         status: 999,
         // @@ what number/string should fetch failures report?
-        statusText: (error.name || "network failure") + ": " + (error.errno || error.code || error.type),
-        responseText: error.message,
+        statusText: (error2.name || "network failure") + ": " + (error2.errno || error2.code || error2.type),
+        responseText: error2.message,
         headers: new import_cross_fetch.Headers(),
         // Headers() ???
         ok: false,
@@ -43253,7 +44412,7 @@ var Fetcher = class _Fetcher {
             reject(err);
           } else {
             options.data = jsonString;
-            this.webOperation("PUT", uri, options).then((res) => resolve2(res)).catch((error) => reject(error));
+            this.webOperation("PUT", uri, options).then((res) => resolve2(res)).catch((error2) => reject(error2));
           }
         });
       });
@@ -43409,8 +44568,8 @@ var Fetcher = class _Fetcher {
    * @param rterm - the resource which referred to this
    *   (for tracking bad links)
    */
-  lookUpThing(term2, rterm) {
-    let uris = this.store.uris(term2);
+  lookUpThing(term3, rterm) {
+    let uris = this.store.uris(term3);
     uris = uris.map((u) => docpart(u));
     uris.forEach((u) => {
       this.lookedUp[u] = true;
@@ -43485,8 +44644,8 @@ var Fetcher = class _Fetcher {
     });
     return responseNode;
   }
-  objectRefresh(term2) {
-    let uris = this.store.uris(term2);
+  objectRefresh(term3) {
+    let uris = this.store.uris(term3);
     if (typeof uris !== "undefined") {
       for (let i = 0; i < uris.length; i++) {
         this.refresh(this.store.rdfFactory.namedNode(docpart(uris[i])));
@@ -43498,9 +44657,9 @@ var Fetcher = class _Fetcher {
   ** @param term - An RDF Named Node for the eodcument in question
   ** @param userCallback - A function userCallback(ok, message, response)
   */
-  refresh(term2, userCallback) {
+  refresh(term3, userCallback) {
     this.fireCallbacks("refresh", arguments);
-    this.nowOrWhenFetched(term2, {
+    this.nowOrWhenFetched(term3, {
       force: true,
       clearPreviousData: true
     }, userCallback);
@@ -43510,18 +44669,18 @@ var Fetcher = class _Fetcher {
   ** @param term - An RDF Named Node for the eodcument in question
   ** @param userCallback - A function userCallback(ok, message, response)
   */
-  refreshIfExpired(term2, userCallback) {
-    let exp = this.getHeader(term2, "Expires");
+  refreshIfExpired(term3, userCallback) {
+    let exp = this.getHeader(term3, "Expires");
     if (!exp || new Date(exp[0]).getTime() <= (/* @__PURE__ */ new Date()).getTime()) {
-      this.refresh(term2, userCallback);
+      this.refresh(term3, userCallback);
     } else {
       userCallback(true, "Not expired", {});
     }
   }
-  retract(term2) {
-    this.store.removeMany(void 0, void 0, void 0, term2);
-    if (term2.value) {
-      delete this.requested[docpart(term2.value)];
+  retract(term3) {
+    this.store.removeMany(void 0, void 0, void 0, term3);
+    if (term3.value) {
+      delete this.requested[docpart(term3.value)];
     }
     this.fireCallbacks("retract", arguments);
   }
@@ -43541,13 +44700,13 @@ var Fetcher = class _Fetcher {
   isPending(docuri) {
     return this.requested[docuri] === true;
   }
-  unload(term2) {
-    this.store.removeDocument(term2);
-    delete this.requested[term2.value];
+  unload(term3) {
+    this.store.removeDocument(term3);
+    delete this.requested[term3.value];
   }
-  addHandler(handler) {
-    this.handlers.push(handler);
-    handler.register(this);
+  addHandler(handler2) {
+    this.handlers.push(handler2);
+    handler2.register(this);
   }
   retryNoCredentials(docuri, options) {
     options.retriedWithNoCredentials = true;
@@ -43684,14 +44843,14 @@ var Fetcher = class _Fetcher {
       this.requested[absContentLocation] = true;
     }
     this.parseLinkHeader(headers.get("link"), options.original, reqNode);
-    let handler = this.handlerForContentType(contentType, response);
-    if (!handler) {
+    let handler2 = this.handlerForContentType(contentType, response);
+    if (!handler2) {
       this.addStatus(reqNode, "Fetch over. No data handled.");
       return this.doneFetch(options, response);
     }
     return response.text().then((responseText) => {
       response.responseText = responseText;
-      return handler.parse(this, responseText, options, response);
+      return handler2.parse(this, responseText, options, response);
     });
   }
   saveErrorResponse(response, responseNode) {
@@ -43706,8 +44865,8 @@ var Fetcher = class _Fetcher {
     if (!contentType) {
       return null;
     }
-    let Handler2 = this.handlers.find((handler) => {
-      return contentType.match(handler.pattern);
+    let Handler2 = this.handlers.find((handler2) => {
+      return contentType.match(handler2.pattern);
     });
     return Handler2 ? new Handler2(response) : null;
   }
@@ -44344,6 +45503,10027 @@ async function publishFeatured(publisher) {
 
 // lib/core/publisher/restore.mjs
 init_wire();
+
+// lib/core/as2.mjs
+var import_jsonld = __toESM(require_jsonld(), 1);
+init_wire();
+
+// lib/core/contexts/activitystreams.json
+var activitystreams_default = {
+  "@context": {
+    "@vocab": "_:",
+    xsd: "http://www.w3.org/2001/XMLSchema#",
+    as: "https://www.w3.org/ns/activitystreams#",
+    ldp: "http://www.w3.org/ns/ldp#",
+    vcard: "http://www.w3.org/2006/vcard/ns#",
+    id: "@id",
+    type: "@type",
+    Accept: "as:Accept",
+    Activity: "as:Activity",
+    IntransitiveActivity: "as:IntransitiveActivity",
+    Add: "as:Add",
+    Announce: "as:Announce",
+    Application: "as:Application",
+    Arrive: "as:Arrive",
+    Article: "as:Article",
+    Audio: "as:Audio",
+    Block: "as:Block",
+    Collection: "as:Collection",
+    CollectionPage: "as:CollectionPage",
+    Relationship: "as:Relationship",
+    Create: "as:Create",
+    Delete: "as:Delete",
+    Dislike: "as:Dislike",
+    Document: "as:Document",
+    Event: "as:Event",
+    Follow: "as:Follow",
+    Flag: "as:Flag",
+    Group: "as:Group",
+    Ignore: "as:Ignore",
+    Image: "as:Image",
+    Invite: "as:Invite",
+    Join: "as:Join",
+    Leave: "as:Leave",
+    Like: "as:Like",
+    Link: "as:Link",
+    Mention: "as:Mention",
+    Note: "as:Note",
+    Object: "as:Object",
+    Offer: "as:Offer",
+    OrderedCollection: "as:OrderedCollection",
+    OrderedCollectionPage: "as:OrderedCollectionPage",
+    Organization: "as:Organization",
+    Page: "as:Page",
+    Person: "as:Person",
+    Place: "as:Place",
+    Profile: "as:Profile",
+    Question: "as:Question",
+    Reject: "as:Reject",
+    Remove: "as:Remove",
+    Service: "as:Service",
+    TentativeAccept: "as:TentativeAccept",
+    TentativeReject: "as:TentativeReject",
+    Tombstone: "as:Tombstone",
+    Undo: "as:Undo",
+    Update: "as:Update",
+    Video: "as:Video",
+    View: "as:View",
+    Listen: "as:Listen",
+    Read: "as:Read",
+    Move: "as:Move",
+    Travel: "as:Travel",
+    IsFollowing: "as:IsFollowing",
+    IsFollowedBy: "as:IsFollowedBy",
+    IsContact: "as:IsContact",
+    IsMember: "as:IsMember",
+    subject: {
+      "@id": "as:subject",
+      "@type": "@id"
+    },
+    relationship: {
+      "@id": "as:relationship",
+      "@type": "@id"
+    },
+    actor: {
+      "@id": "as:actor",
+      "@type": "@id"
+    },
+    attributedTo: {
+      "@id": "as:attributedTo",
+      "@type": "@id"
+    },
+    attachment: {
+      "@id": "as:attachment",
+      "@type": "@id"
+    },
+    bcc: {
+      "@id": "as:bcc",
+      "@type": "@id"
+    },
+    bto: {
+      "@id": "as:bto",
+      "@type": "@id"
+    },
+    cc: {
+      "@id": "as:cc",
+      "@type": "@id"
+    },
+    context: {
+      "@id": "as:context",
+      "@type": "@id"
+    },
+    current: {
+      "@id": "as:current",
+      "@type": "@id"
+    },
+    first: {
+      "@id": "as:first",
+      "@type": "@id"
+    },
+    generator: {
+      "@id": "as:generator",
+      "@type": "@id"
+    },
+    icon: {
+      "@id": "as:icon",
+      "@type": "@id"
+    },
+    image: {
+      "@id": "as:image",
+      "@type": "@id"
+    },
+    inReplyTo: {
+      "@id": "as:inReplyTo",
+      "@type": "@id"
+    },
+    items: {
+      "@id": "as:items",
+      "@type": "@id"
+    },
+    instrument: {
+      "@id": "as:instrument",
+      "@type": "@id"
+    },
+    orderedItems: {
+      "@id": "as:items",
+      "@type": "@id",
+      "@container": "@list"
+    },
+    last: {
+      "@id": "as:last",
+      "@type": "@id"
+    },
+    location: {
+      "@id": "as:location",
+      "@type": "@id"
+    },
+    next: {
+      "@id": "as:next",
+      "@type": "@id"
+    },
+    object: {
+      "@id": "as:object",
+      "@type": "@id"
+    },
+    oneOf: {
+      "@id": "as:oneOf",
+      "@type": "@id"
+    },
+    anyOf: {
+      "@id": "as:anyOf",
+      "@type": "@id"
+    },
+    closed: {
+      "@id": "as:closed",
+      "@type": "xsd:dateTime"
+    },
+    origin: {
+      "@id": "as:origin",
+      "@type": "@id"
+    },
+    accuracy: {
+      "@id": "as:accuracy",
+      "@type": "xsd:float"
+    },
+    prev: {
+      "@id": "as:prev",
+      "@type": "@id"
+    },
+    preview: {
+      "@id": "as:preview",
+      "@type": "@id"
+    },
+    replies: {
+      "@id": "as:replies",
+      "@type": "@id"
+    },
+    result: {
+      "@id": "as:result",
+      "@type": "@id"
+    },
+    audience: {
+      "@id": "as:audience",
+      "@type": "@id"
+    },
+    partOf: {
+      "@id": "as:partOf",
+      "@type": "@id"
+    },
+    tag: {
+      "@id": "as:tag",
+      "@type": "@id"
+    },
+    target: {
+      "@id": "as:target",
+      "@type": "@id"
+    },
+    to: {
+      "@id": "as:to",
+      "@type": "@id"
+    },
+    url: {
+      "@id": "as:url",
+      "@type": "@id"
+    },
+    altitude: {
+      "@id": "as:altitude",
+      "@type": "xsd:float"
+    },
+    content: "as:content",
+    contentMap: {
+      "@id": "as:content",
+      "@container": "@language"
+    },
+    name: "as:name",
+    nameMap: {
+      "@id": "as:name",
+      "@container": "@language"
+    },
+    duration: {
+      "@id": "as:duration",
+      "@type": "xsd:duration"
+    },
+    endTime: {
+      "@id": "as:endTime",
+      "@type": "xsd:dateTime"
+    },
+    height: {
+      "@id": "as:height",
+      "@type": "xsd:nonNegativeInteger"
+    },
+    href: {
+      "@id": "as:href",
+      "@type": "@id"
+    },
+    hreflang: "as:hreflang",
+    latitude: {
+      "@id": "as:latitude",
+      "@type": "xsd:float"
+    },
+    longitude: {
+      "@id": "as:longitude",
+      "@type": "xsd:float"
+    },
+    mediaType: "as:mediaType",
+    published: {
+      "@id": "as:published",
+      "@type": "xsd:dateTime"
+    },
+    radius: {
+      "@id": "as:radius",
+      "@type": "xsd:float"
+    },
+    rel: "as:rel",
+    startIndex: {
+      "@id": "as:startIndex",
+      "@type": "xsd:nonNegativeInteger"
+    },
+    startTime: {
+      "@id": "as:startTime",
+      "@type": "xsd:dateTime"
+    },
+    summary: "as:summary",
+    summaryMap: {
+      "@id": "as:summary",
+      "@container": "@language"
+    },
+    totalItems: {
+      "@id": "as:totalItems",
+      "@type": "xsd:nonNegativeInteger"
+    },
+    units: "as:units",
+    updated: {
+      "@id": "as:updated",
+      "@type": "xsd:dateTime"
+    },
+    width: {
+      "@id": "as:width",
+      "@type": "xsd:nonNegativeInteger"
+    },
+    describes: {
+      "@id": "as:describes",
+      "@type": "@id"
+    },
+    formerType: {
+      "@id": "as:formerType",
+      "@type": "@id"
+    },
+    deleted: {
+      "@id": "as:deleted",
+      "@type": "xsd:dateTime"
+    },
+    inbox: {
+      "@id": "ldp:inbox",
+      "@type": "@id"
+    },
+    outbox: {
+      "@id": "as:outbox",
+      "@type": "@id"
+    },
+    following: {
+      "@id": "as:following",
+      "@type": "@id"
+    },
+    followers: {
+      "@id": "as:followers",
+      "@type": "@id"
+    },
+    streams: {
+      "@id": "as:streams",
+      "@type": "@id"
+    },
+    preferredUsername: "as:preferredUsername",
+    endpoints: {
+      "@id": "as:endpoints",
+      "@type": "@id"
+    },
+    uploadMedia: {
+      "@id": "as:uploadMedia",
+      "@type": "@id"
+    },
+    proxyUrl: {
+      "@id": "as:proxyUrl",
+      "@type": "@id"
+    },
+    liked: {
+      "@id": "as:liked",
+      "@type": "@id"
+    },
+    oauthAuthorizationEndpoint: {
+      "@id": "as:oauthAuthorizationEndpoint",
+      "@type": "@id"
+    },
+    oauthTokenEndpoint: {
+      "@id": "as:oauthTokenEndpoint",
+      "@type": "@id"
+    },
+    provideClientKey: {
+      "@id": "as:provideClientKey",
+      "@type": "@id"
+    },
+    signClientKey: {
+      "@id": "as:signClientKey",
+      "@type": "@id"
+    },
+    sharedInbox: {
+      "@id": "as:sharedInbox",
+      "@type": "@id"
+    },
+    Public: {
+      "@id": "as:Public",
+      "@type": "@id"
+    },
+    source: "as:source",
+    likes: {
+      "@id": "as:likes",
+      "@type": "@id"
+    },
+    shares: {
+      "@id": "as:shares",
+      "@type": "@id"
+    },
+    alsoKnownAs: {
+      "@id": "as:alsoKnownAs",
+      "@type": "@id"
+    }
+  }
+};
+
+// lib/core/contexts/security-v1.json
+var security_v1_default = {
+  "@context": {
+    id: "@id",
+    type: "@type",
+    dc: "http://purl.org/dc/terms/",
+    sec: "https://w3id.org/security#",
+    xsd: "http://www.w3.org/2001/XMLSchema#",
+    EcdsaKoblitzSignature2016: "sec:EcdsaKoblitzSignature2016",
+    Ed25519Signature2018: "sec:Ed25519Signature2018",
+    EncryptedMessage: "sec:EncryptedMessage",
+    GraphSignature2012: "sec:GraphSignature2012",
+    LinkedDataSignature2015: "sec:LinkedDataSignature2015",
+    LinkedDataSignature2016: "sec:LinkedDataSignature2016",
+    CryptographicKey: "sec:Key",
+    authenticationTag: "sec:authenticationTag",
+    canonicalizationAlgorithm: "sec:canonicalizationAlgorithm",
+    cipherAlgorithm: "sec:cipherAlgorithm",
+    cipherData: "sec:cipherData",
+    cipherKey: "sec:cipherKey",
+    created: {
+      "@id": "dc:created",
+      "@type": "xsd:dateTime"
+    },
+    creator: {
+      "@id": "dc:creator",
+      "@type": "@id"
+    },
+    digestAlgorithm: "sec:digestAlgorithm",
+    digestValue: "sec:digestValue",
+    domain: "sec:domain",
+    encryptionKey: "sec:encryptionKey",
+    expiration: {
+      "@id": "sec:expiration",
+      "@type": "xsd:dateTime"
+    },
+    expires: {
+      "@id": "sec:expiration",
+      "@type": "xsd:dateTime"
+    },
+    initializationVector: "sec:initializationVector",
+    iterationCount: "sec:iterationCount",
+    nonce: "sec:nonce",
+    normalizationAlgorithm: "sec:normalizationAlgorithm",
+    owner: {
+      "@id": "sec:owner",
+      "@type": "@id"
+    },
+    password: "sec:password",
+    privateKey: {
+      "@id": "sec:privateKey",
+      "@type": "@id"
+    },
+    privateKeyPem: "sec:privateKeyPem",
+    publicKey: {
+      "@id": "sec:publicKey",
+      "@type": "@id"
+    },
+    publicKeyBase58: "sec:publicKeyBase58",
+    publicKeyPem: "sec:publicKeyPem",
+    publicKeyWif: "sec:publicKeyWif",
+    publicKeyService: {
+      "@id": "sec:publicKeyService",
+      "@type": "@id"
+    },
+    revoked: {
+      "@id": "sec:revoked",
+      "@type": "xsd:dateTime"
+    },
+    salt: "sec:salt",
+    signature: "sec:signature",
+    signatureAlgorithm: "sec:signingAlgorithm",
+    signatureValue: "sec:signatureValue"
+  }
+};
+
+// lib/core/contexts/security-data-integrity-v1.json
+var security_data_integrity_v1_default = {
+  "@context": {
+    id: "@id",
+    type: "@type",
+    "@protected": true,
+    digestMultibase: {
+      "@id": "https://w3id.org/security#digestMultibase",
+      "@type": "https://w3id.org/security#multibase"
+    },
+    proof: {
+      "@id": "https://w3id.org/security#proof",
+      "@type": "@id",
+      "@container": "@graph"
+    },
+    DataIntegrityProof: {
+      "@id": "https://w3id.org/security#DataIntegrityProof",
+      "@context": {
+        "@protected": true,
+        id: "@id",
+        type: "@type",
+        challenge: "https://w3id.org/security#challenge",
+        created: {
+          "@id": "http://purl.org/dc/terms/created",
+          "@type": "http://www.w3.org/2001/XMLSchema#dateTime"
+        },
+        domain: "https://w3id.org/security#domain",
+        expires: {
+          "@id": "https://w3id.org/security#expiration",
+          "@type": "http://www.w3.org/2001/XMLSchema#dateTime"
+        },
+        nonce: "https://w3id.org/security#nonce",
+        proofPurpose: {
+          "@id": "https://w3id.org/security#proofPurpose",
+          "@type": "@vocab",
+          "@context": {
+            "@protected": true,
+            id: "@id",
+            type: "@type",
+            assertionMethod: {
+              "@id": "https://w3id.org/security#assertionMethod",
+              "@type": "@id",
+              "@container": "@set"
+            },
+            authentication: {
+              "@id": "https://w3id.org/security#authenticationMethod",
+              "@type": "@id",
+              "@container": "@set"
+            },
+            capabilityInvocation: {
+              "@id": "https://w3id.org/security#capabilityInvocationMethod",
+              "@type": "@id",
+              "@container": "@set"
+            },
+            capabilityDelegation: {
+              "@id": "https://w3id.org/security#capabilityDelegationMethod",
+              "@type": "@id",
+              "@container": "@set"
+            },
+            keyAgreement: {
+              "@id": "https://w3id.org/security#keyAgreementMethod",
+              "@type": "@id",
+              "@container": "@set"
+            }
+          }
+        },
+        cryptosuite: "https://w3id.org/security#cryptosuite",
+        proofValue: {
+          "@id": "https://w3id.org/security#proofValue",
+          "@type": "https://w3id.org/security#multibase"
+        },
+        verificationMethod: {
+          "@id": "https://w3id.org/security#verificationMethod",
+          "@type": "@id"
+        }
+      }
+    }
+  }
+};
+
+// lib/core/contexts/security-data-integrity-v2.json
+var security_data_integrity_v2_default = {
+  "@context": {
+    id: "@id",
+    type: "@type",
+    "@protected": true,
+    proof: {
+      "@id": "https://w3id.org/security#proof",
+      "@type": "@id",
+      "@container": "@graph"
+    },
+    DataIntegrityProof: {
+      "@id": "https://w3id.org/security#DataIntegrityProof",
+      "@context": {
+        "@protected": true,
+        id: "@id",
+        type: "@type",
+        challenge: "https://w3id.org/security#challenge",
+        created: {
+          "@id": "http://purl.org/dc/terms/created",
+          "@type": "http://www.w3.org/2001/XMLSchema#dateTime"
+        },
+        domain: "https://w3id.org/security#domain",
+        expires: {
+          "@id": "https://w3id.org/security#expiration",
+          "@type": "http://www.w3.org/2001/XMLSchema#dateTime"
+        },
+        nonce: "https://w3id.org/security#nonce",
+        previousProof: {
+          "@id": "https://w3id.org/security#previousProof",
+          "@type": "@id"
+        },
+        proofPurpose: {
+          "@id": "https://w3id.org/security#proofPurpose",
+          "@type": "@vocab",
+          "@context": {
+            "@protected": true,
+            id: "@id",
+            type: "@type",
+            assertionMethod: {
+              "@id": "https://w3id.org/security#assertionMethod",
+              "@type": "@id",
+              "@container": "@set"
+            },
+            authentication: {
+              "@id": "https://w3id.org/security#authenticationMethod",
+              "@type": "@id",
+              "@container": "@set"
+            },
+            capabilityInvocation: {
+              "@id": "https://w3id.org/security#capabilityInvocationMethod",
+              "@type": "@id",
+              "@container": "@set"
+            },
+            capabilityDelegation: {
+              "@id": "https://w3id.org/security#capabilityDelegationMethod",
+              "@type": "@id",
+              "@container": "@set"
+            },
+            keyAgreement: {
+              "@id": "https://w3id.org/security#keyAgreementMethod",
+              "@type": "@id",
+              "@container": "@set"
+            }
+          }
+        },
+        cryptosuite: {
+          "@id": "https://w3id.org/security#cryptosuite",
+          "@type": "https://w3id.org/security#cryptosuiteString"
+        },
+        proofValue: {
+          "@id": "https://w3id.org/security#proofValue",
+          "@type": "https://w3id.org/security#multibase"
+        },
+        verificationMethod: {
+          "@id": "https://w3id.org/security#verificationMethod",
+          "@type": "@id"
+        }
+      }
+    }
+  }
+};
+
+// lib/core/contexts/did-v1.json
+var did_v1_default = {
+  "@context": {
+    "@protected": true,
+    id: "@id",
+    type: "@type",
+    alsoKnownAs: {
+      "@id": "https://www.w3.org/ns/activitystreams#alsoKnownAs",
+      "@type": "@id"
+    },
+    assertionMethod: {
+      "@id": "https://w3id.org/security#assertionMethod",
+      "@type": "@id",
+      "@container": "@set"
+    },
+    authentication: {
+      "@id": "https://w3id.org/security#authenticationMethod",
+      "@type": "@id",
+      "@container": "@set"
+    },
+    capabilityDelegation: {
+      "@id": "https://w3id.org/security#capabilityDelegationMethod",
+      "@type": "@id",
+      "@container": "@set"
+    },
+    capabilityInvocation: {
+      "@id": "https://w3id.org/security#capabilityInvocationMethod",
+      "@type": "@id",
+      "@container": "@set"
+    },
+    controller: {
+      "@id": "https://w3id.org/security#controller",
+      "@type": "@id"
+    },
+    keyAgreement: {
+      "@id": "https://w3id.org/security#keyAgreementMethod",
+      "@type": "@id",
+      "@container": "@set"
+    },
+    service: {
+      "@id": "https://www.w3.org/ns/did#service",
+      "@type": "@id",
+      "@context": {
+        "@protected": true,
+        id: "@id",
+        type: "@type",
+        serviceEndpoint: {
+          "@id": "https://www.w3.org/ns/did#serviceEndpoint",
+          "@type": "@id"
+        }
+      }
+    },
+    verificationMethod: {
+      "@id": "https://w3id.org/security#verificationMethod",
+      "@type": "@id"
+    }
+  }
+};
+
+// lib/core/contexts/security-multikey-v1.json
+var security_multikey_v1_default = {
+  "@context": {
+    id: "@id",
+    type: "@type",
+    "@protected": true,
+    Multikey: {
+      "@id": "https://w3id.org/security#Multikey",
+      "@context": {
+        "@protected": true,
+        id: "@id",
+        type: "@type",
+        controller: {
+          "@id": "https://w3id.org/security#controller",
+          "@type": "@id"
+        },
+        revoked: {
+          "@id": "https://w3id.org/security#revoked",
+          "@type": "http://www.w3.org/2001/XMLSchema#dateTime"
+        },
+        expires: {
+          "@id": "https://w3id.org/security#expiration",
+          "@type": "http://www.w3.org/2001/XMLSchema#dateTime"
+        },
+        publicKeyMultibase: {
+          "@id": "https://w3id.org/security#publicKeyMultibase",
+          "@type": "https://w3id.org/security#multibase"
+        },
+        secretKeyMultibase: {
+          "@id": "https://w3id.org/security#secretKeyMultibase",
+          "@type": "https://w3id.org/security#multibase"
+        }
+      }
+    }
+  }
+};
+
+// lib/core/contexts/identity-v1.json
+var identity_v1_default = {
+  "@context": {
+    id: "@id",
+    type: "@type",
+    cred: "https://w3id.org/credentials#",
+    dc: "http://purl.org/dc/terms/",
+    identity: "https://w3id.org/identity#",
+    perm: "https://w3id.org/permissions#",
+    ps: "https://w3id.org/payswarm#",
+    rdf: "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
+    rdfs: "http://www.w3.org/2000/01/rdf-schema#",
+    sec: "https://w3id.org/security#",
+    schema: "http://schema.org/",
+    xsd: "http://www.w3.org/2001/XMLSchema#",
+    Group: "https://www.w3.org/ns/activitystreams#Group",
+    claim: {
+      "@id": "cred:claim",
+      "@type": "@id"
+    },
+    credential: {
+      "@id": "cred:credential",
+      "@type": "@id"
+    },
+    issued: {
+      "@id": "cred:issued",
+      "@type": "xsd:dateTime"
+    },
+    issuer: {
+      "@id": "cred:issuer",
+      "@type": "@id"
+    },
+    recipient: {
+      "@id": "cred:recipient",
+      "@type": "@id"
+    },
+    Credential: "cred:Credential",
+    CryptographicKeyCredential: "cred:CryptographicKeyCredential",
+    about: {
+      "@id": "schema:about",
+      "@type": "@id"
+    },
+    address: {
+      "@id": "schema:address",
+      "@type": "@id"
+    },
+    addressCountry: "schema:addressCountry",
+    addressLocality: "schema:addressLocality",
+    addressRegion: "schema:addressRegion",
+    comment: "rdfs:comment",
+    created: {
+      "@id": "dc:created",
+      "@type": "xsd:dateTime"
+    },
+    creator: {
+      "@id": "dc:creator",
+      "@type": "@id"
+    },
+    description: "schema:description",
+    email: "schema:email",
+    familyName: "schema:familyName",
+    givenName: "schema:givenName",
+    image: {
+      "@id": "schema:image",
+      "@type": "@id"
+    },
+    label: "rdfs:label",
+    name: "schema:name",
+    postalCode: "schema:postalCode",
+    streetAddress: "schema:streetAddress",
+    title: "dc:title",
+    url: {
+      "@id": "schema:url",
+      "@type": "@id"
+    },
+    Person: "schema:Person",
+    PostalAddress: "schema:PostalAddress",
+    Organization: "schema:Organization",
+    identityService: {
+      "@id": "identity:identityService",
+      "@type": "@id"
+    },
+    idp: {
+      "@id": "identity:idp",
+      "@type": "@id"
+    },
+    Identity: "identity:Identity",
+    paymentProcessor: "ps:processor",
+    preferences: {
+      "@id": "ps:preferences",
+      "@type": "@vocab"
+    },
+    cipherAlgorithm: "sec:cipherAlgorithm",
+    cipherData: "sec:cipherData",
+    cipherKey: "sec:cipherKey",
+    digestAlgorithm: "sec:digestAlgorithm",
+    digestValue: "sec:digestValue",
+    domain: "sec:domain",
+    expires: {
+      "@id": "sec:expiration",
+      "@type": "xsd:dateTime"
+    },
+    initializationVector: "sec:initializationVector",
+    member: {
+      "@id": "schema:member",
+      "@type": "@id"
+    },
+    memberOf: {
+      "@id": "schema:memberOf",
+      "@type": "@id"
+    },
+    nonce: "sec:nonce",
+    normalizationAlgorithm: "sec:normalizationAlgorithm",
+    owner: {
+      "@id": "sec:owner",
+      "@type": "@id"
+    },
+    password: "sec:password",
+    privateKey: {
+      "@id": "sec:privateKey",
+      "@type": "@id"
+    },
+    privateKeyPem: "sec:privateKeyPem",
+    publicKey: {
+      "@id": "sec:publicKey",
+      "@type": "@id"
+    },
+    publicKeyPem: "sec:publicKeyPem",
+    publicKeyService: {
+      "@id": "sec:publicKeyService",
+      "@type": "@id"
+    },
+    revoked: {
+      "@id": "sec:revoked",
+      "@type": "xsd:dateTime"
+    },
+    signature: "sec:signature",
+    signatureAlgorithm: "sec:signatureAlgorithm",
+    signatureValue: "sec:signatureValue",
+    CryptographicKey: "sec:Key",
+    EncryptedMessage: "sec:EncryptedMessage",
+    GraphSignature2012: "sec:GraphSignature2012",
+    LinkedDataSignature2015: "sec:LinkedDataSignature2015",
+    accessControl: {
+      "@id": "perm:accessControl",
+      "@type": "@id"
+    },
+    writePermission: {
+      "@id": "perm:writePermission",
+      "@type": "@id"
+    }
+  }
+};
+
+// lib/core/contexts/webfinger.json
+var webfinger_default = {
+  "@context": {
+    wf: "https://purl.archive.org/socialweb/webfinger#",
+    xsd: "http://www.w3.org/2001/XMLSchema#",
+    webfinger: {
+      "@id": "wf:webfinger",
+      "@type": "xsd:string"
+    }
+  }
+};
+
+// lib/core/contexts/schemaorg.json
+var schemaorg_default = {
+  "@context": {
+    type: "@type",
+    id: "@id",
+    HTML: {
+      "@id": "rdf:HTML"
+    },
+    "@vocab": "http://schema.org/",
+    csvw: "http://www.w3.org/ns/csvw#",
+    dc: "http://purl.org/dc/elements/1.1/",
+    dcat: "http://www.w3.org/ns/dcat#",
+    dcmitype: "http://purl.org/dc/dcmitype/",
+    dcterms: "http://purl.org/dc/terms/",
+    dcam: "http://purl.org/dc/dcam/",
+    doap: "http://usefulinc.com/ns/doap#",
+    foaf: "http://xmlns.com/foaf/0.1/",
+    odrl: "http://www.w3.org/ns/odrl/2/",
+    org: "http://www.w3.org/ns/org#",
+    owl: "http://www.w3.org/2002/07/owl#",
+    prof: "http://www.w3.org/ns/dx/prof/",
+    prov: "http://www.w3.org/ns/prov#",
+    qb: "http://purl.org/linked-data/cube#",
+    rdf: "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
+    rdfs: "http://www.w3.org/2000/01/rdf-schema#",
+    schema: "http://schema.org/",
+    sh: "http://www.w3.org/ns/shacl#",
+    skos: "http://www.w3.org/2004/02/skos/core#",
+    sosa: "http://www.w3.org/ns/sosa/",
+    ssn: "http://www.w3.org/ns/ssn/",
+    time: "http://www.w3.org/2006/time#",
+    vann: "http://purl.org/vocab/vann/",
+    void: "http://rdfs.org/ns/void#",
+    xsd: "http://www.w3.org/2001/XMLSchema#",
+    xml: "http://www.w3.org/XML/1998/namespace",
+    dct: "http://purl.org/dc/terms/",
+    dctype: "http://purl.org/dc/dcmitype/",
+    "3DModel": {
+      "@id": "schema:3DModel"
+    },
+    AMRadioChannel: {
+      "@id": "schema:AMRadioChannel"
+    },
+    APIReference: {
+      "@id": "schema:APIReference"
+    },
+    Abdomen: {
+      "@id": "schema:Abdomen"
+    },
+    AboutPage: {
+      "@id": "schema:AboutPage"
+    },
+    AcceptAction: {
+      "@id": "schema:AcceptAction"
+    },
+    Accommodation: {
+      "@id": "schema:Accommodation"
+    },
+    AccountingService: {
+      "@id": "schema:AccountingService"
+    },
+    AchieveAction: {
+      "@id": "schema:AchieveAction"
+    },
+    Action: {
+      "@id": "schema:Action"
+    },
+    ActionAccessSpecification: {
+      "@id": "schema:ActionAccessSpecification"
+    },
+    ActionStatusType: {
+      "@id": "schema:ActionStatusType"
+    },
+    ActivateAction: {
+      "@id": "schema:ActivateAction"
+    },
+    ActivationFee: {
+      "@id": "schema:ActivationFee"
+    },
+    ActiveActionStatus: {
+      "@id": "schema:ActiveActionStatus"
+    },
+    ActiveNotRecruiting: {
+      "@id": "schema:ActiveNotRecruiting"
+    },
+    AddAction: {
+      "@id": "schema:AddAction"
+    },
+    AdministrativeArea: {
+      "@id": "schema:AdministrativeArea"
+    },
+    AdultEntertainment: {
+      "@id": "schema:AdultEntertainment"
+    },
+    AdultOrientedEnumeration: {
+      "@id": "schema:AdultOrientedEnumeration"
+    },
+    AdvertiserContentArticle: {
+      "@id": "schema:AdvertiserContentArticle"
+    },
+    AerobicActivity: {
+      "@id": "schema:AerobicActivity"
+    },
+    AggregateOffer: {
+      "@id": "schema:AggregateOffer"
+    },
+    AggregateRating: {
+      "@id": "schema:AggregateRating"
+    },
+    AgreeAction: {
+      "@id": "schema:AgreeAction"
+    },
+    Airline: {
+      "@id": "schema:Airline"
+    },
+    Airport: {
+      "@id": "schema:Airport"
+    },
+    AlbumRelease: {
+      "@id": "schema:AlbumRelease"
+    },
+    AlcoholConsideration: {
+      "@id": "schema:AlcoholConsideration"
+    },
+    AlgorithmicMediaDigitalSource: {
+      "@id": "schema:AlgorithmicMediaDigitalSource"
+    },
+    AlgorithmicallyEnhancedDigitalSource: {
+      "@id": "schema:AlgorithmicallyEnhancedDigitalSource"
+    },
+    AlignmentObject: {
+      "@id": "schema:AlignmentObject"
+    },
+    AllWheelDriveConfiguration: {
+      "@id": "schema:AllWheelDriveConfiguration"
+    },
+    AllergiesHealthAspect: {
+      "@id": "schema:AllergiesHealthAspect"
+    },
+    AllocateAction: {
+      "@id": "schema:AllocateAction"
+    },
+    AmpStory: {
+      "@id": "schema:AmpStory"
+    },
+    AmusementPark: {
+      "@id": "schema:AmusementPark"
+    },
+    AnaerobicActivity: {
+      "@id": "schema:AnaerobicActivity"
+    },
+    AnalysisNewsArticle: {
+      "@id": "schema:AnalysisNewsArticle"
+    },
+    AnatomicalStructure: {
+      "@id": "schema:AnatomicalStructure"
+    },
+    AnatomicalSystem: {
+      "@id": "schema:AnatomicalSystem"
+    },
+    AndroidPlatform: {
+      "@id": "schema:AndroidPlatform"
+    },
+    Anesthesia: {
+      "@id": "schema:Anesthesia"
+    },
+    AnimalShelter: {
+      "@id": "schema:AnimalShelter"
+    },
+    Answer: {
+      "@id": "schema:Answer"
+    },
+    Apartment: {
+      "@id": "schema:Apartment"
+    },
+    ApartmentComplex: {
+      "@id": "schema:ApartmentComplex"
+    },
+    Appearance: {
+      "@id": "schema:Appearance"
+    },
+    AppendAction: {
+      "@id": "schema:AppendAction"
+    },
+    ApplyAction: {
+      "@id": "schema:ApplyAction"
+    },
+    ApprovedIndication: {
+      "@id": "schema:ApprovedIndication"
+    },
+    Aquarium: {
+      "@id": "schema:Aquarium"
+    },
+    ArchiveComponent: {
+      "@id": "schema:ArchiveComponent"
+    },
+    ArchiveOrganization: {
+      "@id": "schema:ArchiveOrganization"
+    },
+    ArriveAction: {
+      "@id": "schema:ArriveAction"
+    },
+    ArtGallery: {
+      "@id": "schema:ArtGallery"
+    },
+    Artery: {
+      "@id": "schema:Artery"
+    },
+    Article: {
+      "@id": "schema:Article"
+    },
+    AskAction: {
+      "@id": "schema:AskAction"
+    },
+    AskPublicNewsArticle: {
+      "@id": "schema:AskPublicNewsArticle"
+    },
+    AssessAction: {
+      "@id": "schema:AssessAction"
+    },
+    AssignAction: {
+      "@id": "schema:AssignAction"
+    },
+    Atlas: {
+      "@id": "schema:Atlas"
+    },
+    Attorney: {
+      "@id": "schema:Attorney"
+    },
+    Audience: {
+      "@id": "schema:Audience"
+    },
+    AudioObject: {
+      "@id": "schema:AudioObject"
+    },
+    AudioObjectSnapshot: {
+      "@id": "schema:AudioObjectSnapshot"
+    },
+    Audiobook: {
+      "@id": "schema:Audiobook"
+    },
+    AudiobookFormat: {
+      "@id": "schema:AudiobookFormat"
+    },
+    AuthoritativeLegalValue: {
+      "@id": "schema:AuthoritativeLegalValue"
+    },
+    AuthorizeAction: {
+      "@id": "schema:AuthorizeAction"
+    },
+    AutoBodyShop: {
+      "@id": "schema:AutoBodyShop"
+    },
+    AutoDealer: {
+      "@id": "schema:AutoDealer"
+    },
+    AutoPartsStore: {
+      "@id": "schema:AutoPartsStore"
+    },
+    AutoRental: {
+      "@id": "schema:AutoRental"
+    },
+    AutoRepair: {
+      "@id": "schema:AutoRepair"
+    },
+    AutoWash: {
+      "@id": "schema:AutoWash"
+    },
+    AutomatedTeller: {
+      "@id": "schema:AutomatedTeller"
+    },
+    AutomotiveBusiness: {
+      "@id": "schema:AutomotiveBusiness"
+    },
+    Ayurvedic: {
+      "@id": "schema:Ayurvedic"
+    },
+    BackOrder: {
+      "@id": "schema:BackOrder"
+    },
+    BackgroundNewsArticle: {
+      "@id": "schema:BackgroundNewsArticle"
+    },
+    Bacteria: {
+      "@id": "schema:Bacteria"
+    },
+    Bakery: {
+      "@id": "schema:Bakery"
+    },
+    Balance: {
+      "@id": "schema:Balance"
+    },
+    BankAccount: {
+      "@id": "schema:BankAccount"
+    },
+    BankOrCreditUnion: {
+      "@id": "schema:BankOrCreditUnion"
+    },
+    BarOrPub: {
+      "@id": "schema:BarOrPub"
+    },
+    Barcode: {
+      "@id": "schema:Barcode"
+    },
+    BasicIncome: {
+      "@id": "schema:BasicIncome"
+    },
+    Beach: {
+      "@id": "schema:Beach"
+    },
+    BeautySalon: {
+      "@id": "schema:BeautySalon"
+    },
+    BedAndBreakfast: {
+      "@id": "schema:BedAndBreakfast"
+    },
+    BedDetails: {
+      "@id": "schema:BedDetails"
+    },
+    BedType: {
+      "@id": "schema:BedType"
+    },
+    BefriendAction: {
+      "@id": "schema:BefriendAction"
+    },
+    BenefitsHealthAspect: {
+      "@id": "schema:BenefitsHealthAspect"
+    },
+    BikeStore: {
+      "@id": "schema:BikeStore"
+    },
+    BioChemEntity: {
+      "@id": "schema:BioChemEntity"
+    },
+    Blog: {
+      "@id": "schema:Blog"
+    },
+    BlogPosting: {
+      "@id": "schema:BlogPosting"
+    },
+    BloodTest: {
+      "@id": "schema:BloodTest"
+    },
+    BoardingPolicyType: {
+      "@id": "schema:BoardingPolicyType"
+    },
+    BoatReservation: {
+      "@id": "schema:BoatReservation"
+    },
+    BoatTerminal: {
+      "@id": "schema:BoatTerminal"
+    },
+    BoatTrip: {
+      "@id": "schema:BoatTrip"
+    },
+    BodyMeasurementArm: {
+      "@id": "schema:BodyMeasurementArm"
+    },
+    BodyMeasurementBust: {
+      "@id": "schema:BodyMeasurementBust"
+    },
+    BodyMeasurementChest: {
+      "@id": "schema:BodyMeasurementChest"
+    },
+    BodyMeasurementFoot: {
+      "@id": "schema:BodyMeasurementFoot"
+    },
+    BodyMeasurementHand: {
+      "@id": "schema:BodyMeasurementHand"
+    },
+    BodyMeasurementHead: {
+      "@id": "schema:BodyMeasurementHead"
+    },
+    BodyMeasurementHeight: {
+      "@id": "schema:BodyMeasurementHeight"
+    },
+    BodyMeasurementHips: {
+      "@id": "schema:BodyMeasurementHips"
+    },
+    BodyMeasurementInsideLeg: {
+      "@id": "schema:BodyMeasurementInsideLeg"
+    },
+    BodyMeasurementNeck: {
+      "@id": "schema:BodyMeasurementNeck"
+    },
+    BodyMeasurementTypeEnumeration: {
+      "@id": "schema:BodyMeasurementTypeEnumeration"
+    },
+    BodyMeasurementUnderbust: {
+      "@id": "schema:BodyMeasurementUnderbust"
+    },
+    BodyMeasurementWaist: {
+      "@id": "schema:BodyMeasurementWaist"
+    },
+    BodyMeasurementWeight: {
+      "@id": "schema:BodyMeasurementWeight"
+    },
+    BodyOfWater: {
+      "@id": "schema:BodyOfWater"
+    },
+    Bone: {
+      "@id": "schema:Bone"
+    },
+    Book: {
+      "@id": "schema:Book"
+    },
+    BookFormatType: {
+      "@id": "schema:BookFormatType"
+    },
+    BookSeries: {
+      "@id": "schema:BookSeries"
+    },
+    BookStore: {
+      "@id": "schema:BookStore"
+    },
+    BookmarkAction: {
+      "@id": "schema:BookmarkAction"
+    },
+    Boolean: {
+      "@id": "schema:Boolean"
+    },
+    BorrowAction: {
+      "@id": "schema:BorrowAction"
+    },
+    BowlingAlley: {
+      "@id": "schema:BowlingAlley"
+    },
+    BrainStructure: {
+      "@id": "schema:BrainStructure"
+    },
+    Brand: {
+      "@id": "schema:Brand"
+    },
+    BreadcrumbList: {
+      "@id": "schema:BreadcrumbList"
+    },
+    Brewery: {
+      "@id": "schema:Brewery"
+    },
+    Bridge: {
+      "@id": "schema:Bridge"
+    },
+    BroadcastChannel: {
+      "@id": "schema:BroadcastChannel"
+    },
+    BroadcastEvent: {
+      "@id": "schema:BroadcastEvent"
+    },
+    BroadcastFrequencySpecification: {
+      "@id": "schema:BroadcastFrequencySpecification"
+    },
+    BroadcastRelease: {
+      "@id": "schema:BroadcastRelease"
+    },
+    BroadcastService: {
+      "@id": "schema:BroadcastService"
+    },
+    BrokerageAccount: {
+      "@id": "schema:BrokerageAccount"
+    },
+    BuddhistTemple: {
+      "@id": "schema:BuddhistTemple"
+    },
+    BusOrCoach: {
+      "@id": "schema:BusOrCoach"
+    },
+    BusReservation: {
+      "@id": "schema:BusReservation"
+    },
+    BusStation: {
+      "@id": "schema:BusStation"
+    },
+    BusStop: {
+      "@id": "schema:BusStop"
+    },
+    BusTrip: {
+      "@id": "schema:BusTrip"
+    },
+    BusinessAudience: {
+      "@id": "schema:BusinessAudience"
+    },
+    BusinessEntityType: {
+      "@id": "schema:BusinessEntityType"
+    },
+    BusinessEvent: {
+      "@id": "schema:BusinessEvent"
+    },
+    BusinessFunction: {
+      "@id": "schema:BusinessFunction"
+    },
+    BusinessSupport: {
+      "@id": "schema:BusinessSupport"
+    },
+    BuyAction: {
+      "@id": "schema:BuyAction"
+    },
+    ByBankTransferInAdvance: {
+      "@id": "schema:ByBankTransferInAdvance"
+    },
+    ByInvoice: {
+      "@id": "schema:ByInvoice"
+    },
+    CDCPMDRecord: {
+      "@id": "schema:CDCPMDRecord"
+    },
+    CDFormat: {
+      "@id": "schema:CDFormat"
+    },
+    COD: {
+      "@id": "schema:COD"
+    },
+    CT: {
+      "@id": "schema:CT"
+    },
+    CableOrSatelliteService: {
+      "@id": "schema:CableOrSatelliteService"
+    },
+    CafeOrCoffeeShop: {
+      "@id": "schema:CafeOrCoffeeShop"
+    },
+    Campground: {
+      "@id": "schema:Campground"
+    },
+    CampingPitch: {
+      "@id": "schema:CampingPitch"
+    },
+    Canal: {
+      "@id": "schema:Canal"
+    },
+    CancelAction: {
+      "@id": "schema:CancelAction"
+    },
+    Car: {
+      "@id": "schema:Car"
+    },
+    CarUsageType: {
+      "@id": "schema:CarUsageType"
+    },
+    Cardiovascular: {
+      "@id": "schema:Cardiovascular"
+    },
+    CardiovascularExam: {
+      "@id": "schema:CardiovascularExam"
+    },
+    CaseSeries: {
+      "@id": "schema:CaseSeries"
+    },
+    Cash: {
+      "@id": "schema:Cash"
+    },
+    Casino: {
+      "@id": "schema:Casino"
+    },
+    CassetteFormat: {
+      "@id": "schema:CassetteFormat"
+    },
+    CategoryCode: {
+      "@id": "schema:CategoryCode"
+    },
+    CategoryCodeSet: {
+      "@id": "schema:CategoryCodeSet"
+    },
+    CatholicChurch: {
+      "@id": "schema:CatholicChurch"
+    },
+    CausesHealthAspect: {
+      "@id": "schema:CausesHealthAspect"
+    },
+    Cemetery: {
+      "@id": "schema:Cemetery"
+    },
+    Certification: {
+      "@id": "schema:Certification"
+    },
+    CertificationActive: {
+      "@id": "schema:CertificationActive"
+    },
+    CertificationInactive: {
+      "@id": "schema:CertificationInactive"
+    },
+    CertificationStatusEnumeration: {
+      "@id": "schema:CertificationStatusEnumeration"
+    },
+    Chapter: {
+      "@id": "schema:Chapter"
+    },
+    CharitableIncorporatedOrganization: {
+      "@id": "schema:CharitableIncorporatedOrganization"
+    },
+    CheckAction: {
+      "@id": "schema:CheckAction"
+    },
+    CheckInAction: {
+      "@id": "schema:CheckInAction"
+    },
+    CheckInAdvance: {
+      "@id": "schema:CheckInAdvance"
+    },
+    CheckOutAction: {
+      "@id": "schema:CheckOutAction"
+    },
+    CheckoutPage: {
+      "@id": "schema:CheckoutPage"
+    },
+    ChemicalSubstance: {
+      "@id": "schema:ChemicalSubstance"
+    },
+    ChildCare: {
+      "@id": "schema:ChildCare"
+    },
+    ChildrensEvent: {
+      "@id": "schema:ChildrensEvent"
+    },
+    Chiropractic: {
+      "@id": "schema:Chiropractic"
+    },
+    ChooseAction: {
+      "@id": "schema:ChooseAction"
+    },
+    Church: {
+      "@id": "schema:Church"
+    },
+    City: {
+      "@id": "schema:City"
+    },
+    CityHall: {
+      "@id": "schema:CityHall"
+    },
+    CivicStructure: {
+      "@id": "schema:CivicStructure"
+    },
+    Claim: {
+      "@id": "schema:Claim"
+    },
+    ClaimReview: {
+      "@id": "schema:ClaimReview"
+    },
+    Class: {
+      "@id": "schema:Class"
+    },
+    CleaningFee: {
+      "@id": "schema:CleaningFee"
+    },
+    Clinician: {
+      "@id": "schema:Clinician"
+    },
+    Clip: {
+      "@id": "schema:Clip"
+    },
+    ClothingStore: {
+      "@id": "schema:ClothingStore"
+    },
+    CoOp: {
+      "@id": "schema:CoOp"
+    },
+    Code: {
+      "@id": "schema:Code"
+    },
+    CohortStudy: {
+      "@id": "schema:CohortStudy"
+    },
+    Collection: {
+      "@id": "schema:Collection"
+    },
+    CollectionPage: {
+      "@id": "schema:CollectionPage"
+    },
+    CollegeOrUniversity: {
+      "@id": "schema:CollegeOrUniversity"
+    },
+    ComedyClub: {
+      "@id": "schema:ComedyClub"
+    },
+    ComedyEvent: {
+      "@id": "schema:ComedyEvent"
+    },
+    ComicCoverArt: {
+      "@id": "schema:ComicCoverArt"
+    },
+    ComicIssue: {
+      "@id": "schema:ComicIssue"
+    },
+    ComicSeries: {
+      "@id": "schema:ComicSeries"
+    },
+    ComicStory: {
+      "@id": "schema:ComicStory"
+    },
+    Comment: {
+      "@id": "schema:Comment"
+    },
+    CommentAction: {
+      "@id": "schema:CommentAction"
+    },
+    CommentPermission: {
+      "@id": "schema:CommentPermission"
+    },
+    CommunicateAction: {
+      "@id": "schema:CommunicateAction"
+    },
+    CommunityHealth: {
+      "@id": "schema:CommunityHealth"
+    },
+    CompilationAlbum: {
+      "@id": "schema:CompilationAlbum"
+    },
+    CompleteDataFeed: {
+      "@id": "schema:CompleteDataFeed"
+    },
+    Completed: {
+      "@id": "schema:Completed"
+    },
+    CompletedActionStatus: {
+      "@id": "schema:CompletedActionStatus"
+    },
+    CompositeCaptureDigitalSource: {
+      "@id": "schema:CompositeCaptureDigitalSource"
+    },
+    CompositeSyntheticDigitalSource: {
+      "@id": "schema:CompositeSyntheticDigitalSource"
+    },
+    CompositeWithTrainedAlgorithmicMediaDigitalSource: {
+      "@id": "schema:CompositeWithTrainedAlgorithmicMediaDigitalSource"
+    },
+    CompoundPriceSpecification: {
+      "@id": "schema:CompoundPriceSpecification"
+    },
+    ComputerLanguage: {
+      "@id": "schema:ComputerLanguage"
+    },
+    ComputerStore: {
+      "@id": "schema:ComputerStore"
+    },
+    ConfirmAction: {
+      "@id": "schema:ConfirmAction"
+    },
+    Consortium: {
+      "@id": "schema:Consortium"
+    },
+    ConstraintNode: {
+      "@id": "schema:ConstraintNode"
+    },
+    ConsumeAction: {
+      "@id": "schema:ConsumeAction"
+    },
+    ContactPage: {
+      "@id": "schema:ContactPage"
+    },
+    ContactPoint: {
+      "@id": "schema:ContactPoint"
+    },
+    ContactPointOption: {
+      "@id": "schema:ContactPointOption"
+    },
+    ContagiousnessHealthAspect: {
+      "@id": "schema:ContagiousnessHealthAspect"
+    },
+    Continent: {
+      "@id": "schema:Continent"
+    },
+    ControlAction: {
+      "@id": "schema:ControlAction"
+    },
+    ConvenienceStore: {
+      "@id": "schema:ConvenienceStore"
+    },
+    Conversation: {
+      "@id": "schema:Conversation"
+    },
+    CookAction: {
+      "@id": "schema:CookAction"
+    },
+    Corporation: {
+      "@id": "schema:Corporation"
+    },
+    CorrectionComment: {
+      "@id": "schema:CorrectionComment"
+    },
+    Country: {
+      "@id": "schema:Country"
+    },
+    Course: {
+      "@id": "schema:Course"
+    },
+    CourseInstance: {
+      "@id": "schema:CourseInstance"
+    },
+    Courthouse: {
+      "@id": "schema:Courthouse"
+    },
+    CoverArt: {
+      "@id": "schema:CoverArt"
+    },
+    CovidTestingFacility: {
+      "@id": "schema:CovidTestingFacility"
+    },
+    CreateAction: {
+      "@id": "schema:CreateAction"
+    },
+    CreativeWork: {
+      "@id": "schema:CreativeWork"
+    },
+    CreativeWorkSeason: {
+      "@id": "schema:CreativeWorkSeason"
+    },
+    CreativeWorkSeries: {
+      "@id": "schema:CreativeWorkSeries"
+    },
+    CreditCard: {
+      "@id": "schema:CreditCard"
+    },
+    Crematorium: {
+      "@id": "schema:Crematorium"
+    },
+    CriticReview: {
+      "@id": "schema:CriticReview"
+    },
+    CrossSectional: {
+      "@id": "schema:CrossSectional"
+    },
+    CssSelectorType: {
+      "@id": "schema:CssSelectorType"
+    },
+    CurrencyConversionService: {
+      "@id": "schema:CurrencyConversionService"
+    },
+    DDxElement: {
+      "@id": "schema:DDxElement"
+    },
+    DJMixAlbum: {
+      "@id": "schema:DJMixAlbum"
+    },
+    DVDFormat: {
+      "@id": "schema:DVDFormat"
+    },
+    DamagedCondition: {
+      "@id": "schema:DamagedCondition"
+    },
+    DanceEvent: {
+      "@id": "schema:DanceEvent"
+    },
+    DanceGroup: {
+      "@id": "schema:DanceGroup"
+    },
+    DangerousGoodConsideration: {
+      "@id": "schema:DangerousGoodConsideration"
+    },
+    DataCatalog: {
+      "@id": "schema:DataCatalog"
+    },
+    DataDownload: {
+      "@id": "schema:DataDownload"
+    },
+    DataDrivenMediaDigitalSource: {
+      "@id": "schema:DataDrivenMediaDigitalSource"
+    },
+    DataFeed: {
+      "@id": "schema:DataFeed"
+    },
+    DataFeedItem: {
+      "@id": "schema:DataFeedItem"
+    },
+    DataType: {
+      "@id": "schema:DataType"
+    },
+    Dataset: {
+      "@id": "schema:Dataset"
+    },
+    Date: {
+      "@id": "schema:Date"
+    },
+    DateTime: {
+      "@id": "schema:DateTime"
+    },
+    DatedMoneySpecification: {
+      "@id": "schema:DatedMoneySpecification"
+    },
+    DayOfWeek: {
+      "@id": "schema:DayOfWeek"
+    },
+    DaySpa: {
+      "@id": "schema:DaySpa"
+    },
+    DeactivateAction: {
+      "@id": "schema:DeactivateAction"
+    },
+    DecontextualizedContent: {
+      "@id": "schema:DecontextualizedContent"
+    },
+    DefenceEstablishment: {
+      "@id": "schema:DefenceEstablishment"
+    },
+    DefinedRegion: {
+      "@id": "schema:DefinedRegion"
+    },
+    DefinedTerm: {
+      "@id": "schema:DefinedTerm"
+    },
+    DefinedTermSet: {
+      "@id": "schema:DefinedTermSet"
+    },
+    DefinitiveLegalValue: {
+      "@id": "schema:DefinitiveLegalValue"
+    },
+    DeleteAction: {
+      "@id": "schema:DeleteAction"
+    },
+    DeliveryChargeSpecification: {
+      "@id": "schema:DeliveryChargeSpecification"
+    },
+    DeliveryEvent: {
+      "@id": "schema:DeliveryEvent"
+    },
+    DeliveryMethod: {
+      "@id": "schema:DeliveryMethod"
+    },
+    DeliveryTimeSettings: {
+      "@id": "schema:DeliveryTimeSettings"
+    },
+    Demand: {
+      "@id": "schema:Demand"
+    },
+    DemoAlbum: {
+      "@id": "schema:DemoAlbum"
+    },
+    DemoGameAvailability: {
+      "@id": "schema:DemoGameAvailability"
+    },
+    Dentist: {
+      "@id": "schema:Dentist"
+    },
+    Dentistry: {
+      "@id": "schema:Dentistry"
+    },
+    DepartAction: {
+      "@id": "schema:DepartAction"
+    },
+    DepartmentStore: {
+      "@id": "schema:DepartmentStore"
+    },
+    DepositAccount: {
+      "@id": "schema:DepositAccount"
+    },
+    Dermatologic: {
+      "@id": "schema:Dermatologic"
+    },
+    Dermatology: {
+      "@id": "schema:Dermatology"
+    },
+    DesktopWebPlatform: {
+      "@id": "schema:DesktopWebPlatform"
+    },
+    DiabeticDiet: {
+      "@id": "schema:DiabeticDiet"
+    },
+    Diagnostic: {
+      "@id": "schema:Diagnostic"
+    },
+    DiagnosticLab: {
+      "@id": "schema:DiagnosticLab"
+    },
+    DiagnosticProcedure: {
+      "@id": "schema:DiagnosticProcedure"
+    },
+    Diet: {
+      "@id": "schema:Diet"
+    },
+    DietNutrition: {
+      "@id": "schema:DietNutrition"
+    },
+    DietarySupplement: {
+      "@id": "schema:DietarySupplement"
+    },
+    DigitalArtDigitalSource: {
+      "@id": "schema:DigitalArtDigitalSource"
+    },
+    DigitalAudioTapeFormat: {
+      "@id": "schema:DigitalAudioTapeFormat"
+    },
+    DigitalCaptureDigitalSource: {
+      "@id": "schema:DigitalCaptureDigitalSource"
+    },
+    DigitalDocument: {
+      "@id": "schema:DigitalDocument"
+    },
+    DigitalDocumentPermission: {
+      "@id": "schema:DigitalDocumentPermission"
+    },
+    DigitalDocumentPermissionType: {
+      "@id": "schema:DigitalDocumentPermissionType"
+    },
+    DigitalFormat: {
+      "@id": "schema:DigitalFormat"
+    },
+    DigitalPlatformEnumeration: {
+      "@id": "schema:DigitalPlatformEnumeration"
+    },
+    DirectDebit: {
+      "@id": "schema:DirectDebit"
+    },
+    DisabilitySupport: {
+      "@id": "schema:DisabilitySupport"
+    },
+    DisagreeAction: {
+      "@id": "schema:DisagreeAction"
+    },
+    Discontinued: {
+      "@id": "schema:Discontinued"
+    },
+    DiscoverAction: {
+      "@id": "schema:DiscoverAction"
+    },
+    DiscussionForumPosting: {
+      "@id": "schema:DiscussionForumPosting"
+    },
+    DislikeAction: {
+      "@id": "schema:DislikeAction"
+    },
+    Distance: {
+      "@id": "schema:Distance"
+    },
+    DistanceFee: {
+      "@id": "schema:DistanceFee"
+    },
+    Distillery: {
+      "@id": "schema:Distillery"
+    },
+    DonateAction: {
+      "@id": "schema:DonateAction"
+    },
+    DoseSchedule: {
+      "@id": "schema:DoseSchedule"
+    },
+    DoubleBlindedTrial: {
+      "@id": "schema:DoubleBlindedTrial"
+    },
+    DownloadAction: {
+      "@id": "schema:DownloadAction"
+    },
+    Downpayment: {
+      "@id": "schema:Downpayment"
+    },
+    DrawAction: {
+      "@id": "schema:DrawAction"
+    },
+    Drawing: {
+      "@id": "schema:Drawing"
+    },
+    DrinkAction: {
+      "@id": "schema:DrinkAction"
+    },
+    DriveWheelConfigurationValue: {
+      "@id": "schema:DriveWheelConfigurationValue"
+    },
+    DrivingSchoolVehicleUsage: {
+      "@id": "schema:DrivingSchoolVehicleUsage"
+    },
+    Drug: {
+      "@id": "schema:Drug"
+    },
+    DrugClass: {
+      "@id": "schema:DrugClass"
+    },
+    DrugCost: {
+      "@id": "schema:DrugCost"
+    },
+    DrugCostCategory: {
+      "@id": "schema:DrugCostCategory"
+    },
+    DrugLegalStatus: {
+      "@id": "schema:DrugLegalStatus"
+    },
+    DrugPregnancyCategory: {
+      "@id": "schema:DrugPregnancyCategory"
+    },
+    DrugPrescriptionStatus: {
+      "@id": "schema:DrugPrescriptionStatus"
+    },
+    DrugStrength: {
+      "@id": "schema:DrugStrength"
+    },
+    DryCleaningOrLaundry: {
+      "@id": "schema:DryCleaningOrLaundry"
+    },
+    Duration: {
+      "@id": "schema:Duration"
+    },
+    EBook: {
+      "@id": "schema:EBook"
+    },
+    EPRelease: {
+      "@id": "schema:EPRelease"
+    },
+    EUEnergyEfficiencyCategoryA: {
+      "@id": "schema:EUEnergyEfficiencyCategoryA"
+    },
+    EUEnergyEfficiencyCategoryA1Plus: {
+      "@id": "schema:EUEnergyEfficiencyCategoryA1Plus"
+    },
+    EUEnergyEfficiencyCategoryA2Plus: {
+      "@id": "schema:EUEnergyEfficiencyCategoryA2Plus"
+    },
+    EUEnergyEfficiencyCategoryA3Plus: {
+      "@id": "schema:EUEnergyEfficiencyCategoryA3Plus"
+    },
+    EUEnergyEfficiencyCategoryB: {
+      "@id": "schema:EUEnergyEfficiencyCategoryB"
+    },
+    EUEnergyEfficiencyCategoryC: {
+      "@id": "schema:EUEnergyEfficiencyCategoryC"
+    },
+    EUEnergyEfficiencyCategoryD: {
+      "@id": "schema:EUEnergyEfficiencyCategoryD"
+    },
+    EUEnergyEfficiencyCategoryE: {
+      "@id": "schema:EUEnergyEfficiencyCategoryE"
+    },
+    EUEnergyEfficiencyCategoryF: {
+      "@id": "schema:EUEnergyEfficiencyCategoryF"
+    },
+    EUEnergyEfficiencyCategoryG: {
+      "@id": "schema:EUEnergyEfficiencyCategoryG"
+    },
+    EUEnergyEfficiencyEnumeration: {
+      "@id": "schema:EUEnergyEfficiencyEnumeration"
+    },
+    Ear: {
+      "@id": "schema:Ear"
+    },
+    EatAction: {
+      "@id": "schema:EatAction"
+    },
+    EditedOrCroppedContent: {
+      "@id": "schema:EditedOrCroppedContent"
+    },
+    EducationEvent: {
+      "@id": "schema:EducationEvent"
+    },
+    EducationalAudience: {
+      "@id": "schema:EducationalAudience"
+    },
+    EducationalOccupationalCredential: {
+      "@id": "schema:EducationalOccupationalCredential"
+    },
+    EducationalOccupationalProgram: {
+      "@id": "schema:EducationalOccupationalProgram"
+    },
+    EducationalOrganization: {
+      "@id": "schema:EducationalOrganization"
+    },
+    EffectivenessHealthAspect: {
+      "@id": "schema:EffectivenessHealthAspect"
+    },
+    Electrician: {
+      "@id": "schema:Electrician"
+    },
+    ElectronicsStore: {
+      "@id": "schema:ElectronicsStore"
+    },
+    ElementarySchool: {
+      "@id": "schema:ElementarySchool"
+    },
+    EmailMessage: {
+      "@id": "schema:EmailMessage"
+    },
+    Embassy: {
+      "@id": "schema:Embassy"
+    },
+    Emergency: {
+      "@id": "schema:Emergency"
+    },
+    EmergencyService: {
+      "@id": "schema:EmergencyService"
+    },
+    EmployeeRole: {
+      "@id": "schema:EmployeeRole"
+    },
+    EmployerAggregateRating: {
+      "@id": "schema:EmployerAggregateRating"
+    },
+    EmployerReview: {
+      "@id": "schema:EmployerReview"
+    },
+    EmploymentAgency: {
+      "@id": "schema:EmploymentAgency"
+    },
+    Endocrine: {
+      "@id": "schema:Endocrine"
+    },
+    EndorseAction: {
+      "@id": "schema:EndorseAction"
+    },
+    EndorsementRating: {
+      "@id": "schema:EndorsementRating"
+    },
+    Energy: {
+      "@id": "schema:Energy"
+    },
+    EnergyConsumptionDetails: {
+      "@id": "schema:EnergyConsumptionDetails"
+    },
+    EnergyEfficiencyEnumeration: {
+      "@id": "schema:EnergyEfficiencyEnumeration"
+    },
+    EnergyStarCertified: {
+      "@id": "schema:EnergyStarCertified"
+    },
+    EnergyStarEnergyEfficiencyEnumeration: {
+      "@id": "schema:EnergyStarEnergyEfficiencyEnumeration"
+    },
+    EngineSpecification: {
+      "@id": "schema:EngineSpecification"
+    },
+    EnrollingByInvitation: {
+      "@id": "schema:EnrollingByInvitation"
+    },
+    EntertainmentBusiness: {
+      "@id": "schema:EntertainmentBusiness"
+    },
+    EntryPoint: {
+      "@id": "schema:EntryPoint"
+    },
+    Enumeration: {
+      "@id": "schema:Enumeration"
+    },
+    Episode: {
+      "@id": "schema:Episode"
+    },
+    Event: {
+      "@id": "schema:Event"
+    },
+    EventAttendanceModeEnumeration: {
+      "@id": "schema:EventAttendanceModeEnumeration"
+    },
+    EventCancelled: {
+      "@id": "schema:EventCancelled"
+    },
+    EventMovedOnline: {
+      "@id": "schema:EventMovedOnline"
+    },
+    EventPostponed: {
+      "@id": "schema:EventPostponed"
+    },
+    EventRescheduled: {
+      "@id": "schema:EventRescheduled"
+    },
+    EventReservation: {
+      "@id": "schema:EventReservation"
+    },
+    EventScheduled: {
+      "@id": "schema:EventScheduled"
+    },
+    EventSeries: {
+      "@id": "schema:EventSeries"
+    },
+    EventStatusType: {
+      "@id": "schema:EventStatusType"
+    },
+    EventVenue: {
+      "@id": "schema:EventVenue"
+    },
+    EvidenceLevelA: {
+      "@id": "schema:EvidenceLevelA"
+    },
+    EvidenceLevelB: {
+      "@id": "schema:EvidenceLevelB"
+    },
+    EvidenceLevelC: {
+      "@id": "schema:EvidenceLevelC"
+    },
+    ExampleMeasurementMethodEnum: {
+      "@id": "schema:ExampleMeasurementMethodEnum"
+    },
+    ExchangeRateSpecification: {
+      "@id": "schema:ExchangeRateSpecification"
+    },
+    ExchangeRefund: {
+      "@id": "schema:ExchangeRefund"
+    },
+    ExerciseAction: {
+      "@id": "schema:ExerciseAction"
+    },
+    ExerciseGym: {
+      "@id": "schema:ExerciseGym"
+    },
+    ExercisePlan: {
+      "@id": "schema:ExercisePlan"
+    },
+    ExhibitionEvent: {
+      "@id": "schema:ExhibitionEvent"
+    },
+    Eye: {
+      "@id": "schema:Eye"
+    },
+    FAQPage: {
+      "@id": "schema:FAQPage"
+    },
+    FDAcategoryA: {
+      "@id": "schema:FDAcategoryA"
+    },
+    FDAcategoryB: {
+      "@id": "schema:FDAcategoryB"
+    },
+    FDAcategoryC: {
+      "@id": "schema:FDAcategoryC"
+    },
+    FDAcategoryD: {
+      "@id": "schema:FDAcategoryD"
+    },
+    FDAcategoryX: {
+      "@id": "schema:FDAcategoryX"
+    },
+    FDAnotEvaluated: {
+      "@id": "schema:FDAnotEvaluated"
+    },
+    FMRadioChannel: {
+      "@id": "schema:FMRadioChannel"
+    },
+    FailedActionStatus: {
+      "@id": "schema:FailedActionStatus"
+    },
+    False: {
+      "@id": "schema:False"
+    },
+    FastFoodRestaurant: {
+      "@id": "schema:FastFoodRestaurant"
+    },
+    Female: {
+      "@id": "schema:Female"
+    },
+    Festival: {
+      "@id": "schema:Festival"
+    },
+    FilmAction: {
+      "@id": "schema:FilmAction"
+    },
+    FinancialProduct: {
+      "@id": "schema:FinancialProduct"
+    },
+    FinancialService: {
+      "@id": "schema:FinancialService"
+    },
+    FindAction: {
+      "@id": "schema:FindAction"
+    },
+    FireStation: {
+      "@id": "schema:FireStation"
+    },
+    Flexibility: {
+      "@id": "schema:Flexibility"
+    },
+    Flight: {
+      "@id": "schema:Flight"
+    },
+    FlightReservation: {
+      "@id": "schema:FlightReservation"
+    },
+    Float: {
+      "@id": "schema:Float"
+    },
+    FloorPlan: {
+      "@id": "schema:FloorPlan"
+    },
+    Florist: {
+      "@id": "schema:Florist"
+    },
+    FollowAction: {
+      "@id": "schema:FollowAction"
+    },
+    FoodEstablishment: {
+      "@id": "schema:FoodEstablishment"
+    },
+    FoodEstablishmentReservation: {
+      "@id": "schema:FoodEstablishmentReservation"
+    },
+    FoodEvent: {
+      "@id": "schema:FoodEvent"
+    },
+    FoodService: {
+      "@id": "schema:FoodService"
+    },
+    FourWheelDriveConfiguration: {
+      "@id": "schema:FourWheelDriveConfiguration"
+    },
+    FreeReturn: {
+      "@id": "schema:FreeReturn"
+    },
+    Friday: {
+      "@id": "schema:Friday"
+    },
+    FrontWheelDriveConfiguration: {
+      "@id": "schema:FrontWheelDriveConfiguration"
+    },
+    FullGameAvailability: {
+      "@id": "schema:FullGameAvailability"
+    },
+    FullRefund: {
+      "@id": "schema:FullRefund"
+    },
+    FundingAgency: {
+      "@id": "schema:FundingAgency"
+    },
+    FundingScheme: {
+      "@id": "schema:FundingScheme"
+    },
+    Fungus: {
+      "@id": "schema:Fungus"
+    },
+    FurnitureStore: {
+      "@id": "schema:FurnitureStore"
+    },
+    Game: {
+      "@id": "schema:Game"
+    },
+    GameAvailabilityEnumeration: {
+      "@id": "schema:GameAvailabilityEnumeration"
+    },
+    GamePlayMode: {
+      "@id": "schema:GamePlayMode"
+    },
+    GameServer: {
+      "@id": "schema:GameServer"
+    },
+    GameServerStatus: {
+      "@id": "schema:GameServerStatus"
+    },
+    GardenStore: {
+      "@id": "schema:GardenStore"
+    },
+    GasStation: {
+      "@id": "schema:GasStation"
+    },
+    Gastroenterologic: {
+      "@id": "schema:Gastroenterologic"
+    },
+    GatedResidenceCommunity: {
+      "@id": "schema:GatedResidenceCommunity"
+    },
+    GenderType: {
+      "@id": "schema:GenderType"
+    },
+    Gene: {
+      "@id": "schema:Gene"
+    },
+    GeneralContractor: {
+      "@id": "schema:GeneralContractor"
+    },
+    GenericWebPlatform: {
+      "@id": "schema:GenericWebPlatform"
+    },
+    Genetic: {
+      "@id": "schema:Genetic"
+    },
+    Genitourinary: {
+      "@id": "schema:Genitourinary"
+    },
+    GeoCircle: {
+      "@id": "schema:GeoCircle"
+    },
+    GeoCoordinates: {
+      "@id": "schema:GeoCoordinates"
+    },
+    GeoShape: {
+      "@id": "schema:GeoShape"
+    },
+    GeospatialGeometry: {
+      "@id": "schema:GeospatialGeometry"
+    },
+    Geriatric: {
+      "@id": "schema:Geriatric"
+    },
+    GettingAccessHealthAspect: {
+      "@id": "schema:GettingAccessHealthAspect"
+    },
+    GiveAction: {
+      "@id": "schema:GiveAction"
+    },
+    GlutenFreeDiet: {
+      "@id": "schema:GlutenFreeDiet"
+    },
+    GolfCourse: {
+      "@id": "schema:GolfCourse"
+    },
+    GovernmentBenefitsType: {
+      "@id": "schema:GovernmentBenefitsType"
+    },
+    GovernmentBuilding: {
+      "@id": "schema:GovernmentBuilding"
+    },
+    GovernmentOffice: {
+      "@id": "schema:GovernmentOffice"
+    },
+    GovernmentOrganization: {
+      "@id": "schema:GovernmentOrganization"
+    },
+    GovernmentPermit: {
+      "@id": "schema:GovernmentPermit"
+    },
+    GovernmentService: {
+      "@id": "schema:GovernmentService"
+    },
+    Grant: {
+      "@id": "schema:Grant"
+    },
+    GraphicNovel: {
+      "@id": "schema:GraphicNovel"
+    },
+    GroceryStore: {
+      "@id": "schema:GroceryStore"
+    },
+    GroupBoardingPolicy: {
+      "@id": "schema:GroupBoardingPolicy"
+    },
+    Guide: {
+      "@id": "schema:Guide"
+    },
+    Gynecologic: {
+      "@id": "schema:Gynecologic"
+    },
+    HVACBusiness: {
+      "@id": "schema:HVACBusiness"
+    },
+    Hackathon: {
+      "@id": "schema:Hackathon"
+    },
+    HairSalon: {
+      "@id": "schema:HairSalon"
+    },
+    HalalDiet: {
+      "@id": "schema:HalalDiet"
+    },
+    Hardcover: {
+      "@id": "schema:Hardcover"
+    },
+    HardwareStore: {
+      "@id": "schema:HardwareStore"
+    },
+    Head: {
+      "@id": "schema:Head"
+    },
+    HealthAndBeautyBusiness: {
+      "@id": "schema:HealthAndBeautyBusiness"
+    },
+    HealthAspectEnumeration: {
+      "@id": "schema:HealthAspectEnumeration"
+    },
+    HealthCare: {
+      "@id": "schema:HealthCare"
+    },
+    HealthClub: {
+      "@id": "schema:HealthClub"
+    },
+    HealthInsurancePlan: {
+      "@id": "schema:HealthInsurancePlan"
+    },
+    HealthPlanCostSharingSpecification: {
+      "@id": "schema:HealthPlanCostSharingSpecification"
+    },
+    HealthPlanFormulary: {
+      "@id": "schema:HealthPlanFormulary"
+    },
+    HealthPlanNetwork: {
+      "@id": "schema:HealthPlanNetwork"
+    },
+    HealthTopicContent: {
+      "@id": "schema:HealthTopicContent"
+    },
+    HealthcareConsideration: {
+      "@id": "schema:HealthcareConsideration"
+    },
+    HearingImpairedSupported: {
+      "@id": "schema:HearingImpairedSupported"
+    },
+    Hematologic: {
+      "@id": "schema:Hematologic"
+    },
+    HighSchool: {
+      "@id": "schema:HighSchool"
+    },
+    HinduDiet: {
+      "@id": "schema:HinduDiet"
+    },
+    HinduTemple: {
+      "@id": "schema:HinduTemple"
+    },
+    HobbyShop: {
+      "@id": "schema:HobbyShop"
+    },
+    HomeAndConstructionBusiness: {
+      "@id": "schema:HomeAndConstructionBusiness"
+    },
+    HomeGoodsStore: {
+      "@id": "schema:HomeGoodsStore"
+    },
+    Homeopathic: {
+      "@id": "schema:Homeopathic"
+    },
+    Hospital: {
+      "@id": "schema:Hospital"
+    },
+    Hostel: {
+      "@id": "schema:Hostel"
+    },
+    Hotel: {
+      "@id": "schema:Hotel"
+    },
+    HotelRoom: {
+      "@id": "schema:HotelRoom"
+    },
+    House: {
+      "@id": "schema:House"
+    },
+    HousePainter: {
+      "@id": "schema:HousePainter"
+    },
+    HowItWorksHealthAspect: {
+      "@id": "schema:HowItWorksHealthAspect"
+    },
+    HowOrWhereHealthAspect: {
+      "@id": "schema:HowOrWhereHealthAspect"
+    },
+    HowTo: {
+      "@id": "schema:HowTo"
+    },
+    HowToDirection: {
+      "@id": "schema:HowToDirection"
+    },
+    HowToItem: {
+      "@id": "schema:HowToItem"
+    },
+    HowToSection: {
+      "@id": "schema:HowToSection"
+    },
+    HowToStep: {
+      "@id": "schema:HowToStep"
+    },
+    HowToSupply: {
+      "@id": "schema:HowToSupply"
+    },
+    HowToTip: {
+      "@id": "schema:HowToTip"
+    },
+    HowToTool: {
+      "@id": "schema:HowToTool"
+    },
+    HyperToc: {
+      "@id": "schema:HyperToc"
+    },
+    HyperTocEntry: {
+      "@id": "schema:HyperTocEntry"
+    },
+    IOSPlatform: {
+      "@id": "schema:IOSPlatform"
+    },
+    IPTCDigitalSourceEnumeration: {
+      "@id": "schema:IPTCDigitalSourceEnumeration"
+    },
+    IceCreamShop: {
+      "@id": "schema:IceCreamShop"
+    },
+    IgnoreAction: {
+      "@id": "schema:IgnoreAction"
+    },
+    ImageGallery: {
+      "@id": "schema:ImageGallery"
+    },
+    ImageObject: {
+      "@id": "schema:ImageObject"
+    },
+    ImageObjectSnapshot: {
+      "@id": "schema:ImageObjectSnapshot"
+    },
+    ImagingTest: {
+      "@id": "schema:ImagingTest"
+    },
+    InForce: {
+      "@id": "schema:InForce"
+    },
+    InStock: {
+      "@id": "schema:InStock"
+    },
+    InStoreOnly: {
+      "@id": "schema:InStoreOnly"
+    },
+    InStorePrepay: {
+      "@id": "schema:InStorePrepay"
+    },
+    IndividualPhysician: {
+      "@id": "schema:IndividualPhysician"
+    },
+    IndividualProduct: {
+      "@id": "schema:IndividualProduct"
+    },
+    Infectious: {
+      "@id": "schema:Infectious"
+    },
+    InfectiousAgentClass: {
+      "@id": "schema:InfectiousAgentClass"
+    },
+    InfectiousDisease: {
+      "@id": "schema:InfectiousDisease"
+    },
+    InformAction: {
+      "@id": "schema:InformAction"
+    },
+    IngredientsHealthAspect: {
+      "@id": "schema:IngredientsHealthAspect"
+    },
+    InsertAction: {
+      "@id": "schema:InsertAction"
+    },
+    InstallAction: {
+      "@id": "schema:InstallAction"
+    },
+    Installment: {
+      "@id": "schema:Installment"
+    },
+    InsuranceAgency: {
+      "@id": "schema:InsuranceAgency"
+    },
+    Intangible: {
+      "@id": "schema:Intangible"
+    },
+    Integer: {
+      "@id": "schema:Integer"
+    },
+    InteractAction: {
+      "@id": "schema:InteractAction"
+    },
+    InteractionCounter: {
+      "@id": "schema:InteractionCounter"
+    },
+    InternationalTrial: {
+      "@id": "schema:InternationalTrial"
+    },
+    InternetCafe: {
+      "@id": "schema:InternetCafe"
+    },
+    InvestmentFund: {
+      "@id": "schema:InvestmentFund"
+    },
+    InvestmentOrDeposit: {
+      "@id": "schema:InvestmentOrDeposit"
+    },
+    InviteAction: {
+      "@id": "schema:InviteAction"
+    },
+    Invoice: {
+      "@id": "schema:Invoice"
+    },
+    InvoicePrice: {
+      "@id": "schema:InvoicePrice"
+    },
+    ItemAvailability: {
+      "@id": "schema:ItemAvailability"
+    },
+    ItemList: {
+      "@id": "schema:ItemList"
+    },
+    ItemListOrderAscending: {
+      "@id": "schema:ItemListOrderAscending"
+    },
+    ItemListOrderDescending: {
+      "@id": "schema:ItemListOrderDescending"
+    },
+    ItemListOrderType: {
+      "@id": "schema:ItemListOrderType"
+    },
+    ItemListUnordered: {
+      "@id": "schema:ItemListUnordered"
+    },
+    ItemPage: {
+      "@id": "schema:ItemPage"
+    },
+    JewelryStore: {
+      "@id": "schema:JewelryStore"
+    },
+    JobPosting: {
+      "@id": "schema:JobPosting"
+    },
+    JoinAction: {
+      "@id": "schema:JoinAction"
+    },
+    Joint: {
+      "@id": "schema:Joint"
+    },
+    KeepProduct: {
+      "@id": "schema:KeepProduct"
+    },
+    KosherDiet: {
+      "@id": "schema:KosherDiet"
+    },
+    LaboratoryScience: {
+      "@id": "schema:LaboratoryScience"
+    },
+    LakeBodyOfWater: {
+      "@id": "schema:LakeBodyOfWater"
+    },
+    Landform: {
+      "@id": "schema:Landform"
+    },
+    LandmarksOrHistoricalBuildings: {
+      "@id": "schema:LandmarksOrHistoricalBuildings"
+    },
+    Language: {
+      "@id": "schema:Language"
+    },
+    LaserDiscFormat: {
+      "@id": "schema:LaserDiscFormat"
+    },
+    LearningResource: {
+      "@id": "schema:LearningResource"
+    },
+    LeaveAction: {
+      "@id": "schema:LeaveAction"
+    },
+    LeftHandDriving: {
+      "@id": "schema:LeftHandDriving"
+    },
+    LegalForceStatus: {
+      "@id": "schema:LegalForceStatus"
+    },
+    LegalService: {
+      "@id": "schema:LegalService"
+    },
+    LegalValueLevel: {
+      "@id": "schema:LegalValueLevel"
+    },
+    Legislation: {
+      "@id": "schema:Legislation"
+    },
+    LegislationObject: {
+      "@id": "schema:LegislationObject"
+    },
+    LegislativeBuilding: {
+      "@id": "schema:LegislativeBuilding"
+    },
+    LeisureTimeActivity: {
+      "@id": "schema:LeisureTimeActivity"
+    },
+    LendAction: {
+      "@id": "schema:LendAction"
+    },
+    Library: {
+      "@id": "schema:Library"
+    },
+    LibrarySystem: {
+      "@id": "schema:LibrarySystem"
+    },
+    LifestyleModification: {
+      "@id": "schema:LifestyleModification"
+    },
+    Ligament: {
+      "@id": "schema:Ligament"
+    },
+    LikeAction: {
+      "@id": "schema:LikeAction"
+    },
+    LimitedAvailability: {
+      "@id": "schema:LimitedAvailability"
+    },
+    LimitedByGuaranteeCharity: {
+      "@id": "schema:LimitedByGuaranteeCharity"
+    },
+    LinkRole: {
+      "@id": "schema:LinkRole"
+    },
+    LiquorStore: {
+      "@id": "schema:LiquorStore"
+    },
+    ListItem: {
+      "@id": "schema:ListItem"
+    },
+    ListPrice: {
+      "@id": "schema:ListPrice"
+    },
+    ListenAction: {
+      "@id": "schema:ListenAction"
+    },
+    LiteraryEvent: {
+      "@id": "schema:LiteraryEvent"
+    },
+    LiveAlbum: {
+      "@id": "schema:LiveAlbum"
+    },
+    LiveBlogPosting: {
+      "@id": "schema:LiveBlogPosting"
+    },
+    LivingWithHealthAspect: {
+      "@id": "schema:LivingWithHealthAspect"
+    },
+    LoanOrCredit: {
+      "@id": "schema:LoanOrCredit"
+    },
+    LocalBusiness: {
+      "@id": "schema:LocalBusiness"
+    },
+    LocationFeatureSpecification: {
+      "@id": "schema:LocationFeatureSpecification"
+    },
+    LockerDelivery: {
+      "@id": "schema:LockerDelivery"
+    },
+    Locksmith: {
+      "@id": "schema:Locksmith"
+    },
+    LodgingBusiness: {
+      "@id": "schema:LodgingBusiness"
+    },
+    LodgingReservation: {
+      "@id": "schema:LodgingReservation"
+    },
+    Longitudinal: {
+      "@id": "schema:Longitudinal"
+    },
+    LoseAction: {
+      "@id": "schema:LoseAction"
+    },
+    LowCalorieDiet: {
+      "@id": "schema:LowCalorieDiet"
+    },
+    LowFatDiet: {
+      "@id": "schema:LowFatDiet"
+    },
+    LowLactoseDiet: {
+      "@id": "schema:LowLactoseDiet"
+    },
+    LowSaltDiet: {
+      "@id": "schema:LowSaltDiet"
+    },
+    Lung: {
+      "@id": "schema:Lung"
+    },
+    LymphaticVessel: {
+      "@id": "schema:LymphaticVessel"
+    },
+    MRI: {
+      "@id": "schema:MRI"
+    },
+    MSRP: {
+      "@id": "schema:MSRP"
+    },
+    MadeToOrder: {
+      "@id": "schema:MadeToOrder"
+    },
+    Male: {
+      "@id": "schema:Male"
+    },
+    Manuscript: {
+      "@id": "schema:Manuscript"
+    },
+    Map: {
+      "@id": "schema:Map"
+    },
+    MapCategoryType: {
+      "@id": "schema:MapCategoryType"
+    },
+    MarryAction: {
+      "@id": "schema:MarryAction"
+    },
+    Mass: {
+      "@id": "schema:Mass"
+    },
+    MathSolver: {
+      "@id": "schema:MathSolver"
+    },
+    MaximumDoseSchedule: {
+      "@id": "schema:MaximumDoseSchedule"
+    },
+    MayTreatHealthAspect: {
+      "@id": "schema:MayTreatHealthAspect"
+    },
+    MeasurementMethodEnum: {
+      "@id": "schema:MeasurementMethodEnum"
+    },
+    MeasurementTypeEnumeration: {
+      "@id": "schema:MeasurementTypeEnumeration"
+    },
+    MediaEnumeration: {
+      "@id": "schema:MediaEnumeration"
+    },
+    MediaGallery: {
+      "@id": "schema:MediaGallery"
+    },
+    MediaManipulationRatingEnumeration: {
+      "@id": "schema:MediaManipulationRatingEnumeration"
+    },
+    MediaObject: {
+      "@id": "schema:MediaObject"
+    },
+    MediaReview: {
+      "@id": "schema:MediaReview"
+    },
+    MediaReviewItem: {
+      "@id": "schema:MediaReviewItem"
+    },
+    MediaSubscription: {
+      "@id": "schema:MediaSubscription"
+    },
+    MedicalAudience: {
+      "@id": "schema:MedicalAudience"
+    },
+    MedicalAudienceType: {
+      "@id": "schema:MedicalAudienceType"
+    },
+    MedicalBusiness: {
+      "@id": "schema:MedicalBusiness"
+    },
+    MedicalCause: {
+      "@id": "schema:MedicalCause"
+    },
+    MedicalClinic: {
+      "@id": "schema:MedicalClinic"
+    },
+    MedicalCode: {
+      "@id": "schema:MedicalCode"
+    },
+    MedicalCondition: {
+      "@id": "schema:MedicalCondition"
+    },
+    MedicalConditionStage: {
+      "@id": "schema:MedicalConditionStage"
+    },
+    MedicalContraindication: {
+      "@id": "schema:MedicalContraindication"
+    },
+    MedicalDevice: {
+      "@id": "schema:MedicalDevice"
+    },
+    MedicalDevicePurpose: {
+      "@id": "schema:MedicalDevicePurpose"
+    },
+    MedicalEntity: {
+      "@id": "schema:MedicalEntity"
+    },
+    MedicalEnumeration: {
+      "@id": "schema:MedicalEnumeration"
+    },
+    MedicalEvidenceLevel: {
+      "@id": "schema:MedicalEvidenceLevel"
+    },
+    MedicalGuideline: {
+      "@id": "schema:MedicalGuideline"
+    },
+    MedicalGuidelineContraindication: {
+      "@id": "schema:MedicalGuidelineContraindication"
+    },
+    MedicalGuidelineRecommendation: {
+      "@id": "schema:MedicalGuidelineRecommendation"
+    },
+    MedicalImagingTechnique: {
+      "@id": "schema:MedicalImagingTechnique"
+    },
+    MedicalIndication: {
+      "@id": "schema:MedicalIndication"
+    },
+    MedicalIntangible: {
+      "@id": "schema:MedicalIntangible"
+    },
+    MedicalObservationalStudy: {
+      "@id": "schema:MedicalObservationalStudy"
+    },
+    MedicalObservationalStudyDesign: {
+      "@id": "schema:MedicalObservationalStudyDesign"
+    },
+    MedicalOrganization: {
+      "@id": "schema:MedicalOrganization"
+    },
+    MedicalProcedure: {
+      "@id": "schema:MedicalProcedure"
+    },
+    MedicalProcedureType: {
+      "@id": "schema:MedicalProcedureType"
+    },
+    MedicalResearcher: {
+      "@id": "schema:MedicalResearcher"
+    },
+    MedicalRiskCalculator: {
+      "@id": "schema:MedicalRiskCalculator"
+    },
+    MedicalRiskEstimator: {
+      "@id": "schema:MedicalRiskEstimator"
+    },
+    MedicalRiskFactor: {
+      "@id": "schema:MedicalRiskFactor"
+    },
+    MedicalRiskScore: {
+      "@id": "schema:MedicalRiskScore"
+    },
+    MedicalScholarlyArticle: {
+      "@id": "schema:MedicalScholarlyArticle"
+    },
+    MedicalSign: {
+      "@id": "schema:MedicalSign"
+    },
+    MedicalSignOrSymptom: {
+      "@id": "schema:MedicalSignOrSymptom"
+    },
+    MedicalSpecialty: {
+      "@id": "schema:MedicalSpecialty"
+    },
+    MedicalStudy: {
+      "@id": "schema:MedicalStudy"
+    },
+    MedicalStudyStatus: {
+      "@id": "schema:MedicalStudyStatus"
+    },
+    MedicalSymptom: {
+      "@id": "schema:MedicalSymptom"
+    },
+    MedicalTest: {
+      "@id": "schema:MedicalTest"
+    },
+    MedicalTestPanel: {
+      "@id": "schema:MedicalTestPanel"
+    },
+    MedicalTherapy: {
+      "@id": "schema:MedicalTherapy"
+    },
+    MedicalTrial: {
+      "@id": "schema:MedicalTrial"
+    },
+    MedicalTrialDesign: {
+      "@id": "schema:MedicalTrialDesign"
+    },
+    MedicalWebPage: {
+      "@id": "schema:MedicalWebPage"
+    },
+    MedicineSystem: {
+      "@id": "schema:MedicineSystem"
+    },
+    MeetingRoom: {
+      "@id": "schema:MeetingRoom"
+    },
+    MemberProgram: {
+      "@id": "schema:MemberProgram"
+    },
+    MemberProgramTier: {
+      "@id": "schema:MemberProgramTier"
+    },
+    MensClothingStore: {
+      "@id": "schema:MensClothingStore"
+    },
+    Menu: {
+      "@id": "schema:Menu"
+    },
+    MenuItem: {
+      "@id": "schema:MenuItem"
+    },
+    MenuSection: {
+      "@id": "schema:MenuSection"
+    },
+    MerchantReturnEnumeration: {
+      "@id": "schema:MerchantReturnEnumeration"
+    },
+    MerchantReturnFiniteReturnWindow: {
+      "@id": "schema:MerchantReturnFiniteReturnWindow"
+    },
+    MerchantReturnNotPermitted: {
+      "@id": "schema:MerchantReturnNotPermitted"
+    },
+    MerchantReturnPolicy: {
+      "@id": "schema:MerchantReturnPolicy"
+    },
+    MerchantReturnPolicySeasonalOverride: {
+      "@id": "schema:MerchantReturnPolicySeasonalOverride"
+    },
+    MerchantReturnUnlimitedWindow: {
+      "@id": "schema:MerchantReturnUnlimitedWindow"
+    },
+    MerchantReturnUnspecified: {
+      "@id": "schema:MerchantReturnUnspecified"
+    },
+    Message: {
+      "@id": "schema:Message"
+    },
+    MiddleSchool: {
+      "@id": "schema:MiddleSchool"
+    },
+    Midwifery: {
+      "@id": "schema:Midwifery"
+    },
+    MinimumAdvertisedPrice: {
+      "@id": "schema:MinimumAdvertisedPrice"
+    },
+    MinorHumanEditsDigitalSource: {
+      "@id": "schema:MinorHumanEditsDigitalSource"
+    },
+    MisconceptionsHealthAspect: {
+      "@id": "schema:MisconceptionsHealthAspect"
+    },
+    MixedEventAttendanceMode: {
+      "@id": "schema:MixedEventAttendanceMode"
+    },
+    MixtapeAlbum: {
+      "@id": "schema:MixtapeAlbum"
+    },
+    MobileApplication: {
+      "@id": "schema:MobileApplication"
+    },
+    MobilePhoneStore: {
+      "@id": "schema:MobilePhoneStore"
+    },
+    MobileWebPlatform: {
+      "@id": "schema:MobileWebPlatform"
+    },
+    MolecularEntity: {
+      "@id": "schema:MolecularEntity"
+    },
+    Monday: {
+      "@id": "schema:Monday"
+    },
+    MonetaryAmount: {
+      "@id": "schema:MonetaryAmount"
+    },
+    MonetaryAmountDistribution: {
+      "@id": "schema:MonetaryAmountDistribution"
+    },
+    MonetaryGrant: {
+      "@id": "schema:MonetaryGrant"
+    },
+    MoneyTransfer: {
+      "@id": "schema:MoneyTransfer"
+    },
+    MortgageLoan: {
+      "@id": "schema:MortgageLoan"
+    },
+    Mosque: {
+      "@id": "schema:Mosque"
+    },
+    Motel: {
+      "@id": "schema:Motel"
+    },
+    Motorcycle: {
+      "@id": "schema:Motorcycle"
+    },
+    MotorcycleDealer: {
+      "@id": "schema:MotorcycleDealer"
+    },
+    MotorcycleRepair: {
+      "@id": "schema:MotorcycleRepair"
+    },
+    MotorizedBicycle: {
+      "@id": "schema:MotorizedBicycle"
+    },
+    Mountain: {
+      "@id": "schema:Mountain"
+    },
+    MoveAction: {
+      "@id": "schema:MoveAction"
+    },
+    Movie: {
+      "@id": "schema:Movie"
+    },
+    MovieClip: {
+      "@id": "schema:MovieClip"
+    },
+    MovieRentalStore: {
+      "@id": "schema:MovieRentalStore"
+    },
+    MovieSeries: {
+      "@id": "schema:MovieSeries"
+    },
+    MovieTheater: {
+      "@id": "schema:MovieTheater"
+    },
+    MovingCompany: {
+      "@id": "schema:MovingCompany"
+    },
+    MultiCenterTrial: {
+      "@id": "schema:MultiCenterTrial"
+    },
+    MultiPlayer: {
+      "@id": "schema:MultiPlayer"
+    },
+    MulticellularParasite: {
+      "@id": "schema:MulticellularParasite"
+    },
+    Muscle: {
+      "@id": "schema:Muscle"
+    },
+    Musculoskeletal: {
+      "@id": "schema:Musculoskeletal"
+    },
+    MusculoskeletalExam: {
+      "@id": "schema:MusculoskeletalExam"
+    },
+    Museum: {
+      "@id": "schema:Museum"
+    },
+    MusicAlbum: {
+      "@id": "schema:MusicAlbum"
+    },
+    MusicAlbumProductionType: {
+      "@id": "schema:MusicAlbumProductionType"
+    },
+    MusicAlbumReleaseType: {
+      "@id": "schema:MusicAlbumReleaseType"
+    },
+    MusicComposition: {
+      "@id": "schema:MusicComposition"
+    },
+    MusicEvent: {
+      "@id": "schema:MusicEvent"
+    },
+    MusicGroup: {
+      "@id": "schema:MusicGroup"
+    },
+    MusicPlaylist: {
+      "@id": "schema:MusicPlaylist"
+    },
+    MusicRecording: {
+      "@id": "schema:MusicRecording"
+    },
+    MusicRelease: {
+      "@id": "schema:MusicRelease"
+    },
+    MusicReleaseFormatType: {
+      "@id": "schema:MusicReleaseFormatType"
+    },
+    MusicStore: {
+      "@id": "schema:MusicStore"
+    },
+    MusicVenue: {
+      "@id": "schema:MusicVenue"
+    },
+    MusicVideoObject: {
+      "@id": "schema:MusicVideoObject"
+    },
+    NGO: {
+      "@id": "schema:NGO"
+    },
+    NLNonprofitType: {
+      "@id": "schema:NLNonprofitType"
+    },
+    NailSalon: {
+      "@id": "schema:NailSalon"
+    },
+    NarcoticConsideration: {
+      "@id": "schema:NarcoticConsideration"
+    },
+    Neck: {
+      "@id": "schema:Neck"
+    },
+    NegativeFilmDigitalSource: {
+      "@id": "schema:NegativeFilmDigitalSource"
+    },
+    Nerve: {
+      "@id": "schema:Nerve"
+    },
+    Neuro: {
+      "@id": "schema:Neuro"
+    },
+    Neurologic: {
+      "@id": "schema:Neurologic"
+    },
+    NewCondition: {
+      "@id": "schema:NewCondition"
+    },
+    NewsArticle: {
+      "@id": "schema:NewsArticle"
+    },
+    NewsMediaOrganization: {
+      "@id": "schema:NewsMediaOrganization"
+    },
+    Newspaper: {
+      "@id": "schema:Newspaper"
+    },
+    NightClub: {
+      "@id": "schema:NightClub"
+    },
+    NoninvasiveProcedure: {
+      "@id": "schema:NoninvasiveProcedure"
+    },
+    Nonprofit501a: {
+      "@id": "schema:Nonprofit501a"
+    },
+    Nonprofit501c1: {
+      "@id": "schema:Nonprofit501c1"
+    },
+    Nonprofit501c10: {
+      "@id": "schema:Nonprofit501c10"
+    },
+    Nonprofit501c11: {
+      "@id": "schema:Nonprofit501c11"
+    },
+    Nonprofit501c12: {
+      "@id": "schema:Nonprofit501c12"
+    },
+    Nonprofit501c13: {
+      "@id": "schema:Nonprofit501c13"
+    },
+    Nonprofit501c14: {
+      "@id": "schema:Nonprofit501c14"
+    },
+    Nonprofit501c15: {
+      "@id": "schema:Nonprofit501c15"
+    },
+    Nonprofit501c16: {
+      "@id": "schema:Nonprofit501c16"
+    },
+    Nonprofit501c17: {
+      "@id": "schema:Nonprofit501c17"
+    },
+    Nonprofit501c18: {
+      "@id": "schema:Nonprofit501c18"
+    },
+    Nonprofit501c19: {
+      "@id": "schema:Nonprofit501c19"
+    },
+    Nonprofit501c2: {
+      "@id": "schema:Nonprofit501c2"
+    },
+    Nonprofit501c20: {
+      "@id": "schema:Nonprofit501c20"
+    },
+    Nonprofit501c21: {
+      "@id": "schema:Nonprofit501c21"
+    },
+    Nonprofit501c22: {
+      "@id": "schema:Nonprofit501c22"
+    },
+    Nonprofit501c23: {
+      "@id": "schema:Nonprofit501c23"
+    },
+    Nonprofit501c24: {
+      "@id": "schema:Nonprofit501c24"
+    },
+    Nonprofit501c25: {
+      "@id": "schema:Nonprofit501c25"
+    },
+    Nonprofit501c26: {
+      "@id": "schema:Nonprofit501c26"
+    },
+    Nonprofit501c27: {
+      "@id": "schema:Nonprofit501c27"
+    },
+    Nonprofit501c28: {
+      "@id": "schema:Nonprofit501c28"
+    },
+    Nonprofit501c3: {
+      "@id": "schema:Nonprofit501c3"
+    },
+    Nonprofit501c4: {
+      "@id": "schema:Nonprofit501c4"
+    },
+    Nonprofit501c5: {
+      "@id": "schema:Nonprofit501c5"
+    },
+    Nonprofit501c6: {
+      "@id": "schema:Nonprofit501c6"
+    },
+    Nonprofit501c7: {
+      "@id": "schema:Nonprofit501c7"
+    },
+    Nonprofit501c8: {
+      "@id": "schema:Nonprofit501c8"
+    },
+    Nonprofit501c9: {
+      "@id": "schema:Nonprofit501c9"
+    },
+    Nonprofit501d: {
+      "@id": "schema:Nonprofit501d"
+    },
+    Nonprofit501e: {
+      "@id": "schema:Nonprofit501e"
+    },
+    Nonprofit501f: {
+      "@id": "schema:Nonprofit501f"
+    },
+    Nonprofit501k: {
+      "@id": "schema:Nonprofit501k"
+    },
+    Nonprofit501n: {
+      "@id": "schema:Nonprofit501n"
+    },
+    Nonprofit501q: {
+      "@id": "schema:Nonprofit501q"
+    },
+    Nonprofit527: {
+      "@id": "schema:Nonprofit527"
+    },
+    NonprofitANBI: {
+      "@id": "schema:NonprofitANBI"
+    },
+    NonprofitSBBI: {
+      "@id": "schema:NonprofitSBBI"
+    },
+    NonprofitType: {
+      "@id": "schema:NonprofitType"
+    },
+    Nose: {
+      "@id": "schema:Nose"
+    },
+    NotInForce: {
+      "@id": "schema:NotInForce"
+    },
+    NotYetRecruiting: {
+      "@id": "schema:NotYetRecruiting"
+    },
+    Notary: {
+      "@id": "schema:Notary"
+    },
+    NoteDigitalDocument: {
+      "@id": "schema:NoteDigitalDocument"
+    },
+    Number: {
+      "@id": "schema:Number"
+    },
+    Nursing: {
+      "@id": "schema:Nursing"
+    },
+    NutritionInformation: {
+      "@id": "schema:NutritionInformation"
+    },
+    OTC: {
+      "@id": "schema:OTC"
+    },
+    Observation: {
+      "@id": "schema:Observation"
+    },
+    Observational: {
+      "@id": "schema:Observational"
+    },
+    Obstetric: {
+      "@id": "schema:Obstetric"
+    },
+    Occupation: {
+      "@id": "schema:Occupation"
+    },
+    OccupationalActivity: {
+      "@id": "schema:OccupationalActivity"
+    },
+    OccupationalExperienceRequirements: {
+      "@id": "schema:OccupationalExperienceRequirements"
+    },
+    OccupationalTherapy: {
+      "@id": "schema:OccupationalTherapy"
+    },
+    OceanBodyOfWater: {
+      "@id": "schema:OceanBodyOfWater"
+    },
+    Offer: {
+      "@id": "schema:Offer"
+    },
+    OfferCatalog: {
+      "@id": "schema:OfferCatalog"
+    },
+    OfferForLease: {
+      "@id": "schema:OfferForLease"
+    },
+    OfferForPurchase: {
+      "@id": "schema:OfferForPurchase"
+    },
+    OfferItemCondition: {
+      "@id": "schema:OfferItemCondition"
+    },
+    OfferShippingDetails: {
+      "@id": "schema:OfferShippingDetails"
+    },
+    OfficeEquipmentStore: {
+      "@id": "schema:OfficeEquipmentStore"
+    },
+    OfficialLegalValue: {
+      "@id": "schema:OfficialLegalValue"
+    },
+    OfflineEventAttendanceMode: {
+      "@id": "schema:OfflineEventAttendanceMode"
+    },
+    OfflinePermanently: {
+      "@id": "schema:OfflinePermanently"
+    },
+    OfflineTemporarily: {
+      "@id": "schema:OfflineTemporarily"
+    },
+    OnDemandEvent: {
+      "@id": "schema:OnDemandEvent"
+    },
+    OnSitePickup: {
+      "@id": "schema:OnSitePickup"
+    },
+    Oncologic: {
+      "@id": "schema:Oncologic"
+    },
+    OneTimePayments: {
+      "@id": "schema:OneTimePayments"
+    },
+    Online: {
+      "@id": "schema:Online"
+    },
+    OnlineBusiness: {
+      "@id": "schema:OnlineBusiness"
+    },
+    OnlineEventAttendanceMode: {
+      "@id": "schema:OnlineEventAttendanceMode"
+    },
+    OnlineFull: {
+      "@id": "schema:OnlineFull"
+    },
+    OnlineOnly: {
+      "@id": "schema:OnlineOnly"
+    },
+    OnlineStore: {
+      "@id": "schema:OnlineStore"
+    },
+    OpenTrial: {
+      "@id": "schema:OpenTrial"
+    },
+    OpeningHoursSpecification: {
+      "@id": "schema:OpeningHoursSpecification"
+    },
+    OpinionNewsArticle: {
+      "@id": "schema:OpinionNewsArticle"
+    },
+    Optician: {
+      "@id": "schema:Optician"
+    },
+    Optometric: {
+      "@id": "schema:Optometric"
+    },
+    Order: {
+      "@id": "schema:Order"
+    },
+    OrderAction: {
+      "@id": "schema:OrderAction"
+    },
+    OrderCancelled: {
+      "@id": "schema:OrderCancelled"
+    },
+    OrderDelivered: {
+      "@id": "schema:OrderDelivered"
+    },
+    OrderInTransit: {
+      "@id": "schema:OrderInTransit"
+    },
+    OrderItem: {
+      "@id": "schema:OrderItem"
+    },
+    OrderPaymentDue: {
+      "@id": "schema:OrderPaymentDue"
+    },
+    OrderPickupAvailable: {
+      "@id": "schema:OrderPickupAvailable"
+    },
+    OrderProblem: {
+      "@id": "schema:OrderProblem"
+    },
+    OrderProcessing: {
+      "@id": "schema:OrderProcessing"
+    },
+    OrderReturned: {
+      "@id": "schema:OrderReturned"
+    },
+    OrderStatus: {
+      "@id": "schema:OrderStatus"
+    },
+    Organization: {
+      "@id": "schema:Organization"
+    },
+    OrganizationRole: {
+      "@id": "schema:OrganizationRole"
+    },
+    OrganizeAction: {
+      "@id": "schema:OrganizeAction"
+    },
+    OriginalMediaContent: {
+      "@id": "schema:OriginalMediaContent"
+    },
+    OriginalShippingFees: {
+      "@id": "schema:OriginalShippingFees"
+    },
+    Osteopathic: {
+      "@id": "schema:Osteopathic"
+    },
+    Otolaryngologic: {
+      "@id": "schema:Otolaryngologic"
+    },
+    OutOfStock: {
+      "@id": "schema:OutOfStock"
+    },
+    OutletStore: {
+      "@id": "schema:OutletStore"
+    },
+    OverviewHealthAspect: {
+      "@id": "schema:OverviewHealthAspect"
+    },
+    OwnershipInfo: {
+      "@id": "schema:OwnershipInfo"
+    },
+    PET: {
+      "@id": "schema:PET"
+    },
+    PaidLeave: {
+      "@id": "schema:PaidLeave"
+    },
+    PaintAction: {
+      "@id": "schema:PaintAction"
+    },
+    Painting: {
+      "@id": "schema:Painting"
+    },
+    PalliativeProcedure: {
+      "@id": "schema:PalliativeProcedure"
+    },
+    Paperback: {
+      "@id": "schema:Paperback"
+    },
+    ParcelDelivery: {
+      "@id": "schema:ParcelDelivery"
+    },
+    ParcelService: {
+      "@id": "schema:ParcelService"
+    },
+    ParentAudience: {
+      "@id": "schema:ParentAudience"
+    },
+    ParentalSupport: {
+      "@id": "schema:ParentalSupport"
+    },
+    Park: {
+      "@id": "schema:Park"
+    },
+    ParkingFacility: {
+      "@id": "schema:ParkingFacility"
+    },
+    ParkingMap: {
+      "@id": "schema:ParkingMap"
+    },
+    PartiallyInForce: {
+      "@id": "schema:PartiallyInForce"
+    },
+    Pathology: {
+      "@id": "schema:Pathology"
+    },
+    PathologyTest: {
+      "@id": "schema:PathologyTest"
+    },
+    Patient: {
+      "@id": "schema:Patient"
+    },
+    PatientExperienceHealthAspect: {
+      "@id": "schema:PatientExperienceHealthAspect"
+    },
+    PawnShop: {
+      "@id": "schema:PawnShop"
+    },
+    PayAction: {
+      "@id": "schema:PayAction"
+    },
+    PaymentAutomaticallyApplied: {
+      "@id": "schema:PaymentAutomaticallyApplied"
+    },
+    PaymentCard: {
+      "@id": "schema:PaymentCard"
+    },
+    PaymentChargeSpecification: {
+      "@id": "schema:PaymentChargeSpecification"
+    },
+    PaymentComplete: {
+      "@id": "schema:PaymentComplete"
+    },
+    PaymentDeclined: {
+      "@id": "schema:PaymentDeclined"
+    },
+    PaymentDue: {
+      "@id": "schema:PaymentDue"
+    },
+    PaymentMethod: {
+      "@id": "schema:PaymentMethod"
+    },
+    PaymentMethodType: {
+      "@id": "schema:PaymentMethodType"
+    },
+    PaymentPastDue: {
+      "@id": "schema:PaymentPastDue"
+    },
+    PaymentService: {
+      "@id": "schema:PaymentService"
+    },
+    PaymentStatusType: {
+      "@id": "schema:PaymentStatusType"
+    },
+    Pediatric: {
+      "@id": "schema:Pediatric"
+    },
+    PeopleAudience: {
+      "@id": "schema:PeopleAudience"
+    },
+    PercutaneousProcedure: {
+      "@id": "schema:PercutaneousProcedure"
+    },
+    PerformAction: {
+      "@id": "schema:PerformAction"
+    },
+    PerformanceRole: {
+      "@id": "schema:PerformanceRole"
+    },
+    PerformingArtsTheater: {
+      "@id": "schema:PerformingArtsTheater"
+    },
+    PerformingGroup: {
+      "@id": "schema:PerformingGroup"
+    },
+    Periodical: {
+      "@id": "schema:Periodical"
+    },
+    Permit: {
+      "@id": "schema:Permit"
+    },
+    Person: {
+      "@id": "schema:Person"
+    },
+    PetStore: {
+      "@id": "schema:PetStore"
+    },
+    Pharmacy: {
+      "@id": "schema:Pharmacy"
+    },
+    PharmacySpecialty: {
+      "@id": "schema:PharmacySpecialty"
+    },
+    PhoneCarrierPayment: {
+      "@id": "schema:PhoneCarrierPayment"
+    },
+    Photograph: {
+      "@id": "schema:Photograph"
+    },
+    PhotographAction: {
+      "@id": "schema:PhotographAction"
+    },
+    PhysicalActivity: {
+      "@id": "schema:PhysicalActivity"
+    },
+    PhysicalActivityCategory: {
+      "@id": "schema:PhysicalActivityCategory"
+    },
+    PhysicalExam: {
+      "@id": "schema:PhysicalExam"
+    },
+    PhysicalTherapy: {
+      "@id": "schema:PhysicalTherapy"
+    },
+    Physician: {
+      "@id": "schema:Physician"
+    },
+    PhysiciansOffice: {
+      "@id": "schema:PhysiciansOffice"
+    },
+    Physiotherapy: {
+      "@id": "schema:Physiotherapy"
+    },
+    Place: {
+      "@id": "schema:Place"
+    },
+    PlaceOfWorship: {
+      "@id": "schema:PlaceOfWorship"
+    },
+    PlaceboControlledTrial: {
+      "@id": "schema:PlaceboControlledTrial"
+    },
+    PlanAction: {
+      "@id": "schema:PlanAction"
+    },
+    PlasticSurgery: {
+      "@id": "schema:PlasticSurgery"
+    },
+    Play: {
+      "@id": "schema:Play"
+    },
+    PlayAction: {
+      "@id": "schema:PlayAction"
+    },
+    PlayGameAction: {
+      "@id": "schema:PlayGameAction"
+    },
+    Playground: {
+      "@id": "schema:Playground"
+    },
+    Plumber: {
+      "@id": "schema:Plumber"
+    },
+    PodcastEpisode: {
+      "@id": "schema:PodcastEpisode"
+    },
+    PodcastSeason: {
+      "@id": "schema:PodcastSeason"
+    },
+    PodcastSeries: {
+      "@id": "schema:PodcastSeries"
+    },
+    Podiatric: {
+      "@id": "schema:Podiatric"
+    },
+    PoliceStation: {
+      "@id": "schema:PoliceStation"
+    },
+    PoliticalParty: {
+      "@id": "schema:PoliticalParty"
+    },
+    Pond: {
+      "@id": "schema:Pond"
+    },
+    PositiveFilmDigitalSource: {
+      "@id": "schema:PositiveFilmDigitalSource"
+    },
+    PostOffice: {
+      "@id": "schema:PostOffice"
+    },
+    PostalAddress: {
+      "@id": "schema:PostalAddress"
+    },
+    PostalCodeRangeSpecification: {
+      "@id": "schema:PostalCodeRangeSpecification"
+    },
+    Poster: {
+      "@id": "schema:Poster"
+    },
+    PotentialActionStatus: {
+      "@id": "schema:PotentialActionStatus"
+    },
+    PreOrder: {
+      "@id": "schema:PreOrder"
+    },
+    PreOrderAction: {
+      "@id": "schema:PreOrderAction"
+    },
+    PreSale: {
+      "@id": "schema:PreSale"
+    },
+    PregnancyHealthAspect: {
+      "@id": "schema:PregnancyHealthAspect"
+    },
+    PrependAction: {
+      "@id": "schema:PrependAction"
+    },
+    Preschool: {
+      "@id": "schema:Preschool"
+    },
+    PrescriptionOnly: {
+      "@id": "schema:PrescriptionOnly"
+    },
+    PresentationDigitalDocument: {
+      "@id": "schema:PresentationDigitalDocument"
+    },
+    PreventionHealthAspect: {
+      "@id": "schema:PreventionHealthAspect"
+    },
+    PreventionIndication: {
+      "@id": "schema:PreventionIndication"
+    },
+    PriceComponentTypeEnumeration: {
+      "@id": "schema:PriceComponentTypeEnumeration"
+    },
+    PriceSpecification: {
+      "@id": "schema:PriceSpecification"
+    },
+    PriceTypeEnumeration: {
+      "@id": "schema:PriceTypeEnumeration"
+    },
+    PrimaryCare: {
+      "@id": "schema:PrimaryCare"
+    },
+    PrintDigitalSource: {
+      "@id": "schema:PrintDigitalSource"
+    },
+    Prion: {
+      "@id": "schema:Prion"
+    },
+    Product: {
+      "@id": "schema:Product"
+    },
+    ProductCollection: {
+      "@id": "schema:ProductCollection"
+    },
+    ProductGroup: {
+      "@id": "schema:ProductGroup"
+    },
+    ProductModel: {
+      "@id": "schema:ProductModel"
+    },
+    ProductReturnEnumeration: {
+      "@id": "schema:ProductReturnEnumeration"
+    },
+    ProductReturnFiniteReturnWindow: {
+      "@id": "schema:ProductReturnFiniteReturnWindow"
+    },
+    ProductReturnNotPermitted: {
+      "@id": "schema:ProductReturnNotPermitted"
+    },
+    ProductReturnPolicy: {
+      "@id": "schema:ProductReturnPolicy"
+    },
+    ProductReturnUnlimitedWindow: {
+      "@id": "schema:ProductReturnUnlimitedWindow"
+    },
+    ProductReturnUnspecified: {
+      "@id": "schema:ProductReturnUnspecified"
+    },
+    ProfessionalService: {
+      "@id": "schema:ProfessionalService"
+    },
+    ProfilePage: {
+      "@id": "schema:ProfilePage"
+    },
+    PrognosisHealthAspect: {
+      "@id": "schema:PrognosisHealthAspect"
+    },
+    ProgramMembership: {
+      "@id": "schema:ProgramMembership"
+    },
+    Project: {
+      "@id": "schema:Project"
+    },
+    PronounceableText: {
+      "@id": "schema:PronounceableText"
+    },
+    Property: {
+      "@id": "schema:Property"
+    },
+    PropertyValue: {
+      "@id": "schema:PropertyValue"
+    },
+    PropertyValueSpecification: {
+      "@id": "schema:PropertyValueSpecification"
+    },
+    Protein: {
+      "@id": "schema:Protein"
+    },
+    Protozoa: {
+      "@id": "schema:Protozoa"
+    },
+    Psychiatric: {
+      "@id": "schema:Psychiatric"
+    },
+    PsychologicalTreatment: {
+      "@id": "schema:PsychologicalTreatment"
+    },
+    PublicHealth: {
+      "@id": "schema:PublicHealth"
+    },
+    PublicHolidays: {
+      "@id": "schema:PublicHolidays"
+    },
+    PublicSwimmingPool: {
+      "@id": "schema:PublicSwimmingPool"
+    },
+    PublicToilet: {
+      "@id": "schema:PublicToilet"
+    },
+    PublicationEvent: {
+      "@id": "schema:PublicationEvent"
+    },
+    PublicationIssue: {
+      "@id": "schema:PublicationIssue"
+    },
+    PublicationVolume: {
+      "@id": "schema:PublicationVolume"
+    },
+    Pulmonary: {
+      "@id": "schema:Pulmonary"
+    },
+    QAPage: {
+      "@id": "schema:QAPage"
+    },
+    QualitativeValue: {
+      "@id": "schema:QualitativeValue"
+    },
+    QuantitativeValue: {
+      "@id": "schema:QuantitativeValue"
+    },
+    QuantitativeValueDistribution: {
+      "@id": "schema:QuantitativeValueDistribution"
+    },
+    Quantity: {
+      "@id": "schema:Quantity"
+    },
+    Question: {
+      "@id": "schema:Question"
+    },
+    Quiz: {
+      "@id": "schema:Quiz"
+    },
+    Quotation: {
+      "@id": "schema:Quotation"
+    },
+    QuoteAction: {
+      "@id": "schema:QuoteAction"
+    },
+    RVPark: {
+      "@id": "schema:RVPark"
+    },
+    RadiationTherapy: {
+      "@id": "schema:RadiationTherapy"
+    },
+    RadioBroadcastService: {
+      "@id": "schema:RadioBroadcastService"
+    },
+    RadioChannel: {
+      "@id": "schema:RadioChannel"
+    },
+    RadioClip: {
+      "@id": "schema:RadioClip"
+    },
+    RadioEpisode: {
+      "@id": "schema:RadioEpisode"
+    },
+    RadioSeason: {
+      "@id": "schema:RadioSeason"
+    },
+    RadioSeries: {
+      "@id": "schema:RadioSeries"
+    },
+    RadioStation: {
+      "@id": "schema:RadioStation"
+    },
+    Radiography: {
+      "@id": "schema:Radiography"
+    },
+    RandomizedTrial: {
+      "@id": "schema:RandomizedTrial"
+    },
+    Rating: {
+      "@id": "schema:Rating"
+    },
+    ReactAction: {
+      "@id": "schema:ReactAction"
+    },
+    ReadAction: {
+      "@id": "schema:ReadAction"
+    },
+    ReadPermission: {
+      "@id": "schema:ReadPermission"
+    },
+    RealEstateAgent: {
+      "@id": "schema:RealEstateAgent"
+    },
+    RealEstateListing: {
+      "@id": "schema:RealEstateListing"
+    },
+    RearWheelDriveConfiguration: {
+      "@id": "schema:RearWheelDriveConfiguration"
+    },
+    ReceiveAction: {
+      "@id": "schema:ReceiveAction"
+    },
+    Recipe: {
+      "@id": "schema:Recipe"
+    },
+    Recommendation: {
+      "@id": "schema:Recommendation"
+    },
+    RecommendedDoseSchedule: {
+      "@id": "schema:RecommendedDoseSchedule"
+    },
+    Recruiting: {
+      "@id": "schema:Recruiting"
+    },
+    RecyclingCenter: {
+      "@id": "schema:RecyclingCenter"
+    },
+    ReducedRelevanceForChildrenConsideration: {
+      "@id": "schema:ReducedRelevanceForChildrenConsideration"
+    },
+    RefundTypeEnumeration: {
+      "@id": "schema:RefundTypeEnumeration"
+    },
+    RefurbishedCondition: {
+      "@id": "schema:RefurbishedCondition"
+    },
+    RegisterAction: {
+      "@id": "schema:RegisterAction"
+    },
+    Registry: {
+      "@id": "schema:Registry"
+    },
+    RegularPrice: {
+      "@id": "schema:RegularPrice"
+    },
+    ReimbursementCap: {
+      "@id": "schema:ReimbursementCap"
+    },
+    RejectAction: {
+      "@id": "schema:RejectAction"
+    },
+    RelatedTopicsHealthAspect: {
+      "@id": "schema:RelatedTopicsHealthAspect"
+    },
+    RemixAlbum: {
+      "@id": "schema:RemixAlbum"
+    },
+    Renal: {
+      "@id": "schema:Renal"
+    },
+    RentAction: {
+      "@id": "schema:RentAction"
+    },
+    RentalCarReservation: {
+      "@id": "schema:RentalCarReservation"
+    },
+    RentalVehicleUsage: {
+      "@id": "schema:RentalVehicleUsage"
+    },
+    RepaymentSpecification: {
+      "@id": "schema:RepaymentSpecification"
+    },
+    ReplaceAction: {
+      "@id": "schema:ReplaceAction"
+    },
+    ReplyAction: {
+      "@id": "schema:ReplyAction"
+    },
+    Report: {
+      "@id": "schema:Report"
+    },
+    ReportageNewsArticle: {
+      "@id": "schema:ReportageNewsArticle"
+    },
+    ReportedDoseSchedule: {
+      "@id": "schema:ReportedDoseSchedule"
+    },
+    ResearchOrganization: {
+      "@id": "schema:ResearchOrganization"
+    },
+    ResearchProject: {
+      "@id": "schema:ResearchProject"
+    },
+    Researcher: {
+      "@id": "schema:Researcher"
+    },
+    Reservation: {
+      "@id": "schema:Reservation"
+    },
+    ReservationCancelled: {
+      "@id": "schema:ReservationCancelled"
+    },
+    ReservationConfirmed: {
+      "@id": "schema:ReservationConfirmed"
+    },
+    ReservationHold: {
+      "@id": "schema:ReservationHold"
+    },
+    ReservationPackage: {
+      "@id": "schema:ReservationPackage"
+    },
+    ReservationPending: {
+      "@id": "schema:ReservationPending"
+    },
+    ReservationStatusType: {
+      "@id": "schema:ReservationStatusType"
+    },
+    ReserveAction: {
+      "@id": "schema:ReserveAction"
+    },
+    Reserved: {
+      "@id": "schema:Reserved"
+    },
+    Reservoir: {
+      "@id": "schema:Reservoir"
+    },
+    Residence: {
+      "@id": "schema:Residence"
+    },
+    Resort: {
+      "@id": "schema:Resort"
+    },
+    RespiratoryTherapy: {
+      "@id": "schema:RespiratoryTherapy"
+    },
+    Restaurant: {
+      "@id": "schema:Restaurant"
+    },
+    RestockingFees: {
+      "@id": "schema:RestockingFees"
+    },
+    RestrictedDiet: {
+      "@id": "schema:RestrictedDiet"
+    },
+    ResultsAvailable: {
+      "@id": "schema:ResultsAvailable"
+    },
+    ResultsNotAvailable: {
+      "@id": "schema:ResultsNotAvailable"
+    },
+    ResumeAction: {
+      "@id": "schema:ResumeAction"
+    },
+    Retail: {
+      "@id": "schema:Retail"
+    },
+    ReturnAction: {
+      "@id": "schema:ReturnAction"
+    },
+    ReturnAtKiosk: {
+      "@id": "schema:ReturnAtKiosk"
+    },
+    ReturnByMail: {
+      "@id": "schema:ReturnByMail"
+    },
+    ReturnFeesCustomerResponsibility: {
+      "@id": "schema:ReturnFeesCustomerResponsibility"
+    },
+    ReturnFeesEnumeration: {
+      "@id": "schema:ReturnFeesEnumeration"
+    },
+    ReturnInStore: {
+      "@id": "schema:ReturnInStore"
+    },
+    ReturnLabelCustomerResponsibility: {
+      "@id": "schema:ReturnLabelCustomerResponsibility"
+    },
+    ReturnLabelDownloadAndPrint: {
+      "@id": "schema:ReturnLabelDownloadAndPrint"
+    },
+    ReturnLabelInBox: {
+      "@id": "schema:ReturnLabelInBox"
+    },
+    ReturnLabelSourceEnumeration: {
+      "@id": "schema:ReturnLabelSourceEnumeration"
+    },
+    ReturnMethodEnumeration: {
+      "@id": "schema:ReturnMethodEnumeration"
+    },
+    ReturnShippingFees: {
+      "@id": "schema:ReturnShippingFees"
+    },
+    Review: {
+      "@id": "schema:Review"
+    },
+    ReviewAction: {
+      "@id": "schema:ReviewAction"
+    },
+    ReviewNewsArticle: {
+      "@id": "schema:ReviewNewsArticle"
+    },
+    Rheumatologic: {
+      "@id": "schema:Rheumatologic"
+    },
+    RightHandDriving: {
+      "@id": "schema:RightHandDriving"
+    },
+    RisksOrComplicationsHealthAspect: {
+      "@id": "schema:RisksOrComplicationsHealthAspect"
+    },
+    RiverBodyOfWater: {
+      "@id": "schema:RiverBodyOfWater"
+    },
+    Role: {
+      "@id": "schema:Role"
+    },
+    RoofingContractor: {
+      "@id": "schema:RoofingContractor"
+    },
+    Room: {
+      "@id": "schema:Room"
+    },
+    RsvpAction: {
+      "@id": "schema:RsvpAction"
+    },
+    RsvpResponseMaybe: {
+      "@id": "schema:RsvpResponseMaybe"
+    },
+    RsvpResponseNo: {
+      "@id": "schema:RsvpResponseNo"
+    },
+    RsvpResponseType: {
+      "@id": "schema:RsvpResponseType"
+    },
+    RsvpResponseYes: {
+      "@id": "schema:RsvpResponseYes"
+    },
+    SRP: {
+      "@id": "schema:SRP"
+    },
+    SafetyHealthAspect: {
+      "@id": "schema:SafetyHealthAspect"
+    },
+    SaleEvent: {
+      "@id": "schema:SaleEvent"
+    },
+    SalePrice: {
+      "@id": "schema:SalePrice"
+    },
+    SatireOrParodyContent: {
+      "@id": "schema:SatireOrParodyContent"
+    },
+    SatiricalArticle: {
+      "@id": "schema:SatiricalArticle"
+    },
+    Saturday: {
+      "@id": "schema:Saturday"
+    },
+    Schedule: {
+      "@id": "schema:Schedule"
+    },
+    ScheduleAction: {
+      "@id": "schema:ScheduleAction"
+    },
+    ScholarlyArticle: {
+      "@id": "schema:ScholarlyArticle"
+    },
+    School: {
+      "@id": "schema:School"
+    },
+    SchoolDistrict: {
+      "@id": "schema:SchoolDistrict"
+    },
+    ScreeningEvent: {
+      "@id": "schema:ScreeningEvent"
+    },
+    ScreeningHealthAspect: {
+      "@id": "schema:ScreeningHealthAspect"
+    },
+    Sculpture: {
+      "@id": "schema:Sculpture"
+    },
+    SeaBodyOfWater: {
+      "@id": "schema:SeaBodyOfWater"
+    },
+    SearchAction: {
+      "@id": "schema:SearchAction"
+    },
+    SearchRescueOrganization: {
+      "@id": "schema:SearchRescueOrganization"
+    },
+    SearchResultsPage: {
+      "@id": "schema:SearchResultsPage"
+    },
+    Season: {
+      "@id": "schema:Season"
+    },
+    Seat: {
+      "@id": "schema:Seat"
+    },
+    SeatingMap: {
+      "@id": "schema:SeatingMap"
+    },
+    SeeDoctorHealthAspect: {
+      "@id": "schema:SeeDoctorHealthAspect"
+    },
+    SeekToAction: {
+      "@id": "schema:SeekToAction"
+    },
+    SelfCareHealthAspect: {
+      "@id": "schema:SelfCareHealthAspect"
+    },
+    SelfStorage: {
+      "@id": "schema:SelfStorage"
+    },
+    SellAction: {
+      "@id": "schema:SellAction"
+    },
+    SendAction: {
+      "@id": "schema:SendAction"
+    },
+    Series: {
+      "@id": "schema:Series"
+    },
+    Service: {
+      "@id": "schema:Service"
+    },
+    ServiceChannel: {
+      "@id": "schema:ServiceChannel"
+    },
+    SexualContentConsideration: {
+      "@id": "schema:SexualContentConsideration"
+    },
+    ShareAction: {
+      "@id": "schema:ShareAction"
+    },
+    SheetMusic: {
+      "@id": "schema:SheetMusic"
+    },
+    ShippingDeliveryTime: {
+      "@id": "schema:ShippingDeliveryTime"
+    },
+    ShippingRateSettings: {
+      "@id": "schema:ShippingRateSettings"
+    },
+    ShoeStore: {
+      "@id": "schema:ShoeStore"
+    },
+    ShoppingCenter: {
+      "@id": "schema:ShoppingCenter"
+    },
+    ShortStory: {
+      "@id": "schema:ShortStory"
+    },
+    SideEffectsHealthAspect: {
+      "@id": "schema:SideEffectsHealthAspect"
+    },
+    SingleBlindedTrial: {
+      "@id": "schema:SingleBlindedTrial"
+    },
+    SingleCenterTrial: {
+      "@id": "schema:SingleCenterTrial"
+    },
+    SingleFamilyResidence: {
+      "@id": "schema:SingleFamilyResidence"
+    },
+    SinglePlayer: {
+      "@id": "schema:SinglePlayer"
+    },
+    SingleRelease: {
+      "@id": "schema:SingleRelease"
+    },
+    SiteNavigationElement: {
+      "@id": "schema:SiteNavigationElement"
+    },
+    SizeGroupEnumeration: {
+      "@id": "schema:SizeGroupEnumeration"
+    },
+    SizeSpecification: {
+      "@id": "schema:SizeSpecification"
+    },
+    SizeSystemEnumeration: {
+      "@id": "schema:SizeSystemEnumeration"
+    },
+    SizeSystemImperial: {
+      "@id": "schema:SizeSystemImperial"
+    },
+    SizeSystemMetric: {
+      "@id": "schema:SizeSystemMetric"
+    },
+    SkiResort: {
+      "@id": "schema:SkiResort"
+    },
+    Skin: {
+      "@id": "schema:Skin"
+    },
+    SocialEvent: {
+      "@id": "schema:SocialEvent"
+    },
+    SocialMediaPosting: {
+      "@id": "schema:SocialMediaPosting"
+    },
+    SoftwareApplication: {
+      "@id": "schema:SoftwareApplication"
+    },
+    SoftwareSourceCode: {
+      "@id": "schema:SoftwareSourceCode"
+    },
+    SoldOut: {
+      "@id": "schema:SoldOut"
+    },
+    SolveMathAction: {
+      "@id": "schema:SolveMathAction"
+    },
+    SomeProducts: {
+      "@id": "schema:SomeProducts"
+    },
+    SoundtrackAlbum: {
+      "@id": "schema:SoundtrackAlbum"
+    },
+    SpeakableSpecification: {
+      "@id": "schema:SpeakableSpecification"
+    },
+    SpecialAnnouncement: {
+      "@id": "schema:SpecialAnnouncement"
+    },
+    Specialty: {
+      "@id": "schema:Specialty"
+    },
+    SpeechPathology: {
+      "@id": "schema:SpeechPathology"
+    },
+    SpokenWordAlbum: {
+      "@id": "schema:SpokenWordAlbum"
+    },
+    SportingGoodsStore: {
+      "@id": "schema:SportingGoodsStore"
+    },
+    SportsActivityLocation: {
+      "@id": "schema:SportsActivityLocation"
+    },
+    SportsClub: {
+      "@id": "schema:SportsClub"
+    },
+    SportsEvent: {
+      "@id": "schema:SportsEvent"
+    },
+    SportsOrganization: {
+      "@id": "schema:SportsOrganization"
+    },
+    SportsTeam: {
+      "@id": "schema:SportsTeam"
+    },
+    SpreadsheetDigitalDocument: {
+      "@id": "schema:SpreadsheetDigitalDocument"
+    },
+    StadiumOrArena: {
+      "@id": "schema:StadiumOrArena"
+    },
+    StagedContent: {
+      "@id": "schema:StagedContent"
+    },
+    StagesHealthAspect: {
+      "@id": "schema:StagesHealthAspect"
+    },
+    State: {
+      "@id": "schema:State"
+    },
+    Statement: {
+      "@id": "schema:Statement"
+    },
+    StatisticalPopulation: {
+      "@id": "schema:StatisticalPopulation"
+    },
+    StatisticalVariable: {
+      "@id": "schema:StatisticalVariable"
+    },
+    StatusEnumeration: {
+      "@id": "schema:StatusEnumeration"
+    },
+    SteeringPositionValue: {
+      "@id": "schema:SteeringPositionValue"
+    },
+    Store: {
+      "@id": "schema:Store"
+    },
+    StoreCreditRefund: {
+      "@id": "schema:StoreCreditRefund"
+    },
+    StrengthTraining: {
+      "@id": "schema:StrengthTraining"
+    },
+    StructuredValue: {
+      "@id": "schema:StructuredValue"
+    },
+    StudioAlbum: {
+      "@id": "schema:StudioAlbum"
+    },
+    StupidType: {
+      "@id": "schema:StupidType"
+    },
+    SubscribeAction: {
+      "@id": "schema:SubscribeAction"
+    },
+    Subscription: {
+      "@id": "schema:Subscription"
+    },
+    Substance: {
+      "@id": "schema:Substance"
+    },
+    SubwayStation: {
+      "@id": "schema:SubwayStation"
+    },
+    Suite: {
+      "@id": "schema:Suite"
+    },
+    Sunday: {
+      "@id": "schema:Sunday"
+    },
+    SuperficialAnatomy: {
+      "@id": "schema:SuperficialAnatomy"
+    },
+    Surgical: {
+      "@id": "schema:Surgical"
+    },
+    SurgicalProcedure: {
+      "@id": "schema:SurgicalProcedure"
+    },
+    SuspendAction: {
+      "@id": "schema:SuspendAction"
+    },
+    Suspended: {
+      "@id": "schema:Suspended"
+    },
+    Syllabus: {
+      "@id": "schema:Syllabus"
+    },
+    SymptomsHealthAspect: {
+      "@id": "schema:SymptomsHealthAspect"
+    },
+    Synagogue: {
+      "@id": "schema:Synagogue"
+    },
+    TVClip: {
+      "@id": "schema:TVClip"
+    },
+    TVEpisode: {
+      "@id": "schema:TVEpisode"
+    },
+    TVSeason: {
+      "@id": "schema:TVSeason"
+    },
+    TVSeries: {
+      "@id": "schema:TVSeries"
+    },
+    Table: {
+      "@id": "schema:Table"
+    },
+    TakeAction: {
+      "@id": "schema:TakeAction"
+    },
+    TattooParlor: {
+      "@id": "schema:TattooParlor"
+    },
+    Taxi: {
+      "@id": "schema:Taxi"
+    },
+    TaxiReservation: {
+      "@id": "schema:TaxiReservation"
+    },
+    TaxiService: {
+      "@id": "schema:TaxiService"
+    },
+    TaxiStand: {
+      "@id": "schema:TaxiStand"
+    },
+    TaxiVehicleUsage: {
+      "@id": "schema:TaxiVehicleUsage"
+    },
+    Taxon: {
+      "@id": "schema:Taxon"
+    },
+    TechArticle: {
+      "@id": "schema:TechArticle"
+    },
+    TelevisionChannel: {
+      "@id": "schema:TelevisionChannel"
+    },
+    TelevisionStation: {
+      "@id": "schema:TelevisionStation"
+    },
+    TennisComplex: {
+      "@id": "schema:TennisComplex"
+    },
+    Terminated: {
+      "@id": "schema:Terminated"
+    },
+    Text: {
+      "@id": "schema:Text"
+    },
+    TextDigitalDocument: {
+      "@id": "schema:TextDigitalDocument"
+    },
+    TextObject: {
+      "@id": "schema:TextObject"
+    },
+    TheaterEvent: {
+      "@id": "schema:TheaterEvent"
+    },
+    TheaterGroup: {
+      "@id": "schema:TheaterGroup"
+    },
+    Therapeutic: {
+      "@id": "schema:Therapeutic"
+    },
+    TherapeuticProcedure: {
+      "@id": "schema:TherapeuticProcedure"
+    },
+    Thesis: {
+      "@id": "schema:Thesis"
+    },
+    Thing: {
+      "@id": "schema:Thing"
+    },
+    Throat: {
+      "@id": "schema:Throat"
+    },
+    Thursday: {
+      "@id": "schema:Thursday"
+    },
+    Ticket: {
+      "@id": "schema:Ticket"
+    },
+    TieAction: {
+      "@id": "schema:TieAction"
+    },
+    TierBenefitEnumeration: {
+      "@id": "schema:TierBenefitEnumeration"
+    },
+    TierBenefitLoyaltyPoints: {
+      "@id": "schema:TierBenefitLoyaltyPoints"
+    },
+    TierBenefitLoyaltyPrice: {
+      "@id": "schema:TierBenefitLoyaltyPrice"
+    },
+    TierBenefitLoyaltyReturns: {
+      "@id": "schema:TierBenefitLoyaltyReturns"
+    },
+    TierBenefitLoyaltyShipping: {
+      "@id": "schema:TierBenefitLoyaltyShipping"
+    },
+    Time: {
+      "@id": "schema:Time"
+    },
+    TipAction: {
+      "@id": "schema:TipAction"
+    },
+    TireShop: {
+      "@id": "schema:TireShop"
+    },
+    TobaccoNicotineConsideration: {
+      "@id": "schema:TobaccoNicotineConsideration"
+    },
+    TollFree: {
+      "@id": "schema:TollFree"
+    },
+    TouristAttraction: {
+      "@id": "schema:TouristAttraction"
+    },
+    TouristDestination: {
+      "@id": "schema:TouristDestination"
+    },
+    TouristInformationCenter: {
+      "@id": "schema:TouristInformationCenter"
+    },
+    TouristTrip: {
+      "@id": "schema:TouristTrip"
+    },
+    Toxicologic: {
+      "@id": "schema:Toxicologic"
+    },
+    ToyStore: {
+      "@id": "schema:ToyStore"
+    },
+    TrackAction: {
+      "@id": "schema:TrackAction"
+    },
+    TradeAction: {
+      "@id": "schema:TradeAction"
+    },
+    TraditionalChinese: {
+      "@id": "schema:TraditionalChinese"
+    },
+    TrainReservation: {
+      "@id": "schema:TrainReservation"
+    },
+    TrainStation: {
+      "@id": "schema:TrainStation"
+    },
+    TrainTrip: {
+      "@id": "schema:TrainTrip"
+    },
+    TrainedAlgorithmicMediaDigitalSource: {
+      "@id": "schema:TrainedAlgorithmicMediaDigitalSource"
+    },
+    TransferAction: {
+      "@id": "schema:TransferAction"
+    },
+    TransformedContent: {
+      "@id": "schema:TransformedContent"
+    },
+    TransitMap: {
+      "@id": "schema:TransitMap"
+    },
+    TravelAction: {
+      "@id": "schema:TravelAction"
+    },
+    TravelAgency: {
+      "@id": "schema:TravelAgency"
+    },
+    TreatmentIndication: {
+      "@id": "schema:TreatmentIndication"
+    },
+    TreatmentsHealthAspect: {
+      "@id": "schema:TreatmentsHealthAspect"
+    },
+    Trip: {
+      "@id": "schema:Trip"
+    },
+    TripleBlindedTrial: {
+      "@id": "schema:TripleBlindedTrial"
+    },
+    True: {
+      "@id": "schema:True"
+    },
+    Tuesday: {
+      "@id": "schema:Tuesday"
+    },
+    TypeAndQuantityNode: {
+      "@id": "schema:TypeAndQuantityNode"
+    },
+    TypesHealthAspect: {
+      "@id": "schema:TypesHealthAspect"
+    },
+    UKNonprofitType: {
+      "@id": "schema:UKNonprofitType"
+    },
+    UKTrust: {
+      "@id": "schema:UKTrust"
+    },
+    URL: {
+      "@id": "schema:URL"
+    },
+    USNonprofitType: {
+      "@id": "schema:USNonprofitType"
+    },
+    Ultrasound: {
+      "@id": "schema:Ultrasound"
+    },
+    UnRegisterAction: {
+      "@id": "schema:UnRegisterAction"
+    },
+    UnclassifiedAdultConsideration: {
+      "@id": "schema:UnclassifiedAdultConsideration"
+    },
+    UnemploymentSupport: {
+      "@id": "schema:UnemploymentSupport"
+    },
+    UnincorporatedAssociationCharity: {
+      "@id": "schema:UnincorporatedAssociationCharity"
+    },
+    UnitPriceSpecification: {
+      "@id": "schema:UnitPriceSpecification"
+    },
+    UnofficialLegalValue: {
+      "@id": "schema:UnofficialLegalValue"
+    },
+    UpdateAction: {
+      "@id": "schema:UpdateAction"
+    },
+    Urologic: {
+      "@id": "schema:Urologic"
+    },
+    UsageOrScheduleHealthAspect: {
+      "@id": "schema:UsageOrScheduleHealthAspect"
+    },
+    UseAction: {
+      "@id": "schema:UseAction"
+    },
+    UsedCondition: {
+      "@id": "schema:UsedCondition"
+    },
+    UserBlocks: {
+      "@id": "schema:UserBlocks"
+    },
+    UserCheckins: {
+      "@id": "schema:UserCheckins"
+    },
+    UserComments: {
+      "@id": "schema:UserComments"
+    },
+    UserDownloads: {
+      "@id": "schema:UserDownloads"
+    },
+    UserInteraction: {
+      "@id": "schema:UserInteraction"
+    },
+    UserLikes: {
+      "@id": "schema:UserLikes"
+    },
+    UserPageVisits: {
+      "@id": "schema:UserPageVisits"
+    },
+    UserPlays: {
+      "@id": "schema:UserPlays"
+    },
+    UserPlusOnes: {
+      "@id": "schema:UserPlusOnes"
+    },
+    UserReview: {
+      "@id": "schema:UserReview"
+    },
+    UserTweets: {
+      "@id": "schema:UserTweets"
+    },
+    VacationRental: {
+      "@id": "schema:VacationRental"
+    },
+    VeganDiet: {
+      "@id": "schema:VeganDiet"
+    },
+    VegetarianDiet: {
+      "@id": "schema:VegetarianDiet"
+    },
+    Vehicle: {
+      "@id": "schema:Vehicle"
+    },
+    Vein: {
+      "@id": "schema:Vein"
+    },
+    VenueMap: {
+      "@id": "schema:VenueMap"
+    },
+    Vessel: {
+      "@id": "schema:Vessel"
+    },
+    VeterinaryCare: {
+      "@id": "schema:VeterinaryCare"
+    },
+    VideoGallery: {
+      "@id": "schema:VideoGallery"
+    },
+    VideoGame: {
+      "@id": "schema:VideoGame"
+    },
+    VideoGameClip: {
+      "@id": "schema:VideoGameClip"
+    },
+    VideoGameSeries: {
+      "@id": "schema:VideoGameSeries"
+    },
+    VideoObject: {
+      "@id": "schema:VideoObject"
+    },
+    VideoObjectSnapshot: {
+      "@id": "schema:VideoObjectSnapshot"
+    },
+    ViewAction: {
+      "@id": "schema:ViewAction"
+    },
+    VinylFormat: {
+      "@id": "schema:VinylFormat"
+    },
+    ViolenceConsideration: {
+      "@id": "schema:ViolenceConsideration"
+    },
+    VirtualLocation: {
+      "@id": "schema:VirtualLocation"
+    },
+    VirtualRecordingDigitalSource: {
+      "@id": "schema:VirtualRecordingDigitalSource"
+    },
+    Virus: {
+      "@id": "schema:Virus"
+    },
+    VisualArtsEvent: {
+      "@id": "schema:VisualArtsEvent"
+    },
+    VisualArtwork: {
+      "@id": "schema:VisualArtwork"
+    },
+    VitalSign: {
+      "@id": "schema:VitalSign"
+    },
+    Volcano: {
+      "@id": "schema:Volcano"
+    },
+    VoteAction: {
+      "@id": "schema:VoteAction"
+    },
+    WPAdBlock: {
+      "@id": "schema:WPAdBlock"
+    },
+    WPFooter: {
+      "@id": "schema:WPFooter"
+    },
+    WPHeader: {
+      "@id": "schema:WPHeader"
+    },
+    WPSideBar: {
+      "@id": "schema:WPSideBar"
+    },
+    WantAction: {
+      "@id": "schema:WantAction"
+    },
+    WarrantyPromise: {
+      "@id": "schema:WarrantyPromise"
+    },
+    WarrantyScope: {
+      "@id": "schema:WarrantyScope"
+    },
+    WatchAction: {
+      "@id": "schema:WatchAction"
+    },
+    Waterfall: {
+      "@id": "schema:Waterfall"
+    },
+    WeaponConsideration: {
+      "@id": "schema:WeaponConsideration"
+    },
+    WearAction: {
+      "@id": "schema:WearAction"
+    },
+    WearableMeasurementBack: {
+      "@id": "schema:WearableMeasurementBack"
+    },
+    WearableMeasurementChestOrBust: {
+      "@id": "schema:WearableMeasurementChestOrBust"
+    },
+    WearableMeasurementCollar: {
+      "@id": "schema:WearableMeasurementCollar"
+    },
+    WearableMeasurementCup: {
+      "@id": "schema:WearableMeasurementCup"
+    },
+    WearableMeasurementHeight: {
+      "@id": "schema:WearableMeasurementHeight"
+    },
+    WearableMeasurementHips: {
+      "@id": "schema:WearableMeasurementHips"
+    },
+    WearableMeasurementInseam: {
+      "@id": "schema:WearableMeasurementInseam"
+    },
+    WearableMeasurementLength: {
+      "@id": "schema:WearableMeasurementLength"
+    },
+    WearableMeasurementOutsideLeg: {
+      "@id": "schema:WearableMeasurementOutsideLeg"
+    },
+    WearableMeasurementSleeve: {
+      "@id": "schema:WearableMeasurementSleeve"
+    },
+    WearableMeasurementTypeEnumeration: {
+      "@id": "schema:WearableMeasurementTypeEnumeration"
+    },
+    WearableMeasurementWaist: {
+      "@id": "schema:WearableMeasurementWaist"
+    },
+    WearableMeasurementWidth: {
+      "@id": "schema:WearableMeasurementWidth"
+    },
+    WearableSizeGroupBig: {
+      "@id": "schema:WearableSizeGroupBig"
+    },
+    WearableSizeGroupBoys: {
+      "@id": "schema:WearableSizeGroupBoys"
+    },
+    WearableSizeGroupEnumeration: {
+      "@id": "schema:WearableSizeGroupEnumeration"
+    },
+    WearableSizeGroupExtraShort: {
+      "@id": "schema:WearableSizeGroupExtraShort"
+    },
+    WearableSizeGroupExtraTall: {
+      "@id": "schema:WearableSizeGroupExtraTall"
+    },
+    WearableSizeGroupGirls: {
+      "@id": "schema:WearableSizeGroupGirls"
+    },
+    WearableSizeGroupHusky: {
+      "@id": "schema:WearableSizeGroupHusky"
+    },
+    WearableSizeGroupInfants: {
+      "@id": "schema:WearableSizeGroupInfants"
+    },
+    WearableSizeGroupJuniors: {
+      "@id": "schema:WearableSizeGroupJuniors"
+    },
+    WearableSizeGroupMaternity: {
+      "@id": "schema:WearableSizeGroupMaternity"
+    },
+    WearableSizeGroupMens: {
+      "@id": "schema:WearableSizeGroupMens"
+    },
+    WearableSizeGroupMisses: {
+      "@id": "schema:WearableSizeGroupMisses"
+    },
+    WearableSizeGroupPetite: {
+      "@id": "schema:WearableSizeGroupPetite"
+    },
+    WearableSizeGroupPlus: {
+      "@id": "schema:WearableSizeGroupPlus"
+    },
+    WearableSizeGroupRegular: {
+      "@id": "schema:WearableSizeGroupRegular"
+    },
+    WearableSizeGroupShort: {
+      "@id": "schema:WearableSizeGroupShort"
+    },
+    WearableSizeGroupTall: {
+      "@id": "schema:WearableSizeGroupTall"
+    },
+    WearableSizeGroupWomens: {
+      "@id": "schema:WearableSizeGroupWomens"
+    },
+    WearableSizeSystemAU: {
+      "@id": "schema:WearableSizeSystemAU"
+    },
+    WearableSizeSystemBR: {
+      "@id": "schema:WearableSizeSystemBR"
+    },
+    WearableSizeSystemCN: {
+      "@id": "schema:WearableSizeSystemCN"
+    },
+    WearableSizeSystemContinental: {
+      "@id": "schema:WearableSizeSystemContinental"
+    },
+    WearableSizeSystemDE: {
+      "@id": "schema:WearableSizeSystemDE"
+    },
+    WearableSizeSystemEN13402: {
+      "@id": "schema:WearableSizeSystemEN13402"
+    },
+    WearableSizeSystemEnumeration: {
+      "@id": "schema:WearableSizeSystemEnumeration"
+    },
+    WearableSizeSystemEurope: {
+      "@id": "schema:WearableSizeSystemEurope"
+    },
+    WearableSizeSystemFR: {
+      "@id": "schema:WearableSizeSystemFR"
+    },
+    WearableSizeSystemGS1: {
+      "@id": "schema:WearableSizeSystemGS1"
+    },
+    WearableSizeSystemIT: {
+      "@id": "schema:WearableSizeSystemIT"
+    },
+    WearableSizeSystemJP: {
+      "@id": "schema:WearableSizeSystemJP"
+    },
+    WearableSizeSystemMX: {
+      "@id": "schema:WearableSizeSystemMX"
+    },
+    WearableSizeSystemUK: {
+      "@id": "schema:WearableSizeSystemUK"
+    },
+    WearableSizeSystemUS: {
+      "@id": "schema:WearableSizeSystemUS"
+    },
+    WebAPI: {
+      "@id": "schema:WebAPI"
+    },
+    WebApplication: {
+      "@id": "schema:WebApplication"
+    },
+    WebContent: {
+      "@id": "schema:WebContent"
+    },
+    WebPage: {
+      "@id": "schema:WebPage"
+    },
+    WebPageElement: {
+      "@id": "schema:WebPageElement"
+    },
+    WebSite: {
+      "@id": "schema:WebSite"
+    },
+    Wednesday: {
+      "@id": "schema:Wednesday"
+    },
+    WesternConventional: {
+      "@id": "schema:WesternConventional"
+    },
+    Wholesale: {
+      "@id": "schema:Wholesale"
+    },
+    WholesaleStore: {
+      "@id": "schema:WholesaleStore"
+    },
+    WinAction: {
+      "@id": "schema:WinAction"
+    },
+    Winery: {
+      "@id": "schema:Winery"
+    },
+    Withdrawn: {
+      "@id": "schema:Withdrawn"
+    },
+    WorkBasedProgram: {
+      "@id": "schema:WorkBasedProgram"
+    },
+    WorkersUnion: {
+      "@id": "schema:WorkersUnion"
+    },
+    WriteAction: {
+      "@id": "schema:WriteAction"
+    },
+    WritePermission: {
+      "@id": "schema:WritePermission"
+    },
+    XPathType: {
+      "@id": "schema:XPathType"
+    },
+    XRay: {
+      "@id": "schema:XRay"
+    },
+    ZoneBoardingPolicy: {
+      "@id": "schema:ZoneBoardingPolicy"
+    },
+    Zoo: {
+      "@id": "schema:Zoo"
+    },
+    about: {
+      "@id": "schema:about"
+    },
+    abridged: {
+      "@id": "schema:abridged"
+    },
+    abstract: {
+      "@id": "schema:abstract"
+    },
+    accelerationTime: {
+      "@id": "schema:accelerationTime"
+    },
+    acceptedAnswer: {
+      "@id": "schema:acceptedAnswer"
+    },
+    acceptedOffer: {
+      "@id": "schema:acceptedOffer"
+    },
+    acceptedPaymentMethod: {
+      "@id": "schema:acceptedPaymentMethod"
+    },
+    acceptsReservations: {
+      "@id": "schema:acceptsReservations"
+    },
+    accessCode: {
+      "@id": "schema:accessCode"
+    },
+    accessMode: {
+      "@id": "schema:accessMode"
+    },
+    accessModeSufficient: {
+      "@id": "schema:accessModeSufficient"
+    },
+    accessibilityAPI: {
+      "@id": "schema:accessibilityAPI"
+    },
+    accessibilityControl: {
+      "@id": "schema:accessibilityControl"
+    },
+    accessibilityFeature: {
+      "@id": "schema:accessibilityFeature"
+    },
+    accessibilityHazard: {
+      "@id": "schema:accessibilityHazard"
+    },
+    accessibilitySummary: {
+      "@id": "schema:accessibilitySummary"
+    },
+    accommodationCategory: {
+      "@id": "schema:accommodationCategory"
+    },
+    accommodationFloorPlan: {
+      "@id": "schema:accommodationFloorPlan"
+    },
+    accountId: {
+      "@id": "schema:accountId"
+    },
+    accountMinimumInflow: {
+      "@id": "schema:accountMinimumInflow"
+    },
+    accountOverdraftLimit: {
+      "@id": "schema:accountOverdraftLimit"
+    },
+    accountablePerson: {
+      "@id": "schema:accountablePerson"
+    },
+    acquireLicensePage: {
+      "@id": "schema:acquireLicensePage",
+      "@type": "@id"
+    },
+    acquiredFrom: {
+      "@id": "schema:acquiredFrom"
+    },
+    acrissCode: {
+      "@id": "schema:acrissCode"
+    },
+    actionAccessibilityRequirement: {
+      "@id": "schema:actionAccessibilityRequirement"
+    },
+    actionApplication: {
+      "@id": "schema:actionApplication"
+    },
+    actionOption: {
+      "@id": "schema:actionOption"
+    },
+    actionPlatform: {
+      "@id": "schema:actionPlatform"
+    },
+    actionStatus: {
+      "@id": "schema:actionStatus"
+    },
+    actionableFeedbackPolicy: {
+      "@id": "schema:actionableFeedbackPolicy",
+      "@type": "@id"
+    },
+    activeIngredient: {
+      "@id": "schema:activeIngredient"
+    },
+    activityDuration: {
+      "@id": "schema:activityDuration"
+    },
+    activityFrequency: {
+      "@id": "schema:activityFrequency"
+    },
+    actor: {
+      "@id": "schema:actor"
+    },
+    actors: {
+      "@id": "schema:actors"
+    },
+    addOn: {
+      "@id": "schema:addOn"
+    },
+    additionalName: {
+      "@id": "schema:additionalName"
+    },
+    additionalNumberOfGuests: {
+      "@id": "schema:additionalNumberOfGuests"
+    },
+    additionalProperty: {
+      "@id": "schema:additionalProperty"
+    },
+    additionalType: {
+      "@id": "schema:additionalType"
+    },
+    additionalVariable: {
+      "@id": "schema:additionalVariable"
+    },
+    address: {
+      "@id": "schema:address"
+    },
+    addressCountry: {
+      "@id": "schema:addressCountry"
+    },
+    addressLocality: {
+      "@id": "schema:addressLocality"
+    },
+    addressRegion: {
+      "@id": "schema:addressRegion"
+    },
+    administrationRoute: {
+      "@id": "schema:administrationRoute"
+    },
+    advanceBookingRequirement: {
+      "@id": "schema:advanceBookingRequirement"
+    },
+    adverseOutcome: {
+      "@id": "schema:adverseOutcome"
+    },
+    affectedBy: {
+      "@id": "schema:affectedBy"
+    },
+    affiliation: {
+      "@id": "schema:affiliation"
+    },
+    afterMedia: {
+      "@id": "schema:afterMedia",
+      "@type": "@id"
+    },
+    agent: {
+      "@id": "schema:agent"
+    },
+    agentInteractionStatistic: {
+      "@id": "schema:agentInteractionStatistic"
+    },
+    aggregateRating: {
+      "@id": "schema:aggregateRating"
+    },
+    aircraft: {
+      "@id": "schema:aircraft"
+    },
+    album: {
+      "@id": "schema:album"
+    },
+    albumProductionType: {
+      "@id": "schema:albumProductionType"
+    },
+    albumRelease: {
+      "@id": "schema:albumRelease"
+    },
+    albumReleaseType: {
+      "@id": "schema:albumReleaseType"
+    },
+    albums: {
+      "@id": "schema:albums"
+    },
+    alcoholWarning: {
+      "@id": "schema:alcoholWarning"
+    },
+    algorithm: {
+      "@id": "schema:algorithm"
+    },
+    alignmentType: {
+      "@id": "schema:alignmentType"
+    },
+    alternateName: {
+      "@id": "schema:alternateName"
+    },
+    alternativeHeadline: {
+      "@id": "schema:alternativeHeadline"
+    },
+    alternativeOf: {
+      "@id": "schema:alternativeOf"
+    },
+    alumni: {
+      "@id": "schema:alumni"
+    },
+    alumniOf: {
+      "@id": "schema:alumniOf"
+    },
+    amenityFeature: {
+      "@id": "schema:amenityFeature"
+    },
+    amount: {
+      "@id": "schema:amount"
+    },
+    amountOfThisGood: {
+      "@id": "schema:amountOfThisGood"
+    },
+    announcementLocation: {
+      "@id": "schema:announcementLocation"
+    },
+    annualPercentageRate: {
+      "@id": "schema:annualPercentageRate"
+    },
+    answerCount: {
+      "@id": "schema:answerCount"
+    },
+    answerExplanation: {
+      "@id": "schema:answerExplanation"
+    },
+    antagonist: {
+      "@id": "schema:antagonist"
+    },
+    appearance: {
+      "@id": "schema:appearance"
+    },
+    applicableCountry: {
+      "@id": "schema:applicableCountry"
+    },
+    applicableLocation: {
+      "@id": "schema:applicableLocation"
+    },
+    applicantLocationRequirements: {
+      "@id": "schema:applicantLocationRequirements"
+    },
+    application: {
+      "@id": "schema:application"
+    },
+    applicationCategory: {
+      "@id": "schema:applicationCategory"
+    },
+    applicationContact: {
+      "@id": "schema:applicationContact"
+    },
+    applicationDeadline: {
+      "@id": "schema:applicationDeadline",
+      "@type": "Date"
+    },
+    applicationStartDate: {
+      "@id": "schema:applicationStartDate",
+      "@type": "Date"
+    },
+    applicationSubCategory: {
+      "@id": "schema:applicationSubCategory"
+    },
+    applicationSuite: {
+      "@id": "schema:applicationSuite"
+    },
+    appliesToDeliveryMethod: {
+      "@id": "schema:appliesToDeliveryMethod"
+    },
+    appliesToPaymentMethod: {
+      "@id": "schema:appliesToPaymentMethod"
+    },
+    archiveHeld: {
+      "@id": "schema:archiveHeld"
+    },
+    archivedAt: {
+      "@id": "schema:archivedAt",
+      "@type": "@id"
+    },
+    area: {
+      "@id": "schema:area"
+    },
+    areaServed: {
+      "@id": "schema:areaServed"
+    },
+    arrivalAirport: {
+      "@id": "schema:arrivalAirport"
+    },
+    arrivalBoatTerminal: {
+      "@id": "schema:arrivalBoatTerminal"
+    },
+    arrivalBusStop: {
+      "@id": "schema:arrivalBusStop"
+    },
+    arrivalGate: {
+      "@id": "schema:arrivalGate"
+    },
+    arrivalPlatform: {
+      "@id": "schema:arrivalPlatform"
+    },
+    arrivalStation: {
+      "@id": "schema:arrivalStation"
+    },
+    arrivalTerminal: {
+      "@id": "schema:arrivalTerminal"
+    },
+    arrivalTime: {
+      "@id": "schema:arrivalTime"
+    },
+    artEdition: {
+      "@id": "schema:artEdition"
+    },
+    artMedium: {
+      "@id": "schema:artMedium"
+    },
+    arterialBranch: {
+      "@id": "schema:arterialBranch"
+    },
+    artform: {
+      "@id": "schema:artform"
+    },
+    articleBody: {
+      "@id": "schema:articleBody"
+    },
+    articleSection: {
+      "@id": "schema:articleSection"
+    },
+    artist: {
+      "@id": "schema:artist"
+    },
+    artworkSurface: {
+      "@id": "schema:artworkSurface"
+    },
+    asin: {
+      "@id": "schema:asin"
+    },
+    aspect: {
+      "@id": "schema:aspect"
+    },
+    assembly: {
+      "@id": "schema:assembly"
+    },
+    assemblyVersion: {
+      "@id": "schema:assemblyVersion"
+    },
+    assesses: {
+      "@id": "schema:assesses"
+    },
+    associatedAnatomy: {
+      "@id": "schema:associatedAnatomy"
+    },
+    associatedArticle: {
+      "@id": "schema:associatedArticle"
+    },
+    associatedClaimReview: {
+      "@id": "schema:associatedClaimReview"
+    },
+    associatedDisease: {
+      "@id": "schema:associatedDisease",
+      "@type": "@id"
+    },
+    associatedMedia: {
+      "@id": "schema:associatedMedia"
+    },
+    associatedMediaReview: {
+      "@id": "schema:associatedMediaReview"
+    },
+    associatedPathophysiology: {
+      "@id": "schema:associatedPathophysiology"
+    },
+    associatedReview: {
+      "@id": "schema:associatedReview"
+    },
+    athlete: {
+      "@id": "schema:athlete"
+    },
+    attendee: {
+      "@id": "schema:attendee"
+    },
+    attendees: {
+      "@id": "schema:attendees"
+    },
+    audience: {
+      "@id": "schema:audience"
+    },
+    audienceType: {
+      "@id": "schema:audienceType"
+    },
+    audio: {
+      "@id": "schema:audio"
+    },
+    auditDate: {
+      "@id": "schema:auditDate",
+      "@type": "Date"
+    },
+    authenticator: {
+      "@id": "schema:authenticator"
+    },
+    author: {
+      "@id": "schema:author"
+    },
+    availability: {
+      "@id": "schema:availability"
+    },
+    availabilityEnds: {
+      "@id": "schema:availabilityEnds",
+      "@type": "Date"
+    },
+    availabilityStarts: {
+      "@id": "schema:availabilityStarts",
+      "@type": "Date"
+    },
+    availableAtOrFrom: {
+      "@id": "schema:availableAtOrFrom"
+    },
+    availableChannel: {
+      "@id": "schema:availableChannel"
+    },
+    availableDeliveryMethod: {
+      "@id": "schema:availableDeliveryMethod"
+    },
+    availableFrom: {
+      "@id": "schema:availableFrom"
+    },
+    availableIn: {
+      "@id": "schema:availableIn"
+    },
+    availableLanguage: {
+      "@id": "schema:availableLanguage"
+    },
+    availableOnDevice: {
+      "@id": "schema:availableOnDevice"
+    },
+    availableService: {
+      "@id": "schema:availableService"
+    },
+    availableStrength: {
+      "@id": "schema:availableStrength"
+    },
+    availableTest: {
+      "@id": "schema:availableTest"
+    },
+    availableThrough: {
+      "@id": "schema:availableThrough"
+    },
+    award: {
+      "@id": "schema:award"
+    },
+    awards: {
+      "@id": "schema:awards"
+    },
+    awayTeam: {
+      "@id": "schema:awayTeam"
+    },
+    backstory: {
+      "@id": "schema:backstory"
+    },
+    bankAccountType: {
+      "@id": "schema:bankAccountType"
+    },
+    baseSalary: {
+      "@id": "schema:baseSalary"
+    },
+    bccRecipient: {
+      "@id": "schema:bccRecipient"
+    },
+    bed: {
+      "@id": "schema:bed"
+    },
+    beforeMedia: {
+      "@id": "schema:beforeMedia",
+      "@type": "@id"
+    },
+    beneficiaryBank: {
+      "@id": "schema:beneficiaryBank"
+    },
+    benefits: {
+      "@id": "schema:benefits"
+    },
+    benefitsSummaryUrl: {
+      "@id": "schema:benefitsSummaryUrl",
+      "@type": "@id"
+    },
+    bestRating: {
+      "@id": "schema:bestRating"
+    },
+    billingAddress: {
+      "@id": "schema:billingAddress"
+    },
+    billingDuration: {
+      "@id": "schema:billingDuration"
+    },
+    billingIncrement: {
+      "@id": "schema:billingIncrement"
+    },
+    billingPeriod: {
+      "@id": "schema:billingPeriod"
+    },
+    billingStart: {
+      "@id": "schema:billingStart"
+    },
+    bioChemInteraction: {
+      "@id": "schema:bioChemInteraction"
+    },
+    bioChemSimilarity: {
+      "@id": "schema:bioChemSimilarity"
+    },
+    biologicalRole: {
+      "@id": "schema:biologicalRole"
+    },
+    biomechnicalClass: {
+      "@id": "schema:biomechnicalClass"
+    },
+    birthDate: {
+      "@id": "schema:birthDate",
+      "@type": "Date"
+    },
+    birthPlace: {
+      "@id": "schema:birthPlace"
+    },
+    bitrate: {
+      "@id": "schema:bitrate"
+    },
+    blogPost: {
+      "@id": "schema:blogPost"
+    },
+    blogPosts: {
+      "@id": "schema:blogPosts"
+    },
+    bloodSupply: {
+      "@id": "schema:bloodSupply"
+    },
+    boardingGroup: {
+      "@id": "schema:boardingGroup"
+    },
+    boardingPolicy: {
+      "@id": "schema:boardingPolicy"
+    },
+    bodyLocation: {
+      "@id": "schema:bodyLocation"
+    },
+    bodyType: {
+      "@id": "schema:bodyType"
+    },
+    bookEdition: {
+      "@id": "schema:bookEdition"
+    },
+    bookFormat: {
+      "@id": "schema:bookFormat"
+    },
+    bookingAgent: {
+      "@id": "schema:bookingAgent"
+    },
+    bookingTime: {
+      "@id": "schema:bookingTime"
+    },
+    borrower: {
+      "@id": "schema:borrower"
+    },
+    box: {
+      "@id": "schema:box"
+    },
+    branch: {
+      "@id": "schema:branch"
+    },
+    branchCode: {
+      "@id": "schema:branchCode"
+    },
+    branchOf: {
+      "@id": "schema:branchOf"
+    },
+    brand: {
+      "@id": "schema:brand"
+    },
+    breadcrumb: {
+      "@id": "schema:breadcrumb"
+    },
+    breastfeedingWarning: {
+      "@id": "schema:breastfeedingWarning"
+    },
+    broadcastAffiliateOf: {
+      "@id": "schema:broadcastAffiliateOf"
+    },
+    broadcastChannelId: {
+      "@id": "schema:broadcastChannelId"
+    },
+    broadcastDisplayName: {
+      "@id": "schema:broadcastDisplayName"
+    },
+    broadcastFrequency: {
+      "@id": "schema:broadcastFrequency"
+    },
+    broadcastFrequencyValue: {
+      "@id": "schema:broadcastFrequencyValue"
+    },
+    broadcastOfEvent: {
+      "@id": "schema:broadcastOfEvent"
+    },
+    broadcastServiceTier: {
+      "@id": "schema:broadcastServiceTier"
+    },
+    broadcastSignalModulation: {
+      "@id": "schema:broadcastSignalModulation"
+    },
+    broadcastSubChannel: {
+      "@id": "schema:broadcastSubChannel"
+    },
+    broadcastTimezone: {
+      "@id": "schema:broadcastTimezone"
+    },
+    broadcaster: {
+      "@id": "schema:broadcaster"
+    },
+    broker: {
+      "@id": "schema:broker"
+    },
+    browserRequirements: {
+      "@id": "schema:browserRequirements"
+    },
+    busName: {
+      "@id": "schema:busName"
+    },
+    busNumber: {
+      "@id": "schema:busNumber"
+    },
+    businessDays: {
+      "@id": "schema:businessDays"
+    },
+    businessFunction: {
+      "@id": "schema:businessFunction"
+    },
+    buyer: {
+      "@id": "schema:buyer"
+    },
+    byArtist: {
+      "@id": "schema:byArtist"
+    },
+    byDay: {
+      "@id": "schema:byDay"
+    },
+    byMonth: {
+      "@id": "schema:byMonth"
+    },
+    byMonthDay: {
+      "@id": "schema:byMonthDay"
+    },
+    byMonthWeek: {
+      "@id": "schema:byMonthWeek"
+    },
+    callSign: {
+      "@id": "schema:callSign"
+    },
+    calories: {
+      "@id": "schema:calories"
+    },
+    candidate: {
+      "@id": "schema:candidate"
+    },
+    caption: {
+      "@id": "schema:caption"
+    },
+    carbohydrateContent: {
+      "@id": "schema:carbohydrateContent"
+    },
+    cargoVolume: {
+      "@id": "schema:cargoVolume"
+    },
+    carrier: {
+      "@id": "schema:carrier"
+    },
+    carrierRequirements: {
+      "@id": "schema:carrierRequirements"
+    },
+    cashBack: {
+      "@id": "schema:cashBack"
+    },
+    catalog: {
+      "@id": "schema:catalog"
+    },
+    catalogNumber: {
+      "@id": "schema:catalogNumber"
+    },
+    category: {
+      "@id": "schema:category"
+    },
+    causeOf: {
+      "@id": "schema:causeOf"
+    },
+    ccRecipient: {
+      "@id": "schema:ccRecipient"
+    },
+    certificationIdentification: {
+      "@id": "schema:certificationIdentification"
+    },
+    certificationRating: {
+      "@id": "schema:certificationRating"
+    },
+    certificationStatus: {
+      "@id": "schema:certificationStatus"
+    },
+    character: {
+      "@id": "schema:character"
+    },
+    characterAttribute: {
+      "@id": "schema:characterAttribute"
+    },
+    characterName: {
+      "@id": "schema:characterName"
+    },
+    cheatCode: {
+      "@id": "schema:cheatCode"
+    },
+    checkinTime: {
+      "@id": "schema:checkinTime"
+    },
+    checkoutPageURLTemplate: {
+      "@id": "schema:checkoutPageURLTemplate"
+    },
+    checkoutTime: {
+      "@id": "schema:checkoutTime"
+    },
+    chemicalComposition: {
+      "@id": "schema:chemicalComposition"
+    },
+    chemicalRole: {
+      "@id": "schema:chemicalRole"
+    },
+    childMaxAge: {
+      "@id": "schema:childMaxAge"
+    },
+    childMinAge: {
+      "@id": "schema:childMinAge"
+    },
+    childTaxon: {
+      "@id": "schema:childTaxon"
+    },
+    children: {
+      "@id": "schema:children"
+    },
+    cholesterolContent: {
+      "@id": "schema:cholesterolContent"
+    },
+    circle: {
+      "@id": "schema:circle"
+    },
+    citation: {
+      "@id": "schema:citation"
+    },
+    claimInterpreter: {
+      "@id": "schema:claimInterpreter"
+    },
+    claimReviewed: {
+      "@id": "schema:claimReviewed"
+    },
+    clincalPharmacology: {
+      "@id": "schema:clincalPharmacology"
+    },
+    clinicalPharmacology: {
+      "@id": "schema:clinicalPharmacology"
+    },
+    clipNumber: {
+      "@id": "schema:clipNumber"
+    },
+    closes: {
+      "@id": "schema:closes"
+    },
+    coach: {
+      "@id": "schema:coach"
+    },
+    code: {
+      "@id": "schema:code"
+    },
+    codeRepository: {
+      "@id": "schema:codeRepository",
+      "@type": "@id"
+    },
+    codeSampleType: {
+      "@id": "schema:codeSampleType"
+    },
+    codeValue: {
+      "@id": "schema:codeValue"
+    },
+    codingSystem: {
+      "@id": "schema:codingSystem"
+    },
+    colleague: {
+      "@id": "schema:colleague",
+      "@type": "@id"
+    },
+    colleagues: {
+      "@id": "schema:colleagues"
+    },
+    collection: {
+      "@id": "schema:collection"
+    },
+    collectionSize: {
+      "@id": "schema:collectionSize"
+    },
+    color: {
+      "@id": "schema:color"
+    },
+    colorSwatch: {
+      "@id": "schema:colorSwatch",
+      "@type": "@id"
+    },
+    colorist: {
+      "@id": "schema:colorist"
+    },
+    comment: {
+      "@id": "schema:comment"
+    },
+    commentCount: {
+      "@id": "schema:commentCount"
+    },
+    commentText: {
+      "@id": "schema:commentText"
+    },
+    commentTime: {
+      "@id": "schema:commentTime",
+      "@type": "Date"
+    },
+    competencyRequired: {
+      "@id": "schema:competencyRequired"
+    },
+    competitor: {
+      "@id": "schema:competitor"
+    },
+    composer: {
+      "@id": "schema:composer"
+    },
+    comprisedOf: {
+      "@id": "schema:comprisedOf"
+    },
+    conditionsOfAccess: {
+      "@id": "schema:conditionsOfAccess"
+    },
+    confirmationNumber: {
+      "@id": "schema:confirmationNumber"
+    },
+    connectedTo: {
+      "@id": "schema:connectedTo"
+    },
+    constraintProperty: {
+      "@id": "schema:constraintProperty",
+      "@type": "@id"
+    },
+    contactOption: {
+      "@id": "schema:contactOption"
+    },
+    contactPoint: {
+      "@id": "schema:contactPoint"
+    },
+    contactPoints: {
+      "@id": "schema:contactPoints"
+    },
+    contactType: {
+      "@id": "schema:contactType"
+    },
+    contactlessPayment: {
+      "@id": "schema:contactlessPayment"
+    },
+    containedIn: {
+      "@id": "schema:containedIn"
+    },
+    containedInPlace: {
+      "@id": "schema:containedInPlace"
+    },
+    containsPlace: {
+      "@id": "schema:containsPlace"
+    },
+    containsSeason: {
+      "@id": "schema:containsSeason"
+    },
+    contentLocation: {
+      "@id": "schema:contentLocation"
+    },
+    contentRating: {
+      "@id": "schema:contentRating"
+    },
+    contentReferenceTime: {
+      "@id": "schema:contentReferenceTime"
+    },
+    contentSize: {
+      "@id": "schema:contentSize"
+    },
+    contentType: {
+      "@id": "schema:contentType"
+    },
+    contentUrl: {
+      "@id": "schema:contentUrl",
+      "@type": "@id"
+    },
+    contraindication: {
+      "@id": "schema:contraindication"
+    },
+    contributor: {
+      "@id": "schema:contributor"
+    },
+    cookTime: {
+      "@id": "schema:cookTime"
+    },
+    cookingMethod: {
+      "@id": "schema:cookingMethod"
+    },
+    copyrightHolder: {
+      "@id": "schema:copyrightHolder"
+    },
+    copyrightNotice: {
+      "@id": "schema:copyrightNotice"
+    },
+    copyrightYear: {
+      "@id": "schema:copyrightYear"
+    },
+    correction: {
+      "@id": "schema:correction"
+    },
+    correctionsPolicy: {
+      "@id": "schema:correctionsPolicy",
+      "@type": "@id"
+    },
+    costCategory: {
+      "@id": "schema:costCategory"
+    },
+    costCurrency: {
+      "@id": "schema:costCurrency"
+    },
+    costOrigin: {
+      "@id": "schema:costOrigin"
+    },
+    costPerUnit: {
+      "@id": "schema:costPerUnit"
+    },
+    countriesNotSupported: {
+      "@id": "schema:countriesNotSupported"
+    },
+    countriesSupported: {
+      "@id": "schema:countriesSupported"
+    },
+    countryOfAssembly: {
+      "@id": "schema:countryOfAssembly"
+    },
+    countryOfLastProcessing: {
+      "@id": "schema:countryOfLastProcessing"
+    },
+    countryOfOrigin: {
+      "@id": "schema:countryOfOrigin"
+    },
+    course: {
+      "@id": "schema:course"
+    },
+    courseCode: {
+      "@id": "schema:courseCode"
+    },
+    courseMode: {
+      "@id": "schema:courseMode"
+    },
+    coursePrerequisites: {
+      "@id": "schema:coursePrerequisites"
+    },
+    courseSchedule: {
+      "@id": "schema:courseSchedule"
+    },
+    courseWorkload: {
+      "@id": "schema:courseWorkload"
+    },
+    coverageEndTime: {
+      "@id": "schema:coverageEndTime"
+    },
+    coverageStartTime: {
+      "@id": "schema:coverageStartTime"
+    },
+    creativeWorkStatus: {
+      "@id": "schema:creativeWorkStatus"
+    },
+    creator: {
+      "@id": "schema:creator"
+    },
+    credentialCategory: {
+      "@id": "schema:credentialCategory"
+    },
+    creditText: {
+      "@id": "schema:creditText"
+    },
+    creditedTo: {
+      "@id": "schema:creditedTo"
+    },
+    cssSelector: {
+      "@id": "schema:cssSelector"
+    },
+    currenciesAccepted: {
+      "@id": "schema:currenciesAccepted"
+    },
+    currency: {
+      "@id": "schema:currency"
+    },
+    currentExchangeRate: {
+      "@id": "schema:currentExchangeRate"
+    },
+    customer: {
+      "@id": "schema:customer"
+    },
+    customerRemorseReturnFees: {
+      "@id": "schema:customerRemorseReturnFees"
+    },
+    customerRemorseReturnLabelSource: {
+      "@id": "schema:customerRemorseReturnLabelSource"
+    },
+    customerRemorseReturnShippingFeesAmount: {
+      "@id": "schema:customerRemorseReturnShippingFeesAmount"
+    },
+    cutoffTime: {
+      "@id": "schema:cutoffTime"
+    },
+    cvdCollectionDate: {
+      "@id": "schema:cvdCollectionDate"
+    },
+    cvdFacilityCounty: {
+      "@id": "schema:cvdFacilityCounty"
+    },
+    cvdFacilityId: {
+      "@id": "schema:cvdFacilityId"
+    },
+    cvdNumBeds: {
+      "@id": "schema:cvdNumBeds"
+    },
+    cvdNumBedsOcc: {
+      "@id": "schema:cvdNumBedsOcc"
+    },
+    cvdNumC19Died: {
+      "@id": "schema:cvdNumC19Died"
+    },
+    cvdNumC19HOPats: {
+      "@id": "schema:cvdNumC19HOPats"
+    },
+    cvdNumC19HospPats: {
+      "@id": "schema:cvdNumC19HospPats"
+    },
+    cvdNumC19MechVentPats: {
+      "@id": "schema:cvdNumC19MechVentPats"
+    },
+    cvdNumC19OFMechVentPats: {
+      "@id": "schema:cvdNumC19OFMechVentPats"
+    },
+    cvdNumC19OverflowPats: {
+      "@id": "schema:cvdNumC19OverflowPats"
+    },
+    cvdNumICUBeds: {
+      "@id": "schema:cvdNumICUBeds"
+    },
+    cvdNumICUBedsOcc: {
+      "@id": "schema:cvdNumICUBedsOcc"
+    },
+    cvdNumTotBeds: {
+      "@id": "schema:cvdNumTotBeds"
+    },
+    cvdNumVent: {
+      "@id": "schema:cvdNumVent"
+    },
+    cvdNumVentUse: {
+      "@id": "schema:cvdNumVentUse"
+    },
+    dataFeedElement: {
+      "@id": "schema:dataFeedElement"
+    },
+    dataset: {
+      "@id": "schema:dataset"
+    },
+    datasetTimeInterval: {
+      "@id": "schema:datasetTimeInterval"
+    },
+    dateCreated: {
+      "@id": "schema:dateCreated",
+      "@type": "Date"
+    },
+    dateDeleted: {
+      "@id": "schema:dateDeleted",
+      "@type": "Date"
+    },
+    dateIssued: {
+      "@id": "schema:dateIssued",
+      "@type": "Date"
+    },
+    dateModified: {
+      "@id": "schema:dateModified",
+      "@type": "Date"
+    },
+    datePosted: {
+      "@id": "schema:datePosted",
+      "@type": "Date"
+    },
+    datePublished: {
+      "@id": "schema:datePublished",
+      "@type": "Date"
+    },
+    dateRead: {
+      "@id": "schema:dateRead",
+      "@type": "Date"
+    },
+    dateReceived: {
+      "@id": "schema:dateReceived"
+    },
+    dateSent: {
+      "@id": "schema:dateSent"
+    },
+    dateVehicleFirstRegistered: {
+      "@id": "schema:dateVehicleFirstRegistered",
+      "@type": "Date"
+    },
+    dateline: {
+      "@id": "schema:dateline"
+    },
+    dayOfWeek: {
+      "@id": "schema:dayOfWeek"
+    },
+    deathDate: {
+      "@id": "schema:deathDate",
+      "@type": "Date"
+    },
+    deathPlace: {
+      "@id": "schema:deathPlace"
+    },
+    defaultValue: {
+      "@id": "schema:defaultValue"
+    },
+    deliveryAddress: {
+      "@id": "schema:deliveryAddress"
+    },
+    deliveryLeadTime: {
+      "@id": "schema:deliveryLeadTime"
+    },
+    deliveryMethod: {
+      "@id": "schema:deliveryMethod"
+    },
+    deliveryStatus: {
+      "@id": "schema:deliveryStatus"
+    },
+    deliveryTime: {
+      "@id": "schema:deliveryTime"
+    },
+    department: {
+      "@id": "schema:department"
+    },
+    departureAirport: {
+      "@id": "schema:departureAirport"
+    },
+    departureBoatTerminal: {
+      "@id": "schema:departureBoatTerminal"
+    },
+    departureBusStop: {
+      "@id": "schema:departureBusStop"
+    },
+    departureGate: {
+      "@id": "schema:departureGate"
+    },
+    departurePlatform: {
+      "@id": "schema:departurePlatform"
+    },
+    departureStation: {
+      "@id": "schema:departureStation"
+    },
+    departureTerminal: {
+      "@id": "schema:departureTerminal"
+    },
+    departureTime: {
+      "@id": "schema:departureTime"
+    },
+    dependencies: {
+      "@id": "schema:dependencies"
+    },
+    depth: {
+      "@id": "schema:depth"
+    },
+    description: {
+      "@id": "schema:description"
+    },
+    device: {
+      "@id": "schema:device"
+    },
+    diagnosis: {
+      "@id": "schema:diagnosis"
+    },
+    diagram: {
+      "@id": "schema:diagram"
+    },
+    diet: {
+      "@id": "schema:diet"
+    },
+    dietFeatures: {
+      "@id": "schema:dietFeatures"
+    },
+    differentialDiagnosis: {
+      "@id": "schema:differentialDiagnosis"
+    },
+    digitalSourceType: {
+      "@id": "schema:digitalSourceType"
+    },
+    directApply: {
+      "@id": "schema:directApply"
+    },
+    director: {
+      "@id": "schema:director"
+    },
+    directors: {
+      "@id": "schema:directors"
+    },
+    disambiguatingDescription: {
+      "@id": "schema:disambiguatingDescription"
+    },
+    discount: {
+      "@id": "schema:discount"
+    },
+    discountCode: {
+      "@id": "schema:discountCode"
+    },
+    discountCurrency: {
+      "@id": "schema:discountCurrency"
+    },
+    discusses: {
+      "@id": "schema:discusses"
+    },
+    discussionUrl: {
+      "@id": "schema:discussionUrl",
+      "@type": "@id"
+    },
+    diseasePreventionInfo: {
+      "@id": "schema:diseasePreventionInfo",
+      "@type": "@id"
+    },
+    diseaseSpreadStatistics: {
+      "@id": "schema:diseaseSpreadStatistics",
+      "@type": "@id"
+    },
+    dissolutionDate: {
+      "@id": "schema:dissolutionDate",
+      "@type": "Date"
+    },
+    distance: {
+      "@id": "schema:distance"
+    },
+    distinguishingSign: {
+      "@id": "schema:distinguishingSign"
+    },
+    distribution: {
+      "@id": "schema:distribution"
+    },
+    diversityPolicy: {
+      "@id": "schema:diversityPolicy",
+      "@type": "@id"
+    },
+    diversityStaffingReport: {
+      "@id": "schema:diversityStaffingReport",
+      "@type": "@id"
+    },
+    documentation: {
+      "@id": "schema:documentation",
+      "@type": "@id"
+    },
+    doesNotShip: {
+      "@id": "schema:doesNotShip"
+    },
+    domainIncludes: {
+      "@id": "schema:domainIncludes"
+    },
+    domiciledMortgage: {
+      "@id": "schema:domiciledMortgage"
+    },
+    doorTime: {
+      "@id": "schema:doorTime"
+    },
+    dosageForm: {
+      "@id": "schema:dosageForm"
+    },
+    doseSchedule: {
+      "@id": "schema:doseSchedule"
+    },
+    doseUnit: {
+      "@id": "schema:doseUnit"
+    },
+    doseValue: {
+      "@id": "schema:doseValue"
+    },
+    downPayment: {
+      "@id": "schema:downPayment"
+    },
+    downloadUrl: {
+      "@id": "schema:downloadUrl",
+      "@type": "@id"
+    },
+    downvoteCount: {
+      "@id": "schema:downvoteCount"
+    },
+    drainsTo: {
+      "@id": "schema:drainsTo"
+    },
+    driveWheelConfiguration: {
+      "@id": "schema:driveWheelConfiguration"
+    },
+    dropoffLocation: {
+      "@id": "schema:dropoffLocation"
+    },
+    dropoffTime: {
+      "@id": "schema:dropoffTime"
+    },
+    drug: {
+      "@id": "schema:drug"
+    },
+    drugClass: {
+      "@id": "schema:drugClass"
+    },
+    drugUnit: {
+      "@id": "schema:drugUnit"
+    },
+    duns: {
+      "@id": "schema:duns"
+    },
+    duplicateTherapy: {
+      "@id": "schema:duplicateTherapy"
+    },
+    duration: {
+      "@id": "schema:duration"
+    },
+    durationOfWarranty: {
+      "@id": "schema:durationOfWarranty"
+    },
+    duringMedia: {
+      "@id": "schema:duringMedia",
+      "@type": "@id"
+    },
+    earlyPrepaymentPenalty: {
+      "@id": "schema:earlyPrepaymentPenalty"
+    },
+    editEIDR: {
+      "@id": "schema:editEIDR"
+    },
+    editor: {
+      "@id": "schema:editor"
+    },
+    eduQuestionType: {
+      "@id": "schema:eduQuestionType"
+    },
+    educationRequirements: {
+      "@id": "schema:educationRequirements"
+    },
+    educationalAlignment: {
+      "@id": "schema:educationalAlignment"
+    },
+    educationalCredentialAwarded: {
+      "@id": "schema:educationalCredentialAwarded"
+    },
+    educationalFramework: {
+      "@id": "schema:educationalFramework"
+    },
+    educationalLevel: {
+      "@id": "schema:educationalLevel"
+    },
+    educationalProgramMode: {
+      "@id": "schema:educationalProgramMode"
+    },
+    educationalRole: {
+      "@id": "schema:educationalRole"
+    },
+    educationalUse: {
+      "@id": "schema:educationalUse"
+    },
+    elevation: {
+      "@id": "schema:elevation"
+    },
+    eligibilityToWorkRequirement: {
+      "@id": "schema:eligibilityToWorkRequirement"
+    },
+    eligibleCustomerType: {
+      "@id": "schema:eligibleCustomerType"
+    },
+    eligibleDuration: {
+      "@id": "schema:eligibleDuration"
+    },
+    eligibleQuantity: {
+      "@id": "schema:eligibleQuantity"
+    },
+    eligibleRegion: {
+      "@id": "schema:eligibleRegion"
+    },
+    eligibleTransactionVolume: {
+      "@id": "schema:eligibleTransactionVolume"
+    },
+    email: {
+      "@id": "schema:email"
+    },
+    embedUrl: {
+      "@id": "schema:embedUrl",
+      "@type": "@id"
+    },
+    embeddedTextCaption: {
+      "@id": "schema:embeddedTextCaption"
+    },
+    emissionsCO2: {
+      "@id": "schema:emissionsCO2"
+    },
+    employee: {
+      "@id": "schema:employee"
+    },
+    employees: {
+      "@id": "schema:employees"
+    },
+    employerOverview: {
+      "@id": "schema:employerOverview"
+    },
+    employmentType: {
+      "@id": "schema:employmentType"
+    },
+    employmentUnit: {
+      "@id": "schema:employmentUnit"
+    },
+    encodesBioChemEntity: {
+      "@id": "schema:encodesBioChemEntity"
+    },
+    encodesCreativeWork: {
+      "@id": "schema:encodesCreativeWork"
+    },
+    encoding: {
+      "@id": "schema:encoding"
+    },
+    encodingFormat: {
+      "@id": "schema:encodingFormat"
+    },
+    encodingType: {
+      "@id": "schema:encodingType"
+    },
+    encodings: {
+      "@id": "schema:encodings"
+    },
+    endDate: {
+      "@id": "schema:endDate",
+      "@type": "Date"
+    },
+    endOffset: {
+      "@id": "schema:endOffset"
+    },
+    endTime: {
+      "@id": "schema:endTime"
+    },
+    endorsee: {
+      "@id": "schema:endorsee"
+    },
+    endorsers: {
+      "@id": "schema:endorsers"
+    },
+    energyEfficiencyScaleMax: {
+      "@id": "schema:energyEfficiencyScaleMax"
+    },
+    energyEfficiencyScaleMin: {
+      "@id": "schema:energyEfficiencyScaleMin"
+    },
+    engineDisplacement: {
+      "@id": "schema:engineDisplacement"
+    },
+    enginePower: {
+      "@id": "schema:enginePower"
+    },
+    engineType: {
+      "@id": "schema:engineType"
+    },
+    entertainmentBusiness: {
+      "@id": "schema:entertainmentBusiness"
+    },
+    epidemiology: {
+      "@id": "schema:epidemiology"
+    },
+    episode: {
+      "@id": "schema:episode"
+    },
+    episodeNumber: {
+      "@id": "schema:episodeNumber"
+    },
+    episodes: {
+      "@id": "schema:episodes"
+    },
+    equal: {
+      "@id": "schema:equal"
+    },
+    error: {
+      "@id": "schema:error"
+    },
+    estimatedCost: {
+      "@id": "schema:estimatedCost"
+    },
+    estimatedFlightDuration: {
+      "@id": "schema:estimatedFlightDuration"
+    },
+    estimatedSalary: {
+      "@id": "schema:estimatedSalary"
+    },
+    estimatesRiskOf: {
+      "@id": "schema:estimatesRiskOf"
+    },
+    ethicsPolicy: {
+      "@id": "schema:ethicsPolicy",
+      "@type": "@id"
+    },
+    event: {
+      "@id": "schema:event"
+    },
+    eventAttendanceMode: {
+      "@id": "schema:eventAttendanceMode"
+    },
+    eventSchedule: {
+      "@id": "schema:eventSchedule"
+    },
+    eventStatus: {
+      "@id": "schema:eventStatus"
+    },
+    events: {
+      "@id": "schema:events"
+    },
+    evidenceLevel: {
+      "@id": "schema:evidenceLevel"
+    },
+    evidenceOrigin: {
+      "@id": "schema:evidenceOrigin"
+    },
+    exampleOfWork: {
+      "@id": "schema:exampleOfWork"
+    },
+    exceptDate: {
+      "@id": "schema:exceptDate",
+      "@type": "Date"
+    },
+    exchangeRateSpread: {
+      "@id": "schema:exchangeRateSpread"
+    },
+    executableLibraryName: {
+      "@id": "schema:executableLibraryName"
+    },
+    exerciseCourse: {
+      "@id": "schema:exerciseCourse"
+    },
+    exercisePlan: {
+      "@id": "schema:exercisePlan"
+    },
+    exerciseRelatedDiet: {
+      "@id": "schema:exerciseRelatedDiet"
+    },
+    exerciseType: {
+      "@id": "schema:exerciseType"
+    },
+    exifData: {
+      "@id": "schema:exifData"
+    },
+    expectedArrivalFrom: {
+      "@id": "schema:expectedArrivalFrom",
+      "@type": "Date"
+    },
+    expectedArrivalUntil: {
+      "@id": "schema:expectedArrivalUntil",
+      "@type": "Date"
+    },
+    expectedPrognosis: {
+      "@id": "schema:expectedPrognosis"
+    },
+    expectsAcceptanceOf: {
+      "@id": "schema:expectsAcceptanceOf"
+    },
+    experienceInPlaceOfEducation: {
+      "@id": "schema:experienceInPlaceOfEducation"
+    },
+    experienceRequirements: {
+      "@id": "schema:experienceRequirements"
+    },
+    expertConsiderations: {
+      "@id": "schema:expertConsiderations"
+    },
+    expires: {
+      "@id": "schema:expires",
+      "@type": "Date"
+    },
+    expressedIn: {
+      "@id": "schema:expressedIn"
+    },
+    familyName: {
+      "@id": "schema:familyName"
+    },
+    fatContent: {
+      "@id": "schema:fatContent"
+    },
+    faxNumber: {
+      "@id": "schema:faxNumber"
+    },
+    featureList: {
+      "@id": "schema:featureList"
+    },
+    feesAndCommissionsSpecification: {
+      "@id": "schema:feesAndCommissionsSpecification"
+    },
+    fiberContent: {
+      "@id": "schema:fiberContent"
+    },
+    fileFormat: {
+      "@id": "schema:fileFormat"
+    },
+    fileSize: {
+      "@id": "schema:fileSize"
+    },
+    financialAidEligible: {
+      "@id": "schema:financialAidEligible"
+    },
+    firstAppearance: {
+      "@id": "schema:firstAppearance"
+    },
+    firstPerformance: {
+      "@id": "schema:firstPerformance"
+    },
+    flightDistance: {
+      "@id": "schema:flightDistance"
+    },
+    flightNumber: {
+      "@id": "schema:flightNumber"
+    },
+    floorLevel: {
+      "@id": "schema:floorLevel"
+    },
+    floorLimit: {
+      "@id": "schema:floorLimit"
+    },
+    floorSize: {
+      "@id": "schema:floorSize"
+    },
+    followee: {
+      "@id": "schema:followee"
+    },
+    follows: {
+      "@id": "schema:follows"
+    },
+    followup: {
+      "@id": "schema:followup"
+    },
+    foodEstablishment: {
+      "@id": "schema:foodEstablishment"
+    },
+    foodEvent: {
+      "@id": "schema:foodEvent"
+    },
+    foodWarning: {
+      "@id": "schema:foodWarning"
+    },
+    founder: {
+      "@id": "schema:founder"
+    },
+    founders: {
+      "@id": "schema:founders"
+    },
+    foundingDate: {
+      "@id": "schema:foundingDate",
+      "@type": "Date"
+    },
+    foundingLocation: {
+      "@id": "schema:foundingLocation"
+    },
+    free: {
+      "@id": "schema:free"
+    },
+    freeShippingThreshold: {
+      "@id": "schema:freeShippingThreshold"
+    },
+    frequency: {
+      "@id": "schema:frequency"
+    },
+    fromLocation: {
+      "@id": "schema:fromLocation"
+    },
+    fuelCapacity: {
+      "@id": "schema:fuelCapacity"
+    },
+    fuelConsumption: {
+      "@id": "schema:fuelConsumption"
+    },
+    fuelEfficiency: {
+      "@id": "schema:fuelEfficiency"
+    },
+    fuelType: {
+      "@id": "schema:fuelType"
+    },
+    functionalClass: {
+      "@id": "schema:functionalClass"
+    },
+    fundedItem: {
+      "@id": "schema:fundedItem"
+    },
+    funder: {
+      "@id": "schema:funder"
+    },
+    funding: {
+      "@id": "schema:funding"
+    },
+    game: {
+      "@id": "schema:game"
+    },
+    gameAvailabilityType: {
+      "@id": "schema:gameAvailabilityType"
+    },
+    gameEdition: {
+      "@id": "schema:gameEdition"
+    },
+    gameItem: {
+      "@id": "schema:gameItem"
+    },
+    gameLocation: {
+      "@id": "schema:gameLocation",
+      "@type": "@id"
+    },
+    gamePlatform: {
+      "@id": "schema:gamePlatform"
+    },
+    gameServer: {
+      "@id": "schema:gameServer"
+    },
+    gameTip: {
+      "@id": "schema:gameTip"
+    },
+    gender: {
+      "@id": "schema:gender"
+    },
+    genre: {
+      "@id": "schema:genre"
+    },
+    geo: {
+      "@id": "schema:geo"
+    },
+    geoContains: {
+      "@id": "schema:geoContains"
+    },
+    geoCoveredBy: {
+      "@id": "schema:geoCoveredBy"
+    },
+    geoCovers: {
+      "@id": "schema:geoCovers"
+    },
+    geoCrosses: {
+      "@id": "schema:geoCrosses"
+    },
+    geoDisjoint: {
+      "@id": "schema:geoDisjoint"
+    },
+    geoEquals: {
+      "@id": "schema:geoEquals"
+    },
+    geoIntersects: {
+      "@id": "schema:geoIntersects"
+    },
+    geoMidpoint: {
+      "@id": "schema:geoMidpoint"
+    },
+    geoOverlaps: {
+      "@id": "schema:geoOverlaps"
+    },
+    geoRadius: {
+      "@id": "schema:geoRadius"
+    },
+    geoTouches: {
+      "@id": "schema:geoTouches"
+    },
+    geoWithin: {
+      "@id": "schema:geoWithin"
+    },
+    geographicArea: {
+      "@id": "schema:geographicArea"
+    },
+    gettingTestedInfo: {
+      "@id": "schema:gettingTestedInfo",
+      "@type": "@id"
+    },
+    givenName: {
+      "@id": "schema:givenName"
+    },
+    globalLocationNumber: {
+      "@id": "schema:globalLocationNumber"
+    },
+    governmentBenefitsInfo: {
+      "@id": "schema:governmentBenefitsInfo"
+    },
+    gracePeriod: {
+      "@id": "schema:gracePeriod"
+    },
+    grantee: {
+      "@id": "schema:grantee"
+    },
+    greater: {
+      "@id": "schema:greater"
+    },
+    greaterOrEqual: {
+      "@id": "schema:greaterOrEqual"
+    },
+    gtin: {
+      "@id": "schema:gtin"
+    },
+    gtin12: {
+      "@id": "schema:gtin12"
+    },
+    gtin13: {
+      "@id": "schema:gtin13"
+    },
+    gtin14: {
+      "@id": "schema:gtin14"
+    },
+    gtin8: {
+      "@id": "schema:gtin8"
+    },
+    guideline: {
+      "@id": "schema:guideline"
+    },
+    guidelineDate: {
+      "@id": "schema:guidelineDate",
+      "@type": "Date"
+    },
+    guidelineSubject: {
+      "@id": "schema:guidelineSubject"
+    },
+    handlingTime: {
+      "@id": "schema:handlingTime"
+    },
+    hasAdultConsideration: {
+      "@id": "schema:hasAdultConsideration"
+    },
+    hasBioChemEntityPart: {
+      "@id": "schema:hasBioChemEntityPart"
+    },
+    hasBioPolymerSequence: {
+      "@id": "schema:hasBioPolymerSequence"
+    },
+    hasBroadcastChannel: {
+      "@id": "schema:hasBroadcastChannel"
+    },
+    hasCategoryCode: {
+      "@id": "schema:hasCategoryCode"
+    },
+    hasCertification: {
+      "@id": "schema:hasCertification"
+    },
+    hasCourse: {
+      "@id": "schema:hasCourse"
+    },
+    hasCourseInstance: {
+      "@id": "schema:hasCourseInstance"
+    },
+    hasCredential: {
+      "@id": "schema:hasCredential"
+    },
+    hasDefinedTerm: {
+      "@id": "schema:hasDefinedTerm"
+    },
+    hasDeliveryMethod: {
+      "@id": "schema:hasDeliveryMethod"
+    },
+    hasDigitalDocumentPermission: {
+      "@id": "schema:hasDigitalDocumentPermission"
+    },
+    hasDriveThroughService: {
+      "@id": "schema:hasDriveThroughService"
+    },
+    hasEnergyConsumptionDetails: {
+      "@id": "schema:hasEnergyConsumptionDetails"
+    },
+    hasEnergyEfficiencyCategory: {
+      "@id": "schema:hasEnergyEfficiencyCategory"
+    },
+    hasGS1DigitalLink: {
+      "@id": "schema:hasGS1DigitalLink",
+      "@type": "@id"
+    },
+    hasHealthAspect: {
+      "@id": "schema:hasHealthAspect"
+    },
+    hasMap: {
+      "@id": "schema:hasMap",
+      "@type": "@id"
+    },
+    hasMeasurement: {
+      "@id": "schema:hasMeasurement"
+    },
+    hasMemberProgram: {
+      "@id": "schema:hasMemberProgram"
+    },
+    hasMenu: {
+      "@id": "schema:hasMenu"
+    },
+    hasMenuItem: {
+      "@id": "schema:hasMenuItem"
+    },
+    hasMenuSection: {
+      "@id": "schema:hasMenuSection"
+    },
+    hasMerchantReturnPolicy: {
+      "@id": "schema:hasMerchantReturnPolicy"
+    },
+    hasMolecularFunction: {
+      "@id": "schema:hasMolecularFunction",
+      "@type": "@id"
+    },
+    hasOccupation: {
+      "@id": "schema:hasOccupation"
+    },
+    hasOfferCatalog: {
+      "@id": "schema:hasOfferCatalog"
+    },
+    hasPOS: {
+      "@id": "schema:hasPOS"
+    },
+    hasPart: {
+      "@id": "schema:hasPart"
+    },
+    hasProductReturnPolicy: {
+      "@id": "schema:hasProductReturnPolicy"
+    },
+    hasRepresentation: {
+      "@id": "schema:hasRepresentation"
+    },
+    hasTierBenefit: {
+      "@id": "schema:hasTierBenefit"
+    },
+    hasTierRequirement: {
+      "@id": "schema:hasTierRequirement"
+    },
+    hasTiers: {
+      "@id": "schema:hasTiers"
+    },
+    hasVariant: {
+      "@id": "schema:hasVariant"
+    },
+    headline: {
+      "@id": "schema:headline"
+    },
+    healthCondition: {
+      "@id": "schema:healthCondition"
+    },
+    healthPlanCoinsuranceOption: {
+      "@id": "schema:healthPlanCoinsuranceOption"
+    },
+    healthPlanCoinsuranceRate: {
+      "@id": "schema:healthPlanCoinsuranceRate"
+    },
+    healthPlanCopay: {
+      "@id": "schema:healthPlanCopay"
+    },
+    healthPlanCopayOption: {
+      "@id": "schema:healthPlanCopayOption"
+    },
+    healthPlanCostSharing: {
+      "@id": "schema:healthPlanCostSharing"
+    },
+    healthPlanDrugOption: {
+      "@id": "schema:healthPlanDrugOption"
+    },
+    healthPlanDrugTier: {
+      "@id": "schema:healthPlanDrugTier"
+    },
+    healthPlanId: {
+      "@id": "schema:healthPlanId"
+    },
+    healthPlanMarketingUrl: {
+      "@id": "schema:healthPlanMarketingUrl",
+      "@type": "@id"
+    },
+    healthPlanNetworkId: {
+      "@id": "schema:healthPlanNetworkId"
+    },
+    healthPlanNetworkTier: {
+      "@id": "schema:healthPlanNetworkTier"
+    },
+    healthPlanPharmacyCategory: {
+      "@id": "schema:healthPlanPharmacyCategory"
+    },
+    healthcareReportingData: {
+      "@id": "schema:healthcareReportingData"
+    },
+    height: {
+      "@id": "schema:height"
+    },
+    highPrice: {
+      "@id": "schema:highPrice"
+    },
+    hiringOrganization: {
+      "@id": "schema:hiringOrganization"
+    },
+    holdingArchive: {
+      "@id": "schema:holdingArchive"
+    },
+    homeLocation: {
+      "@id": "schema:homeLocation"
+    },
+    homeTeam: {
+      "@id": "schema:homeTeam"
+    },
+    honorificPrefix: {
+      "@id": "schema:honorificPrefix"
+    },
+    honorificSuffix: {
+      "@id": "schema:honorificSuffix"
+    },
+    hospitalAffiliation: {
+      "@id": "schema:hospitalAffiliation"
+    },
+    hostingOrganization: {
+      "@id": "schema:hostingOrganization"
+    },
+    hoursAvailable: {
+      "@id": "schema:hoursAvailable"
+    },
+    howPerformed: {
+      "@id": "schema:howPerformed"
+    },
+    httpMethod: {
+      "@id": "schema:httpMethod"
+    },
+    iataCode: {
+      "@id": "schema:iataCode"
+    },
+    icaoCode: {
+      "@id": "schema:icaoCode"
+    },
+    identifier: {
+      "@id": "schema:identifier"
+    },
+    identifyingExam: {
+      "@id": "schema:identifyingExam"
+    },
+    identifyingTest: {
+      "@id": "schema:identifyingTest"
+    },
+    illustrator: {
+      "@id": "schema:illustrator"
+    },
+    image: {
+      "@id": "schema:image",
+      "@type": "@id"
+    },
+    imagingTechnique: {
+      "@id": "schema:imagingTechnique"
+    },
+    inAlbum: {
+      "@id": "schema:inAlbum"
+    },
+    inBroadcastLineup: {
+      "@id": "schema:inBroadcastLineup"
+    },
+    inChI: {
+      "@id": "schema:inChI"
+    },
+    inChIKey: {
+      "@id": "schema:inChIKey"
+    },
+    inCodeSet: {
+      "@id": "schema:inCodeSet",
+      "@type": "@id"
+    },
+    inDefinedTermSet: {
+      "@id": "schema:inDefinedTermSet",
+      "@type": "@id"
+    },
+    inLanguage: {
+      "@id": "schema:inLanguage"
+    },
+    inPlaylist: {
+      "@id": "schema:inPlaylist"
+    },
+    inProductGroupWithID: {
+      "@id": "schema:inProductGroupWithID"
+    },
+    inStoreReturnsOffered: {
+      "@id": "schema:inStoreReturnsOffered"
+    },
+    inSupportOf: {
+      "@id": "schema:inSupportOf"
+    },
+    incentiveCompensation: {
+      "@id": "schema:incentiveCompensation"
+    },
+    incentives: {
+      "@id": "schema:incentives"
+    },
+    includedComposition: {
+      "@id": "schema:includedComposition"
+    },
+    includedDataCatalog: {
+      "@id": "schema:includedDataCatalog"
+    },
+    includedInDataCatalog: {
+      "@id": "schema:includedInDataCatalog"
+    },
+    includedInHealthInsurancePlan: {
+      "@id": "schema:includedInHealthInsurancePlan"
+    },
+    includedRiskFactor: {
+      "@id": "schema:includedRiskFactor"
+    },
+    includesAttraction: {
+      "@id": "schema:includesAttraction"
+    },
+    includesHealthPlanFormulary: {
+      "@id": "schema:includesHealthPlanFormulary"
+    },
+    includesHealthPlanNetwork: {
+      "@id": "schema:includesHealthPlanNetwork"
+    },
+    includesObject: {
+      "@id": "schema:includesObject"
+    },
+    increasesRiskOf: {
+      "@id": "schema:increasesRiskOf"
+    },
+    industry: {
+      "@id": "schema:industry"
+    },
+    ineligibleRegion: {
+      "@id": "schema:ineligibleRegion"
+    },
+    infectiousAgent: {
+      "@id": "schema:infectiousAgent"
+    },
+    infectiousAgentClass: {
+      "@id": "schema:infectiousAgentClass"
+    },
+    ingredients: {
+      "@id": "schema:ingredients"
+    },
+    inker: {
+      "@id": "schema:inker"
+    },
+    insertion: {
+      "@id": "schema:insertion"
+    },
+    installUrl: {
+      "@id": "schema:installUrl",
+      "@type": "@id"
+    },
+    instructor: {
+      "@id": "schema:instructor"
+    },
+    instrument: {
+      "@id": "schema:instrument"
+    },
+    intensity: {
+      "@id": "schema:intensity"
+    },
+    interactingDrug: {
+      "@id": "schema:interactingDrug"
+    },
+    interactionCount: {
+      "@id": "schema:interactionCount"
+    },
+    interactionService: {
+      "@id": "schema:interactionService"
+    },
+    interactionStatistic: {
+      "@id": "schema:interactionStatistic"
+    },
+    interactionType: {
+      "@id": "schema:interactionType"
+    },
+    interactivityType: {
+      "@id": "schema:interactivityType"
+    },
+    interestRate: {
+      "@id": "schema:interestRate"
+    },
+    interpretedAsClaim: {
+      "@id": "schema:interpretedAsClaim"
+    },
+    inventoryLevel: {
+      "@id": "schema:inventoryLevel"
+    },
+    inverseOf: {
+      "@id": "schema:inverseOf"
+    },
+    isAcceptingNewPatients: {
+      "@id": "schema:isAcceptingNewPatients"
+    },
+    isAccessibleForFree: {
+      "@id": "schema:isAccessibleForFree"
+    },
+    isAccessoryOrSparePartFor: {
+      "@id": "schema:isAccessoryOrSparePartFor"
+    },
+    isAvailableGenerically: {
+      "@id": "schema:isAvailableGenerically"
+    },
+    isBasedOn: {
+      "@id": "schema:isBasedOn",
+      "@type": "@id"
+    },
+    isBasedOnUrl: {
+      "@id": "schema:isBasedOnUrl",
+      "@type": "@id"
+    },
+    isConsumableFor: {
+      "@id": "schema:isConsumableFor"
+    },
+    isEncodedByBioChemEntity: {
+      "@id": "schema:isEncodedByBioChemEntity"
+    },
+    isFamilyFriendly: {
+      "@id": "schema:isFamilyFriendly"
+    },
+    isGift: {
+      "@id": "schema:isGift"
+    },
+    isInvolvedInBiologicalProcess: {
+      "@id": "schema:isInvolvedInBiologicalProcess",
+      "@type": "@id"
+    },
+    isLiveBroadcast: {
+      "@id": "schema:isLiveBroadcast"
+    },
+    isLocatedInSubcellularLocation: {
+      "@id": "schema:isLocatedInSubcellularLocation",
+      "@type": "@id"
+    },
+    isPartOf: {
+      "@id": "schema:isPartOf",
+      "@type": "@id"
+    },
+    isPartOfBioChemEntity: {
+      "@id": "schema:isPartOfBioChemEntity"
+    },
+    isPlanForApartment: {
+      "@id": "schema:isPlanForApartment"
+    },
+    isProprietary: {
+      "@id": "schema:isProprietary"
+    },
+    isRelatedTo: {
+      "@id": "schema:isRelatedTo"
+    },
+    isResizable: {
+      "@id": "schema:isResizable"
+    },
+    isSimilarTo: {
+      "@id": "schema:isSimilarTo"
+    },
+    isTierOf: {
+      "@id": "schema:isTierOf"
+    },
+    isUnlabelledFallback: {
+      "@id": "schema:isUnlabelledFallback"
+    },
+    isVariantOf: {
+      "@id": "schema:isVariantOf"
+    },
+    isbn: {
+      "@id": "schema:isbn"
+    },
+    isicV4: {
+      "@id": "schema:isicV4"
+    },
+    iso6523Code: {
+      "@id": "schema:iso6523Code"
+    },
+    isrcCode: {
+      "@id": "schema:isrcCode"
+    },
+    issn: {
+      "@id": "schema:issn"
+    },
+    issueNumber: {
+      "@id": "schema:issueNumber"
+    },
+    issuedBy: {
+      "@id": "schema:issuedBy"
+    },
+    issuedThrough: {
+      "@id": "schema:issuedThrough"
+    },
+    iswcCode: {
+      "@id": "schema:iswcCode"
+    },
+    item: {
+      "@id": "schema:item"
+    },
+    itemCondition: {
+      "@id": "schema:itemCondition"
+    },
+    itemDefectReturnFees: {
+      "@id": "schema:itemDefectReturnFees"
+    },
+    itemDefectReturnLabelSource: {
+      "@id": "schema:itemDefectReturnLabelSource"
+    },
+    itemDefectReturnShippingFeesAmount: {
+      "@id": "schema:itemDefectReturnShippingFeesAmount"
+    },
+    itemListElement: {
+      "@id": "schema:itemListElement"
+    },
+    itemListOrder: {
+      "@id": "schema:itemListOrder"
+    },
+    itemLocation: {
+      "@id": "schema:itemLocation"
+    },
+    itemOffered: {
+      "@id": "schema:itemOffered"
+    },
+    itemReviewed: {
+      "@id": "schema:itemReviewed"
+    },
+    itemShipped: {
+      "@id": "schema:itemShipped"
+    },
+    itinerary: {
+      "@id": "schema:itinerary"
+    },
+    iupacName: {
+      "@id": "schema:iupacName"
+    },
+    jobBenefits: {
+      "@id": "schema:jobBenefits"
+    },
+    jobImmediateStart: {
+      "@id": "schema:jobImmediateStart"
+    },
+    jobLocation: {
+      "@id": "schema:jobLocation"
+    },
+    jobLocationType: {
+      "@id": "schema:jobLocationType"
+    },
+    jobStartDate: {
+      "@id": "schema:jobStartDate"
+    },
+    jobTitle: {
+      "@id": "schema:jobTitle"
+    },
+    jurisdiction: {
+      "@id": "schema:jurisdiction"
+    },
+    keywords: {
+      "@id": "schema:keywords"
+    },
+    knownVehicleDamages: {
+      "@id": "schema:knownVehicleDamages"
+    },
+    knows: {
+      "@id": "schema:knows"
+    },
+    knowsAbout: {
+      "@id": "schema:knowsAbout"
+    },
+    knowsLanguage: {
+      "@id": "schema:knowsLanguage"
+    },
+    labelDetails: {
+      "@id": "schema:labelDetails",
+      "@type": "@id"
+    },
+    landlord: {
+      "@id": "schema:landlord"
+    },
+    language: {
+      "@id": "schema:language"
+    },
+    lastReviewed: {
+      "@id": "schema:lastReviewed",
+      "@type": "Date"
+    },
+    latitude: {
+      "@id": "schema:latitude"
+    },
+    layoutImage: {
+      "@id": "schema:layoutImage",
+      "@type": "@id"
+    },
+    learningResourceType: {
+      "@id": "schema:learningResourceType"
+    },
+    leaseLength: {
+      "@id": "schema:leaseLength"
+    },
+    legalName: {
+      "@id": "schema:legalName"
+    },
+    legalStatus: {
+      "@id": "schema:legalStatus"
+    },
+    legislationApplies: {
+      "@id": "schema:legislationApplies"
+    },
+    legislationChanges: {
+      "@id": "schema:legislationChanges"
+    },
+    legislationConsolidates: {
+      "@id": "schema:legislationConsolidates"
+    },
+    legislationDate: {
+      "@id": "schema:legislationDate",
+      "@type": "Date"
+    },
+    legislationDateVersion: {
+      "@id": "schema:legislationDateVersion",
+      "@type": "Date"
+    },
+    legislationIdentifier: {
+      "@id": "schema:legislationIdentifier"
+    },
+    legislationJurisdiction: {
+      "@id": "schema:legislationJurisdiction"
+    },
+    legislationLegalForce: {
+      "@id": "schema:legislationLegalForce"
+    },
+    legislationLegalValue: {
+      "@id": "schema:legislationLegalValue"
+    },
+    legislationPassedBy: {
+      "@id": "schema:legislationPassedBy"
+    },
+    legislationResponsible: {
+      "@id": "schema:legislationResponsible"
+    },
+    legislationTransposes: {
+      "@id": "schema:legislationTransposes"
+    },
+    legislationType: {
+      "@id": "schema:legislationType"
+    },
+    leiCode: {
+      "@id": "schema:leiCode"
+    },
+    lender: {
+      "@id": "schema:lender"
+    },
+    lesser: {
+      "@id": "schema:lesser"
+    },
+    lesserOrEqual: {
+      "@id": "schema:lesserOrEqual"
+    },
+    letterer: {
+      "@id": "schema:letterer"
+    },
+    license: {
+      "@id": "schema:license",
+      "@type": "@id"
+    },
+    line: {
+      "@id": "schema:line"
+    },
+    linkRelationship: {
+      "@id": "schema:linkRelationship"
+    },
+    liveBlogUpdate: {
+      "@id": "schema:liveBlogUpdate"
+    },
+    loanMortgageMandateAmount: {
+      "@id": "schema:loanMortgageMandateAmount"
+    },
+    loanPaymentAmount: {
+      "@id": "schema:loanPaymentAmount"
+    },
+    loanPaymentFrequency: {
+      "@id": "schema:loanPaymentFrequency"
+    },
+    loanRepaymentForm: {
+      "@id": "schema:loanRepaymentForm"
+    },
+    loanTerm: {
+      "@id": "schema:loanTerm"
+    },
+    loanType: {
+      "@id": "schema:loanType"
+    },
+    location: {
+      "@id": "schema:location"
+    },
+    locationCreated: {
+      "@id": "schema:locationCreated"
+    },
+    lodgingUnitDescription: {
+      "@id": "schema:lodgingUnitDescription"
+    },
+    lodgingUnitType: {
+      "@id": "schema:lodgingUnitType"
+    },
+    logo: {
+      "@id": "schema:logo",
+      "@type": "@id"
+    },
+    longitude: {
+      "@id": "schema:longitude"
+    },
+    loser: {
+      "@id": "schema:loser"
+    },
+    lowPrice: {
+      "@id": "schema:lowPrice"
+    },
+    lyricist: {
+      "@id": "schema:lyricist"
+    },
+    lyrics: {
+      "@id": "schema:lyrics"
+    },
+    mainContentOfPage: {
+      "@id": "schema:mainContentOfPage"
+    },
+    mainEntity: {
+      "@id": "schema:mainEntity"
+    },
+    mainEntityOfPage: {
+      "@id": "schema:mainEntityOfPage",
+      "@type": "@id"
+    },
+    maintainer: {
+      "@id": "schema:maintainer"
+    },
+    makesOffer: {
+      "@id": "schema:makesOffer"
+    },
+    manufacturer: {
+      "@id": "schema:manufacturer"
+    },
+    map: {
+      "@id": "schema:map",
+      "@type": "@id"
+    },
+    mapType: {
+      "@id": "schema:mapType"
+    },
+    maps: {
+      "@id": "schema:maps",
+      "@type": "@id"
+    },
+    marginOfError: {
+      "@id": "schema:marginOfError"
+    },
+    masthead: {
+      "@id": "schema:masthead",
+      "@type": "@id"
+    },
+    material: {
+      "@id": "schema:material"
+    },
+    materialExtent: {
+      "@id": "schema:materialExtent"
+    },
+    mathExpression: {
+      "@id": "schema:mathExpression"
+    },
+    maxPrice: {
+      "@id": "schema:maxPrice"
+    },
+    maxValue: {
+      "@id": "schema:maxValue"
+    },
+    maximumAttendeeCapacity: {
+      "@id": "schema:maximumAttendeeCapacity"
+    },
+    maximumEnrollment: {
+      "@id": "schema:maximumEnrollment"
+    },
+    maximumIntake: {
+      "@id": "schema:maximumIntake"
+    },
+    maximumPhysicalAttendeeCapacity: {
+      "@id": "schema:maximumPhysicalAttendeeCapacity"
+    },
+    maximumVirtualAttendeeCapacity: {
+      "@id": "schema:maximumVirtualAttendeeCapacity"
+    },
+    mealService: {
+      "@id": "schema:mealService"
+    },
+    measuredProperty: {
+      "@id": "schema:measuredProperty"
+    },
+    measurementDenominator: {
+      "@id": "schema:measurementDenominator"
+    },
+    measurementMethod: {
+      "@id": "schema:measurementMethod"
+    },
+    measurementQualifier: {
+      "@id": "schema:measurementQualifier"
+    },
+    measurementTechnique: {
+      "@id": "schema:measurementTechnique"
+    },
+    mechanismOfAction: {
+      "@id": "schema:mechanismOfAction"
+    },
+    mediaAuthenticityCategory: {
+      "@id": "schema:mediaAuthenticityCategory"
+    },
+    mediaItemAppearance: {
+      "@id": "schema:mediaItemAppearance"
+    },
+    median: {
+      "@id": "schema:median"
+    },
+    medicalAudience: {
+      "@id": "schema:medicalAudience"
+    },
+    medicalSpecialty: {
+      "@id": "schema:medicalSpecialty"
+    },
+    medicineSystem: {
+      "@id": "schema:medicineSystem"
+    },
+    meetsEmissionStandard: {
+      "@id": "schema:meetsEmissionStandard"
+    },
+    member: {
+      "@id": "schema:member"
+    },
+    memberOf: {
+      "@id": "schema:memberOf"
+    },
+    members: {
+      "@id": "schema:members"
+    },
+    membershipNumber: {
+      "@id": "schema:membershipNumber"
+    },
+    membershipPointsEarned: {
+      "@id": "schema:membershipPointsEarned"
+    },
+    memoryRequirements: {
+      "@id": "schema:memoryRequirements"
+    },
+    mentions: {
+      "@id": "schema:mentions"
+    },
+    menu: {
+      "@id": "schema:menu"
+    },
+    menuAddOn: {
+      "@id": "schema:menuAddOn"
+    },
+    merchant: {
+      "@id": "schema:merchant"
+    },
+    merchantReturnDays: {
+      "@id": "schema:merchantReturnDays",
+      "@type": "Date"
+    },
+    merchantReturnLink: {
+      "@id": "schema:merchantReturnLink",
+      "@type": "@id"
+    },
+    messageAttachment: {
+      "@id": "schema:messageAttachment"
+    },
+    mileageFromOdometer: {
+      "@id": "schema:mileageFromOdometer"
+    },
+    minPrice: {
+      "@id": "schema:minPrice"
+    },
+    minValue: {
+      "@id": "schema:minValue"
+    },
+    minimumPaymentDue: {
+      "@id": "schema:minimumPaymentDue"
+    },
+    missionCoveragePrioritiesPolicy: {
+      "@id": "schema:missionCoveragePrioritiesPolicy",
+      "@type": "@id"
+    },
+    mobileUrl: {
+      "@id": "schema:mobileUrl"
+    },
+    model: {
+      "@id": "schema:model"
+    },
+    modelDate: {
+      "@id": "schema:modelDate",
+      "@type": "Date"
+    },
+    modifiedTime: {
+      "@id": "schema:modifiedTime"
+    },
+    molecularFormula: {
+      "@id": "schema:molecularFormula"
+    },
+    molecularWeight: {
+      "@id": "schema:molecularWeight"
+    },
+    monoisotopicMolecularWeight: {
+      "@id": "schema:monoisotopicMolecularWeight"
+    },
+    monthlyMinimumRepaymentAmount: {
+      "@id": "schema:monthlyMinimumRepaymentAmount"
+    },
+    monthsOfExperience: {
+      "@id": "schema:monthsOfExperience"
+    },
+    mpn: {
+      "@id": "schema:mpn"
+    },
+    multipleValues: {
+      "@id": "schema:multipleValues"
+    },
+    muscleAction: {
+      "@id": "schema:muscleAction"
+    },
+    musicArrangement: {
+      "@id": "schema:musicArrangement"
+    },
+    musicBy: {
+      "@id": "schema:musicBy"
+    },
+    musicCompositionForm: {
+      "@id": "schema:musicCompositionForm"
+    },
+    musicGroupMember: {
+      "@id": "schema:musicGroupMember"
+    },
+    musicReleaseFormat: {
+      "@id": "schema:musicReleaseFormat"
+    },
+    musicalKey: {
+      "@id": "schema:musicalKey"
+    },
+    naics: {
+      "@id": "schema:naics"
+    },
+    name: {
+      "@id": "schema:name"
+    },
+    namedPosition: {
+      "@id": "schema:namedPosition"
+    },
+    nationality: {
+      "@id": "schema:nationality"
+    },
+    naturalProgression: {
+      "@id": "schema:naturalProgression"
+    },
+    negativeNotes: {
+      "@id": "schema:negativeNotes"
+    },
+    nerve: {
+      "@id": "schema:nerve"
+    },
+    nerveMotor: {
+      "@id": "schema:nerveMotor"
+    },
+    netWorth: {
+      "@id": "schema:netWorth"
+    },
+    newsUpdatesAndGuidelines: {
+      "@id": "schema:newsUpdatesAndGuidelines",
+      "@type": "@id"
+    },
+    nextItem: {
+      "@id": "schema:nextItem"
+    },
+    noBylinesPolicy: {
+      "@id": "schema:noBylinesPolicy",
+      "@type": "@id"
+    },
+    nonEqual: {
+      "@id": "schema:nonEqual"
+    },
+    nonProprietaryName: {
+      "@id": "schema:nonProprietaryName"
+    },
+    nonprofitStatus: {
+      "@id": "schema:nonprofitStatus"
+    },
+    normalRange: {
+      "@id": "schema:normalRange"
+    },
+    nsn: {
+      "@id": "schema:nsn"
+    },
+    numAdults: {
+      "@id": "schema:numAdults"
+    },
+    numChildren: {
+      "@id": "schema:numChildren"
+    },
+    numConstraints: {
+      "@id": "schema:numConstraints"
+    },
+    numTracks: {
+      "@id": "schema:numTracks"
+    },
+    numberOfAccommodationUnits: {
+      "@id": "schema:numberOfAccommodationUnits"
+    },
+    numberOfAirbags: {
+      "@id": "schema:numberOfAirbags"
+    },
+    numberOfAvailableAccommodationUnits: {
+      "@id": "schema:numberOfAvailableAccommodationUnits"
+    },
+    numberOfAxles: {
+      "@id": "schema:numberOfAxles"
+    },
+    numberOfBathroomsTotal: {
+      "@id": "schema:numberOfBathroomsTotal"
+    },
+    numberOfBedrooms: {
+      "@id": "schema:numberOfBedrooms"
+    },
+    numberOfBeds: {
+      "@id": "schema:numberOfBeds"
+    },
+    numberOfCredits: {
+      "@id": "schema:numberOfCredits"
+    },
+    numberOfDoors: {
+      "@id": "schema:numberOfDoors"
+    },
+    numberOfEmployees: {
+      "@id": "schema:numberOfEmployees"
+    },
+    numberOfEpisodes: {
+      "@id": "schema:numberOfEpisodes"
+    },
+    numberOfForwardGears: {
+      "@id": "schema:numberOfForwardGears"
+    },
+    numberOfFullBathrooms: {
+      "@id": "schema:numberOfFullBathrooms"
+    },
+    numberOfItems: {
+      "@id": "schema:numberOfItems"
+    },
+    numberOfLoanPayments: {
+      "@id": "schema:numberOfLoanPayments"
+    },
+    numberOfPages: {
+      "@id": "schema:numberOfPages"
+    },
+    numberOfPartialBathrooms: {
+      "@id": "schema:numberOfPartialBathrooms"
+    },
+    numberOfPlayers: {
+      "@id": "schema:numberOfPlayers"
+    },
+    numberOfPreviousOwners: {
+      "@id": "schema:numberOfPreviousOwners"
+    },
+    numberOfRooms: {
+      "@id": "schema:numberOfRooms"
+    },
+    numberOfSeasons: {
+      "@id": "schema:numberOfSeasons"
+    },
+    numberedPosition: {
+      "@id": "schema:numberedPosition"
+    },
+    nutrition: {
+      "@id": "schema:nutrition"
+    },
+    object: {
+      "@id": "schema:object"
+    },
+    observationAbout: {
+      "@id": "schema:observationAbout"
+    },
+    observationDate: {
+      "@id": "schema:observationDate"
+    },
+    observationPeriod: {
+      "@id": "schema:observationPeriod"
+    },
+    occupancy: {
+      "@id": "schema:occupancy"
+    },
+    occupationLocation: {
+      "@id": "schema:occupationLocation"
+    },
+    occupationalCategory: {
+      "@id": "schema:occupationalCategory"
+    },
+    occupationalCredentialAwarded: {
+      "@id": "schema:occupationalCredentialAwarded"
+    },
+    offerCount: {
+      "@id": "schema:offerCount"
+    },
+    offeredBy: {
+      "@id": "schema:offeredBy"
+    },
+    offers: {
+      "@id": "schema:offers"
+    },
+    offersPrescriptionByMail: {
+      "@id": "schema:offersPrescriptionByMail"
+    },
+    openingHours: {
+      "@id": "schema:openingHours"
+    },
+    openingHoursSpecification: {
+      "@id": "schema:openingHoursSpecification"
+    },
+    opens: {
+      "@id": "schema:opens"
+    },
+    operatingSystem: {
+      "@id": "schema:operatingSystem"
+    },
+    opponent: {
+      "@id": "schema:opponent"
+    },
+    option: {
+      "@id": "schema:option"
+    },
+    orderDate: {
+      "@id": "schema:orderDate",
+      "@type": "Date"
+    },
+    orderDelivery: {
+      "@id": "schema:orderDelivery"
+    },
+    orderItemNumber: {
+      "@id": "schema:orderItemNumber"
+    },
+    orderItemStatus: {
+      "@id": "schema:orderItemStatus"
+    },
+    orderNumber: {
+      "@id": "schema:orderNumber"
+    },
+    orderQuantity: {
+      "@id": "schema:orderQuantity"
+    },
+    orderStatus: {
+      "@id": "schema:orderStatus"
+    },
+    orderedItem: {
+      "@id": "schema:orderedItem"
+    },
+    organizer: {
+      "@id": "schema:organizer"
+    },
+    originAddress: {
+      "@id": "schema:originAddress"
+    },
+    originalMediaContextDescription: {
+      "@id": "schema:originalMediaContextDescription"
+    },
+    originalMediaLink: {
+      "@id": "schema:originalMediaLink",
+      "@type": "@id"
+    },
+    originatesFrom: {
+      "@id": "schema:originatesFrom"
+    },
+    overdosage: {
+      "@id": "schema:overdosage"
+    },
+    ownedFrom: {
+      "@id": "schema:ownedFrom"
+    },
+    ownedThrough: {
+      "@id": "schema:ownedThrough"
+    },
+    ownershipFundingInfo: {
+      "@id": "schema:ownershipFundingInfo"
+    },
+    owns: {
+      "@id": "schema:owns"
+    },
+    pageEnd: {
+      "@id": "schema:pageEnd"
+    },
+    pageStart: {
+      "@id": "schema:pageStart"
+    },
+    pagination: {
+      "@id": "schema:pagination"
+    },
+    parent: {
+      "@id": "schema:parent"
+    },
+    parentItem: {
+      "@id": "schema:parentItem"
+    },
+    parentOrganization: {
+      "@id": "schema:parentOrganization"
+    },
+    parentService: {
+      "@id": "schema:parentService"
+    },
+    parentTaxon: {
+      "@id": "schema:parentTaxon"
+    },
+    parents: {
+      "@id": "schema:parents"
+    },
+    partOfEpisode: {
+      "@id": "schema:partOfEpisode"
+    },
+    partOfInvoice: {
+      "@id": "schema:partOfInvoice"
+    },
+    partOfOrder: {
+      "@id": "schema:partOfOrder"
+    },
+    partOfSeason: {
+      "@id": "schema:partOfSeason"
+    },
+    partOfSeries: {
+      "@id": "schema:partOfSeries"
+    },
+    partOfSystem: {
+      "@id": "schema:partOfSystem"
+    },
+    partOfTVSeries: {
+      "@id": "schema:partOfTVSeries"
+    },
+    partOfTrip: {
+      "@id": "schema:partOfTrip"
+    },
+    participant: {
+      "@id": "schema:participant"
+    },
+    partySize: {
+      "@id": "schema:partySize"
+    },
+    passengerPriorityStatus: {
+      "@id": "schema:passengerPriorityStatus"
+    },
+    passengerSequenceNumber: {
+      "@id": "schema:passengerSequenceNumber"
+    },
+    pathophysiology: {
+      "@id": "schema:pathophysiology"
+    },
+    pattern: {
+      "@id": "schema:pattern"
+    },
+    payload: {
+      "@id": "schema:payload"
+    },
+    paymentAccepted: {
+      "@id": "schema:paymentAccepted"
+    },
+    paymentDue: {
+      "@id": "schema:paymentDue"
+    },
+    paymentDueDate: {
+      "@id": "schema:paymentDueDate",
+      "@type": "Date"
+    },
+    paymentMethod: {
+      "@id": "schema:paymentMethod"
+    },
+    paymentMethodId: {
+      "@id": "schema:paymentMethodId"
+    },
+    paymentMethodType: {
+      "@id": "schema:paymentMethodType"
+    },
+    paymentStatus: {
+      "@id": "schema:paymentStatus"
+    },
+    paymentUrl: {
+      "@id": "schema:paymentUrl",
+      "@type": "@id"
+    },
+    penciler: {
+      "@id": "schema:penciler"
+    },
+    percentile10: {
+      "@id": "schema:percentile10"
+    },
+    percentile25: {
+      "@id": "schema:percentile25"
+    },
+    percentile75: {
+      "@id": "schema:percentile75"
+    },
+    percentile90: {
+      "@id": "schema:percentile90"
+    },
+    performTime: {
+      "@id": "schema:performTime"
+    },
+    performer: {
+      "@id": "schema:performer"
+    },
+    performerIn: {
+      "@id": "schema:performerIn"
+    },
+    performers: {
+      "@id": "schema:performers"
+    },
+    permissionType: {
+      "@id": "schema:permissionType"
+    },
+    permissions: {
+      "@id": "schema:permissions"
+    },
+    permitAudience: {
+      "@id": "schema:permitAudience"
+    },
+    permittedUsage: {
+      "@id": "schema:permittedUsage"
+    },
+    petsAllowed: {
+      "@id": "schema:petsAllowed"
+    },
+    phoneticText: {
+      "@id": "schema:phoneticText"
+    },
+    photo: {
+      "@id": "schema:photo"
+    },
+    photos: {
+      "@id": "schema:photos"
+    },
+    physicalRequirement: {
+      "@id": "schema:physicalRequirement"
+    },
+    physiologicalBenefits: {
+      "@id": "schema:physiologicalBenefits"
+    },
+    pickupLocation: {
+      "@id": "schema:pickupLocation"
+    },
+    pickupTime: {
+      "@id": "schema:pickupTime"
+    },
+    playMode: {
+      "@id": "schema:playMode"
+    },
+    playerType: {
+      "@id": "schema:playerType"
+    },
+    playersOnline: {
+      "@id": "schema:playersOnline"
+    },
+    polygon: {
+      "@id": "schema:polygon"
+    },
+    populationType: {
+      "@id": "schema:populationType"
+    },
+    position: {
+      "@id": "schema:position"
+    },
+    positiveNotes: {
+      "@id": "schema:positiveNotes"
+    },
+    possibleComplication: {
+      "@id": "schema:possibleComplication"
+    },
+    possibleTreatment: {
+      "@id": "schema:possibleTreatment"
+    },
+    postOfficeBoxNumber: {
+      "@id": "schema:postOfficeBoxNumber"
+    },
+    postOp: {
+      "@id": "schema:postOp"
+    },
+    postalCode: {
+      "@id": "schema:postalCode"
+    },
+    postalCodeBegin: {
+      "@id": "schema:postalCodeBegin"
+    },
+    postalCodeEnd: {
+      "@id": "schema:postalCodeEnd"
+    },
+    postalCodePrefix: {
+      "@id": "schema:postalCodePrefix"
+    },
+    postalCodeRange: {
+      "@id": "schema:postalCodeRange"
+    },
+    potentialAction: {
+      "@id": "schema:potentialAction"
+    },
+    potentialUse: {
+      "@id": "schema:potentialUse"
+    },
+    practicesAt: {
+      "@id": "schema:practicesAt"
+    },
+    preOp: {
+      "@id": "schema:preOp"
+    },
+    predecessorOf: {
+      "@id": "schema:predecessorOf"
+    },
+    pregnancyCategory: {
+      "@id": "schema:pregnancyCategory"
+    },
+    pregnancyWarning: {
+      "@id": "schema:pregnancyWarning"
+    },
+    prepTime: {
+      "@id": "schema:prepTime"
+    },
+    preparation: {
+      "@id": "schema:preparation"
+    },
+    prescribingInfo: {
+      "@id": "schema:prescribingInfo",
+      "@type": "@id"
+    },
+    prescriptionStatus: {
+      "@id": "schema:prescriptionStatus"
+    },
+    previousItem: {
+      "@id": "schema:previousItem"
+    },
+    previousStartDate: {
+      "@id": "schema:previousStartDate",
+      "@type": "Date"
+    },
+    price: {
+      "@id": "schema:price"
+    },
+    priceComponent: {
+      "@id": "schema:priceComponent"
+    },
+    priceComponentType: {
+      "@id": "schema:priceComponentType"
+    },
+    priceCurrency: {
+      "@id": "schema:priceCurrency"
+    },
+    priceRange: {
+      "@id": "schema:priceRange"
+    },
+    priceSpecification: {
+      "@id": "schema:priceSpecification"
+    },
+    priceType: {
+      "@id": "schema:priceType"
+    },
+    priceValidUntil: {
+      "@id": "schema:priceValidUntil",
+      "@type": "Date"
+    },
+    primaryImageOfPage: {
+      "@id": "schema:primaryImageOfPage"
+    },
+    primaryPrevention: {
+      "@id": "schema:primaryPrevention"
+    },
+    printColumn: {
+      "@id": "schema:printColumn"
+    },
+    printEdition: {
+      "@id": "schema:printEdition"
+    },
+    printPage: {
+      "@id": "schema:printPage"
+    },
+    printSection: {
+      "@id": "schema:printSection"
+    },
+    procedure: {
+      "@id": "schema:procedure"
+    },
+    procedureType: {
+      "@id": "schema:procedureType"
+    },
+    processingTime: {
+      "@id": "schema:processingTime"
+    },
+    processorRequirements: {
+      "@id": "schema:processorRequirements"
+    },
+    producer: {
+      "@id": "schema:producer"
+    },
+    produces: {
+      "@id": "schema:produces"
+    },
+    productGroupID: {
+      "@id": "schema:productGroupID"
+    },
+    productID: {
+      "@id": "schema:productID"
+    },
+    productReturnDays: {
+      "@id": "schema:productReturnDays"
+    },
+    productReturnLink: {
+      "@id": "schema:productReturnLink",
+      "@type": "@id"
+    },
+    productSupported: {
+      "@id": "schema:productSupported"
+    },
+    productionCompany: {
+      "@id": "schema:productionCompany"
+    },
+    productionDate: {
+      "@id": "schema:productionDate",
+      "@type": "Date"
+    },
+    proficiencyLevel: {
+      "@id": "schema:proficiencyLevel"
+    },
+    program: {
+      "@id": "schema:program"
+    },
+    programMembershipUsed: {
+      "@id": "schema:programMembershipUsed"
+    },
+    programName: {
+      "@id": "schema:programName"
+    },
+    programPrerequisites: {
+      "@id": "schema:programPrerequisites"
+    },
+    programType: {
+      "@id": "schema:programType"
+    },
+    programmingLanguage: {
+      "@id": "schema:programmingLanguage"
+    },
+    programmingModel: {
+      "@id": "schema:programmingModel"
+    },
+    propertyID: {
+      "@id": "schema:propertyID"
+    },
+    proprietaryName: {
+      "@id": "schema:proprietaryName"
+    },
+    proteinContent: {
+      "@id": "schema:proteinContent"
+    },
+    provider: {
+      "@id": "schema:provider"
+    },
+    providerMobility: {
+      "@id": "schema:providerMobility"
+    },
+    providesBroadcastService: {
+      "@id": "schema:providesBroadcastService"
+    },
+    providesService: {
+      "@id": "schema:providesService"
+    },
+    publicAccess: {
+      "@id": "schema:publicAccess"
+    },
+    publicTransportClosuresInfo: {
+      "@id": "schema:publicTransportClosuresInfo",
+      "@type": "@id"
+    },
+    publication: {
+      "@id": "schema:publication"
+    },
+    publicationType: {
+      "@id": "schema:publicationType"
+    },
+    publishedBy: {
+      "@id": "schema:publishedBy"
+    },
+    publishedOn: {
+      "@id": "schema:publishedOn"
+    },
+    publisher: {
+      "@id": "schema:publisher"
+    },
+    publisherImprint: {
+      "@id": "schema:publisherImprint"
+    },
+    publishingPrinciples: {
+      "@id": "schema:publishingPrinciples",
+      "@type": "@id"
+    },
+    purchaseDate: {
+      "@id": "schema:purchaseDate",
+      "@type": "Date"
+    },
+    qualifications: {
+      "@id": "schema:qualifications"
+    },
+    quarantineGuidelines: {
+      "@id": "schema:quarantineGuidelines",
+      "@type": "@id"
+    },
+    query: {
+      "@id": "schema:query"
+    },
+    quest: {
+      "@id": "schema:quest"
+    },
+    question: {
+      "@id": "schema:question"
+    },
+    rangeIncludes: {
+      "@id": "schema:rangeIncludes"
+    },
+    ratingCount: {
+      "@id": "schema:ratingCount"
+    },
+    ratingExplanation: {
+      "@id": "schema:ratingExplanation"
+    },
+    ratingValue: {
+      "@id": "schema:ratingValue"
+    },
+    readBy: {
+      "@id": "schema:readBy"
+    },
+    readonlyValue: {
+      "@id": "schema:readonlyValue"
+    },
+    realEstateAgent: {
+      "@id": "schema:realEstateAgent"
+    },
+    recipe: {
+      "@id": "schema:recipe"
+    },
+    recipeCategory: {
+      "@id": "schema:recipeCategory"
+    },
+    recipeCuisine: {
+      "@id": "schema:recipeCuisine"
+    },
+    recipeIngredient: {
+      "@id": "schema:recipeIngredient"
+    },
+    recipeInstructions: {
+      "@id": "schema:recipeInstructions"
+    },
+    recipeYield: {
+      "@id": "schema:recipeYield"
+    },
+    recipient: {
+      "@id": "schema:recipient"
+    },
+    recognizedBy: {
+      "@id": "schema:recognizedBy"
+    },
+    recognizingAuthority: {
+      "@id": "schema:recognizingAuthority"
+    },
+    recommendationStrength: {
+      "@id": "schema:recommendationStrength"
+    },
+    recommendedIntake: {
+      "@id": "schema:recommendedIntake"
+    },
+    recordLabel: {
+      "@id": "schema:recordLabel"
+    },
+    recordedAs: {
+      "@id": "schema:recordedAs"
+    },
+    recordedAt: {
+      "@id": "schema:recordedAt"
+    },
+    recordedIn: {
+      "@id": "schema:recordedIn"
+    },
+    recordingOf: {
+      "@id": "schema:recordingOf"
+    },
+    recourseLoan: {
+      "@id": "schema:recourseLoan"
+    },
+    referenceQuantity: {
+      "@id": "schema:referenceQuantity"
+    },
+    referencesOrder: {
+      "@id": "schema:referencesOrder"
+    },
+    refundType: {
+      "@id": "schema:refundType"
+    },
+    regionDrained: {
+      "@id": "schema:regionDrained"
+    },
+    regionsAllowed: {
+      "@id": "schema:regionsAllowed"
+    },
+    relatedAnatomy: {
+      "@id": "schema:relatedAnatomy"
+    },
+    relatedCondition: {
+      "@id": "schema:relatedCondition"
+    },
+    relatedDrug: {
+      "@id": "schema:relatedDrug"
+    },
+    relatedLink: {
+      "@id": "schema:relatedLink",
+      "@type": "@id"
+    },
+    relatedStructure: {
+      "@id": "schema:relatedStructure"
+    },
+    relatedTherapy: {
+      "@id": "schema:relatedTherapy"
+    },
+    relatedTo: {
+      "@id": "schema:relatedTo"
+    },
+    releaseDate: {
+      "@id": "schema:releaseDate",
+      "@type": "Date"
+    },
+    releaseNotes: {
+      "@id": "schema:releaseNotes"
+    },
+    releaseOf: {
+      "@id": "schema:releaseOf"
+    },
+    releasedEvent: {
+      "@id": "schema:releasedEvent"
+    },
+    relevantOccupation: {
+      "@id": "schema:relevantOccupation"
+    },
+    relevantSpecialty: {
+      "@id": "schema:relevantSpecialty"
+    },
+    remainingAttendeeCapacity: {
+      "@id": "schema:remainingAttendeeCapacity"
+    },
+    renegotiableLoan: {
+      "@id": "schema:renegotiableLoan"
+    },
+    repeatCount: {
+      "@id": "schema:repeatCount"
+    },
+    repeatFrequency: {
+      "@id": "schema:repeatFrequency"
+    },
+    repetitions: {
+      "@id": "schema:repetitions"
+    },
+    replacee: {
+      "@id": "schema:replacee"
+    },
+    replacer: {
+      "@id": "schema:replacer"
+    },
+    replyToUrl: {
+      "@id": "schema:replyToUrl",
+      "@type": "@id"
+    },
+    reportNumber: {
+      "@id": "schema:reportNumber"
+    },
+    representativeOfPage: {
+      "@id": "schema:representativeOfPage"
+    },
+    requiredCollateral: {
+      "@id": "schema:requiredCollateral"
+    },
+    requiredGender: {
+      "@id": "schema:requiredGender"
+    },
+    requiredMaxAge: {
+      "@id": "schema:requiredMaxAge"
+    },
+    requiredMinAge: {
+      "@id": "schema:requiredMinAge"
+    },
+    requiredQuantity: {
+      "@id": "schema:requiredQuantity"
+    },
+    requirements: {
+      "@id": "schema:requirements"
+    },
+    requiresSubscription: {
+      "@id": "schema:requiresSubscription"
+    },
+    reservationFor: {
+      "@id": "schema:reservationFor"
+    },
+    reservationId: {
+      "@id": "schema:reservationId"
+    },
+    reservationStatus: {
+      "@id": "schema:reservationStatus"
+    },
+    reservedTicket: {
+      "@id": "schema:reservedTicket"
+    },
+    responsibilities: {
+      "@id": "schema:responsibilities"
+    },
+    restPeriods: {
+      "@id": "schema:restPeriods"
+    },
+    restockingFee: {
+      "@id": "schema:restockingFee"
+    },
+    result: {
+      "@id": "schema:result"
+    },
+    resultComment: {
+      "@id": "schema:resultComment"
+    },
+    resultReview: {
+      "@id": "schema:resultReview"
+    },
+    returnFees: {
+      "@id": "schema:returnFees"
+    },
+    returnLabelSource: {
+      "@id": "schema:returnLabelSource"
+    },
+    returnMethod: {
+      "@id": "schema:returnMethod"
+    },
+    returnPolicyCategory: {
+      "@id": "schema:returnPolicyCategory"
+    },
+    returnPolicyCountry: {
+      "@id": "schema:returnPolicyCountry"
+    },
+    returnPolicySeasonalOverride: {
+      "@id": "schema:returnPolicySeasonalOverride"
+    },
+    returnShippingFeesAmount: {
+      "@id": "schema:returnShippingFeesAmount"
+    },
+    review: {
+      "@id": "schema:review"
+    },
+    reviewAspect: {
+      "@id": "schema:reviewAspect"
+    },
+    reviewBody: {
+      "@id": "schema:reviewBody"
+    },
+    reviewCount: {
+      "@id": "schema:reviewCount"
+    },
+    reviewRating: {
+      "@id": "schema:reviewRating"
+    },
+    reviewedBy: {
+      "@id": "schema:reviewedBy"
+    },
+    reviews: {
+      "@id": "schema:reviews"
+    },
+    riskFactor: {
+      "@id": "schema:riskFactor"
+    },
+    risks: {
+      "@id": "schema:risks"
+    },
+    roleName: {
+      "@id": "schema:roleName"
+    },
+    roofLoad: {
+      "@id": "schema:roofLoad"
+    },
+    rsvpResponse: {
+      "@id": "schema:rsvpResponse"
+    },
+    runsTo: {
+      "@id": "schema:runsTo"
+    },
+    runtime: {
+      "@id": "schema:runtime"
+    },
+    runtimePlatform: {
+      "@id": "schema:runtimePlatform"
+    },
+    rxcui: {
+      "@id": "schema:rxcui"
+    },
+    safetyConsideration: {
+      "@id": "schema:safetyConsideration"
+    },
+    salaryCurrency: {
+      "@id": "schema:salaryCurrency"
+    },
+    salaryUponCompletion: {
+      "@id": "schema:salaryUponCompletion"
+    },
+    sameAs: {
+      "@id": "schema:sameAs",
+      "@type": "@id"
+    },
+    sampleType: {
+      "@id": "schema:sampleType"
+    },
+    saturatedFatContent: {
+      "@id": "schema:saturatedFatContent"
+    },
+    scheduleTimezone: {
+      "@id": "schema:scheduleTimezone"
+    },
+    scheduledPaymentDate: {
+      "@id": "schema:scheduledPaymentDate",
+      "@type": "Date"
+    },
+    scheduledTime: {
+      "@id": "schema:scheduledTime",
+      "@type": "Date"
+    },
+    schemaVersion: {
+      "@id": "schema:schemaVersion"
+    },
+    schoolClosuresInfo: {
+      "@id": "schema:schoolClosuresInfo",
+      "@type": "@id"
+    },
+    screenCount: {
+      "@id": "schema:screenCount"
+    },
+    screenshot: {
+      "@id": "schema:screenshot",
+      "@type": "@id"
+    },
+    sdDatePublished: {
+      "@id": "schema:sdDatePublished",
+      "@type": "Date"
+    },
+    sdLicense: {
+      "@id": "schema:sdLicense",
+      "@type": "@id"
+    },
+    sdPublisher: {
+      "@id": "schema:sdPublisher"
+    },
+    season: {
+      "@id": "schema:season",
+      "@type": "@id"
+    },
+    seasonNumber: {
+      "@id": "schema:seasonNumber"
+    },
+    seasons: {
+      "@id": "schema:seasons"
+    },
+    seatNumber: {
+      "@id": "schema:seatNumber"
+    },
+    seatRow: {
+      "@id": "schema:seatRow"
+    },
+    seatSection: {
+      "@id": "schema:seatSection"
+    },
+    seatingCapacity: {
+      "@id": "schema:seatingCapacity"
+    },
+    seatingType: {
+      "@id": "schema:seatingType"
+    },
+    secondaryPrevention: {
+      "@id": "schema:secondaryPrevention"
+    },
+    securityClearanceRequirement: {
+      "@id": "schema:securityClearanceRequirement"
+    },
+    securityScreening: {
+      "@id": "schema:securityScreening"
+    },
+    seeks: {
+      "@id": "schema:seeks"
+    },
+    seller: {
+      "@id": "schema:seller"
+    },
+    sender: {
+      "@id": "schema:sender"
+    },
+    sensoryRequirement: {
+      "@id": "schema:sensoryRequirement"
+    },
+    sensoryUnit: {
+      "@id": "schema:sensoryUnit"
+    },
+    serialNumber: {
+      "@id": "schema:serialNumber"
+    },
+    seriousAdverseOutcome: {
+      "@id": "schema:seriousAdverseOutcome"
+    },
+    serverStatus: {
+      "@id": "schema:serverStatus"
+    },
+    servesCuisine: {
+      "@id": "schema:servesCuisine"
+    },
+    serviceArea: {
+      "@id": "schema:serviceArea"
+    },
+    serviceAudience: {
+      "@id": "schema:serviceAudience"
+    },
+    serviceLocation: {
+      "@id": "schema:serviceLocation"
+    },
+    serviceOperator: {
+      "@id": "schema:serviceOperator"
+    },
+    serviceOutput: {
+      "@id": "schema:serviceOutput"
+    },
+    servicePhone: {
+      "@id": "schema:servicePhone"
+    },
+    servicePostalAddress: {
+      "@id": "schema:servicePostalAddress"
+    },
+    serviceSmsNumber: {
+      "@id": "schema:serviceSmsNumber"
+    },
+    serviceType: {
+      "@id": "schema:serviceType"
+    },
+    serviceUrl: {
+      "@id": "schema:serviceUrl",
+      "@type": "@id"
+    },
+    servingSize: {
+      "@id": "schema:servingSize"
+    },
+    sha256: {
+      "@id": "schema:sha256"
+    },
+    sharedContent: {
+      "@id": "schema:sharedContent"
+    },
+    shippingDestination: {
+      "@id": "schema:shippingDestination"
+    },
+    shippingDetails: {
+      "@id": "schema:shippingDetails"
+    },
+    shippingLabel: {
+      "@id": "schema:shippingLabel"
+    },
+    shippingOrigin: {
+      "@id": "schema:shippingOrigin"
+    },
+    shippingRate: {
+      "@id": "schema:shippingRate"
+    },
+    shippingSettingsLink: {
+      "@id": "schema:shippingSettingsLink",
+      "@type": "@id"
+    },
+    sibling: {
+      "@id": "schema:sibling"
+    },
+    siblings: {
+      "@id": "schema:siblings"
+    },
+    signDetected: {
+      "@id": "schema:signDetected"
+    },
+    signOrSymptom: {
+      "@id": "schema:signOrSymptom"
+    },
+    significance: {
+      "@id": "schema:significance"
+    },
+    significantLink: {
+      "@id": "schema:significantLink",
+      "@type": "@id"
+    },
+    significantLinks: {
+      "@id": "schema:significantLinks",
+      "@type": "@id"
+    },
+    size: {
+      "@id": "schema:size"
+    },
+    sizeGroup: {
+      "@id": "schema:sizeGroup"
+    },
+    sizeSystem: {
+      "@id": "schema:sizeSystem"
+    },
+    skills: {
+      "@id": "schema:skills"
+    },
+    sku: {
+      "@id": "schema:sku"
+    },
+    slogan: {
+      "@id": "schema:slogan"
+    },
+    smiles: {
+      "@id": "schema:smiles"
+    },
+    smokingAllowed: {
+      "@id": "schema:smokingAllowed"
+    },
+    sodiumContent: {
+      "@id": "schema:sodiumContent"
+    },
+    softwareAddOn: {
+      "@id": "schema:softwareAddOn"
+    },
+    softwareHelp: {
+      "@id": "schema:softwareHelp"
+    },
+    softwareRequirements: {
+      "@id": "schema:softwareRequirements"
+    },
+    softwareVersion: {
+      "@id": "schema:softwareVersion"
+    },
+    sourceOrganization: {
+      "@id": "schema:sourceOrganization"
+    },
+    sourcedFrom: {
+      "@id": "schema:sourcedFrom"
+    },
+    spatial: {
+      "@id": "schema:spatial"
+    },
+    spatialCoverage: {
+      "@id": "schema:spatialCoverage"
+    },
+    speakable: {
+      "@id": "schema:speakable",
+      "@type": "@id"
+    },
+    specialCommitments: {
+      "@id": "schema:specialCommitments"
+    },
+    specialOpeningHoursSpecification: {
+      "@id": "schema:specialOpeningHoursSpecification"
+    },
+    specialty: {
+      "@id": "schema:specialty"
+    },
+    speechToTextMarkup: {
+      "@id": "schema:speechToTextMarkup"
+    },
+    speed: {
+      "@id": "schema:speed"
+    },
+    spokenByCharacter: {
+      "@id": "schema:spokenByCharacter"
+    },
+    sponsor: {
+      "@id": "schema:sponsor"
+    },
+    sport: {
+      "@id": "schema:sport"
+    },
+    sportsActivityLocation: {
+      "@id": "schema:sportsActivityLocation"
+    },
+    sportsEvent: {
+      "@id": "schema:sportsEvent"
+    },
+    sportsTeam: {
+      "@id": "schema:sportsTeam"
+    },
+    spouse: {
+      "@id": "schema:spouse"
+    },
+    stage: {
+      "@id": "schema:stage"
+    },
+    stageAsNumber: {
+      "@id": "schema:stageAsNumber"
+    },
+    starRating: {
+      "@id": "schema:starRating"
+    },
+    startDate: {
+      "@id": "schema:startDate",
+      "@type": "Date"
+    },
+    startOffset: {
+      "@id": "schema:startOffset"
+    },
+    startTime: {
+      "@id": "schema:startTime"
+    },
+    statType: {
+      "@id": "schema:statType"
+    },
+    status: {
+      "@id": "schema:status"
+    },
+    steeringPosition: {
+      "@id": "schema:steeringPosition"
+    },
+    step: {
+      "@id": "schema:step"
+    },
+    stepValue: {
+      "@id": "schema:stepValue"
+    },
+    steps: {
+      "@id": "schema:steps"
+    },
+    storageRequirements: {
+      "@id": "schema:storageRequirements"
+    },
+    streetAddress: {
+      "@id": "schema:streetAddress"
+    },
+    strengthUnit: {
+      "@id": "schema:strengthUnit"
+    },
+    strengthValue: {
+      "@id": "schema:strengthValue"
+    },
+    structuralClass: {
+      "@id": "schema:structuralClass"
+    },
+    study: {
+      "@id": "schema:study"
+    },
+    studyDesign: {
+      "@id": "schema:studyDesign"
+    },
+    studyLocation: {
+      "@id": "schema:studyLocation"
+    },
+    studySubject: {
+      "@id": "schema:studySubject"
+    },
+    stupidProperty: {
+      "@id": "schema:stupidProperty"
+    },
+    subEvent: {
+      "@id": "schema:subEvent"
+    },
+    subEvents: {
+      "@id": "schema:subEvents"
+    },
+    subOrganization: {
+      "@id": "schema:subOrganization"
+    },
+    subReservation: {
+      "@id": "schema:subReservation"
+    },
+    subStageSuffix: {
+      "@id": "schema:subStageSuffix"
+    },
+    subStructure: {
+      "@id": "schema:subStructure"
+    },
+    subTest: {
+      "@id": "schema:subTest"
+    },
+    subTrip: {
+      "@id": "schema:subTrip"
+    },
+    subjectOf: {
+      "@id": "schema:subjectOf"
+    },
+    subtitleLanguage: {
+      "@id": "schema:subtitleLanguage"
+    },
+    successorOf: {
+      "@id": "schema:successorOf"
+    },
+    sugarContent: {
+      "@id": "schema:sugarContent"
+    },
+    suggestedAge: {
+      "@id": "schema:suggestedAge"
+    },
+    suggestedAnswer: {
+      "@id": "schema:suggestedAnswer"
+    },
+    suggestedGender: {
+      "@id": "schema:suggestedGender"
+    },
+    suggestedMaxAge: {
+      "@id": "schema:suggestedMaxAge"
+    },
+    suggestedMeasurement: {
+      "@id": "schema:suggestedMeasurement"
+    },
+    suggestedMinAge: {
+      "@id": "schema:suggestedMinAge"
+    },
+    suitableForDiet: {
+      "@id": "schema:suitableForDiet"
+    },
+    superEvent: {
+      "@id": "schema:superEvent"
+    },
+    supersededBy: {
+      "@id": "schema:supersededBy"
+    },
+    supply: {
+      "@id": "schema:supply"
+    },
+    supplyTo: {
+      "@id": "schema:supplyTo"
+    },
+    supportingData: {
+      "@id": "schema:supportingData"
+    },
+    surface: {
+      "@id": "schema:surface"
+    },
+    syllabusSections: {
+      "@id": "schema:syllabusSections"
+    },
+    target: {
+      "@id": "schema:target",
+      "@type": "@id"
+    },
+    targetCollection: {
+      "@id": "schema:targetCollection"
+    },
+    targetDescription: {
+      "@id": "schema:targetDescription"
+    },
+    targetName: {
+      "@id": "schema:targetName"
+    },
+    targetPlatform: {
+      "@id": "schema:targetPlatform"
+    },
+    targetPopulation: {
+      "@id": "schema:targetPopulation"
+    },
+    targetProduct: {
+      "@id": "schema:targetProduct"
+    },
+    targetUrl: {
+      "@id": "schema:targetUrl",
+      "@type": "@id"
+    },
+    taxID: {
+      "@id": "schema:taxID"
+    },
+    taxonRank: {
+      "@id": "schema:taxonRank"
+    },
+    taxonomicRange: {
+      "@id": "schema:taxonomicRange"
+    },
+    teaches: {
+      "@id": "schema:teaches"
+    },
+    telephone: {
+      "@id": "schema:telephone"
+    },
+    temporal: {
+      "@id": "schema:temporal"
+    },
+    temporalCoverage: {
+      "@id": "schema:temporalCoverage"
+    },
+    termCode: {
+      "@id": "schema:termCode"
+    },
+    termDuration: {
+      "@id": "schema:termDuration"
+    },
+    termsOfService: {
+      "@id": "schema:termsOfService"
+    },
+    termsPerYear: {
+      "@id": "schema:termsPerYear"
+    },
+    text: {
+      "@id": "schema:text"
+    },
+    textValue: {
+      "@id": "schema:textValue"
+    },
+    thumbnail: {
+      "@id": "schema:thumbnail"
+    },
+    thumbnailUrl: {
+      "@id": "schema:thumbnailUrl",
+      "@type": "@id"
+    },
+    tickerSymbol: {
+      "@id": "schema:tickerSymbol"
+    },
+    ticketNumber: {
+      "@id": "schema:ticketNumber"
+    },
+    ticketToken: {
+      "@id": "schema:ticketToken"
+    },
+    ticketedSeat: {
+      "@id": "schema:ticketedSeat"
+    },
+    timeOfDay: {
+      "@id": "schema:timeOfDay"
+    },
+    timeRequired: {
+      "@id": "schema:timeRequired"
+    },
+    timeToComplete: {
+      "@id": "schema:timeToComplete"
+    },
+    tissueSample: {
+      "@id": "schema:tissueSample"
+    },
+    title: {
+      "@id": "schema:title"
+    },
+    titleEIDR: {
+      "@id": "schema:titleEIDR"
+    },
+    toLocation: {
+      "@id": "schema:toLocation"
+    },
+    toRecipient: {
+      "@id": "schema:toRecipient"
+    },
+    tocContinuation: {
+      "@id": "schema:tocContinuation"
+    },
+    tocEntry: {
+      "@id": "schema:tocEntry"
+    },
+    tongueWeight: {
+      "@id": "schema:tongueWeight"
+    },
+    tool: {
+      "@id": "schema:tool"
+    },
+    torque: {
+      "@id": "schema:torque"
+    },
+    totalHistoricalEnrollment: {
+      "@id": "schema:totalHistoricalEnrollment"
+    },
+    totalJobOpenings: {
+      "@id": "schema:totalJobOpenings"
+    },
+    totalPaymentDue: {
+      "@id": "schema:totalPaymentDue"
+    },
+    totalPrice: {
+      "@id": "schema:totalPrice"
+    },
+    totalTime: {
+      "@id": "schema:totalTime"
+    },
+    tourBookingPage: {
+      "@id": "schema:tourBookingPage",
+      "@type": "@id"
+    },
+    touristType: {
+      "@id": "schema:touristType"
+    },
+    track: {
+      "@id": "schema:track"
+    },
+    trackingNumber: {
+      "@id": "schema:trackingNumber"
+    },
+    trackingUrl: {
+      "@id": "schema:trackingUrl",
+      "@type": "@id"
+    },
+    tracks: {
+      "@id": "schema:tracks"
+    },
+    trailer: {
+      "@id": "schema:trailer"
+    },
+    trailerWeight: {
+      "@id": "schema:trailerWeight"
+    },
+    trainName: {
+      "@id": "schema:trainName"
+    },
+    trainNumber: {
+      "@id": "schema:trainNumber"
+    },
+    trainingSalary: {
+      "@id": "schema:trainingSalary"
+    },
+    transFatContent: {
+      "@id": "schema:transFatContent"
+    },
+    transcript: {
+      "@id": "schema:transcript"
+    },
+    transitTime: {
+      "@id": "schema:transitTime"
+    },
+    transitTimeLabel: {
+      "@id": "schema:transitTimeLabel"
+    },
+    translationOfWork: {
+      "@id": "schema:translationOfWork"
+    },
+    translator: {
+      "@id": "schema:translator"
+    },
+    transmissionMethod: {
+      "@id": "schema:transmissionMethod"
+    },
+    travelBans: {
+      "@id": "schema:travelBans",
+      "@type": "@id"
+    },
+    trialDesign: {
+      "@id": "schema:trialDesign"
+    },
+    tributary: {
+      "@id": "schema:tributary"
+    },
+    tripOrigin: {
+      "@id": "schema:tripOrigin"
+    },
+    typeOfBed: {
+      "@id": "schema:typeOfBed"
+    },
+    typeOfGood: {
+      "@id": "schema:typeOfGood"
+    },
+    typicalAgeRange: {
+      "@id": "schema:typicalAgeRange"
+    },
+    typicalCreditsPerTerm: {
+      "@id": "schema:typicalCreditsPerTerm"
+    },
+    typicalTest: {
+      "@id": "schema:typicalTest"
+    },
+    underName: {
+      "@id": "schema:underName"
+    },
+    unitCode: {
+      "@id": "schema:unitCode"
+    },
+    unitText: {
+      "@id": "schema:unitText"
+    },
+    unnamedSourcesPolicy: {
+      "@id": "schema:unnamedSourcesPolicy",
+      "@type": "@id"
+    },
+    unsaturatedFatContent: {
+      "@id": "schema:unsaturatedFatContent"
+    },
+    uploadDate: {
+      "@id": "schema:uploadDate",
+      "@type": "Date"
+    },
+    upvoteCount: {
+      "@id": "schema:upvoteCount"
+    },
+    url: {
+      "@id": "schema:url",
+      "@type": "@id"
+    },
+    urlTemplate: {
+      "@id": "schema:urlTemplate"
+    },
+    usNPI: {
+      "@id": "schema:usNPI"
+    },
+    usageInfo: {
+      "@id": "schema:usageInfo",
+      "@type": "@id"
+    },
+    usedToDiagnose: {
+      "@id": "schema:usedToDiagnose"
+    },
+    userInteractionCount: {
+      "@id": "schema:userInteractionCount"
+    },
+    usesDevice: {
+      "@id": "schema:usesDevice"
+    },
+    usesHealthPlanIdStandard: {
+      "@id": "schema:usesHealthPlanIdStandard"
+    },
+    utterances: {
+      "@id": "schema:utterances"
+    },
+    validFor: {
+      "@id": "schema:validFor"
+    },
+    validForMemberTier: {
+      "@id": "schema:validForMemberTier"
+    },
+    validFrom: {
+      "@id": "schema:validFrom",
+      "@type": "Date"
+    },
+    validIn: {
+      "@id": "schema:validIn"
+    },
+    validThrough: {
+      "@id": "schema:validThrough",
+      "@type": "Date"
+    },
+    validUntil: {
+      "@id": "schema:validUntil",
+      "@type": "Date"
+    },
+    value: {
+      "@id": "schema:value"
+    },
+    valueAddedTaxIncluded: {
+      "@id": "schema:valueAddedTaxIncluded"
+    },
+    valueMaxLength: {
+      "@id": "schema:valueMaxLength"
+    },
+    valueMinLength: {
+      "@id": "schema:valueMinLength"
+    },
+    valueName: {
+      "@id": "schema:valueName"
+    },
+    valuePattern: {
+      "@id": "schema:valuePattern"
+    },
+    valueReference: {
+      "@id": "schema:valueReference"
+    },
+    valueRequired: {
+      "@id": "schema:valueRequired"
+    },
+    variableMeasured: {
+      "@id": "schema:variableMeasured"
+    },
+    variablesMeasured: {
+      "@id": "schema:variablesMeasured"
+    },
+    variantCover: {
+      "@id": "schema:variantCover"
+    },
+    variesBy: {
+      "@id": "schema:variesBy"
+    },
+    vatID: {
+      "@id": "schema:vatID"
+    },
+    vehicleConfiguration: {
+      "@id": "schema:vehicleConfiguration"
+    },
+    vehicleEngine: {
+      "@id": "schema:vehicleEngine"
+    },
+    vehicleIdentificationNumber: {
+      "@id": "schema:vehicleIdentificationNumber"
+    },
+    vehicleInteriorColor: {
+      "@id": "schema:vehicleInteriorColor"
+    },
+    vehicleInteriorType: {
+      "@id": "schema:vehicleInteriorType"
+    },
+    vehicleModelDate: {
+      "@id": "schema:vehicleModelDate",
+      "@type": "Date"
+    },
+    vehicleSeatingCapacity: {
+      "@id": "schema:vehicleSeatingCapacity"
+    },
+    vehicleSpecialUsage: {
+      "@id": "schema:vehicleSpecialUsage"
+    },
+    vehicleTransmission: {
+      "@id": "schema:vehicleTransmission"
+    },
+    vendor: {
+      "@id": "schema:vendor"
+    },
+    verificationFactCheckingPolicy: {
+      "@id": "schema:verificationFactCheckingPolicy",
+      "@type": "@id"
+    },
+    version: {
+      "@id": "schema:version"
+    },
+    video: {
+      "@id": "schema:video"
+    },
+    videoFormat: {
+      "@id": "schema:videoFormat"
+    },
+    videoFrameSize: {
+      "@id": "schema:videoFrameSize"
+    },
+    videoQuality: {
+      "@id": "schema:videoQuality"
+    },
+    volumeNumber: {
+      "@id": "schema:volumeNumber"
+    },
+    warning: {
+      "@id": "schema:warning"
+    },
+    warranty: {
+      "@id": "schema:warranty"
+    },
+    warrantyPromise: {
+      "@id": "schema:warrantyPromise"
+    },
+    warrantyScope: {
+      "@id": "schema:warrantyScope"
+    },
+    webCheckinTime: {
+      "@id": "schema:webCheckinTime"
+    },
+    webFeed: {
+      "@id": "schema:webFeed",
+      "@type": "@id"
+    },
+    weight: {
+      "@id": "schema:weight"
+    },
+    weightTotal: {
+      "@id": "schema:weightTotal"
+    },
+    wheelbase: {
+      "@id": "schema:wheelbase"
+    },
+    width: {
+      "@id": "schema:width"
+    },
+    winner: {
+      "@id": "schema:winner"
+    },
+    wordCount: {
+      "@id": "schema:wordCount"
+    },
+    workExample: {
+      "@id": "schema:workExample"
+    },
+    workFeatured: {
+      "@id": "schema:workFeatured"
+    },
+    workHours: {
+      "@id": "schema:workHours"
+    },
+    workLocation: {
+      "@id": "schema:workLocation"
+    },
+    workPerformed: {
+      "@id": "schema:workPerformed"
+    },
+    workPresented: {
+      "@id": "schema:workPresented"
+    },
+    workTranslation: {
+      "@id": "schema:workTranslation"
+    },
+    workload: {
+      "@id": "schema:workload"
+    },
+    worksFor: {
+      "@id": "schema:worksFor"
+    },
+    worstRating: {
+      "@id": "schema:worstRating"
+    },
+    xpath: {
+      "@id": "schema:xpath"
+    },
+    yearBuilt: {
+      "@id": "schema:yearBuilt"
+    },
+    yearlyRevenue: {
+      "@id": "schema:yearlyRevenue"
+    },
+    yearsInOperation: {
+      "@id": "schema:yearsInOperation"
+    },
+    yield: {
+      "@id": "schema:yield"
+    }
+  }
+};
+
+// lib/core/contexts/gotosocial.json
+var gotosocial_default = {
+  "@context": {
+    xsd: "http://www.w3.org/2001/XMLSchema#",
+    gts: "https://gotosocial.org/ns#",
+    LikeRequest: "gts:LikeRequest",
+    ReplyRequest: "gts:ReplyRequest",
+    AnnounceRequest: "gts:AnnounceRequest",
+    QuoteRequest: "https://w3id.org/fep/044f#QuoteRequest",
+    LikeAuthorization: "gts:LikeApproval",
+    ReplyAuthorization: "gts:ReplyAuthorization",
+    AnnounceAuthorization: "gts:AnnounceAuthorization",
+    QuoteAuthorization: "https://w3id.org/fep/044f#QuoteAuthorization",
+    likeAuthorization: {
+      "@id": "gts:likeAuthorization",
+      "@type": "@id"
+    },
+    replyAuthorization: {
+      "@id": "gts:replyAuthorization",
+      "@type": "@id"
+    },
+    announceAuthorization: {
+      "@id": "gts:announceAuthorization",
+      "@type": "@id"
+    },
+    quoteAuthorization: {
+      "@id": "https://w3id.org/fep/044f#quoteAuthorization",
+      "@type": "@id"
+    },
+    interactingObject: {
+      "@id": "gts:interactingObject",
+      "@type": "@id"
+    },
+    interactionTarget: {
+      "@id": "gts:interactionTarget",
+      "@type": "@id"
+    },
+    interactionPolicy: {
+      "@id": "gts:interactionPolicy",
+      "@type": "@id"
+    },
+    canLike: {
+      "@id": "gts:canLike",
+      "@type": "@id"
+    },
+    canReply: {
+      "@id": "gts:canReply",
+      "@type": "@id"
+    },
+    canAnnounce: {
+      "@id": "gts:canAnnounce",
+      "@type": "@id"
+    },
+    canQuote: {
+      "@id": "gts:canQuote",
+      "@type": "@id"
+    },
+    automaticApproval: {
+      "@id": "gts:automaticApproval",
+      "@type": "@id"
+    },
+    manualApproval: {
+      "@id": "gts:manualApproval",
+      "@type": "@id"
+    },
+    hidesToPublicFromUnauthedWeb: {
+      "@id": "gts:hidesToPublicFromUnauthedWeb",
+      "@type": "xsd:boolean"
+    },
+    hidesCcPublicFromUnauthedWeb: {
+      "@id": "gts:hidesCcPublicFromUnauthedWeb",
+      "@type": "xsd:boolean"
+    },
+    always: {
+      "@id": "gts:always",
+      "@type": "@id"
+    },
+    approvalRequired: {
+      "@id": "gts:approvalRequired",
+      "@type": "@id"
+    },
+    approvedBy: {
+      "@id": "gts:approvedBy",
+      "@type": "@id"
+    }
+  }
+};
+
+// lib/core/contexts/fep-5711.json
+var fep_5711_default = {
+  "@context": {
+    likesOf: {
+      "@id": "https://w3id.org/fep/5711#likesOf",
+      "@type": "@id"
+    },
+    sharesOf: {
+      "@id": "https://w3id.org/fep/5711#sharesOf",
+      "@type": "@id"
+    },
+    repliesOf: {
+      "@id": "https://w3id.org/fep/5711#repliesOf",
+      "@type": "@id"
+    },
+    inboxOf: {
+      "@id": "https://w3id.org/fep/5711#inboxOf",
+      "@type": "@id"
+    },
+    outboxOf: {
+      "@id": "https://w3id.org/fep/5711#outboxOf",
+      "@type": "@id"
+    },
+    followersOf: {
+      "@id": "https://w3id.org/fep/5711#followersOf",
+      "@type": "@id"
+    },
+    followingOf: {
+      "@id": "https://w3id.org/fep/5711#followingOf",
+      "@type": "@id"
+    },
+    likedOf: {
+      "@id": "https://w3id.org/fep/5711#likedOf",
+      "@type": "@id"
+    }
+  }
+};
+
+// lib/core/contexts/join-lemmy.json
+var join_lemmy_default = {
+  "@context": [
+    "https://w3id.org/security/v1",
+    {
+      as: "https://www.w3.org/ns/activitystreams#",
+      lemmy: "https://join-lemmy.org/ns#",
+      litepub: "http://litepub.social/ns#",
+      pt: "https://joinpeertube.org/ns#",
+      sc: "http://schema.org/",
+      mastodon: "http://joinmastodon.org/ns#",
+      ChatMessage: "litepub:ChatMessage",
+      commentsEnabled: "pt:commentsEnabled",
+      sensitive: "as:sensitive",
+      matrixUserId: "lemmy:matrixUserId",
+      postingRestrictedToMods: "lemmy:postingRestrictedToMods",
+      removeData: "lemmy:removeData",
+      stickied: "lemmy:stickied",
+      moderators: {
+        "@type": "@id",
+        "@id": "lemmy:moderators"
+      },
+      expires: "as:endTime",
+      distinguished: "lemmy:distinguished",
+      language: "sc:inLanguage",
+      identifier: "sc:identifier",
+      Hashtag: "as:Hashtag",
+      featured: {
+        "@type": "@id",
+        "@id": "mastodon:featured"
+      }
+    }
+  ]
+};
+
+// lib/core/contexts/joinmastodon.json
+var joinmastodon_default = {
+  "@context": {
+    toot: "http://joinmastodon.org/ns#",
+    Emoji: "toot:Emoji",
+    featured: {
+      "@id": "toot:featured",
+      "@type": "@id"
+    },
+    featuredTags: {
+      "@id": "toot:featuredTags",
+      "@type": "@id"
+    },
+    focalPoint: {
+      "@container": "@list",
+      "@id": "toot:focalPoint"
+    },
+    blurhash: "toot:blurhash",
+    discoverable: "toot:discoverable",
+    indexable: "toot:indexable",
+    memorial: "toot:memorial",
+    votersCount: "toot:votersCount",
+    suspended: "toot:suspended",
+    attributionDomains: {
+      "@id": "toot:attributionDomains",
+      "@type": "@id"
+    }
+  }
+};
+
+// lib/core/contexts/miscellany.json
+var miscellany_default = {
+  "@context": {
+    as: "https://www.w3.org/ns/activitystreams#",
+    xsd: "http://www.w3.org/2001/XMLSchema#",
+    Hashtag: "as:Hashtag",
+    manuallyApprovesFollowers: {
+      "@id": "as:manuallyApprovesFollowers",
+      "@type": "xsd:boolean"
+    },
+    movedTo: {
+      "@id": "as:movedTo",
+      "@type": "@id"
+    },
+    sensitive: {
+      "@id": "as:sensitive",
+      "@type": "xsd:boolean"
+    }
+  }
+};
+
+// lib/core/contexts/index.mjs
+var CONTEXTS = {
+  "https://www.w3.org/ns/activitystreams": activitystreams_default,
+  "https://w3id.org/security/v1": security_v1_default,
+  "https://w3id.org/security/data-integrity/v1": security_data_integrity_v1_default,
+  "https://w3id.org/security/data-integrity/v2": security_data_integrity_v2_default,
+  "https://www.w3.org/ns/did/v1": did_v1_default,
+  "https://w3id.org/security/multikey/v1": security_multikey_v1_default,
+  "https://w3id.org/identity/v1": identity_v1_default,
+  "https://purl.archive.org/socialweb/webfinger": webfinger_default,
+  "http://schema.org/": schemaorg_default,
+  "https://gotosocial.org/ns": gotosocial_default,
+  "https://w3id.org/fep/5711": fep_5711_default,
+  "https://join-lemmy.org/context.json": join_lemmy_default,
+  "http://joinmastodon.org/ns": joinmastodon_default,
+  "https://purl.archive.org/miscellany": miscellany_default
+};
+
+// lib/core/as2.mjs
+var AS2Error = class extends Error {
+  constructor(reason, { context = null } = {}) {
+    super(reason);
+    this.name = "AS2Error";
+    this.context = context;
+  }
+};
+function contextLoader(url) {
+  const doc = CONTEXTS[url];
+  if (!doc) {
+    return Promise.reject(new AS2Error(`context not held here: ${url}`, { context: url }));
+  }
+  return Promise.resolve({ contextUrl: null, documentUrl: url, document: doc });
+}
+async function parseAS2(raw) {
+  let input;
+  if (typeof raw === "string") {
+    try {
+      input = JSON.parse(raw);
+    } catch (e) {
+      throw new AS2Error(`not JSON: ${e.message}`);
+    }
+  } else {
+    input = raw;
+  }
+  if (!input || typeof input !== "object") throw new AS2Error("not a JSON object");
+  if (input["@context"] === void 0) throw new AS2Error("no @context");
+  const options = { documentLoader: contextLoader };
+  let graph2;
+  let doc;
+  try {
+    graph2 = await import_jsonld.default.toRDF(input, options);
+    doc = await import_jsonld.default.compact(input, AS_CTX, options);
+  } catch (e) {
+    if (e instanceof AS2Error) throw e;
+    const cause = e?.details?.cause ?? e?.cause;
+    if (cause instanceof AS2Error) throw cause;
+    throw new AS2Error(`not readable as JSON-LD: ${e.message}`);
+  }
+  return { doc, graph: graph2 };
+}
+async function readLenient(raw) {
+  try {
+    const { doc, graph: graph2 } = await parseAS2(raw);
+    return { doc, graph: graph2, degraded: null };
+  } catch (e) {
+    let doc = null;
+    try {
+      doc = typeof raw === "string" ? JSON.parse(raw) : raw ?? null;
+    } catch {
+    }
+    return { doc: doc && typeof doc === "object" ? doc : null, graph: null, degraded: e.message };
+  }
+}
+
+// lib/core/publisher/restore.mjs
 var ACCEPT_AP = 'application/activity+json, application/ld+json; profile="https://www.w3.org/ns/activitystreams"';
 var REBUILD_MAX_PER_RUN = 200;
 async function reconcileFollowers(publisher, contacts) {
@@ -44362,7 +55542,8 @@ async function reconcileFollowers(publisher, contacts) {
     try {
       const res = await publisher.deliverer.signedFetch(actor, { headers: { accept: ACCEPT_AP } });
       if (!res.ok) continue;
-      const doc = await res.json();
+      const { doc, degraded } = await readLenient(await res.json());
+      if (degraded) publisher.log?.(`actor ${actor} read as plain JSON: ${degraded}`);
       if (!doc?.inbox) continue;
       contacts.followers.push({
         actor,
@@ -45567,13 +56748,13 @@ async function subscribeOnce(intake) {
     return;
   }
   const descUrl = await intake._storageDescriptionUrl();
-  const { channel, error } = await readWebSocketChannel(
+  const { channel, error: error2 } = await readWebSocketChannel(
     descUrl,
     { headers: { "user-agent": USER_AGENT }, timeoutMs: HTTP_TIMEOUT_MS }
   );
   if (!channel) {
     intake.wsState = "unavailable";
-    intake.log(`${error} \u2014 polling only`);
+    intake.log(`${error2} \u2014 polling only`);
     return;
   }
   const topic = intake.urls.toPod ? intake.urls.toPod(intake.urls.inbox) : intake.urls.inbox;
@@ -45640,9 +56821,15 @@ async function fetchAP(intake, url) {
   if (ct && !ct.endsWith("json")) return null;
   let doc = null;
   try {
-    doc = JSON.parse(await readCapped3(res));
+    const read2 = await readLenient(await readCapped3(res));
+    if (read2.degraded) intake.log(`fetch ${url} read as plain JSON: ${read2.degraded}`);
+    doc = read2.doc;
   } catch (e) {
-    intake.log(`fetch ${url}: unreadable as JSON \u2014 ${e.message}`);
+    intake.log(`fetch ${url}: unreadable \u2014 ${e.message}`);
+    return null;
+  }
+  if (!doc) {
+    intake.log(`fetch ${url}: unreadable as JSON`);
     return null;
   }
   const landed = res.finalUrl || url;
@@ -45699,7 +56886,7 @@ async function isGone(intake, url) {
   if (res.status < 400) {
     try {
       const { readCapped: readCapped3 } = await Promise.resolve().then(() => (init_safefetch(), safefetch_exports));
-      return JSON.parse(await readCapped3(res))?.type === "Tombstone";
+      return (await readLenient(await readCapped3(res))).doc?.type === "Tombstone";
     } catch {
       return false;
     }
@@ -46284,6 +57471,4900 @@ async function addReply(intake, parentId, replyId) {
   intake.log(`reply recorded on ${parentId}`);
 }
 
+// node_modules/@rdfjs/environment/Environment.js
+var Environment = class _Environment {
+  constructor(factories, { bind = false } = {}) {
+    this._factories = factories.slice();
+    for (const factory3 of this._factories) {
+      if (typeof factory3.prototype.init === "function") {
+        factory3.prototype.init.call(this);
+      }
+      for (const method of factory3.exports || []) {
+        if (bind) {
+          this[method] = factory3.prototype[method].bind(this);
+        } else {
+          this[method] = factory3.prototype[method];
+        }
+      }
+    }
+  }
+  clone() {
+    const env = new _Environment(this._factories);
+    for (const factory3 of env._factories) {
+      if (typeof factory3.prototype.clone === "function") {
+        factory3.prototype.clone.call(env, this);
+      }
+    }
+    return env;
+  }
+};
+var Environment_default = Environment;
+
+// node_modules/@rdfjs/data-model/lib/BlankNode.js
+var BlankNode3 = class {
+  constructor(id) {
+    this.value = id;
+  }
+  equals(other) {
+    return !!other && other.termType === this.termType && other.value === this.value;
+  }
+};
+BlankNode3.prototype.termType = "BlankNode";
+var BlankNode_default = BlankNode3;
+
+// node_modules/@rdfjs/data-model/lib/DefaultGraph.js
+var DefaultGraph3 = class {
+  equals(other) {
+    return !!other && other.termType === this.termType;
+  }
+};
+DefaultGraph3.prototype.termType = "DefaultGraph";
+DefaultGraph3.prototype.value = "";
+var DefaultGraph_default = DefaultGraph3;
+
+// node_modules/@rdfjs/data-model/lib/fromTerm.js
+function fromTerm2(factory3, original) {
+  if (!original) {
+    return null;
+  }
+  if (original.termType === "BlankNode") {
+    return factory3.blankNode(original.value);
+  }
+  if (original.termType === "DefaultGraph") {
+    return factory3.defaultGraph();
+  }
+  if (original.termType === "Literal") {
+    return factory3.literal(original.value, original.language ? { language: original.language, direction: original.direction } : factory3.namedNode(original.datatype.value));
+  }
+  if (original.termType === "NamedNode") {
+    return factory3.namedNode(original.value);
+  }
+  if (original.termType === "Quad") {
+    const subject = factory3.fromTerm(original.subject);
+    const predicate = factory3.fromTerm(original.predicate);
+    const object = factory3.fromTerm(original.object);
+    const graph2 = factory3.fromTerm(original.graph);
+    return factory3.quad(subject, predicate, object, graph2);
+  }
+  if (original.termType === "Variable") {
+    return factory3.variable(original.value);
+  }
+  throw new Error(`unknown termType ${original.termType}`);
+}
+var fromTerm_default = fromTerm2;
+
+// node_modules/@rdfjs/data-model/lib/Literal.js
+var Literal3 = class {
+  constructor(value, language, datatype, direction = "") {
+    this.value = value;
+    this.language = language;
+    this.datatype = datatype;
+    this.direction = direction;
+  }
+  equals(other) {
+    return !!other && other.termType === this.termType && other.value === this.value && other.language === this.language && other.datatype.equals(this.datatype) && (other.direction || "") === this.direction;
+  }
+};
+Literal3.prototype.termType = "Literal";
+var Literal_default = Literal3;
+
+// node_modules/@rdfjs/data-model/lib/NamedNode.js
+var NamedNode3 = class {
+  constructor(iri) {
+    this.value = iri;
+  }
+  equals(other) {
+    return !!other && other.termType === this.termType && other.value === this.value;
+  }
+};
+NamedNode3.prototype.termType = "NamedNode";
+var NamedNode_default = NamedNode3;
+
+// node_modules/@rdfjs/data-model/lib/Quad.js
+var Quad2 = class {
+  constructor(subject, predicate, object, graph2) {
+    this.subject = subject;
+    this.predicate = predicate;
+    this.object = object;
+    this.graph = graph2;
+  }
+  equals(other) {
+    return !!other && (other.termType === "Quad" || !other.termType) && other.subject.equals(this.subject) && other.predicate.equals(this.predicate) && other.object.equals(this.object) && other.graph.equals(this.graph);
+  }
+};
+Quad2.prototype.termType = "Quad";
+Quad2.prototype.value = "";
+var Quad_default = Quad2;
+
+// node_modules/@rdfjs/data-model/lib/Variable.js
+var Variable3 = class {
+  constructor(name) {
+    this.value = name;
+  }
+  equals(other) {
+    return !!other && other.termType === this.termType && other.value === this.value;
+  }
+};
+Variable3.prototype.termType = "Variable";
+var Variable_default = Variable3;
+
+// node_modules/@rdfjs/data-model/Factory.js
+var dirLangStringDatatype = new NamedNode_default("http://www.w3.org/1999/02/22-rdf-syntax-ns#dirLangString");
+var langStringDatatype = new NamedNode_default("http://www.w3.org/1999/02/22-rdf-syntax-ns#langString");
+var stringDatatype = new NamedNode_default("http://www.w3.org/2001/XMLSchema#string");
+var DataFactory2 = class {
+  constructor() {
+    this.init();
+  }
+  init() {
+    this._data = {
+      blankNodeCounter: 0,
+      defaultGraph: new DefaultGraph_default()
+    };
+  }
+  namedNode(value) {
+    return new NamedNode_default(value);
+  }
+  blankNode(value) {
+    value = value || "b" + ++this._data.blankNodeCounter;
+    return new BlankNode_default(value);
+  }
+  literal(value, languageOrDatatype) {
+    if (typeof languageOrDatatype === "string") {
+      return new Literal_default(value, languageOrDatatype, langStringDatatype);
+    } else if (typeof languageOrDatatype?.language === "string") {
+      return new Literal_default(
+        value,
+        languageOrDatatype.language,
+        languageOrDatatype.direction ? dirLangStringDatatype : langStringDatatype,
+        languageOrDatatype.direction
+      );
+    } else {
+      return new Literal_default(value, "", languageOrDatatype || stringDatatype);
+    }
+  }
+  variable(value) {
+    return new Variable_default(value);
+  }
+  defaultGraph() {
+    return this._data.defaultGraph;
+  }
+  quad(subject, predicate, object, graph2 = this.defaultGraph()) {
+    return new Quad_default(subject, predicate, object, graph2);
+  }
+  fromTerm(original) {
+    return fromTerm_default(this, original);
+  }
+  fromQuad(original) {
+    return fromTerm_default(this, original);
+  }
+};
+DataFactory2.exports = [
+  "blankNode",
+  "defaultGraph",
+  "fromQuad",
+  "fromTerm",
+  "literal",
+  "namedNode",
+  "quad",
+  "variable"
+];
+var Factory_default = DataFactory2;
+
+// node_modules/@rdfjs/dataset/DatasetCore.js
+function isString(s) {
+  return typeof s === "string" || s instanceof String;
+}
+var xsdString = "http://www.w3.org/2001/XMLSchema#string";
+function termToId(term3) {
+  if (typeof term3 === "string") {
+    return term3;
+  }
+  if (!term3) {
+    return "";
+  }
+  if (typeof term3.id !== "undefined" && term3.termType !== "Quad") {
+    return term3.id;
+  }
+  let subject, predicate, object, graph2;
+  switch (term3.termType) {
+    case "NamedNode":
+      return term3.value;
+    case "BlankNode":
+      return `_:${term3.value}`;
+    case "Variable":
+      return `?${term3.value}`;
+    case "DefaultGraph":
+      return "";
+    case "Literal":
+      if (term3.language) {
+        return `"${term3.value}"@${term3.language}${term3.direction ? `--${term3.direction}` : ""}`;
+      }
+      return `"${term3.value}"${term3.datatype && term3.datatype.value !== xsdString ? `^^${term3.datatype.value}` : ""}`;
+    case "Quad":
+      subject = escapeQuotes(termToId(term3.subject));
+      predicate = escapeQuotes(termToId(term3.predicate));
+      object = escapeQuotes(termToId(term3.object));
+      graph2 = term3.graph.termType === "DefaultGraph" ? "" : ` ${termToId(term3.graph)}`;
+      return `<<${subject} ${predicate} ${object}${graph2}>>`;
+    default:
+      throw new Error(`Unexpected termType: ${term3.termType}`);
+  }
+}
+var escapedLiteral = /^"(.*".*)(?="[^"]*$)/;
+function escapeQuotes(id) {
+  return id.replace(escapedLiteral, (_, quoted) => `"${quoted.replace(/"/g, '""')}`);
+}
+var DatasetCore = class {
+  constructor(quads) {
+    this._size = 0;
+    this._graphs = /* @__PURE__ */ Object.create(null);
+    this._id = 0;
+    this._ids = /* @__PURE__ */ Object.create(null);
+    this._ids["><"] = 0;
+    this._entities = /* @__PURE__ */ Object.create(null);
+    this._quads = /* @__PURE__ */ new Map();
+    if (quads) {
+      for (const quad4 of quads) {
+        this.add(quad4);
+      }
+    }
+  }
+  get size() {
+    let size = this._size;
+    if (size !== null) {
+      return size;
+    }
+    size = 0;
+    const graphs = this._graphs;
+    let subjects, subject;
+    for (const graphKey in graphs) {
+      for (const subjectKey in subjects = graphs[graphKey].subjects) {
+        for (const predicateKey in subject = subjects[subjectKey]) {
+          size += Object.keys(subject[predicateKey]).length;
+        }
+      }
+    }
+    this._size = size;
+    return this._size;
+  }
+  add(quad4) {
+    let subject = termToId(quad4.subject);
+    let predicate = termToId(quad4.predicate);
+    let object = termToId(quad4.object);
+    const graph2 = termToId(quad4.graph);
+    let graphItem = this._graphs[graph2];
+    if (!graphItem) {
+      graphItem = this._graphs[graph2] = { subjects: {}, predicates: {}, objects: {} };
+      Object.freeze(graphItem);
+    }
+    const ids = this._ids;
+    const entities = this._entities;
+    subject = ids[subject] || (ids[entities[++this._id] = subject] = this._id);
+    predicate = ids[predicate] || (ids[entities[++this._id] = predicate] = this._id);
+    object = ids[object] || (ids[entities[++this._id] = object] = this._id);
+    this._addToIndex(graphItem.subjects, subject, predicate, object);
+    this._addToIndex(graphItem.predicates, predicate, object, subject);
+    this._addToIndex(graphItem.objects, object, subject, predicate);
+    this._setQuad(subject, predicate, object, graph2, quad4);
+    this._size = null;
+    return this;
+  }
+  delete(quad4) {
+    let subject = termToId(quad4.subject);
+    let predicate = termToId(quad4.predicate);
+    let object = termToId(quad4.object);
+    const graph2 = termToId(quad4.graph);
+    const ids = this._ids;
+    const graphs = this._graphs;
+    let graphItem, subjects, predicates;
+    if (!(subject = ids[subject]) || !(predicate = ids[predicate]) || !(object = ids[object]) || !(graphItem = graphs[graph2]) || !(subjects = graphItem.subjects[subject]) || !(predicates = subjects[predicate]) || !(object in predicates)) {
+      return this;
+    }
+    this._removeFromIndex(graphItem.subjects, subject, predicate, object);
+    this._removeFromIndex(graphItem.predicates, predicate, object, subject);
+    this._removeFromIndex(graphItem.objects, object, subject, predicate);
+    if (this._size !== null) {
+      this._size--;
+    }
+    this._deleteQuad(subject, predicate, object, graph2);
+    for (subject in graphItem.subjects) {
+      return this;
+    }
+    delete graphs[graph2];
+    return this;
+  }
+  has(quad4) {
+    const subject = termToId(quad4.subject);
+    const predicate = termToId(quad4.predicate);
+    const object = termToId(quad4.object);
+    const graph2 = termToId(quad4.graph);
+    const graphItem = this._graphs[graph2];
+    if (!graphItem) {
+      return false;
+    }
+    const ids = this._ids;
+    let subjectId, predicateId, objectId;
+    if (isString(subject) && !(subjectId = ids[subject]) || isString(predicate) && !(predicateId = ids[predicate]) || isString(object) && !(objectId = ids[object])) {
+      return false;
+    }
+    return this._countInIndex(graphItem.objects, objectId, subjectId, predicateId) === 1;
+  }
+  match(subject, predicate, object, graph2) {
+    return this._createDataset(this._match(subject, predicate, object, graph2));
+  }
+  [Symbol.iterator]() {
+    return this._match()[Symbol.iterator]();
+  }
+  // ## Private methods
+  // ### `_addToIndex` adds a quad to a three-layered index.
+  // Returns if the index has changed, if the entry did not already exist.
+  _addToIndex(index0, key0, key1, key2) {
+    const index1 = index0[key0] || (index0[key0] = {});
+    const index2 = index1[key1] || (index1[key1] = {});
+    const existed = key2 in index2;
+    if (!existed) {
+      index2[key2] = null;
+    }
+    return !existed;
+  }
+  // ### `_removeFromIndex` removes a quad from a three-layered index
+  _removeFromIndex(index0, key0, key1, key2) {
+    const index1 = index0[key0];
+    const index2 = index1[key1];
+    delete index2[key2];
+    for (const key in index2) {
+      return;
+    }
+    delete index1[key1];
+    for (const key in index1) {
+      return;
+    }
+    delete index0[key0];
+  }
+  // ### `_findInIndex` finds a set of quads in a three-layered index.
+  // The index base is `index0` and the keys at each level are `key0`, `key1`, and `key2`.
+  // Any of these keys can be undefined, which is interpreted as a wildcard.
+  // `name0`, `name1`, and `name2` are the names of the keys at each level,
+  // used when reconstructing the resulting quad
+  // (for instance: _subject_, _predicate_, and _object_).
+  // Finally, `graph` will be the graph of the created quads.
+  // If `callback` is given, each result is passed through it
+  // and iteration halts when it returns truthy for any quad.
+  // If instead `array` is given, each result is added to the array.
+  _findInIndex(index0, key0, key1, key2, name0, name1, name2, graph2, callback, array) {
+    let tmp, index1, index2;
+    if (key0) {
+      (tmp = index0, index0 = {})[key0] = tmp[key0];
+    }
+    for (const value0 in index0) {
+      index1 = index0[value0];
+      if (index1) {
+        if (key1) {
+          (tmp = index1, index1 = {})[key1] = tmp[key1];
+        }
+        for (const value1 in index1) {
+          index2 = index1[value1];
+          if (index2) {
+            const values = key2 ? key2 in index2 ? [key2] : [] : Object.keys(index2);
+            for (let l = 0; l < values.length; l++) {
+              const parts = {
+                [name0]: value0,
+                [name1]: value1,
+                [name2]: values[l]
+              };
+              const quad4 = this._getQuad(parts.subject, parts.predicate, parts.object, graph2);
+              if (array) {
+                array.push(quad4);
+              } else if (callback(quad4)) {
+                return true;
+              }
+            }
+          }
+        }
+      }
+    }
+    return array;
+  }
+  // ### `_countInIndex` counts matching quads in a three-layered index.
+  // The index base is `index0` and the keys at each level are `key0`, `key1`, and `key2`.
+  // Any of these keys can be undefined, which is interpreted as a wildcard.
+  _countInIndex(index0, key0, key1, key2) {
+    let count = 0;
+    let tmp, index1, index2;
+    if (key0) {
+      (tmp = index0, index0 = {})[key0] = tmp[key0];
+    }
+    for (const value0 in index0) {
+      index1 = index0[value0];
+      if (index1) {
+        if (key1) {
+          (tmp = index1, index1 = {})[key1] = tmp[key1];
+        }
+        for (const value1 in index1) {
+          index2 = index1[value1];
+          if (index2) {
+            if (key2) {
+              key2 in index2 && count++;
+            } else {
+              count += Object.keys(index2).length;
+            }
+          }
+        }
+      }
+    }
+    return count;
+  }
+  // ### `_getGraphs` returns an array with the given graph,
+  // or all graphs if the argument is null or undefined.
+  _getGraphs(graph2) {
+    if (!isString(graph2)) {
+      return this._graphs;
+    }
+    return {
+      [graph2]: this._graphs[graph2]
+    };
+  }
+  _match(subject, predicate, object, graph2) {
+    subject = subject && termToId(subject);
+    predicate = predicate && termToId(predicate);
+    object = object && termToId(object);
+    graph2 = graph2 && termToId(graph2);
+    const quads = [];
+    const graphs = this._getGraphs(graph2);
+    const ids = this._ids;
+    let content, subjectId, predicateId, objectId;
+    if (isString(subject) && !(subjectId = ids[subject]) || isString(predicate) && !(predicateId = ids[predicate]) || isString(object) && !(objectId = ids[object])) {
+      return quads;
+    }
+    for (const graphId in graphs) {
+      content = graphs[graphId];
+      if (content) {
+        if (subjectId) {
+          if (objectId) {
+            this._findInIndex(content.objects, objectId, subjectId, predicateId, "object", "subject", "predicate", graphId, null, quads);
+          } else {
+            this._findInIndex(content.subjects, subjectId, predicateId, null, "subject", "predicate", "object", graphId, null, quads);
+          }
+        } else if (predicateId) {
+          this._findInIndex(content.predicates, predicateId, objectId, null, "predicate", "object", "subject", graphId, null, quads);
+        } else if (objectId) {
+          this._findInIndex(content.objects, objectId, null, null, "object", "subject", "predicate", graphId, null, quads);
+        } else {
+          this._findInIndex(content.subjects, null, null, null, "subject", "predicate", "object", graphId, null, quads);
+        }
+      }
+    }
+    return quads;
+  }
+  _getQuad(subjectId, predicateId, objectId, graphId) {
+    return this._quads.get(this._toId(subjectId, predicateId, objectId, graphId));
+  }
+  _setQuad(subjectId, predicateId, objectId, graphId, quad4) {
+    this._quads.set(this._toId(subjectId, predicateId, objectId, graphId), quad4);
+  }
+  _deleteQuad(subjectId, predicateId, objectId, graphId) {
+    this._quads.delete(this._toId(subjectId, predicateId, objectId, graphId));
+  }
+  _createDataset(quads) {
+    return new this.constructor(quads);
+  }
+  _toId(subjectId, predicateId, objectId, graphId) {
+    return `${subjectId}:${predicateId}:${objectId}:${graphId}`;
+  }
+};
+var DatasetCore_default = DatasetCore;
+
+// node_modules/@rdfjs/dataset/Factory.js
+var Factory = class {
+  dataset(quads) {
+    return new DatasetCore_default(quads);
+  }
+};
+Factory.exports = ["dataset"];
+var Factory_default2 = Factory;
+
+// node_modules/@rdfjs/data-model/index.js
+var factory = new Factory_default();
+var data_model_default = factory;
+
+// node_modules/@rdfjs/namespace/index.js
+var handler = {
+  apply: (target, thisArg, args) => target(args[0]),
+  get: (target, property) => target(property)
+};
+function namespace(baseIRI, { factory: factory3 = data_model_default } = {}) {
+  const builder111 = (term3 = "") => factory3.namedNode(`${baseIRI}${term3.raw || term3}`);
+  return typeof Proxy === "undefined" ? builder111 : new Proxy(builder111, handler);
+}
+var namespace_default = namespace;
+
+// node_modules/@rdfjs/namespace/Factory.js
+var Factory2 = class {
+  namespace(baseIRI) {
+    return namespace_default(baseIRI, { factory: this });
+  }
+};
+Factory2.exports = ["namespace"];
+var Factory_default3 = Factory2;
+
+// node_modules/@rdfjs/to-ntriples/lib/blankNode.js
+function blankNode3(blankNode5) {
+  return "_:" + blankNode5.value;
+}
+var blankNode_default = blankNode3;
+
+// node_modules/@rdfjs/to-ntriples/lib/dataset.js
+function dataset(dataset2, toNT2) {
+  return [...dataset2].map((quad4) => toNT2(quad4)).join("\n") + "\n";
+}
+var dataset_default = dataset;
+
+// node_modules/@rdfjs/to-ntriples/lib/defaultGraph.js
+function defaultGraph5() {
+  return "";
+}
+var defaultGraph_default = defaultGraph5;
+
+// node_modules/@rdfjs/to-ntriples/lib/namedNode.js
+function namedNode3(namedNode5) {
+  return "<" + namedNode5.value + ">";
+}
+var namedNode_default = namedNode3;
+
+// node_modules/@rdfjs/to-ntriples/lib/literal.js
+var echarRegEx = /["\\\\\n\r]/;
+var echarRegExAll = /["\\\\\n\r]/g;
+var echarReplacement = {
+  '"': '\\"',
+  "\\": "\\\\",
+  "\n": "\\n",
+  "\r": "\\r"
+};
+function echarReplacer(char) {
+  return echarReplacement[char];
+}
+function escapeValue(value) {
+  if (echarRegEx.test(value)) {
+    return value.replace(echarRegExAll, echarReplacer);
+  }
+  return value;
+}
+function literal3(literal5) {
+  const escapedValue = escapeValue(literal5.value);
+  if (literal5.datatype.value === "http://www.w3.org/2001/XMLSchema#string") {
+    return '"' + escapedValue + '"';
+  }
+  if (literal5.datatype.value === "http://www.w3.org/1999/02/22-rdf-syntax-ns#langString") {
+    return '"' + escapedValue + '"@' + literal5.language;
+  }
+  return '"' + escapedValue + '"^^' + namedNode_default(literal5.datatype);
+}
+var literal_default = literal3;
+
+// node_modules/@rdfjs/to-ntriples/lib/quad.js
+function quad3(quad4, toNT2) {
+  const subjectString = toNT2(quad4.subject);
+  const predicateString = toNT2(quad4.predicate);
+  const objectString = toNT2(quad4.object);
+  const graphString = toNT2(quad4.graph);
+  return `${subjectString} ${predicateString} ${objectString} ${graphString ? graphString + " " : ""}.`;
+}
+var quad_default = quad3;
+
+// node_modules/@rdfjs/to-ntriples/lib/variable.js
+function variable3(variable4) {
+  return "?" + variable4.value;
+}
+var variable_default = variable3;
+
+// node_modules/@rdfjs/to-ntriples/index.js
+function toNT(term3) {
+  if (!term3) {
+    return null;
+  }
+  if (term3.termType === "BlankNode") {
+    return blankNode_default(term3);
+  }
+  if (term3.termType === "DefaultGraph") {
+    return defaultGraph_default();
+  }
+  if (term3.termType === "Literal") {
+    return literal_default(term3);
+  }
+  if (term3.termType === "NamedNode") {
+    return namedNode_default(term3);
+  }
+  if (term3.termType === "Quad" || term3.subject && term3.predicate && term3.object && term3.graph) {
+    return quad_default(term3, toNT);
+  }
+  if (term3.termType === "Variable") {
+    return variable_default(term3);
+  }
+  if (term3[Symbol.iterator]) {
+    return dataset_default(term3, toNT);
+  }
+  throw new Error(`unknown termType ${term3.termType}`);
+}
+var to_ntriples_default = toNT;
+
+// node_modules/@rdfjs/term-set/TermSet.js
+function quietToNT(term3) {
+  try {
+    return to_ntriples_default(term3);
+  } catch (err) {
+    return null;
+  }
+}
+var TermSet = class {
+  constructor(terms) {
+    this.index = /* @__PURE__ */ new Map();
+    if (terms) {
+      for (const term3 of terms) {
+        this.add(term3);
+      }
+    }
+  }
+  get size() {
+    return this.index.size;
+  }
+  add(term3) {
+    const key = to_ntriples_default(term3);
+    if (!this.index.has(key)) {
+      this.index.set(key, term3);
+    }
+    return this;
+  }
+  clear() {
+    this.index.clear();
+  }
+  delete(term3) {
+    if (!term3) {
+      return false;
+    }
+    return this.index.delete(quietToNT(term3));
+  }
+  entries() {
+    return this.values().entries();
+  }
+  forEach(callbackfn, thisArg) {
+    return this.values().forEach(callbackfn, thisArg);
+  }
+  has(term3) {
+    if (!term3) {
+      return false;
+    }
+    return this.index.has(quietToNT(term3));
+  }
+  values() {
+    return new Set(this.index.values());
+  }
+  keys() {
+    return this.values();
+  }
+  [Symbol.iterator]() {
+    return this.index.values();
+  }
+};
+var TermSet_default = TermSet;
+
+// node_modules/@rdfjs/term-set/Factory.js
+var Factory3 = class {
+  termSet(terms) {
+    return new TermSet_default(terms);
+  }
+};
+Factory3.exports = ["termSet"];
+var Factory_default4 = Factory3;
+
+// node_modules/@rdfjs/term-map/TermMap.js
+var TermMap = class {
+  constructor(entries) {
+    this.index = /* @__PURE__ */ new Map();
+    if (entries) {
+      for (const [term3, value] of entries) {
+        this.set(term3, value);
+      }
+    }
+  }
+  get size() {
+    return this.index.size;
+  }
+  clear() {
+    this.index.clear();
+  }
+  delete(term3) {
+    return this.index.delete(to_ntriples_default(term3));
+  }
+  *entries() {
+    for (const [, { term: term3, value }] of this.index) {
+      yield [term3, value];
+    }
+  }
+  forEach(callback, thisArg) {
+    for (const entry of this.entries()) {
+      callback.call(thisArg, entry[1], entry[0], this);
+    }
+  }
+  get(term3) {
+    const item = this.index.get(to_ntriples_default(term3));
+    return item && item.value;
+  }
+  has(term3) {
+    return this.index.has(to_ntriples_default(term3));
+  }
+  *keys() {
+    for (const [, { term: term3 }] of this.index) {
+      yield term3;
+    }
+  }
+  set(term3, value) {
+    const key = to_ntriples_default(term3);
+    this.index.set(key, { term: term3, value });
+    return this;
+  }
+  *values() {
+    for (const [, { value }] of this.index) {
+      yield value;
+    }
+  }
+  [Symbol.iterator]() {
+    return this.entries()[Symbol.iterator]();
+  }
+};
+var TermMap_default = TermMap;
+
+// node_modules/@rdfjs/term-map/Factory.js
+var Factory4 = class {
+  termMap(entries) {
+    return new TermMap_default(entries);
+  }
+};
+Factory4.exports = ["termMap"];
+var Factory_default5 = Factory4;
+
+// node_modules/clownface/lib/namespace.js
+var namespace_default2 = (factory3) => {
+  const xsd4 = factory3.namespace("http://www.w3.org/2001/XMLSchema#");
+  const rdf4 = factory3.namespace("http://www.w3.org/1999/02/22-rdf-syntax-ns#");
+  return {
+    first: rdf4.first,
+    nil: rdf4.nil,
+    rest: rdf4.rest,
+    langString: rdf4.langString,
+    xsd: xsd4
+  };
+};
+
+// node_modules/clownface/lib/toArray.js
+function toArray(value, defaultValue) {
+  if (typeof value === "undefined" || value === null) {
+    return defaultValue;
+  }
+  if (Array.isArray(value)) {
+    return value;
+  }
+  if (typeof value !== "string" && value[Symbol.iterator]) {
+    return [...value];
+  }
+  return [value];
+}
+
+// node_modules/clownface/lib/environment.js
+var environment_default = new Environment_default([
+  Factory_default3,
+  Factory_default
+]);
+
+// node_modules/clownface/lib/fromPrimitive.js
+var { xsd: xsd3 } = namespace_default2(environment_default);
+function booleanToLiteral(value, factory3 = environment_default) {
+  if (typeof value !== "boolean") {
+    return null;
+  }
+  return factory3.literal(value.toString(), xsd3("boolean"));
+}
+function numberToLiteral(value, factory3 = environment_default) {
+  if (typeof value !== "number") {
+    return null;
+  }
+  if (Number.isInteger(value)) {
+    return factory3.literal(value.toString(10), xsd3("integer"));
+  }
+  return factory3.literal(value.toString(10), xsd3("double"));
+}
+function stringToLiteral(value, factory3 = environment_default) {
+  if (typeof value !== "string") {
+    return null;
+  }
+  return factory3.literal(value);
+}
+function toLiteral(value, factory3 = environment_default) {
+  return booleanToLiteral(value, factory3) || numberToLiteral(value, factory3) || stringToLiteral(value, factory3);
+}
+
+// node_modules/clownface/lib/term.js
+function blankNode4(value, factory3) {
+  if (value && typeof value !== "string") {
+    throw new Error("Blank node identifier must be a string");
+  }
+  return factory3.blankNode(value);
+}
+function literal4(value, languageOrDatatype, factory3) {
+  if (typeof value === "string") {
+    languageOrDatatype = languageOrDatatype && (languageOrDatatype.value || languageOrDatatype.toString());
+    if (languageOrDatatype && languageOrDatatype.indexOf(":") !== -1) {
+      languageOrDatatype = factory3.namedNode(languageOrDatatype);
+    }
+    return factory3.literal(value.toString(), languageOrDatatype);
+  }
+  const term3 = toLiteral(value, factory3);
+  if (!term3) {
+    throw new Error("The value cannot be converted to a literal node");
+  }
+  return term3;
+}
+function namedNode4(value, factory3) {
+  if (typeof value !== "string") {
+    throw new Error("Named node must be an IRI string");
+  }
+  return factory3.namedNode(value);
+}
+function term2(value, type = "Literal", languageOrDatatype, factory3) {
+  if (value && typeof value === "object" && value.termType) {
+    return value;
+  }
+  if (value && value.constructor.name === "URL") {
+    return namedNode4(value.toString(), factory3);
+  }
+  if (type === "BlankNode") {
+    return blankNode4(value, factory3);
+  }
+  if (value === null || typeof value === "undefined") {
+    return void 0;
+  }
+  if (type === "Literal") {
+    return literal4(value, languageOrDatatype, factory3);
+  }
+  if (type === "NamedNode") {
+    return namedNode4(value, factory3);
+  }
+  throw new Error("unknown type");
+}
+
+// node_modules/clownface/lib/toTermArray.js
+function toTermArray(items, type, languageOrDatatype, factory3) {
+  if ((typeof items === "undefined" || items === null) && !type) {
+    return items;
+  }
+  return (toArray(items) || [void 0]).reduce((all, item) => {
+    if (typeof item === "object" && item.terms) {
+      return all.concat(item.terms);
+    }
+    all.push(term2(item, type, languageOrDatatype, factory3));
+    return all;
+  }, []);
+}
+
+// node_modules/clownface/lib/languageTag.js
+var ns3 = namespace_default2(environment_default);
+function mapLiteralsByLanguage(map, current) {
+  const notLiteral = current.termType !== "Literal";
+  const notStringLiteral = ns3.langString.equals(current.datatype) || ns3.xsd.string.equals(current.datatype);
+  if (notLiteral || !notStringLiteral) return map;
+  const language = current.language.toLowerCase();
+  if (map.has(language)) {
+    map.get(language).push(current);
+  } else {
+    map.set(language, [current]);
+  }
+  return map;
+}
+function createLanguageMapper(objects) {
+  const literalsByLanguage = objects.reduce(mapLiteralsByLanguage, /* @__PURE__ */ new Map());
+  const langMapEntries = [...literalsByLanguage.entries()];
+  return (language) => {
+    const languageLowerCase = language.toLowerCase();
+    if (languageLowerCase === "*") {
+      return langMapEntries[0] && langMapEntries[0][1];
+    }
+    const exactMatch = literalsByLanguage.get(languageLowerCase);
+    if (exactMatch) {
+      return exactMatch;
+    }
+    const secondaryMatches = langMapEntries.find(([entryLanguage]) => entryLanguage.startsWith(languageLowerCase));
+    return secondaryMatches && secondaryMatches[1];
+  };
+}
+function filterTaggedLiterals(terms, { language }) {
+  const languages = typeof language === "string" ? [language] : language;
+  const getLiteralsForLanguage = createLanguageMapper(terms);
+  return languages.map(getLiteralsForLanguage).find(Boolean) || [];
+}
+
+// node_modules/clownface/lib/Context.js
+var Context = class _Context {
+  constructor({ dataset: dataset2, graph: graph2, value, factory: factory3, namespace: namespace2 }) {
+    this.dataset = dataset2;
+    this.graph = graph2;
+    this.factory = factory3;
+    this.namespace = namespace2;
+    this.term = term2(value, void 0, void 0, factory3);
+  }
+  clone({ dataset: dataset2 = this.dataset, graph: graph2 = this.graph, value, factory: factory3 = this.factory, namespace: namespace2 = this.namespace }) {
+    return new _Context({ dataset: dataset2, graph: graph2, value, factory: factory3, namespace: namespace2 });
+  }
+  has(predicate, object) {
+    return this.matchProperty(toArray(this.term), predicate, object, toArray(this.graph), "subject").map((subject) => {
+      return this.clone({ value: subject });
+    });
+  }
+  in(predicate) {
+    return this.matchProperty(null, predicate, toArray(this.term), toArray(this.graph), "subject").map((subject) => {
+      return this.clone({ value: subject });
+    });
+  }
+  out(predicate, { language } = {}) {
+    let objects = this.matchProperty(toArray(this.term), predicate, null, toArray(this.graph), "object");
+    if (typeof language !== "undefined") {
+      objects = filterTaggedLiterals(objects, { language });
+    }
+    return objects.map((object) => {
+      return this.clone({ value: object });
+    });
+  }
+  addIn(predicates, subjects) {
+    const context = [];
+    if (this.term) {
+      subjects.forEach((subject) => {
+        predicates.forEach((predicate) => {
+          this.dataset.add(this.factory.quad(subject, predicate, this.term, this.graph));
+        });
+        context.push(this.clone({ value: subject }));
+      });
+    }
+    return context;
+  }
+  addOut(predicates, objects) {
+    const context = [];
+    if (this.term) {
+      objects.forEach((object) => {
+        predicates.forEach((predicate) => {
+          this.dataset.add(this.factory.quad(this.term, predicate, object, this.graph));
+        });
+        context.push(this.clone({ value: object }));
+      });
+    }
+    return context;
+  }
+  addList(predicates, items) {
+    if (!this.term) {
+      return;
+    }
+    predicates.forEach((predicate) => {
+      const nodes = items.map(() => this.factory.blankNode());
+      this.dataset.add(this.factory.quad(this.term, predicate, nodes[0] || this.namespace.nil, this.graph));
+      for (let index = 0; index < nodes.length; index++) {
+        this.dataset.add(this.factory.quad(nodes[index], this.namespace.first, items[index], this.graph));
+        this.dataset.add(this.factory.quad(nodes[index], this.namespace.rest, nodes[index + 1] || this.namespace.nil, this.graph));
+      }
+    });
+  }
+  deleteIn(predicate, subject) {
+    this.deleteMatch(subject, predicate, toArray(this.term), toArray(this.graph));
+  }
+  deleteOut(predicate, objects) {
+    this.deleteMatch(toArray(this.term), predicate, objects, toArray(this.graph));
+  }
+  deleteList(predicates) {
+    predicates.forEach((predicate) => {
+      for (const quad4 of this.dataset.match(this.term, predicate)) {
+        this.deleteItems(quad4);
+      }
+    });
+  }
+  deleteItems(start) {
+    let quads = [start];
+    while (!quads[quads.length - 1].object.equals(this.namespace.nil)) {
+      const node = quads[quads.length - 1].object;
+      quads = quads.concat([...this.dataset.match(node)]);
+    }
+    quads.forEach((quad4) => {
+      this.dataset.delete(quad4);
+    });
+  }
+  match(subject, predicate, object, graph2) {
+    if (!subject && !predicate && !object && !graph2) {
+      return [...this.dataset];
+    }
+    subject = subject || [null];
+    predicate = predicate || [null];
+    object = object || [null];
+    graph2 = graph2 || [null];
+    const matches = [];
+    for (const g of graph2) {
+      for (const s of subject) {
+        for (const p of predicate) {
+          for (const o of object) {
+            for (const quad4 of this.dataset.match(s, p, o, g)) {
+              matches.push(quad4);
+            }
+          }
+        }
+      }
+    }
+    return matches;
+  }
+  matchProperty(subject, predicate, object, graph2, property) {
+    return this.match(subject, predicate, object, graph2).map((quad4) => quad4[property]);
+  }
+  deleteMatch(subject, predicate, object, graph2) {
+    this.match(subject, predicate, object, graph2).forEach((quad4) => {
+      this.dataset.delete(quad4);
+    });
+  }
+};
+
+// node_modules/clownface/lib/Clownface.js
+var Clownface = class _Clownface {
+  constructor({ dataset: dataset2, graph: graph2, term: term3, value, factory: factory3, _context }) {
+    this.factory = factory3;
+    this.namespace = namespace_default2(factory3);
+    if (_context) {
+      this._context = _context;
+      return;
+    }
+    const terms = term3 && toArray(term3) || value && toArray(value) || [null];
+    this._context = terms.map((term4) => {
+      return new Context({ dataset: dataset2, graph: graph2, value: term4, factory: this.factory, namespace: this.namespace });
+    });
+  }
+  /**
+   * Gets the current RDF/JS term or undefined if pointer has no context
+   *
+   * @returns {undefined|Term}
+   */
+  get term() {
+    const terms = this.terms;
+    if (terms.length !== 1) {
+      return void 0;
+    }
+    return terms[0];
+  }
+  /**
+   * Gets the current terms or an empty array if the pointer has no context
+   *
+   * @returns {Term[]}
+   */
+  get terms() {
+    return this._context.map((node) => node.term).filter(Boolean);
+  }
+  /**
+   * Gets the string representation of term
+   *
+   * @returns {undefined|string}
+   */
+  get value() {
+    const term3 = this.term;
+    return term3 && term3.value;
+  }
+  /**
+   * Gets the string representation of terms
+   *
+   * @returns {string[]}
+   */
+  get values() {
+    return this.terms.map((term3) => term3.value);
+  }
+  /**
+   * Gets the current context's dataset, or undefined if there are multiple
+   *
+   * @returns {undefined|DatasetCore}
+   */
+  get dataset() {
+    const datasets = this.datasets;
+    if (datasets.length !== 1) {
+      return void 0;
+    }
+    return datasets[0];
+  }
+  /**
+   * Gets the current context's datasets
+   *
+   * @returns {DatasetCore[]}
+   */
+  get datasets() {
+    return this._context.map((node) => node.dataset).filter(Boolean);
+  }
+  /**
+   * Removes current pointers from the context and return an "any pointer".
+   * The returned object can be used to find any nodes in the dataset
+   *
+   * @returns {Clownface}
+   */
+  any() {
+    return _Clownface.fromContext(this._context.map((current) => current.clone({})), this);
+  }
+  /**
+   * Returns true if the current term is a rdf:List
+   *
+   * @returns {boolean}
+   */
+  isList() {
+    if (!this.term) {
+      return false;
+    }
+    if (this.term.equals(this.namespace.nil)) {
+      return true;
+    }
+    if (this.out(this.namespace.first).term) {
+      return true;
+    }
+    return false;
+  }
+  /**
+   * Creates an iterator which iterates and rdf:List of the current term
+   *
+   * @returns {Iterable | null}
+   */
+  list() {
+    if (this.terms.length > 1) {
+      throw new Error("iterator over multiple terms is not supported");
+    }
+    if (this.term) {
+      if (this.term.termType !== "NamedNode" && this.term.termType !== "BlankNode") {
+        return null;
+      }
+      if (!this.term.equals(this.namespace.nil) && !this.out(this.namespace.first).term) {
+        return null;
+      }
+    }
+    let item = this;
+    return {
+      [Symbol.iterator]: () => {
+        return {
+          next: () => {
+            if (!item.term || item.term.equals(this.namespace.nil)) {
+              return { done: true };
+            }
+            const value = item.out(this.namespace.first);
+            if (value.terms.length > 1) {
+              throw new Error(`Invalid list: multiple values for rdf:first on ${item.value}`);
+            }
+            const rest = item.out(this.namespace.rest);
+            if (rest.terms.length > 1) {
+              throw new Error(`Invalid list: multiple values for rdf:rest on ${item.value}`);
+            }
+            item = rest;
+            return { done: false, value };
+          }
+        };
+      }
+    };
+  }
+  /**
+   * Returns an array of graph pointers where each one has a single _context
+   *
+   * @returns {Clownface[]}
+   */
+  toArray() {
+    return this._context.map((context) => _Clownface.fromContext(context, this)).filter((context) => context.terms.some(Boolean));
+  }
+  /**
+   * Returns graph pointers which meet the condition specified in a callback function
+   * @param {FilterCallback} callback
+   * @returns {Clownface}
+   */
+  filter(callback) {
+    const pointers = this._context.map((context) => _Clownface.fromContext(context, this));
+    return _Clownface.fromContext(this._context.filter((context, index) => callback(_Clownface.fromContext(context, this), index, pointers)), this);
+  }
+  /**
+   * Performs the specified action on every graph pointer
+   * @param {ForEachCallback} callback
+   * @returns {Clownface}
+   */
+  forEach(callback) {
+    this.toArray().forEach(callback);
+    return this;
+  }
+  /**
+   * Calls a defined callback function on each graph pointer, and returns an array that contains the results.
+   * @template T
+   * @param {MapCallback<T>} callback
+   * @returns {T[]}
+   */
+  map(callback) {
+    return this.toArray().map(callback);
+  }
+  toString() {
+    return this.values.join();
+  }
+  /**
+   * Creates graph pointer to one or more node(s)
+   *
+   * Depending on the value creates pointers to:
+   *
+   * - blank node context for null `values`
+   * - literal for string `values` and no `options` paramter
+   * - matching RDF/JS term
+   * - term created according to `options.type` parameter
+   *
+   * @param {null|string|string[]|Term|Term[]|Clownface|Clownface[]} values
+   * @param {Object} [options]
+   * @param {"NamedNode"|"BlankNode"|"Literal"} [options.type] explicit type for nodes
+   * @param {string} [options.language] language tag of literals
+   * @param {string} [options.datatype] datatype of literals
+   * @returns {Clownface}
+   */
+  node(values, { type, datatype, language } = {}) {
+    values = this._toTermArray(values, type, datatype || language) || [null];
+    const context = values.reduce((context2, value) => {
+      return context2.concat(this._context.reduce((all, current) => {
+        return all.concat([current.clone({ value })]);
+      }, []));
+    }, []);
+    return _Clownface.fromContext(context, { factory: this.factory });
+  }
+  /**
+   * Creates graph pointer to one or more blank nodes
+   * @param {null|string|string[]|BlankNode|BlankNode[]|Clownface|Clownface[]} [values] blank node identifiers (generates it when falsy) or existing RDF/JS blank node(s)
+   * @returns {Clownface}
+   */
+  blankNode(values) {
+    return this.node(values, { type: "BlankNode" });
+  }
+  /**
+   * Creates graph pointer to one or more literal nodes
+   * @param {string|string[]|boolean|boolean[]|number|number[]|Literal|Literal[]|Clownface|Clownface[]} values literal values as JS objects or RDF/JS Literal(s)
+   * @param {string|Term} [languageOrDatatype] a language tag string or datatype term
+   * @returns {Clownface}
+   */
+  literal(values, languageOrDatatype) {
+    return this.node(values, { type: "Literal", datatype: languageOrDatatype });
+  }
+  /**
+   * Creates graph pointer to one or more named nodes
+   * @param {string|string[]|NamedNode|NamedNode[]|Clownface|Clownface[]} values URI(s) or RDF/JS NamedNode(s)
+   * @returns {Clownface}
+   */
+  namedNode(values) {
+    return this.node(values, { type: "NamedNode" });
+  }
+  /**
+   * Creates a graph pointer to nodes which are linked to the current pointer by `predicates`
+   * @param {Term|Term[]|Clownface|Clownface[]} [predicates] one or more RDF/JS term identifying a property
+   * @returns {Clownface}
+   */
+  in(predicates) {
+    predicates = this._toTermArray(predicates);
+    const context = this._context.reduce((all, current) => all.concat(current.in(predicates)), []);
+    return _Clownface.fromContext(context, this);
+  }
+  /**
+   * Creates a graph pointer to the result nodes after following a predicate, or after
+   * following any predicates in an array, starting from the subject(s) (current graph pointer) to the objects.
+   * @param {Term|Term[]|Clownface|Clownface[]} [predicates] any predicates to follow
+   * @param {object} [options]
+   * @param {string | string[] | undefined} [options.language]
+   * @returns {Clownface}
+   */
+  out(predicates, options = {}) {
+    predicates = this._toTermArray(predicates);
+    const context = this._context.reduce((all, current) => all.concat(current.out(predicates, options)), []);
+    return _Clownface.fromContext(context, this);
+  }
+  /**
+   * Creates a graph pointer to nodes which are subjects of predicates, optionally also with specific objects
+   *
+   * If the current context is empty, will check all potential subjects
+   *
+   * @param {Term|Term[]|Clownface|Clownface[]} predicates RDF property identifiers
+   * @param {*} [objects] object values to match
+   * @returns {Clownface}
+   */
+  has(predicates, objects) {
+    predicates = this._toTermArray(predicates);
+    objects = this._toTermArray(objects);
+    const context = this._context.reduce((all, current) => all.concat(current.has(predicates, objects)), []);
+    return _Clownface.fromContext(context, this);
+  }
+  /**
+   * Creates a new quad(s) in the dataset where the current context is the object
+   *
+   * @param {Term|Term[]|Clownface|Clownface[]} predicates
+   * @param {NamedNode|NamedNode[]|Clownface|Clownface[]} subjects one or more nodes to use as subjects
+   * @param {GraphPointerCallback} [callback] called for each object, with subject pointer as parameter
+   * @returns {Clownface} current graph pointer
+   */
+  addIn(predicates, subjects, callback) {
+    if (!predicates) {
+      throw new Error("predicate parameter is required");
+    }
+    if (typeof subjects === "function") {
+      callback = subjects;
+      subjects = null;
+    }
+    predicates = this._toTermArray(predicates);
+    subjects = this._toTermArray(subjects) || [this.factory.blankNode()];
+    const context = this._context.map((context2) => context2.addIn(predicates, subjects));
+    if (callback) {
+      _Clownface.fromContext(context, this).forEach(callback);
+    }
+    return this;
+  }
+  /**
+   * Creates a new quad(s) in the dataset where the current context is the subject
+   *
+   * @param {Term|Term[]|Clownface|Clownface[]} predicates
+   * @param {*} objects one or more values to use for objects
+   * @param {GraphPointerCallback} [callback] called for each subject, with object pointer as parameter
+   * @returns {Clownface} current graph pointer
+   */
+  addOut(predicates, objects, callback) {
+    if (!predicates) {
+      throw new Error("predicate parameter is required");
+    }
+    if (typeof objects === "function") {
+      callback = objects;
+      objects = null;
+    }
+    predicates = this._toTermArray(predicates);
+    objects = this._toTermArray(objects) || [this.factory.blankNode()];
+    const context = this._context.map((context2) => context2.addOut(predicates, objects));
+    if (callback) {
+      _Clownface.fromContext(context, this).forEach(callback);
+    }
+    return this;
+  }
+  /**
+   * Creates a new RDF list or lists containing the given items
+   *
+   * @param {Term|Term[]|Clownface|Clownface[]} predicates
+   * @param {*} items one or more values to use for subjects
+   * @returns {Clownface} current graph pointer
+   */
+  addList(predicates, items) {
+    if (!predicates || !items) {
+      throw new Error("predicate and items parameter is required");
+    }
+    predicates = this._toTermArray(predicates);
+    items = this._toTermArray(items);
+    this._context.forEach((context) => context.addList(predicates, items));
+    return this;
+  }
+  /**
+   * Deletes all quads where the current graph pointer contexts are the objects
+   *
+   * @param {Term|Term[]|Clownface|Clownface[]} [predicates]
+   * @param {Term|Term[]|Clownface|Clownface[]} [subjects]
+   * @returns {Clownface} current graph pointer
+   */
+  deleteIn(predicates, subjects) {
+    predicates = this._toTermArray(predicates);
+    subjects = this._toTermArray(subjects);
+    this._context.forEach((context) => context.deleteIn(predicates, subjects));
+    return this;
+  }
+  /**
+   * Deletes all quads where the current graph pointer contexts are the subjects
+   *
+   * @param {Term|Term[]|Clownface|Clownface[]} [predicates]
+   * @param {Term|Term[]|Clownface|Clownface[]} [objects]
+   * @returns {Clownface} current graph pointer
+   */
+  deleteOut(predicates, objects) {
+    predicates = this._toTermArray(predicates);
+    objects = this._toTermArray(objects);
+    this._context.forEach((context) => context.deleteOut(predicates, objects));
+    return this;
+  }
+  /**
+   * Deletes entire RDF lists where the current graph pointer is the subject
+   *
+   * @param {Term|Term[]|Clownface|Clownface[]} predicates
+   * @returns {Clownface} current graph pointer
+   */
+  deleteList(predicates) {
+    if (!predicates) {
+      throw new Error("predicate parameter is required");
+    }
+    predicates = this._toTermArray(predicates);
+    this._context.forEach((context) => context.deleteList(predicates));
+    return this;
+  }
+  _toTermArray(predicates, type, languageOrDatatype) {
+    return toTermArray(predicates, type, languageOrDatatype, this.factory);
+  }
+  static fromContext(context, { factory: factory3 }) {
+    return new _Clownface({ _context: toArray(context), factory: factory3 });
+  }
+};
+
+// node_modules/clownface/index.js
+function factory2({ dataset: dataset2, graph: graph2, term: term3, value, factory: factory3 = environment_default, _context }) {
+  return new Clownface({ dataset: dataset2, graph: graph2, term: term3, value, factory: factory3, _context });
+}
+
+// node_modules/clownface/Factory.js
+var ClownfaceFactory = class {
+  clownface({ ...args } = {}) {
+    if (!args.dataset && typeof this.dataset === "function") {
+      args.dataset = this.dataset();
+    }
+    return factory2({ ...args, factory: this });
+  }
+};
+ClownfaceFactory.exports = ["clownface"];
+var Factory_default6 = ClownfaceFactory;
+
+// node_modules/rdf-validate-shacl/src/defaultEnv.js
+var defaultEnv_default = new Environment_default([
+  Factory_default,
+  Factory_default2,
+  Factory_default3,
+  Factory_default6,
+  Factory_default5
+]);
+
+// node_modules/rdf-validate-shacl/src/namespaces.js
+function prepareNamespaces(factory3) {
+  return {
+    sh: namespace_default("http://www.w3.org/ns/shacl#", { factory: factory3 }),
+    xsd: namespace_default("http://www.w3.org/2001/XMLSchema#", { factory: factory3 }),
+    rdf: namespace_default("http://www.w3.org/1999/02/22-rdf-syntax-ns#", { factory: factory3 }),
+    rdfs: namespace_default("http://www.w3.org/2000/01/rdf-schema#", { factory: factory3 }),
+    owl: namespace_default("http://www.w3.org/2002/07/owl#", { factory: factory3 })
+  };
+}
+var namespaces_default = prepareNamespaces();
+
+// node_modules/@vocabulary/sh/index.js
+var sh_default = ({ factory: factory3 }) => {
+  const f = factory3;
+  const ns1 = "http://www.w3.org/ns/shacl#";
+  const ns22 = "http://www.w3.org/1999/02/22-rdf-syntax-ns#";
+  const ns32 = "http://www.w3.org/2002/07/owl#";
+  const ns4 = "http://www.w3.org/2000/01/rdf-schema#";
+  const ns5 = "http://www.w3.org/ns/shacl-shacl#";
+  const ns6 = "http://www.w3.org/2001/XMLSchema#";
+  const ns7 = "http://datashapes.org/dash#";
+  const blankNodes = [];
+  for (let i = 0; i < 76; i++) {
+    blankNodes.push(f.blankNode());
+  }
+  return [
+    f.quad(f.namedNode(ns1), f.namedNode(`${ns22}type`), f.namedNode(`${ns32}Ontology`), f.namedNode(ns1)),
+    f.quad(f.namedNode(ns1), f.namedNode(`${ns4}comment`), f.literal("This vocabulary defines terms used in SHACL, the W3C Shapes Constraint Language.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(ns1), f.namedNode(`${ns4}label`), f.literal("W3C Shapes Constraint Language (SHACL) Vocabulary", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(ns1), f.namedNode(`${ns1}declare`), blankNodes[0], f.namedNode(ns1)),
+    f.quad(f.namedNode(ns1), f.namedNode(`${ns1}suggestedShapesGraph`), f.namedNode(ns5), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}AbstractResult`), f.namedNode(`${ns22}type`), f.namedNode(`${ns4}Class`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}AbstractResult`), f.namedNode(`${ns4}comment`), f.literal("The base class of validation results, typically not instantiated directly.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}AbstractResult`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}AbstractResult`), f.namedNode(`${ns4}label`), f.literal("Abstract result", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}AbstractResult`), f.namedNode(`${ns4}subClassOf`), f.namedNode(`${ns4}Resource`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}AndConstraintComponent-and`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}Parameter`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}AndConstraintComponent-and`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}AndConstraintComponent-and`), f.namedNode(`${ns1}path`), f.namedNode(`${ns1}and`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}AndConstraintComponent`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}ConstraintComponent`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}AndConstraintComponent`), f.namedNode(`${ns4}comment`), f.literal("A constraint component that can be used to test whether a value node conforms to all members of a provided list of shapes.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}AndConstraintComponent`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}AndConstraintComponent`), f.namedNode(`${ns4}label`), f.literal("And constraint component", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}AndConstraintComponent`), f.namedNode(`${ns1}parameter`), f.namedNode(`${ns1}AndConstraintComponent-and`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}BlankNode`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}NodeKind`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}BlankNode`), f.namedNode(`${ns4}comment`), f.literal("The node kind of all blank nodes.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}BlankNode`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}BlankNode`), f.namedNode(`${ns4}label`), f.literal("Blank node", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}BlankNodeOrIRI`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}NodeKind`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}BlankNodeOrIRI`), f.namedNode(`${ns4}comment`), f.literal("The node kind of all blank nodes or IRIs.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}BlankNodeOrIRI`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}BlankNodeOrIRI`), f.namedNode(`${ns4}label`), f.literal("Blank node or IRI", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}BlankNodeOrLiteral`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}NodeKind`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}BlankNodeOrLiteral`), f.namedNode(`${ns4}comment`), f.literal("The node kind of all blank nodes or literals.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}BlankNodeOrLiteral`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}BlankNodeOrLiteral`), f.namedNode(`${ns4}label`), f.literal("Blank node or literal", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}ClassConstraintComponent-class`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}Parameter`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}ClassConstraintComponent-class`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}ClassConstraintComponent-class`), f.namedNode(`${ns1}nodeKind`), f.namedNode(`${ns1}IRI`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}ClassConstraintComponent-class`), f.namedNode(`${ns1}path`), f.namedNode(`${ns1}class`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}ClassConstraintComponent`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}ConstraintComponent`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}ClassConstraintComponent`), f.namedNode(`${ns4}comment`), f.literal("A constraint component that can be used to verify that each value node is an instance of a given type.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}ClassConstraintComponent`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}ClassConstraintComponent`), f.namedNode(`${ns4}label`), f.literal("Class constraint component", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}ClassConstraintComponent`), f.namedNode(`${ns1}parameter`), f.namedNode(`${ns1}ClassConstraintComponent-class`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}ClosedConstraintComponent-closed`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}Parameter`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}ClosedConstraintComponent-closed`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}ClosedConstraintComponent-closed`), f.namedNode(`${ns1}datatype`), f.namedNode(`${ns6}boolean`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}ClosedConstraintComponent-closed`), f.namedNode(`${ns1}path`), f.namedNode(`${ns1}closed`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}ClosedConstraintComponent-ignoredProperties`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}Parameter`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}ClosedConstraintComponent-ignoredProperties`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}ClosedConstraintComponent-ignoredProperties`), f.namedNode(`${ns1}optional`), f.literal("true", f.namedNode(`${ns6}boolean`)), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}ClosedConstraintComponent-ignoredProperties`), f.namedNode(`${ns1}path`), f.namedNode(`${ns1}ignoredProperties`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}ClosedConstraintComponent`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}ConstraintComponent`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}ClosedConstraintComponent`), f.namedNode(`${ns4}comment`), f.literal("A constraint component that can be used to indicate that focus nodes must only have values for those properties that have been explicitly enumerated via sh:property/sh:path.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}ClosedConstraintComponent`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}ClosedConstraintComponent`), f.namedNode(`${ns4}label`), f.literal("Closed constraint component", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}ClosedConstraintComponent`), f.namedNode(`${ns1}parameter`), f.namedNode(`${ns1}ClosedConstraintComponent-closed`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}ClosedConstraintComponent`), f.namedNode(`${ns1}parameter`), f.namedNode(`${ns1}ClosedConstraintComponent-ignoredProperties`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}ConstraintComponent`), f.namedNode(`${ns22}type`), f.namedNode(`${ns4}Class`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}ConstraintComponent`), f.namedNode(`${ns4}comment`), f.literal("The class of constraint components.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}ConstraintComponent`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}ConstraintComponent`), f.namedNode(`${ns4}label`), f.literal("Constraint component", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}ConstraintComponent`), f.namedNode(`${ns4}subClassOf`), f.namedNode(`${ns1}Parameterizable`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}CountExpression`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}NodeShape`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}CountExpression`), f.namedNode(`${ns4}comment`), f.literal("A count expression is a blank node with exactly one value for the property sh:count which is a well-formed node expression."), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}CountExpression`), f.namedNode(`${ns4}label`), f.literal("Count Expression"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}CountExpression`), f.namedNode(`${ns1}nodeKind`), f.namedNode(`${ns1}BlankNode`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}CountExpression`), f.namedNode(`${ns1}property`), blankNodes[1], f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}CountExpression`), f.namedNode(`${ns1}targetSubjectsOf`), f.namedNode(`${ns1}count`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}DatatypeConstraintComponent-datatype`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}Parameter`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}DatatypeConstraintComponent-datatype`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}DatatypeConstraintComponent-datatype`), f.namedNode(`${ns1}maxCount`), f.literal("1", f.namedNode(`${ns6}integer`)), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}DatatypeConstraintComponent-datatype`), f.namedNode(`${ns1}nodeKind`), f.namedNode(`${ns1}IRI`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}DatatypeConstraintComponent-datatype`), f.namedNode(`${ns1}path`), f.namedNode(`${ns1}datatype`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}DatatypeConstraintComponent`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}ConstraintComponent`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}DatatypeConstraintComponent`), f.namedNode(`${ns4}comment`), f.literal("A constraint component that can be used to restrict the datatype of all value nodes.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}DatatypeConstraintComponent`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}DatatypeConstraintComponent`), f.namedNode(`${ns4}label`), f.literal("Datatype constraint component", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}DatatypeConstraintComponent`), f.namedNode(`${ns1}parameter`), f.namedNode(`${ns1}DatatypeConstraintComponent-datatype`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}DisjointConstraintComponent-disjoint`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}Parameter`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}DisjointConstraintComponent-disjoint`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}DisjointConstraintComponent-disjoint`), f.namedNode(`${ns1}nodeKind`), f.namedNode(`${ns1}IRI`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}DisjointConstraintComponent-disjoint`), f.namedNode(`${ns1}path`), f.namedNode(`${ns1}disjoint`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}DisjointConstraintComponent`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}ConstraintComponent`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}DisjointConstraintComponent`), f.namedNode(`${ns4}comment`), f.literal("A constraint component that can be used to verify that the set of value nodes is disjoint with the the set of nodes that have the focus node as subject and the value of a given property as predicate.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}DisjointConstraintComponent`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}DisjointConstraintComponent`), f.namedNode(`${ns4}label`), f.literal("Disjoint constraint component", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}DisjointConstraintComponent`), f.namedNode(`${ns1}parameter`), f.namedNode(`${ns1}DisjointConstraintComponent-disjoint`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}DistinctExpression`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}NodeShape`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}DistinctExpression`), f.namedNode(`${ns4}comment`), f.literal("A distinct expression is a blank node with exactly one value for the property sh:distinct which is a well-formed node expression."), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}DistinctExpression`), f.namedNode(`${ns4}label`), f.literal("Distinct Expression"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}DistinctExpression`), f.namedNode(`${ns1}nodeKind`), f.namedNode(`${ns1}BlankNode`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}DistinctExpression`), f.namedNode(`${ns1}property`), blankNodes[2], f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}DistinctExpression`), f.namedNode(`${ns1}targetSubjectsOf`), f.namedNode(`${ns1}distinct`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}EqualsConstraintComponent-equals`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}Parameter`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}EqualsConstraintComponent-equals`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}EqualsConstraintComponent-equals`), f.namedNode(`${ns1}nodeKind`), f.namedNode(`${ns1}IRI`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}EqualsConstraintComponent-equals`), f.namedNode(`${ns1}path`), f.namedNode(`${ns1}equals`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}EqualsConstraintComponent`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}ConstraintComponent`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}EqualsConstraintComponent`), f.namedNode(`${ns4}comment`), f.literal("A constraint component that can be used to verify that the set of value nodes is equal to the set of nodes that have the focus node as subject and the value of a given property as predicate.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}EqualsConstraintComponent`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}EqualsConstraintComponent`), f.namedNode(`${ns4}label`), f.literal("Equals constraint component", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}EqualsConstraintComponent`), f.namedNode(`${ns1}parameter`), f.namedNode(`${ns1}EqualsConstraintComponent-equals`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}ExistsExpression`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}NodeShape`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}ExistsExpression`), f.namedNode(`${ns4}comment`), f.literal("An exists expression is a blank node with exactly one value for sh:exists (which is a well-formed shape)."), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}ExistsExpression`), f.namedNode(`${ns4}label`), f.literal("Exists Expression"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}ExistsExpression`), f.namedNode(`${ns1}nodeKind`), f.namedNode(`${ns1}BlankNode`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}ExistsExpression`), f.namedNode(`${ns1}property`), blankNodes[3], f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}ExistsExpression`), f.namedNode(`${ns1}targetSubjectsOf`), f.namedNode(`${ns1}exists`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}ExpressionConstraintComponent-expression`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}Parameter`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}ExpressionConstraintComponent-expression`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}ExpressionConstraintComponent-expression`), f.namedNode(`${ns1}path`), f.namedNode(`${ns1}expression`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}ExpressionConstraintComponent`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}ConstraintComponent`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}ExpressionConstraintComponent`), f.namedNode(`${ns4}comment`), f.literal("A constraint component that can be used to verify that a given node expression produces true for all value nodes.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}ExpressionConstraintComponent`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}ExpressionConstraintComponent`), f.namedNode(`${ns4}label`), f.literal("Expression constraint component", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}ExpressionConstraintComponent`), f.namedNode(`${ns1}parameter`), f.namedNode(`${ns1}ExpressionConstraintComponent-expression`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}FilterShapeExpression`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}NodeShape`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}FilterShapeExpression`), f.namedNode(`${ns4}comment`), f.literal("A filter shape expression is a blank node with exactly one value for sh:filterShape (which is a well-formed shape) and at most one value for sh:nodes (which is a well-formed node expression)."), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}FilterShapeExpression`), f.namedNode(`${ns4}label`), f.literal("Filter Shape Expression"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}FilterShapeExpression`), f.namedNode(`${ns1}nodeKind`), f.namedNode(`${ns1}BlankNode`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}FilterShapeExpression`), f.namedNode(`${ns1}property`), blankNodes[4], f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}FilterShapeExpression`), f.namedNode(`${ns1}property`), blankNodes[5], f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}FilterShapeExpression`), f.namedNode(`${ns1}targetSubjectsOf`), f.namedNode(`${ns1}filterShape`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}FocusNodeOrConstantTermExpression`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}NodeShape`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}FocusNodeOrConstantTermExpression`), f.namedNode(`${ns1}nodeKind`), f.namedNode(`${ns1}IRIOrLiteral`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}Function`), f.namedNode(`${ns22}type`), f.namedNode(`${ns4}Class`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}Function`), f.namedNode(`${ns4}comment`), f.literal("The class of SHACL functions.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}Function`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}Function`), f.namedNode(`${ns4}label`), f.literal("Function", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}Function`), f.namedNode(`${ns4}subClassOf`), f.namedNode(`${ns1}Parameterizable`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}FunctionExpression`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}NodeShape`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}FunctionExpression`), f.namedNode(`${ns4}comment`), f.literal("A function expression is a blank node that does not fulfill any of the syntax rules of the other node expression types and which is the subject of exactly one triple T where the object is a well-formed SHACL list, and each member of that list is a well-formed node expression."), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}FunctionExpression`), f.namedNode(`${ns4}label`), f.literal("Function Expression"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}FunctionExpression`), f.namedNode(`${ns1}nodeKind`), f.namedNode(`${ns1}BlankNode`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}GroupConcatExpression`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}NodeShape`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}GroupConcatExpression`), f.namedNode(`${ns4}comment`), f.literal("A group concat expression is a blank node with exactly one value for the property sh:groupConcat which is a well-formed node expression. A group concat expression can have a single value for the property sh:separator which is literal with datatype xsd:string."), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}GroupConcatExpression`), f.namedNode(`${ns4}label`), f.literal("Group Concat Expression"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}GroupConcatExpression`), f.namedNode(`${ns1}nodeKind`), f.namedNode(`${ns1}BlankNode`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}GroupConcatExpression`), f.namedNode(`${ns1}property`), blankNodes[6], f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}GroupConcatExpression`), f.namedNode(`${ns1}property`), blankNodes[7], f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}GroupConcatExpression`), f.namedNode(`${ns1}targetSubjectsOf`), f.namedNode(`${ns1}groupConcat`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}HasValueConstraintComponent-hasValue`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}Parameter`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}HasValueConstraintComponent-hasValue`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}HasValueConstraintComponent-hasValue`), f.namedNode(`${ns1}path`), f.namedNode(`${ns1}hasValue`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}HasValueConstraintComponent`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}ConstraintComponent`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}HasValueConstraintComponent`), f.namedNode(`${ns4}comment`), f.literal("A constraint component that can be used to verify that one of the value nodes is a given RDF node.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}HasValueConstraintComponent`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}HasValueConstraintComponent`), f.namedNode(`${ns4}label`), f.literal("Has-value constraint component", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}HasValueConstraintComponent`), f.namedNode(`${ns1}parameter`), f.namedNode(`${ns1}HasValueConstraintComponent-hasValue`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}IRI`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}NodeKind`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}IRI`), f.namedNode(`${ns4}comment`), f.literal("The node kind of all IRIs.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}IRI`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}IRI`), f.namedNode(`${ns4}label`), f.literal("IRI", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}IRIOrLiteral`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}NodeKind`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}IRIOrLiteral`), f.namedNode(`${ns4}comment`), f.literal("The node kind of all IRIs or literals.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}IRIOrLiteral`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}IRIOrLiteral`), f.namedNode(`${ns4}label`), f.literal("IRI or literal", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}IfExpression`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}NodeShape`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}IfExpression`), f.namedNode(`${ns4}comment`), f.literal("An if expression is a blank node with exactly one value for sh:if (which is a well-formed node expression), at most one value for sh:then (which is a well-formed node expression) and at most one value for sh:else (which is a well-formed node expression)."), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}IfExpression`), f.namedNode(`${ns4}label`), f.literal("If Expression"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}IfExpression`), f.namedNode(`${ns1}nodeKind`), f.namedNode(`${ns1}BlankNode`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}IfExpression`), f.namedNode(`${ns1}property`), blankNodes[8], f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}IfExpression`), f.namedNode(`${ns1}property`), blankNodes[9], f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}IfExpression`), f.namedNode(`${ns1}property`), blankNodes[10], f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}IfExpression`), f.namedNode(`${ns1}targetSubjectsOf`), f.namedNode(`${ns1}else`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}IfExpression`), f.namedNode(`${ns1}targetSubjectsOf`), f.namedNode(`${ns1}if`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}IfExpression`), f.namedNode(`${ns1}targetSubjectsOf`), f.namedNode(`${ns1}then`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}InConstraintComponent-in`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}Parameter`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}InConstraintComponent-in`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}InConstraintComponent-in`), f.namedNode(`${ns1}maxCount`), f.literal("1", f.namedNode(`${ns6}integer`)), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}InConstraintComponent-in`), f.namedNode(`${ns1}path`), f.namedNode(`${ns1}in`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}InConstraintComponent`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}ConstraintComponent`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}InConstraintComponent`), f.namedNode(`${ns4}comment`), f.literal("A constraint component that can be used to exclusively enumerate the permitted value nodes.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}InConstraintComponent`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}InConstraintComponent`), f.namedNode(`${ns4}label`), f.literal("In constraint component", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}InConstraintComponent`), f.namedNode(`${ns1}parameter`), f.namedNode(`${ns1}InConstraintComponent-in`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}Info`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}Severity`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}Info`), f.namedNode(`${ns4}comment`), f.literal("The severity for an informational validation result.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}Info`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}Info`), f.namedNode(`${ns4}label`), f.literal("Info", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}IntersectionExpression`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}NodeShape`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}IntersectionExpression`), f.namedNode(`${ns4}comment`), f.literal("An intersection expression is a blank node with exactly one value for the property sh:intersection which is a well-formed SHACL list with at least two members (which are well-formed node expressions)."), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}IntersectionExpression`), f.namedNode(`${ns4}label`), f.literal("Intersection Expression"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}IntersectionExpression`), f.namedNode(`${ns1}nodeKind`), f.namedNode(`${ns1}BlankNode`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}IntersectionExpression`), f.namedNode(`${ns1}property`), blankNodes[11], f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}IntersectionExpression`), f.namedNode(`${ns1}targetSubjectsOf`), f.namedNode(`${ns1}intersection`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}JSConstraint-js`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}Parameter`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}JSConstraint-js`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}JSConstraint-js`), f.namedNode(`${ns1}path`), f.namedNode(`${ns1}js`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}JSConstraint`), f.namedNode(`${ns22}type`), f.namedNode(`${ns4}Class`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}JSConstraint`), f.namedNode(`${ns4}comment`), f.literal("The class of constraints backed by a JavaScript function.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}JSConstraint`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}JSConstraint`), f.namedNode(`${ns4}label`), f.literal("JavaScript-based constraint", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}JSConstraint`), f.namedNode(`${ns4}subClassOf`), f.namedNode(`${ns1}JSExecutable`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}JSConstraintComponent`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}ConstraintComponent`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}JSConstraintComponent`), f.namedNode(`${ns4}comment`), f.literal("A constraint component with the parameter sh:js linking to a sh:JSConstraint containing a sh:script.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}JSConstraintComponent`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}JSConstraintComponent`), f.namedNode(`${ns4}label`), f.literal("JavaScript constraint component", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}JSConstraintComponent`), f.namedNode(`${ns1}parameter`), f.namedNode(`${ns1}JSConstraint-js`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}JSExecutable`), f.namedNode(`${ns22}type`), f.namedNode(`${ns4}Class`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}JSExecutable`), f.namedNode(`${ns4}comment`), f.literal("Abstract base class of resources that declare an executable JavaScript.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}JSExecutable`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}JSExecutable`), f.namedNode(`${ns4}label`), f.literal("JavaScript executable", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}JSExecutable`), f.namedNode(`${ns4}subClassOf`), f.namedNode(`${ns4}Resource`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}JSFunction`), f.namedNode(`${ns22}type`), f.namedNode(`${ns4}Class`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}JSFunction`), f.namedNode(`${ns4}comment`), f.literal("The class of SHACL functions that execute a JavaScript function when called.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}JSFunction`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}JSFunction`), f.namedNode(`${ns4}label`), f.literal("JavaScript function", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}JSFunction`), f.namedNode(`${ns4}subClassOf`), f.namedNode(`${ns1}Function`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}JSFunction`), f.namedNode(`${ns4}subClassOf`), f.namedNode(`${ns1}JSExecutable`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}JSLibrary`), f.namedNode(`${ns22}type`), f.namedNode(`${ns4}Class`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}JSLibrary`), f.namedNode(`${ns4}comment`), f.literal("Represents a JavaScript library, typically identified by one or more URLs of files to include.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}JSLibrary`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}JSLibrary`), f.namedNode(`${ns4}label`), f.literal("JavaScript library", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}JSLibrary`), f.namedNode(`${ns4}subClassOf`), f.namedNode(`${ns4}Resource`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}JSRule`), f.namedNode(`${ns22}type`), f.namedNode(`${ns4}Class`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}JSRule`), f.namedNode(`${ns4}comment`), f.literal("The class of SHACL rules expressed using JavaScript.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}JSRule`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}JSRule`), f.namedNode(`${ns4}label`), f.literal("JavaScript rule", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}JSRule`), f.namedNode(`${ns4}subClassOf`), f.namedNode(`${ns1}JSExecutable`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}JSRule`), f.namedNode(`${ns4}subClassOf`), f.namedNode(`${ns1}Rule`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}JSTarget`), f.namedNode(`${ns22}type`), f.namedNode(`${ns4}Class`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}JSTarget`), f.namedNode(`${ns4}comment`), f.literal("The class of targets that are based on JavaScript functions.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}JSTarget`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}JSTarget`), f.namedNode(`${ns4}label`), f.literal("JavaScript target", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}JSTarget`), f.namedNode(`${ns4}subClassOf`), f.namedNode(`${ns1}JSExecutable`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}JSTarget`), f.namedNode(`${ns4}subClassOf`), f.namedNode(`${ns1}Target`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}JSTargetType`), f.namedNode(`${ns22}type`), f.namedNode(`${ns4}Class`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}JSTargetType`), f.namedNode(`${ns4}comment`), f.literal("The (meta) class for parameterizable targets that are based on JavaScript functions.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}JSTargetType`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}JSTargetType`), f.namedNode(`${ns4}label`), f.literal("JavaScript target type", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}JSTargetType`), f.namedNode(`${ns4}subClassOf`), f.namedNode(`${ns1}JSExecutable`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}JSTargetType`), f.namedNode(`${ns4}subClassOf`), f.namedNode(`${ns1}TargetType`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}JSValidator`), f.namedNode(`${ns22}type`), f.namedNode(`${ns4}Class`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}JSValidator`), f.namedNode(`${ns4}comment`), f.literal("A SHACL validator based on JavaScript. This can be used to declare SHACL constraint components that perform JavaScript-based validation when used.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}JSValidator`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}JSValidator`), f.namedNode(`${ns4}label`), f.literal("JavaScript validator", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}JSValidator`), f.namedNode(`${ns4}subClassOf`), f.namedNode(`${ns1}JSExecutable`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}JSValidator`), f.namedNode(`${ns4}subClassOf`), f.namedNode(`${ns1}Validator`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}LanguageInConstraintComponent-languageIn`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}Parameter`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}LanguageInConstraintComponent-languageIn`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}LanguageInConstraintComponent-languageIn`), f.namedNode(`${ns1}maxCount`), f.literal("1", f.namedNode(`${ns6}integer`)), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}LanguageInConstraintComponent-languageIn`), f.namedNode(`${ns1}path`), f.namedNode(`${ns1}languageIn`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}LanguageInConstraintComponent`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}ConstraintComponent`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}LanguageInConstraintComponent`), f.namedNode(`${ns4}comment`), f.literal("A constraint component that can be used to enumerate language tags that all value nodes must have.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}LanguageInConstraintComponent`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}LanguageInConstraintComponent`), f.namedNode(`${ns4}label`), f.literal("Language-in constraint component", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}LanguageInConstraintComponent`), f.namedNode(`${ns1}parameter`), f.namedNode(`${ns1}LanguageInConstraintComponent-languageIn`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}LessThanConstraintComponent-lessThan`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}Parameter`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}LessThanConstraintComponent-lessThan`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}LessThanConstraintComponent-lessThan`), f.namedNode(`${ns1}nodeKind`), f.namedNode(`${ns1}IRI`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}LessThanConstraintComponent-lessThan`), f.namedNode(`${ns1}path`), f.namedNode(`${ns1}lessThan`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}LessThanConstraintComponent`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}ConstraintComponent`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}LessThanConstraintComponent`), f.namedNode(`${ns4}comment`), f.literal("A constraint component that can be used to verify that each value node is smaller than all the nodes that have the focus node as subject and the value of a given property as predicate.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}LessThanConstraintComponent`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}LessThanConstraintComponent`), f.namedNode(`${ns4}label`), f.literal("Less-than constraint component", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}LessThanConstraintComponent`), f.namedNode(`${ns1}parameter`), f.namedNode(`${ns1}LessThanConstraintComponent-lessThan`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}LessThanOrEqualsConstraintComponent-lessThanOrEquals`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}Parameter`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}LessThanOrEqualsConstraintComponent-lessThanOrEquals`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}LessThanOrEqualsConstraintComponent-lessThanOrEquals`), f.namedNode(`${ns1}nodeKind`), f.namedNode(`${ns1}IRI`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}LessThanOrEqualsConstraintComponent-lessThanOrEquals`), f.namedNode(`${ns1}path`), f.namedNode(`${ns1}lessThanOrEquals`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}LessThanOrEqualsConstraintComponent`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}ConstraintComponent`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}LessThanOrEqualsConstraintComponent`), f.namedNode(`${ns4}comment`), f.literal("A constraint component that can be used to verify that every value node is smaller than all the nodes that have the focus node as subject and the value of a given property as predicate.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}LessThanOrEqualsConstraintComponent`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}LessThanOrEqualsConstraintComponent`), f.namedNode(`${ns4}label`), f.literal("less-than-or-equals constraint component", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}LessThanOrEqualsConstraintComponent`), f.namedNode(`${ns1}parameter`), f.namedNode(`${ns1}LessThanOrEqualsConstraintComponent-lessThanOrEquals`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}LimitExpression`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}NodeShape`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}LimitExpression`), f.namedNode(`${ns4}comment`), f.literal("A limit expression is a blank node with exactly one value for the property sh:limit which is a literal with datatype xsd:integer and with exactly one value for the property sh:nodes which is a well-formed node expression."), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}LimitExpression`), f.namedNode(`${ns4}label`), f.literal("Limit Expression"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}LimitExpression`), f.namedNode(`${ns1}nodeKind`), f.namedNode(`${ns1}BlankNode`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}LimitExpression`), f.namedNode(`${ns1}property`), blankNodes[12], f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}LimitExpression`), f.namedNode(`${ns1}property`), blankNodes[13], f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}LimitExpression`), f.namedNode(`${ns1}targetSubjectsOf`), f.namedNode(`${ns1}limit`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}Literal`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}NodeKind`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}Literal`), f.namedNode(`${ns4}comment`), f.literal("The node kind of all literals.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}Literal`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}Literal`), f.namedNode(`${ns4}label`), f.literal("Literal", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MaxCountConstraintComponent-maxCount`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}Parameter`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MaxCountConstraintComponent-maxCount`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MaxCountConstraintComponent-maxCount`), f.namedNode(`${ns1}datatype`), f.namedNode(`${ns6}integer`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MaxCountConstraintComponent-maxCount`), f.namedNode(`${ns1}maxCount`), f.literal("1", f.namedNode(`${ns6}integer`)), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MaxCountConstraintComponent-maxCount`), f.namedNode(`${ns1}path`), f.namedNode(`${ns1}maxCount`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MaxCountConstraintComponent`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}ConstraintComponent`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MaxCountConstraintComponent`), f.namedNode(`${ns4}comment`), f.literal("A constraint component that can be used to restrict the maximum number of value nodes.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MaxCountConstraintComponent`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MaxCountConstraintComponent`), f.namedNode(`${ns4}label`), f.literal("Max-count constraint component", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MaxCountConstraintComponent`), f.namedNode(`${ns1}parameter`), f.namedNode(`${ns1}MaxCountConstraintComponent-maxCount`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MaxExclusiveConstraintComponent-maxExclusive`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}Parameter`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MaxExclusiveConstraintComponent-maxExclusive`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MaxExclusiveConstraintComponent-maxExclusive`), f.namedNode(`${ns1}maxCount`), f.literal("1", f.namedNode(`${ns6}integer`)), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MaxExclusiveConstraintComponent-maxExclusive`), f.namedNode(`${ns1}nodeKind`), f.namedNode(`${ns1}Literal`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MaxExclusiveConstraintComponent-maxExclusive`), f.namedNode(`${ns1}path`), f.namedNode(`${ns1}maxExclusive`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MaxExclusiveConstraintComponent`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}ConstraintComponent`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MaxExclusiveConstraintComponent`), f.namedNode(`${ns4}comment`), f.literal("A constraint component that can be used to restrict the range of value nodes with a maximum exclusive value.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MaxExclusiveConstraintComponent`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MaxExclusiveConstraintComponent`), f.namedNode(`${ns4}label`), f.literal("Max-exclusive constraint component", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MaxExclusiveConstraintComponent`), f.namedNode(`${ns1}parameter`), f.namedNode(`${ns1}MaxExclusiveConstraintComponent-maxExclusive`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MaxExpression`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}NodeShape`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MaxExpression`), f.namedNode(`${ns4}comment`), f.literal("A max expression is a blank node with exactly one value for the property sh:max which is a well-formed node expression."), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MaxExpression`), f.namedNode(`${ns4}label`), f.literal("Max Expression"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MaxExpression`), f.namedNode(`${ns1}nodeKind`), f.namedNode(`${ns1}BlankNode`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MaxExpression`), f.namedNode(`${ns1}property`), blankNodes[14], f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MaxExpression`), f.namedNode(`${ns1}targetSubjectsOf`), f.namedNode(`${ns1}max`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MaxInclusiveConstraintComponent-maxInclusive`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}Parameter`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MaxInclusiveConstraintComponent-maxInclusive`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MaxInclusiveConstraintComponent-maxInclusive`), f.namedNode(`${ns1}maxCount`), f.literal("1", f.namedNode(`${ns6}integer`)), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MaxInclusiveConstraintComponent-maxInclusive`), f.namedNode(`${ns1}nodeKind`), f.namedNode(`${ns1}Literal`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MaxInclusiveConstraintComponent-maxInclusive`), f.namedNode(`${ns1}path`), f.namedNode(`${ns1}maxInclusive`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MaxInclusiveConstraintComponent`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}ConstraintComponent`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MaxInclusiveConstraintComponent`), f.namedNode(`${ns4}comment`), f.literal("A constraint component that can be used to restrict the range of value nodes with a maximum inclusive value.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MaxInclusiveConstraintComponent`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MaxInclusiveConstraintComponent`), f.namedNode(`${ns4}label`), f.literal("Max-inclusive constraint component", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MaxInclusiveConstraintComponent`), f.namedNode(`${ns1}parameter`), f.namedNode(`${ns1}MaxInclusiveConstraintComponent-maxInclusive`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MaxLengthConstraintComponent-maxLength`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}Parameter`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MaxLengthConstraintComponent-maxLength`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MaxLengthConstraintComponent-maxLength`), f.namedNode(`${ns1}datatype`), f.namedNode(`${ns6}integer`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MaxLengthConstraintComponent-maxLength`), f.namedNode(`${ns1}maxCount`), f.literal("1", f.namedNode(`${ns6}integer`)), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MaxLengthConstraintComponent-maxLength`), f.namedNode(`${ns1}path`), f.namedNode(`${ns1}maxLength`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MaxLengthConstraintComponent`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}ConstraintComponent`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MaxLengthConstraintComponent`), f.namedNode(`${ns4}comment`), f.literal("A constraint component that can be used to restrict the maximum string length of value nodes.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MaxLengthConstraintComponent`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MaxLengthConstraintComponent`), f.namedNode(`${ns4}label`), f.literal("Max-length constraint component", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MaxLengthConstraintComponent`), f.namedNode(`${ns1}parameter`), f.namedNode(`${ns1}MaxLengthConstraintComponent-maxLength`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MinCountConstraintComponent-minCount`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}Parameter`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MinCountConstraintComponent-minCount`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MinCountConstraintComponent-minCount`), f.namedNode(`${ns1}datatype`), f.namedNode(`${ns6}integer`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MinCountConstraintComponent-minCount`), f.namedNode(`${ns1}maxCount`), f.literal("1", f.namedNode(`${ns6}integer`)), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MinCountConstraintComponent-minCount`), f.namedNode(`${ns1}path`), f.namedNode(`${ns1}minCount`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MinCountConstraintComponent`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}ConstraintComponent`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MinCountConstraintComponent`), f.namedNode(`${ns4}comment`), f.literal("A constraint component that can be used to restrict the minimum number of value nodes.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MinCountConstraintComponent`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MinCountConstraintComponent`), f.namedNode(`${ns4}label`), f.literal("Min-count constraint component", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MinCountConstraintComponent`), f.namedNode(`${ns1}parameter`), f.namedNode(`${ns1}MinCountConstraintComponent-minCount`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MinExclusiveConstraintComponent-minExclusive`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}Parameter`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MinExclusiveConstraintComponent-minExclusive`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MinExclusiveConstraintComponent-minExclusive`), f.namedNode(`${ns1}maxCount`), f.literal("1", f.namedNode(`${ns6}integer`)), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MinExclusiveConstraintComponent-minExclusive`), f.namedNode(`${ns1}nodeKind`), f.namedNode(`${ns1}Literal`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MinExclusiveConstraintComponent-minExclusive`), f.namedNode(`${ns1}path`), f.namedNode(`${ns1}minExclusive`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MinExclusiveConstraintComponent`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}ConstraintComponent`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MinExclusiveConstraintComponent`), f.namedNode(`${ns4}comment`), f.literal("A constraint component that can be used to restrict the range of value nodes with a minimum exclusive value.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MinExclusiveConstraintComponent`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MinExclusiveConstraintComponent`), f.namedNode(`${ns4}label`), f.literal("Min-exclusive constraint component", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MinExclusiveConstraintComponent`), f.namedNode(`${ns1}parameter`), f.namedNode(`${ns1}MinExclusiveConstraintComponent-minExclusive`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MinExpression`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}NodeShape`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MinExpression`), f.namedNode(`${ns4}comment`), f.literal("A min expression is a blank node with exactly one value for the property sh:min which is a well-formed node expression."), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MinExpression`), f.namedNode(`${ns4}label`), f.literal("Min Expression"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MinExpression`), f.namedNode(`${ns1}nodeKind`), f.namedNode(`${ns1}BlankNode`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MinExpression`), f.namedNode(`${ns1}property`), blankNodes[15], f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MinExpression`), f.namedNode(`${ns1}targetSubjectsOf`), f.namedNode(`${ns1}min`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MinInclusiveConstraintComponent-minInclusive`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}Parameter`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MinInclusiveConstraintComponent-minInclusive`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MinInclusiveConstraintComponent-minInclusive`), f.namedNode(`${ns1}maxCount`), f.literal("1", f.namedNode(`${ns6}integer`)), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MinInclusiveConstraintComponent-minInclusive`), f.namedNode(`${ns1}nodeKind`), f.namedNode(`${ns1}Literal`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MinInclusiveConstraintComponent-minInclusive`), f.namedNode(`${ns1}path`), f.namedNode(`${ns1}minInclusive`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MinInclusiveConstraintComponent`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}ConstraintComponent`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MinInclusiveConstraintComponent`), f.namedNode(`${ns4}comment`), f.literal("A constraint component that can be used to restrict the range of value nodes with a minimum inclusive value.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MinInclusiveConstraintComponent`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MinInclusiveConstraintComponent`), f.namedNode(`${ns4}label`), f.literal("Min-inclusive constraint component", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MinInclusiveConstraintComponent`), f.namedNode(`${ns1}parameter`), f.namedNode(`${ns1}MinInclusiveConstraintComponent-minInclusive`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MinLengthConstraintComponent-minLength`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}Parameter`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MinLengthConstraintComponent-minLength`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MinLengthConstraintComponent-minLength`), f.namedNode(`${ns1}datatype`), f.namedNode(`${ns6}integer`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MinLengthConstraintComponent-minLength`), f.namedNode(`${ns1}maxCount`), f.literal("1", f.namedNode(`${ns6}integer`)), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MinLengthConstraintComponent-minLength`), f.namedNode(`${ns1}path`), f.namedNode(`${ns1}minLength`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MinLengthConstraintComponent`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}ConstraintComponent`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MinLengthConstraintComponent`), f.namedNode(`${ns4}comment`), f.literal("A constraint component that can be used to restrict the minimum string length of value nodes.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MinLengthConstraintComponent`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MinLengthConstraintComponent`), f.namedNode(`${ns4}label`), f.literal("Min-length constraint component", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MinLengthConstraintComponent`), f.namedNode(`${ns1}parameter`), f.namedNode(`${ns1}MinLengthConstraintComponent-minLength`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MinusExpression`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}NodeShape`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MinusExpression`), f.namedNode(`${ns4}comment`), f.literal("A minus expression is a blank node with exactly one value for the property sh:minus which is a well-formed node expression and exactly one value for the property sh:nodes which is a well-formed node expression."), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MinusExpression`), f.namedNode(`${ns4}label`), f.literal("Minus Expression"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MinusExpression`), f.namedNode(`${ns1}nodeKind`), f.namedNode(`${ns1}BlankNode`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MinusExpression`), f.namedNode(`${ns1}property`), blankNodes[16], f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MinusExpression`), f.namedNode(`${ns1}property`), blankNodes[17], f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}MinusExpression`), f.namedNode(`${ns1}targetSubjectsOf`), f.namedNode(`${ns1}minus`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}NodeConstraintComponent-node`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}Parameter`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}NodeConstraintComponent-node`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}NodeConstraintComponent-node`), f.namedNode(`${ns1}path`), f.namedNode(`${ns1}node`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}NodeConstraintComponent`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}ConstraintComponent`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}NodeConstraintComponent`), f.namedNode(`${ns4}comment`), f.literal("A constraint component that can be used to verify that all value nodes conform to the given node shape.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}NodeConstraintComponent`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}NodeConstraintComponent`), f.namedNode(`${ns4}label`), f.literal("Node constraint component", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}NodeConstraintComponent`), f.namedNode(`${ns1}parameter`), f.namedNode(`${ns1}NodeConstraintComponent-node`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}NodeExpression`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}NodeShape`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}NodeExpression`), f.namedNode(`${ns1}targetObjectsOf`), f.namedNode(`${ns1}expression`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}NodeExpression`), f.namedNode(`${ns1}targetObjectsOf`), f.namedNode(`${ns1}values`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}NodeExpression`), f.namedNode(`${ns1}xone`), blankNodes[18], f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}NodeKind`), f.namedNode(`${ns22}type`), f.namedNode(`${ns4}Class`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}NodeKind`), f.namedNode(`${ns4}comment`), f.literal("The class of all node kinds, including sh:BlankNode, sh:IRI, sh:Literal or the combinations of these: sh:BlankNodeOrIRI, sh:BlankNodeOrLiteral, sh:IRIOrLiteral.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}NodeKind`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}NodeKind`), f.namedNode(`${ns4}label`), f.literal("Node kind", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}NodeKind`), f.namedNode(`${ns4}subClassOf`), f.namedNode(`${ns4}Resource`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}NodeKindConstraintComponent-nodeKind`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}Parameter`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}NodeKindConstraintComponent-nodeKind`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}NodeKindConstraintComponent-nodeKind`), f.namedNode(`${ns1}in`), blankNodes[19], f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}NodeKindConstraintComponent-nodeKind`), f.namedNode(`${ns1}maxCount`), f.literal("1", f.namedNode(`${ns6}integer`)), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}NodeKindConstraintComponent-nodeKind`), f.namedNode(`${ns1}path`), f.namedNode(`${ns1}nodeKind`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}NodeKindConstraintComponent`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}ConstraintComponent`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}NodeKindConstraintComponent`), f.namedNode(`${ns4}comment`), f.literal("A constraint component that can be used to restrict the RDF node kind of each value node.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}NodeKindConstraintComponent`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}NodeKindConstraintComponent`), f.namedNode(`${ns4}label`), f.literal("Node-kind constraint component", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}NodeKindConstraintComponent`), f.namedNode(`${ns1}parameter`), f.namedNode(`${ns1}NodeKindConstraintComponent-nodeKind`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}NodeShape`), f.namedNode(`${ns22}type`), f.namedNode(`${ns4}Class`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}NodeShape`), f.namedNode(`${ns4}comment`), f.literal("A node shape is a shape that specifies constraint that need to be met with respect to focus nodes.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}NodeShape`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}NodeShape`), f.namedNode(`${ns4}label`), f.literal("Node shape", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}NodeShape`), f.namedNode(`${ns4}subClassOf`), f.namedNode(`${ns1}Shape`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}NotConstraintComponent-not`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}Parameter`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}NotConstraintComponent-not`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}NotConstraintComponent-not`), f.namedNode(`${ns1}path`), f.namedNode(`${ns1}not`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}NotConstraintComponent`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}ConstraintComponent`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}NotConstraintComponent`), f.namedNode(`${ns4}comment`), f.literal("A constraint component that can be used to verify that value nodes do not conform to a given shape.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}NotConstraintComponent`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}NotConstraintComponent`), f.namedNode(`${ns4}label`), f.literal("Not constraint component", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}NotConstraintComponent`), f.namedNode(`${ns1}parameter`), f.namedNode(`${ns1}NotConstraintComponent-not`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}OffsetExpression`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}NodeShape`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}OffsetExpression`), f.namedNode(`${ns4}comment`), f.literal("An offset expression is a blank node with exactly one value for the property sh:offset which is a literal with datatype xsd:integer and with exactly one value for the property sh:nodes which is a well-formed node expression."), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}OffsetExpression`), f.namedNode(`${ns4}label`), f.literal("Offset Expression"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}OffsetExpression`), f.namedNode(`${ns1}nodeKind`), f.namedNode(`${ns1}BlankNode`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}OffsetExpression`), f.namedNode(`${ns1}property`), blankNodes[20], f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}OffsetExpression`), f.namedNode(`${ns1}property`), blankNodes[21], f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}OffsetExpression`), f.namedNode(`${ns1}targetSubjectsOf`), f.namedNode(`${ns1}offset`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}OrConstraintComponent-or`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}Parameter`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}OrConstraintComponent-or`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}OrConstraintComponent-or`), f.namedNode(`${ns1}path`), f.namedNode(`${ns1}or`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}OrConstraintComponent`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}ConstraintComponent`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}OrConstraintComponent`), f.namedNode(`${ns4}comment`), f.literal("A constraint component that can be used to restrict the value nodes so that they conform to at least one out of several provided shapes.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}OrConstraintComponent`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}OrConstraintComponent`), f.namedNode(`${ns4}label`), f.literal("Or constraint component", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}OrConstraintComponent`), f.namedNode(`${ns1}parameter`), f.namedNode(`${ns1}OrConstraintComponent-or`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}OrderByExpression`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}NodeShape`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}OrderByExpression`), f.namedNode(`${ns4}comment`), f.literal("An orderBy expression is a blank node with exactly one value for the property sh:orderBy which is a well-formed node expression and with exactly one value for the property sh:nodes which is a well-formed node expression. An orderBy expression can have one value for the property sh:desc which is either true or false."), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}OrderByExpression`), f.namedNode(`${ns4}label`), f.literal("OrderBy Expression"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}OrderByExpression`), f.namedNode(`${ns1}nodeKind`), f.namedNode(`${ns1}BlankNode`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}OrderByExpression`), f.namedNode(`${ns1}property`), blankNodes[22], f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}OrderByExpression`), f.namedNode(`${ns1}property`), blankNodes[23], f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}OrderByExpression`), f.namedNode(`${ns1}property`), blankNodes[24], f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}OrderByExpression`), f.namedNode(`${ns1}targetSubjectsOf`), f.namedNode(`${ns1}orderBy`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}Parameter`), f.namedNode(`${ns22}type`), f.namedNode(`${ns4}Class`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}Parameter`), f.namedNode(`${ns4}comment`), f.literal("The class of parameter declarations, consisting of a path predicate and (possibly) information about allowed value type, cardinality and other characteristics.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}Parameter`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}Parameter`), f.namedNode(`${ns4}label`), f.literal("Parameter", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}Parameter`), f.namedNode(`${ns4}subClassOf`), f.namedNode(`${ns1}PropertyShape`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}Parameterizable`), f.namedNode(`${ns22}type`), f.namedNode(`${ns4}Class`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}Parameterizable`), f.namedNode(`${ns4}comment`), f.literal("Superclass of components that can take parameters, especially functions and constraint components.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}Parameterizable`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}Parameterizable`), f.namedNode(`${ns4}label`), f.literal("Parameterizable", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}Parameterizable`), f.namedNode(`${ns4}subClassOf`), f.namedNode(`${ns4}Resource`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}PathExpression`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}NodeShape`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}PathExpression`), f.namedNode(`${ns4}comment`), f.literal("A path expression is a blank node with exactly one value of the property sh:path (which are well-formed property paths) and at most one value for sh:nodes (which is a well-formed node expression)."), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}PathExpression`), f.namedNode(`${ns4}label`), f.literal("Path Expression"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}PathExpression`), f.namedNode(`${ns1}nodeKind`), f.namedNode(`${ns1}BlankNode`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}PathExpression`), f.namedNode(`${ns1}property`), blankNodes[25], f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}PathExpression`), f.namedNode(`${ns1}property`), blankNodes[26], f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}PatternConstraintComponent-flags`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}Parameter`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}PatternConstraintComponent-flags`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}PatternConstraintComponent-flags`), f.namedNode(`${ns1}datatype`), f.namedNode(`${ns6}string`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}PatternConstraintComponent-flags`), f.namedNode(`${ns1}optional`), f.literal("true", f.namedNode(`${ns6}boolean`)), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}PatternConstraintComponent-flags`), f.namedNode(`${ns1}path`), f.namedNode(`${ns1}flags`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}PatternConstraintComponent-pattern`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}Parameter`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}PatternConstraintComponent-pattern`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}PatternConstraintComponent-pattern`), f.namedNode(`${ns1}datatype`), f.namedNode(`${ns6}string`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}PatternConstraintComponent-pattern`), f.namedNode(`${ns1}path`), f.namedNode(`${ns1}pattern`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}PatternConstraintComponent`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}ConstraintComponent`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}PatternConstraintComponent`), f.namedNode(`${ns4}comment`), f.literal("A constraint component that can be used to verify that every value node matches a given regular expression.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}PatternConstraintComponent`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}PatternConstraintComponent`), f.namedNode(`${ns4}label`), f.literal("Pattern constraint component", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}PatternConstraintComponent`), f.namedNode(`${ns1}parameter`), f.namedNode(`${ns1}PatternConstraintComponent-flags`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}PatternConstraintComponent`), f.namedNode(`${ns1}parameter`), f.namedNode(`${ns1}PatternConstraintComponent-pattern`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}PrefixDeclaration`), f.namedNode(`${ns22}type`), f.namedNode(`${ns4}Class`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}PrefixDeclaration`), f.namedNode(`${ns4}comment`), f.literal("The class of prefix declarations, consisting of pairs of a prefix with a namespace.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}PrefixDeclaration`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}PrefixDeclaration`), f.namedNode(`${ns4}label`), f.literal("Prefix declaration", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}PrefixDeclaration`), f.namedNode(`${ns4}subClassOf`), f.namedNode(`${ns4}Resource`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}PropertyConstraintComponent-property`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}Parameter`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}PropertyConstraintComponent-property`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}PropertyConstraintComponent-property`), f.namedNode(`${ns1}path`), f.namedNode(`${ns1}property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}PropertyConstraintComponent`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}ConstraintComponent`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}PropertyConstraintComponent`), f.namedNode(`${ns4}comment`), f.literal("A constraint component that can be used to verify that all value nodes conform to the given property shape.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}PropertyConstraintComponent`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}PropertyConstraintComponent`), f.namedNode(`${ns4}label`), f.literal("Property constraint component", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}PropertyConstraintComponent`), f.namedNode(`${ns1}parameter`), f.namedNode(`${ns1}PropertyConstraintComponent-property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}PropertyGroup`), f.namedNode(`${ns22}type`), f.namedNode(`${ns4}Class`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}PropertyGroup`), f.namedNode(`${ns4}comment`), f.literal("Instances of this class represent groups of property shapes that belong together.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}PropertyGroup`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}PropertyGroup`), f.namedNode(`${ns4}label`), f.literal("Property group", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}PropertyGroup`), f.namedNode(`${ns4}subClassOf`), f.namedNode(`${ns4}Resource`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}PropertyShape`), f.namedNode(`${ns22}type`), f.namedNode(`${ns4}Class`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}PropertyShape`), f.namedNode(`${ns4}comment`), f.literal("A property shape is a shape that specifies constraints on the values of a focus node for a given property or path.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}PropertyShape`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}PropertyShape`), f.namedNode(`${ns4}label`), f.literal("Property shape", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}PropertyShape`), f.namedNode(`${ns4}subClassOf`), f.namedNode(`${ns1}Shape`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}QualifiedMaxCountConstraintComponent-qualifiedMaxCount`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}Parameter`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}QualifiedMaxCountConstraintComponent-qualifiedMaxCount`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}QualifiedMaxCountConstraintComponent-qualifiedMaxCount`), f.namedNode(`${ns1}datatype`), f.namedNode(`${ns6}integer`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}QualifiedMaxCountConstraintComponent-qualifiedMaxCount`), f.namedNode(`${ns1}path`), f.namedNode(`${ns1}qualifiedMaxCount`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}QualifiedMaxCountConstraintComponent-qualifiedValueShape`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}Parameter`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}QualifiedMaxCountConstraintComponent-qualifiedValueShape`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}QualifiedMaxCountConstraintComponent-qualifiedValueShape`), f.namedNode(`${ns1}path`), f.namedNode(`${ns1}qualifiedValueShape`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}QualifiedMaxCountConstraintComponent-qualifiedValueShapesDisjoint`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}Parameter`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}QualifiedMaxCountConstraintComponent-qualifiedValueShapesDisjoint`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}QualifiedMaxCountConstraintComponent-qualifiedValueShapesDisjoint`), f.namedNode(`${ns1}datatype`), f.namedNode(`${ns6}boolean`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}QualifiedMaxCountConstraintComponent-qualifiedValueShapesDisjoint`), f.namedNode(`${ns1}optional`), f.literal("true", f.namedNode(`${ns6}boolean`)), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}QualifiedMaxCountConstraintComponent-qualifiedValueShapesDisjoint`), f.namedNode(`${ns1}path`), f.namedNode(`${ns1}qualifiedValueShapesDisjoint`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}QualifiedMaxCountConstraintComponent`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}ConstraintComponent`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}QualifiedMaxCountConstraintComponent`), f.namedNode(`${ns4}comment`), f.literal("A constraint component that can be used to verify that a specified maximum number of value nodes conforms to a given shape.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}QualifiedMaxCountConstraintComponent`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}QualifiedMaxCountConstraintComponent`), f.namedNode(`${ns4}label`), f.literal("Qualified-max-count constraint component", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}QualifiedMaxCountConstraintComponent`), f.namedNode(`${ns1}parameter`), f.namedNode(`${ns1}QualifiedMaxCountConstraintComponent-qualifiedMaxCount`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}QualifiedMaxCountConstraintComponent`), f.namedNode(`${ns1}parameter`), f.namedNode(`${ns1}QualifiedMaxCountConstraintComponent-qualifiedValueShape`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}QualifiedMaxCountConstraintComponent`), f.namedNode(`${ns1}parameter`), f.namedNode(`${ns1}QualifiedMaxCountConstraintComponent-qualifiedValueShapesDisjoint`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}QualifiedMinCountConstraintComponent-qualifiedMinCount`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}Parameter`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}QualifiedMinCountConstraintComponent-qualifiedMinCount`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}QualifiedMinCountConstraintComponent-qualifiedMinCount`), f.namedNode(`${ns1}datatype`), f.namedNode(`${ns6}integer`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}QualifiedMinCountConstraintComponent-qualifiedMinCount`), f.namedNode(`${ns1}path`), f.namedNode(`${ns1}qualifiedMinCount`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}QualifiedMinCountConstraintComponent-qualifiedValueShape`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}Parameter`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}QualifiedMinCountConstraintComponent-qualifiedValueShape`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}QualifiedMinCountConstraintComponent-qualifiedValueShape`), f.namedNode(`${ns1}path`), f.namedNode(`${ns1}qualifiedValueShape`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}QualifiedMinCountConstraintComponent-qualifiedValueShapesDisjoint`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}Parameter`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}QualifiedMinCountConstraintComponent-qualifiedValueShapesDisjoint`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}QualifiedMinCountConstraintComponent-qualifiedValueShapesDisjoint`), f.namedNode(`${ns1}datatype`), f.namedNode(`${ns6}boolean`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}QualifiedMinCountConstraintComponent-qualifiedValueShapesDisjoint`), f.namedNode(`${ns1}optional`), f.literal("true", f.namedNode(`${ns6}boolean`)), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}QualifiedMinCountConstraintComponent-qualifiedValueShapesDisjoint`), f.namedNode(`${ns1}path`), f.namedNode(`${ns1}qualifiedValueShapesDisjoint`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}QualifiedMinCountConstraintComponent`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}ConstraintComponent`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}QualifiedMinCountConstraintComponent`), f.namedNode(`${ns4}comment`), f.literal("A constraint component that can be used to verify that a specified minimum number of value nodes conforms to a given shape.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}QualifiedMinCountConstraintComponent`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}QualifiedMinCountConstraintComponent`), f.namedNode(`${ns4}label`), f.literal("Qualified-min-count constraint component", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}QualifiedMinCountConstraintComponent`), f.namedNode(`${ns1}parameter`), f.namedNode(`${ns1}QualifiedMinCountConstraintComponent-qualifiedMinCount`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}QualifiedMinCountConstraintComponent`), f.namedNode(`${ns1}parameter`), f.namedNode(`${ns1}QualifiedMinCountConstraintComponent-qualifiedValueShape`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}QualifiedMinCountConstraintComponent`), f.namedNode(`${ns1}parameter`), f.namedNode(`${ns1}QualifiedMinCountConstraintComponent-qualifiedValueShapesDisjoint`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}ResultAnnotation`), f.namedNode(`${ns22}type`), f.namedNode(`${ns4}Class`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}ResultAnnotation`), f.namedNode(`${ns4}comment`), f.literal("A class of result annotations, which define the rules to derive the values of a given annotation property as extra values for a validation result.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}ResultAnnotation`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}ResultAnnotation`), f.namedNode(`${ns4}label`), f.literal("Result annotation", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}ResultAnnotation`), f.namedNode(`${ns4}subClassOf`), f.namedNode(`${ns4}Resource`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}Rule`), f.namedNode(`${ns22}type`), f.namedNode(`${ns4}Class`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}Rule`), f.namedNode(`${ns4}comment`), f.literal("The class of SHACL rules. Never instantiated directly.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}Rule`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}Rule`), f.namedNode(`${ns4}label`), f.literal("Rule", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}Rule`), f.namedNode(`${ns4}subClassOf`), f.namedNode(`${ns4}Resource`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SPARQLAskExecutable`), f.namedNode(`${ns22}type`), f.namedNode(`${ns4}Class`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SPARQLAskExecutable`), f.namedNode(`${ns4}comment`), f.literal("The class of SPARQL executables that are based on an ASK query.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SPARQLAskExecutable`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SPARQLAskExecutable`), f.namedNode(`${ns4}label`), f.literal("SPARQL ASK executable", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SPARQLAskExecutable`), f.namedNode(`${ns4}subClassOf`), f.namedNode(`${ns1}SPARQLExecutable`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SPARQLAskExpression`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}NodeShape`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SPARQLAskExpression`), f.namedNode(`${ns4}comment`), f.literal("A SPARQL ASK expression is a blank node with exactly one value for the property sh:ask which is string literal. The blank node may have values for the property sh:prefixes and these values are IRIs or blank nodes. Using the values of sh:prefixes as defined by 5.2.1 Prefix Declarations for SPARQL Queries, the value of sh:ask must be valid SPARQL 1.1 ASK query. The blank node may also have exactly one value for the property sh:nodes which is a well-formed node expression."), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SPARQLAskExpression`), f.namedNode(`${ns4}label`), f.literal("SPARQL ASK Expression"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SPARQLAskExpression`), f.namedNode(`${ns1}nodeKind`), f.namedNode(`${ns1}BlankNode`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SPARQLAskExpression`), f.namedNode(`${ns1}property`), blankNodes[27], f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SPARQLAskExpression`), f.namedNode(`${ns1}property`), blankNodes[28], f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SPARQLAskExpression`), f.namedNode(`${ns1}property`), blankNodes[29], f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SPARQLAskExpression`), f.namedNode(`${ns1}targetSubjectsOf`), f.namedNode(`${ns1}ask`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SPARQLAskValidator`), f.namedNode(`${ns22}type`), f.namedNode(`${ns4}Class`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SPARQLAskValidator`), f.namedNode(`${ns4}comment`), f.literal("The class of validators based on SPARQL ASK queries. The queries are evaluated for each value node and are supposed to return true if the given node conforms.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SPARQLAskValidator`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SPARQLAskValidator`), f.namedNode(`${ns4}label`), f.literal("SPARQL ASK validator", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SPARQLAskValidator`), f.namedNode(`${ns4}subClassOf`), f.namedNode(`${ns1}SPARQLAskExecutable`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SPARQLAskValidator`), f.namedNode(`${ns4}subClassOf`), f.namedNode(`${ns1}Validator`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SPARQLConstraint`), f.namedNode(`${ns22}type`), f.namedNode(`${ns4}Class`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SPARQLConstraint`), f.namedNode(`${ns4}comment`), f.literal("The class of constraints based on SPARQL SELECT queries.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SPARQLConstraint`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SPARQLConstraint`), f.namedNode(`${ns4}label`), f.literal("SPARQL constraint", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SPARQLConstraint`), f.namedNode(`${ns4}subClassOf`), f.namedNode(`${ns1}SPARQLSelectExecutable`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SPARQLConstraintComponent-sparql`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}Parameter`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SPARQLConstraintComponent-sparql`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SPARQLConstraintComponent-sparql`), f.namedNode(`${ns1}path`), f.namedNode(`${ns1}sparql`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SPARQLConstraintComponent`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}ConstraintComponent`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SPARQLConstraintComponent`), f.namedNode(`${ns4}comment`), f.literal("A constraint component that can be used to define constraints based on SPARQL queries.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SPARQLConstraintComponent`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SPARQLConstraintComponent`), f.namedNode(`${ns4}label`), f.literal("SPARQL constraint component", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SPARQLConstraintComponent`), f.namedNode(`${ns1}parameter`), f.namedNode(`${ns1}SPARQLConstraintComponent-sparql`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SPARQLConstructExecutable`), f.namedNode(`${ns22}type`), f.namedNode(`${ns4}Class`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SPARQLConstructExecutable`), f.namedNode(`${ns4}comment`), f.literal("The class of SPARQL executables that are based on a CONSTRUCT query.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SPARQLConstructExecutable`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SPARQLConstructExecutable`), f.namedNode(`${ns4}label`), f.literal("SPARQL CONSTRUCT executable", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SPARQLConstructExecutable`), f.namedNode(`${ns4}subClassOf`), f.namedNode(`${ns1}SPARQLExecutable`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SPARQLExecutable`), f.namedNode(`${ns22}type`), f.namedNode(`${ns4}Class`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SPARQLExecutable`), f.namedNode(`${ns4}comment`), f.literal("The class of resources that encapsulate a SPARQL query.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SPARQLExecutable`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SPARQLExecutable`), f.namedNode(`${ns4}label`), f.literal("SPARQL executable", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SPARQLExecutable`), f.namedNode(`${ns4}subClassOf`), f.namedNode(`${ns4}Resource`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SPARQLFunction`), f.namedNode(`${ns22}type`), f.namedNode(`${ns4}Class`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SPARQLFunction`), f.namedNode(`${ns4}comment`), f.literal("A function backed by a SPARQL query - either ASK or SELECT.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SPARQLFunction`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SPARQLFunction`), f.namedNode(`${ns4}label`), f.literal("SPARQL function", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SPARQLFunction`), f.namedNode(`${ns4}subClassOf`), f.namedNode(`${ns1}Function`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SPARQLFunction`), f.namedNode(`${ns4}subClassOf`), f.namedNode(`${ns1}SPARQLAskExecutable`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SPARQLFunction`), f.namedNode(`${ns4}subClassOf`), f.namedNode(`${ns1}SPARQLSelectExecutable`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SPARQLRule`), f.namedNode(`${ns22}type`), f.namedNode(`${ns4}Class`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SPARQLRule`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}NodeShape`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SPARQLRule`), f.namedNode(`${ns4}comment`), f.literal("The class of SHACL rules based on SPARQL CONSTRUCT queries.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SPARQLRule`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SPARQLRule`), f.namedNode(`${ns4}label`), f.literal("SPARQL CONSTRUCT rule", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SPARQLRule`), f.namedNode(`${ns4}subClassOf`), f.namedNode(`${ns1}Rule`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SPARQLRule`), f.namedNode(`${ns4}subClassOf`), f.namedNode(`${ns1}SPARQLConstructExecutable`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SPARQLRule`), f.namedNode(`${ns1}property`), blankNodes[30], f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SPARQLRule`), f.namedNode(`${ns1}property`), blankNodes[31], f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SPARQLSelectExecutable`), f.namedNode(`${ns22}type`), f.namedNode(`${ns4}Class`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SPARQLSelectExecutable`), f.namedNode(`${ns4}comment`), f.literal("The class of SPARQL executables based on a SELECT query.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SPARQLSelectExecutable`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SPARQLSelectExecutable`), f.namedNode(`${ns4}label`), f.literal("SPARQL SELECT executable", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SPARQLSelectExecutable`), f.namedNode(`${ns4}subClassOf`), f.namedNode(`${ns1}SPARQLExecutable`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SPARQLSelectExpression`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}NodeShape`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SPARQLSelectExpression`), f.namedNode(`${ns4}comment`), f.literal("A SPARQL SELECT expression is a blank node with exactly one value for the property sh:select which is string literal. The blank node may have values for the property sh:prefixes and these values are IRIs or blank nodes. Using the values of sh:prefixes as defined by 5.2.1 Prefix Declarations for SPARQL Queries, the value of sh:select must be valid SPARQL 1.1 SELECT query with exactly one result variable. The blank node may also have exactly one value for the property sh:nodes which is a well-formed node expression."), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SPARQLSelectExpression`), f.namedNode(`${ns4}label`), f.literal("SPARQL SELECT Expression"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SPARQLSelectExpression`), f.namedNode(`${ns1}nodeKind`), f.namedNode(`${ns1}BlankNode`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SPARQLSelectExpression`), f.namedNode(`${ns1}property`), blankNodes[32], f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SPARQLSelectExpression`), f.namedNode(`${ns1}property`), blankNodes[33], f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SPARQLSelectExpression`), f.namedNode(`${ns1}property`), blankNodes[34], f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SPARQLSelectExpression`), f.namedNode(`${ns1}targetSubjectsOf`), f.namedNode(`${ns1}select`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SPARQLSelectValidator`), f.namedNode(`${ns22}type`), f.namedNode(`${ns4}Class`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SPARQLSelectValidator`), f.namedNode(`${ns4}comment`), f.literal("The class of validators based on SPARQL SELECT queries. The queries are evaluated for each focus node and are supposed to produce bindings for all focus nodes that do not conform.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SPARQLSelectValidator`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SPARQLSelectValidator`), f.namedNode(`${ns4}label`), f.literal("SPARQL SELECT validator", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SPARQLSelectValidator`), f.namedNode(`${ns4}subClassOf`), f.namedNode(`${ns1}SPARQLSelectExecutable`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SPARQLSelectValidator`), f.namedNode(`${ns4}subClassOf`), f.namedNode(`${ns1}Validator`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SPARQLTarget`), f.namedNode(`${ns22}type`), f.namedNode(`${ns4}Class`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SPARQLTarget`), f.namedNode(`${ns4}comment`), f.literal("The class of targets that are based on SPARQL queries.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SPARQLTarget`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SPARQLTarget`), f.namedNode(`${ns4}label`), f.literal("SPARQL target", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SPARQLTarget`), f.namedNode(`${ns4}subClassOf`), f.namedNode(`${ns1}SPARQLAskExecutable`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SPARQLTarget`), f.namedNode(`${ns4}subClassOf`), f.namedNode(`${ns1}SPARQLSelectExecutable`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SPARQLTarget`), f.namedNode(`${ns4}subClassOf`), f.namedNode(`${ns1}Target`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SPARQLTargetType`), f.namedNode(`${ns22}type`), f.namedNode(`${ns4}Class`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SPARQLTargetType`), f.namedNode(`${ns4}comment`), f.literal("The (meta) class for parameterizable targets that are based on SPARQL queries.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SPARQLTargetType`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SPARQLTargetType`), f.namedNode(`${ns4}label`), f.literal("SPARQL target type", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SPARQLTargetType`), f.namedNode(`${ns4}subClassOf`), f.namedNode(`${ns1}SPARQLAskExecutable`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SPARQLTargetType`), f.namedNode(`${ns4}subClassOf`), f.namedNode(`${ns1}SPARQLSelectExecutable`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SPARQLTargetType`), f.namedNode(`${ns4}subClassOf`), f.namedNode(`${ns1}TargetType`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SPARQLUpdateExecutable`), f.namedNode(`${ns22}type`), f.namedNode(`${ns4}Class`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SPARQLUpdateExecutable`), f.namedNode(`${ns4}comment`), f.literal("The class of SPARQL executables based on a SPARQL UPDATE.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SPARQLUpdateExecutable`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SPARQLUpdateExecutable`), f.namedNode(`${ns4}label`), f.literal("SPARQL UPDATE executable", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SPARQLUpdateExecutable`), f.namedNode(`${ns4}subClassOf`), f.namedNode(`${ns1}SPARQLExecutable`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}Severity`), f.namedNode(`${ns22}type`), f.namedNode(`${ns4}Class`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}Severity`), f.namedNode(`${ns4}comment`), f.literal("The class of validation result severity levels, including violation and warning levels.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}Severity`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}Severity`), f.namedNode(`${ns4}label`), f.literal("Severity", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}Severity`), f.namedNode(`${ns4}subClassOf`), f.namedNode(`${ns4}Resource`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}Shape`), f.namedNode(`${ns22}type`), f.namedNode(`${ns4}Class`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}Shape`), f.namedNode(`${ns4}comment`), f.literal("A shape is a collection of constraints that may be targeted for certain nodes.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}Shape`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}Shape`), f.namedNode(`${ns4}label`), f.literal("Shape", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}Shape`), f.namedNode(`${ns4}subClassOf`), f.namedNode(`${ns4}Resource`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SumExpression`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}NodeShape`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SumExpression`), f.namedNode(`${ns4}comment`), f.literal("A sum expression is a blank node with exactly one value for the property sh:sum which is a well-formed node expression."), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SumExpression`), f.namedNode(`${ns4}label`), f.literal("Sum Expression"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SumExpression`), f.namedNode(`${ns1}nodeKind`), f.namedNode(`${ns1}BlankNode`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SumExpression`), f.namedNode(`${ns1}property`), blankNodes[35], f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}SumExpression`), f.namedNode(`${ns1}targetSubjectsOf`), f.namedNode(`${ns1}sum`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}Target`), f.namedNode(`${ns22}type`), f.namedNode(`${ns4}Class`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}Target`), f.namedNode(`${ns4}comment`), f.literal("The base class of targets such as those based on SPARQL queries.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}Target`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}Target`), f.namedNode(`${ns4}label`), f.literal("Target", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}Target`), f.namedNode(`${ns4}subClassOf`), f.namedNode(`${ns4}Resource`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}TargetType`), f.namedNode(`${ns22}type`), f.namedNode(`${ns4}Class`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}TargetType`), f.namedNode(`${ns4}comment`), f.literal("The (meta) class for parameterizable targets.	Instances of this are instantiated as values of the sh:target property.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}TargetType`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}TargetType`), f.namedNode(`${ns4}label`), f.literal("Target type", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}TargetType`), f.namedNode(`${ns4}subClassOf`), f.namedNode(`${ns4}Class`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}TargetType`), f.namedNode(`${ns4}subClassOf`), f.namedNode(`${ns1}Parameterizable`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}TripleRule`), f.namedNode(`${ns22}type`), f.namedNode(`${ns4}Class`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}TripleRule`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}NodeShape`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}TripleRule`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}TripleRule`), f.namedNode(`${ns4}label`), f.literal("A rule based on triple (subject, predicate, object) pattern.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}TripleRule`), f.namedNode(`${ns4}subClassOf`), f.namedNode(`${ns1}Rule`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}TripleRule`), f.namedNode(`${ns1}property`), blankNodes[36], f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}TripleRule`), f.namedNode(`${ns1}property`), blankNodes[37], f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}TripleRule`), f.namedNode(`${ns1}property`), blankNodes[38], f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}UnionExpression`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}NodeShape`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}UnionExpression`), f.namedNode(`${ns4}comment`), f.literal("A union expression is a blank node with exactly one value for the property sh:union which is a well-formed SHACL list with at least two members (which are well-formed node expressions)."), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}UnionExpression`), f.namedNode(`${ns4}label`), f.literal("Union Expression"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}UnionExpression`), f.namedNode(`${ns1}nodeKind`), f.namedNode(`${ns1}BlankNode`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}UnionExpression`), f.namedNode(`${ns1}property`), blankNodes[39], f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}UnionExpression`), f.namedNode(`${ns1}targetSubjectsOf`), f.namedNode(`${ns1}union`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}UniqueLangConstraintComponent-uniqueLang`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}Parameter`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}UniqueLangConstraintComponent-uniqueLang`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}UniqueLangConstraintComponent-uniqueLang`), f.namedNode(`${ns1}datatype`), f.namedNode(`${ns6}boolean`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}UniqueLangConstraintComponent-uniqueLang`), f.namedNode(`${ns1}maxCount`), f.literal("1", f.namedNode(`${ns6}integer`)), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}UniqueLangConstraintComponent-uniqueLang`), f.namedNode(`${ns1}path`), f.namedNode(`${ns1}uniqueLang`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}UniqueLangConstraintComponent`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}ConstraintComponent`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}UniqueLangConstraintComponent`), f.namedNode(`${ns4}comment`), f.literal("A constraint component that can be used to specify that no pair of value nodes may use the same language tag.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}UniqueLangConstraintComponent`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}UniqueLangConstraintComponent`), f.namedNode(`${ns4}label`), f.literal("Unique-languages constraint component", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}UniqueLangConstraintComponent`), f.namedNode(`${ns1}parameter`), f.namedNode(`${ns1}UniqueLangConstraintComponent-uniqueLang`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}ValidationReport`), f.namedNode(`${ns22}type`), f.namedNode(`${ns4}Class`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}ValidationReport`), f.namedNode(`${ns4}comment`), f.literal("The class of SHACL validation reports.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}ValidationReport`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}ValidationReport`), f.namedNode(`${ns4}label`), f.literal("Validation report", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}ValidationReport`), f.namedNode(`${ns4}subClassOf`), f.namedNode(`${ns4}Resource`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}ValidationResult`), f.namedNode(`${ns22}type`), f.namedNode(`${ns4}Class`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}ValidationResult`), f.namedNode(`${ns4}comment`), f.literal("The class of validation results.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}ValidationResult`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}ValidationResult`), f.namedNode(`${ns4}label`), f.literal("Validation result", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}ValidationResult`), f.namedNode(`${ns4}subClassOf`), f.namedNode(`${ns1}AbstractResult`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}Validator`), f.namedNode(`${ns22}type`), f.namedNode(`${ns4}Class`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}Validator`), f.namedNode(`${ns4}comment`), f.literal("The class of validators, which provide instructions on how to process a constraint definition. This class serves as base class for the SPARQL-based validators and other possible implementations.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}Validator`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}Validator`), f.namedNode(`${ns4}label`), f.literal("Validator", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}Validator`), f.namedNode(`${ns4}subClassOf`), f.namedNode(`${ns4}Resource`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}Violation`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}Severity`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}Violation`), f.namedNode(`${ns4}comment`), f.literal("The severity for a violation validation result.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}Violation`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}Violation`), f.namedNode(`${ns4}label`), f.literal("Violation", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}Warning`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}Severity`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}Warning`), f.namedNode(`${ns4}comment`), f.literal("The severity for a warning validation result.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}Warning`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}Warning`), f.namedNode(`${ns4}label`), f.literal("Warning", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}XoneConstraintComponent-xone`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}Parameter`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}XoneConstraintComponent-xone`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}XoneConstraintComponent-xone`), f.namedNode(`${ns1}path`), f.namedNode(`${ns1}xone`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}XoneConstraintComponent`), f.namedNode(`${ns22}type`), f.namedNode(`${ns1}ConstraintComponent`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}XoneConstraintComponent`), f.namedNode(`${ns4}comment`), f.literal("A constraint component that can be used to restrict the value nodes so that they conform to exactly one out of several provided shapes.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}XoneConstraintComponent`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}XoneConstraintComponent`), f.namedNode(`${ns4}label`), f.literal("Exactly one constraint component", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}XoneConstraintComponent`), f.namedNode(`${ns1}parameter`), f.namedNode(`${ns1}XoneConstraintComponent-xone`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}alternativePath`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}alternativePath`), f.namedNode(`${ns4}comment`), f.literal("The (single) value of this property must be a list of path elements, representing the elements of alternative paths.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}alternativePath`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}alternativePath`), f.namedNode(`${ns4}label`), f.literal("alternative path", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}alternativePath`), f.namedNode(`${ns4}range`), f.namedNode(`${ns22}List`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}and`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}and`), f.namedNode(`${ns4}comment`), f.literal("RDF list of shapes to validate the value nodes against.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}and`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}and`), f.namedNode(`${ns4}label`), f.literal("and", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}and`), f.namedNode(`${ns4}range`), f.namedNode(`${ns22}List`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}annotationProperty`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}annotationProperty`), f.namedNode(`${ns4}comment`), f.literal("The annotation property that shall be set.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}annotationProperty`), f.namedNode(`${ns4}domain`), f.namedNode(`${ns1}ResultAnnotation`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}annotationProperty`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}annotationProperty`), f.namedNode(`${ns4}label`), f.literal("annotation property", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}annotationProperty`), f.namedNode(`${ns4}range`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}annotationValue`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}annotationValue`), f.namedNode(`${ns4}comment`), f.literal("The (default) values of the annotation property.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}annotationValue`), f.namedNode(`${ns4}domain`), f.namedNode(`${ns1}ResultAnnotation`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}annotationValue`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}annotationValue`), f.namedNode(`${ns4}label`), f.literal("annotation value", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}annotationVarName`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}annotationVarName`), f.namedNode(`${ns4}comment`), f.literal("The name of the SPARQL variable from the SELECT clause that shall be used for the values.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}annotationVarName`), f.namedNode(`${ns4}domain`), f.namedNode(`${ns1}ResultAnnotation`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}annotationVarName`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}annotationVarName`), f.namedNode(`${ns4}label`), f.literal("annotation variable name", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}annotationVarName`), f.namedNode(`${ns4}range`), f.namedNode(`${ns6}string`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}ask`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}ask`), f.namedNode(`${ns4}comment`), f.literal("The SPARQL ASK query to execute.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}ask`), f.namedNode(`${ns4}domain`), f.namedNode(`${ns1}SPARQLAskExecutable`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}ask`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}ask`), f.namedNode(`${ns4}label`), f.literal("ask", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}ask`), f.namedNode(`${ns4}range`), f.namedNode(`${ns6}string`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}class`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}class`), f.namedNode(`${ns4}comment`), f.literal("The type that all value nodes must have.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}class`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}class`), f.namedNode(`${ns4}label`), f.literal("class", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}class`), f.namedNode(`${ns4}range`), f.namedNode(`${ns4}Class`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}closed`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}closed`), f.namedNode(`${ns4}comment`), f.literal("If set to true then the shape is closed.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}closed`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}closed`), f.namedNode(`${ns4}label`), f.literal("closed", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}closed`), f.namedNode(`${ns4}range`), f.namedNode(`${ns6}boolean`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}condition`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}condition`), f.namedNode(`${ns4}comment`), f.literal("The shapes that the focus nodes need to conform to before a rule is executed on them.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}condition`), f.namedNode(`${ns4}domain`), f.namedNode(`${ns1}Rule`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}condition`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}condition`), f.namedNode(`${ns4}label`), f.literal("condition", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}condition`), f.namedNode(`${ns4}range`), f.namedNode(`${ns1}Shape`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}conforms`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}conforms`), f.namedNode(`${ns4}comment`), f.literal("True if the validation did not produce any validation results, and false otherwise.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}conforms`), f.namedNode(`${ns4}domain`), f.namedNode(`${ns1}ValidationReport`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}conforms`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}conforms`), f.namedNode(`${ns4}label`), f.literal("conforms", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}conforms`), f.namedNode(`${ns4}range`), f.namedNode(`${ns6}boolean`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}construct`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}construct`), f.namedNode(`${ns4}comment`), f.literal("The SPARQL CONSTRUCT query to execute.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}construct`), f.namedNode(`${ns4}domain`), f.namedNode(`${ns1}SPARQLConstructExecutable`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}construct`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}construct`), f.namedNode(`${ns4}label`), f.literal("construct", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}construct`), f.namedNode(`${ns4}range`), f.namedNode(`${ns6}string`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}count`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}datatype`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}datatype`), f.namedNode(`${ns4}comment`), f.literal("Specifies an RDF datatype that all value nodes must have.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}datatype`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}datatype`), f.namedNode(`${ns4}label`), f.literal("datatype", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}datatype`), f.namedNode(`${ns4}range`), f.namedNode(`${ns4}Datatype`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}deactivated`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}deactivated`), f.namedNode(`${ns4}comment`), f.literal("If set to true then all nodes conform to this.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}deactivated`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}deactivated`), f.namedNode(`${ns4}label`), f.literal("deactivated", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}deactivated`), f.namedNode(`${ns4}range`), f.namedNode(`${ns6}boolean`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}declare`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}declare`), f.namedNode(`${ns4}comment`), f.literal("Links a resource with its namespace prefix declarations.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}declare`), f.namedNode(`${ns4}domain`), f.namedNode(`${ns32}Ontology`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}declare`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}declare`), f.namedNode(`${ns4}label`), f.literal("declare", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}declare`), f.namedNode(`${ns4}range`), f.namedNode(`${ns1}PrefixDeclaration`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}defaultValue`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}defaultValue`), f.namedNode(`${ns4}comment`), f.literal("A default value for a property, for example for user interface tools to pre-populate input fields.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}defaultValue`), f.namedNode(`${ns4}domain`), f.namedNode(`${ns1}PropertyShape`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}defaultValue`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}defaultValue`), f.namedNode(`${ns4}label`), f.literal("default value", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}desc`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}description`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}description`), f.namedNode(`${ns4}comment`), f.literal("Human-readable descriptions for the property in the context of the surrounding shape.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}description`), f.namedNode(`${ns4}domain`), f.namedNode(`${ns1}PropertyShape`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}description`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}description`), f.namedNode(`${ns4}label`), f.literal("description", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}detail`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}detail`), f.namedNode(`${ns4}comment`), f.literal("Links a result with other results that provide more details, for example to describe violations against nested shapes.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}detail`), f.namedNode(`${ns4}domain`), f.namedNode(`${ns1}AbstractResult`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}detail`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}detail`), f.namedNode(`${ns4}label`), f.literal("detail", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}detail`), f.namedNode(`${ns4}range`), f.namedNode(`${ns1}AbstractResult`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}disjoint`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}disjoint`), f.namedNode(`${ns4}comment`), f.literal("Specifies a property where the set of values must be disjoint with the value nodes.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}disjoint`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}disjoint`), f.namedNode(`${ns4}label`), f.literal("disjoint", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}disjoint`), f.namedNode(`${ns4}range`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}distinct`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}else`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}entailment`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}entailment`), f.namedNode(`${ns4}comment`), f.literal("An entailment regime that indicates what kind of inferencing is required by a shapes graph.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}entailment`), f.namedNode(`${ns4}domain`), f.namedNode(`${ns32}Ontology`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}entailment`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}entailment`), f.namedNode(`${ns4}label`), f.literal("entailment", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}entailment`), f.namedNode(`${ns4}range`), f.namedNode(`${ns4}Resource`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}equals`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}equals`), f.namedNode(`${ns4}comment`), f.literal("Specifies a property that must have the same values as the value nodes.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}equals`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}equals`), f.namedNode(`${ns4}label`), f.literal("equals", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}equals`), f.namedNode(`${ns4}range`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}exists`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}expression`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}expression`), f.namedNode(`${ns4}comment`), f.literal("The node expression that must return true for the value nodes.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}expression`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}expression`), f.namedNode(`${ns4}label`), f.literal("expression", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}filterShape`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}filterShape`), f.namedNode(`${ns4}comment`), f.literal("The shape that all input nodes of the expression need to conform to.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}filterShape`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}filterShape`), f.namedNode(`${ns4}label`), f.literal("filter shape", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}filterShape`), f.namedNode(`${ns4}range`), f.namedNode(`${ns1}Shape`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}flags`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}flags`), f.namedNode(`${ns4}comment`), f.literal("An optional flag to be used with regular expression pattern matching.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}flags`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}flags`), f.namedNode(`${ns4}label`), f.literal("flags", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}flags`), f.namedNode(`${ns4}range`), f.namedNode(`${ns6}string`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}focusNode`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}focusNode`), f.namedNode(`${ns4}comment`), f.literal("The focus node that was validated when the result was produced.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}focusNode`), f.namedNode(`${ns4}domain`), f.namedNode(`${ns1}AbstractResult`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}focusNode`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}focusNode`), f.namedNode(`${ns4}label`), f.literal("focus node", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}group`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}group`), f.namedNode(`${ns4}comment`), f.literal("Can be used to link to a property group to indicate that a property shape belongs to a group of related property shapes.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}group`), f.namedNode(`${ns4}domain`), f.namedNode(`${ns1}PropertyShape`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}group`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}group`), f.namedNode(`${ns4}label`), f.literal("group", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}group`), f.namedNode(`${ns4}range`), f.namedNode(`${ns1}PropertyGroup`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}groupConcat`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}hasValue`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}hasValue`), f.namedNode(`${ns4}comment`), f.literal("Specifies a value that must be among the value nodes.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}hasValue`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}hasValue`), f.namedNode(`${ns4}label`), f.literal("has value", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}if`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}ignoredProperties`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}ignoredProperties`), f.namedNode(`${ns4}comment`), f.literal("An optional RDF list of properties that are also permitted in addition to those explicitly enumerated via sh:property/sh:path.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}ignoredProperties`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}ignoredProperties`), f.namedNode(`${ns4}label`), f.literal("ignored properties", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}ignoredProperties`), f.namedNode(`${ns4}range`), f.namedNode(`${ns22}List`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}in`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}in`), f.namedNode(`${ns4}comment`), f.literal("Specifies a list of allowed values so that each value node must be among the members of the given list.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}in`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}in`), f.namedNode(`${ns4}label`), f.literal("in", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}in`), f.namedNode(`${ns4}range`), f.namedNode(`${ns22}List`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}intersection`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}intersection`), f.namedNode(`${ns4}comment`), f.literal("A list of node expressions that shall be intersected.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}intersection`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}intersection`), f.namedNode(`${ns4}label`), f.literal("intersection", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}inversePath`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}inversePath`), f.namedNode(`${ns4}comment`), f.literal("The (single) value of this property represents an inverse path (object to subject).", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}inversePath`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}inversePath`), f.namedNode(`${ns4}label`), f.literal("inverse path", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}inversePath`), f.namedNode(`${ns4}range`), f.namedNode(`${ns4}Resource`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}js`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}js`), f.namedNode(`${ns4}comment`), f.literal("Constraints expressed in JavaScript."), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}js`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}js`), f.namedNode(`${ns4}label`), f.literal("JavaScript constraint", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}js`), f.namedNode(`${ns4}range`), f.namedNode(`${ns1}JSConstraint`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}jsFunctionName`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}jsFunctionName`), f.namedNode(`${ns4}comment`), f.literal("The name of the JavaScript function to execute.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}jsFunctionName`), f.namedNode(`${ns4}domain`), f.namedNode(`${ns1}JSExecutable`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}jsFunctionName`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}jsFunctionName`), f.namedNode(`${ns4}label`), f.literal("JavaScript function name", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}jsFunctionName`), f.namedNode(`${ns4}range`), f.namedNode(`${ns6}string`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}jsLibrary`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}jsLibrary`), f.namedNode(`${ns4}comment`), f.literal("Declares which JavaScript libraries are needed to execute this.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}jsLibrary`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}jsLibrary`), f.namedNode(`${ns4}label`), f.literal("JavaScript library", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}jsLibrary`), f.namedNode(`${ns4}range`), f.namedNode(`${ns1}JSLibrary`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}jsLibraryURL`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}jsLibraryURL`), f.namedNode(`${ns4}comment`), f.literal("Declares the URLs of a JavaScript library. This should be the absolute URL of a JavaScript file. Implementations may redirect those to local files.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}jsLibraryURL`), f.namedNode(`${ns4}domain`), f.namedNode(`${ns1}JSLibrary`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}jsLibraryURL`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}jsLibraryURL`), f.namedNode(`${ns4}label`), f.literal("JavaScript library URL", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}jsLibraryURL`), f.namedNode(`${ns4}range`), f.namedNode(`${ns6}anyURI`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}labelTemplate`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}labelTemplate`), f.namedNode(`${ns4}comment`), f.literal("Outlines how human-readable labels of instances of the associated Parameterizable shall be produced. The values can contain {?paramName} as placeholders for the actual values of the given parameter.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}labelTemplate`), f.namedNode(`${ns4}domain`), f.namedNode(`${ns1}Parameterizable`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}labelTemplate`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}labelTemplate`), f.namedNode(`${ns4}label`), f.literal("label template", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}languageIn`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}languageIn`), f.namedNode(`${ns4}comment`), f.literal("Specifies a list of language tags that all value nodes must have.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}languageIn`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}languageIn`), f.namedNode(`${ns4}label`), f.literal("language in", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}languageIn`), f.namedNode(`${ns4}range`), f.namedNode(`${ns22}List`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}lessThan`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}lessThan`), f.namedNode(`${ns4}comment`), f.literal("Specifies a property that must have smaller values than the value nodes.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}lessThan`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}lessThan`), f.namedNode(`${ns4}label`), f.literal("less than", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}lessThan`), f.namedNode(`${ns4}range`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}lessThanOrEquals`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}lessThanOrEquals`), f.namedNode(`${ns4}comment`), f.literal("Specifies a property that must have smaller or equal values than the value nodes.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}lessThanOrEquals`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}lessThanOrEquals`), f.namedNode(`${ns4}label`), f.literal("less than or equals", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}lessThanOrEquals`), f.namedNode(`${ns4}range`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}limit`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}max`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}maxCount`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}maxCount`), f.namedNode(`${ns4}comment`), f.literal("Specifies the maximum number of values in the set of value nodes.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}maxCount`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}maxCount`), f.namedNode(`${ns4}label`), f.literal("max count", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}maxCount`), f.namedNode(`${ns4}range`), f.namedNode(`${ns6}integer`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}maxExclusive`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}maxExclusive`), f.namedNode(`${ns4}comment`), f.literal("Specifies the maximum exclusive value of each value node.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}maxExclusive`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}maxExclusive`), f.namedNode(`${ns4}label`), f.literal("max exclusive", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}maxInclusive`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}maxInclusive`), f.namedNode(`${ns4}comment`), f.literal("Specifies the maximum inclusive value of each value node.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}maxInclusive`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}maxInclusive`), f.namedNode(`${ns4}label`), f.literal("max inclusive", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}maxLength`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}maxLength`), f.namedNode(`${ns4}comment`), f.literal("Specifies the maximum string length of each value node.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}maxLength`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}maxLength`), f.namedNode(`${ns4}label`), f.literal("max length", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}maxLength`), f.namedNode(`${ns4}range`), f.namedNode(`${ns6}integer`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}message`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}message`), f.namedNode(`${ns4}comment`), f.literal("A human-readable message (possibly with placeholders for variables) explaining the cause of the result.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}message`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}message`), f.namedNode(`${ns4}label`), f.literal("message", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}min`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}minCount`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}minCount`), f.namedNode(`${ns4}comment`), f.literal("Specifies the minimum number of values in the set of value nodes.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}minCount`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}minCount`), f.namedNode(`${ns4}label`), f.literal("min count", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}minCount`), f.namedNode(`${ns4}range`), f.namedNode(`${ns6}integer`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}minExclusive`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}minExclusive`), f.namedNode(`${ns4}comment`), f.literal("Specifies the minimum exclusive value of each value node.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}minExclusive`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}minExclusive`), f.namedNode(`${ns4}label`), f.literal("min exclusive", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}minInclusive`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}minInclusive`), f.namedNode(`${ns4}comment`), f.literal("Specifies the minimum inclusive value of each value node.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}minInclusive`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}minInclusive`), f.namedNode(`${ns4}label`), f.literal("min inclusive", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}minLength`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}minLength`), f.namedNode(`${ns4}comment`), f.literal("Specifies the minimum string length of each value node.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}minLength`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}minLength`), f.namedNode(`${ns4}label`), f.literal("min length", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}minLength`), f.namedNode(`${ns4}range`), f.namedNode(`${ns6}integer`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}minus`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}name`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}name`), f.namedNode(`${ns4}comment`), f.literal("Human-readable labels for the property in the context of the surrounding shape.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}name`), f.namedNode(`${ns4}domain`), f.namedNode(`${ns1}PropertyShape`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}name`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}name`), f.namedNode(`${ns4}label`), f.literal("name", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}namespace`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}namespace`), f.namedNode(`${ns4}comment`), f.literal("The namespace associated with a prefix in a prefix declaration.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}namespace`), f.namedNode(`${ns4}domain`), f.namedNode(`${ns1}PrefixDeclaration`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}namespace`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}namespace`), f.namedNode(`${ns4}label`), f.literal("namespace", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}namespace`), f.namedNode(`${ns4}range`), f.namedNode(`${ns6}anyURI`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}node`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}node`), f.namedNode(`${ns4}comment`), f.literal("Specifies the node shape that all value nodes must conform to.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}node`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}node`), f.namedNode(`${ns4}label`), f.literal("node", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}node`), f.namedNode(`${ns4}range`), f.namedNode(`${ns1}NodeShape`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}nodeKind`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}nodeKind`), f.namedNode(`${ns4}comment`), f.literal("Specifies the node kind (e.g. IRI or literal) each value node.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}nodeKind`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}nodeKind`), f.namedNode(`${ns4}label`), f.literal("node kind", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}nodeKind`), f.namedNode(`${ns4}range`), f.namedNode(`${ns1}NodeKind`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}nodeValidator`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}nodeValidator`), f.namedNode(`${ns4}comment`), f.literal("The validator(s) used to evaluate a constraint in the context of a node shape.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}nodeValidator`), f.namedNode(`${ns4}domain`), f.namedNode(`${ns1}ConstraintComponent`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}nodeValidator`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}nodeValidator`), f.namedNode(`${ns4}label`), f.literal("shape validator", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}nodeValidator`), f.namedNode(`${ns4}range`), f.namedNode(`${ns1}Validator`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}nodes`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}nodes`), f.namedNode(`${ns4}comment`), f.literal("The node expression producing the input nodes of a filter shape expression.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}nodes`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}nodes`), f.namedNode(`${ns4}label`), f.literal("nodes", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}not`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}not`), f.namedNode(`${ns4}comment`), f.literal("Specifies a shape that the value nodes must not conform to.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}not`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}not`), f.namedNode(`${ns4}label`), f.literal("not", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}not`), f.namedNode(`${ns4}range`), f.namedNode(`${ns1}Shape`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}object`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}object`), f.namedNode(`${ns4}comment`), f.literal("An expression producing the nodes that shall be inferred as objects.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}object`), f.namedNode(`${ns4}domain`), f.namedNode(`${ns1}TripleRule`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}object`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}object`), f.namedNode(`${ns4}label`), f.literal("object", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}offset`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}oneOrMorePath`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}oneOrMorePath`), f.namedNode(`${ns4}comment`), f.literal("The (single) value of this property represents a path that is matched one or more times.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}oneOrMorePath`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}oneOrMorePath`), f.namedNode(`${ns4}label`), f.literal("one or more path", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}oneOrMorePath`), f.namedNode(`${ns4}range`), f.namedNode(`${ns4}Resource`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}optional`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}optional`), f.namedNode(`${ns4}comment`), f.literal("Indicates whether a parameter is optional.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}optional`), f.namedNode(`${ns4}domain`), f.namedNode(`${ns1}Parameter`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}optional`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}optional`), f.namedNode(`${ns4}label`), f.literal("optional", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}optional`), f.namedNode(`${ns4}range`), f.namedNode(`${ns6}boolean`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}or`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}or`), f.namedNode(`${ns4}comment`), f.literal("Specifies a list of shapes so that the value nodes must conform to at least one of the shapes.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}or`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}or`), f.namedNode(`${ns4}label`), f.literal("or", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}or`), f.namedNode(`${ns4}range`), f.namedNode(`${ns22}List`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}order`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}order`), f.namedNode(`${ns4}comment`), f.literal("Specifies the relative order of this compared to its siblings. For example use 0 for the first, 1 for the second.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}order`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}order`), f.namedNode(`${ns4}label`), f.literal("order", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}orderBy`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}parameter`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}parameter`), f.namedNode(`${ns4}comment`), f.literal("The parameters of a function or constraint component.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}parameter`), f.namedNode(`${ns4}domain`), f.namedNode(`${ns1}Parameterizable`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}parameter`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}parameter`), f.namedNode(`${ns4}label`), f.literal("parameter", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}parameter`), f.namedNode(`${ns4}range`), f.namedNode(`${ns1}Parameter`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}path`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}path`), f.namedNode(`${ns4}comment`), f.literal("Specifies the property path of a property shape.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}path`), f.namedNode(`${ns4}domain`), f.namedNode(`${ns1}PropertyShape`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}path`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}path`), f.namedNode(`${ns4}label`), f.literal("path", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}path`), f.namedNode(`${ns4}range`), f.namedNode(`${ns4}Resource`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}pattern`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}pattern`), f.namedNode(`${ns4}comment`), f.literal("Specifies a regular expression pattern that the string representations of the value nodes must match.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}pattern`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}pattern`), f.namedNode(`${ns4}label`), f.literal("pattern", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}pattern`), f.namedNode(`${ns4}range`), f.namedNode(`${ns6}string`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}predicate`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}predicate`), f.namedNode(`${ns4}comment`), f.literal("An expression producing the properties that shall be inferred as predicates.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}predicate`), f.namedNode(`${ns4}domain`), f.namedNode(`${ns1}TripleRule`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}predicate`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}predicate`), f.namedNode(`${ns4}label`), f.literal("predicate", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}prefix`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}prefix`), f.namedNode(`${ns4}comment`), f.literal("The prefix of a prefix declaration.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}prefix`), f.namedNode(`${ns4}domain`), f.namedNode(`${ns1}PrefixDeclaration`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}prefix`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}prefix`), f.namedNode(`${ns4}label`), f.literal("prefix", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}prefix`), f.namedNode(`${ns4}range`), f.namedNode(`${ns6}string`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}prefixes`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}prefixes`), f.namedNode(`${ns4}comment`), f.literal("The prefixes that shall be applied before parsing the associated SPARQL query.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}prefixes`), f.namedNode(`${ns4}domain`), f.namedNode(`${ns1}SPARQLExecutable`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}prefixes`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}prefixes`), f.namedNode(`${ns4}label`), f.literal("prefixes", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}prefixes`), f.namedNode(`${ns4}range`), f.namedNode(`${ns32}Ontology`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}property`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}property`), f.namedNode(`${ns4}comment`), f.literal("Links a shape to its property shapes.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}property`), f.namedNode(`${ns4}domain`), f.namedNode(`${ns1}Shape`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}property`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}property`), f.namedNode(`${ns4}label`), f.literal("property", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}property`), f.namedNode(`${ns4}range`), f.namedNode(`${ns1}PropertyShape`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}propertyValidator`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}propertyValidator`), f.namedNode(`${ns4}comment`), f.literal("The validator(s) used to evaluate a constraint in the context of a property shape.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}propertyValidator`), f.namedNode(`${ns4}domain`), f.namedNode(`${ns1}ConstraintComponent`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}propertyValidator`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}propertyValidator`), f.namedNode(`${ns4}label`), f.literal("property validator", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}propertyValidator`), f.namedNode(`${ns4}range`), f.namedNode(`${ns1}Validator`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}qualifiedMaxCount`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}qualifiedMaxCount`), f.namedNode(`${ns4}comment`), f.literal("The maximum number of value nodes that can conform to the shape.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}qualifiedMaxCount`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}qualifiedMaxCount`), f.namedNode(`${ns4}label`), f.literal("qualified max count", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}qualifiedMaxCount`), f.namedNode(`${ns4}range`), f.namedNode(`${ns6}integer`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}qualifiedMinCount`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}qualifiedMinCount`), f.namedNode(`${ns4}comment`), f.literal("The minimum number of value nodes that must conform to the shape.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}qualifiedMinCount`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}qualifiedMinCount`), f.namedNode(`${ns4}label`), f.literal("qualified min count", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}qualifiedMinCount`), f.namedNode(`${ns4}range`), f.namedNode(`${ns6}integer`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}qualifiedValueShape`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}qualifiedValueShape`), f.namedNode(`${ns4}comment`), f.literal("The shape that a specified number of values must conform to.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}qualifiedValueShape`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}qualifiedValueShape`), f.namedNode(`${ns4}label`), f.literal("qualified value shape", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}qualifiedValueShape`), f.namedNode(`${ns4}range`), f.namedNode(`${ns1}Shape`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}qualifiedValueShapesDisjoint`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}qualifiedValueShapesDisjoint`), f.namedNode(`${ns4}comment`), f.literal("Can be used to mark the qualified value shape to be disjoint with its sibling shapes.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}qualifiedValueShapesDisjoint`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}qualifiedValueShapesDisjoint`), f.namedNode(`${ns4}label`), f.literal("qualified value shapes disjoint", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}qualifiedValueShapesDisjoint`), f.namedNode(`${ns4}range`), f.namedNode(`${ns6}boolean`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}result`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}result`), f.namedNode(`${ns4}comment`), f.literal("The validation results contained in a validation report.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}result`), f.namedNode(`${ns4}domain`), f.namedNode(`${ns1}ValidationReport`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}result`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}result`), f.namedNode(`${ns4}label`), f.literal("result", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}result`), f.namedNode(`${ns4}range`), f.namedNode(`${ns1}ValidationResult`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}resultAnnotation`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}resultAnnotation`), f.namedNode(`${ns4}comment`), f.literal("Links a SPARQL validator with zero or more sh:ResultAnnotation instances, defining how to derive additional result properties based on the variables of the SELECT query.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}resultAnnotation`), f.namedNode(`${ns4}domain`), f.namedNode(`${ns1}SPARQLSelectValidator`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}resultAnnotation`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}resultAnnotation`), f.namedNode(`${ns4}label`), f.literal("result annotation", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}resultAnnotation`), f.namedNode(`${ns4}range`), f.namedNode(`${ns1}ResultAnnotation`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}resultMessage`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}resultMessage`), f.namedNode(`${ns4}comment`), f.literal("Human-readable messages explaining the cause of the result.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}resultMessage`), f.namedNode(`${ns4}domain`), f.namedNode(`${ns1}AbstractResult`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}resultMessage`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}resultMessage`), f.namedNode(`${ns4}label`), f.literal("result message", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}resultPath`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}resultPath`), f.namedNode(`${ns4}comment`), f.literal("The path of a validation result, based on the path of the validated property shape.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}resultPath`), f.namedNode(`${ns4}domain`), f.namedNode(`${ns1}AbstractResult`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}resultPath`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}resultPath`), f.namedNode(`${ns4}label`), f.literal("result path", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}resultPath`), f.namedNode(`${ns4}range`), f.namedNode(`${ns4}Resource`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}resultSeverity`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}resultSeverity`), f.namedNode(`${ns4}comment`), f.literal("The severity of the result, e.g. warning.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}resultSeverity`), f.namedNode(`${ns4}domain`), f.namedNode(`${ns1}AbstractResult`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}resultSeverity`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}resultSeverity`), f.namedNode(`${ns4}label`), f.literal("result severity", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}resultSeverity`), f.namedNode(`${ns4}range`), f.namedNode(`${ns1}Severity`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}returnType`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}returnType`), f.namedNode(`${ns4}comment`), f.literal("The expected type of values returned by the associated function.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}returnType`), f.namedNode(`${ns4}domain`), f.namedNode(`${ns1}Function`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}returnType`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}returnType`), f.namedNode(`${ns4}label`), f.literal("return type", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}returnType`), f.namedNode(`${ns4}range`), f.namedNode(`${ns4}Class`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}rule`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}rule`), f.namedNode(`${ns4}comment`), f.literal("The rules linked to a shape.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}rule`), f.namedNode(`${ns4}domain`), f.namedNode(`${ns1}Shape`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}rule`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}rule`), f.namedNode(`${ns4}label`), f.literal("rule", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}rule`), f.namedNode(`${ns4}range`), f.namedNode(`${ns1}Rule`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}select`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}select`), f.namedNode(`${ns4}comment`), f.literal("The SPARQL SELECT query to execute.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}select`), f.namedNode(`${ns4}domain`), f.namedNode(`${ns1}SPARQLSelectExecutable`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}select`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}select`), f.namedNode(`${ns4}label`), f.literal("select", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}select`), f.namedNode(`${ns4}range`), f.namedNode(`${ns6}string`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}separator`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}severity`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}severity`), f.namedNode(`${ns4}comment`), f.literal("Defines the severity that validation results produced by a shape must have. Defaults to sh:Violation.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}severity`), f.namedNode(`${ns4}domain`), f.namedNode(`${ns1}Shape`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}severity`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}severity`), f.namedNode(`${ns4}label`), f.literal("severity", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}severity`), f.namedNode(`${ns4}range`), f.namedNode(`${ns1}Severity`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}shapesGraph`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}shapesGraph`), f.namedNode(`${ns4}comment`), f.literal("Shapes graphs that should be used when validating this data graph.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}shapesGraph`), f.namedNode(`${ns4}domain`), f.namedNode(`${ns32}Ontology`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}shapesGraph`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}shapesGraph`), f.namedNode(`${ns4}label`), f.literal("shapes graph", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}shapesGraph`), f.namedNode(`${ns4}range`), f.namedNode(`${ns32}Ontology`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}shapesGraphWellFormed`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}shapesGraphWellFormed`), f.namedNode(`${ns4}comment`), f.literal("If true then the validation engine was certain that the shapes graph has passed all SHACL syntax requirements during the validation process.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}shapesGraphWellFormed`), f.namedNode(`${ns4}domain`), f.namedNode(`${ns1}ValidationReport`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}shapesGraphWellFormed`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}shapesGraphWellFormed`), f.namedNode(`${ns4}label`), f.literal("shapes graph well-formed", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}shapesGraphWellFormed`), f.namedNode(`${ns4}range`), f.namedNode(`${ns6}boolean`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}sourceConstraint`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}sourceConstraint`), f.namedNode(`${ns4}comment`), f.literal("The constraint that was validated when the result was produced.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}sourceConstraint`), f.namedNode(`${ns4}domain`), f.namedNode(`${ns1}AbstractResult`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}sourceConstraint`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}sourceConstraint`), f.namedNode(`${ns4}label`), f.literal("source constraint", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}sourceConstraintComponent`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}sourceConstraintComponent`), f.namedNode(`${ns4}comment`), f.literal("The constraint component that is the source of the result.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}sourceConstraintComponent`), f.namedNode(`${ns4}domain`), f.namedNode(`${ns1}AbstractResult`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}sourceConstraintComponent`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}sourceConstraintComponent`), f.namedNode(`${ns4}label`), f.literal("source constraint component", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}sourceConstraintComponent`), f.namedNode(`${ns4}range`), f.namedNode(`${ns1}ConstraintComponent`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}sourceShape`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}sourceShape`), f.namedNode(`${ns4}comment`), f.literal("The shape that is was validated when the result was produced.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}sourceShape`), f.namedNode(`${ns4}domain`), f.namedNode(`${ns1}AbstractResult`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}sourceShape`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}sourceShape`), f.namedNode(`${ns4}label`), f.literal("source shape", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}sourceShape`), f.namedNode(`${ns4}range`), f.namedNode(`${ns1}Shape`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}sparql`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}sparql`), f.namedNode(`${ns4}comment`), f.literal("Links a shape with SPARQL constraints.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}sparql`), f.namedNode(`${ns4}domain`), f.namedNode(`${ns1}Shape`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}sparql`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}sparql`), f.namedNode(`${ns4}label`), f.literal("constraint (in SPARQL)", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}sparql`), f.namedNode(`${ns4}range`), f.namedNode(`${ns1}SPARQLConstraint`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}subject`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}subject`), f.namedNode(`${ns4}comment`), f.literal("An expression producing the resources that shall be inferred as subjects.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}subject`), f.namedNode(`${ns4}domain`), f.namedNode(`${ns1}TripleRule`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}subject`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}subject`), f.namedNode(`${ns4}label`), f.literal("subject", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}suggestedShapesGraph`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}suggestedShapesGraph`), f.namedNode(`${ns4}comment`), f.literal("Suggested shapes graphs for this ontology. The values of this property may be used in the absence of specific sh:shapesGraph statements.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}suggestedShapesGraph`), f.namedNode(`${ns4}domain`), f.namedNode(`${ns32}Ontology`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}suggestedShapesGraph`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}suggestedShapesGraph`), f.namedNode(`${ns4}label`), f.literal("suggested shapes graph", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}suggestedShapesGraph`), f.namedNode(`${ns4}range`), f.namedNode(`${ns32}Ontology`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}sum`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}target`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}target`), f.namedNode(`${ns4}comment`), f.literal("Links a shape to a target specified by an extension language, for example instances of sh:SPARQLTarget.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}target`), f.namedNode(`${ns4}domain`), f.namedNode(`${ns1}Shape`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}target`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}target`), f.namedNode(`${ns4}label`), f.literal("target", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}target`), f.namedNode(`${ns4}range`), f.namedNode(`${ns1}Target`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}targetClass`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}targetClass`), f.namedNode(`${ns4}comment`), f.literal("Links a shape to a class, indicating that all instances of the class must conform to the shape.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}targetClass`), f.namedNode(`${ns4}domain`), f.namedNode(`${ns1}Shape`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}targetClass`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}targetClass`), f.namedNode(`${ns4}label`), f.literal("target class", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}targetClass`), f.namedNode(`${ns4}range`), f.namedNode(`${ns4}Class`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}targetNode`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}targetNode`), f.namedNode(`${ns4}comment`), f.literal("Links a shape to individual nodes, indicating that these nodes must conform to the shape.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}targetNode`), f.namedNode(`${ns4}domain`), f.namedNode(`${ns1}Shape`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}targetNode`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}targetNode`), f.namedNode(`${ns4}label`), f.literal("target node", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}targetObjectsOf`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}targetObjectsOf`), f.namedNode(`${ns4}comment`), f.literal("Links a shape to a property, indicating that all all objects of triples that have the given property as their predicate must conform to the shape.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}targetObjectsOf`), f.namedNode(`${ns4}domain`), f.namedNode(`${ns1}Shape`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}targetObjectsOf`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}targetObjectsOf`), f.namedNode(`${ns4}label`), f.literal("target objects of", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}targetObjectsOf`), f.namedNode(`${ns4}range`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}targetSubjectsOf`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}targetSubjectsOf`), f.namedNode(`${ns4}comment`), f.literal("Links a shape to a property, indicating that all subjects of triples that have the given property as their predicate must conform to the shape.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}targetSubjectsOf`), f.namedNode(`${ns4}domain`), f.namedNode(`${ns1}Shape`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}targetSubjectsOf`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}targetSubjectsOf`), f.namedNode(`${ns4}label`), f.literal("target subjects of", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}targetSubjectsOf`), f.namedNode(`${ns4}range`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}then`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}this`), f.namedNode(`${ns22}type`), f.namedNode(`${ns4}Resource`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}this`), f.namedNode(`${ns4}comment`), f.literal("A node expression that represents the current focus node.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}this`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}this`), f.namedNode(`${ns4}label`), f.literal("this", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}union`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}union`), f.namedNode(`${ns4}comment`), f.literal("A list of node expressions that shall be used together.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}union`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}union`), f.namedNode(`${ns4}label`), f.literal("union", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}uniqueLang`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}uniqueLang`), f.namedNode(`${ns4}comment`), f.literal("Specifies whether all node values must have a unique (or no) language tag.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}uniqueLang`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}uniqueLang`), f.namedNode(`${ns4}label`), f.literal("unique languages", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}uniqueLang`), f.namedNode(`${ns4}range`), f.namedNode(`${ns6}boolean`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}update`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}update`), f.namedNode(`${ns4}comment`), f.literal("The SPARQL UPDATE to execute.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}update`), f.namedNode(`${ns4}domain`), f.namedNode(`${ns1}SPARQLUpdateExecutable`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}update`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}update`), f.namedNode(`${ns4}label`), f.literal("update", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}update`), f.namedNode(`${ns4}range`), f.namedNode(`${ns6}string`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}validator`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}validator`), f.namedNode(`${ns4}comment`), f.literal("The validator(s) used to evaluate constraints of either node or property shapes.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}validator`), f.namedNode(`${ns4}domain`), f.namedNode(`${ns1}ConstraintComponent`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}validator`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}validator`), f.namedNode(`${ns4}label`), f.literal("validator", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}validator`), f.namedNode(`${ns4}range`), f.namedNode(`${ns1}Validator`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}value`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}value`), f.namedNode(`${ns4}comment`), f.literal("An RDF node that has caused the result.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}value`), f.namedNode(`${ns4}domain`), f.namedNode(`${ns1}AbstractResult`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}value`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}value`), f.namedNode(`${ns4}label`), f.literal("value", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}values`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}xone`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}xone`), f.namedNode(`${ns4}comment`), f.literal("Specifies a list of shapes so that the value nodes must conform to exactly one of the shapes.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}xone`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}xone`), f.namedNode(`${ns4}label`), f.literal("exactly one", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}xone`), f.namedNode(`${ns4}range`), f.namedNode(`${ns22}List`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}zeroOrMorePath`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}zeroOrMorePath`), f.namedNode(`${ns4}comment`), f.literal("The (single) value of this property represents a path that is matched zero or more times.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}zeroOrMorePath`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}zeroOrMorePath`), f.namedNode(`${ns4}label`), f.literal("zero or more path", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}zeroOrMorePath`), f.namedNode(`${ns4}range`), f.namedNode(`${ns4}Resource`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}zeroOrOnePath`), f.namedNode(`${ns22}type`), f.namedNode(`${ns22}Property`), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}zeroOrOnePath`), f.namedNode(`${ns4}comment`), f.literal("The (single) value of this property represents a path that is matched zero or one times.", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}zeroOrOnePath`), f.namedNode(`${ns4}isDefinedBy`), f.namedNode(ns1), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}zeroOrOnePath`), f.namedNode(`${ns4}label`), f.literal("zero or one path", "en"), f.namedNode(ns1)),
+    f.quad(f.namedNode(`${ns1}zeroOrOnePath`), f.namedNode(`${ns4}range`), f.namedNode(`${ns4}Resource`), f.namedNode(ns1)),
+    f.quad(blankNodes[4], f.namedNode(`${ns1}maxCount`), f.literal("1", f.namedNode(`${ns6}integer`)), f.namedNode(ns1)),
+    f.quad(blankNodes[4], f.namedNode(`${ns1}minCount`), f.literal("1", f.namedNode(`${ns6}integer`)), f.namedNode(ns1)),
+    f.quad(blankNodes[4], f.namedNode(`${ns1}node`), f.namedNode(`${ns5}ShapeShape`), f.namedNode(ns1)),
+    f.quad(blankNodes[4], f.namedNode(`${ns1}path`), f.namedNode(`${ns1}filterShape`), f.namedNode(ns1)),
+    f.quad(blankNodes[40], f.namedNode(`${ns22}first`), f.namedNode(`${ns1}IfExpression`), f.namedNode(ns1)),
+    f.quad(blankNodes[40], f.namedNode(`${ns22}rest`), blankNodes[41], f.namedNode(ns1)),
+    f.quad(blankNodes[16], f.namedNode(`${ns1}maxCount`), f.literal("1", f.namedNode(`${ns6}integer`)), f.namedNode(ns1)),
+    f.quad(blankNodes[16], f.namedNode(`${ns1}minCount`), f.literal("1", f.namedNode(`${ns6}integer`)), f.namedNode(ns1)),
+    f.quad(blankNodes[16], f.namedNode(`${ns1}node`), f.namedNode(`${ns1}NodeExpression`), f.namedNode(ns1)),
+    f.quad(blankNodes[16], f.namedNode(`${ns1}path`), f.namedNode(`${ns1}nodes`), f.namedNode(ns1)),
+    f.quad(blankNodes[32], f.namedNode(`${ns1}datatype`), f.namedNode(`${ns6}string`), f.namedNode(ns1)),
+    f.quad(blankNodes[32], f.namedNode(`${ns1}maxCount`), f.literal("1", f.namedNode(`${ns6}integer`)), f.namedNode(ns1)),
+    f.quad(blankNodes[32], f.namedNode(`${ns1}minCount`), f.literal("1", f.namedNode(`${ns6}integer`)), f.namedNode(ns1)),
+    f.quad(blankNodes[32], f.namedNode(`${ns1}path`), f.namedNode(`${ns1}select`), f.namedNode(ns1)),
+    f.quad(blankNodes[6], f.namedNode(`${ns1}datatype`), f.namedNode(`${ns6}string`), f.namedNode(ns1)),
+    f.quad(blankNodes[6], f.namedNode(`${ns1}maxCount`), f.literal("1", f.namedNode(`${ns6}integer`)), f.namedNode(ns1)),
+    f.quad(blankNodes[6], f.namedNode(`${ns1}path`), f.namedNode(`${ns1}separator`), f.namedNode(ns1)),
+    f.quad(blankNodes[42], f.namedNode(`${ns22}first`), f.namedNode(`${ns1}BlankNodeOrLiteral`), f.namedNode(ns1)),
+    f.quad(blankNodes[42], f.namedNode(`${ns22}rest`), blankNodes[43], f.namedNode(ns1)),
+    f.quad(blankNodes[19], f.namedNode(`${ns22}first`), f.namedNode(`${ns1}BlankNode`), f.namedNode(ns1)),
+    f.quad(blankNodes[19], f.namedNode(`${ns22}rest`), blankNodes[44], f.namedNode(ns1)),
+    f.quad(blankNodes[45], f.namedNode(`${ns22}first`), f.namedNode(`${ns1}MinExpression`), f.namedNode(ns1)),
+    f.quad(blankNodes[45], f.namedNode(`${ns22}rest`), blankNodes[46], f.namedNode(ns1)),
+    f.quad(blankNodes[47], f.namedNode(`${ns22}first`), f.namedNode(`${ns1}SPARQLAskExpression`), f.namedNode(ns1)),
+    f.quad(blankNodes[47], f.namedNode(`${ns22}rest`), blankNodes[48], f.namedNode(ns1)),
+    f.quad(blankNodes[25], f.namedNode(`${ns1}maxCount`), f.literal("1", f.namedNode(`${ns6}integer`)), f.namedNode(ns1)),
+    f.quad(blankNodes[25], f.namedNode(`${ns1}minCount`), f.literal("1", f.namedNode(`${ns6}integer`)), f.namedNode(ns1)),
+    f.quad(blankNodes[25], f.namedNode(`${ns1}node`), f.namedNode(`${ns5}PathShape`), f.namedNode(ns1)),
+    f.quad(blankNodes[25], f.namedNode(`${ns1}path`), f.namedNode(`${ns1}path`), f.namedNode(ns1)),
+    f.quad(blankNodes[49], f.namedNode(`${ns22}first`), f.namedNode(`${ns1}MinusExpression`), f.namedNode(ns1)),
+    f.quad(blankNodes[49], f.namedNode(`${ns22}rest`), blankNodes[50], f.namedNode(ns1)),
+    f.quad(blankNodes[46], f.namedNode(`${ns22}first`), f.namedNode(`${ns1}MaxExpression`), f.namedNode(ns1)),
+    f.quad(blankNodes[46], f.namedNode(`${ns22}rest`), blankNodes[51], f.namedNode(ns1)),
+    f.quad(blankNodes[52], f.namedNode(`${ns22}first`), f.namedNode(`${ns1}LimitExpression`), f.namedNode(ns1)),
+    f.quad(blankNodes[52], f.namedNode(`${ns22}rest`), blankNodes[53], f.namedNode(ns1)),
+    f.quad(blankNodes[8], f.namedNode(`${ns1}maxCount`), f.literal("1", f.namedNode(`${ns6}integer`)), f.namedNode(ns1)),
+    f.quad(blankNodes[8], f.namedNode(`${ns1}node`), f.namedNode(`${ns1}NodeExpression`), f.namedNode(ns1)),
+    f.quad(blankNodes[8], f.namedNode(`${ns1}path`), f.namedNode(`${ns1}then`), f.namedNode(ns1)),
+    f.quad(blankNodes[44], f.namedNode(`${ns22}first`), f.namedNode(`${ns1}IRI`), f.namedNode(ns1)),
+    f.quad(blankNodes[44], f.namedNode(`${ns22}rest`), blankNodes[54], f.namedNode(ns1)),
+    f.quad(blankNodes[55], f.namedNode(`${ns1}zeroOrMorePath`), f.namedNode(`${ns22}rest`), f.namedNode(ns1)),
+    f.quad(blankNodes[5], f.namedNode(`${ns1}maxCount`), f.literal("1", f.namedNode(`${ns6}integer`)), f.namedNode(ns1)),
+    f.quad(blankNodes[5], f.namedNode(`${ns1}node`), f.namedNode(`${ns1}NodeExpression`), f.namedNode(ns1)),
+    f.quad(blankNodes[5], f.namedNode(`${ns1}path`), f.namedNode(`${ns1}nodes`), f.namedNode(ns1)),
+    f.quad(blankNodes[56], f.namedNode(`${ns22}first`), blankNodes[57], f.namedNode(ns1)),
+    f.quad(blankNodes[56], f.namedNode(`${ns22}rest`), f.namedNode(`${ns22}nil`), f.namedNode(ns1)),
+    f.quad(blankNodes[0], f.namedNode(`${ns1}namespace`), f.literal("http://www.w3.org/ns/shacl#"), f.namedNode(ns1)),
+    f.quad(blankNodes[0], f.namedNode(`${ns1}prefix`), f.literal("sh"), f.namedNode(ns1)),
+    f.quad(blankNodes[58], f.namedNode(`${ns1}nodeKind`), f.namedNode(`${ns1}BlankNode`), f.namedNode(ns1)),
+    f.quad(blankNodes[58], f.namedNode(`${ns1}not`), blankNodes[59], f.namedNode(ns1)),
+    f.quad(blankNodes[18], f.namedNode(`${ns22}first`), f.namedNode(`${ns1}FocusNodeOrConstantTermExpression`), f.namedNode(ns1)),
+    f.quad(blankNodes[18], f.namedNode(`${ns22}rest`), blankNodes[60], f.namedNode(ns1)),
+    f.quad(blankNodes[15], f.namedNode(`${ns1}maxCount`), f.literal("1", f.namedNode(`${ns6}integer`)), f.namedNode(ns1)),
+    f.quad(blankNodes[15], f.namedNode(`${ns1}minCount`), f.literal("1", f.namedNode(`${ns6}integer`)), f.namedNode(ns1)),
+    f.quad(blankNodes[15], f.namedNode(`${ns1}node`), f.namedNode(`${ns1}NodeExpression`), f.namedNode(ns1)),
+    f.quad(blankNodes[15], f.namedNode(`${ns1}path`), f.namedNode(`${ns1}min`), f.namedNode(ns1)),
+    f.quad(blankNodes[30], f.namedNode(`${ns1}maxCount`), f.literal("1", f.namedNode(`${ns6}integer`)), f.namedNode(ns1)),
+    f.quad(blankNodes[30], f.namedNode(`${ns1}nodeKind`), f.namedNode(`${ns1}BlankNodeOrIRI`), f.namedNode(ns1)),
+    f.quad(blankNodes[30], f.namedNode(`${ns1}path`), f.namedNode(`${ns1}prefixes`), f.namedNode(ns1)),
+    f.quad(blankNodes[61], f.namedNode(`${ns22}first`), blankNodes[55], f.namedNode(ns1)),
+    f.quad(blankNodes[61], f.namedNode(`${ns22}rest`), blankNodes[62], f.namedNode(ns1)),
+    f.quad(blankNodes[1], f.namedNode(`${ns1}maxCount`), f.literal("1", f.namedNode(`${ns6}integer`)), f.namedNode(ns1)),
+    f.quad(blankNodes[1], f.namedNode(`${ns1}minCount`), f.literal("1", f.namedNode(`${ns6}integer`)), f.namedNode(ns1)),
+    f.quad(blankNodes[1], f.namedNode(`${ns1}node`), f.namedNode(`${ns1}NodeExpression`), f.namedNode(ns1)),
+    f.quad(blankNodes[1], f.namedNode(`${ns1}path`), f.namedNode(`${ns1}count`), f.namedNode(ns1)),
+    f.quad(blankNodes[12], f.namedNode(`${ns1}maxCount`), f.literal("1", f.namedNode(`${ns6}integer`)), f.namedNode(ns1)),
+    f.quad(blankNodes[12], f.namedNode(`${ns1}minCount`), f.literal("1", f.namedNode(`${ns6}integer`)), f.namedNode(ns1)),
+    f.quad(blankNodes[12], f.namedNode(`${ns1}node`), f.namedNode(`${ns1}NodeExpression`), f.namedNode(ns1)),
+    f.quad(blankNodes[12], f.namedNode(`${ns1}path`), f.namedNode(`${ns1}nodes`), f.namedNode(ns1)),
+    f.quad(blankNodes[33], f.namedNode(`${ns1}maxCount`), f.literal("1", f.namedNode(`${ns6}integer`)), f.namedNode(ns1)),
+    f.quad(blankNodes[33], f.namedNode(`${ns1}node`), f.namedNode(`${ns1}NodeExpression`), f.namedNode(ns1)),
+    f.quad(blankNodes[33], f.namedNode(`${ns1}path`), f.namedNode(`${ns1}nodes`), f.namedNode(ns1)),
+    f.quad(blankNodes[63], f.namedNode(`${ns1}maxCount`), f.literal("1", f.namedNode(`${ns6}integer`)), f.namedNode(ns1)),
+    f.quad(blankNodes[63], f.namedNode(`${ns1}minCount`), f.literal("1", f.namedNode(`${ns6}integer`)), f.namedNode(ns1)),
+    f.quad(blankNodes[63], f.namedNode(`${ns1}node`), f.namedNode(`${ns7}ListShape`), f.namedNode(ns1)),
+    f.quad(blankNodes[63], f.namedNode(`${ns1}path`), f.namedNode(`${ns1}intersection`), f.namedNode(ns1)),
+    f.quad(blankNodes[63], f.namedNode(`${ns1}property`), blankNodes[64], f.namedNode(ns1)),
+    f.quad(blankNodes[13], f.namedNode(`${ns1}datatype`), f.namedNode(`${ns6}integer`), f.namedNode(ns1)),
+    f.quad(blankNodes[13], f.namedNode(`${ns1}maxCount`), f.literal("1", f.namedNode(`${ns6}integer`)), f.namedNode(ns1)),
+    f.quad(blankNodes[13], f.namedNode(`${ns1}minCount`), f.literal("1", f.namedNode(`${ns6}integer`)), f.namedNode(ns1)),
+    f.quad(blankNodes[13], f.namedNode(`${ns1}path`), f.namedNode(`${ns1}limit`), f.namedNode(ns1)),
+    f.quad(blankNodes[59], f.namedNode(`${ns22}first`), f.namedNode(`${ns1}ExistsExpression`), f.namedNode(ns1)),
+    f.quad(blankNodes[59], f.namedNode(`${ns22}rest`), blankNodes[40], f.namedNode(ns1)),
+    f.quad(blankNodes[36], f.namedNode(`${ns1}maxCount`), f.literal("1", f.namedNode(`${ns6}integer`)), f.namedNode(ns1)),
+    f.quad(blankNodes[36], f.namedNode(`${ns1}minCount`), f.literal("1", f.namedNode(`${ns6}integer`)), f.namedNode(ns1)),
+    f.quad(blankNodes[36], f.namedNode(`${ns1}node`), f.namedNode(`${ns1}NodeExpression`), f.namedNode(ns1)),
+    f.quad(blankNodes[36], f.namedNode(`${ns1}path`), f.namedNode(`${ns1}object`), f.namedNode(ns1)),
+    f.quad(blankNodes[2], f.namedNode(`${ns1}maxCount`), f.literal("1", f.namedNode(`${ns6}integer`)), f.namedNode(ns1)),
+    f.quad(blankNodes[2], f.namedNode(`${ns1}minCount`), f.literal("1", f.namedNode(`${ns6}integer`)), f.namedNode(ns1)),
+    f.quad(blankNodes[2], f.namedNode(`${ns1}node`), f.namedNode(`${ns1}NodeExpression`), f.namedNode(ns1)),
+    f.quad(blankNodes[2], f.namedNode(`${ns1}path`), f.namedNode(`${ns1}distinct`), f.namedNode(ns1)),
+    f.quad(blankNodes[65], f.namedNode(`${ns22}first`), f.namedNode(`${ns1}IntersectionExpression`), f.namedNode(ns1)),
+    f.quad(blankNodes[65], f.namedNode(`${ns22}rest`), blankNodes[66], f.namedNode(ns1)),
+    f.quad(blankNodes[57], f.namedNode(`${ns1}xone`), blankNodes[59], f.namedNode(ns1)),
+    f.quad(blankNodes[34], f.namedNode(`${ns1}maxCount`), f.literal("1", f.namedNode(`${ns6}integer`)), f.namedNode(ns1)),
+    f.quad(blankNodes[34], f.namedNode(`${ns1}nodeKind`), f.namedNode(`${ns1}BlankNodeOrIRI`), f.namedNode(ns1)),
+    f.quad(blankNodes[34], f.namedNode(`${ns1}path`), f.namedNode(`${ns1}prefixes`), f.namedNode(ns1)),
+    f.quad(blankNodes[67], f.namedNode(`${ns22}first`), f.namedNode(`${ns1}GroupConcatExpression`), f.namedNode(ns1)),
+    f.quad(blankNodes[67], f.namedNode(`${ns22}rest`), blankNodes[68], f.namedNode(ns1)),
+    f.quad(blankNodes[20], f.namedNode(`${ns1}maxCount`), f.literal("1", f.namedNode(`${ns6}integer`)), f.namedNode(ns1)),
+    f.quad(blankNodes[20], f.namedNode(`${ns1}minCount`), f.literal("1", f.namedNode(`${ns6}integer`)), f.namedNode(ns1)),
+    f.quad(blankNodes[20], f.namedNode(`${ns1}node`), f.namedNode(`${ns1}NodeExpression`), f.namedNode(ns1)),
+    f.quad(blankNodes[20], f.namedNode(`${ns1}path`), f.namedNode(`${ns1}nodes`), f.namedNode(ns1)),
+    f.quad(blankNodes[69], f.namedNode(`${ns1}property`), blankNodes[63], f.namedNode(ns1)),
+    f.quad(blankNodes[27], f.namedNode(`${ns1}datatype`), f.namedNode(`${ns6}string`), f.namedNode(ns1)),
+    f.quad(blankNodes[27], f.namedNode(`${ns1}maxCount`), f.literal("1", f.namedNode(`${ns6}integer`)), f.namedNode(ns1)),
+    f.quad(blankNodes[27], f.namedNode(`${ns1}minCount`), f.literal("1", f.namedNode(`${ns6}integer`)), f.namedNode(ns1)),
+    f.quad(blankNodes[27], f.namedNode(`${ns1}path`), f.namedNode(`${ns1}ask`), f.namedNode(ns1)),
+    f.quad(blankNodes[28], f.namedNode(`${ns1}maxCount`), f.literal("1", f.namedNode(`${ns6}integer`)), f.namedNode(ns1)),
+    f.quad(blankNodes[28], f.namedNode(`${ns1}nodeKind`), f.namedNode(`${ns1}BlankNodeOrIRI`), f.namedNode(ns1)),
+    f.quad(blankNodes[28], f.namedNode(`${ns1}path`), f.namedNode(`${ns1}prefixes`), f.namedNode(ns1)),
+    f.quad(blankNodes[64], f.namedNode(`${ns1}minCount`), f.literal("2", f.namedNode(`${ns6}integer`)), f.namedNode(ns1)),
+    f.quad(blankNodes[64], f.namedNode(`${ns1}node`), f.namedNode(`${ns1}NodeExpression`), f.namedNode(ns1)),
+    f.quad(blankNodes[64], f.namedNode(`${ns1}path`), blankNodes[61], f.namedNode(ns1)),
+    f.quad(blankNodes[22], f.namedNode(`${ns1}datatype`), f.namedNode(`${ns6}boolean`), f.namedNode(ns1)),
+    f.quad(blankNodes[22], f.namedNode(`${ns1}maxCount`), f.literal("1", f.namedNode(`${ns6}integer`)), f.namedNode(ns1)),
+    f.quad(blankNodes[22], f.namedNode(`${ns1}path`), f.namedNode(`${ns1}desc`), f.namedNode(ns1)),
+    f.quad(blankNodes[29], f.namedNode(`${ns1}maxCount`), f.literal("1", f.namedNode(`${ns6}integer`)), f.namedNode(ns1)),
+    f.quad(blankNodes[29], f.namedNode(`${ns1}node`), f.namedNode(`${ns1}NodeExpression`), f.namedNode(ns1)),
+    f.quad(blankNodes[29], f.namedNode(`${ns1}path`), f.namedNode(`${ns1}nodes`), f.namedNode(ns1)),
+    f.quad(blankNodes[41], f.namedNode(`${ns22}first`), f.namedNode(`${ns1}FilterShapeExpression`), f.namedNode(ns1)),
+    f.quad(blankNodes[41], f.namedNode(`${ns22}rest`), blankNodes[70], f.namedNode(ns1)),
+    f.quad(blankNodes[62], f.namedNode(`${ns22}first`), f.namedNode(`${ns22}first`), f.namedNode(ns1)),
+    f.quad(blankNodes[62], f.namedNode(`${ns22}rest`), f.namedNode(`${ns22}nil`), f.namedNode(ns1)),
+    f.quad(blankNodes[48], f.namedNode(`${ns22}first`), f.namedNode(`${ns1}SPARQLSelectExpression`), f.namedNode(ns1)),
+    f.quad(blankNodes[48], f.namedNode(`${ns22}rest`), f.namedNode(`${ns22}nil`), f.namedNode(ns1)),
+    f.quad(blankNodes[26], f.namedNode(`${ns1}maxCount`), f.literal("1", f.namedNode(`${ns6}integer`)), f.namedNode(ns1)),
+    f.quad(blankNodes[26], f.namedNode(`${ns1}node`), f.namedNode(`${ns1}NodeExpression`), f.namedNode(ns1)),
+    f.quad(blankNodes[26], f.namedNode(`${ns1}path`), f.namedNode(`${ns1}nodes`), f.namedNode(ns1)),
+    f.quad(blankNodes[71], f.namedNode(`${ns22}first`), f.namedNode(`${ns1}CountExpression`), f.namedNode(ns1)),
+    f.quad(blankNodes[71], f.namedNode(`${ns22}rest`), blankNodes[45], f.namedNode(ns1)),
+    f.quad(blankNodes[7], f.namedNode(`${ns1}maxCount`), f.literal("1", f.namedNode(`${ns6}integer`)), f.namedNode(ns1)),
+    f.quad(blankNodes[7], f.namedNode(`${ns1}minCount`), f.literal("1", f.namedNode(`${ns6}integer`)), f.namedNode(ns1)),
+    f.quad(blankNodes[7], f.namedNode(`${ns1}node`), f.namedNode(`${ns1}NodeExpression`), f.namedNode(ns1)),
+    f.quad(blankNodes[7], f.namedNode(`${ns1}path`), f.namedNode(`${ns1}groupConcat`), f.namedNode(ns1)),
+    f.quad(blankNodes[54], f.namedNode(`${ns22}first`), f.namedNode(`${ns1}Literal`), f.namedNode(ns1)),
+    f.quad(blankNodes[54], f.namedNode(`${ns22}rest`), blankNodes[72], f.namedNode(ns1)),
+    f.quad(blankNodes[23], f.namedNode(`${ns1}maxCount`), f.literal("1", f.namedNode(`${ns6}integer`)), f.namedNode(ns1)),
+    f.quad(blankNodes[23], f.namedNode(`${ns1}minCount`), f.literal("1", f.namedNode(`${ns6}integer`)), f.namedNode(ns1)),
+    f.quad(blankNodes[23], f.namedNode(`${ns1}node`), f.namedNode(`${ns1}NodeExpression`), f.namedNode(ns1)),
+    f.quad(blankNodes[23], f.namedNode(`${ns1}path`), f.namedNode(`${ns1}nodes`), f.namedNode(ns1)),
+    f.quad(blankNodes[21], f.namedNode(`${ns1}datatype`), f.namedNode(`${ns6}integer`), f.namedNode(ns1)),
+    f.quad(blankNodes[21], f.namedNode(`${ns1}maxCount`), f.literal("1", f.namedNode(`${ns6}integer`)), f.namedNode(ns1)),
+    f.quad(blankNodes[21], f.namedNode(`${ns1}minCount`), f.literal("1", f.namedNode(`${ns6}integer`)), f.namedNode(ns1)),
+    f.quad(blankNodes[21], f.namedNode(`${ns1}path`), f.namedNode(`${ns1}offset`), f.namedNode(ns1)),
+    f.quad(blankNodes[50], f.namedNode(`${ns22}first`), f.namedNode(`${ns1}DistinctExpression`), f.namedNode(ns1)),
+    f.quad(blankNodes[50], f.namedNode(`${ns22}rest`), blankNodes[71], f.namedNode(ns1)),
+    f.quad(blankNodes[14], f.namedNode(`${ns1}maxCount`), f.literal("1", f.namedNode(`${ns6}integer`)), f.namedNode(ns1)),
+    f.quad(blankNodes[14], f.namedNode(`${ns1}minCount`), f.literal("1", f.namedNode(`${ns6}integer`)), f.namedNode(ns1)),
+    f.quad(blankNodes[14], f.namedNode(`${ns1}node`), f.namedNode(`${ns1}NodeExpression`), f.namedNode(ns1)),
+    f.quad(blankNodes[14], f.namedNode(`${ns1}path`), f.namedNode(`${ns1}max`), f.namedNode(ns1)),
+    f.quad(blankNodes[51], f.namedNode(`${ns22}first`), f.namedNode(`${ns1}SumExpression`), f.namedNode(ns1)),
+    f.quad(blankNodes[51], f.namedNode(`${ns22}rest`), blankNodes[67], f.namedNode(ns1)),
+    f.quad(blankNodes[68], f.namedNode(`${ns22}first`), f.namedNode(`${ns1}OrderByExpression`), f.namedNode(ns1)),
+    f.quad(blankNodes[68], f.namedNode(`${ns22}rest`), blankNodes[52], f.namedNode(ns1)),
+    f.quad(blankNodes[60], f.namedNode(`${ns22}first`), blankNodes[58], f.namedNode(ns1)),
+    f.quad(blankNodes[60], f.namedNode(`${ns22}rest`), blankNodes[56], f.namedNode(ns1)),
+    f.quad(blankNodes[24], f.namedNode(`${ns1}maxCount`), f.literal("1", f.namedNode(`${ns6}integer`)), f.namedNode(ns1)),
+    f.quad(blankNodes[24], f.namedNode(`${ns1}minCount`), f.literal("1", f.namedNode(`${ns6}integer`)), f.namedNode(ns1)),
+    f.quad(blankNodes[24], f.namedNode(`${ns1}node`), f.namedNode(`${ns1}NodeExpression`), f.namedNode(ns1)),
+    f.quad(blankNodes[24], f.namedNode(`${ns1}path`), f.namedNode(`${ns1}orderBy`), f.namedNode(ns1)),
+    f.quad(blankNodes[35], f.namedNode(`${ns1}maxCount`), f.literal("1", f.namedNode(`${ns6}integer`)), f.namedNode(ns1)),
+    f.quad(blankNodes[35], f.namedNode(`${ns1}minCount`), f.literal("1", f.namedNode(`${ns6}integer`)), f.namedNode(ns1)),
+    f.quad(blankNodes[35], f.namedNode(`${ns1}node`), f.namedNode(`${ns1}NodeExpression`), f.namedNode(ns1)),
+    f.quad(blankNodes[35], f.namedNode(`${ns1}path`), f.namedNode(`${ns1}sum`), f.namedNode(ns1)),
+    f.quad(blankNodes[3], f.namedNode(`${ns1}maxCount`), f.literal("1", f.namedNode(`${ns6}integer`)), f.namedNode(ns1)),
+    f.quad(blankNodes[3], f.namedNode(`${ns1}minCount`), f.literal("1", f.namedNode(`${ns6}integer`)), f.namedNode(ns1)),
+    f.quad(blankNodes[3], f.namedNode(`${ns1}node`), f.namedNode(`${ns5}ShapeShape`), f.namedNode(ns1)),
+    f.quad(blankNodes[3], f.namedNode(`${ns1}path`), f.namedNode(`${ns1}exists`), f.namedNode(ns1)),
+    f.quad(blankNodes[37], f.namedNode(`${ns1}maxCount`), f.literal("1", f.namedNode(`${ns6}integer`)), f.namedNode(ns1)),
+    f.quad(blankNodes[37], f.namedNode(`${ns1}minCount`), f.literal("1", f.namedNode(`${ns6}integer`)), f.namedNode(ns1)),
+    f.quad(blankNodes[37], f.namedNode(`${ns1}node`), f.namedNode(`${ns1}NodeExpression`), f.namedNode(ns1)),
+    f.quad(blankNodes[37], f.namedNode(`${ns1}path`), f.namedNode(`${ns1}subject`), f.namedNode(ns1)),
+    f.quad(blankNodes[11], f.namedNode(`${ns1}and`), blankNodes[73], f.namedNode(ns1)),
+    f.quad(blankNodes[11], f.namedNode(`${ns1}maxCount`), f.literal("1", f.namedNode(`${ns6}integer`)), f.namedNode(ns1)),
+    f.quad(blankNodes[11], f.namedNode(`${ns1}minCount`), f.literal("1", f.namedNode(`${ns6}integer`)), f.namedNode(ns1)),
+    f.quad(blankNodes[11], f.namedNode(`${ns1}node`), f.namedNode(`${ns7}ListShape`), f.namedNode(ns1)),
+    f.quad(blankNodes[11], f.namedNode(`${ns1}path`), f.namedNode(`${ns1}intersection`), f.namedNode(ns1)),
+    f.quad(blankNodes[9], f.namedNode(`${ns1}maxCount`), f.literal("1", f.namedNode(`${ns6}integer`)), f.namedNode(ns1)),
+    f.quad(blankNodes[9], f.namedNode(`${ns1}minCount`), f.literal("1", f.namedNode(`${ns6}integer`)), f.namedNode(ns1)),
+    f.quad(blankNodes[9], f.namedNode(`${ns1}node`), f.namedNode(`${ns1}NodeExpression`), f.namedNode(ns1)),
+    f.quad(blankNodes[9], f.namedNode(`${ns1}path`), f.namedNode(`${ns1}if`), f.namedNode(ns1)),
+    f.quad(blankNodes[53], f.namedNode(`${ns22}first`), f.namedNode(`${ns1}OffsetExpression`), f.namedNode(ns1)),
+    f.quad(blankNodes[53], f.namedNode(`${ns22}rest`), blankNodes[47], f.namedNode(ns1)),
+    f.quad(blankNodes[72], f.namedNode(`${ns22}first`), f.namedNode(`${ns1}BlankNodeOrIRI`), f.namedNode(ns1)),
+    f.quad(blankNodes[72], f.namedNode(`${ns22}rest`), blankNodes[42], f.namedNode(ns1)),
+    f.quad(blankNodes[70], f.namedNode(`${ns22}first`), f.namedNode(`${ns1}PathExpression`), f.namedNode(ns1)),
+    f.quad(blankNodes[70], f.namedNode(`${ns22}rest`), blankNodes[65], f.namedNode(ns1)),
+    f.quad(blankNodes[38], f.namedNode(`${ns1}maxCount`), f.literal("1", f.namedNode(`${ns6}integer`)), f.namedNode(ns1)),
+    f.quad(blankNodes[38], f.namedNode(`${ns1}minCount`), f.literal("1", f.namedNode(`${ns6}integer`)), f.namedNode(ns1)),
+    f.quad(blankNodes[38], f.namedNode(`${ns1}node`), f.namedNode(`${ns1}NodeExpression`), f.namedNode(ns1)),
+    f.quad(blankNodes[38], f.namedNode(`${ns1}path`), f.namedNode(`${ns1}predicate`), f.namedNode(ns1)),
+    f.quad(blankNodes[39], f.namedNode(`${ns1}and`), blankNodes[74], f.namedNode(ns1)),
+    f.quad(blankNodes[39], f.namedNode(`${ns1}maxCount`), f.literal("1", f.namedNode(`${ns6}integer`)), f.namedNode(ns1)),
+    f.quad(blankNodes[39], f.namedNode(`${ns1}minCount`), f.literal("1", f.namedNode(`${ns6}integer`)), f.namedNode(ns1)),
+    f.quad(blankNodes[39], f.namedNode(`${ns1}node`), f.namedNode(`${ns7}ListShape`), f.namedNode(ns1)),
+    f.quad(blankNodes[39], f.namedNode(`${ns1}path`), f.namedNode(`${ns1}union`), f.namedNode(ns1)),
+    f.quad(blankNodes[66], f.namedNode(`${ns22}first`), f.namedNode(`${ns1}UnionExpression`), f.namedNode(ns1)),
+    f.quad(blankNodes[66], f.namedNode(`${ns22}rest`), blankNodes[49], f.namedNode(ns1)),
+    f.quad(blankNodes[10], f.namedNode(`${ns1}maxCount`), f.literal("1", f.namedNode(`${ns6}integer`)), f.namedNode(ns1)),
+    f.quad(blankNodes[10], f.namedNode(`${ns1}node`), f.namedNode(`${ns1}NodeExpression`), f.namedNode(ns1)),
+    f.quad(blankNodes[10], f.namedNode(`${ns1}path`), f.namedNode(`${ns1}else`), f.namedNode(ns1)),
+    f.quad(blankNodes[17], f.namedNode(`${ns1}maxCount`), f.literal("1", f.namedNode(`${ns6}integer`)), f.namedNode(ns1)),
+    f.quad(blankNodes[17], f.namedNode(`${ns1}minCount`), f.literal("1", f.namedNode(`${ns6}integer`)), f.namedNode(ns1)),
+    f.quad(blankNodes[17], f.namedNode(`${ns1}node`), f.namedNode(`${ns1}NodeExpression`), f.namedNode(ns1)),
+    f.quad(blankNodes[17], f.namedNode(`${ns1}path`), f.namedNode(`${ns1}minus`), f.namedNode(ns1)),
+    f.quad(blankNodes[74], f.namedNode(`${ns22}first`), blankNodes[75], f.namedNode(ns1)),
+    f.quad(blankNodes[74], f.namedNode(`${ns22}rest`), f.namedNode(`${ns22}nil`), f.namedNode(ns1)),
+    f.quad(blankNodes[73], f.namedNode(`${ns22}first`), blankNodes[75], f.namedNode(ns1)),
+    f.quad(blankNodes[73], f.namedNode(`${ns22}rest`), f.namedNode(`${ns22}nil`), f.namedNode(ns1)),
+    f.quad(blankNodes[31], f.namedNode(`${ns1}datatype`), f.namedNode(`${ns6}string`), f.namedNode(ns1)),
+    f.quad(blankNodes[31], f.namedNode(`${ns1}maxCount`), f.literal("1", f.namedNode(`${ns6}integer`)), f.namedNode(ns1)),
+    f.quad(blankNodes[31], f.namedNode(`${ns1}minCount`), f.literal("1", f.namedNode(`${ns6}integer`)), f.namedNode(ns1)),
+    f.quad(blankNodes[31], f.namedNode(`${ns1}path`), f.namedNode(`${ns1}construct`), f.namedNode(ns1)),
+    f.quad(blankNodes[43], f.namedNode(`${ns22}first`), f.namedNode(`${ns1}IRIOrLiteral`), f.namedNode(ns1)),
+    f.quad(blankNodes[43], f.namedNode(`${ns22}rest`), f.namedNode(`${ns22}nil`), f.namedNode(ns1))
+  ];
+};
+
+// node_modules/rdf-validate-shacl/src/node-set.js
+var NodeSet = class extends TermSet_default {
+  addAll(nodes) {
+    for (const node of nodes) {
+      this.add(node);
+    }
+  }
+};
+var node_set_default = NodeSet;
+
+// node_modules/rdf-validate-shacl/src/property-path.js
+function extractPropertyPath(pathNode, ns4, allowNamedNodeInList) {
+  if (pathNode.term.termType === "NamedNode" && !allowNamedNodeInList) {
+    return pathNode.term;
+  }
+  if (pathNode.term.termType === "BlankNode" || pathNode.term.termType === "NamedNode") {
+    const first = pathNode.out(ns4.rdf.first).term;
+    if (first) {
+      const paths = [...pathNode.list()];
+      return paths.map((path) => extractPropertyPath(path, ns4, allowNamedNodeInList));
+    }
+    const alternativePath = pathNode.out(ns4.sh.alternativePath);
+    if (alternativePath.term) {
+      const paths = [...alternativePath.list()];
+      return { or: paths.map((path) => extractPropertyPath(path, ns4, allowNamedNodeInList)) };
+    }
+    const zeroOrMorePath = pathNode.out(ns4.sh.zeroOrMorePath);
+    if (zeroOrMorePath.term) {
+      return { zeroOrMore: extractPropertyPath(zeroOrMorePath, ns4, allowNamedNodeInList) };
+    }
+    const oneOrMorePath = pathNode.out(ns4.sh.oneOrMorePath);
+    if (oneOrMorePath.term) {
+      return { oneOrMore: extractPropertyPath(oneOrMorePath, ns4, allowNamedNodeInList) };
+    }
+    const zeroOrOnePath = pathNode.out(ns4.sh.zeroOrOnePath);
+    if (zeroOrOnePath.term) {
+      return { zeroOrOne: extractPropertyPath(zeroOrOnePath, ns4, allowNamedNodeInList) };
+    }
+    const inversePath = pathNode.out(ns4.sh.inversePath);
+    if (inversePath.term) {
+      return { inverse: extractPropertyPath(inversePath, ns4, allowNamedNodeInList) };
+    }
+    return pathNode.term;
+  }
+  throw new Error(`Unsupported SHACL path: ${pathNode.term.value}`);
+}
+function getPathObjects(graph2, subject, path) {
+  return [...getPathObjectsSet(graph2, subject, path)];
+}
+function getPathObjectsSet(graph2, subject, path) {
+  if ("termType" in path && path.termType === "NamedNode") {
+    return getNamedNodePathObjects(graph2, subject, path);
+  } else if (Array.isArray(path)) {
+    return getSequencePathObjects(graph2, subject, path);
+  } else if ("or" in path) {
+    return getOrPathObjects(graph2, subject, path);
+  } else if ("inverse" in path) {
+    return getInversePathObjects(graph2, subject, path);
+  } else if ("zeroOrOne" in path) {
+    return getZeroOrOnePathObjects(graph2, subject, path);
+  } else if ("zeroOrMore" in path) {
+    return getZeroOrMorePathObjects(graph2, subject, path);
+  } else if ("oneOrMore" in path) {
+    return getOneOrMorePathObjects(graph2, subject, path);
+  } else {
+    throw new Error(`Unsupported path object: ${path}`);
+  }
+}
+function getNamedNodePathObjects(graph2, subject, path) {
+  return new node_set_default(graph2.node(subject).out(path).terms);
+}
+function getSequencePathObjects(graph2, subject, path) {
+  let subjects = new node_set_default([subject]);
+  for (const pathItem of path) {
+    subjects = new node_set_default(flatMap(subjects, (subjectItem) => getPathObjects(graph2, subjectItem, pathItem)));
+  }
+  return subjects;
+}
+function getOrPathObjects(graph2, subject, path) {
+  return new node_set_default(flatMap(path.or, (pathItem) => getPathObjects(graph2, subject, pathItem)));
+}
+function getInversePathObjects(graph2, subject, path) {
+  if (!("termType" in path.inverse) || path.inverse.termType !== "NamedNode") {
+    throw new Error("Unsupported: Inverse paths only work for named nodes");
+  }
+  return new node_set_default(graph2.node(subject).in(path.inverse).terms);
+}
+function getZeroOrOnePathObjects(graph2, subject, path) {
+  const pathObjects = getPathObjectsSet(graph2, subject, path.zeroOrOne);
+  pathObjects.add(subject);
+  return pathObjects;
+}
+function getZeroOrMorePathObjects(graph2, subject, path) {
+  const pathObjects = walkPath(graph2, subject, path.zeroOrMore);
+  pathObjects.add(subject);
+  return pathObjects;
+}
+function getOneOrMorePathObjects(graph2, subject, path) {
+  return walkPath(graph2, subject, path.oneOrMore);
+}
+function walkPath(graph2, subject, path, visited = new node_set_default()) {
+  visited.add(subject);
+  const pathValues = getPathObjectsSet(graph2, subject, path);
+  const deeperValues = flatMap(pathValues, (pathValue) => {
+    if (!visited.has(pathValue)) {
+      return [...walkPath(graph2, pathValue, path, visited)];
+    } else {
+      return [];
+    }
+  });
+  pathValues.addAll(deeperValues);
+  return pathValues;
+}
+function flatMap(arr, func) {
+  return [...arr].reduce((acc, x) => acc.concat(func(x)), []);
+}
+
+// node_modules/rdf-validate-shacl/src/dataset-utils.js
+function* extractStructure(dataset2, startNode, visited = new TermSet_default()) {
+  if (startNode.termType !== "BlankNode" || visited.has(startNode)) {
+    return;
+  }
+  visited.add(startNode);
+  for (const quad4 of dataset2.match(startNode, null, null)) {
+    yield quad4;
+    yield* extractStructure(dataset2, quad4.object, visited);
+  }
+}
+function* extractSourceShapeStructure(shape, dataset2, startNode, visited = new TermSet_default()) {
+  if (startNode.termType !== "BlankNode" || visited.has(startNode)) {
+    return;
+  }
+  const { factory: factory3 } = shape.context;
+  const { sh, rdfs } = shape.context.ns;
+  const inListSize = (term3) => {
+    const inConstraint = shape.constraints.find((x) => term3.equals(x.paramValue));
+    return inConstraint?.nodeSet.size || -1;
+  };
+  visited.add(startNode);
+  for (const quad4 of dataset2.match(startNode, null, null)) {
+    if (quad4.predicate.equals(sh.in) && inListSize(quad4.object) > 3) {
+      const msg = `sh:in has ${inListSize(quad4.object)} elements and has been removed from the report for brevity. Please refer the original shape`;
+      yield factory3.quad(quad4.subject, rdfs.comment, factory3.literal(msg));
+    } else {
+      yield quad4;
+      yield* extractSourceShapeStructure(shape, dataset2, quad4.object, visited);
+    }
+  }
+}
+function getInstancesOf(cls, ns4) {
+  const classes = getSubClassesOf(cls, ns4);
+  classes.add(cls.term);
+  return [...classes].reduce((acc, classTerm) => {
+    const classInstances = cls.node(classTerm).in(ns4.rdf.type).terms;
+    acc.addAll(classInstances);
+    return acc;
+  }, new node_set_default());
+}
+function getSubClassesOf(cls, ns4) {
+  const subclasses = cls.in(ns4.rdfs.subClassOf);
+  const transubclasses = subclasses.toArray().reduce((acc, subclass) => {
+    const scs = getSubClassesOf(subclass, ns4);
+    acc.addAll(scs);
+    return acc;
+  }, new node_set_default());
+  return new node_set_default([...subclasses.terms, ...transubclasses]);
+}
+function isInstanceOf(instance, cls, ns4) {
+  const classes = getSubClassesOf(cls, ns4);
+  classes.add(cls.term);
+  const types = instance.out(ns4.rdf.type).terms;
+  return types.some((type) => classes.has(type));
+}
+function rdfListToArray(listNode) {
+  return [...listNode.list?.() || []].map(({ term: term3 }) => term3);
+}
+
+// node_modules/rdf-validate-shacl/src/shapes-graph.js
+var ShapesGraph = class {
+  _components;
+  _parametersMap;
+  _shapes;
+  _shapeNodesWithConstraints;
+  _shapesWithTarget;
+  constructor(context) {
+    this.context = context;
+    const { sh } = context.ns;
+    const shaclVocabulary = context.factory.clownface({
+      dataset: context.factory.dataset(sh_default(context))
+    });
+    const componentNodes = getInstancesOf(shaclVocabulary.node(sh.ConstraintComponent), context.ns);
+    this._components = [...componentNodes].map((node) => new ConstraintComponent(node, context, shaclVocabulary));
+    this._parametersMap = /* @__PURE__ */ new Map();
+    for (const component of this._components) {
+      for (const parameter of component.parameters) {
+        this._parametersMap.set(parameter.value, component);
+      }
+    }
+    this._shapes = /* @__PURE__ */ new Map();
+  }
+  getComponentWithParameter(parameter) {
+    return this._parametersMap.get(parameter.value);
+  }
+  getShape(shapeNode) {
+    if (!this._shapes.has(shapeNode.value)) {
+      const shape = new Shape(this.context, shapeNode);
+      this._shapes.set(shapeNode.value, shape);
+    }
+    return this._shapes.get(shapeNode.value);
+  }
+  get shapeNodesWithConstraints() {
+    if (!this._shapeNodesWithConstraints) {
+      const set = new node_set_default();
+      for (const component of this._components) {
+        const params = component.requiredParameters;
+        for (const param of params) {
+          const shapesWithParam = [...this.context.$shapes.dataset.match(null, param, null)].map(({ subject }) => subject);
+          set.addAll(shapesWithParam);
+        }
+      }
+      this._shapeNodesWithConstraints = [...set];
+    }
+    return this._shapeNodesWithConstraints;
+  }
+  get shapesWithTarget() {
+    const { $shapes, ns: ns4 } = this.context;
+    const { rdfs, sh } = ns4;
+    if (!this._shapesWithTarget) {
+      this._shapesWithTarget = this.shapeNodesWithConstraints.filter((shapeNode) => isInstanceOf($shapes.node(shapeNode), $shapes.node(rdfs.Class), ns4) || $shapes.node(shapeNode).out([
+        sh.targetClass,
+        sh.targetNode,
+        sh.targetSubjectsOf,
+        sh.targetObjectsOf,
+        sh.target
+      ]).terms.length > 0).map((shapeNode) => this.getShape(shapeNode));
+    }
+    return this._shapesWithTarget;
+  }
+};
+var Constraint = class _Constraint {
+  shape;
+  component;
+  paramValue;
+  _parameterValues;
+  inNodeSet;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  constructor(shape, component, shapesGraph, _parameterValuesOrSingleParam) {
+    this.shape = shape;
+    this.component = component;
+    this.shapeNodePointer = shapesGraph.node(shape.shapeNode);
+    if ("termType" in _parameterValuesOrSingleParam) {
+      this.paramValue = _parameterValuesOrSingleParam;
+    } else {
+      this._parameterValues = _parameterValuesOrSingleParam;
+    }
+  }
+  get validate() {
+    if (this.component.validator && this.validationFunction) {
+      return (focusNode, valueNode) => {
+        return this.validationFunction(focusNode, valueNode, this);
+      };
+    }
+  }
+  static *fromShape(shape, component, shapesGraph) {
+    const allParams = component.parameters.map((param) => {
+      return [param, shape.shapeNodePointer.out(param).terms];
+    });
+    const combinations = allParams.reduce((acc, [param, values]) => {
+      if (values.length === 0) {
+        return acc;
+      }
+      if (acc.length === 0) {
+        return values.map((value) => [[param, value]]);
+      }
+      return acc.flatMap((comb) => values.map((value) => comb.concat([[param, value]])));
+    }, []);
+    for (const combination of combinations) {
+      if (component.parameters.length === 1) {
+        yield new _Constraint(shape, component, shapesGraph, combination[0][1]);
+        continue;
+      }
+      const params = shape.context.factory.termMap(combination);
+      if (component.isComplete(params)) {
+        yield new _Constraint(shape, component, shapesGraph, params);
+      }
+    }
+  }
+  getParameterValue(param) {
+    return this.paramValue || this._parameterValues.get(param);
+  }
+  get pathObject() {
+    return this.shape.pathObject;
+  }
+  get validationFunction() {
+    return this.shape.isPropertyShape ? this.component.propertyValidationFunction : this.component.nodeValidationFunction;
+  }
+  get isValidationFunctionGeneric() {
+    return this.shape.isPropertyShape ? this.component.propertyValidationFunctionGeneric : this.component.nodeValidationFunctionGeneric;
+  }
+  get componentMessages() {
+    return this.component.getMessages(this.shape);
+  }
+  get nodeSet() {
+    const { sh } = this.shape.context.ns;
+    if (!this.inNodeSet) {
+      this.inNodeSet = new node_set_default(rdfListToArray(this.shapeNodePointer.out(sh.in)));
+    }
+    return this.inNodeSet;
+  }
+};
+var ConstraintComponent = class {
+  node;
+  context;
+  constructor(node, context, shaclVocabulary) {
+    this.node = node;
+    this.context = context;
+    const { factory: factory3, ns: ns4 } = context;
+    const { sh, xsd: xsd4 } = ns4;
+    this.nodePointer = shaclVocabulary.node(node);
+    this.parameters = [];
+    this.parameterNodes = [];
+    this.requiredParameters = [];
+    this.optionals = {};
+    const trueTerm = factory3.literal("true", xsd4.boolean);
+    this.nodePointer.out(sh.parameter).forEach((parameterCf) => {
+      const parameter = parameterCf.term;
+      parameterCf.out(sh.path).forEach(({ term: path }) => {
+        this.parameters.push(path);
+        this.parameterNodes.push(parameter);
+        if (shaclVocabulary.dataset.match(parameter, sh.optional, trueTerm).size > 0) {
+          this.optionals[path.value] = true;
+        } else {
+          this.requiredParameters.push(path);
+        }
+      });
+    });
+    this.validator = context.validators.get(node);
+    if (!this.validator) {
+      return;
+    }
+    if ("nodeValidate" in this.validator) {
+      this.nodeValidationFunction = this.validator.nodeValidate.bind(void 0, this.context);
+      this.nodeValidationMessage = this.validator.nodeValidationMessage;
+    } else if ("validate" in this.validator) {
+      this.nodeValidationFunction = this.validator.validate.bind(void 0, this.context);
+      this.nodeValidationMessage = this.validator.validationMessage;
+      this.nodeValidationFunctionGeneric = true;
+    }
+    if ("propertyValidate" in this.validator) {
+      this.propertyValidationFunction = this.validator.propertyValidate.bind(void 0, this.context);
+      this.propertyValidationMessage = this.validator.propertyValidationMessage;
+    } else if ("validate" in this.validator) {
+      this.propertyValidationFunction = this.validator.validate.bind(void 0, this.context);
+      this.propertyValidationMessage = this.validator.validationMessage;
+      this.propertyValidationFunctionGeneric = true;
+    }
+  }
+  getMessages(shape) {
+    const message = shape.isPropertyShape ? this.propertyValidationMessage : this.nodeValidationMessage;
+    return message ? [message] : [];
+  }
+  isComplete(parameterValues) {
+    return this.requiredParameters.every((param) => parameterValues.has(param));
+  }
+};
+var Shape = class _Shape {
+  constructor(context, shapeNode) {
+    const { $shapes, ns: ns4, shapesGraph, allowNamedNodeInList: allowNamedNodeSequencePaths } = context;
+    const { sh } = ns4;
+    this.context = context;
+    this.shapeNode = shapeNode;
+    this.shapeNodePointer = $shapes.node(shapeNode);
+    this.severity = this.shapeNodePointer.out(sh.severity).term || sh.Violation;
+    this.deactivated = this.shapeNodePointer.out(sh.deactivated).value === "true";
+    this.pathObject = null;
+    const path = this.shapeNodePointer.out(sh.path);
+    if (path.term) {
+      this.path = path;
+      this.pathObject = extractPropertyPath(this.path, ns4, allowNamedNodeSequencePaths);
+    }
+    this.constraints = [];
+    const handled = new node_set_default();
+    const shapeProperties = [...$shapes.dataset.match(shapeNode, null, null)];
+    shapeProperties.forEach((sol) => {
+      const component = shapesGraph.getComponentWithParameter(sol.predicate);
+      if (component && !handled.has(component.node)) {
+        this.constraints.push(...Constraint.fromShape(this, component, $shapes));
+        handled.add(component.node);
+      }
+    });
+  }
+  get isPropertyShape() {
+    return this.pathObject != null;
+  }
+  overridePath(path) {
+    const shape = new _Shape(this.context, this.shapeNode);
+    shape.pathObject = path;
+    return shape;
+  }
+  getTargetNodes(dataGraph) {
+    const { $shapes, ns: ns4 } = this.context;
+    const { rdfs, sh } = ns4;
+    const results = new node_set_default();
+    if (isInstanceOf($shapes.node(this.shapeNode), $shapes.node(rdfs.Class), ns4)) {
+      results.addAll(getInstancesOf(dataGraph.node(this.shapeNode), ns4));
+    }
+    const targetClasses = [...$shapes.dataset.match(this.shapeNode, sh.targetClass, null)];
+    targetClasses.forEach(({ object: targetClass }) => {
+      results.addAll(getInstancesOf(dataGraph.node(targetClass), ns4));
+    });
+    results.addAll(this.shapeNodePointer.out(sh.targetNode).terms);
+    this.shapeNodePointer.out(sh.targetSubjectsOf).terms.forEach((predicate) => {
+      const subjects = [...dataGraph.dataset.match(null, predicate, null)].map(({ subject }) => subject);
+      results.addAll(subjects);
+    });
+    this.shapeNodePointer.out(sh.targetObjectsOf).terms.forEach((predicate) => {
+      const objects = [...dataGraph.dataset.match(null, predicate, null)].map(({ object }) => object);
+      results.addAll(objects);
+    });
+    return [...results];
+  }
+  getValueNodes(focusNode, dataGraph) {
+    if (this.pathObject) {
+      return getPathObjects(dataGraph, focusNode, this.pathObject);
+    } else {
+      return [focusNode];
+    }
+  }
+};
+var shapes_graph_default = ShapesGraph;
+
+// node_modules/rdf-validate-shacl/src/validation-engine.js
+var import_debug = __toESM(require_browser(), 1);
+
+// node_modules/rdf-validate-shacl/src/validation-report.js
+var ValidationReport = class {
+  constructor(pointer, options = {}) {
+    this.factory = options.factory || defaultEnv_default;
+    this.ns = options.ns || prepareNamespaces(this.factory);
+    const { sh, xsd: xsd4 } = this.ns;
+    this.pointer = pointer;
+    this.term = pointer.term;
+    this.dataset = pointer.dataset;
+    const resultsPointer = pointer.out(sh.result);
+    const conforms = resultsPointer.terms.length === 0;
+    pointer.addOut(sh.conforms, this.factory.literal(conforms.toString(), xsd4.boolean));
+    this.conforms = conforms;
+    this.results = resultsPointer.toArray().map((resultPointer) => new ValidationResult(resultPointer, this.ns));
+  }
+};
+var ValidationResult = class _ValidationResult {
+  pointer;
+  ns;
+  constructor(pointer, ns4) {
+    this.pointer = pointer;
+    this.ns = ns4;
+    this.term = pointer.term;
+    this.dataset = pointer.dataset;
+  }
+  get message() {
+    return this.pointer.out(this.ns.sh.resultMessage).terms || [];
+  }
+  get path() {
+    return this.pointer.out(this.ns.sh.resultPath).term || null;
+  }
+  get focusNode() {
+    return this.pointer.out(this.ns.sh.focusNode).term || null;
+  }
+  get severity() {
+    return this.pointer.out(this.ns.sh.resultSeverity).term || null;
+  }
+  get sourceConstraintComponent() {
+    return this.pointer.out(this.ns.sh.sourceConstraintComponent).term || null;
+  }
+  get sourceShape() {
+    return this.pointer.out(this.ns.sh.sourceShape).term || null;
+  }
+  get value() {
+    return this.pointer.out(this.ns.sh.value).term || null;
+  }
+  get detail() {
+    return this.pointer.out(this.ns.sh.detail).map((detailResult) => new _ValidationResult(detailResult, this.ns));
+  }
+};
+var validation_report_default = ValidationReport;
+
+// node_modules/rdf-validate-shacl/src/validation-engine.js
+var error = (0, import_debug.default)("validation-engine::error");
+var defaultMaxNodeChecks = 50;
+var ValidationEngine = class _ValidationEngine {
+  constructor(context, options) {
+    this.context = context;
+    this.factory = context.factory;
+    this.maxErrors = options.maxErrors;
+    this.maxNodeChecks = options.maxNodeChecks === void 0 ? defaultMaxNodeChecks : options.maxNodeChecks;
+    this.initReport();
+    this.recordErrorsLevel = options.recordErrorsLevel || 0;
+    this.violationsCount = 0;
+    this.validationError = null;
+    this.nestedResults = options.nestedResults || {};
+    this.nodeCheckCounters = {};
+    this.reportPointer = this.factory.clownface().blankNode();
+  }
+  clone({ recordErrorsLevel } = {}) {
+    return new _ValidationEngine(this.context, {
+      maxErrors: this.maxErrors,
+      maxNodeChecks: this.maxNodeChecks,
+      recordErrorsLevel
+    });
+  }
+  initReport() {
+    const { rdf: rdf4, sh } = this.context.ns;
+    this.nodeCheckCounters = {};
+    this.reportPointer = this.factory.clownface({
+      term: this.factory.blankNode("report")
+    }).addOut(rdf4.type, sh.ValidationReport);
+  }
+  /**
+   * Validates the data graph against the shapes graph
+   */
+  validateAll(dataGraph) {
+    if (this.maxErrorsReached())
+      return true;
+    this.validationError = null;
+    try {
+      this.initReport();
+      let foundError = false;
+      const shapes = this.context.shapesGraph.shapesWithTarget;
+      for (const shape of shapes) {
+        const focusNodes = shape.getTargetNodes(dataGraph);
+        for (const focusNode of focusNodes) {
+          if (this.validateNodeAgainstShape(focusNode, shape, dataGraph)) {
+            foundError = true;
+          }
+        }
+      }
+      return foundError;
+    } catch (e) {
+      this.validationError = e;
+      return true;
+    }
+  }
+  /**
+   * Returns true if any violation has been found
+   */
+  validateNodeAgainstShape(focusNode, shape, dataGraph) {
+    if (this.maxErrorsReached())
+      return true;
+    if (shape.deactivated)
+      return false;
+    if (this.maxNodeChecks > 0) {
+      const id = JSON.stringify([focusNode, shape.shapeNode]);
+      const nodeCheckCounter = this.nodeCheckCounters[id] === void 0 ? 0 : this.nodeCheckCounters[id];
+      if (nodeCheckCounter > this.maxNodeChecks) {
+        return false;
+      }
+      this.nodeCheckCounters[id] = nodeCheckCounter + 1;
+    }
+    const valueNodes = shape.getValueNodes(focusNode, dataGraph);
+    let errorFound = false;
+    for (const constraint of shape.constraints) {
+      if (this.validateNodeAgainstConstraint(focusNode, valueNodes, constraint, dataGraph)) {
+        errorFound = true;
+      }
+    }
+    return errorFound;
+  }
+  validateNodeAgainstConstraint(focusNode, valueNodes, constraint, dataGraph) {
+    const { sh } = this.context.ns;
+    if (this.maxErrorsReached())
+      return true;
+    if (sh.PropertyConstraintComponent.equals(constraint.component.node)) {
+      let errorFound = false;
+      for (const valueNode of valueNodes) {
+        if (this.validateNodeAgainstShape(valueNode, this.context.shapesGraph.getShape(constraint.paramValue), dataGraph)) {
+          errorFound = true;
+        }
+      }
+      return errorFound;
+    }
+    if (!constraint.validate) {
+      throw new Error("Cannot find validator for constraint component " + constraint.component.node.value);
+    }
+    if (constraint.isValidationFunctionGeneric) {
+      let errorFound = false;
+      for (const valueNode of valueNodes) {
+        if (this.maxErrorsReached()) {
+          break;
+        }
+        const valueNodeError = this.validateValueNodeAgainstConstraint(focusNode, valueNode, constraint);
+        if (valueNodeError) {
+          this.violationsCount++;
+        }
+        errorFound = errorFound || valueNodeError;
+      }
+      return errorFound;
+    } else {
+      return this.validateValueNodeAgainstConstraint(focusNode, null, constraint);
+    }
+  }
+  validateValueNodeAgainstConstraint(focusNode, valueNode, constraint) {
+    const { sh } = this.context.ns;
+    this.recordErrorsLevel++;
+    const validationOutput = constraint.validate(focusNode, valueNode);
+    const validationResults = Array.isArray(validationOutput) ? validationOutput : [validationOutput];
+    const results = validationResults.map((validationResult) => this.createResultFromObject(validationResult, constraint, focusNode, valueNode)).filter(Boolean);
+    if (this.recordErrorsLevel === 1) {
+      for (const result of results) {
+        copyResult(result, this.reportPointer, sh.result);
+      }
+    } else {
+      this.nestedResults[this.recordErrorsLevel] = (this.nestedResults[this.recordErrorsLevel] || []).concat(results);
+    }
+    this.recordErrorsLevel--;
+    return results.length > 0;
+  }
+  maxErrorsReached() {
+    if (this.maxErrors) {
+      return this.violationsCount >= this.maxErrors;
+    } else {
+      return false;
+    }
+  }
+  getReport() {
+    if (this.validationError) {
+      error("Validation Failure: " + this.validationError);
+      throw this.validationError;
+    } else {
+      return new validation_report_default(this.reportPointer, { factory: this.factory, ns: this.context.ns });
+    }
+  }
+  /**
+   * Creates all the validation result nodes and messages for the result of applying the validation logic
+   * of a constraints against a node.
+   * Result passed as the first argument can be false, a resultMessage or a validation result object.
+   * If none of these values is passed no error result or error message will be created.
+   */
+  createResultFromObject(validationResult, constraint, focusNode, valueNode) {
+    const { sh } = this.context.ns;
+    const validationResultObj = this.normalizeValidationResult(validationResult, valueNode);
+    if (!validationResultObj) {
+      return null;
+    }
+    const result = this.createResult(constraint, focusNode);
+    if (validationResultObj.path) {
+      result.addOut(sh.resultPath, validationResultObj.path);
+      this.copyNestedStructure(validationResultObj.path, result);
+    } else if (constraint.shape.isPropertyShape && constraint.shape.path?.term) {
+      result.addOut(sh.resultPath, constraint.shape.path);
+      this.copyNestedStructure(constraint.shape.path.term, result);
+    }
+    if (validationResultObj.value) {
+      result.addOut(sh.value, validationResultObj.value);
+      this.copyNestedStructure(validationResultObj.value, result);
+    } else if (valueNode) {
+      result.addOut(sh.value, valueNode);
+      this.copyNestedStructure(valueNode, result);
+    }
+    const messages = this.createResultMessages(validationResultObj, constraint);
+    for (const message of messages) {
+      result.addOut(sh.resultMessage, message);
+    }
+    return result;
+  }
+  /**
+   * Validators can return a boolean, a string (message) or a validation result object.
+   * This function normalizes all of them as a validation result object.
+   * @returns null if validation was successful.
+   */
+  normalizeValidationResult(validationResult, valueNode) {
+    if (validationResult === false) {
+      return { value: valueNode };
+    } else if (typeof validationResult === "string") {
+      return { message: validationResult, value: valueNode };
+    } else if (typeof validationResult === "object") {
+      return validationResult;
+    } else {
+      return null;
+    }
+  }
+  /**
+   * Creates a new BlankNode holding the SHACL validation result, adding the default
+   * properties for the constraint, focused node and value node
+   */
+  createResult(constraint, focusNode) {
+    const { rdf: rdf4, sh } = this.context.ns;
+    const severity = constraint.shape.severity;
+    const sourceConstraintComponent = constraint.component.node;
+    const sourceShape = constraint.shape.shapeNode;
+    const result = this.factory.clownface().blankNode();
+    result.addOut(rdf4.type, sh.ValidationResult).addOut(sh.resultSeverity, severity).addOut(sh.sourceConstraintComponent, sourceConstraintComponent).addOut(sh.sourceShape, sourceShape).addOut(sh.focusNode, focusNode);
+    this.copySourceShapeStructure(constraint.shape, result);
+    this.copyNestedStructure(focusNode, result);
+    const children = this.nestedResults[this.recordErrorsLevel + 1];
+    if (children) {
+      if (sourceConstraintComponent.equals(sh.NodeConstraintComponent)) {
+        for (const child of children) {
+          copyResult(child, result, sh.detail);
+        }
+      } else {
+      }
+      this.nestedResults[this.recordErrorsLevel + 1] = [];
+    }
+    return result;
+  }
+  copyNestedStructure(subject, result) {
+    const structureQuads = extractStructure(this.context.$shapes.dataset, subject);
+    for (const quad4 of structureQuads) {
+      result.dataset.add(quad4);
+    }
+  }
+  copySourceShapeStructure(shape, result) {
+    const structureQuads = extractSourceShapeStructure(shape, this.context.$shapes.dataset, shape.shapeNode);
+    for (const quad4 of structureQuads) {
+      result.dataset.add(quad4);
+    }
+  }
+  /**
+   * Creates a result message from the validation result and the message pattern in the constraint
+   */
+  createResultMessages(validationResult, constraint) {
+    const { $shapes, ns: ns4 } = this.context;
+    const { sh } = ns4;
+    let messages = [];
+    if (validationResult.message) {
+      messages = [this.factory.literal(validationResult.message)];
+    }
+    if (messages.length === 0) {
+      messages = $shapes.node(constraint.shape.shapeNode).out(sh.message).terms;
+    }
+    if (messages.length === 0) {
+      messages = constraint.componentMessages.map((m) => this.factory.literal(m));
+    }
+    if (messages.length === 0) {
+      messages = $shapes.node(constraint.component.node).out(sh.message).terms;
+    }
+    return messages.map((message) => withSubstitutions(message, constraint, this.factory));
+  }
+};
+function localName(uri) {
+  let index = uri.lastIndexOf("#");
+  if (index < 0) {
+    index = uri.lastIndexOf("/");
+  }
+  if (index < 0) {
+    throw new Error(`Cannot get local name of ${uri}`);
+  }
+  return uri.substring(index + 1);
+}
+function* take(n, iterable) {
+  let i = 0;
+  for (const item of iterable) {
+    if (i++ === n)
+      break;
+    yield item;
+  }
+}
+function nodeLabel(constraint, param) {
+  const node = constraint.getParameterValue(param);
+  if (!node) {
+    return "NULL";
+  }
+  if (node.termType === "NamedNode") {
+    return "<" + node.value + ">";
+  }
+  if (node.termType === "BlankNode") {
+    if (constraint.nodeSet) {
+      const limit = 3;
+      if (constraint.nodeSet.size > limit) {
+        const prefix = Array.from(take(limit, constraint.nodeSet)).map((x) => x.value);
+        return prefix.join(", ") + ` ... (and ${constraint.nodeSet.size - limit} more)`;
+      } else {
+        return Array.from(constraint.nodeSet).map((x) => x.value).join(", ");
+      }
+    }
+    return "Blank node " + node.value;
+  }
+  return node.value;
+}
+function withSubstitutions(messageTerm, constraint, factory3) {
+  const message = constraint.component.parameters.reduce((message2, param) => {
+    const paramName = localName(param.value);
+    const paramValue = nodeLabel(constraint, param);
+    return message2.replace(`{$${paramName}}`, paramValue).replace(`{?${paramName}}`, paramValue);
+  }, messageTerm.value);
+  return factory3.literal(message, messageTerm.language || messageTerm.datatype);
+}
+function copyResult(resultPointer, targetPointer, predicate) {
+  for (const quad4 of resultPointer.dataset) {
+    targetPointer.dataset.add(quad4);
+  }
+  targetPointer.addOut(predicate, resultPointer);
+}
+var validation_engine_default = ValidationEngine;
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/acl.js
+var builder = namespace_default("http://www.w3.org/ns/auth/acl#");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/as.js
+var builder2 = namespace_default("https://www.w3.org/ns/activitystreams#");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/bibo.js
+var builder3 = namespace_default("http://purl.org/ontology/bibo/");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/cc.js
+var builder4 = namespace_default("http://creativecommons.org/ns#");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/cert.js
+var builder5 = namespace_default("http://www.w3.org/ns/auth/cert#");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/cnt.js
+var builder6 = namespace_default("http://www.w3.org/2011/content#");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/constant.js
+var builder7 = namespace_default("http://qudt.org/vocab/constant/");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/crm.js
+var builder8 = namespace_default("http://www.cidoc-crm.org/cidoc-crm/");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/csvw.js
+var builder9 = namespace_default("http://www.w3.org/ns/csvw#");
+var strict = builder9;
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/ctag.js
+var builder10 = namespace_default("http://commontag.org/ns#");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/cur.js
+var builder11 = namespace_default("http://qudt.org/vocab/currency/");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/dash-sparql.js
+var builder12 = namespace_default("http://datashapes.org/sparql#");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/dash.js
+var builder13 = namespace_default("http://datashapes.org/dash#");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/dbo.js
+var builder14 = namespace_default("http://dbpedia.org/ontology/");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/dc11.js
+var builder15 = namespace_default("http://purl.org/dc/elements/1.1/");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/dcam.js
+var builder16 = namespace_default("http://purl.org/dc/dcam/");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/dcat.js
+var builder17 = namespace_default("http://www.w3.org/ns/dcat#");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/dcmitype.js
+var builder18 = namespace_default("http://purl.org/dc/dcmitype/");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/dcterms.js
+var builder19 = namespace_default("http://purl.org/dc/terms/");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/dig.js
+var builder20 = namespace_default("http://www.ics.forth.gr/isl/CRMdig/");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/discipline.js
+var builder21 = namespace_default("http://qudt.org/vocab/discipline/");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/doap.js
+var builder22 = namespace_default("http://usefulinc.com/ns/doap#");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/dprod.js
+var builder23 = namespace_default("https://ekgf.github.io/dprod/");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/dpv.js
+var builder24 = namespace_default("http://www.w3.org/ns/dpv#");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/dqv.js
+var builder25 = namespace_default("http://www.w3.org/ns/dqv#");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/dtype.js
+var builder26 = namespace_default("http://www.linkedmodel.org/schema/dtype#");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/duv.js
+var builder27 = namespace_default("http://www.w3.org/ns/duv#");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/earl.js
+var builder28 = namespace_default("http://www.w3.org/ns/earl#");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/ebucore.js
+var builder29 = namespace_default("http://www.ebu.ch/metadata/ontologies/ebucore/ebucore#");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/exif.js
+var builder30 = namespace_default("http://www.w3.org/2003/12/exif/ns#");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/foaf.js
+var builder31 = namespace_default("http://xmlns.com/foaf/0.1/");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/frbr.js
+var builder32 = namespace_default("http://purl.org/vocab/frbr/core#");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/geo.js
+var builder33 = namespace_default("http://www.opengis.net/ont/geosparql#");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/geof.js
+var builder34 = namespace_default("http://www.opengis.net/def/function/geosparql/");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/geor.js
+var builder35 = namespace_default("http://www.opengis.net/def/rule/geosparql/");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/gml.js
+var builder36 = namespace_default("http://www.opengis.net/ont/gml#");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/gn.js
+var builder37 = namespace_default("http://www.geonames.org/ontology#");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/gr.js
+var builder38 = namespace_default("http://purl.org/goodrelations/v1#");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/grddl.js
+var builder39 = namespace_default("http://www.w3.org/2003/g/data-view#");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/gs1.js
+var builder40 = namespace_default("https://gs1.org/voc/");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/gtfs.js
+var builder41 = namespace_default("http://vocab.gtfs.org/terms#");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/http.js
+var builder42 = namespace_default("http://www.w3.org/2011/http#");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/hydra.js
+var builder43 = namespace_default("http://www.w3.org/ns/hydra/core#");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/ical.js
+var builder44 = namespace_default("http://www.w3.org/2002/12/cal/icaltzd#");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/la.js
+var builder45 = namespace_default("https://linked.art/ns/terms/");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/ldp.js
+var builder46 = namespace_default("http://www.w3.org/ns/ldp#");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/list.js
+var builder47 = namespace_default("http://www.w3.org/2000/10/swap/list#");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/locn.js
+var builder48 = namespace_default("http://www.w3.org/ns/locn#");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/log.js
+var builder49 = namespace_default("http://www.w3.org/2000/10/swap/log#");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/lvont.js
+var builder50 = namespace_default("http://lexvo.org/ontology#");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/m4i.js
+var builder51 = namespace_default("http://w3id.org/nfdi4ing/metadata4ing#");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/ma.js
+var builder52 = namespace_default("http://www.w3.org/ns/ma-ont#");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/mads.js
+var builder53 = namespace_default("http://www.loc.gov/mads/rdf/v1#");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/math.js
+var builder54 = namespace_default("http://www.w3.org/2000/10/swap/math#");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/oa.js
+var builder55 = namespace_default("http://www.w3.org/ns/oa#");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/og.js
+var builder56 = namespace_default("http://ogp.me/ns#");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/oidc.js
+var builder57 = namespace_default("http://www.w3.org/ns/solid/oidc#");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/org.js
+var builder58 = namespace_default("http://www.w3.org/ns/org#");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/owl.js
+var builder59 = namespace_default("http://www.w3.org/2002/07/owl#");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/pim.js
+var builder60 = namespace_default("http://www.w3.org/ns/pim/space#");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/prefix.js
+var builder61 = namespace_default("http://qudt.org/vocab/prefix/");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/prov.js
+var builder62 = namespace_default("http://www.w3.org/ns/prov#");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/qb.js
+var builder63 = namespace_default("http://purl.org/linked-data/cube#");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/qkdv.js
+var builder64 = namespace_default("http://qudt.org/vocab/dimensionvector/");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/quantitykind.js
+var builder65 = namespace_default("http://qudt.org/vocab/quantitykind/");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/qudt.js
+var builder66 = namespace_default("http://qudt.org/schema/qudt/");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/rdau.js
+var builder67 = namespace_default("http://rdaregistry.info/Elements/u/");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/rdf.js
+var builder68 = namespace_default("http://www.w3.org/1999/02/22-rdf-syntax-ns#");
+var strict2 = builder68;
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/rdfa.js
+var builder69 = namespace_default("http://www.w3.org/ns/rdfa#");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/rdfs.js
+var builder70 = namespace_default("http://www.w3.org/2000/01/rdf-schema#");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/rev.js
+var builder71 = namespace_default("http://purl.org/stuff/rev#");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/rico.js
+var builder72 = namespace_default("https://www.ica.org/standards/RiC/ontology#");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/rr.js
+var builder73 = namespace_default("http://www.w3.org/ns/r2rml#");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/rss.js
+var builder74 = namespace_default("http://purl.org/rss/1.0/");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/schema.js
+var builder75 = namespace_default("http://schema.org/");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/sd.js
+var builder76 = namespace_default("http://www.w3.org/ns/sparql-service-description#");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/sdmx.js
+var builder77 = namespace_default("http://purl.org/linked-data/sdmx#");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/sem.js
+var builder78 = namespace_default("http://semanticweb.cs.vu.nl/2009/11/sem/");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/set.js
+var builder79 = namespace_default("http://www.w3.org/2000/10/swap/set#");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/sf.js
+var builder80 = namespace_default("http://www.opengis.net/ont/sf#");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/sh.js
+var builder81 = namespace_default("http://www.w3.org/ns/shacl#");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/shex.js
+var builder82 = namespace_default("http://www.w3.org/ns/shex#");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/shsh.js
+var builder83 = namespace_default("http://www.w3.org/ns/shacl-shacl#");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/sioc.js
+var builder84 = namespace_default("http://rdfs.org/sioc/ns#");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/skos.js
+var builder85 = namespace_default("http://www.w3.org/2004/02/skos/core#");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/skosxl.js
+var builder86 = namespace_default("http://www.w3.org/2008/05/skos-xl#");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/solid.js
+var builder87 = namespace_default("http://www.w3.org/ns/solid/terms#");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/sosa.js
+var builder88 = namespace_default("http://www.w3.org/ns/sosa/");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/sou.js
+var builder89 = namespace_default("http://qudt.org/vocab/sou/");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/ssn.js
+var builder90 = namespace_default("http://www.w3.org/ns/ssn/");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/stat.js
+var builder91 = namespace_default("http://www.w3.org/ns/posix/stat#");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/string.js
+var builder92 = namespace_default("http://www.w3.org/2000/10/swap/string#");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/test.js
+var builder93 = namespace_default("http://www.w3.org/2006/03/test-description#");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/time.js
+var builder94 = namespace_default("http://www.w3.org/2006/time#");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/unit.js
+var builder95 = namespace_default("http://qudt.org/vocab/unit/");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/vaem.js
+var builder96 = namespace_default("http://www.linkedmodel.org/schema/vaem#");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/vann.js
+var builder97 = namespace_default("http://purl.org/vocab/vann/");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/vcard.js
+var builder98 = namespace_default("http://www.w3.org/2006/vcard/ns#");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/void.js
+var builder99 = namespace_default("http://rdfs.org/ns/void#");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/vs.js
+var builder100 = namespace_default("http://www.w3.org/2003/06/sw-vocab-status/ns#");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/vso.js
+var builder101 = namespace_default("http://purl.org/vso/ns#");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/wdrs.js
+var builder102 = namespace_default("http://www.w3.org/2007/05/powder-s#");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/wgs.js
+var builder103 = namespace_default("http://www.w3.org/2003/01/geo/wgs84_pos#");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/xhv.js
+var builder104 = namespace_default("http://www.w3.org/1999/xhtml/vocab#");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/xkos.js
+var builder105 = namespace_default("http://rdf-vocabulary.ddialliance.org/xkos#");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/xsd.js
+var builder106 = namespace_default("http://www.w3.org/2001/XMLSchema#");
+var strict3 = builder106;
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/rif.js
+var builder107 = namespace_default("http://www.w3.org/2007/rif#");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/v.js
+var builder108 = namespace_default("http://rdf.data-vocabulary.org/#");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/wdr.js
+var builder109 = namespace_default("http://www.w3.org/2007/05/powder#");
+
+// node_modules/@tpluscode/rdf-ns-builders/vocabularies/xml.js
+var builder110 = namespace_default("http://www.w3.org/XML/1998/namespace/");
+
+// node_modules/rdf-validate-datatype/src/validators.js
+var Registry = class {
+  validators;
+  constructor() {
+    this.validators = new TermMap_default();
+  }
+  /**
+   * Register a new validator for a specific datatype.
+   */
+  register(datatype, validatorFunc) {
+    this.validators.set(datatype, validatorFunc);
+  }
+  /**
+   * Find validator for a given datatype.
+   */
+  find(datatype) {
+    if (!datatype) {
+      return null;
+    }
+    return this.validators.get(datatype);
+  }
+};
+var validators = new Registry();
+validators.register(strict3.anySimpleType, () => true);
+validators.register(strict3.anyAtomicType, () => true);
+validators.register(strict3.string, () => true);
+validators.register(strict3.normalizedString, (value) => isNormalized(value));
+validators.register(strict3.token, (value) => isNormalized(value) && !value.startsWith(" ") && !value.endsWith(" ") && !value.includes("  "));
+function isNormalized(value) {
+  const forbiddenChars = ["\n", "\r", "	"];
+  return !forbiddenChars.some((forbiddenChar) => value.includes(forbiddenChar));
+}
+var languagePattern = /^[a-zA-Z]{1,8}(-[a-zA-Z0-9]{1,8})*$/;
+validators.register(strict3.language, (value) => languagePattern.test(value));
+var anyURIPattern = /^[^\ufffe\uffff]*$/;
+validators.register(strict3.anyURI, (value) => anyURIPattern.test(value));
+var signSeg = "(\\+|-)?";
+var integerPattern = new RegExp(`^${signSeg}\\d+$`);
+validators.register(strict3.integer, (value) => integerPattern.test(value));
+validators.register(strict3.nonNegativeInteger, (value) => integerPattern.test(value) && BigInt(value) >= BigInt("0"));
+validators.register(strict3.positiveInteger, (value) => integerPattern.test(value) && BigInt(value) > BigInt("0"));
+validators.register(strict3.nonPositiveInteger, (value) => integerPattern.test(value) && BigInt(value) <= BigInt("0"));
+validators.register(strict3.negativeInteger, (value) => integerPattern.test(value) && BigInt(value) < BigInt("0"));
+validators.register(strict3.int, (value) => integerPattern.test(value) && BigInt(value) >= BigInt("-2147483647") && BigInt(value) <= BigInt("2147483648"));
+validators.register(strict3.unsignedInt, (value) => integerPattern.test(value) && BigInt(value) >= BigInt("0") && BigInt(value) <= BigInt("4294967295"));
+validators.register(strict3.long, (value) => integerPattern.test(value) && BigInt(value) >= BigInt("-9223372036854775808") && BigInt(value) <= BigInt("9223372036854775807"));
+validators.register(strict3.unsignedLong, (value) => integerPattern.test(value) && BigInt(value) >= BigInt("0") && BigInt(value) <= BigInt("18446744073709551615"));
+validators.register(strict3.short, (value) => integerPattern.test(value) && BigInt(value) >= BigInt("-32768") && BigInt(value) <= BigInt("32767"));
+validators.register(strict3.unsignedShort, (value) => integerPattern.test(value) && BigInt(value) >= BigInt("0") && BigInt(value) <= BigInt("65535"));
+validators.register(strict3.byte, (value) => integerPattern.test(value) && BigInt(value) >= BigInt("-128") && BigInt(value) <= BigInt("127"));
+validators.register(strict3.unsignedByte, (value) => integerPattern.test(value) && BigInt(value) >= BigInt("0") && BigInt(value) <= BigInt("255"));
+validators.register(strict3.boolean, (value) => value === "1" || value === "true" || value === "0" || value === "false");
+var decimalSeg = `${signSeg}(\\d+\\.?\\d*|\\.\\d+)`;
+var decimalPattern = new RegExp(`^${signSeg}${decimalSeg}$`);
+validators.register(strict3.decimal, (value) => decimalPattern.test(value));
+validators.register(strict3.float, validateFloat);
+validators.register(strict3.double, validateFloat);
+var floatPattern = new RegExp(`^${signSeg}${decimalSeg}((E|e)(\\+|-)?\\d+)?$`);
+function validateFloat(value) {
+  return value === "INF" || value === "-INF" || value === "NaN" || floatPattern.test(value);
+}
+var dateSignSeg = "-?";
+var durationYearSeg = "\\d+Y";
+var durationMonthSeg = "\\d+M";
+var durationDaySeg = "\\d+D";
+var durationHourSeg = "\\d+H";
+var durationMinuteSeg = "\\d+M";
+var durationSecondSeg = "\\d+(\\.\\d+)?S";
+var durationYearMonthSeg = `(${durationYearSeg}(${durationMonthSeg})?|${durationMonthSeg})`;
+var durationTimeSeg = `T((${durationHourSeg}(${durationMinuteSeg})?(${durationSecondSeg})?)|(${durationMinuteSeg}(${durationSecondSeg})?)|${durationSecondSeg})`;
+var durationDayTimeSeg = `(${durationDaySeg}(${durationTimeSeg})?|${durationTimeSeg})`;
+var durationSeg = `${dateSignSeg}P((${durationYearMonthSeg}(${durationDayTimeSeg})?)|${durationDayTimeSeg})`;
+var durationPattern = new RegExp(`^${durationSeg}$`);
+validators.register(strict3.duration, (value) => durationPattern.test(value));
+var dayTimeDurationPattern = new RegExp(`^${dateSignSeg}P${durationDayTimeSeg}$`);
+validators.register(strict3.dayTimeDuration, (value) => dayTimeDurationPattern.test(value));
+var yearMonthDurationPattern = new RegExp(`^${dateSignSeg}P${durationYearMonthSeg}$`);
+validators.register(strict3.yearMonthDuration, (value) => yearMonthDurationPattern.test(value));
+var yearSeg = `${dateSignSeg}(([1-9]\\d{3,})|(0\\d{3}))`;
+var timezoneSeg = "(((\\+|-)\\d{2}:\\d{2})|Z)";
+var monthSeg = "\\d{2}";
+var daySeg = "\\d{2}";
+var dateSeg = `${yearSeg}-${monthSeg}-${daySeg}`;
+var timeSeg = "\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?";
+var dateTimePattern = new RegExp(`^${dateSeg}T${timeSeg}${timezoneSeg}?$`);
+validators.register(strict3.dateTime, (value) => dateTimePattern.test(value));
+var dateTimeStampPattern = new RegExp(`^${dateSeg}T${timeSeg}${timezoneSeg}$`);
+validators.register(strict3.dateTimeStamp, (value) => dateTimeStampPattern.test(value));
+var datePattern = new RegExp(`^${dateSeg}${timezoneSeg}?$`);
+validators.register(strict3.date, (value) => datePattern.test(value));
+var dayPattern = new RegExp(`^${daySeg}${timezoneSeg}?$`);
+validators.register(strict3.gDay, (value) => dayPattern.test(value));
+var monthPattern = new RegExp(`^--${monthSeg}${timezoneSeg}?$`);
+validators.register(strict3.gMonth, (value) => monthPattern.test(value));
+var monthDayPattern = new RegExp(`^${monthSeg}-${daySeg}${timezoneSeg}?$`);
+validators.register(strict3.gMonthDay, (value) => monthDayPattern.test(value));
+var yearPattern = new RegExp(`^${yearSeg}${timezoneSeg}?$`);
+validators.register(strict3.gYear, (value) => yearPattern.test(value));
+var yearMonthPattern = new RegExp(`^${yearSeg}-${monthSeg}${timezoneSeg}?$`);
+validators.register(strict3.gYearMonth, (value) => yearMonthPattern.test(value));
+var timePattern = new RegExp(`^${timeSeg}${timezoneSeg}?$`);
+validators.register(strict3.time, (value) => timePattern.test(value));
+var hexBinaryPattern = /^([0-9a-fA-F]{2})*$/;
+validators.register(strict3.hexBinary, (value) => hexBinaryPattern.test(value));
+var b64CharSeg = "[A-Za-z0-9+/]";
+var b16CharSeg = "[AEIMQUYcgkosw048]";
+var b04CharSeg = "[AQgw]";
+var b64Seg = `(${b64CharSeg} ?)`;
+var b16Seg = `(${b16CharSeg} ?)`;
+var b04Seg = `(${b04CharSeg} ?)`;
+var b64Padded16Seg = `(${b64Seg}{2}${b16Seg}=)`;
+var b64Padded8Seg = `(${b64Seg}${b04Seg}= ?=)`;
+var b64QuadSeg = `(${b64Seg}{4})`;
+var b64FinalQuadSeg = `(${b64Seg}{3}${b64CharSeg})`;
+var b64FinalSeg = `(${b64FinalQuadSeg}|${b64Padded16Seg}|${b64Padded8Seg})`;
+var b64Pattern = new RegExp(`^(${b64QuadSeg}*${b64FinalSeg})?$`);
+validators.register(strict3.base64Binary, (value) => b64Pattern.test(value));
+validators.register(strict.JSON, (value) => {
+  try {
+    JSON.parse(value);
+    return true;
+  } catch (e) {
+    return false;
+  }
+});
+validators.register(strict3.NOTATION, () => true);
+validators.register(strict3.QName, () => true);
+validators.register(strict3.Name, () => true);
+validators.register(strict3.NCName, () => true);
+validators.register(strict3.ENTITY, () => true);
+validators.register(strict3.ID, () => true);
+validators.register(strict3.IDREF, () => true);
+validators.register(strict3.NMTOKEN, () => true);
+validators.register(strict3.ENTITIES, () => true);
+validators.register(strict3.IDREFS, () => true);
+validators.register(strict3.NMTOKENS, () => true);
+validators.register(strict2.XMLLiteral, () => true);
+validators.register(strict2.HTML, () => true);
+
+// node_modules/rdf-validate-datatype/src/validate-term.js
+function validateTerm(term3) {
+  if (term3.termType !== "Literal") {
+    throw new Error("Cannot validate non-literal terms");
+  }
+  const validator2 = validators.find(term3.datatype);
+  if (validator2) {
+    return validator2(term3.value);
+  }
+  return true;
+}
+
+// node_modules/rdf-validate-shacl/src/validators.js
+var import_rdf_literal = __toESM(require_rdf_literal(), 1);
+var validateAnd = {
+  validate(context, focusNode, valueNode, constraint) {
+    const { sh } = context.ns;
+    const andNode = constraint.getParameterValue(sh.and);
+    const shapes = rdfListToArray(context.$shapes.node(andNode));
+    return shapes.every((shape) => {
+      if (constraint.shape.isPropertyShape) {
+        return context.nodeConformsToShape(focusNode, shape, constraint.pathObject);
+      }
+      return context.nodeConformsToShape(valueNode, shape);
+    });
+  }
+};
+var validateClass = {
+  validate(context, focusNode, valueNode, constraint) {
+    const classNode = constraint.getParameterValue(namespaces_default.sh.class);
+    return isInstanceOf(context.$data.node(valueNode), context.$data.node(classNode), context.ns);
+  }
+};
+var validateClosed = {
+  validate(context, focusNode, valueNode, constraint) {
+    const { sh, xsd: xsd4 } = context.ns;
+    const closedNode = constraint.getParameterValue(sh.closed);
+    const ignoredPropertiesNode = constraint.getParameterValue(sh.ignoredProperties);
+    const currentShape = constraint.shape.shapeNode;
+    const trueTerm = context.factory.literal("true", xsd4.boolean);
+    if (!trueTerm.equals(closedNode)) {
+      return;
+    }
+    const allowed = new node_set_default(context.$shapes.node(currentShape).out(sh.property).out(sh.path).terms.filter((term3) => term3.termType === "NamedNode"));
+    if (ignoredPropertiesNode) {
+      allowed.addAll(rdfListToArray(context.$shapes.node(ignoredPropertiesNode)));
+    }
+    const results = [];
+    const valueQuads = [...context.$data.dataset.match(valueNode, null, null)];
+    valueQuads.filter(({ predicate }) => !allowed.has(predicate)).forEach(({ predicate, object }) => {
+      results.push({ path: predicate, value: object });
+    });
+    return results;
+  },
+  validationMessage: "Predicate is not allowed (closed shape)"
+};
+var validateDatatype = {
+  validate(context, focusNode, valueNode, constraint) {
+    const { sh } = context.ns;
+    const datatypeNode = constraint.getParameterValue(sh.datatype);
+    if (valueNode.termType === "Literal") {
+      return valueNode.datatype.equals(datatypeNode) && validateTerm(valueNode);
+    } else {
+      return false;
+    }
+  },
+  validationMessage: "Value does not have datatype {$datatype}"
+};
+var validateDisjoint = {
+  validate(context, focusNode, valueNode, constraint) {
+    const { sh } = context.ns;
+    const disjointNode = constraint.getParameterValue(sh.disjoint);
+    return context.$data.dataset.match(focusNode, disjointNode, valueNode).size === 0;
+  },
+  validationMessage: "Value node must not also be one of the values of {$disjoint}"
+};
+var validateEquals = {
+  propertyValidate(context, focusNode, valueNode, constraint) {
+    const { sh } = context.ns;
+    const path = constraint.shape.pathObject;
+    const equalsNode = constraint.getParameterValue(sh.equals);
+    const results = [];
+    getPathObjects(context.$data, focusNode, path).forEach((value) => {
+      if (context.$data.dataset.match(focusNode, equalsNode, value).size === 0) {
+        results.push({ value });
+      }
+    });
+    const equalsQuads = [...context.$data.dataset.match(focusNode, equalsNode, null)];
+    equalsQuads.forEach(({ object }) => {
+      const value = object;
+      if (!getPathObjects(context.$data, focusNode, path).some((pathValue) => pathValue.equals(value))) {
+        results.push({ value });
+      }
+    });
+    return results;
+  },
+  propertyValidationMessage: "Must have same values as {$equals}",
+  nodeValidate(context, focusNode, valueNode, constraint) {
+    const { sh } = context.ns;
+    const equalsNode = constraint.getParameterValue(sh.equals);
+    const results = [];
+    let solutions = 0;
+    getPathObjects(context.$data, focusNode, equalsNode).forEach((value) => {
+      solutions++;
+      if (!value.equals(focusNode)) {
+        results.push({ value });
+      }
+    });
+    if (results.length === 0 && solutions === 0) {
+      results.push({ value: focusNode });
+    }
+    return results;
+  },
+  nodeValidationMessage: "Must have same values as {$equals}"
+};
+var validateHasValue = {
+  nodeValidate(context, focusNode, valueNode, constraint) {
+    const { sh } = context.ns;
+    const hasValueNode = constraint.getParameterValue(sh.hasValue);
+    return focusNode.equals(hasValueNode);
+  },
+  nodeValidationMessage: "Value must be {$hasValue}",
+  propertyValidate(context, focusNode, valueNode, constraint) {
+    const { sh } = context.ns;
+    const path = constraint.shape.pathObject;
+    const hasValueNode = constraint.getParameterValue(sh.hasValue);
+    return getPathObjects(context.$data, focusNode, path).some((value) => value.equals(hasValueNode));
+  },
+  propertyValidationMessage: "Missing expected value {$hasValue}"
+};
+var validateIn = {
+  validate(context, focusNode, valueNode, constraint) {
+    return constraint.nodeSet.has(valueNode);
+  },
+  validationMessage: "Value is not one of the allowed values: {$in}"
+};
+var validateLanguageIn = {
+  validate(context, focusNode, valueNode, constraint) {
+    const { sh } = context.ns;
+    if (valueNode.termType !== "Literal") {
+      return false;
+    }
+    const valueLanguage = valueNode.language;
+    if (!valueLanguage || valueLanguage === "") {
+      return false;
+    }
+    const languageInNode = constraint.getParameterValue(sh.languageIn);
+    const allowedLanguages = rdfListToArray(context.$shapes.node(languageInNode));
+    return allowedLanguages.some((allowedLanguage) => valueLanguage.startsWith(allowedLanguage.value));
+  },
+  validationMessage: "Language does not match any of {$languageIn}"
+};
+var validateLessThan = {
+  propertyValidate(context, focusNode, valueNode, constraint) {
+    const { sh } = context.ns;
+    const valuePath = constraint.shape.pathObject;
+    const values = getPathObjects(context.$data, focusNode, valuePath);
+    const lessThanNode = constraint.getParameterValue(sh.lessThan);
+    const referenceValues = context.$data.node(focusNode).out(lessThanNode).terms;
+    const invalidValues = [];
+    for (const value of values) {
+      for (const referenceValue of referenceValues) {
+        const c = compareTerms(value, referenceValue, context.ns);
+        if (c === null || c >= 0) {
+          invalidValues.push({ value });
+        }
+      }
+    }
+    return invalidValues;
+  },
+  propertyValidationMessage: "Value is not less than value of {$lessThan}"
+};
+var validateLessThanOrEquals = {
+  propertyValidate(context, focusNode, valueNode, constraint) {
+    const { sh } = context.ns;
+    const valuePath = constraint.shape.pathObject;
+    const values = getPathObjects(context.$data, focusNode, valuePath);
+    const lessThanOrEqualsNode = constraint.getParameterValue(sh.lessThanOrEquals);
+    const referenceValues = context.$data.node(focusNode).out(lessThanOrEqualsNode).terms;
+    const invalidValues = [];
+    for (const value of values) {
+      for (const referenceValue of referenceValues) {
+        const c = compareTerms(value, referenceValue, context.ns);
+        if (c === null || c > 0) {
+          invalidValues.push({ value });
+        }
+      }
+    }
+    return invalidValues;
+  },
+  propertyValidationMessage: "Value is not less than or equal to value of {$lessThanOrEquals}"
+};
+var validateMaxCount = {
+  propertyValidate(context, focusNode, valueNode, constraint) {
+    const { sh } = context.ns;
+    const path = constraint.shape.pathObject;
+    const count = getPathObjects(context.$data, focusNode, path).length;
+    const maxCountNode = constraint.getParameterValue(sh.maxCount);
+    return maxCountNode && count <= Number(maxCountNode.value);
+  },
+  propertyValidationMessage: "More than {$maxCount} values"
+};
+var validateMaxExclusive = {
+  validate(context, focusNode, valueNode, constraint) {
+    const { sh } = context.ns;
+    const maxExclusiveNode = constraint.getParameterValue(sh.maxExclusive);
+    const comp = compareTerms(valueNode, maxExclusiveNode, context.ns);
+    return comp !== null && comp < 0;
+  },
+  validationMessage: "Value is not less than {$maxExclusive}"
+};
+var validateMaxInclusive = {
+  validate(context, focusNode, valueNode, constraint) {
+    const { sh } = context.ns;
+    const maxInclusiveNode = constraint.getParameterValue(sh.maxInclusive);
+    const comp = compareTerms(valueNode, maxInclusiveNode, context.ns);
+    return comp !== null && comp <= 0;
+  },
+  validationMessage: "Value is not less than or equal to {$maxInclusive}"
+};
+var validateMaxLength = {
+  validate(context, focusNode, valueNode, constraint) {
+    if (valueNode.termType === "BlankNode") {
+      return false;
+    }
+    const { sh } = context.ns;
+    const maxLengthNode = constraint.getParameterValue(sh.maxLength);
+    return valueNode.value.length <= Number(maxLengthNode.value);
+  },
+  validationMessage: "Value has more than {$maxLength} characters"
+};
+var validateMinCount = {
+  propertyValidate(context, focusNode, valueNode, constraint) {
+    const { sh } = context.ns;
+    const path = constraint.pathObject;
+    const count = getPathObjects(context.$data, focusNode, path).length;
+    const minCountNode = constraint.getParameterValue(sh.minCount);
+    return count >= Number(minCountNode.value);
+  },
+  propertyValidationMessage: "Less than {$minCount} values"
+};
+var validateMinExclusive = {
+  validate(context, focusNode, valueNode, constraint) {
+    const { sh } = context.ns;
+    const minExclusiveNode = constraint.getParameterValue(sh.minExclusive);
+    const comp = compareTerms(valueNode, minExclusiveNode, context.ns);
+    return comp !== null && comp > 0;
+  },
+  validationMessage: "Value is not greater than {$minExclusive}"
+};
+var validateMinInclusive = {
+  validate(context, focusNode, valueNode, constraint) {
+    const { sh } = context.ns;
+    const minInclusiveNode = constraint.getParameterValue(sh.minInclusive);
+    const comp = compareTerms(valueNode, minInclusiveNode, context.ns);
+    return comp !== null && comp >= 0;
+  },
+  validationMessage: "Value is not greater than or equal to {$minInclusive}"
+};
+var validateMinLength = {
+  validate(context, focusNode, valueNode, constraint) {
+    if (valueNode.termType === "BlankNode") {
+      return false;
+    }
+    const { sh } = context.ns;
+    const minLengthNode = constraint.getParameterValue(sh.minLength);
+    return valueNode.value.length >= Number(minLengthNode.value);
+  },
+  validationMessage: "Value has less than {$minLength} characters"
+};
+var validateNodeKind = {
+  validate(context, focusNode, valueNode, constraint) {
+    const { sh } = context.ns;
+    const nodeKindNode = constraint.getParameterValue(sh.nodeKind);
+    if (valueNode.termType === "BlankNode") {
+      return sh.BlankNode.equals(nodeKindNode) || sh.BlankNodeOrIRI.equals(nodeKindNode) || sh.BlankNodeOrLiteral.equals(nodeKindNode);
+    } else if (valueNode.termType === "NamedNode") {
+      return sh.IRI.equals(nodeKindNode) || sh.BlankNodeOrIRI.equals(nodeKindNode) || sh.IRIOrLiteral.equals(nodeKindNode);
+    } else if (valueNode.termType === "Literal") {
+      return sh.Literal.equals(nodeKindNode) || sh.BlankNodeOrLiteral.equals(nodeKindNode) || sh.IRIOrLiteral.equals(nodeKindNode);
+    }
+  },
+  validationMessage: "Value does not have node kind {$nodeKind}"
+};
+var validateNode = {
+  validate(context, focusNode, valueNode, constraint) {
+    const { sh } = context.ns;
+    const nodeNode = constraint.getParameterValue(sh.node);
+    return context.validateNodeAgainstShape(valueNode, nodeNode);
+  },
+  validationMessage: "Value does not have shape {$node}"
+};
+var validateNot = {
+  validate(context, focusNode, valueNode, constraint) {
+    const { sh } = context.ns;
+    const notNode = constraint.getParameterValue(sh.not);
+    return !context.nodeConformsToShape(valueNode, notNode);
+  },
+  validationMessage: "Value does have shape {$not}"
+};
+var validateOr = {
+  validate(context, focusNode, valueNode, constraint) {
+    const { sh } = context.ns;
+    const orNode = constraint.getParameterValue(sh.or);
+    const shapes = rdfListToArray(context.$shapes.node(orNode));
+    return shapes.some((shape) => context.nodeConformsToShape(valueNode, shape));
+  }
+};
+var validatePattern = {
+  validate(context, focusNode, valueNode, constraint) {
+    if (valueNode.termType === "BlankNode") {
+      return false;
+    }
+    const { sh } = context.ns;
+    const flagsNode = constraint.getParameterValue(sh.flags);
+    const patternNode = constraint.getParameterValue(sh.pattern);
+    const re = flagsNode ? new RegExp(patternNode.value, flagsNode.value) : new RegExp(patternNode.value);
+    return re.test(valueNode.value);
+  },
+  validationMessage: 'Value does not match pattern "{$pattern}"'
+};
+var validateQualifiedMaxCount = {
+  propertyValidate(context, focusNode, valueNode, constraint) {
+    const { sh } = context.ns;
+    const count = validateQualifiedHelper(context, focusNode, constraint);
+    const qualifiedMaxCountNode = constraint.getParameterValue(sh.qualifiedMaxCount);
+    return qualifiedMaxCountNode.termType === "Literal" && count <= Number(qualifiedMaxCountNode.value);
+  },
+  propertyValidationMessage: "More than {$qualifiedMaxCount} values have shape {$qualifiedValueShape}"
+};
+var validateQualifiedMinCount = {
+  propertyValidate(context, focusNode, valueNode, constraint) {
+    const { sh } = context.ns;
+    const count = validateQualifiedHelper(context, focusNode, constraint);
+    const qualifiedMinCountNode = constraint.getParameterValue(sh.qualifiedMinCount);
+    return qualifiedMinCountNode.termType === "Literal" && count >= Number(qualifiedMinCountNode.value);
+  },
+  propertyValidationMessage: "Less than {$qualifiedMinCount} values have shape {$qualifiedValueShape}"
+};
+function validateQualifiedHelper(context, focusNode, constraint) {
+  const { sh, xsd: xsd4 } = context.ns;
+  const currentShapeNode = constraint.shape.shapeNode;
+  const qualifiedValueShapesDisjointNode = constraint.getParameterValue(sh.qualifiedValueShapesDisjoint);
+  const qualifiedValueShapeNode = constraint.getParameterValue(sh.qualifiedValueShape);
+  const trueTerm = context.factory.literal("true", xsd4.boolean);
+  const siblingShapes = new node_set_default();
+  if (trueTerm.equals(qualifiedValueShapesDisjointNode)) {
+    const qualifiedSiblingShapes = context.$shapes.node(currentShapeNode).in(sh.property).out(sh.property).out(sh.qualifiedValueShape).filter(({ term: term3 }) => !term3.equals(qualifiedValueShapeNode)).terms;
+    siblingShapes.addAll(qualifiedSiblingShapes);
+  }
+  const path = constraint.shape.pathObject;
+  return getPathObjects(context.$data, focusNode, path).filter((value) => context.nodeConformsToShape(value, qualifiedValueShapeNode) && !validateQualifiedConformsToASibling(context, value, [...siblingShapes])).length;
+}
+function validateQualifiedConformsToASibling(context, value, siblingShapes) {
+  for (let i = 0; i < siblingShapes.length; i++) {
+    if (context.nodeConformsToShape(value, siblingShapes[i])) {
+      return true;
+    }
+  }
+  return false;
+}
+var validateUniqueLang = {
+  propertyValidate(context, focusNode, valueNode, constraint) {
+    const { sh, xsd: xsd4 } = context.ns;
+    const uniqueLangNode = constraint.getParameterValue(sh.uniqueLang);
+    const trueTerm = context.factory.literal("true", xsd4.boolean);
+    if (!trueTerm.equals(uniqueLangNode)) {
+      return;
+    }
+    const path = constraint.shape.pathObject;
+    const map = {};
+    getPathObjects(context.$data, focusNode, path).forEach((value) => {
+      if (value.termType === "Literal" && value.language && value.language !== "") {
+        const old = map[value.language];
+        if (!old) {
+          map[value.language] = 1;
+        } else {
+          map[value.language] = old + 1;
+        }
+      }
+    });
+    const results = [];
+    for (const lang in map) {
+      if (Object.prototype.hasOwnProperty.call(map, lang)) {
+        const count = map[lang];
+        if (count > 1) {
+          results.push('Language "' + lang + '" has been used by ' + count + " values");
+        }
+      }
+    }
+    return results;
+  },
+  propertyValidationMessage: 'Language "{?lang}" used more than once'
+};
+var validateXone = {
+  validate(context, focusNode, valueNode, constraint) {
+    const { sh } = context.ns;
+    const xoneNode = constraint.getParameterValue(sh.xone);
+    const shapes = rdfListToArray(context.$shapes.node(xoneNode));
+    const conformsCount = shapes.map((shape) => context.nodeConformsToShape(valueNode, shape)).filter(Boolean).length;
+    return conformsCount === 1;
+  }
+};
+function compareTerms(term1, term22, ns4) {
+  if (!term1 || !term22 || term1.termType !== "Literal" || term22.termType !== "Literal") {
+    return null;
+  }
+  if (hasTimezone(term1, ns4) !== hasTimezone(term22, ns4)) {
+    return null;
+  }
+  const value1 = (0, import_rdf_literal.fromRdf)(term1);
+  const value2 = (0, import_rdf_literal.fromRdf)(term22);
+  if (typeof value1 !== typeof value2) {
+    return null;
+  }
+  if (typeof value1 === "string") {
+    return value1.localeCompare(value2);
+  } else {
+    return value1 - value2;
+  }
+}
+function hasTimezone(node, ns4) {
+  const pattern = /^.*(((\+|-)\d{2}:\d{2})|Z)$/;
+  return ns4.xsd.dateTime.equals(node.datatype) && pattern.test(node.value);
+}
+var validators_default = {
+  validateAnd,
+  validateClass,
+  validateClosed,
+  validateDatatype,
+  validateDisjoint,
+  validateEquals,
+  validateHasValue,
+  validateIn,
+  validateLanguageIn,
+  validateLessThan,
+  validateLessThanOrEquals,
+  validateMaxCount,
+  validateMaxExclusive,
+  validateMaxInclusive,
+  validateMaxLength,
+  validateMinCount,
+  validateMinExclusive,
+  validateMinInclusive,
+  validateMinLength,
+  validateNode,
+  validateNodeKind,
+  validateNot,
+  validateOr,
+  validatePattern,
+  validateQualifiedMaxCount,
+  validateQualifiedMinCount,
+  validateUniqueLang,
+  validateXone
+};
+
+// node_modules/rdf-validate-shacl/src/validators-registry.js
+var validators_registry_default = [
+  [namespaces_default.sh.AndConstraintComponent, validators_default.validateAnd],
+  [namespaces_default.sh.ClassConstraintComponent, validators_default.validateClass],
+  [namespaces_default.sh.ClosedConstraintComponent, validators_default.validateClosed],
+  [namespaces_default.sh.DatatypeConstraintComponent, validators_default.validateDatatype],
+  [namespaces_default.sh.DisjointConstraintComponent, validators_default.validateDisjoint],
+  [namespaces_default.sh.EqualsConstraintComponent, validators_default.validateEquals],
+  [namespaces_default.sh.HasValueConstraintComponent, validators_default.validateHasValue],
+  [namespaces_default.sh.InConstraintComponent, validators_default.validateIn],
+  [namespaces_default.sh.LanguageInConstraintComponent, validators_default.validateLanguageIn],
+  [namespaces_default.sh.LessThanConstraintComponent, validators_default.validateLessThan],
+  [namespaces_default.sh.LessThanOrEqualsConstraintComponent, validators_default.validateLessThanOrEquals],
+  [namespaces_default.sh.MaxCountConstraintComponent, validators_default.validateMaxCount],
+  [namespaces_default.sh.MaxExclusiveConstraintComponent, validators_default.validateMaxExclusive],
+  [namespaces_default.sh.MaxInclusiveConstraintComponent, validators_default.validateMaxInclusive],
+  [namespaces_default.sh.MaxLengthConstraintComponent, validators_default.validateMaxLength],
+  [namespaces_default.sh.MinCountConstraintComponent, validators_default.validateMinCount],
+  [namespaces_default.sh.MinExclusiveConstraintComponent, validators_default.validateMinExclusive],
+  [namespaces_default.sh.MinInclusiveConstraintComponent, validators_default.validateMinInclusive],
+  [namespaces_default.sh.MinLengthConstraintComponent, validators_default.validateMinLength],
+  [namespaces_default.sh.NodeConstraintComponent, validators_default.validateNode],
+  [namespaces_default.sh.NodeKindConstraintComponent, validators_default.validateNodeKind],
+  [namespaces_default.sh.NotConstraintComponent, validators_default.validateNot],
+  [namespaces_default.sh.OrConstraintComponent, validators_default.validateOr],
+  [namespaces_default.sh.PatternConstraintComponent, validators_default.validatePattern],
+  [namespaces_default.sh.QualifiedMaxCountConstraintComponent, validators_default.validateQualifiedMaxCount],
+  [namespaces_default.sh.QualifiedMinCountConstraintComponent, validators_default.validateQualifiedMinCount],
+  [namespaces_default.sh.UniqueLangConstraintComponent, validators_default.validateUniqueLang],
+  [namespaces_default.sh.XoneConstraintComponent, validators_default.validateXone]
+];
+
+// node_modules/rdf-validate-shacl/index.js
+var SHACLValidator = class {
+  importsLoaded = false;
+  /**
+   * @param shapes - Dataset containing the SHACL shapes for validation
+   * @param {object} [options] - Validator options
+   */
+  constructor(shapes, options) {
+    options = options || {};
+    this.factory = options.factory || defaultEnv_default;
+    this.ns = prepareNamespaces(this.factory);
+    this.allowNamedNodeInList = options.allowNamedNodeInList === void 0 ? false : options.allowNamedNodeInList;
+    const dataset2 = this.factory.dataset([...shapes]);
+    this.$shapes = this.factory.clownface({ dataset: dataset2 });
+    this.$data = this.factory.clownface();
+    this.validators = this.factory.termMap(validators_registry_default);
+    this.shapesGraph = new shapes_graph_default(this);
+    this.validationEngine = new validation_engine_default(this, options);
+    if (options.importGraph) {
+      this.importGraph = options.importGraph;
+    }
+    this.depth = 0;
+  }
+  /**
+   * Validates the provided data graph against the provided shapes graph
+   */
+  async validate(dataGraph) {
+    await this.loadOwlImports();
+    this.setDataGraph(dataGraph);
+    this.validationEngine.validateAll(this.$data);
+    return this.validationEngine.getReport();
+  }
+  /**
+   * Validates the provided focus node against the provided shape
+   */
+  async validateNode(dataGraph, focusNode, shapeNode) {
+    await this.loadOwlImports();
+    this.setDataGraph(dataGraph);
+    this.nodeConformsToShape(focusNode, shapeNode, this.validationEngine);
+    return this.validationEngine.getReport();
+  }
+  setDataGraph(dataGraph) {
+    if ("dataset" in dataGraph) {
+      this.$data = dataGraph;
+    } else {
+      this.$data = this.factory.clownface({ dataset: dataGraph });
+    }
+  }
+  /**
+   * Exposed to be available from validation functions as `SHACL.nodeConformsToShape`
+   */
+  nodeConformsToShape(focusNode, shapeNode, propertyPathOrEngine) {
+    let engine;
+    let shape = this.shapesGraph?.getShape(shapeNode);
+    if (propertyPathOrEngine && "termType" in propertyPathOrEngine) {
+      engine = this.validationEngine.clone({
+        recordErrorsLevel: this.validationEngine.recordErrorsLevel
+      });
+      shape = shape.overridePath(propertyPathOrEngine);
+    } else if (propertyPathOrEngine && "clone" in propertyPathOrEngine) {
+      engine = propertyPathOrEngine;
+    } else {
+      engine = this.validationEngine.clone();
+    }
+    try {
+      this.depth++;
+      const foundViolations = engine.validateNodeAgainstShape(focusNode, shape, this.$data);
+      return !foundViolations;
+    } finally {
+      this.depth--;
+    }
+  }
+  validateNodeAgainstShape(focusNode, shapeNode) {
+    return this.nodeConformsToShape(focusNode, shapeNode, this.validationEngine);
+  }
+  async loadOwlImports() {
+    if (this.importsLoaded) {
+      return;
+    }
+    this.importsLoaded = true;
+    const { owl } = this.ns;
+    const loaded = new TermSet_default();
+    const doLoad = async (url) => {
+      if (!this.importGraph) {
+        throw new Error("importGraph parameter is required to load owl:imports");
+      }
+      const imported = await this.importGraph(url);
+      for (const quad4 of imported) {
+        this.$shapes.dataset.add(quad4);
+      }
+      return imported;
+    };
+    const loadFromDataset = (dataset2) => {
+      const toImport = new TermSet_default();
+      for (const { object } of dataset2.match(null, owl.imports)) {
+        if (object.termType === "NamedNode" && !loaded.has(object) && !toImport.has(object)) {
+          loaded.add(object);
+          toImport.add(object);
+        }
+      }
+      return Promise.all([...toImport].map(async (url) => {
+        await loadFromDataset(await doLoad(url));
+      }));
+    };
+    await loadFromDataset(this.$shapes.dataset);
+  }
+};
+var rdf_validate_shacl_default = SHACLValidator;
+
+// lib/core/shapes/text.mjs
+var SHAPES_TTL = node_fs_default.readFileSync(
+  node_path_default.join(node_path_default.dirname(fileURLToPath(import.meta.url)), "activitystreams.ttl"),
+  "utf8"
+);
+
+// lib/core/shapes/index.mjs
+var rdf3 = new Environment_default([Factory_default, Factory_default2, Factory_default3, Factory_default4, Factory_default5, Factory_default6]);
+var SHAPES_BASE = "https://fedipod.invalid/shapes";
+var validator;
+var brokenReported = false;
+function shacl() {
+  if (!validator) {
+    const quads = new N3Parser({ baseIRI: SHAPES_BASE, format: "text/turtle" }).parse(SHAPES_TTL);
+    validator = new rdf_validate_shacl_default(rdf3.dataset(quads.map(asTerm)), { factory: rdf3 });
+  }
+  return validator;
+}
+function asTerm(q) {
+  const term3 = (t) => {
+    if (t.termType === "NamedNode") return rdf3.namedNode(t.value);
+    if (t.termType === "BlankNode") return rdf3.blankNode(String(t.value).replace(/^_:/u, ""));
+    if (t.termType === "Literal") {
+      return rdf3.literal(t.value, t.language || (t.datatype ? rdf3.namedNode(t.datatype.value) : void 0));
+    }
+    return rdf3.defaultGraph();
+  };
+  return rdf3.quad(term3(q.subject), term3(q.predicate), term3(q.object));
+}
+async function checkShapes(quads) {
+  if (!Array.isArray(quads) || quads.length === 0) return null;
+  let report;
+  try {
+    report = await shacl().validate(rdf3.dataset(quads.map(asTerm)));
+  } catch (e) {
+    if (!brokenReported) {
+      brokenReported = true;
+      return { conforms: false, broken: true, results: [{ focus: null, path: null, message: `shape validation is not running: ${e.message}`, shape: null }] };
+    }
+    return null;
+  }
+  if (report.conforms) return null;
+  return {
+    conforms: false,
+    results: report.results.slice(0, 10).map((r) => ({
+      focus: r.focusNode?.value ?? null,
+      path: r.path?.value ?? null,
+      message: r.message?.[0]?.value ?? String(r.sourceConstraintComponent?.value ?? "does not fit the shape"),
+      shape: r.sourceShape?.value ?? null
+    }))
+  };
+}
+function describeShapeFailure(failure) {
+  if (!failure) return null;
+  return failure.results.map((r) => `${r.path ? r.path.replace(/^.*[#/]/u, "") : "node"}: ${r.message}`).join("; ");
+}
+
 // lib/core/intake/index.mjs
 var POLL_MS = 2 * 6e4;
 var POLL_PUSH_OK_MS = 10 * 6e4;
@@ -46447,13 +62528,9 @@ var Intake = class {
           out.discarded++;
         } else {
           const got = await readItem(this.remote, item.url, { maxBytes: MAX_ITEM_BYTES, readCapped });
-          const activity = got.raw === null ? null : (() => {
-            try {
-              return JSON.parse(got.raw);
-            } catch {
-              return null;
-            }
-          })();
+          const read2 = got.raw === null ? null : await readLenient(got.raw);
+          if (read2?.degraded) this.log(`inbox item ${item.url} read as plain JSON: ${read2.degraded}`);
+          const activity = read2?.doc ?? null;
           if (keepConcerning) {
             const rejection = activity ? await this.handle(activity) : "unparsable JSON";
             if (rejection) out.dropped++;
@@ -46592,9 +62669,21 @@ var Intake = class {
       try {
         const got = await readItem(this.remote, url, { maxBytes: MAX_ITEM_BYTES, readCapped });
         const raw = got.raw;
-        try {
-          activity = raw ? JSON.parse(raw) : null;
-        } catch {
+        const read2 = raw ? await readLenient(raw) : null;
+        if (read2?.degraded) this.log(`inbox item ${url} read as plain JSON: ${read2.degraded}`);
+        activity = read2?.doc ?? null;
+        if (read2?.graph) {
+          const failure = await checkShapes(read2.graph);
+          if (failure) {
+            const said = describeShapeFailure(failure);
+            this.log(`inbox item ${url} does not fit its shape: ${said}`);
+            this.store.addDeadLetter({
+              inboxUrl: url,
+              reason: `shape: ${said}`,
+              shapeOnly: true,
+              activity: trimActivity(activity)
+            });
+          }
         }
         const receipt = activity ? await this._readReceipt(url) : null;
         if (activity && this.gatewaySecret()) this._bumpGatewayStat(!!receipt?.verified);
@@ -47197,7 +63286,7 @@ function checkPassword(rec, password) {
 }
 var escapeHtml = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 var parseRedirects = (v) => (Array.isArray(v) ? v : String(v || "").split(/\s+/)).map((s) => s.trim()).filter(Boolean);
-function sendLoginForm(res, params, error = "", client = null, status2 = null, headers = {}) {
+function sendLoginForm(res, params, error2 = "", client = null, status2 = null, headers = {}) {
   const hidden = [...params.entries()].filter(([k]) => k !== "password").map(([k, v]) => `<input type="hidden" name="${escapeHtml(k)}" value="${escapeHtml(v)}">`).join("\n");
   let asking = "<p>Enter the agent password to authorize this client.</p>";
   if (client && (client.name || client.redirect)) {
@@ -47210,7 +63299,7 @@ function sendLoginForm(res, params, error = "", client = null, status2 = null, h
     asking = `<p><strong>${who}</strong> is asking to access your account${where ? `, sending the authorization to <code>${escapeHtml(where)}</code>` : ""}.</p><p>Scope: <code>${escapeHtml(client.scope || "read")}</code>. Enter the agent password to allow it.</p>`;
   }
   res.writeHead(
-    status2 || (error ? 401 : 200),
+    status2 || (error2 ? 401 : 200),
     { "content-type": "text/html; charset=utf-8", ...headers }
   );
   res.end(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
@@ -47226,12 +63315,12 @@ input,button{font:inherit;width:100%;padding:.5rem;margin:.3rem 0;box-sizing:bor
 <main>
 <h1>FediPod</h1>
 ${asking}
-${error ? `<p class="err" id="login-err" role="alert">${escapeHtml(error)}</p>` : ""}
+${error2 ? `<p class="err" id="login-err" role="alert">${escapeHtml(error2)}</p>` : ""}
 <form method="POST" action="/oauth/authorize">
 ${hidden}
 <label for="password">Agent password</label>
 <input type="password" id="password" name="password" autofocus autocomplete="current-password"
-  ${error ? 'aria-invalid="true" aria-describedby="login-err"' : ""}>
+  ${error2 ? 'aria-invalid="true" aria-describedby="login-err"' : ""}>
 <button type="submit">Authorize</button>
 </form>
 </main></body></html>`);
@@ -51974,6 +68063,44 @@ function writeJsonAtomic(file, obj, opts) {
   writeFileAtomic(file, JSON.stringify(obj, null, 2) + "\n", opts);
 }
 
+// lib/connections/vault.mjs
+function fileVault(dir) {
+  const file = (name) => node_path_default.join(dir, `${name}.json`);
+  return {
+    kind: "file",
+    where: dir,
+    names() {
+      try {
+        return node_fs_default.readdirSync(dir).filter((n) => n.endsWith(".json")).map((n) => n.slice(0, -5));
+      } catch {
+        return [];
+      }
+    },
+    read(name) {
+      try {
+        return JSON.parse(node_fs_default.readFileSync(file(name), "utf8"));
+      } catch {
+        return null;
+      }
+    },
+    write(name, rec) {
+      node_fs_default.mkdirSync(dir, { recursive: true, mode: 448 });
+      writeJsonAtomic(file(name), rec);
+    },
+    async remove(name) {
+      try {
+        node_fs_default.rmSync(file(name));
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    async commit() {
+      return true;
+    }
+  };
+}
+
 // lib/connections/atproto.mjs
 init_safefetch();
 var FILE = "atproto.json";
@@ -52025,10 +68152,15 @@ function bskyText(text, noteUrl) {
   const facets = detectFacets(out);
   return { text: out, facets, truncated: true };
 }
-var filePath = (dir) => node_path_default.join(dir, FILE);
 var Atproto = class {
-  constructor({ localDir, actorId = null, log: log2 = console.log, fetcher: fetcher2 = null }) {
-    this.localDir = localDir;
+  /**
+   * `vault` is where the app password is kept: this machine when the identity
+   * runs on a laptop, its own pod when it runs inside the pod server. Absent,
+   * it is the file beside the credential, which is what a laptop wants.
+   */
+  constructor({ localDir, vault = null, actorId = null, log: log2 = console.log, fetcher: fetcher2 = null }) {
+    this.vault = vault || fileVault(localDir);
+    this.name = vault ? "bluesky" : FILE.replace(/\.json$/u, "");
     this.actorId = actorId;
     this.log = log2;
     this.fetcher = fetcher2 || ((url, init) => safeFetch(url, init));
@@ -52038,21 +68170,16 @@ var Atproto = class {
   // The stamped-record guard: a credential minted for another actor is treated
   // as absent, never silently adopted across identities.
   read() {
-    let rec;
-    try {
-      rec = JSON.parse(node_fs_default.readFileSync(filePath(this.localDir), "utf8"));
-    } catch {
-      return null;
-    }
+    const rec = this.vault.read(this.name);
+    if (!rec) return null;
     if (rec?.mintedFor && this.actorId && rec.mintedFor !== this.actorId) {
-      this.log(`atproto.json belongs to ${rec.mintedFor} \u2014 not reusing it for ${this.actorId}`);
+      this.log(`the Bluesky connection belongs to ${rec.mintedFor} \u2014 not reusing it for ${this.actorId}`);
       return null;
     }
     return rec;
   }
   write(rec) {
-    node_fs_default.mkdirSync(this.localDir, { recursive: true, mode: 448 });
-    writeJsonAtomic(filePath(this.localDir), rec);
+    this.vault.write(this.name, rec);
   }
   connected() {
     return !!this.read()?.did;
@@ -52125,10 +68252,7 @@ var Atproto = class {
       }).catch(() => {
       });
     }
-    try {
-      node_fs_default.rmSync(filePath(this.localDir));
-    } catch {
-    }
+    await this.vault.remove(this.name);
     this.log("bluesky disconnected");
   }
   async _refresh(rec) {
@@ -52396,8 +68520,14 @@ function cleanHost(host) {
   return /^[a-z0-9.-]+(:\d+)?$/i.test(raw) ? raw.toLowerCase() : null;
 }
 var FediAccounts = class {
-  constructor({ localDir, actorId = null, log: log2 = console.log, fetcher: fetcher2 = null }) {
-    this.dir = node_path_default.join(localDir, DIR);
+  /**
+   * `vault` and `apps` are where the credentials and the per-host app
+   * registrations live. Absent, they are the directories beside the
+   * credential file, which is what a laptop wants.
+   */
+  constructor({ localDir, vault = null, apps: apps2 = null, actorId = null, log: log2 = console.log, fetcher: fetcher2 = null }) {
+    this.vault = vault || fileVault(node_path_default.join(localDir, DIR));
+    this.apps = apps2 || fileVault(node_path_default.join(localDir, DIR, APPS));
     this.actorId = actorId;
     this.log = log2;
     this.fetcher = fetcher2 || ((url, init) => safeFetch(url, init));
@@ -52405,34 +68535,20 @@ var FediAccounts = class {
     this.pending = /* @__PURE__ */ new Map();
   }
   // ---- records ----
-  _path(id) {
-    return node_path_default.join(this.dir, `${id}.json`);
-  }
   ids() {
-    let names = [];
-    try {
-      names = node_fs_default.readdirSync(this.dir);
-    } catch {
-      return [];
-    }
-    return names.filter((n) => n.endsWith(".json") && !n.startsWith("_")).map((n) => n.slice(0, -5));
+    return this.vault.names().filter((n) => !n.startsWith("_"));
   }
   read(id) {
-    let rec;
-    try {
-      rec = JSON.parse(node_fs_default.readFileSync(this._path(id), "utf8"));
-    } catch {
-      return null;
-    }
+    const rec = this.vault.read(id);
+    if (!rec) return null;
     if (rec?.mintedFor && this.actorId && rec.mintedFor !== this.actorId) {
-      this.log(`fediaccts/${id}.json belongs to ${rec.mintedFor} \u2014 not reusing it for ${this.actorId}`);
+      this.log(`the connection record for ${id} belongs to ${rec.mintedFor} \u2014 not reusing it for ${this.actorId}`);
       return null;
     }
     return rec;
   }
   write(rec) {
-    node_fs_default.mkdirSync(this.dir, { recursive: true, mode: 448 });
-    writeJsonAtomic(this._path(rec.id), rec);
+    this.vault.write(rec.id, rec);
   }
   list() {
     return this.ids().map((id) => this.read(id)).filter(Boolean);
@@ -52466,13 +68582,9 @@ var FediAccounts = class {
     this.write({ ...rec, enabled: !!on });
     return this.roster().find((r) => r.id === id) || null;
   }
-  remove(id) {
+  async remove(id) {
     if (!this.read(id)) return false;
-    try {
-      node_fs_default.rmSync(this._path(id));
-    } catch {
-      return false;
-    }
+    if (!await this.vault.remove(id)) return false;
     this.log(`Fediverse account disconnected: ${id}`);
     return true;
   }
@@ -52502,12 +68614,8 @@ var FediAccounts = class {
   // was registered, so an agent that moved to another port re-registers rather
   // than sending the server a redirect it will refuse.
   async appFor(host, redirectUri) {
-    const file = node_path_default.join(this.dir, APPS, `${host}.json`);
-    try {
-      const app2 = JSON.parse(node_fs_default.readFileSync(file, "utf8"));
-      if (app2.redirectUri === redirectUri && app2.clientId && app2.clientSecret) return app2;
-    } catch {
-    }
+    const known2 = this.apps.read(host);
+    if (known2?.redirectUri === redirectUri && known2.clientId && known2.clientSecret) return known2;
     const res = await this._fetch(host, `https://${host}/api/v1/apps`, {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -52521,8 +68629,7 @@ var FediAccounts = class {
     const body = await this._json(res, host);
     if (!body.client_id || !body.client_secret) throw new Error(`${host} registered no client`);
     const app = { host, redirectUri, clientId: body.client_id, clientSecret: body.client_secret };
-    node_fs_default.mkdirSync(node_path_default.join(this.dir, APPS), { recursive: true, mode: 448 });
-    writeJsonAtomic(file, app);
+    this.apps.write(host, app);
     return app;
   }
   // Step one: where to send the browser. The state nonce is single-use and
@@ -52584,6 +68691,7 @@ var FediAccounts = class {
       enabled: true,
       ...this.actorId ? { mintedFor: this.actorId } : {}
     });
+    if (!await this.vault.commit()) throw new Error("the connection could not be written down");
     this.log(`Fediverse account connected: @${me.username}@${host}`);
     return this.roster().find((r) => r.id === id);
   }

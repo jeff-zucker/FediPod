@@ -1,5 +1,20 @@
 # Changes
 
+## 2026-09-12 (an activity means what it says, however it was written)
+
+ActivityStreams documents are read as the JSON-LD they are. Two servers can
+write the same Follow in different ways — one spelling the terms out, one
+naming them through a prefix — and until now only the first was understood; the
+second was quietly ignored. Both arrive now.
+
+Nothing is fetched to do it. The contexts that fediverse documents name are
+held here, and an activity naming anything else is read the old way rather than
+sending this software off to an address a stranger chose.
+
+Each document is also checked against a description of what that kind of
+document is. Nothing is turned away for failing the check — the mismatch is
+recorded where you can see it, on the dead letters page.
+
 ## 2026-09-12 (a pod-hosted identity travels whole — version 1.1.0)
 
 An account hosted inside a Solid server kept its signing key, the secret
