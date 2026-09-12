@@ -125,8 +125,11 @@ const until = async (label, predicate, timeoutMs = 45_000) => {
   }
 };
 
-const doorSecret = (handle) => JSON.parse(fs.readFileSync(
-  path.join(dataDir, handle, 'door-secret.json'), 'utf8')).secret;
+// The secret lives in the identity's own pod now, where this test has no
+// reader; the opt-in reply is where an owner gets it, so that is where this
+// takes it too.
+const secrets = new Map();
+const doorSecret = (handle) => secrets.get(handle);
 
 const app = await new AppRunner().create({
   config,
@@ -155,8 +158,12 @@ const optIn = (session, podBase) => session.fetch(`${BASE}api/agent`, {
 try {
   const aliceIn = await optIn(await sessionFor('alice@example.com', POD), POD);
   check(aliceIn.status === 201, "alice's opt-in is accepted — sign-up is how an account is made");
+  secrets.set('alice', (await aliceIn.clone().json()).doorSecret);
   const carolIn = await optIn(await sessionFor('carol@example.com', POD2), POD2);
   check(carolIn.status === 201, "carol's too, on her own origin");
+  secrets.set('carol', (await carolIn.clone().json()).doorSecret);
+  check(Boolean(doorSecret('alice')) && doorSecret('alice') !== doorSecret('carol'),
+    'each opt-in reply carries a door secret of its own');
 
   // ---- the identity provisions itself -------------------------------------
   const actorUrl = `${POD}activitypods-js/ap/actor`;
@@ -484,12 +491,15 @@ try {
   remote.close();
 }
 
-// Everything the identities are made of survives the server they ran in.
-check(fs.existsSync(path.join(dataDir, 'alice', 'keys.json'))
-  && fs.existsSync(path.join(dataDir, 'carol', 'keys.json')),
-'each identity\'s signing key is kept where the operator was told it would be');
-check(!JSON.parse(fs.readFileSync(path.join(dataDir, 'alice', 'credential.json'), 'utf8')).secret,
-  'and no client secret was ever needed');
+// Everything the identities are made of travels with their pods.
+check(!fs.existsSync(path.join(dataDir, 'alice', 'keys.json'))
+  && !fs.existsSync(path.join(dataDir, 'carol', 'keys.json')),
+'no identity leaves its signing key on the host');
+check(!fs.existsSync(path.join(dataDir, 'alice', 'door-secret.json')),
+  'nor its door secret');
+const aliceCred = JSON.parse(fs.readFileSync(path.join(dataDir, 'alice', 'credential.json'), 'utf8'));
+check(!aliceCred.secret, 'and no client secret was ever needed');
+check(aliceCred.keysMode === 'pod', "the credential says where the identity's key is");
 
 fs.rmSync(tmp, { recursive: true, force: true });
 console.log(fails ? `\n${fails} FAILURE(S)` : '\nall green');

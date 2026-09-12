@@ -78,15 +78,24 @@ and stop with the server, and on the websocket handler list for the live feed.
 
 An identity is provisioned when its owner opts in: its name is the pod's
 subdomain label, and it publishes an actor, a signing key and WebFinger on the
-pod itself. Its state lives on the pod. Its signing key lives in
-`agentDataDir`, one directory per identity — and beside it,
-`door-secret.json`: the secret guarding that identity's own pages. Each
-identity has its own; one owner's secret opens nobody else's door.
+pod itself. Everything it is made of lives on its pod — its state, its private
+signing key, the secret guarding its own pages, and the credentials for any
+accounts its owner connects on other servers. Each identity has its own
+secret; one owner's opens nobody else's door. The opt-in reply is where the
+owner is given it.
+
+That is the difference from running FediPod on your own machine, where those
+credentials stay on the machine and never reach the pod. Here the machine is
+the pod's server, so a credential left on it is a connection its owner loses
+the day they take their pod elsewhere.
+
+`agentDataDir` holds what is left: one directory per identity, with the file
+naming the pod the identity runs on. Nothing private is in it.
 
 | Setting | What it is |
 |---|---|
 | `agentRuntimeOptIn` | Whether pod owners can sign up. With it off, nothing runs. |
-| `agentDataDir` | Where each identity keeps its signing key, credential and door secret; its log lines go to the server's own log. Required whenever sign-up is on. |
+| `agentDataDir` | Where each identity keeps the file naming its pod; its log lines go to the server's own log. Required whenever sign-up is on. |
 | `agentUiPath` | Where the owner's pages live on the pod's origin. `/fedipod/` by default; empty serves no pages. |
 | `agentRegistryContainer` | The internal container holding the sign-up rows. |
 | `runPage` | The HTML served at `/run`: the page where a pod owner opts in or out. The package's own `web/front/run.html` is served unless you set this. |
@@ -149,7 +158,7 @@ owner's door, with that identity's own door secret:
 
 ```
 curl -X POST https://mei.example.org/fedipod/config \
-  -H 'x-dk-token: THE_DOOR_SECRET_FROM_door-secret.json' -H 'content-type: application/json' \
+  -H 'x-dk-token: THE_DOOR_SECRET_FROM_THE_OPT_IN_REPLY' -H 'content-type: application/json' \
   -d '{"password":"the one you will type into your phone"}'
 ```
 

@@ -11330,6 +11330,78 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
   }
 }
 
+// --- connected-account credentials: which vault, and moving between them ---
+{
+  const { fileVault, podVault, moveVault, CONNECTION_PREFIX } =
+    await import(path.join(root, 'lib/connections/vault.mjs'));
+  const { FediAccounts } = await import(path.join(root, 'lib/connections/fediacct.mjs'));
+  const { Atproto } = await import(path.join(root, 'lib/connections/atproto.mjs'));
+  const { PodStore } = await import(path.join(root, 'lib/core/store.mjs'));
+
+  const VDIR = fs.mkdtempSync(path.join(os.tmpdir(), 'fp-vault-'));
+  const ACTOR = 'https://p.example/ap/actor';
+  const rec = (id) => ({ id, host: 'm.example', handle: `@${id}`, token: 'SECRET-TOKEN', enabled: true, mintedFor: ACTOR });
+
+  // A laptop: the credential is a file beside the credential file, and the
+  // pod is somebody else's server.
+  const onDisk = new FediAccounts({ localDir: VDIR, actorId: ACTOR, log: () => {} });
+  onDisk.write(rec('sam@m.example'));
+  check(onDisk.list().length === 1 && onDisk.read('sam@m.example').token === 'SECRET-TOKEN',
+    'a laptop keeps a connected account on this machine');
+  check(fs.existsSync(path.join(VDIR, 'fediaccts', 'sam@m.example.json')),
+    'in the directory it always used');
+  check(await onDisk.remove('sam@m.example') === true && onDisk.list().length === 0,
+    'and disconnecting takes it away');
+  check(await onDisk.remove('nobody@m.example') === false, 'removing one that is not there says so');
+
+  // A pod server: the same class over the identity's own pod state.
+  const store = new PodStore({ log: () => {} });
+  const inPod = new FediAccounts({
+    localDir: VDIR, actorId: ACTOR, log: () => {},
+    vault: podVault(store, `${CONNECTION_PREFIX}fedi-`),
+    apps: podVault(store, `${CONNECTION_PREFIX}fediapp-`),
+  });
+  inPod.write(rec('mei@m.example'));
+  check(inPod.read('mei@m.example')?.token === 'SECRET-TOKEN', 'a pod server keeps it in the pod');
+  check(store.read('conn-fedi-mei@m.example.json', null)?.token === 'SECRET-TOKEN',
+    'as one document per account in the identity\'s own state');
+  check(!fs.existsSync(path.join(VDIR, 'fediaccts', 'mei@m.example.json')),
+    'and nothing of it is written to the host');
+  check(inPod.roster().length === 1 && !('token' in inPod.roster()[0]),
+    'the roster still carries who and where, never the token');
+
+  // A record stamped for another identity is absent, wherever it is kept.
+  const stranger = new FediAccounts({
+    localDir: VDIR, actorId: 'https://q.example/ap/actor', log: () => {},
+    vault: podVault(store, `${CONNECTION_PREFIX}fedi-`),
+    apps: podVault(store, `${CONNECTION_PREFIX}fediapp-`),
+  });
+  check(stranger.read('mei@m.example') === null,
+    'a record stamped for another identity is not adopted in the pod either');
+  check(await inPod.remove('mei@m.example') === true && inPod.list().length === 0,
+    'and disconnecting takes it out of the pod');
+
+  // Bluesky, the single-record case.
+  const bskyDisk = new Atproto({ localDir: VDIR, actorId: ACTOR, log: () => {} });
+  bskyDisk.write({ did: 'did:plc:x', service: 'https://bsky.social', password: 'APP-PASSWORD', mintedFor: ACTOR });
+  check(fs.existsSync(path.join(VDIR, 'atproto.json')) && bskyDisk.connected(),
+    'the Bluesky credential is a file on a laptop');
+  const bskyPod = new Atproto({ localDir: VDIR, actorId: ACTOR, log: () => {}, vault: podVault(store, CONNECTION_PREFIX) });
+  bskyPod.write({ did: 'did:plc:y', service: 'https://bsky.social', password: 'APP-PASSWORD', mintedFor: ACTOR });
+  check(store.read('conn-bluesky.json', null)?.password === 'APP-PASSWORD',
+    'and one document in the pod on a pod server');
+
+  // The move an identity makes the first time it starts inside a server.
+  const from = fileVault(path.join(VDIR, 'fediaccts'));
+  const to = podVault(store, `${CONNECTION_PREFIX}fedi-`);
+  from.write('old@m.example', rec('old@m.example'));
+  check(await moveVault(from, to, () => {}) === 1, 'an existing connection moves into the pod');
+  check(to.read('old@m.example')?.token === 'SECRET-TOKEN', 'the pod has it');
+  check(from.read('old@m.example') === null, 'and the host does not');
+
+  fs.rmSync(VDIR, { recursive: true, force: true });
+}
+
 child.kill('SIGTERM');
 fs.rmSync(HOME, { recursive: true, force: true });
 console.log(failures ? `\n${failures} FAILURE(S)` : '\nall green');

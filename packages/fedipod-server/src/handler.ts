@@ -267,6 +267,25 @@ export class FediPodServerHandler extends HttpHandler implements Initializable, 
     }));
   }
 
+  /**
+   * One identity's door secret, in its own pod's state. `agentDataDir` is
+   * handed in as the place an identity set up before this kept it, so its
+   * owner's existing door link survives the move.
+   */
+  private async doorSecretFor(podBase: string, session?: { fetch: unknown }, opts: { rotate?: boolean } = {}):
+  Promise<{ secret: string; url: string; rotated: boolean }> {
+    const { ensureDoorSecret } = await esmImport(EMBED) as {
+      ensureDoorSecret: (session: unknown, podBase: string, opts?: Record<string, unknown>) =>
+      Promise<{ secret: string; url: string; rotated: boolean }>;
+    };
+    return ensureDoorSecret(session ?? makeStoreSession(this.args.resourceStore, podBase), podBase, {
+      ...opts,
+      dataDir: this.args.agentDataDir,
+      handle: deriveHandle(podBase),
+      log: (message: string): void => { this.logger.info(`@${deriveHandle(podBase)}: ${message}`); },
+    });
+  }
+
   private async startIdentity(podBase: string): Promise<void> {
     if (this.starting.has(podBase) || this.identities.has(podBase)) return;
     this.starting.add(podBase);
@@ -275,17 +294,15 @@ export class FediPodServerHandler extends HttpHandler implements Initializable, 
     try {
       for (let attempt = 0; !this.stopping && !this.startCancelled.has(podBase); attempt++) {
         try {
-          const { startEmbeddedAgent, ensureDoorSecret } = await esmImport(EMBED) as {
+          const { startEmbeddedAgent } = await esmImport(EMBED) as {
             startEmbeddedAgent: (opts: Record<string, unknown>) => Promise<EmbeddedIdentity>;
-            ensureDoorSecret: (dataDir: string, handle: string, opts?: { rotate?: boolean }) =>
-            { secret: string; path: string; rotated: boolean };
           };
           // The secret is in the map BEFORE the surface can exist, so the
           // gate's resolver never comes up empty — empty would mean gate-off.
           if (!this.doorSecrets.has(podBase)) {
-            const door = ensureDoorSecret(this.args.agentDataDir!, deriveHandle(podBase));
+            const door = await this.doorSecretFor(podBase, session);
             this.doorSecrets.set(podBase, door.secret);
-            this.logger.info(`door secret for @${deriveHandle(podBase)} is at ${door.path}`);
+            this.logger.info(`door secret for @${deriveHandle(podBase)} is in its pod at ${door.url}`);
           }
           const identity = await startEmbeddedAgent({
             podBase,
@@ -398,15 +415,10 @@ export class FediPodServerHandler extends HttpHandler implements Initializable, 
     }
     const base = podBase.endsWith('/') ? podBase : `${podBase}/`;
     const handle = deriveHandle(base);
-    const { ensureDoorSecret } = await esmImport(EMBED) as {
-      ensureDoorSecret: (dataDir: string, handle: string, opts?: { rotate?: boolean }) =>
-      { secret: string; path: string; rotated: boolean };
-    };
-
     // Already running here from an earlier opt-in: proving pod
     // control again buys a fresh secret, nothing else.
     if (this.agentHandles.get(handle) === base) {
-      const door = ensureDoorSecret(this.args.agentDataDir!, handle, { rotate: true });
+      const door = await this.doorSecretFor(base, undefined, { rotate: true });
       this.doorSecrets.set(base, door.secret);
       return { httpStatus: 201, ok: true, handle, host: new URL(base).host.toLowerCase(),
         doorSecret: door.secret, doorPath: this.uiPath, status: 'rotated' };
@@ -428,10 +440,10 @@ export class FediPodServerHandler extends HttpHandler implements Initializable, 
     // until the agent registers its surface.
     this.agentHosts.add(host);
     this.agentHandles.set(handle, base);
-    const door = ensureDoorSecret(this.args.agentDataDir!, handle, { rotate: true });
+    const door = await this.doorSecretFor(base, undefined, { rotate: true });
     this.doorSecrets.set(base, door.secret);
     void this.startIdentity(base);
-    this.logger.info(`runtime opt-in: @${handle} on ${base} (door secret at ${door.path})`);
+    this.logger.info(`runtime opt-in: @${handle} on ${base} (door secret in its pod at ${door.url})`);
     return { httpStatus: 201, ok: true, handle, host,
       doorSecret: door.secret, doorPath: this.uiPath, status: 'starting' };
   }

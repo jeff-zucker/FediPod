@@ -249,11 +249,14 @@ check(await claimsFor('dana.localhost:4000', '/api/v1/instance') === true,
 const optRes = { s: 0, writeHead(st) { this.s = st; return this; }, end() {} };
 await optHandler.handle({ request: { headers: { host: 'dana.localhost:4000' }, url: '/api/v1/instance' }, response: optRes });
 check(optRes.s === 503, 'the surface answers 503 while the identity is still coming up');
-const secretFile = pathMod.join(optDataDir, 'dana', 'door-secret.json');
-check(fs.existsSync(secretFile) && (fs.statSync(secretFile).mode & 0o777) === 0o600,
-  'the secret file sits in the identity directory, owner-readable only');
-check(JSON.parse(fs.readFileSync(secretFile, 'utf8')).secret === optReply.doorSecret,
-  'and holds exactly the secret the reply carried');
+const secretUrl = `${OPT_POD}activitypods-js/ap-state/door-secret.json`;
+const secretOnPod = await realStore.getRepresentation({ path: secretUrl }, {})
+  .then(async (r) => JSON.parse(await readableToString(r.data)))
+  .catch(() => null);
+check(!!secretOnPod, 'the secret is in the pod, not on the host');
+check(secretOnPod?.secret === optReply.doorSecret, 'and is exactly the secret the reply carried');
+check(!fs.existsSync(pathMod.join(optDataDir, 'dana', 'door-secret.json')),
+  'and nothing of it is left in the identity directory');
 
 const again = await optHandler.optInPod({ podBase: OPT_POD, webId: OPT_POD + 'profile/card#me' });
 check(again.httpStatus === 201 && again.status === 'rotated' && again.doorSecret !== optReply.doorSecret,
