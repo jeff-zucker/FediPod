@@ -41,7 +41,7 @@ import { TagFeed } from './lib/connections/tagfeed.mjs';
 import { ImportWorker } from './lib/connections/import.mjs';
 import { Atproto } from './lib/connections/atproto.mjs';
 import { FediAccounts } from './lib/connections/fediacct.mjs';
-import { CONNECTION_PREFIX, podVault } from './lib/connections/vault.mjs';
+import { vaultsFor } from './lib/connections/vault.mjs';
 import { AcctFeed } from './lib/connections/acctfeed.mjs';
 import { BskyFeed } from './lib/connections/bskyfeed.mjs';
 import { BskyGroup } from './lib/connections/bskygroup.mjs';
@@ -345,24 +345,19 @@ export class Agent {
     // The CSV-import worker: paced, resumable, armed only while active.
     this.importer?.stop();
     this.importer = new ImportWorker({ agent: this, log: this.log });
-    // Where the credentials for accounts held on OTHER servers are kept. The
-    // same answer as the signing key: on this machine when the pod is
-    // somebody else's server, in the pod when this process is the pod's
-    // server and the pod is the thing that travels.
-    const inPod = cred.keysMode === 'pod';
+    // Where the credentials for accounts held on OTHER servers are kept.
+    const vaults = vaultsFor({ embedded: this.embedded, home: this.home, store: this.store });
     // The Bluesky connection, when one exists. Stamped to this actor; a
     // credential connected for another identity is treated as absent.
     this.atproto = new Atproto({
-      localDir: this.home, actorId: this.urls.actor, log: this.log,
-      vault: inPod ? podVault(this.store, CONNECTION_PREFIX) : null,
+      localDir: this.home, actorId: this.urls.actor, log: this.log, vault: vaults.bluesky,
     });
     this.publisher.atproto = this.atproto;
     // Fediverse accounts the owner holds elsewhere. Same custody rules as the
     // Bluesky credential, and the same absence when stamped for someone else.
     this.fediaccts = new FediAccounts({
       localDir: this.home, actorId: this.urls.actor, log: this.log,
-      vault: inPod ? podVault(this.store, `${CONNECTION_PREFIX}fedi-`) : null,
-      apps: inPod ? podVault(this.store, `${CONNECTION_PREFIX}fediapp-`) : null,
+      vault: vaults.fedi, apps: vaults.apps,
     });
     this.acctfeed?.stop();
     this.acctfeed = null;

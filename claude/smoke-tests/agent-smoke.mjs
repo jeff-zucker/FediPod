@@ -11391,6 +11391,29 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
   check(store.read('conn-bluesky.json', null)?.password === 'APP-PASSWORD',
     'and one document in the pod on a pod server');
 
+  // WHERE the agent runs decides this, not where its signing key is. Somebody
+  // on a laptop who shares their key through their pod — so two devices sign
+  // as them — has said nothing about their Mastodon token, and moving it
+  // would take their connections away from them with no way to say so.
+  {
+    const { vaultsFor } = await import(path.join(root, 'lib/connections/vault.mjs'));
+    const laptop = vaultsFor({ embedded: false, home: VDIR, store });
+    check(laptop.fedi === null && laptop.apps === null && laptop.bluesky === null,
+      'a laptop keeps its connections on the laptop');
+
+    const server = vaultsFor({ embedded: true, home: VDIR, store });
+    check(server.fedi?.kind === 'pod' && server.bluesky?.kind === 'pod',
+      'an identity inside a pod server keeps them in the pod');
+
+    // The laptop answer does not change when its owner shares the signing key.
+    const shared = new FediAccounts({ localDir: VDIR, actorId: ACTOR, log: () => {}, ...vaultsFor({ embedded: false, home: VDIR, store }) });
+    shared.write(rec('kai@m.example'));
+    check(fs.existsSync(path.join(VDIR, 'fediaccts', 'kai@m.example.json'))
+      && shared.read('kai@m.example')?.token === 'SECRET-TOKEN',
+      'and still finds them there, whatever keysMode says');
+    await shared.remove('kai@m.example');
+  }
+
   // The move an identity makes the first time it starts inside a server.
   const from = fileVault(path.join(VDIR, 'fediaccts'));
   const to = podVault(store, `${CONNECTION_PREFIX}fedi-`);
