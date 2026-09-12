@@ -62308,11 +62308,140 @@ var SHACLValidator = class {
 };
 var rdf_validate_shacl_default = SHACLValidator;
 
-// lib/core/shapes/text.mjs
-var SHAPES_TTL = node_fs_default.readFileSync(
-  node_path_default.join(node_path_default.dirname(fileURLToPath(import.meta.url)), "activitystreams.ttl"),
-  "utf8"
-);
+// lib/core/shapes/activitystreams.ttl
+var activitystreams_default2 = `# activitystreams.ttl \u2014 shapes for the ActivityStreams documents an identity
+# reads from strangers.
+#
+# Shapes are identified by fragments of this document, so nothing here claims a
+# namespace of its own.
+#
+# These are deliberately thin. They state what the ActivityPub specification
+# requires and nothing more, because every fediverse implementation writes
+# slightly different documents and a constraint beyond the spec is a constraint
+# that fires on somebody's real traffic. Nothing here rejects anything: a
+# failure is recorded and the activity is handled. A shape earns its way to
+# being enforced by not firing.
+
+@prefix sh:   <http://www.w3.org/ns/shacl#> .
+@prefix as:   <https://www.w3.org/ns/activitystreams#> .
+@prefix ldp:  <http://www.w3.org/ns/ldp#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+
+# --- the actor document ------------------------------------------------------
+
+<#Actor>
+  a sh:NodeShape ;
+  sh:targetClass as:Person, as:Service, as:Group, as:Organization, as:Application ;
+  sh:name "Actor" ;
+  sh:description "Someone or something that acts: it has an address activities are sent to, and a name it is addressed by." ;
+  sh:property [
+    sh:path ldp:inbox ;
+    sh:name "inbox" ;
+    sh:description "The collection an actor receives activities in." ;
+    sh:nodeKind sh:IRI ;
+    sh:minCount 1 ;
+    sh:maxCount 1 ;
+  ] ;
+  sh:property [
+    sh:path as:preferredUsername ;
+    sh:name "preferred username" ;
+    sh:description "The short name an actor is addressed by, the local part of its @handle@host address." ;
+    sh:datatype xsd:string ;
+    sh:maxCount 1 ;
+  ] .
+
+# --- the activities an identity acts on --------------------------------------
+#
+# Each states the two things ActivityPub requires of an activity: who performed
+# it, and what it is about.
+
+<#Create>
+  a sh:NodeShape ;
+  sh:targetClass as:Create ;
+  sh:name "Create" ;
+  sh:description "The bringing into existence of the object it names." ;
+  sh:property [
+    sh:path as:actor ;
+    sh:name "actor" ;
+    sh:description "The one that performed the activity." ;
+    sh:nodeKind sh:BlankNodeOrIRI ;
+    sh:minCount 1 ;
+    sh:maxCount 1 ;
+  ] ;
+  sh:property [
+    sh:path as:object ;
+    sh:name "object" ;
+    sh:description "The thing the activity is about." ;
+    sh:minCount 1 ;
+    sh:maxCount 1 ;
+  ] .
+
+<#Follow>
+  a sh:NodeShape ;
+  sh:targetClass as:Follow ;
+  sh:name "Follow" ;
+  sh:description "A request to receive what the object it names publishes." ;
+  sh:property [
+    sh:path as:actor ;
+    sh:name "actor" ;
+    sh:description "The one that performed the activity." ;
+    sh:nodeKind sh:BlankNodeOrIRI ;
+    sh:minCount 1 ;
+    sh:maxCount 1 ;
+  ] ;
+  sh:property [
+    sh:path as:object ;
+    sh:name "object" ;
+    sh:description "The thing the activity is about." ;
+    sh:minCount 1 ;
+    sh:maxCount 1 ;
+  ] .
+
+<#Accept>
+  a sh:NodeShape ;
+  sh:targetClass as:Accept ;
+  sh:name "Accept" ;
+  sh:description "Assent to the activity it names." ;
+  sh:property [
+    sh:path as:actor ;
+    sh:name "actor" ;
+    sh:description "The one that performed the activity." ;
+    sh:nodeKind sh:BlankNodeOrIRI ;
+    sh:minCount 1 ;
+    sh:maxCount 1 ;
+  ] ;
+  sh:property [
+    sh:path as:object ;
+    sh:name "object" ;
+    sh:description "The thing the activity is about." ;
+    sh:minCount 1 ;
+    sh:maxCount 1 ;
+  ] .
+
+<#Undo>
+  a sh:NodeShape ;
+  sh:targetClass as:Undo ;
+  sh:name "Undo" ;
+  sh:description "The retraction of the activity it names, by the one that performed it." ;
+  sh:property [
+    sh:path as:actor ;
+    sh:name "actor" ;
+    sh:description "The one that performed the activity." ;
+    sh:nodeKind sh:BlankNodeOrIRI ;
+    sh:minCount 1 ;
+    sh:maxCount 1 ;
+  ] ;
+  sh:property [
+    sh:path as:object ;
+    sh:name "object" ;
+    sh:description "The thing the activity is about." ;
+    sh:minCount 1 ;
+    sh:maxCount 1 ;
+  ] .
+`;
+
+// web/app/shims/shapes-text.mjs
+var SHAPES_TTL = activitystreams_default2;
 
 // lib/core/shapes/index.mjs
 var rdf3 = new Environment_default([Factory_default, Factory_default2, Factory_default3, Factory_default4, Factory_default5, Factory_default6]);

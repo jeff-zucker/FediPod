@@ -34,7 +34,7 @@ const aliasPlugin = {
     build.onResolve({ filter: /\/safefetch\.mjs$/ }, () => ({ path: shim('safefetch.mjs') }));
     // The shapes are one .ttl file for both agents; Node reads it, the browser
     // gets it through the text loader below.
-    build.onResolve({ filter: /\/shapes\/text\.mjs$/ }, () => ({ path: shim('shapes-text.mjs') }));
+    build.onResolve({ filter: /shapes-text\.mjs$/ }, () => ({ path: shim('shapes-text.mjs') }));
     const stub = new RegExp(`^(${STUBBED.map((s) => s.replace('/', '\\/')).join('|')})$`);
     build.onResolve({ filter: stub }, (args) => ({ path: args.path, namespace: 'stub' }));
     build.onLoad({ filter: /.*/, namespace: 'stub' }, (args) => ({

@@ -11425,6 +11425,38 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
   fs.rmSync(VDIR, { recursive: true, force: true });
 }
 
+// --- the browser agent gets the shapes too -----------------------------
+//
+// esbuild matches an onResolve filter against the import path AS WRITTEN, not
+// the resolved one. A filter naming a directory the specifier does not contain
+// silently does nothing, the Node module is bundled instead of the shim, and
+// the browser agent ends up calling readFileSync — which fails at runtime, in
+// a service worker, where nobody is watching. That is how this was wrong once.
+{
+  const fsx = await import('node:fs');
+  const build = fsx.readFileSync(path.join(root, 'scripts/build-app.mjs'), 'utf8');
+  const shapes = fsx.readFileSync(path.join(root, 'lib/core/shapes/index.mjs'), 'utf8');
+
+  const specifier = /from '([^']*shapes-text\.mjs)'/u.exec(shapes)?.[1];
+  check(!!specifier, 'the shapes read their text from a module of its own');
+
+  const aliasLine = build.split('\n').find((l) => /onResolve/u.test(l) && /shapes-text/u.test(l));
+  const filter = /filter: \/((?:[^/\\]|\\.)+)\//u.exec(aliasLine || '')?.[1];
+  check(!!filter, 'and the browser build aliases that module');
+
+  if (specifier && filter) {
+    const re = new RegExp(filter, 'u');
+    check(re.test(specifier),
+      'and the alias matches the specifier as written, so the browser gets the shim and not readFileSync');
+  }
+
+  check(!/node:fs/u.test(shapes), 'the shapes module itself touches no filesystem');
+  check(fsx.existsSync(path.join(root, 'web/app/shims/shapes-text.mjs')),
+    'and the shim it is aliased to exists');
+  check(/loader: \{ '\.ttl': 'text' \}/u.test(build),
+    'and the build can turn the .ttl into text, so there is one shapes file and not two');
+}
+
 // --- SHACL: what a document IS, checked against what arrived ---
 {
   const as2 = await import(path.join(root, 'lib/core/as2.mjs'));
