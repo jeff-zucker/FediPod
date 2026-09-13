@@ -1,5 +1,23 @@
 # Changes
 
+## 2026-09-13 (a Server account checks who is knocking — version 1.3.0, fedipod-server 0.13.0)
+
+FediPod Server now verifies every delivery at the pod's own inbox. The
+signature on a post, follow or reply from another server is checked as it
+arrives, and the account acts only on what checked out. A delivery signed with
+the wrong key is dropped at the door. One with no signature still lands and is
+answered after the account confirms the sender through the sender's own actor
+document, as before. Nothing about an account's address changes, and there is
+no setting: every account on the server gets this from its next start.
+
+## 2026-09-13 (the browser keeps a key it cannot hand over)
+
+The browser build keeps an opened copy of your signing key on the device so
+the agent can start on its own. That copy is now held as a WebCrypto key that
+can sign but cannot be read out, where before it was the key text itself. A
+script that reaches the browser's storage gets nothing it can carry away. A
+copy stored by an earlier build is converted the next time the agent starts.
+
 ## 2026-09-12 (an activity means what it says, however it was written — version 1.2.0)
 
 ActivityStreams documents are read as the JSON-LD they are. Two servers can
