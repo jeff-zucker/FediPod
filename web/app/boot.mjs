@@ -15,8 +15,7 @@ import * as podState from '../../lib/pod/state.mjs';
 import { BrowserRemotePod } from './pod-remote.mjs';
 import { beginLogin, completeLogin, getSession, signOut } from './oidc-session.mjs';
 import { unwrapKeys, isKeyEnvelope } from './keystore.mjs';
-import { kvPut } from './idb-kv.mjs';
-import { keyCacheKey } from './keys-browser.mjs';
+import { cacheOpenedKeys } from './keys-browser.mjs';
 
 const REDIRECT = `${location.origin}/`;   // the app root doubles as the OIDC callback
 
@@ -83,7 +82,7 @@ window.fedipodUnlock = async (password) => {
   if (!isKeyEnvelope(doc)) throw new Error('this account\'s key is not locked — nothing to unlock');
   const rec = await unwrapKeys(doc, password);          // throws 'wrong password'
   const actorUrl = `${cfg.remotePod}${cfg.root || AP_ROOT}ap/actor`;
-  await kvPut(keyCacheKey(actorUrl), rec);
+  await cacheOpenedKeys(actorUrl, rec);
   await bootWorker();
 };
 

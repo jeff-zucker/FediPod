@@ -14,8 +14,7 @@ import { createAccountWithPod, mintCredential, makeDpopSession, revokeCredential
 import { generateKeys, wrapKeys } from './keystore.mjs';
 import { BrowserRemotePod } from './pod-remote.mjs';
 import * as podState from '../../lib/pod/state.mjs';
-import { kvPut } from './idb-kv.mjs';
-import { keyCacheKey } from './keys-browser.mjs';
+import { cacheOpenedKeys } from './keys-browser.mjs';
 
 // The container everything the agent publishes hangs under. New pods made here
 // use `fedipod/`; the agent's own default stays `activitypods-js/` for installs
@@ -167,7 +166,7 @@ export async function signUp(answers, { onStep = () => {}, frontOrigin = null } 
     // This browser's own opened copy, so the boot after the login redirect
     // needs no password. Best effort: a browser that refuses IndexedDB (private
     // mode) simply asks for the password on the way back in.
-    await kvPut(keyCacheKey(actorUrl), keys).catch(() => {});
+    await cacheOpenedKeys(actorUrl, keys);
     prog.keys = keys; prog.keysStored = true;
     keysStep.ok();
   } else {

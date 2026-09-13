@@ -17,9 +17,8 @@ import { MastoApi } from '../../lib/client/masto/index.mjs';
 import { TagFeed } from '../../lib/connections/tagfeed.mjs';
 import { makeDpopSession } from './pod-auth.mjs';
 import { BrowserRemotePod } from './pod-remote.mjs';
-import { importSigningKey, loadKeysFromPod, keyCacheKey } from './keys-browser.mjs';
+import { importSigningKey, loadKeysFromPod, cacheOpenedKeys } from './keys-browser.mjs';
 import { generateKeys, wrapKeys } from './keystore.mjs';
-import { kvPut } from './idb-kv.mjs';
 import { RelayDeliverer } from './deliver-relay.mjs';
 import { AdminFacade } from './admin-facade.mjs';
 import { BrowserAtproto } from './atproto-browser.mjs';
@@ -364,8 +363,7 @@ export class BrowserAgent {
     const rec = await generateKeys();
     rec.mintedFor = this.urls.actor;                  // one key, one actor (lib/keys.mjs)
     await podState.writeWrappedKeys(this.remote, this.urls, await wrapKeys(rec, password));
-    await kvPut(keyCacheKey(this.urls.actor), rec).catch(() => {});
-    const keys = await importSigningKey(rec);
+    const keys = await cacheOpenedKeys(this.urls.actor, rec);
     this.publisher.publicKeyPem = keys.rsaPublicPem;
     this.deliverer.rsaPrivate = keys.rsaPrivate;
     await this.publisher.publishProfile();

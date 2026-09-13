@@ -33231,6 +33231,26 @@ async function kvPut(key, val) {
 }
 
 // web/app/keys-browser.mjs
+var pemToDer = (pem) => Uint8Array.from(
+  atob(pem.replace(/-----[^-]+-----/g, "").replace(/\s+/g, "")),
+  (c) => c.charCodeAt(0)
+);
+async function importSigningKey(keysRecord) {
+  const rsaPrivate = await crypto.subtle.importKey(
+    "pkcs8",
+    pemToDer(keysRecord.rsa.privatePem),
+    { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+  return { rsaPrivate, rsaPublicPem: keysRecord.rsa.publicPem, edPrivate: null, edPublicMultibase: null };
+}
+async function cacheOpenedKeys(actorUrl, keysRecord) {
+  const keys = await importSigningKey(keysRecord);
+  await kvPut(keyCacheKey(actorUrl), { rsaPrivate: keys.rsaPrivate, rsaPublicPem: keys.rsaPublicPem }).catch(() => {
+  });
+  return keys;
+}
 var keyCacheKey = (actorUrl) => `signing-keys:${actorUrl}`;
 
 // web/app/signup.mjs
@@ -33321,8 +33341,7 @@ async function signUp(answers, { onStep = () => {
     } catch (e) {
       throw new Error(`could not store the signing key on the pod (${e.message}). The credential is for ${credential.webId} \u2014 that WebID must own ${pod} and its ${AP_ROOT} must be writable by it.`);
     }
-    await kvPut(keyCacheKey(actorUrl), keys).catch(() => {
-    });
+    await cacheOpenedKeys(actorUrl, keys);
     prog.keys = keys;
     prog.keysStored = true;
     keysStep.ok();
@@ -33668,7 +33687,7 @@ window.fedipodUnlock = async (password) => {
   if (!isKeyEnvelope(doc)) throw new Error("this account's key is not locked \u2014 nothing to unlock");
   const rec = await unwrapKeys(doc, password);
   const actorUrl = `${cfg.remotePod}${cfg.root || AP_ROOT}ap/actor`;
-  await kvPut(keyCacheKey(actorUrl), rec);
+  await cacheOpenedKeys(actorUrl, rec);
   await bootWorker();
 };
 window.fedipodSignup = async ({ onStep, ...answers }) => {

@@ -27444,10 +27444,10 @@ var require_fromRdf = __commonJS({
     var {
       // RDF,
       RDF_LIST,
-      RDF_FIRST,
-      RDF_REST,
-      RDF_NIL,
-      RDF_TYPE,
+      RDF_FIRST: RDF_FIRST2,
+      RDF_REST: RDF_REST2,
+      RDF_NIL: RDF_NIL2,
+      RDF_TYPE: RDF_TYPE2,
       // RDF_PLAIN_LITERAL,
       // RDF_XML_LITERAL,
       RDF_JSON_LITERAL,
@@ -27506,14 +27506,14 @@ var require_fromRdf = __commonJS({
         if (objectIsNode && !(objectNodeId in nodeMap)) {
           nodeMap[objectNodeId] = { "@id": objectNodeId };
         }
-        if (p === RDF_TYPE && !useRdfType && objectIsNode) {
+        if (p === RDF_TYPE2 && !useRdfType && objectIsNode) {
           _addValue(node, "@type", objectNodeId, { propertyIsArray: true });
           continue;
         }
         const value = _RDFToObject(o, useNativeTypes, rdfDirection, options);
         _addValue(node, p, value, { propertyIsArray: true });
         if (objectIsNode) {
-          if (objectNodeId === RDF_NIL) {
+          if (objectNodeId === RDF_NIL2) {
             const object = nodeMap[objectNodeId];
             if (!("usages" in object)) {
               object.usages = [];
@@ -27536,10 +27536,10 @@ var require_fromRdf = __commonJS({
       }
       for (const name in graphMap) {
         const graphObject = graphMap[name];
-        if (!(RDF_NIL in graphObject)) {
+        if (!(RDF_NIL2 in graphObject)) {
           continue;
         }
-        const nil = graphObject[RDF_NIL];
+        const nil = graphObject[RDF_NIL2];
         if (!nil.usages) {
           continue;
         }
@@ -27550,8 +27550,8 @@ var require_fromRdf = __commonJS({
           const list3 = [];
           const listNodes = [];
           let nodeKeyCount = Object.keys(node).length;
-          while (property === RDF_REST && types.isObject(referencedOnce[node["@id"]]) && types.isArray(node[RDF_FIRST]) && node[RDF_FIRST].length === 1 && types.isArray(node[RDF_REST]) && node[RDF_REST].length === 1 && (nodeKeyCount === 3 || nodeKeyCount === 4 && types.isArray(node["@type"]) && node["@type"].length === 1 && node["@type"][0] === RDF_LIST)) {
-            list3.push(node[RDF_FIRST][0]);
+          while (property === RDF_REST2 && types.isObject(referencedOnce[node["@id"]]) && types.isArray(node[RDF_FIRST2]) && node[RDF_FIRST2].length === 1 && types.isArray(node[RDF_REST2]) && node[RDF_REST2].length === 1 && (nodeKeyCount === 3 || nodeKeyCount === 4 && types.isArray(node["@type"]) && node["@type"].length === 1 && node["@type"][0] === RDF_LIST)) {
+            list3.push(node[RDF_FIRST2][0]);
             listNodes.push(node["@id"]);
             usage = referencedOnce[node["@id"]];
             node = usage.node;
@@ -27752,10 +27752,10 @@ var require_toRdf = __commonJS({
     var {
       // RDF,
       // RDF_LIST,
-      RDF_FIRST,
-      RDF_REST,
-      RDF_NIL,
-      RDF_TYPE,
+      RDF_FIRST: RDF_FIRST2,
+      RDF_REST: RDF_REST2,
+      RDF_NIL: RDF_NIL2,
+      RDF_TYPE: RDF_TYPE2,
       // RDF_PLAIN_LITERAL,
       // RDF_XML_LITERAL,
       RDF_JSON_LITERAL,
@@ -27813,7 +27813,7 @@ var require_toRdf = __commonJS({
         for (let property of properties) {
           const items = node[property];
           if (property === "@type") {
-            property = RDF_TYPE;
+            property = RDF_TYPE2;
           } else if (isKeyword(property)) {
             continue;
           }
@@ -27893,9 +27893,9 @@ var require_toRdf = __commonJS({
       }
     }
     function _listToRDF(list3, issuer, dataset2, graphTerm, rdfDirection, options) {
-      const first = { termType: "NamedNode", value: RDF_FIRST };
-      const rest = { termType: "NamedNode", value: RDF_REST };
-      const nil = { termType: "NamedNode", value: RDF_NIL };
+      const first = { termType: "NamedNode", value: RDF_FIRST2 };
+      const rest = { termType: "NamedNode", value: RDF_REST2 };
+      const nil = { termType: "NamedNode", value: RDF_NIL2 };
       const last = list3.pop();
       const result = last ? {
         termType: "BlankNode",
@@ -55467,6 +55467,181 @@ var CONTEXTS = {
   "https://purl.archive.org/miscellany": miscellany_default
 };
 
+// lib/core/graphview.mjs
+init_wire();
+var RDF_TYPE = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type";
+var RDF_FIRST = "http://www.w3.org/1999/02/22-rdf-syntax-ns#first";
+var RDF_REST = "http://www.w3.org/1999/02/22-rdf-syntax-ns#rest";
+var RDF_NIL = "http://www.w3.org/1999/02/22-rdf-syntax-ns#nil";
+var MAX_DEPTH = 12;
+var ALWAYS_LIST = /* @__PURE__ */ new Set([
+  "items",
+  "orderedItems",
+  "to",
+  "cc",
+  "bto",
+  "bcc",
+  "tag",
+  "attachment",
+  "anyOf",
+  "oneOf",
+  "audience",
+  "attributedTo",
+  "alsoKnownAs"
+]);
+function expandIri(value, prefixes) {
+  if (typeof value !== "string") return null;
+  if (/^https?:\/\//.test(value)) return value;
+  const colon = value.indexOf(":");
+  if (colon < 1) return null;
+  const base = prefixes[value.slice(0, colon)];
+  return base ? base + value.slice(colon + 1) : null;
+}
+function buildTerms() {
+  const terms = /* @__PURE__ */ new Map();
+  const order = [AS_CTX, ...Object.keys(CONTEXTS).filter((u) => u !== AS_CTX)];
+  for (const url of order) {
+    const ctx = CONTEXTS[url]?.["@context"];
+    if (!ctx || typeof ctx !== "object") continue;
+    const prefixes = {};
+    for (const [k, v] of Object.entries(ctx)) {
+      if (typeof v === "string" && /^https?:\/\//.test(v)) prefixes[k] = v;
+    }
+    for (const [name, def] of Object.entries(ctx)) {
+      if (name.startsWith("@") || terms.has(name)) continue;
+      const raw = typeof def === "string" ? def : def?.["@id"];
+      const iri = expandIri(raw, prefixes);
+      if (!iri) continue;
+      terms.set(name, { iri, list: def?.["@container"] === "@list", container: def?.["@container"] ?? null });
+    }
+  }
+  return terms;
+}
+var TERMS = buildTerms();
+var BY_IRI = (() => {
+  const m = /* @__PURE__ */ new Map();
+  for (const [name, { iri }] of TERMS) {
+    const held = m.get(iri);
+    if (!held || name.length < held.length) m.set(iri, name);
+  }
+  return m;
+})();
+var NAMES_BY_IRI = (() => {
+  const m = /* @__PURE__ */ new Map();
+  for (const [name, { iri, container }] of TERMS) {
+    if (container === "@language" || container === "@index") continue;
+    const held = m.get(iri);
+    if (held) held.push(name);
+    else m.set(iri, [name]);
+  }
+  return m;
+})();
+function indexQuads(quads) {
+  const bySubject = /* @__PURE__ */ new Map();
+  const objects = /* @__PURE__ */ new Set();
+  const blanks = /* @__PURE__ */ new Set();
+  for (const q of quads) {
+    if (q.subject.termType === "BlankNode") blanks.add(q.subject.value);
+    if (q.object.termType === "BlankNode") blanks.add(q.object.value);
+    const s = q.subject.value;
+    let preds = bySubject.get(s);
+    if (!preds) bySubject.set(s, preds = /* @__PURE__ */ new Map());
+    let vals = preds.get(q.predicate.value);
+    if (!vals) preds.set(q.predicate.value, vals = []);
+    vals.push(q.object);
+    if (q.object.termType === "NamedNode" || q.object.termType === "BlankNode") {
+      objects.add(q.object.value);
+    }
+  }
+  return { bySubject, objects, blanks };
+}
+function findRoot({ bySubject, objects }) {
+  for (const s of bySubject.keys()) if (!objects.has(s)) return s;
+  for (const [s, preds] of bySubject) if (preds.has(RDF_TYPE)) return s;
+  return bySubject.keys().next().value ?? null;
+}
+function readList(head, ctx, depth, path) {
+  const out = [];
+  const walked = /* @__PURE__ */ new Set();
+  let node = head;
+  while (node && node !== RDF_NIL && !walked.has(node)) {
+    walked.add(node);
+    const preds = ctx.bySubject.get(node);
+    if (!preds) break;
+    const first = preds.get(RDF_FIRST)?.[0];
+    if (first) {
+      const value = toValue(first, ctx, depth, path);
+      if (value !== null) out.push(value);
+    }
+    node = preds.get(RDF_REST)?.[0]?.value ?? null;
+  }
+  return out;
+}
+function isListHead(term3, ctx) {
+  if (term3.termType !== "BlankNode" && term3.termType !== "NamedNode") return false;
+  return !!ctx.bySubject.get(term3.value)?.has(RDF_FIRST);
+}
+function toValue(term3, ctx, depth, path) {
+  if (term3.termType === "Literal") return term3.value;
+  if (isListHead(term3, ctx)) return readList(term3.value, ctx, depth, path);
+  const preds = ctx.bySubject.get(term3.value);
+  if (preds && preds.size) return makeView(term3.value, ctx, depth + 1, path);
+  return term3.termType === "BlankNode" ? null : term3.value;
+}
+function readProperty(subject, name, ctx, depth = 0, path = /* @__PURE__ */ new Set()) {
+  const preds = ctx.bySubject.get(subject);
+  if (!preds) return void 0;
+  if (name === "id") return ctx.blanks.has(subject) ? void 0 : subject;
+  if (name === "type") {
+    const types = (preds.get(RDF_TYPE) ?? []).map((t) => BY_IRI.get(t.value) ?? t.value);
+    if (!types.length) return void 0;
+    return types.length === 1 ? types[0] : types;
+  }
+  const term3 = TERMS.get(name);
+  if (!term3) return void 0;
+  const values = preds.get(term3.iri);
+  if (!values || !values.length) return void 0;
+  const listed = values.filter((v) => isListHead(v, ctx));
+  if (term3.list) {
+    if (!listed.length) return void 0;
+    return readList(listed[0].value, ctx, depth, path);
+  }
+  if (listed.length === values.length && listed.length === 1) return readList(listed[0].value, ctx, depth, path);
+  const out = values.map((v) => toValue(v, ctx, depth, path)).filter((v) => v !== null);
+  if (ALWAYS_LIST.has(name)) return out.flat();
+  return out.length === 1 ? out[0] : out;
+}
+function makeView(subject, ctx, depth = 0, seen = /* @__PURE__ */ new Set()) {
+  if (depth > MAX_DEPTH || seen.has(subject)) {
+    return ctx.blanks.has(subject) ? null : subject;
+  }
+  const preds = ctx.bySubject.get(subject);
+  if (!preds) return ctx.blanks.has(subject) ? null : subject;
+  const path = new Set(seen).add(subject);
+  const out = {};
+  const id = readProperty(subject, "id", ctx, depth, path);
+  if (id !== void 0) out.id = id;
+  const type = readProperty(subject, "type", ctx, depth, path);
+  if (type !== void 0) out.type = type;
+  for (const predicate of preds.keys()) {
+    if (predicate === RDF_TYPE || predicate === RDF_FIRST || predicate === RDF_REST) continue;
+    for (const name of NAMES_BY_IRI.get(predicate) ?? []) {
+      if (name === "id" || name === "type") continue;
+      const value = readProperty(subject, name, ctx, depth, path);
+      if (value !== void 0) out[name] = value;
+    }
+  }
+  return out;
+}
+function graphView(quads, { root = null } = {}) {
+  if (!quads || !quads.length) return null;
+  const ctx = indexQuads(quads);
+  const subject = root ?? findRoot(ctx);
+  if (!subject) return null;
+  const view = makeView(subject, ctx);
+  return view && typeof view === "object" ? view : null;
+}
+
 // lib/core/as2.mjs
 var AS2Error = class extends Error {
   constructor(reason, { context = null } = {}) {
@@ -55509,17 +55684,33 @@ async function parseAS2(raw) {
   }
   return { doc, graph: graph2 };
 }
+function groundContext(input) {
+  const ctx = input["@context"];
+  const held = (c) => typeof c === "string" ? Object.hasOwn(CONTEXTS, c) : c && typeof c === "object";
+  let kept;
+  if (ctx === void 0 || ctx === null) kept = [];
+  else if (Array.isArray(ctx)) kept = ctx.filter(held);
+  else kept = held(ctx) ? [ctx] : [];
+  if (!kept.some((c) => c === AS_CTX)) kept.unshift(AS_CTX);
+  return { ...input, "@context": kept.length === 1 ? kept[0] : kept };
+}
 async function readLenient(raw) {
   try {
     const { doc, graph: graph2 } = await parseAS2(raw);
-    return { doc, graph: graph2, degraded: null };
+    return { doc, graph: graph2, view: graphView(graph2), degraded: null };
   } catch (e) {
-    let doc = null;
+    let input = null;
     try {
-      doc = typeof raw === "string" ? JSON.parse(raw) : raw ?? null;
+      input = typeof raw === "string" ? JSON.parse(raw) : raw ?? null;
     } catch {
     }
-    return { doc: doc && typeof doc === "object" ? doc : null, graph: null, degraded: e.message };
+    if (!input || typeof input !== "object") return { doc: null, graph: null, view: null, degraded: e.message };
+    try {
+      const { graph: graph2 } = await parseAS2(groundContext(input));
+      return { doc: input, graph: graph2, view: graphView(graph2), degraded: e.message };
+    } catch (inner) {
+      return { doc: input, graph: null, view: null, degraded: `${e.message}; grounded read also failed: ${inner.message}` };
+    }
   }
 }
 
@@ -55542,13 +55733,14 @@ async function reconcileFollowers(publisher, contacts) {
     try {
       const res = await publisher.deliverer.signedFetch(actor, { headers: { accept: ACCEPT_AP } });
       if (!res.ok) continue;
-      const { doc, degraded } = await readLenient(await res.json());
-      if (degraded) publisher.log?.(`actor ${actor} read as plain JSON: ${degraded}`);
-      if (!doc?.inbox) continue;
+      const { doc, view, degraded } = await readLenient(await res.json());
+      const actorDoc2 = view ?? doc;
+      if (degraded) publisher.log?.(`actor ${actor} grounded to read: ${degraded}`);
+      if (!actorDoc2?.inbox) continue;
       contacts.followers.push({
         actor,
-        inbox: doc.inbox,
-        sharedInbox: doc.endpoints?.sharedInbox || null,
+        inbox: actorDoc2.inbox,
+        sharedInbox: actorDoc2.endpoints?.sharedInbox || null,
         recovered: true,
         // Said explicitly, because onUndo reads it: the pod publishes WHO
         // follows, never the id of the Follow that did it, so a recovered
@@ -56822,8 +57014,8 @@ async function fetchAP(intake, url) {
   let doc = null;
   try {
     const read2 = await readLenient(await readCapped3(res));
-    if (read2.degraded) intake.log(`fetch ${url} read as plain JSON: ${read2.degraded}`);
-    doc = read2.doc;
+    if (read2.degraded) intake.log(`fetch ${url} grounded to read: ${read2.degraded}`);
+    doc = read2.view ?? read2.doc;
   } catch (e) {
     intake.log(`fetch ${url}: unreadable \u2014 ${e.message}`);
     return null;
@@ -56886,7 +57078,8 @@ async function isGone(intake, url) {
   if (res.status < 400) {
     try {
       const { readCapped: readCapped3 } = await Promise.resolve().then(() => (init_safefetch(), safefetch_exports));
-      return (await readLenient(await readCapped3(res))).doc?.type === "Tombstone";
+      const read2 = await readLenient(await readCapped3(res));
+      return (read2.view ?? read2.doc)?.type === "Tombstone";
     } catch {
       return false;
     }
@@ -62658,8 +62851,8 @@ var Intake = class {
         } else {
           const got = await readItem(this.remote, item.url, { maxBytes: MAX_ITEM_BYTES, readCapped });
           const read2 = got.raw === null ? null : await readLenient(got.raw);
-          if (read2?.degraded) this.log(`inbox item ${item.url} read as plain JSON: ${read2.degraded}`);
-          const activity = read2?.doc ?? null;
+          if (read2?.degraded) this.log(`inbox item ${item.url} grounded to read: ${read2.degraded}`);
+          const activity = read2?.view ?? read2?.doc ?? null;
           if (keepConcerning) {
             const rejection = activity ? await this.handle(activity) : "unparsable JSON";
             if (rejection) out.dropped++;
@@ -62799,8 +62992,8 @@ var Intake = class {
         const got = await readItem(this.remote, url, { maxBytes: MAX_ITEM_BYTES, readCapped });
         const raw = got.raw;
         const read2 = raw ? await readLenient(raw) : null;
-        if (read2?.degraded) this.log(`inbox item ${url} read as plain JSON: ${read2.degraded}`);
-        activity = read2?.doc ?? null;
+        if (read2?.degraded) this.log(`inbox item ${url} grounded to read: ${read2.degraded}`);
+        activity = read2?.view ?? read2?.doc ?? null;
         if (read2?.graph) {
           const failure = await checkShapes(read2.graph);
           if (failure) {
@@ -66829,21 +67022,28 @@ async function importSigningKey(keysRecord) {
     "pkcs8",
     pemToDer(keysRecord.rsa.privatePem),
     { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
-    true,
+    false,
     ["sign"]
   );
   return { rsaPrivate, rsaPublicPem: keysRecord.rsa.publicPem, edPrivate: null, edPublicMultibase: null };
 }
+var fromCache = (c) => ({ rsaPrivate: c.rsaPrivate, rsaPublicPem: c.rsaPublicPem, edPrivate: null, edPublicMultibase: null });
+var isOpenedKey = (c) => c?.rsaPrivate?.type === "private" && typeof c.rsaPublicPem === "string";
+async function cacheOpenedKeys(actorUrl, keysRecord) {
+  const keys = await importSigningKey(keysRecord);
+  await kvPut(keyCacheKey(actorUrl), { rsaPrivate: keys.rsaPrivate, rsaPublicPem: keys.rsaPublicPem }).catch(() => {
+  });
+  return keys;
+}
 var keyCacheKey = (actorUrl) => `signing-keys:${actorUrl}`;
 async function loadKeysFromPod(remote, urls) {
   const cached = await kvGet(keyCacheKey(urls.actor)).catch(() => null);
-  if (cached?.rsa) return importSigningKey(cached);
+  if (isOpenedKey(cached)) return fromCache(cached);
+  if (cached?.rsa?.privatePem) return cacheOpenedKeys(urls.actor, cached);
   const doc = await readWrappedKeys(remote, urls);
   if (isKeyEnvelope(doc)) throw new KeyPasswordNeeded();
   if (!doc || !doc.rsa) throw new Error("no signing key on the pod \u2014 sign up did not finish");
-  await kvPut(keyCacheKey(urls.actor), doc).catch(() => {
-  });
-  return importSigningKey(doc);
+  return cacheOpenedKeys(urls.actor, doc);
 }
 
 // lib/core/deliver.mjs
@@ -69525,9 +69725,7 @@ var BrowserAgent = class _BrowserAgent {
     const rec = await generateKeys();
     rec.mintedFor = this.urls.actor;
     await writeWrappedKeys(this.remote, this.urls, await wrapKeys(rec, password));
-    await kvPut(keyCacheKey(this.urls.actor), rec).catch(() => {
-    });
-    const keys = await importSigningKey(rec);
+    const keys = await cacheOpenedKeys(this.urls.actor, rec);
     this.publisher.publicKeyPem = keys.rsaPublicPem;
     this.deliverer.rsaPrivate = keys.rsaPrivate;
     await this.publisher.publishProfile();
