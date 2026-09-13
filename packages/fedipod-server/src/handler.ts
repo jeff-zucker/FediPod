@@ -13,7 +13,7 @@ import { HttpHandler, getLoggerFor } from '@solid/community-server';
 import type {
   HttpHandlerInput, ResourceStore, Initializable, Finalizable, ClusterManager,
 } from '@solid/community-server';
-import { claims, agentClaims } from './claims';
+import { claims, agentClaims, INBOX_PATH } from './claims';
 import { nodeToWhatwg, applyToNode } from './adapt';
 import { makeStoreIO } from './store-css';
 import { makeStoreSession } from './store-pod';
@@ -380,7 +380,7 @@ export class FediPodServerHandler extends HttpHandler implements Initializable, 
     // must not be served by CSS for the seconds before an identity finishes
     // starting, and then stop being served once it has.
     if (claims({ host, pathname }, this.frontHost)) return;
-    if (agentClaims({ host, pathname }, this.agentHosts, this.uiPath)) return;
+    if (agentClaims({ host, pathname, method: request.method }, this.agentHosts, this.uiPath)) return;
     throw new Error('not a gateway route');   // reject → CSS's LDP handler takes it
   }
 
@@ -469,6 +469,36 @@ export class FediPodServerHandler extends HttpHandler implements Initializable, 
     return { httpStatus: 200, ok: true, stopped: Boolean(identity) };
   }
 
+  /**
+   * A delivery to an identity's own inbox, verified here — the server that
+   * stores the inbox is the one the request reached, so the signature is
+   * checked while its headers exist and the receipt is written beside the
+   * activity. The same door code the front runs; nothing is renamed.
+   */
+  private async deliverAtDoor(identity: EmbeddedIdentity, request: HttpHandlerInput['request'], response: HttpHandlerInput['response']): Promise<void> {
+    const { deliverToInbox } = await esmImport(EMBED) as {
+      deliverToInbox: (agent: unknown, req: Request, opts: Record<string, unknown>) =>
+        Promise<{ status: number; reason: string }>;
+    };
+    let whatwg: Request;
+    try {
+      // The pod's own origin: the signature covers the path and the Host header, and both are the pod's.
+      whatwg = await nodeToWhatwg(request as never, new URL(identity.podHome).origin);
+    } catch (e: unknown) {
+      const status = (e as { statusCode?: number }).statusCode === 413 ? 413 : 400;
+      response.writeHead(status, { 'content-type': 'application/json' });
+      response.end(JSON.stringify({ error: (e as Error).message }));
+      return;
+    }
+    const out = await deliverToInbox(identity.agent, whatwg, {
+      podPut: (url: string, body: string, ct: string) => this.podPut(url, body, ct),
+      gatewayWebId: this.args.gatewayWebId ?? null,
+    });
+    this.logger.info(`FediPod: delivery for @${identity.handle} at the door — ${out.reason} (${out.status})`);
+    response.writeHead(out.status, { 'content-type': 'application/json' });
+    response.end(JSON.stringify({ reason: out.reason }));
+  }
+
   public async handle({ request, response }: HttpHandlerInput): Promise<void> {
     const host = String(request.headers.host ?? '').toLowerCase();
     if (this.agentHosts.has(host)) {
@@ -486,6 +516,11 @@ export class FediPodServerHandler extends HttpHandler implements Initializable, 
         }
         response.writeHead(503, { 'content-type': 'application/json', 'retry-after': '5' });
         response.end(JSON.stringify({ error: 'this identity is still starting' }));
+        return;
+      }
+      const pathname = new URL(request.url ?? '/', `https://${host}`).pathname;
+      if (pathname === INBOX_PATH && String(request.method).toUpperCase() === 'POST') {
+        await this.deliverAtDoor(identity, request, response);
         return;
       }
       await identity.surface.handler(request, response);

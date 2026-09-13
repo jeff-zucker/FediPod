@@ -17,6 +17,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { AppRunner } from '@solid/community-server';
+import { generateKeyPairSync, webcrypto } from 'node:crypto';
+import { signRequest } from '@fedify/fedify/sig';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const pkg = path.resolve(here, '../..');
@@ -84,15 +86,22 @@ fs.writeFileSync(config, JSON.stringify({
 const REMOTE_PORT = 4792;
 const REMOTE = `http://127.0.0.1:${REMOTE_PORT}/`;
 const delivered = [];
+// Every stand-in actor publishes the same RSA key; a forged delivery below is
+// signed with a different one, so its signature checks against this and fails.
+const remoteKeys = generateKeyPairSync('rsa', { modulusLength: 2048 });
+const remotePublicPem = remoteKeys.publicKey.export({ type: 'spki', format: 'pem' });
+const signingKeyOf = (privateKey) => webcrypto.subtle.importKey('pkcs8',
+  privateKey.export({ type: 'pkcs8', format: 'der' }), { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, true, ['sign']);   // Fedify's signer insists on extractable
 const remote = http.createServer((req, res) => {
   const isActor = /^\/u\/([a-z]+)$/u.exec(req.url || '');
   if (isActor) {
     const name = isActor[1];
     res.writeHead(200, { 'content-type': 'application/activity+json' });
     res.end(JSON.stringify({
-      '@context': 'https://www.w3.org/ns/activitystreams',
+      '@context': ['https://www.w3.org/ns/activitystreams', 'https://w3id.org/security/v1'],
       id: `${REMOTE}u/${name}`, type: 'Person', preferredUsername: name,
       inbox: `${REMOTE}u/${name}/inbox`, outbox: `${REMOTE}u/${name}/outbox`,
+      publicKey: { id: `${REMOTE}u/${name}#main-key`, owner: `${REMOTE}u/${name}`, publicKeyPem: remotePublicPem },
     }));
     return;
   }
@@ -358,6 +367,46 @@ try {
   check(await until('the identity answers a follow that came in through the door',
     async () => delivered.some((d) => d.type === 'Accept' && d.deliveredTo === 'dave')),
   'a delivery through the door reaches the identity and is answered');
+
+  // ---- a delivery to the pod's own inbox is verified at the door ----------
+  // The actor names its inbox on the pod, and the server that stores it is
+  // the one the POST reaches: the signature is checked there and a receipt
+  // is written beside the activity, so the identity acts on a verified sender.
+  const podInbox = `${POD}activitypods-js/ap/inbox/`;
+  const follow = (who, n) => JSON.stringify({
+    '@context': 'https://www.w3.org/ns/activitystreams',
+    type: 'Follow', id: `${REMOTE}activities/${n}`, actor: `${REMOTE}u/${who}`, object: actorUrl,
+  });
+  const signedPost = async (who, body, privateKey) => {
+    const req = new Request(podInbox, { method: 'POST',
+      headers: { 'content-type': 'application/activity+json' }, body });
+    return signRequest(req, await signingKeyOf(privateKey), new URL(`${REMOTE}u/${who}#main-key`));
+  };
+  const verifiedRes = await fetch(await signedPost('erin', follow('erin', 3), remoteKeys.privateKey));
+  const verified = await verifiedRes.json().catch(() => ({}));
+  check(verifiedRes.status === 202 && verified.reason === 'verified',
+    `a signed delivery to the pod inbox is verified at the door (${verifiedRes.status} ${verified.reason})`);
+  check(await until('the identity answers the verified follow',
+    async () => delivered.some((d) => d.type === 'Accept' && d.deliveredTo === 'erin')),
+  'and the identity acts on it');
+
+  const otherKeys = generateKeyPairSync('rsa', { modulusLength: 2048 });
+  const forgedRes = await fetch(await signedPost('frank', follow('frank', 4), otherKeys.privateKey));
+  const forged = await forgedRes.json().catch(() => ({}));
+  check(forgedRes.status === 202 && forged.reason === 'forged signature',
+    `a delivery signed with the wrong key is dropped at the door (${forgedRes.status} ${forged.reason})`);
+
+  const plainRes = await fetch(podInbox, { method: 'POST',
+    headers: { 'content-type': 'application/activity+json' }, body: follow('grace', 5) });
+  const plain = await plainRes.json().catch(() => ({}));
+  check(plainRes.status === 202 && plain.reason === 'buffered-unverified',
+    `an unsigned delivery still lands, marked unverified (${plainRes.status} ${plain.reason})`);
+  check(await until('the identity answers the unsigned follow after checking its sender',
+    async () => delivered.some((d) => d.type === 'Accept' && d.deliveredTo === 'grace')),
+  'and is still answered, on the strength of the sender\'s own actor document');
+  await new Promise((r) => setTimeout(r, 3000));
+  check(!delivered.some((d) => d.type === 'Accept' && d.deliveredTo === 'frank'),
+    'the forged follow was never answered');
 
   // ---- how a client learns to sign in --------------------------------------
   const metaRes = await fetch(`${POD}.well-known/oauth-authorization-server`);

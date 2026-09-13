@@ -49,6 +49,15 @@ test('an identity claims its protocol routes and its door, and nothing else', ()
   assert.equal(owns('/app/'), false, 'a name the owner may want is theirs');
   assert.equal(owns('/profile/card'), false, 'a pod resource is the pod\'s');
   assert.equal(owns('/ap/inbox/x.json'), false, 'inbox items are pod resources, read and written as such');
+  const inbox = '/activitypods-js/ap/inbox/';
+  assert.equal(agentClaims({ host: 'alice.example.org', pathname: inbox, method: 'POST' }, hosts), true,
+    'a delivery POSTed to the inbox is verified at the door');
+  assert.equal(agentClaims({ host: 'alice.example.org', pathname: inbox, method: 'GET' }, hosts), false,
+    'reading the container is the pod\'s');
+  assert.equal(agentClaims({ host: 'alice.example.org', pathname: inbox, method: 'PUT' }, hosts), false,
+    'and so is a write by name — an outside door forwards that way');
+  assert.equal(agentClaims({ host: 'alice.example.org', pathname: inbox + 'item.json', method: 'POST' }, hosts), false,
+    'only the container itself takes deliveries');
   assert.equal(owns('/api/v1/instance', 'carol.example.org'), false, 'another host is not this identity');
   assert.equal(agentClaims({ host: 'alice.example.org', pathname: '/fedipod/' }, hosts, ''), false,
     'with no door configured there are no pages to claim');

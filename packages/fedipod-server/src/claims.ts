@@ -34,11 +34,19 @@ const AGENT_PATHS = new Set([
 const AGENT_PREFIXES = [ '/api/', '/oauth/' ];
 
 /**
+ * The inbox container of an identity this server runs, under the root the
+ * embedded credential uses (lib/server/embed.mjs). A delivery POSTed here is
+ * verified at the door before it is written, so the request is claimed from
+ * the LDP handler; every other method on the container is the pod's.
+ */
+export const INBOX_PATH = '/activitypods-js/ap/inbox/';
+
+/**
  * True when this request belongs to an identity's client surface.
  * `agentHosts` is keyed by host including port, as the Host header carries it.
  */
 export function agentClaims(
-  input: { host?: string; pathname: string },
+  input: { host?: string; pathname: string; method?: string },
   agentHosts: Set<string>,
   uiPath = '/fedipod/',
 ): boolean {
@@ -46,6 +54,7 @@ export function agentClaims(
   if (!agentHosts.has(String(input.host).toLowerCase())) return false;
   const { pathname } = input;
   if (AGENT_PATHS.has(pathname)) return true;
+  if (pathname === INBOX_PATH) return String(input.method ?? '').toUpperCase() === 'POST';
   if (AGENT_PREFIXES.some((prefix) => pathname.startsWith(prefix))) return true;
   // The owner's door, when there is one: '' turns the pages off entirely.
   return uiPath !== '' && (pathname === uiPath.slice(0, -1) || pathname.startsWith(uiPath));
