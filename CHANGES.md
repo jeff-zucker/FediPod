@@ -1,5 +1,12 @@
 # Changes
 
+## 2026-09-13 (the browser can look people up again — version 1.3.1)
+
+Searching for someone by handle from the browser build found nobody on
+mastodon.social, and following them failed the same way. The browser signs
+its reads and hands them to fedipod.net to send, and one signed header was
+left behind on the way. It travels now. Reload the page and search again.
+
 ## 2026-09-13 (a Server account checks who is knocking — version 1.3.0, fedipod-server 0.13.0)
 
 FediPod Server now verifies every delivery at the pod's own inbox. The
