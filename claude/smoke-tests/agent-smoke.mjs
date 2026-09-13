@@ -8019,9 +8019,12 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
   const seen17 = [];
   intake17.remote.fetch = async (u) => {
     seen17.push(u);
-    return resp({ type: 'Create', _concerns: u.endsWith('big-old') });
+    // A real AS2 term rather than a made-up key. Handlers read the graph now,
+    // and a term no context defines never becomes a statement, so an invented
+    // one would not survive the read to be asserted on.
+    return resp({ type: 'Create', summary: u.endsWith('big-old') ? 'concerns' : 'noise' });
   };
-  intake17.handle = async (a) => (a._concerns ? undefined : 'not addressed to us');
+  intake17.handle = async (a) => (a.summary === 'concerns' ? undefined : 'not addressed to us');
   const out3 = await intake17.prune({ before: '2026-07-02T00:00:00.000Z', keepConcerning: true });
   check(seen17.includes(INBOX + 'big-old'),
     'keepConcerning reads even a large item — a post that concerns us cannot be judged unread');
