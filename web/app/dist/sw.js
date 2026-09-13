@@ -67388,6 +67388,7 @@ var RelayDeliverer = class extends Deliverer {
       headers: {
         date: s.headers.date,
         digest: s.headers.digest,
+        accept: s.headers.accept,
         "content-type": s.headers["content-type"],
         signature: s.headers.signature
       }

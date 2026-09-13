@@ -1976,6 +1976,11 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   // so; this is the browser matching it.
   check(/method: init\.method \|\| 'GET'/.test(read('web/app/deliver-relay.mjs')),
     'a browser-side request with no method named is a read, as it is on the Node side');
+  // The signature covers `accept`, and a read without it gets the HTML page:
+  // dropping it at the relay made every actor lookup from the browser fail on
+  // mastodon.social (2026-09-13). The relay permits it (RELAY_HEADERS).
+  check(/accept: s\.headers\.accept/.test(read('web/app/deliver-relay.mjs')),
+    'the browser hands the relay the Accept header it signed');
 
   // `host` is a forbidden header, so the request the worker builds cannot carry
   // one from the fetch it intercepted — and the facade reads it to say where it

@@ -28,10 +28,13 @@ export class RelayDeliverer extends Deliverer {
   async signedFetch(url, init = {}) {
     const body = typeof init.body === 'string' ? init.body : (init.body ? new TextDecoder().decode(init.body) : '');
     const s = await sign({ url, method: init.method || 'GET', headers: init.headers || {}, body }, this.rsaPrivate, this.keyId);
+    // Every signed header goes to the relay, `accept` included: the signature
+    // covers it, so a relay request missing it carries an invalid signature —
+    // and a read without it gets the HTML page instead of the document.
     const relayReq = {
       url: s.url, method: s.method, body,
       headers: {
-        date: s.headers.date, digest: s.headers.digest,
+        date: s.headers.date, digest: s.headers.digest, accept: s.headers.accept,
         'content-type': s.headers['content-type'], signature: s.headers.signature,
       },
     };
