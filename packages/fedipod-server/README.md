@@ -9,14 +9,12 @@ account: it accepts follows, delivers their posts, and serves their Mastodon
 client at the pod's own address. Signing up is the only way an account is
 made, and opting out is the only way one ends.
 
-<!-- CLAUDE 2026-09-13 — verification at the pod's own inbox; delete these markers when done -->
 Every delivery to an account is checked as it arrives. The server that stores
 the inbox is the server the other side's POST reaches, so the request's
 signature is verified there and the result is written beside the activity. A
 delivery signed with the wrong key is dropped. One with no signature is kept
 and the account confirms the sender through the sender's own actor document
 before acting on it. There is nothing to configure.
-<!-- /CLAUDE -->
 
 With nothing configured beyond the defaults, installing the component changes
 nothing about how the server serves pods. All pods, whether or not they opt-in
