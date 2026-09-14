@@ -33025,9 +33025,10 @@ var PodTransport = class {
     return serialize(doc, g, url, "text/turtle");
   }
   async setAcl(targetUrl, publicModes, opts = {}) {
-    const url = await this.aclUrlFor(targetUrl);
+    const podTarget = this.toPod ? this.toPod(targetUrl) : targetUrl;
+    const url = await this.aclUrlFor(podTarget);
     if (!await this.aclWritable(url)) return null;
-    return this.put(url, this.aclDoc(targetUrl, publicModes, { ...opts, aclUrl: url }), "text/turtle");
+    return this.put(url, this.aclDoc(podTarget, publicModes, { ...opts, aclUrl: url }), "text/turtle");
   }
   // Child documents of an LDP container (URLs under it, excluding aux docs).
   // Revalidated: the inbox is polled every couple of minutes and is usually
@@ -33266,6 +33267,15 @@ function handleProblem(handle) {
 }
 var PROGRESS = /* @__PURE__ */ new Map();
 var progressKey = (a) => [a.issuer, a.mode, a.handle, a.mode === "new" ? a.podName || a.handle : a.pod].join("|");
+async function assertFrontNameFree(frontOrigin, handle) {
+  const res = await fetch(
+    `${frontOrigin.replace(/\/$/, "")}/api/handle?handle=${encodeURIComponent(handle)}`,
+    { headers: { accept: "application/json" } }
+  ).catch(() => null);
+  const d = res ? await res.json().catch(() => ({})) : null;
+  if (!d) throw new Error(`${new URL(frontOrigin).host} did not answer whether @${handle} is free`);
+  if (!d.available) throw new Error(d.reason || `the name @${handle}@${new URL(frontOrigin).host} is taken \u2014 choose another handle`);
+}
 async function signUp(answers, { onStep = () => {
 }, frontOrigin = null } = {}) {
   const { mode, issuer, email, password, handle } = answers;
@@ -33274,6 +33284,9 @@ async function signUp(answers, { onStep = () => {
   if (!email) throw new Error("an email is required");
   if (!password) throw new Error("a password is required");
   if (mode === "existing" && !answers.pod) throw new Error("a pod address is required");
+  const wantsFront = answers.shape === "front";
+  if (wantsFront && !frontOrigin) throw new Error("an address at the gateway needs a gateway, and this page has none");
+  if (wantsFront) await assertFrontNameFree(frontOrigin, handle);
   const key = progressKey(answers);
   const prog = PROGRESS.get(key) || {};
   PROGRESS.set(key, prog);
@@ -33305,11 +33318,14 @@ async function signUp(answers, { onStep = () => {
   }
   const pod = prog.pod;
   const webId = prog.webId || null;
-  const podUrl = new URL(pod);
-  if (podUrl.pathname !== "/") {
-    throw new Error(`${pod} is a path on ${podUrl.host}, not its own host. A Fediverse address lives at a host root, so this pod cannot carry one. Use a pod that is the root of its own subdomain.`);
+  const pathPod = new URL(pod).pathname !== "/";
+  const fronted = pathPod || wantsFront;
+  if (fronted && !frontOrigin) {
+    throw new Error(`${pod} is a path on a shared host, so its address must live at a gateway, and this page has none.`);
   }
+  if (pathPod && !wantsFront) await assertFrontNameFree(frontOrigin, handle);
   const actorUrl = actorUrlFor(pod);
+  const frontActor = fronted ? `${frontOrigin.replace(/\/$/, "")}/u/${handle}/ap/actor` : null;
   const cred = step("credential");
   let credential;
   if (!prog.credential) {
@@ -33324,12 +33340,36 @@ async function signUp(answers, { onStep = () => {
     cred.ok();
   }
   const session = await makeDpopSession(credential);
+  let gateway = answers.gateway || prog.gateway || null;
+  if (frontOrigin && !gateway) {
+    const gw = step("gateway");
+    gw.running(fronted ? `taking your address at ${new URL(frontOrigin).host}` : `connecting your mail door on ${new URL(frontOrigin).host}`);
+    const res = await session.fetch(`${frontOrigin.replace(/\/$/, "")}/api/attach`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      // podHome is the AP CONTAINER, not the pod root: the front builds the
+      // delivery target as `podHome + 'ap/inbox/'` (lib/front-core.mjs), so a
+      // bare pod root sends this identity's mail to <pod>/ap/inbox/ — outside
+      // the container the agent drains, where nothing would ever read it. The
+      // manage surface has always sent `urls.home`; this is the same value.
+      body: JSON.stringify({ handle, podHome: `${pod}${AP_ROOT}`, actorUrl, kind: "person", fronted })
+    });
+    const d = await res.json().catch(() => ({}));
+    if (res.status !== 201 || !d.hmacSecret) {
+      throw new Error(`could not connect the gateway (HTTP ${res.status}): ${d.error || ""}`);
+    }
+    gateway = fronted ? { url: `${frontOrigin.replace(/\/$/, "")}/u/${handle}/ap/inbox/`, frontActor: String(d.frontActor || frontActor), hmacSecret: d.hmacSecret, mode: "trust" } : { url: d.doorInbox, hmacSecret: d.hmacSecret, mode: "trust" };
+    prog.gateway = gateway;
+    gw.ok();
+  } else if (frontOrigin && gateway) {
+    step("gateway").ok();
+  }
   const keysStep = step("keys");
   let keys;
   if (!prog.keysStored) {
     keysStep.running("making your signing key and locking it under your password");
     keys = await generateKeys();
-    keys.mintedFor = actorUrl;
+    keys.mintedFor = gateway?.frontActor || actorUrl;
     const remote = new BrowserRemotePod(session, { webId: credential.webId, role: "signup", log: () => {
     } });
     try {
@@ -33348,30 +33388,6 @@ async function signUp(answers, { onStep = () => {
   } else {
     keys = prog.keys;
     keysStep.ok();
-  }
-  let gateway = answers.gateway || prog.gateway || null;
-  if (frontOrigin && !gateway) {
-    const gw = step("gateway");
-    gw.running(`connecting your mail door on ${new URL(frontOrigin).host}`);
-    const res = await session.fetch(`${frontOrigin.replace(/\/$/, "")}/api/attach`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      // podHome is the AP CONTAINER, not the pod root: the front builds the
-      // delivery target as `podHome + 'ap/inbox/'` (lib/front-core.mjs), so a
-      // bare pod root sends this identity's mail to <pod>/ap/inbox/ — outside
-      // the container the agent drains, where nothing would ever read it. The
-      // manage surface has always sent `urls.home`; this is the same value.
-      body: JSON.stringify({ handle, podHome: `${pod}${AP_ROOT}`, actorUrl, kind: "person" })
-    });
-    const d = await res.json().catch(() => ({}));
-    if (res.status !== 201 || !d.hmacSecret) {
-      throw new Error(`could not connect the mail door (HTTP ${res.status}): ${d.error || ""}`);
-    }
-    gateway = { url: d.doorInbox, hmacSecret: d.hmacSecret, mode: "trust" };
-    prog.gateway = gateway;
-    gw.ok();
-  } else if (frontOrigin && gateway) {
-    step("gateway").ok();
   }
   const config = {
     remotePod: pod,
@@ -33397,7 +33413,7 @@ async function signUp(answers, { onStep = () => {
     onStep("credential", "ok", "this browser is ready (the setup credential could not be revoked automatically \u2014 you can remove it from your pod's account page)");
   }
   PROGRESS.delete(key);
-  const host = new URL(pod).host;
+  const host = gateway?.frontActor ? new URL(gateway.frontActor).host : new URL(pod).host;
   return {
     credential,
     config,
@@ -33423,6 +33439,15 @@ async function readIssuer(actorUrl, fetchImpl = fetch) {
   } catch {
     return null;
   }
+}
+
+// lib/pod/urls.mjs
+function podBaseOfWebId(webId) {
+  const u = new URL(webId);
+  u.hash = "";
+  u.search = "";
+  const dir = u.pathname.replace(/profile\/card$/u, "").replace(/[^/]*$/u, "");
+  return `${u.origin}${dir.endsWith("/") ? dir : dir + "/"}`;
 }
 
 // web/app/oidc-session.mjs
@@ -33674,7 +33699,7 @@ window.fedipodUnlock = async (password) => {
   if (!password) throw new Error("Enter your account password.");
   const session = await getSession();
   if (!session) throw new Error("Sign in first.");
-  const podFromWebId = new URL(session.webId).origin + "/";
+  const podFromWebId = podBaseOfWebId(session.webId);
   const state = `${podFromWebId}${AP_ROOT}ap-state/`;
   const remote = new BrowserRemotePod(session, { webId: session.webId, role: "signup", log: () => {
   } });
@@ -33711,16 +33736,30 @@ async function issuerForPod(pod) {
     if (authz) return new URL(authz).origin;
   } catch {
   }
-  const host = new URL(pod).host;
-  const parent = host.split(".").slice(1).join(".");
-  return `https://${parent || host}`;
+  const u = new URL(pod);
+  if (u.pathname !== "/") return u.origin;
+  const parent = u.host.split(".").slice(1).join(".");
+  return `https://${parent || u.host}`;
+}
+async function podForFrontedAddress(handle) {
+  const res = await fetch(
+    `/.well-known/webfinger?resource=${encodeURIComponent(`acct:${handle}@${location.host}`)}`,
+    { headers: { accept: "application/jrd+json, application/json" } }
+  ).catch(() => null);
+  if (!res || res.status >= 400) throw new Error(`nobody at this site is called @${handle}@${location.host}`);
+  const doc = await res.json().catch(() => ({}));
+  const podActorId = (doc.aliases || []).find((a) => /\/ap\/actor$/u.test(String(a)));
+  if (!podActorId) throw new Error(`@${handle}@${location.host} lives here but names no pod to sign in to`);
+  const tail = `${AP_ROOT}ap/actor`;
+  if (!podActorId.endsWith(tail)) throw new Error(`the pod actor ${podActorId} is not where a FediPod pod keeps one`);
+  return podActorId.slice(0, -tail.length);
 }
 window.fedipodSignin = async ({ address }) => {
   const parsed = parseAddress(address);
   if (!parsed) throw new Error("Enter your address as @you@yourpod (for example @alice@alice.solidcommunity.net).");
   const bad = handleProblem(parsed.handle);
   if (bad) throw new Error(bad);
-  const pod = `https://${parsed.host}/`;
+  const pod = parsed.host === location.host.toLowerCase() ? await podForFrontedAddress(parsed.handle) : `https://${parsed.host}/`;
   const issuer = await issuerForPod(pod);
   const { authorizationUrl } = await beginLogin({ issuer, redirectUri: REDIRECT });
   location.href = authorizationUrl;
@@ -33883,6 +33922,26 @@ ${e.detail}` : "");
     const ph = providerHost();
     return sub && ph ? `${sub}.${ph}` : "";
   };
+  const podUrl = () => {
+    let v = f().pod.value.trim();
+    if (!v) return "";
+    if (!/^https?:\/\//i.test(v)) v = "https://" + v;
+    if (!v.endsWith("/")) v += "/";
+    try {
+      return new URL(v).href;
+    } catch {
+      return "";
+    }
+  };
+  const isPathPod = (u) => {
+    try {
+      return new URL(u).pathname !== "/";
+    } catch {
+      return false;
+    }
+  };
+  const pathPod = () => f().mode.value === "existing" && isPathPod(podUrl());
+  const shape = () => pathPod() ? "front" : f().shape.value;
   const answers = () => {
     const mode = f().mode.value;
     const a = {
@@ -33890,18 +33949,37 @@ ${e.detail}` : "");
       handle: f().handle.value.trim().toLowerCase(),
       email: f().email.value.trim(),
       password: f().password.value,
-      issuer: providerUrl()
+      issuer: providerUrl(),
+      shape: shape()
     };
     if (mode === "new") a.podName = f().podName.value.trim().toLowerCase();
-    else a.pod = `https://${podHostOf()}/`;
+    else a.pod = podUrl();
     return a;
   };
   const previewAddr = () => {
     const handle = f().handle.value.trim().toLowerCase();
-    const ph = podHostOf();
-    $("preview").textContent = handle && ph ? `@${handle}@${ph}` : "@\u2026@\u2026";
+    const host = shape() === "front" ? location.host : f().mode.value === "existing" ? podUrl() ? new URL(podUrl()).host : "" : podHostOf();
+    $("preview").textContent = handle && host ? `@${handle}@${host}` : "@\u2026@\u2026";
   };
-  for (const el of $("form").elements) el.addEventListener("input", previewAddr);
+  const applyShape = () => {
+    const fixed = pathPod();
+    for (const r of f().shape) {
+      r.disabled = fixed;
+      if (fixed) r.checked = r.value === "front";
+    }
+    $("shape-hint").hidden = !fixed;
+  };
+  const applyMode = () => {
+    const existing = f().mode.value === "existing";
+    $("pod-field").hidden = !existing;
+    $("podname-field").hidden = existing;
+  };
+  for (const el of $("form").elements) el.addEventListener("input", () => {
+    applyMode();
+    applyShape();
+    previewAddr();
+  });
+  applyMode();
   const STEP_IDS = ["step-1", "step-2"];
   const FOCUS = { 1: "provider", 2: "handle" };
   const goStep = (n) => {
@@ -33910,15 +33988,22 @@ ${e.detail}` : "");
     });
     $("err-1").textContent = "";
     $("form-error").textContent = "";
-    if (n === 2) previewAddr();
+    if (n === 2) {
+      applyShape();
+      previewAddr();
+    }
     if (FOCUS[n]) $(FOCUS[n]).focus();
   };
   const validateStep1 = () => {
     if (!providerHost()) return "A valid pod provider URL is required.";
-    const sub = f().podName.value.trim().toLowerCase();
-    if (!sub) return "A pod username/subdomain is required.";
-    const sp = window.fedipodHandleProblem(sub);
-    if (sp) return `Pod username: ${sp}`;
+    if (f().mode.value === "existing") {
+      if (!podUrl()) return "A pod address is required, like https://alice.solidcommunity.net/ or https://server.example/alice/.";
+    } else {
+      const sub = f().podName.value.trim().toLowerCase();
+      if (!sub) return "A pod username/subdomain is required.";
+      const sp = window.fedipodHandleProblem(sub);
+      if (sp) return `Pod username: ${sp}`;
+    }
     if (!f().email.value.trim()) return "A pod email is required.";
     if (!f().password.value) return "A pod password is required.";
     return null;

@@ -138,10 +138,21 @@ a { color: var(--accent); }
         <label for="provider">Pod provider</label>
         <input type="url" id="provider" name="provider" autocomplete="url" placeholder="https://solidcommunity.net">
 
-        <label for="podName">Pod username/subdomain</label>
-        <input type="text" id="podName" name="podName" autocomplete="off" aria-describedby="podname-hint">
-        <p class="hint" id="podname-hint">The subdomain of your pod. On solidcommunity.net, alice
-          becomes the pod https://alice.solidcommunity.net.</p>
+        <div id="podname-field">
+          <label for="podName">Pod username/subdomain</label>
+          <input type="text" id="podName" name="podName" autocomplete="off" aria-describedby="podname-hint">
+          <p class="hint" id="podname-hint">The subdomain of your pod. On solidcommunity.net, alice
+            becomes the pod https://alice.solidcommunity.net. A provider that puts pods on paths
+            gives you https://provider/alice/ instead; that works too.</p>
+        </div>
+
+        <div id="pod-field" hidden>
+          <label for="pod">Pod address</label>
+          <input type="url" id="pod" name="pod" autocomplete="url" aria-describedby="pod-hint"
+            placeholder="https://alice.solidcommunity.net/ or https://server.example/alice/">
+          <p class="hint" id="pod-hint">The address of your pod: its own host, or a path on a
+            shared host.</p>
+        </div>
 
         <label for="email">Pod email</label>
         <input type="email" id="email" name="email" autocomplete="email" placeholder="you@example.org">
@@ -171,6 +182,14 @@ a { color: var(--accent); }
           placeholder="the handle part of your address: @HANDLE@server" aria-describedby="handle-hint">
         <p class="hint" id="handle-hint">The name in your Fediverse address. This is permanent.
           Letters, digits, and hyphens only.</p>
+
+        <div role="radiogroup" aria-labelledby="shape-label" id="shape-group">
+          <span id="shape-label" class="grouplabel">Where your address lives</span>
+          <label class="choice"><input type="radio" name="shape" value="pod" checked> On your pod</label>
+          <label class="choice"><input type="radio" name="shape" value="front"> At this site</label>
+        </div>
+        <p class="hint" id="shape-hint" hidden>Your pod shares its host with other pods, so your
+          address lives at this site.</p>
 
         <span id="addr-label" class="grouplabel">Your Fediverse address</span>
         <p class="address" id="preview" role="status" aria-live="polite" aria-labelledby="addr-label">@…@…</p>

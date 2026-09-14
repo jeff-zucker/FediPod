@@ -141,6 +141,13 @@ function apUrls(remotePod, root, { publicBase = null } = {}) {
   }
   return urls;
 }
+function podBaseOfWebId(webId) {
+  const u = new URL(webId);
+  u.hash = "";
+  u.search = "";
+  const dir = u.pathname.replace(/profile\/card$/u, "").replace(/[^/]*$/u, "");
+  return `${u.origin}${dir.endsWith("/") ? dir : dir + "/"}`;
+}
 function webfingerHost(podUrl) {
   const u = new URL(podUrl);
   return u.pathname === "/" ? u.host : null;
@@ -9651,9 +9658,10 @@ function hostMeta(base) {
 </XRD>
 `;
 }
-function jrd({ handle: handle7, host, actor }) {
+function jrd({ handle: handle7, host, actor, aliases = [] }) {
   return {
     subject: `acct:${handle7}@${host}`,
+    ...aliases.length ? { aliases } : {},
     links: [{ rel: "self", type: "application/activity+json", href: actor }]
   };
 }
@@ -66231,8 +66239,11 @@ var MastoApi = class _MastoApi {
     });
     return this._push;
   }
+  // The host in the owner's own address: the gateway's when the identity is
+  // fronted (its documents still live on the pod, but its name does not).
   get host() {
-    return this.urls ? new URL(this.urls.base).host : "unconfigured.invalid";
+    if (!this.urls) return "unconfigured.invalid";
+    return new URL(this.urls.publicHome || this.urls.base).host;
   }
   // Where the live feed is, as the CLIENT must address it: this agent's own
   // origin, taken from the request, not the pod's host. An instance document
@@ -66846,9 +66857,10 @@ var PodTransport = class {
     return serialize(doc, g, url, "text/turtle");
   }
   async setAcl(targetUrl, publicModes, opts = {}) {
-    const url = await this.aclUrlFor(targetUrl);
+    const podTarget = this.toPod ? this.toPod(targetUrl) : targetUrl;
+    const url = await this.aclUrlFor(podTarget);
     if (!await this.aclWritable(url)) return null;
-    return this.put(url, this.aclDoc(targetUrl, publicModes, { ...opts, aclUrl: url }), "text/turtle");
+    return this.put(url, this.aclDoc(podTarget, publicModes, { ...opts, aclUrl: url }), "text/turtle");
   }
   // Child documents of an LDP container (URLs under it, excluding aux docs).
   // Revalidated: the inbox is polled every couple of minutes and is usually
@@ -67166,14 +67178,16 @@ async function cacheOpenedKeys(actorUrl, keysRecord) {
   return keys;
 }
 var keyCacheKey = (actorUrl) => `signing-keys:${actorUrl}`;
+var podActorOf = (urls) => urls.toPod ? urls.toPod(urls.actor) : urls.actor;
 async function loadKeysFromPod(remote, urls) {
-  const cached = await kvGet(keyCacheKey(urls.actor)).catch(() => null);
+  const podActor = podActorOf(urls);
+  const cached = await kvGet(keyCacheKey(podActor)).catch(() => null);
   if (isOpenedKey(cached)) return fromCache(cached);
-  if (cached?.rsa?.privatePem) return cacheOpenedKeys(urls.actor, cached);
+  if (cached?.rsa?.privatePem) return cacheOpenedKeys(podActor, cached);
   const doc = await readWrappedKeys(remote, urls);
   if (isKeyEnvelope(doc)) throw new KeyPasswordNeeded();
   if (!doc || !doc.rsa) throw new Error("no signing key on the pod \u2014 sign up did not finish");
-  return cacheOpenedKeys(urls.actor, doc);
+  return cacheOpenedKeys(podActor, doc);
 }
 
 // lib/core/deliver.mjs
@@ -69602,6 +69616,7 @@ var AcctFeed = class {
 };
 
 // web/app/agent.mjs
+init_urls();
 var originAuthorities = (host) => ({
   set: /* @__PURE__ */ new Set([String(host || "").toLowerCase()]),
   has(authority) {
@@ -69726,7 +69741,7 @@ var BrowserAgent = class _BrowserAgent {
     if (oidc) {
       session = { fetch: (u, i) => oidc.fetch(u, i) };
       webId = oidc.webId;
-      remotePod = new URL(webId).origin + "/";
+      remotePod = podBaseOfWebId(webId);
     } else {
       const dpop = await makeDpopSession(credential);
       session = { fetch: (u, i) => dpop.fetch(u, i) };
@@ -69744,8 +69759,11 @@ var BrowserAgent = class _BrowserAgent {
     const cfg = config || this.store.getConfig();
     if (!cfg) throw new Error("no account config on this pod \u2014 sign up first");
     this.store.setConfig({ ...this.store.getConfig() || {}, ...cfg, root });
-    const keys = keysRecord ? await importSigningKey(keysRecord) : await loadKeysFromPod(this.remote, this.urls);
     config = this.store.getConfig();
+    const publicBase = config.gateway?.frontActor ? config.gateway.frontActor.replace(/ap\/actor\/?$/, "") : null;
+    this.urls = apUrls2(remotePod, root, { publicBase });
+    if (this.urls.toPod) this.remote.setUrlMap(this.urls.toPod);
+    const keys = keysRecord ? await importSigningKey(keysRecord) : await loadKeysFromPod(this.remote, this.urls);
     this.deliverer = new RelayDeliverer({
       passive: true,
       store: this.store,
@@ -69870,7 +69888,7 @@ var BrowserAgent = class _BrowserAgent {
     const rec = await generateKeys();
     rec.mintedFor = this.urls.actor;
     await writeWrappedKeys(this.remote, this.urls, await wrapKeys(rec, password));
-    const keys = await cacheOpenedKeys(this.urls.actor, rec);
+    const keys = await cacheOpenedKeys(podActorOf(this.urls), rec);
     this.publisher.publicKeyPem = keys.rsaPublicPem;
     this.deliverer.rsaPrivate = keys.rsaPrivate;
     await this.publisher.publishProfile();

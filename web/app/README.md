@@ -73,5 +73,5 @@ See the `MastoApi` options in `agent.mjs`.
 | **Web push** | `shims/web-push.mjs` is a no-op. `vapid` is omitted, and a client that subscribes anyway gets a 422 rather than a subscription nothing will push to. |
 | **Scheduled posts** | nothing runs between now and the scheduled time. A `scheduled_at` is refused with a 422 that says so — accepting one was silent loss. |
 | **Groups** | sign-up makes personal identities only (`signup.mjs`), and the moderation surface is not here. Joining a group works; hosting one needs the installed agent. See `groups.md`. |
-| **A fronted `@you@front` handle** | the browser model is `@you@yourpod` with the gateway as a mail door. `admin-facade.mjs` refuses a fronted attach, and `stage-site.mjs` hides the radio that offered it. |
+| **Changing where the address lives** | the shape is chosen at sign-up (`signup.mjs`): on the pod, `@you@yourpod` with the gateway as a mail door, or at the gateway, `@you@front` — and a pod on a path of a shared host is always fronted. `admin-facade.mjs` refuses changing it afterwards, because a rename needs a restart a browser does not have. |
 | **Moving the private half** | `/state-move` is about filesystem paths and `credential.json`. A browser has neither; its private half is always on the pod. |

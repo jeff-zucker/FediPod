@@ -48,9 +48,24 @@ const progressKey = (a) => [a.issuer, a.mode, a.handle, a.mode === 'new' ? (a.po
  * draw the same tick list the CLI setup shows. Resumable: see PROGRESS above.
  *
  * answers: { mode:'new'|'existing', issuer, email, password, handle,
- *            podName?, pod?, gateway? }
+ *            podName?, pod?, gateway?, shape?: 'pod'|'front' }
+ *
+ * `shape` is where the address lives. On the pod, `@handle@yourpod`, with the
+ * gateway as a mail door only — the default. At the gateway, `@handle@front`,
+ * a fronted identity whose documents still live on the pod. A pod on a path of
+ * a shared host cannot answer WebFinger, so it is fronted whatever was asked.
+ *
  * returns: { credential, config, actorUrl, address, keysPublic }
  */
+/** A fronted name is one per gateway; a taken one is refused before anything is made. */
+async function assertFrontNameFree(frontOrigin, handle) {
+  const res = await fetch(`${frontOrigin.replace(/\/$/, '')}/api/handle?handle=${encodeURIComponent(handle)}`,
+    { headers: { accept: 'application/json' } }).catch(() => null);
+  const d = res ? await res.json().catch(() => ({})) : null;
+  if (!d) throw new Error(`${new URL(frontOrigin).host} did not answer whether @${handle} is free`);
+  if (!d.available) throw new Error(d.reason || `the name @${handle}@${new URL(frontOrigin).host} is taken — choose another handle`);
+}
+
 export async function signUp(answers, { onStep = () => {}, frontOrigin = null } = {}) {
   const { mode, issuer, email, password, handle } = answers;
   const bad = handleProblem(handle);
@@ -58,6 +73,10 @@ export async function signUp(answers, { onStep = () => {}, frontOrigin = null } 
   if (!email) throw new Error('an email is required');           // recovery + account login
   if (!password) throw new Error('a password is required');
   if (mode === 'existing' && !answers.pod) throw new Error('a pod address is required');
+  const wantsFront = answers.shape === 'front';
+  if (wantsFront && !frontOrigin) throw new Error('an address at the gateway needs a gateway, and this page has none');
+  // A name at the gateway is one per gateway: settle it before making anything.
+  if (wantsFront) await assertFrontNameFree(frontOrigin, handle);
 
   const key = progressKey(answers);
   const prog = PROGRESS.get(key) || {};
@@ -91,17 +110,18 @@ export async function signUp(answers, { onStep = () => {}, frontOrigin = null } 
   }
   const pod = prog.pod; const webId = prog.webId || null;
 
-  // WebFinger is answered at a host root, so the address only works if the pod
-  // is the root of its own host. Refuse a path pod rather than making an
-  // account nobody can find.
-  const podUrl = new URL(pod);
-  if (podUrl.pathname !== '/') {
-    throw new Error(`${pod} is a path on ${podUrl.host}, not its own host. `
-      + 'A Fediverse address lives at a host root, so this pod cannot carry one. '
-      + 'Use a pod that is the root of its own subdomain.');
+  // WebFinger is answered only at a host root. A pod on a path of a shared
+  // host therefore takes its address at the gateway, whatever was asked; a
+  // pod at its own root keeps the choice made on the form.
+  const pathPod = new URL(pod).pathname !== '/';
+  const fronted = pathPod || wantsFront;
+  if (fronted && !frontOrigin) {
+    throw new Error(`${pod} is a path on a shared host, so its address must live at a gateway, and this page has none.`);
   }
+  if (pathPod && !wantsFront) await assertFrontNameFree(frontOrigin, handle);
 
-  const actorUrl = actorUrlFor(pod);
+  const actorUrl = actorUrlFor(pod);                              // where the documents live, always
+  const frontActor = fronted ? `${frontOrigin.replace(/\/$/, '')}/u/${handle}/ap/actor` : null;
 
   // --- credential --- (a fresh attempt re-mints; a resumed one reuses it)
   const cred = step('credential');
@@ -143,12 +163,48 @@ export async function signUp(answers, { onStep = () => {}, frontOrigin = null } 
   // The opened copy is kept in this browser (IndexedDB) so the worker can boot
   // itself after an idle kill with nobody there to type a password. A browser
   // that has no copy asks for the password once — see boot.mjs.
+  // Connect the gateway (fedipod.net) before the key is made, because a
+  // fronted identity's key is stamped with the gateway actor. Inbox-only: the
+  // actor advertises the door as its inbox and keeps its own ids. Fronted: the
+  // gateway answers WebFinger for @handle@front and serves the actor at its own
+  // address, rewriting reads onto the pod. Either way the door verifies each
+  // delivery and forwards the clean mail to the pod; the agent trusts the
+  // door's receipt. The same DPoP session proves the pod to the gateway — no
+  // password reaches it.
+  let gateway = answers.gateway || prog.gateway || null;
+  if (frontOrigin && !gateway) {
+    const gw = step('gateway');
+    gw.running(fronted ? `taking your address at ${new URL(frontOrigin).host}` : `connecting your mail door on ${new URL(frontOrigin).host}`);
+    const res = await session.fetch(`${frontOrigin.replace(/\/$/, '')}/api/attach`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      // podHome is the AP CONTAINER, not the pod root: the front builds the
+      // delivery target as `podHome + 'ap/inbox/'` (lib/front-core.mjs), so a
+      // bare pod root sends this identity's mail to <pod>/ap/inbox/ — outside
+      // the container the agent drains, where nothing would ever read it. The
+      // manage surface has always sent `urls.home`; this is the same value.
+      body: JSON.stringify({ handle, podHome: `${pod}${AP_ROOT}`, actorUrl, kind: 'person', fronted }),
+    });
+    const d = await res.json().catch(() => ({}));
+    if (res.status !== 201 || !d.hmacSecret) {
+      throw new Error(`could not connect the gateway (HTTP ${res.status}): ${d.error || ''}`);
+    }
+    gateway = fronted
+      ? { url: `${frontOrigin.replace(/\/$/, '')}/u/${handle}/ap/inbox/`, frontActor: String(d.frontActor || frontActor), hmacSecret: d.hmacSecret, mode: 'trust' }
+      : { url: d.doorInbox, hmacSecret: d.hmacSecret, mode: 'trust' };
+    prog.gateway = gateway;
+    gw.ok();
+  } else if (frontOrigin && gateway) {
+    step('gateway').ok();                                        // resumed
+  }
+
   const keysStep = step('keys');
   let keys;
   if (!prog.keysStored) {
     keysStep.running('making your signing key and locking it under your password');
     keys = await generateKeys();
-    keys.mintedFor = actorUrl;                                   // one key, one actor (lib/keys.mjs)
+    // One key, one actor (lib/keys.mjs): the actor the world knows, which for
+    // a fronted identity is the gateway's address for it.
+    keys.mintedFor = gateway?.frontActor || actorUrl;
     const remote = new BrowserRemotePod(session, { webId: credential.webId, role: 'signup', log: () => {} });
     // Owner-only, and THEN the key — one operation, so the order cannot be got
     // wrong here or anywhere else. A pod that refuses the ACL write is not a
@@ -172,34 +228,6 @@ export async function signUp(answers, { onStep = () => {}, frontOrigin = null } 
   } else {
     keys = prog.keys;
     keysStep.ok();
-  }
-
-  // Connect the mail door: attach to the gateway (fedipod.net), inbox-only, so
-  // the actor advertises the door as its inbox. The door verifies each delivery
-  // and forwards the clean mail to the pod; the agent trusts the door's receipt.
-  // The same DPoP session proves the pod to the gateway — no password reaches it.
-  let gateway = answers.gateway || prog.gateway || null;
-  if (frontOrigin && !gateway) {
-    const gw = step('gateway');
-    gw.running(`connecting your mail door on ${new URL(frontOrigin).host}`);
-    const res = await session.fetch(`${frontOrigin.replace(/\/$/, '')}/api/attach`, {
-      method: 'POST', headers: { 'content-type': 'application/json' },
-      // podHome is the AP CONTAINER, not the pod root: the front builds the
-      // delivery target as `podHome + 'ap/inbox/'` (lib/front-core.mjs), so a
-      // bare pod root sends this identity's mail to <pod>/ap/inbox/ — outside
-      // the container the agent drains, where nothing would ever read it. The
-      // manage surface has always sent `urls.home`; this is the same value.
-      body: JSON.stringify({ handle, podHome: `${pod}${AP_ROOT}`, actorUrl, kind: 'person' }),
-    });
-    const d = await res.json().catch(() => ({}));
-    if (res.status !== 201 || !d.hmacSecret) {
-      throw new Error(`could not connect the mail door (HTTP ${res.status}): ${d.error || ''}`);
-    }
-    gateway = { url: d.doorInbox, hmacSecret: d.hmacSecret, mode: 'trust' };
-    prog.gateway = gateway;
-    gw.ok();
-  } else if (frontOrigin && gateway) {
-    step('gateway').ok();                                        // resumed
   }
 
   const config = {
@@ -233,7 +261,7 @@ export async function signUp(answers, { onStep = () => {}, frontOrigin = null } 
 
   PROGRESS.delete(key);                                          // finished — nothing left to resume
 
-  const host = new URL(pod).host;
+  const host = gateway?.frontActor ? new URL(gateway.frontActor).host : new URL(pod).host;
   return {
     credential, config, actorUrl,
     address: `@${handle}@${host}`,

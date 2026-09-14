@@ -18,6 +18,11 @@ There are also a number of [other ways to run FediPod](#other-ways-to-run-fedipo
   solidcommunity.net or another provider, or use a pod you already have. A
   pod that lives on a path of a shared host, like `https://server.example/alice/`,
   cannot be a Fediverse address.
+<!-- CLAUDE 2026-09-14 — path pods are accepted, fronted at fedipod.net; delete these markers when done -->
+  A pod on a path of a shared host, like `https://server.example/alice/`,
+  works too. Its address is then `@handle@fedipod.net`, because the shared
+  host cannot answer for the handle; your posts, key and data stay on your pod.
+<!-- /CLAUDE -->
 - Followers-only and direct posts need a pod that enforces WAC access control.
   On one that does not, the composer refuses those two and says why. Public
   and unlisted posts work on any pod.
@@ -28,6 +33,12 @@ There are also a number of [other ways to run FediPod](#other-ways-to-run-fedipo
 2. Choose a pod: a new one at the provider you name, or a pod you already have.
 3. Choose your handle. Your address is `@handle@yourpod`. Both parts are
    permanent; display name, bio and pictures are set later in the client.
+<!-- CLAUDE 2026-09-14 — the address-shape choice; delete these markers when done -->
+   With a pod at its own host you also choose where the address lives: on
+   your pod, `@handle@yourpod`, or at this site, `@handle@fedipod.net`. A pod
+   on a path of a shared host gets the fedipod.net address. The choice is
+   permanent.
+<!-- /CLAUDE -->
 4. Enter your pod password once. It creates the account and locks your
    signing key. The password is not stored.
 

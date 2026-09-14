@@ -17,7 +17,7 @@ import { MastoApi } from '../../lib/client/masto/index.mjs';
 import { TagFeed } from '../../lib/connections/tagfeed.mjs';
 import { makeDpopSession } from './pod-auth.mjs';
 import { BrowserRemotePod } from './pod-remote.mjs';
-import { importSigningKey, loadKeysFromPod, cacheOpenedKeys } from './keys-browser.mjs';
+import { importSigningKey, loadKeysFromPod, cacheOpenedKeys, podActorOf } from './keys-browser.mjs';
 import { generateKeys, wrapKeys } from './keystore.mjs';
 import { RelayDeliverer, doorKeyOf } from './deliver-relay.mjs';
 import { AdminFacade } from './admin-facade.mjs';
@@ -26,6 +26,7 @@ import { BskyFeed } from '../../lib/connections/bskyfeed.mjs';
 import { BrowserFediAccounts } from './fediacct-browser.mjs';
 import { AcctFeed } from '../../lib/connections/acctfeed.mjs';
 import { followActor, unfollowActor, resolveHandle } from '../../lib/core/social.mjs';
+import { podBaseOfWebId } from '../../lib/pod/urls.mjs';
 import { ImportWorker } from '../../lib/connections/import.mjs';
 
 // The authorities this identity answers on: exactly one, this origin. The Node
@@ -159,7 +160,7 @@ export class BrowserAgent {
     if (oidc) {
       session = { fetch: (u, i) => oidc.fetch(u, i) };
       webId = oidc.webId;
-      remotePod = new URL(webId).origin + '/';
+      remotePod = podBaseOfWebId(webId);              // the pod, which on a shared host is a path
     } else {
       const dpop = await makeDpopSession(credential);
       session = { fetch: (u, i) => dpop.fetch(u, i) };
@@ -169,6 +170,8 @@ export class BrowserAgent {
     this.webId = webId;
     const root = (config && config.root) || 'fedipod/';
     this.remote = new BrowserRemotePod(session, { webId, log: this.log });
+    // Pod-native for now: the state store below is read with these, and only
+    // the config it holds says whether this identity is fronted.
     this.urls = apUrls(remotePod, root);
 
     // State store, on the pod.
@@ -189,9 +192,18 @@ export class BrowserAgent {
     // document it published landed under `activitypods-js/`. One root, decided
     // once, carried by the config everything downstream reads.
     this.store.setConfig({ ...(this.store.getConfig() || {}), ...cfg, root });
+    config = this.store.getConfig();
+    // A fronted identity (config.gateway.frontActor) advertises its ids at the
+    // gateway; the documents stay on the pod. Same three lines as the Node
+    // agent (run-agent.mjs connect): the advertised urls, and the map that
+    // turns an advertised url back into the pod one at the transport's single
+    // write and read choke point. State and media stay pod-native either way.
+    const publicBase = config.gateway?.frontActor
+      ? config.gateway.frontActor.replace(/ap\/actor\/?$/, '') : null;
+    this.urls = apUrls(remotePod, root, { publicBase });
+    if (this.urls.toPod) this.remote.setUrlMap(this.urls.toPod);
     // Keys: handed in (offline), or the owner-only keys.json read from the pod.
     const keys = keysRecord ? await importSigningKey(keysRecord) : await loadKeysFromPod(this.remote, this.urls);
-    config = this.store.getConfig();
 
 
     // `passive`: no queue-drain timer until this device is the active one.
@@ -370,7 +382,7 @@ export class BrowserAgent {
     const rec = await generateKeys();
     rec.mintedFor = this.urls.actor;                  // one key, one actor (lib/keys.mjs)
     await podState.writeWrappedKeys(this.remote, this.urls, await wrapKeys(rec, password));
-    const keys = await cacheOpenedKeys(this.urls.actor, rec);
+    const keys = await cacheOpenedKeys(podActorOf(this.urls), rec);
     this.publisher.publicKeyPem = keys.rsaPublicPem;
     this.deliverer.rsaPrivate = keys.rsaPrivate;
     await this.publisher.publishProfile();

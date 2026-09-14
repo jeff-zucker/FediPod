@@ -12,6 +12,7 @@
 import { signUp, handleProblem, AP_ROOT } from './signup.mjs';
 import * as podActor from '../../lib/pod/actor.mjs';
 import * as podState from '../../lib/pod/state.mjs';
+import { podBaseOfWebId } from '../../lib/pod/urls.mjs';
 import { BrowserRemotePod } from './pod-remote.mjs';
 import { beginLogin, completeLogin, getSession, signOut } from './oidc-session.mjs';
 import { unwrapKeys, isKeyEnvelope } from './keystore.mjs';
@@ -68,7 +69,7 @@ window.fedipodUnlock = async (password) => {
   if (!session) throw new Error('Sign in first.');
   // The config on the pod says where this account's state lives; the key sits
   // beside it. Both are read with the session, as the owner.
-  const podFromWebId = new URL(session.webId).origin + '/';
+  const podFromWebId = podBaseOfWebId(session.webId);   // a path on a shared host, or its own host
   const state = `${podFromWebId}${AP_ROOT}ap-state/`;
   // Through the transport rather than the bare session: this is a pod read
   // like any other, and going round it skipped the retry ladder that exists
@@ -112,21 +113,38 @@ export function parseAddress(input) {
 }
 async function issuerForPod(pod) {
   // The pod's actor says where a client signs in (oauthAuthorizationEndpoint's
-  // origin); failing that, the account provider is the pod host's parent domain.
+  // origin); failing that, the account provider is the pod host's parent
+  // domain for a subdomain pod, and the host itself for a pod on a path.
   try {
     const authz = await podActor.readIssuer(`${pod}${AP_ROOT}ap/actor`);
     if (authz) return new URL(authz).origin;
   } catch { /* fall through */ }
-  const host = new URL(pod).host;
-  const parent = host.split('.').slice(1).join('.');
-  return `https://${parent || host}`;
+  const u = new URL(pod);
+  if (u.pathname !== '/') return u.origin;
+  const parent = u.host.split('.').slice(1).join('.');
+  return `https://${parent || u.host}`;
+}
+// An address at this site names a fronted identity. Its documents live on a
+// pod this site's WebFinger names as an alias — the pod's own actor id.
+async function podForFrontedAddress(handle) {
+  const res = await fetch(`/.well-known/webfinger?resource=${encodeURIComponent(`acct:${handle}@${location.host}`)}`,
+    { headers: { accept: 'application/jrd+json, application/json' } }).catch(() => null);
+  if (!res || res.status >= 400) throw new Error(`nobody at this site is called @${handle}@${location.host}`);
+  const doc = await res.json().catch(() => ({}));
+  const podActorId = (doc.aliases || []).find((a) => /\/ap\/actor$/u.test(String(a)));
+  if (!podActorId) throw new Error(`@${handle}@${location.host} lives here but names no pod to sign in to`);
+  const tail = `${AP_ROOT}ap/actor`;
+  if (!podActorId.endsWith(tail)) throw new Error(`the pod actor ${podActorId} is not where a FediPod pod keeps one`);
+  return podActorId.slice(0, -tail.length);
 }
 window.fedipodSignin = async ({ address }) => {
   const parsed = parseAddress(address);
   if (!parsed) throw new Error('Enter your address as @you@yourpod (for example @alice@alice.solidcommunity.net).');
   const bad = handleProblem(parsed.handle);
   if (bad) throw new Error(bad);
-  const pod = `https://${parsed.host}/`;
+  const pod = parsed.host === location.host.toLowerCase()
+    ? await podForFrontedAddress(parsed.handle)
+    : `https://${parsed.host}/`;
   const issuer = await issuerForPod(pod);
   const { authorizationUrl } = await beginLogin({ issuer, redirectUri: REDIRECT });
   location.href = authorizationUrl;
@@ -264,22 +282,42 @@ if (typeof document !== 'undefined') (async () => {
   // The pod provider is a free-text URL; default and normalise to a scheme.
   const providerUrl = () => { let v = f().provider.value.trim(); if (!v) v = 'https://solidcommunity.net'; if (!/^https?:\/\//i.test(v)) v = 'https://' + v; return v; };
   const providerHost = () => { try { return new URL(providerUrl()).host; } catch { return ''; } };
-  // The pod is always a subdomain of the provider, so both new and existing pods
-  // resolve to https://<subdomain>.<provider-host>/ and carry a host-root address.
+  // A new pod is named by its subdomain under the provider; an existing pod is
+  // brought by its address, which may be its own host or a path on a shared one.
   const podHostOf = () => { const sub = f().podName.value.trim().toLowerCase(); const ph = providerHost(); return (sub && ph) ? `${sub}.${ph}` : ''; };
+  const podUrl = () => { let v = f().pod.value.trim(); if (!v) return ''; if (!/^https?:\/\//i.test(v)) v = 'https://' + v; if (!v.endsWith('/')) v += '/'; try { return new URL(v).href; } catch { return ''; } };
+  // A pod on a path of a shared host cannot answer WebFinger, so its address
+  // lives at this site; a pod at its own host root gets the choice.
+  const isPathPod = (u) => { try { return new URL(u).pathname !== '/'; } catch { return false; } };
+  const pathPod = () => f().mode.value === 'existing' && isPathPod(podUrl());
+  const shape = () => (pathPod() ? 'front' : f().shape.value);
   const answers = () => {
     const mode = f().mode.value;
     const a = { mode, handle: f().handle.value.trim().toLowerCase(), email: f().email.value.trim(),
-      password: f().password.value, issuer: providerUrl() };
+      password: f().password.value, issuer: providerUrl(), shape: shape() };
     if (mode === 'new') a.podName = f().podName.value.trim().toLowerCase();
-    else a.pod = `https://${podHostOf()}/`;
+    else a.pod = podUrl();
     return a;
   };
   const previewAddr = () => {
-    const handle = f().handle.value.trim().toLowerCase(); const ph = podHostOf();
-    $('preview').textContent = (handle && ph) ? `@${handle}@${ph}` : '@…@…';
+    const handle = f().handle.value.trim().toLowerCase();
+    const host = shape() === 'front' ? location.host
+      : (f().mode.value === 'existing' ? (podUrl() ? new URL(podUrl()).host : '') : podHostOf());
+    $('preview').textContent = (handle && host) ? `@${handle}@${host}` : '@…@…';
   };
-  for (const el of $('form').elements) el.addEventListener('input', previewAddr);
+  // The shape choice is fixed for a path pod, and open for a host-root pod.
+  const applyShape = () => {
+    const fixed = pathPod();
+    for (const r of f().shape) { r.disabled = fixed; if (fixed) r.checked = r.value === 'front'; }
+    $('shape-hint').hidden = !fixed;
+  };
+  const applyMode = () => {
+    const existing = f().mode.value === 'existing';
+    $('pod-field').hidden = !existing;
+    $('podname-field').hidden = existing;
+  };
+  for (const el of $('form').elements) el.addEventListener('input', () => { applyMode(); applyShape(); previewAddr(); });
+  applyMode();
 
   // Step machine: one screen at a time, each gated by its own validation.
   const STEP_IDS = ['step-1', 'step-2'];
@@ -287,15 +325,19 @@ if (typeof document !== 'undefined') (async () => {
   const goStep = (n) => {
     STEP_IDS.forEach((id, i) => { $(id).hidden = i !== n - 1; });
     $('err-1').textContent = ''; $('form-error').textContent = '';
-    if (n === 2) previewAddr();
+    if (n === 2) { applyShape(); previewAddr(); }
     if (FOCUS[n]) $(FOCUS[n]).focus();
   };
   const validateStep1 = () => {
     if (!providerHost()) return 'A valid pod provider URL is required.';
-    const sub = f().podName.value.trim().toLowerCase();
-    if (!sub) return 'A pod username/subdomain is required.';
-    const sp = window.fedipodHandleProblem(sub);
-    if (sp) return `Pod username: ${sp}`;
+    if (f().mode.value === 'existing') {
+      if (!podUrl()) return 'A pod address is required, like https://alice.solidcommunity.net/ or https://server.example/alice/.';
+    } else {
+      const sub = f().podName.value.trim().toLowerCase();
+      if (!sub) return 'A pod username/subdomain is required.';
+      const sp = window.fedipodHandleProblem(sub);
+      if (sp) return `Pod username: ${sp}`;
+    }
     if (!f().email.value.trim()) return 'A pod email is required.';
     if (!f().password.value) return 'A pod password is required.';
     return null;

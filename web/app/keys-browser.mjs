@@ -44,6 +44,10 @@ export async function cacheOpenedKeys(actorUrl, keysRecord) {
 // already relies on. It is what lets the worker boot itself after an idle kill
 // without a soul around to type anything.
 export const keyCacheKey = (actorUrl) => `signing-keys:${actorUrl}`;
+// The cache is keyed by the POD actor, whatever the identity advertises: a
+// fronted identity's advertised actor is the gateway's, and keying by that
+// would hide the opened copy sign-up stored and ask for the password again.
+export const podActorOf = (urls) => (urls.toPod ? urls.toPod(urls.actor) : urls.actor);
 
 // Read the signing key for this actor and import it for signing.
 //
@@ -54,16 +58,17 @@ export const keyCacheKey = (actorUrl) => `signing-keys:${actorUrl}`;
 // there is from before wrapping and is used as it stands, while an envelope
 // needs the password and so has to go back to the page.
 export async function loadKeysFromPod(remote, urls) {
-  const cached = await kvGet(keyCacheKey(urls.actor)).catch(() => null);
+  const podActor = podActorOf(urls);
+  const cached = await kvGet(keyCacheKey(podActor)).catch(() => null);
   if (isOpenedKey(cached)) return fromCache(cached);
   // A copy stored as PEM by an earlier build: import it and store the key form
   // in its place, so the PEM is gone from storage after one boot.
-  if (cached?.rsa?.privatePem) return cacheOpenedKeys(urls.actor, cached);
+  if (cached?.rsa?.privatePem) return cacheOpenedKeys(podActor, cached);
 
   const doc = await podState.readWrappedKeys(remote, urls);
   if (isKeyEnvelope(doc)) throw new KeyPasswordNeeded();
   if (!doc || !doc.rsa) throw new Error('no signing key on the pod — sign up did not finish');
   // A pre-wrapping install. Cache it so the next boot is one read, and leave
   // the pod's copy alone: re-wrapping it would need the password we do not have.
-  return cacheOpenedKeys(urls.actor, doc);
+  return cacheOpenedKeys(podActor, doc);
 }

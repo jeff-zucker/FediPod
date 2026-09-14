@@ -2031,6 +2031,46 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   // notified no one (2026-09-14). It gets the installed agent's.
   check(/resolveMention: \(h\) => resolveHandle\(this, h\)/.test(read('web/app/agent.mjs')),
     'the browser publisher resolves the handles a post names');
+  // A fronted identity in the BrowserAgent (2026-09-14, issue #7): a pod on a
+  // path of a shared host takes its address at the Gateway, and a host-root
+  // pod may choose to. The agent builds its advertised urls from the config it
+  // read, installs the pod map, and keys its signing-key cache by the pod actor.
+  const agentSrc = read('web/app/agent.mjs');
+  check(/apUrls\(remotePod, root, \{ publicBase \}\)/.test(agentSrc) && /this\.remote\.setUrlMap\(this\.urls\.toPod\)/.test(agentSrc)
+    && agentSrc.indexOf('config = this.store.getConfig();') < agentSrc.indexOf('apUrls(remotePod, root, { publicBase })'),
+    'the BrowserAgent builds fronted urls from the config it read and installs the pod map');
+  const signupSrc = read('web/app/signup.mjs');
+  check(!/A Fediverse address lives at a host root, so this pod cannot carry one/.test(signupSrc)
+    && /fronted = pathPod \|\| wantsFront/.test(signupSrc) && /kind: 'person', fronted \}/.test(signupSrc)
+    && /mintedFor = gateway\?\.frontActor \|\| actorUrl/.test(signupSrc),
+    'sign-up no longer refuses a path pod: it is fronted, the attach says so, and the key is stamped with the Gateway actor');
+  check(signupSrc.indexOf("step('gateway')") < signupSrc.indexOf("step('keys')"),
+    'and the Gateway is attached before the key is made, so the stamp is known');
+  const { podActorOf } = await import(path.join(root, 'web/app/keys-browser.mjs'));
+  const wireK = await import(path.join(root, 'lib/core/wire.mjs'));
+  const frontedUrls = wireK.apUrls('https://alice.pod/', 'fedipod/', { publicBase: 'https://fedipod.net/u/alice/' });
+  check(frontedUrls.actor === 'https://fedipod.net/u/alice/ap/actor' && podActorOf(frontedUrls) === 'https://alice.pod/fedipod/ap/actor'
+    && podActorOf(wireK.apUrls('https://alice.pod/', 'fedipod/')) === 'https://alice.pod/fedipod/ap/actor',
+    'the signing-key cache is keyed by the pod actor whether or not the identity is fronted');
+  const { MastoApi: MastoApiF } = await import(path.join(root, 'lib/client/masto/index.mjs'));
+  const hostApi = new MastoApiF({ agent: { configured: () => true, store: {}, publisher: { urls: frontedUrls, config: {} } }, log: () => {} });
+  check(hostApi.host === 'fedipod.net', 'the client is shown the Gateway host as the owner\'s when fronted');
+  // The pod a WebID lives in is the path up to its profile, not the origin: a
+  // pod on a shared host was named by the wrong pod on every boot and unlock.
+  const { podBaseOfWebId } = await import(path.join(root, 'lib/pod/urls.mjs'));
+  check(podBaseOfWebId('https://alice.pod/profile/card#me') === 'https://alice.pod/'
+    && podBaseOfWebId('https://server.example/alice/profile/card#me') === 'https://server.example/alice/'
+    && podBaseOfWebId('http://localhost:3342/alice/profile/card#me') === 'http://localhost:3342/alice/',
+    'the pod base is read off the WebID path: own host or a path on a shared one');
+  check(/remotePod = podBaseOfWebId\(webId\)/.test(agentSrc) && /podBaseOfWebId\(session\.webId\)/.test(read('web/app/boot.mjs')),
+    'and both the BrowserAgent boot and the unlock use it');
+  // A fronted WebFinger names the pod actor as an alias, which is how a browser
+  // signing in by @you@fedipod.net finds the pod and its login.
+  check(JSON.stringify(wireK.jrd({ handle: 'me', host: 'fedipod.net', actor: 'https://fedipod.net/u/me/ap/actor', aliases: ['https://alice.pod/fedipod/ap/actor'] }).aliases)
+    === '["https://alice.pod/fedipod/ap/actor"]' && !('aliases' in wireK.jrd({ handle: 'me', host: 'h', actor: 'a' })),
+    'a JRD carries aliases only when given some');
+  check(/podForFrontedAddress\(parsed\.handle\)/.test(read('web/app/boot.mjs')),
+    'sign-in by an address at this site resolves the pod through the WebFinger alias');
   // And the handle lookup goes through the agent's own remote read, which in
   // the browser is the relay — WebFinger was the one lookup made directly.
   const social = await import(path.join(root, 'lib/core/social.mjs'));
@@ -10524,6 +10564,21 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
   await rp.fetch('https://fedipod.net/u/me/ap/notes/n1');
   check(seen[1] === 'https://alice.pod/solid/activitypods-js/ap/notes/n1',
     'with the map installed the same advertised url is written to the pod');
+  // An access rule names the POD resource, whatever url it was handed. One
+  // naming the advertised url guarded a resource the pod does not have and
+  // locked the real one to nobody, the owner included — the private container
+  // of a fronted BrowserAgent answered 403 to its own owner (2026-09-14).
+  rp.webId = 'https://alice.pod/profile/card#me';
+  const aclAsked = []; const aclPut = [];
+  rp.aclUrlFor = async (t) => { aclAsked.push(t); return t + '.acl'; };
+  rp.aclWritable = async () => true;
+  rp.put = async (url, body) => { aclPut.push({ url, body }); return true; };
+  await rp.setAcl('https://fedipod.net/u/me/ap/private/', []);
+  check(aclAsked[0] === 'https://alice.pod/solid/activitypods-js/ap/private/'
+    && aclPut[0]?.url === 'https://alice.pod/solid/activitypods-js/ap/private/.acl'
+    && /accessTo <\.\/>/.test(aclPut[0]?.body || '')            // relative to the pod's own .acl
+    && !/fedipod\.net/.test(aclPut[0]?.body || ''),
+    'an access rule written from an advertised url names the pod resource, not the front');
 
   // A Publisher built for a fronted identity: its urls are fronted, it installs
   // the map on its remote, and a published note gets a fronted id.

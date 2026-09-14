@@ -38,6 +38,22 @@ const pod = http.createServer((req, res) => {
       inbox: POD + 'ap/inbox/', outbox: POD + 'ap/outbox',
     }));
   }
+  // A pod on a path of this host: everything under /pods/wren/fedipod/. Its
+  // documents name themselves by that path, as a suffix-mode CSS pod's do.
+  const PP = POD + 'pods/wren/fedipod/';
+  if (url === '/pods/wren/fedipod/ap/actor') {
+    res.writeHead(200, { 'content-type': 'application/activity+json' });
+    return res.end(JSON.stringify({
+      '@context': 'https://www.w3.org/ns/activitystreams',
+      id: PP + 'ap/actor', type: 'Person', preferredUsername: 'wren',
+      inbox: PP + 'ap/inbox/', outbox: PP + 'ap/outbox',
+      icon: { type: 'Image', url: PP + 'ap/media/face.png' },
+    }));
+  }
+  if (url === '/pods/wren/fedipod/ap/media/face.png') {
+    res.writeHead(200, { 'content-type': 'image/png' });
+    return res.end(Buffer.from([0x89, 0x50, 0x4e, 0x47]));
+  }
   if (url === '/ap/gateway-policy.json') {
     policyServed++;
     res.writeHead(200, { 'content-type': 'application/json' });
@@ -109,7 +125,9 @@ const front = http.createServer(async (req, res) => {
     verifier: async (authz) => ({
       webid: authz === 'Bearer someone-else'
         ? 'https://eve.example/profile/card#me'
-        : 'https://wren.example/profile/card#me',
+        : authz === 'Bearer path-owner'
+          ? POD + 'pods/wren/profile/card#me'
+          : 'https://wren.example/profile/card#me',
     }),
   }).catch(e => ({ status: 500, headers: {}, body: String(e && e.stack || e) }));
   res.writeHead(out.status, out.headers || {});
@@ -297,6 +315,39 @@ try {
   // ---- the public face ------------------------------------------------------
   const face = await get('/u/alice/ap/actor');
   check(face.status === 200, 'the fronted actor is served');
+
+  // ---- a pod on a path of a shared host, fronted (issue #7) ----------------
+  // Nothing answers WebFinger at that host's root for it, so its address lives
+  // here: attach fronted, and the front answers the name, serves the actor with
+  // every id rewritten onto itself, and sends media back to the pod.
+  const pathHome = POD + 'pods/wren/fedipod/';
+  const pathAtt = await get('/api/attach', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', authorization: 'Bearer path-owner' },
+    body: JSON.stringify({ handle: 'pwren', podHome: pathHome, actorUrl: pathHome + 'ap/actor', fronted: true }),
+  });
+  const pathBody = await pathAtt.json();
+  check(pathAtt.status === 201 && pathBody.address === `@pwren@${HOST}` && pathBody.frontActor === `${ORIGIN}/u/pwren/ap/actor`,
+    `a pod on a path of a shared host attaches fronted and gets its address here (${pathAtt.status} ${pathBody.address})`);
+  const pathWf = await get(`/.well-known/webfinger?resource=acct:pwren@${HOST}`);
+  const pathJrd = pathWf.status === 200 ? await pathWf.json() : {};
+  check(pathWf.status === 200 && (pathJrd.links || []).some(l => l.rel === 'self' && l.href === `${ORIGIN}/u/pwren/ap/actor`)
+    && (pathJrd.aliases || []).includes(pathHome + 'ap/actor'),
+    'the front answers WebFinger for it, naming the pod actor as an alias');
+  const inboxOnlyWf = await (await get(`/.well-known/webfinger?resource=acct:alice@${HOST}`)).json().catch(() => ({}));
+  check(!('aliases' in inboxOnlyWf), 'while a mail-door row, whose actor is the pod\'s already, carries no alias');
+  const pathActorRes = await get('/u/pwren/ap/actor', { headers: { accept: 'application/activity+json' } });
+  const pathActor = pathActorRes.status === 200 ? await pathActorRes.json() : {};
+  check(pathActorRes.status === 200 && pathActor.id === `${ORIGIN}/u/pwren/ap/actor`
+    && pathActor.inbox === `${ORIGIN}/u/pwren/ap/inbox/` && pathActor.preferredUsername === 'pwren'
+    && !JSON.stringify(pathActor).includes(pathHome),
+    'the actor is served from the path with every id rewritten onto the front');
+  const pathMedia = await fetch(`${ORIGIN}/u/pwren/ap/media/face.png`, { redirect: 'manual' });
+  check(pathMedia.status === 302 && pathMedia.headers.get('location') === pathHome + 'ap/media/face.png',
+    'a picture under the fronted identity is answered by pointing at the pod, not proxied as JSON');
+  const pathFollowed = await fetch(`${ORIGIN}/u/pwren/ap/media/face.png`);
+  check(pathFollowed.status === 200 && (pathFollowed.headers.get('content-type') || '').startsWith('image/png'),
+    'and following it lands on the image');
 
   // ---- what must NOT be answered -------------------------------------------
   check((await get('/some/pod/document')).status === 404,

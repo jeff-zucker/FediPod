@@ -27,6 +27,14 @@ password is typed anywhere:
    (`@you@the-gateway`). The gateway account is created automatically either
    way. A pod-based attach applies immediately; taking a gateway-based name
    restarts the agent itself to publish under it.
+<!-- CLAUDE 2026-09-14 — the BrowserAgent makes the same choice at sign-up; path pods; delete these markers when done -->
+
+In the BrowserAgent the same choice is made once, at sign-up, and cannot be
+changed afterwards. A pod on a path of a shared host, like
+`https://server.example/alice/`, always takes the gateway-based name: nothing
+at that host answers for the handle, so the gateway does. Its posts, key and
+data stay on the pod.
+<!-- /CLAUDE -->
 
 The same attach from the command line, against the running agent:
 
