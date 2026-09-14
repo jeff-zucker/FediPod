@@ -57471,9 +57471,9 @@ async function onUpdate(intake, activity, actor) {
   const note = await intake.fetchAP(objectId);
   if (!note) throw new Error(`cannot refetch ${objectId} \u2014 will retry`);
   if (note.id !== objectId || !isContentType(note.type)) return `object not verifiable content (${objectId}, ${note.type})`;
-  const { attachmentsOf: attachmentsOf2, titledContent: titledContent2 } = await Promise.resolve().then(() => (init_wire(), wire_exports));
+  const { attachmentsOf: attachmentsOf3, titledContent: titledContent2 } = await Promise.resolve().then(() => (init_wire(), wire_exports));
   const content = titledContent2(note);
-  const attachments = attachmentsOf2(note);
+  const attachments = attachmentsOf3(note);
   const freshPoll = pollOf(note);
   const freshEmojis = emojisOf(note);
   intake.store.updateStatus(objectId, {
@@ -57607,8 +57607,8 @@ async function ingestNote(intake, objectId, actor, { via } = {}) {
   const note = await intake.fetchAP(objectId);
   if (!note) return `object fetch failed (${objectId})`;
   if (note.id !== objectId || !isContentType(note.type)) return `object not verifiable content (${objectId}, ${note.type})`;
-  const { attachmentsOf: attachmentsOf2, titledContent: titledContent2 } = await Promise.resolve().then(() => (init_wire(), wire_exports));
-  const attachments = attachmentsOf2(note);
+  const { attachmentsOf: attachmentsOf3, titledContent: titledContent2 } = await Promise.resolve().then(() => (init_wire(), wire_exports));
+  const attachments = attachmentsOf3(note);
   const content = titledContent2(note);
   const author = authorOf(note, actor);
   if (!author) return `object names an author its origin does not vouch for (${objectId})`;
@@ -64528,6 +64528,16 @@ var postUrl = (uri) => {
   const m = String(uri).match(/^at:\/\/([^/]+)\/[^/]+\/(.+)$/);
   return m ? `https://bsky.app/profile/${m[1]}/post/${m[2]}` : null;
 };
+function attachmentsOf2(post) {
+  const e = post?.embed || {};
+  const images = [...e.images || [], ...e.media?.images || []].filter((i) => i?.fullsize).map((i) => ({ url: i.fullsize, mediaType: "image/jpeg", description: i.alt || "" }));
+  const card = e.external?.thumb || e.media?.external?.thumb;
+  if (card) {
+    const ext = e.external || e.media.external;
+    images.push({ url: card, mediaType: "image/jpeg", description: ext.title || ext.uri || "" });
+  }
+  return images;
+}
 var BskyFeed = class {
   constructor({ store, atproto, log: log2 = console.log, onNotification = null }) {
     Object.assign(this, { store, atproto, log: log2, onNotification });
@@ -64583,14 +64593,27 @@ var BskyFeed = class {
     return url;
   }
   // One Bluesky post into the statuses index. Returns its noteId, new or not.
+  // A post seen before is completed, not duplicated: a reply first met as a
+  // bare notification record learns its parent and its pictures from the
+  // full view when that arrives.
   _mirrorPost(post, { via = null } = {}) {
     const noteId = post.uri;
-    const existing = this.store.getStatuses().some((s) => s.noteId === noteId);
-    if (existing) return { noteId, added: false };
+    const inReplyTo = post.record?.reply?.parent?.uri || null;
+    const attachments = attachmentsOf2(post);
+    const existing = this.store.getStatuses().find((s) => s.noteId === noteId);
+    if (existing) {
+      const patch = {
+        ...inReplyTo && !existing.inReplyTo ? { inReplyTo } : {},
+        ...attachments.length && !existing.attachments?.length ? { attachments } : {}
+      };
+      if (Object.keys(patch).length && typeof this.store.updateStatus === "function") {
+        this.store.updateStatus(noteId, patch);
+      }
+      return { noteId, added: false };
+    }
     const actor = this._rememberAuthor(post.author);
     if (this.store.isBlocked(actor)) return { noteId, added: false };
     const text = post.record?.text || "";
-    const images = post.embed?.images || [];
     this.store.addStatus({
       noteId,
       actor,
@@ -64600,11 +64623,45 @@ var BskyFeed = class {
       ...post.cid ? { cid: post.cid } : {},
       link: postUrl(noteId),
       ...via ? { via } : {},
-      ...images.length ? {
-        attachments: images.map((i) => ({ url: i.fullsize, mediaType: "image/jpeg", description: i.alt || "" }))
-      } : {}
+      ...inReplyTo ? { inReplyTo } : {},
+      ...attachments.length ? { attachments } : {}
     });
     return { noteId, added: true };
+  }
+  // The conversation under one post, asked for when a post is opened: the
+  // ancestors it hangs from and the replies beneath it, each mirrored with
+  // the reply link the thread view is built from. View cache only, like the
+  // timeline. Returns how many posts were new; a thread Bluesky will not
+  // give (gone, blocked, rate-limited) adds none and is logged, not thrown.
+  async mirrorThread(uri, { depth = 6 } = {}) {
+    if (!this.atproto?.connected()) return 0;
+    if (this.quietUntil && Date.now() < this.quietUntil) return 0;
+    let out;
+    try {
+      out = await this.atproto.xrpc("app.bsky.feed.getPostThread", { params: { uri, depth, parentHeight: 40 } });
+    } catch (e) {
+      if (e.status === 429 || e.status >= 500) this._backOff(e.status, null);
+      else this.log(`bskyfeed: thread ${uri}: ${e.message}`);
+      return 0;
+    }
+    const self2 = this.atproto.read()?.did;
+    const ownMirrors = new Set(this.store.getStatuses().map((s) => s.atproto?.uri).filter(Boolean));
+    let added = 0;
+    const take2 = (node) => {
+      const post = node?.post;
+      if (!post?.uri) return;
+      if (post.author?.did === self2 && ownMirrors.has(post.uri)) return;
+      if (this._mirrorPost(post).added) added++;
+    };
+    for (let up = out?.thread?.parent; up; up = up.parent) take2(up);
+    const walk = (node, left) => {
+      take2(node);
+      if (left <= 0) return;
+      for (const r of node?.replies || []) walk(r, left - 1);
+    };
+    walk(out?.thread, depth);
+    if (added) this.log(`bskyfeed: +${added} from the thread under ${uri}`);
+    return added;
   }
   async sweep() {
     if (!this.atproto?.connected()) return;
@@ -64644,8 +64701,13 @@ var BskyFeed = class {
           this.store.addNotification({ type: "follow", actor, bsky: true });
           await this.onNotification?.(n, { actor });
         } else if (n.reason === "mention" || n.reason === "reply") {
-          const record = { uri: n.uri, cid: n.cid, author: n.author, record: n.record, indexedAt: n.indexedAt };
-          this._mirrorPost(record);
+          let view = null;
+          try {
+            const got = await this.atproto.xrpc("app.bsky.feed.getPosts", { params: { uris: n.uri } });
+            view = (got?.posts || [])[0] || null;
+          } catch {
+          }
+          this._mirrorPost(view || { uri: n.uri, cid: n.cid, author: n.author, record: n.record, indexedAt: n.indexedAt });
           this.store.addNotification({ type: "mention", actor, noteId: n.uri, bsky: true });
           await this.onNotification?.(n, { actor });
         }
@@ -65978,6 +66040,10 @@ async function handle6(api, ctx) {
   const mContext = /^\/api\/v1\/statuses\/([a-f0-9]+)\/context$/.exec(pathname);
   if (mContext) {
     const noteUrl = api.lookup(mContext[1]).s?.noteId;
+    const opened = noteUrl && api.store.getStatuses().find((x) => x.noteId === noteUrl);
+    if (opened?.kind === "bsky" && typeof api.agent?.bskyfeed?.mirrorThread === "function") {
+      await api.agent.bskyfeed.mirrorThread(noteUrl);
+    }
     const all = api.store.getStatuses();
     const byId = new Map(all.map((s) => [s.noteId, s]));
     const ancestors = [];
@@ -66413,8 +66479,8 @@ var TagFeed = class {
             await this.intake.fetchAP(author).catch(() => {
             });
           }
-          const { attachmentsOf: attachmentsOf2, titledContent: titledContent2 } = await Promise.resolve().then(() => (init_wire(), wire_exports));
-          const attachments = attachmentsOf2(note);
+          const { attachmentsOf: attachmentsOf3, titledContent: titledContent2 } = await Promise.resolve().then(() => (init_wire(), wire_exports));
+          const attachments = attachmentsOf3(note);
           this.store.addStatus({
             noteId,
             actor: author,

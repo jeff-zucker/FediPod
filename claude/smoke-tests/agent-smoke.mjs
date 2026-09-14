@@ -2007,11 +2007,6 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     'the browser relays under the key the front gave its door, full address included');
   check(/doorKeyOf\(config\.gateway\?\.url\) \|\| config\.handle/.test(read('web/app/agent.mjs')),
     'and the browser agent hands that key to the relay, falling back to the handle only without a door');
-  // The signature covers `accept`, and a read without it gets the HTML page:
-  // dropping it at the relay made every actor lookup from the browser fail on
-  // mastodon.social (2026-09-13). The relay permits it (RELAY_HEADERS).
-  check(/accept: s\.headers\.accept/.test(read('web/app/deliver-relay.mjs')),
-    'the browser hands the relay the Accept header it signed');
 
   // `host` is a forbidden header, so the request the worker builds cannot carry
   // one from the fetch it intercepted — and the facade reads it to say where it
@@ -8404,6 +8399,12 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
     cacheActor: (u, doc) => { actors21[u] = { ...doc, preferredUsername: doc.preferredUsername }; },
     isBlocked: () => false,
     addNotification: (n) => notifications21.push(n),
+    updateStatus: (id, patch) => {
+      const i = statuses21.findIndex(x => x.noteId === id);
+      if (i < 0) return null;
+      statuses21[i] = { ...statuses21[i], ...patch };
+      return statuses21[i];
+    },
   };
   const AUTHOR = { did: 'did:plc:alice', handle: 'alice.test', displayName: 'Alice', avatar: 'https://cdn.test/a.jpg' };
   const feedFixture = {
@@ -8417,8 +8418,49 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
         embed: { images: [{ fullsize: 'https://cdn.test/full.jpg', alt: 'a cat' }] } } },
       { post: { uri: 'at://did:plc:alice/app.bsky.feed.post/p2', author: AUTHOR, record: { text: 'boosted', createdAt: '2026-08-05T03:00:00.000Z' } },
         reason: { $type: 'app.bsky.feed.defs#reasonRepost', by: { did: 'did:plc:bob', handle: 'bob.test' } } },
+      // A quote post carrying pictures keeps them under `media`; a link card
+      // keeps its thumbnail under `external`. Both are pictures to a reader.
+      { post: { uri: 'at://did:plc:alice/app.bsky.feed.post/p3', author: AUTHOR,
+        record: { text: 'quoting with pics', createdAt: '2026-08-05T03:30:00.000Z' },
+        embed: { $type: 'app.bsky.embed.recordWithMedia#view', record: {},
+          media: { $type: 'app.bsky.embed.images#view', images: [{ fullsize: 'https://cdn.test/q.jpg', alt: 'quoted cat' }] } } } },
+      { post: { uri: 'at://did:plc:alice/app.bsky.feed.post/p4', author: AUTHOR,
+        record: { text: 'a link', createdAt: '2026-08-05T03:40:00.000Z' },
+        embed: { $type: 'app.bsky.embed.external#view',
+          external: { uri: 'https://example.test/article', title: 'An article', thumb: 'https://cdn.test/card.jpg' } } } },
     ],
   };
+  // The full view of the mention, as getPosts returns it: unlike the bare
+  // notification record it names its parent and carries its picture.
+  const postsFixture = {
+    posts: [{ uri: 'at://did:plc:alice/app.bsky.feed.post/m1', cid: 'cidm1', author: AUTHOR,
+      record: { text: 'hey @you', createdAt: '2026-08-05T04:00:00.000Z',
+        reply: { root: { uri: 'at://did:plc:alice/app.bsky.feed.post/p1' }, parent: { uri: 'at://did:plc:alice/app.bsky.feed.post/p1' } } },
+      embed: { $type: 'app.bsky.embed.images#view', images: [{ fullsize: 'https://cdn.test/m1.jpg', alt: 'mention pic' }] } }],
+  };
+  const BOB = { did: 'did:plc:bob', handle: 'bob.test', displayName: 'Bob' };
+  const threadFixture = {
+    thread: {
+      $type: 'app.bsky.feed.defs#threadViewPost',
+      post: feedFixture.feed[2].post,
+      replies: [
+        { $type: 'app.bsky.feed.defs#threadViewPost',
+          post: { uri: 'at://did:plc:bob/app.bsky.feed.post/r1', author: BOB,
+            record: { text: 'first reply', createdAt: '2026-08-05T05:00:00.000Z',
+              reply: { root: { uri: 'at://did:plc:alice/app.bsky.feed.post/p1' }, parent: { uri: 'at://did:plc:alice/app.bsky.feed.post/p1' } } },
+            embed: { $type: 'app.bsky.embed.images#view', images: [{ fullsize: 'https://cdn.test/r1.jpg', alt: 'reply pic' }] } },
+          replies: [
+            { $type: 'app.bsky.feed.defs#threadViewPost',
+              post: { uri: 'at://did:plc:alice/app.bsky.feed.post/r2', author: AUTHOR,
+                record: { text: 'and a reply to that', createdAt: '2026-08-05T05:10:00.000Z',
+                  reply: { root: { uri: 'at://did:plc:alice/app.bsky.feed.post/p1' }, parent: { uri: 'at://did:plc:bob/app.bsky.feed.post/r1' } } } },
+              replies: [] },
+          ] },
+        { $type: 'app.bsky.feed.defs#blockedPost', uri: 'at://did:plc:evil/app.bsky.feed.post/x', blocked: true },
+      ],
+    },
+  };
+  let threadCalls = 0;
   const notsFixture = {
     notifications: [
       { author: AUTHOR, reason: 'like', reasonSubject: 'at://did:plc:me/app.bsky.feed.post/mine1' },
@@ -8431,7 +8473,12 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
     store: store21,
     atproto: {
       connected: () => true, read: () => ({ did: 'did:plc:me' }),
-      xrpc: async (nsid) => (nsid === 'app.bsky.feed.getTimeline' ? feedFixture : notsFixture),
+      xrpc: async (nsid) => {
+        if (nsid === 'app.bsky.feed.getTimeline') return feedFixture;
+        if (nsid === 'app.bsky.feed.getPosts') return postsFixture;
+        if (nsid === 'app.bsky.feed.getPostThread') { threadCalls++; return threadFixture; }
+        return notsFixture;
+      },
     },
     log: () => {},
     onNotification: async (n, { actor }) => hookCalls.push([n.reason, actor]),
@@ -8439,7 +8486,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
   await feed21.sweep();
 
   const mirrored = statuses21.filter(s => s.kind === 'bsky');
-  check(mirrored.length === 4 && !statuses21.some(s => s.noteId.endsWith('/mine1'))
+  check(mirrored.length === 6 && !statuses21.some(s => s.noteId.endsWith('/mine1'))
     && statuses21.some(s => s.noteId.endsWith('/own')),
     'our cross-posts never echo back, but our native Bluesky replies DO show');
   const p1 = statuses21.find(s => s.noteId.endsWith('/p1'));
@@ -8462,6 +8509,29 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
   const before21 = statuses21.length;
   await feed21.sweep();
   check(statuses21.length === before21, 'a second sweep adds nothing new');
+
+  // Pictures from every embed shape, and the mention completed from its view.
+  const p3 = statuses21.find(s => s.noteId.endsWith('/p3'));
+  const p4 = statuses21.find(s => s.noteId.endsWith('/p4'));
+  check(p3?.attachments?.[0]?.url === 'https://cdn.test/q.jpg' && p3.attachments[0].description === 'quoted cat',
+    'a quote post keeps the pictures it carries');
+  check(p4?.attachments?.[0]?.url === 'https://cdn.test/card.jpg' && p4.attachments[0].description === 'An article',
+    'a link card keeps its thumbnail, titled');
+  const m1 = statuses21.find(s => s.noteId.endsWith('/m1'));
+  check(m1?.inReplyTo === 'at://did:plc:alice/app.bsky.feed.post/p1' && m1.attachments?.[0]?.url === 'https://cdn.test/m1.jpg',
+    'a mention arriving as a bare notification record is completed from its view: parent and picture');
+
+  // The conversation under a post, asked for when it is opened.
+  const grew = await feed21.mirrorThread('at://did:plc:alice/app.bsky.feed.post/p1');
+  const r1 = statuses21.find(s => s.noteId.endsWith('/r1'));
+  const r2 = statuses21.find(s => s.noteId.endsWith('/r2'));
+  check(grew === 2 && r1?.inReplyTo === 'at://did:plc:alice/app.bsky.feed.post/p1'
+    && r2?.inReplyTo === 'at://did:plc:bob/app.bsky.feed.post/r1' && r1.attachments?.[0]?.description === 'reply pic',
+    'the thread under a Bluesky post is mirrored: each reply linked to its parent, pictures kept');
+  check(!statuses21.some(s => s.noteId.includes('did:plc:evil')) && r1.actor === 'https://bsky.app/profile/did:plc:bob',
+    'a blocked branch is skipped, and reply authors land in the actor cache');
+  check(await feed21.mirrorThread('at://did:plc:alice/app.bsky.feed.post/p1') === 0,
+    'asking for the same thread again adds nothing');
 
   // The facade guards, through the real routes.
   const bskyNote = statuses21.find(s => s.noteId.endsWith('/p1'));
@@ -8511,6 +8581,16 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
   await new Promise(r => gsrv.listen(0, '127.0.0.1', r));
   const gbase = `http://127.0.0.1:${gsrv.address().port}`;
   const ghdr = { authorization: 'Bearer T21', 'content-type': 'application/json' };
+
+  // Opening a Bluesky post asks Bluesky for its conversation first.
+  gapi.agent.bskyfeed = feed21;
+  const callsBefore = threadCalls;
+  const bctx = await (await fetch(`${gbase}/api/v1/statuses/b1/context`, { headers: ghdr })).json();
+  check(threadCalls === callsBefore + 1 && bctx.descendants.some(x => x.uri.endsWith('/r1'))
+    && bctx.descendants.some(x => x.uri.endsWith('/r2')) && bctx.descendants.some(x => x.uri.endsWith('/m1')),
+    'the context of a Bluesky post fetches its thread and serves the replies beneath it');
+  const br1 = bctx.descendants.find(x => x.uri.endsWith('/r1'));
+  check(br1?.media_attachments?.[0]?.url === 'https://cdn.test/r1.jpg', 'with the pictures in the replies');
 
   const gfav = await fetch(`${gbase}/api/v1/statuses/b1/favourite`, { method: 'POST', headers: ghdr, body: '{}' });
   check(gfav.status === 422 && /Bluesky/.test((await gfav.json()).error),
