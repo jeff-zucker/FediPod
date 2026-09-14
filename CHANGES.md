@@ -1,5 +1,18 @@
 # Changes
 
+## 2026-09-14 (conversations under Bluesky posts, and direct messages that say so — version 1.4.0, fedipod-server 0.14.0)
+
+Opening a Bluesky post now shows the conversation under it, with the
+pictures in the replies, in quotes and in link cards. Nothing is written to
+the pod for it.
+
+A direct message to someone the agent cannot find is refused with the
+reason, naming who could not be found, instead of being kept and sent to
+nobody. The same for a direct poll.
+
+A direct message, or any post that names you, raises a notification whoever
+sent it. Before, one from someone you follow arrived silently.
+
 ## 2026-09-14 (a search result can be opened — version 1.3.3, fedipod-server 0.13.2)
 
 In the browser build, clicking an account or post you had just been shown
