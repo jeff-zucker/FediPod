@@ -148,7 +148,8 @@ export default async function handler(request) {
     podPut: async (handle, url, body, ct) => {
       const rec = map[handle];
       if (!rec) return false;
-      return podInbox.appendWithToken(url, body, ct, { appendToken: rec.appendToken });
+      return podInbox.appendWithToken(url, body, ct, { appendToken: rec.appendToken,
+        report: (status) => { if (status >= 400 || status === 0) console.log(`door @${handle}: pod answered ${status || 'nothing'} to PUT ${url}${rec.appendToken ? ' (with token)' : ' (anonymous)'}`); } });
     },
   });
   return new Response(out.body ?? null, { status: out.status, headers: out.headers });

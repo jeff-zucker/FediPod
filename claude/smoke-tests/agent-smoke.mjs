@@ -4997,6 +4997,29 @@ if (up) {
     && !store2.getNotifications().some(n => n.noteId === 'https://m.example/n/plain1'),
     'while a plain public post from them is timeline only');
 
+  // A direct message between two FediPod accounts: the note lives in the
+  // sender's owner-only container, so fetching it answers 401 to everyone.
+  // A delivery the door verified, carrying the note inline, is read from
+  // that copy (2026-09-14: Jeff's message reached Sharon's door verified and
+  // her agent — ours — threw it away on the fetch). Unverified: fetched, as ever.
+  const cfgBefore = store2.getConfig();
+  store2.setConfig({ ...cfgBefore, gateway: { url: 'https://front.example/u/x/ap/inbox/', mode: 'trust', hmacSecret: 'S' } });
+  spamIntake.fetchAP = async () => null;                       // 401 at the origin
+  const dmNote = { id: 'https://m.example/u/bob/private/dm2', type: 'Note', attributedTo: BOB2,
+    content: '<p>for your eyes</p>', published: '2026-07-28T08:20:00Z', to: [urls2.actor], cc: [] };
+  const dmCreate = { type: 'Create', id: 'https://m.example/u/bob/private/dm2-create', actor: BOB2, object: dmNote, to: [urls2.actor] };
+  const vouched = { verified: true, actor: BOB2, keyId: BOB2 + '#main-key' };
+  const unverified = await spamIntake.handle(structuredClone(dmCreate), null);
+  check(/object fetch failed/.test(unverified || ''), 'an unverified delivery of a private note is still fetched, and fails as before');
+  const verified = await spamIntake.handle(structuredClone(dmCreate), vouched);
+  const dm2 = store2.getStatuses().find(s => s.noteId === dmNote.id);
+  check(!verified && dm2?.direct === true && dm2.content.includes('for your eyes'),
+    'a verified delivery carrying the note inline is read from that copy — the private message arrives');
+  const forged = await spamIntake.handle({ ...structuredClone(dmCreate), id: 'https://m.example/u/bob/private/dm3-create',
+    object: { ...dmNote, id: 'https://m.example/u/bob/private/dm3' } }, { verified: true, actor: 'https://m.example/u/eve', keyId: 'https://m.example/u/eve#main-key' });
+  check(/object fetch failed/.test(forged || ''), 'a receipt vouching for someone else buys nothing — the inline copy is not believed');
+  store2.setConfig(cfgBefore);
+
   // Not addressed to us at all → refused before any dereference.
   const reason = await spamIntake.handle({
     type: 'Create', actor: STRANGER, object: { id: 'https://m.example/n/s2', to: ['https://www.w3.org/ns/activitystreams#Public'] },

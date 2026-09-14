@@ -57393,7 +57393,7 @@ async function onUndo(intake, activity, actor, { trusted = false } = {}) {
   await intake.republish({ followers: true });
   intake.log(`unfollowed by ${actor}`);
 }
-async function onCreate(intake, activity, actor) {
+async function onCreate(intake, activity, actor, { trusted = false } = {}) {
   const objectId = typeof activity.object === "string" ? activity.object : activity.object?.id;
   if (!objectId) return "Create without object id";
   if (intake.store.isBlocked(objectId)) return `blocked domain (${objectId})`;
@@ -57402,7 +57402,8 @@ async function onCreate(intake, activity, actor) {
   if (!intake.concernsUs(envelope, actor)) return `not addressed to us (${objectId})`;
   const ingested = intake.store.getStatuses().some((x) => x.noteId === objectId && (x.kind === "timeline" || x.kind === "mention"));
   if (!ingested) {
-    const rejected = await intake.ingestNote(objectId, actor);
+    const inline = trusted && typeof activity.object === "object" && activity.object?.id === objectId ? activity.object : null;
+    const rejected = await intake.ingestNote(objectId, actor, { inline });
     if (rejected) return rejected;
   }
   if (intake.config.kind === "group") await intake.amplify(objectId, { activity });
@@ -57616,8 +57617,8 @@ function referencesOurObject(intake, activity) {
   if (refs.some((r) => r.startsWith(intake.urls.notes))) return true;
   return intake.config.kind === "group" && refs.some((r) => intake.store.getStatuses().some((s) => s.noteId === r));
 }
-async function ingestNote(intake, objectId, actor, { via } = {}) {
-  const note = await intake.fetchAP(objectId);
+async function ingestNote(intake, objectId, actor, { via, inline = null } = {}) {
+  const note = inline || await intake.fetchAP(objectId);
   if (!note) return `object fetch failed (${objectId})`;
   if (note.id !== objectId || !isContentType(note.type)) return `object not verifiable content (${objectId}, ${note.type})`;
   const { attachmentsOf: attachmentsOf3, titledContent: titledContent2 } = await Promise.resolve().then(() => (init_wire(), wire_exports));
@@ -63143,7 +63144,7 @@ var Intake = class {
       case "Undo":
         return this.onUndo(activity, actor, { trusted });
       case "Create":
-        return this.onCreate(activity, actor);
+        return this.onCreate(activity, actor, { trusted });
       case "Accept":
         return this.onAccept(activity, actor, { trusted });
       case "Like":
