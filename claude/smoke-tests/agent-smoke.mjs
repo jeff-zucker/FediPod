@@ -5,7 +5,7 @@
 // 2. gate + unconfigured admin behavior + static Phanpy serving
 // 3. Mastodon facade: oauth theater, stubs, auth gating
 // 4. keys + Fedify sign→verify round-trip on the PodStore
-// 5. wire builders (nested /activitypods-js/ layout)
+// 5. wire builders (nested /fedipod/ layout)
 // 6. pod-RDF turtle builders (escaping, paths) via injected fetch
 // 7. facade M1–M3 surface on a seeded in-memory PodStore, faked delivery
 // 8. Announce ingestion + tag-feed sweep with faked fetches
@@ -504,7 +504,7 @@ const { createRequire } = await import('node:module');
 const req = createRequire(path.join(root, 'package.json'));
 const { signRequest, verifyRequest } = await import(req.resolve('@fedify/fedify/sig'));
 
-const keyId = 'https://pod.example/activitypods-js/ap/actor#main-key';
+const keyId = 'https://pod.example/fedipod/ap/actor#main-key';
 const signed = await signRequest(
   new Request('https://mastodon.example/users/alice/inbox', {
     method: 'POST', headers: { 'content-type': 'application/activity+json' }, body: '{}',
@@ -513,7 +513,7 @@ const signed = await signRequest(
 );
 check(!!signed.headers.get('signature'), 'signRequest adds Signature header');
 
-const actorId = 'https://pod.example/activitypods-js/ap/actor';
+const actorId = 'https://pod.example/fedipod/ap/actor';
 const actorDocJson = {
   '@context': ['https://www.w3.org/ns/activitystreams', 'https://w3id.org/security/v1'],
   id: actorId, type: 'Person',
@@ -528,9 +528,9 @@ check(verified && !(verified instanceof Error),
 const wire = await import(path.join(root, 'lib/core/wire.mjs'));
 const urls = wire.apUrls('https://pod.example/');
 check(urls.webfinger === 'https://pod.example/.well-known/webfinger'
-  && urls.actor === 'https://pod.example/activitypods-js/ap/actor'
-  && urls.state === 'https://pod.example/activitypods-js/ap-state/',
-  'apUrls nests under /activitypods-js/, webfinger at root');
+  && urls.actor === 'https://pod.example/fedipod/ap/actor'
+  && urls.state === 'https://pod.example/fedipod/ap-state/',
+  'apUrls nests under /fedipod/, webfinger at root');
 const urlsCustom = wire.apUrls('https://pod.example/', 'other-root/');
 check(urlsCustom.actor === 'https://pod.example/other-root/ap/actor', 'apUrls root is configurable');
 // base was normalized and root was not, so `--root foo` produced .../fooap/actor
@@ -704,7 +704,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   // thread breaks the first time somebody trims their reply. A PERSON trimmed
   // out of that same reply is not carried: the text is authoritative, which is
   // what every fediverse client leads people to expect.
-  const PARENT = 'https://grp.example/activitypods-js/ap/notes/p9';
+  const PARENT = 'https://grp.example/fedipod/ap/notes/p9';
   const sent3 = [];
   const pub3 = new Publisher({
     config: { remotePod: 'https://pod.example/', handle: 'you', name: 'You' },
@@ -781,7 +781,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
   // followers-only and direct: addressing, container, outbox, delivery, gate
   pub.probeFetch = async () => ({ status: 403 });
-  const OUTBOX = 'https://pod.example/activitypods-js/ap/outbox';
+  const OUTBOX = 'https://pod.example/fedipod/ap/outbox';
   const outboxBefore = JSON.stringify(putDocs[OUTBOX] || null);
   const pn = await pub.publishNote('for followers only', { visibility: 'private' });
   check(!JSON.stringify([pn.to, pn.cc]).includes(PUB) && pn.id.includes('/ap/private/'),
@@ -1058,7 +1058,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   const mk = (actorDoc) => {
     const agent = new Agent({ home: '/tmp', log: () => {} });
     let published = 0;
-    agent.urls = { actor: 'https://pod.example/activitypods-js/ap/actor' };
+    agent.urls = { actor: 'https://pod.example/fedipod/ap/actor' };
     agent.remote = { getJson: async () => actorDoc };
     agent.publisher = { publishProfile: async () => { published++; return { unreachable: [] }; } };
     return { agent, published: () => published };
@@ -1068,7 +1068,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   const republished = await gone.agent.ensureActorPublished();
   check(republished === true && gone.published() === 1, 'a missing actor is republished at start');
 
-  const there = mk({ id: 'https://pod.example/activitypods-js/ap/actor', type: 'Person' });
+  const there = mk({ id: 'https://pod.example/fedipod/ap/actor', type: 'Person' });
   const again = await there.agent.ensureActorPublished();
   check(again === false && there.published() === 0, 'an actor that exists is left alone');
 }
@@ -2802,7 +2802,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   // because as far as they are concerned the question was answered.
   // The Follow we sent, which a Reject has to be answering. followActor stores
   // it on the record for exactly this (lib/social.mjs).
-  const OURS = 'https://pod.example/activitypods-js/ap/act/f-1';
+  const OURS = 'https://pod.example/fedipod/ap/act/f-1';
   const followRec = (over = {}) => ({ actor: THEM, accepted: false, followActivity: { id: OURS }, ...over });
   const rejectOf = (id) => ({ type: 'Reject', object: { type: 'Follow', id }, actor: THEM });
 
@@ -3761,7 +3761,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 {
   const { Intake } = await import(path.join(root, 'lib/core/intake/index.mjs'));
   const { apUrls } = await import(path.join(root, 'lib/core/wire.mjs'));
-  const urls = apUrls('https://apfed.pod.example/', 'activitypods-js/',
+  const urls = apUrls('https://apfed.pod.example/', 'fedipod/',
     { publicBase: 'https://front.example/u/jeff/' });
   const DESC = 'https://apfed.pod.example/.well-known/solid';
   const CHAN = 'https://pod.example/.notifications/WebSocketChannel2023/';
@@ -3786,7 +3786,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   intake.stopped = true;   // leave no retry timer behind
   await intake._subscribeOnce();
   globalThis.fetch = realFetch;
-  check(sentTo === CHAN && sentTopic === 'https://apfed.pod.example/activitypods-js/ap/inbox/',
+  check(sentTo === CHAN && sentTopic === 'https://apfed.pod.example/fedipod/ap/inbox/',
     'a fronted identity subscribes with its POD inbox as the topic, not its front url');
   check(urls.inbox === 'https://front.example/u/jeff/ap/inbox/',
     'and the front url is still the one the actor advertises');
@@ -3814,8 +3814,8 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     'nor an .acl or .meta anywhere — what they govern becomes unreachable');
   check(refuses(`${P}/`), 'nor the pod root');
   check(!refuses(`${P}/ap/notes/2026-01-01-abcd`) && !refuses(`${P}/ap/inbox/item`)
-    && !refuses(`${P}/activitypods-js/ap-state/statuses.json`)
-    && !refuses(`${P}/activitypods-js/fediverse/posts/n1`),
+    && !refuses(`${P}/fedipod/ap-state/statuses.json`)
+    && !refuses(`${P}/fedipod/fediverse/posts/n1`),
     'and everything the agent legitimately deletes still goes through');
   check(!refuses(`${P}/profiles-of-mine/x`),
     'the match is on a path SEGMENT — a container merely starting with "profile" is not the profile');
@@ -3885,7 +3885,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
   // --move-to: Move to the followers, movedTo on the actor, handle still resolves.
   const m = build();
-  const target = 'https://jeff-zucker.teamid.live/activitypods-js/ap/actor';
+  const target = 'https://jeff-zucker.teamid.live/fedipod/ap/actor';
   const mr = await m.agent.moveTo(target, { unfollow: async () => {} });
   const move = m.delivered[0];
   const actor = m.written.get(m.publisher.urls.actor);
@@ -4382,8 +4382,8 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 {
   const { resolveKeys } = await import(path.join(root, 'lib/core/keys.mjs'));
   const store = { read: () => null, write: () => {}, remove: async () => true };
-  const mine = 'https://a.example/activitypods-js/ap/actor';
-  const theirs = 'https://b.example/activitypods-js/ap/actor';
+  const mine = 'https://a.example/fedipod/ap/actor';
+  const theirs = 'https://b.example/fedipod/ap/actor';
 
   // Stamped for another actor → treated as absent, so a fresh key is minted.
   const dir1 = fs.mkdtempSync('/tmp/dk-ap-keys-');
@@ -6342,6 +6342,28 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
     fs.rmSync(HF, { recursive: true, force: true });
   }
 
+  // --- 12g. a pod that already hosts an account refuses a second setup ---
+  {
+    const { resourceExists } = await import(path.join(root, 'lib/pod/root.mjs'));
+    const has = await resourceExists(async (u) => ({ status: u.endsWith('/fedipod/ap/actor') ? 200 : 404 }), 'https://taken.example/fedipod/ap/actor');
+    const none = await resourceExists(async () => ({ status: 404 }), 'https://empty.example/fedipod/ap/actor');
+    check(has === true && none === false, 'resourceExists is true only when the actor answers 200');
+
+    const { runSetup, newRun } = await import(path.join(root, 'lib/device/setup.mjs'));
+    const HR = fs.mkdtempSync('/tmp/fedipod-refuse-');
+    let bootstrapped = false;
+    const agent = { home: HR, bootstrap: async () => { bootstrapped = true; }, connect: async () => {}, urls: {},
+      publisher: { publishProfile: async () => ({ unreachable: [] }) },
+      store: { attach() {}, load: async () => {}, getConfig: () => null, setConfig() {}, flush: async () => {} } };
+    const rR = newRun();
+    await runSetup({ home: HR, agent, run: rR,
+      answers: { mode: 'existing', pod: 'https://taken.example/', handle: 'you', issuer: 'https://taken.example', email: 'e@x', password: 'pw' },
+      deps: { checkPodUsable: async () => ({ ok: true }), resourceExists: async () => true, mintCredential: async () => ({}) } });
+    check(rR.phase === 'error' && /already hosts a FediPod account/.test(rR.error || '') && bootstrapped === false,
+      'setup on a pod that already has an account refuses it, and mints nothing');
+    fs.rmSync(HR, { recursive: true, force: true });
+  }
+
   fs.rmSync(H1, { recursive: true, force: true });
   fs.rmSync(H2, { recursive: true, force: true });
 }
@@ -6888,7 +6910,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
     const gurls = (await import(path.join(root, 'lib/core/wire.mjs'))).apUrls('https://me.example/');
     const gs = new PodStore({ log: () => {} });
     gs.setConfig({ handle: 'me', remotePod: 'https://me.example/' });
-    const actorUrl = 'https://activitypub.example/activitypods-js/ap/actor';
+    const actorUrl = 'https://activitypub.example/fedipod/ap/actor';
 
     const api = new MastoApi({
       agent: { store: gs, publisher: { urls: gurls }, configured: () => true }, log: () => {},
@@ -6985,14 +7007,14 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
     const { PodStore } = await import(path.join(root, 'lib/core/store.mjs'));
     const { Publisher } = await import(path.join(root, 'lib/core/publisher/index.mjs'));
     const POD = 'https://me.example/';
-    const N = POD + 'activitypods-js/ap/notes/';
-    const ACTOR = POD + 'activitypods-js/ap/actor';
+    const N = POD + 'fedipod/ap/notes/';
+    const ACTOR = POD + 'fedipod/ap/actor';
     const note = (slug, extra = {}) => ({
       id: N + slug, type: 'Note', attributedTo: ACTOR,
       content: `<p>${slug}</p>`, published: `2026-07-${slug.slice(-2)}T00:00:00.000Z`, ...extra,
     });
     const docs = {
-      [POD + 'activitypods-js/ap/outbox']: {
+      [POD + 'fedipod/ap/outbox']: {
         type: 'OrderedCollection',
         orderedItems: [N + 'a-01', N + 'a-02', { type: 'Announce', id: ACTOR + '#announce-9', object: N + 'a-01' }],
       },
@@ -8024,7 +8046,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
     check(mig.isCurrent({ privateRoot: 'file:///x/' }) && !mig.isCurrent({}),
       'isCurrent is decided by the shape, not by the stamp');
 
-    const base = 'https://pod.example/activitypods-js/ap-state/';
+    const base = 'https://pod.example/fedipod/ap-state/';
     const { drop, keep } = mig.classifyRemoteState([
       base + 'config.json', base + 'contacts.json', base + 'masto-tokens.json',
       base + 'lease.json', base + '.keep', base + 'something-else.json',
@@ -9536,7 +9558,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
   const actor23 = wire23.actorDoc({
     urls: wire23.apUrls('https://p.example/'), handle: 'p', name: 'P', publicKeyPem: 'K',
   });
-  check(actor23.url === 'https://p.example/activitypods-js/ap/profile.html',
+  check(actor23.url === 'https://p.example/fedipod/ap/profile.html',
     'the actor url is the human page, not machine data');
   const html23 = wire23.contentHtml('hi @friend', [
     { handle: 'friend', actor: 'https://m.example/users/friend', page: 'https://m.example/@friend' }]);
@@ -9856,7 +9878,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
     getStatuses: () => [
       { noteId: 'https://m.example/n/carried', kind: 'timeline', via: GROUP25, slug: 'c1' },
       { noteId: 'https://m.example/n/elsewhere', kind: 'timeline', via: 'https://other.example/u/x', slug: 'c2' },
-      { noteId: 'https://pod.example/activitypods-js/ap/notes/mine', kind: 'post', via: GROUP25 },
+      { noteId: 'https://pod.example/fedipod/ap/notes/mine', kind: 'post', via: GROUP25 },
     ],
     removeStatus: (id) => removed.push(id),
     isBlocked: () => false,
@@ -9871,7 +9893,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
     'the group moderates away the post it carried to us');
   await intake25.onAnnouncedDelete(GROUP25, { type: 'Delete', object: 'https://m.example/n/elsewhere' });
   check(removed.length === 1, "a post another carrier brought is not the group's to remove");
-  await intake25.onAnnouncedDelete(GROUP25, { type: 'Delete', object: 'https://pod.example/activitypods-js/ap/notes/mine' });
+  await intake25.onAnnouncedDelete(GROUP25, { type: 'Delete', object: 'https://pod.example/fedipod/ap/notes/mine' });
   check(removed.length === 1, 'our own post is never removed by moderation');
   await intake25.onAnnouncedDelete('https://stranger.example/u/s', { type: 'Delete', object: 'https://m.example/n/carried' });
   check(removed.length === 1, "a stranger's announced Delete is nothing to us");
@@ -9993,8 +10015,8 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
 {
   const { signRequest: sign27 } = await import(req.resolve('@fedify/fedify/sig'));
   const httpsig = await import(path.join(root, 'lib/gateway/httpsig.mjs'));
-  const KID = 'https://pod.example/activitypods-js/ap/actor#main-key';
-  const AID = 'https://pod.example/activitypods-js/ap/actor';
+  const KID = 'https://pod.example/fedipod/ap/actor#main-key';
+  const AID = 'https://pod.example/fedipod/ap/actor';
   const actorDoc27 = {
     '@context': ['https://www.w3.org/ns/activitystreams', 'https://w3id.org/security/v1'],
     id: AID, type: 'Person', publicKey: { id: KID, owner: AID, publicKeyPem: keys.rsaPublicPem },
@@ -10067,14 +10089,14 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
   const { signRequest: sign28 } = await import(req.resolve('@fedify/fedify/sig'));
   const gw = await import(path.join(root, 'lib/gateway/gateway-core.mjs'));
   const httpsig28 = await import(path.join(root, 'lib/gateway/httpsig.mjs'));
-  const KID = 'https://pod.example/activitypods-js/ap/actor#main-key';
-  const AID = 'https://pod.example/activitypods-js/ap/actor';
+  const KID = 'https://pod.example/fedipod/ap/actor#main-key';
+  const AID = 'https://pod.example/fedipod/ap/actor';
   const actorDoc28 = {
     '@context': ['https://www.w3.org/ns/activitystreams', 'https://w3id.org/security/v1'],
     id: AID, type: 'Person', publicKey: { id: KID, owner: AID, publicKeyPem: keys.rsaPublicPem },
   };
   const ident = {
-    inboxUrl: 'https://pod.example/activitypods-js/ap/inbox/',
+    inboxUrl: 'https://pod.example/fedipod/ap/inbox/',
     actorUrl: 'https://me.example/actor', followersUrl: 'https://me.example/followers',
     notesPrefix: 'https://me.example/notes/', following: ['https://friend.example/actor'],
     blocklist: { domains: ['spam.example'], actors: [] }, kind: 'person',
@@ -10609,21 +10631,21 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
 
   // Regression pin: with no publicBase the object is exactly as before.
   const plain = wire30.apUrls('https://alice.pod/solid/');
-  check(plain.actor === 'https://alice.pod/solid/activitypods-js/ap/actor'
+  check(plain.actor === 'https://alice.pod/solid/fedipod/ap/actor'
     && plain.toPod === undefined && plain.publicHome === undefined,
     'apUrls with no publicBase is byte-identical to before (no map, pod-native ids)');
 
-  const u = wire30.apUrls(POD, 'activitypods-js/', { publicBase: FRONT });
+  const u = wire30.apUrls(POD, 'fedipod/', { publicBase: FRONT });
   check(u.actor === 'https://fedipod.net/u/me/ap/actor'
     && u.outbox === 'https://fedipod.net/u/me/ap/outbox'
     && u.notes === 'https://fedipod.net/u/me/ap/notes/'
     && u.followers === 'https://fedipod.net/u/me/ap/followers',
     'a fronted identity advertises actor and every collection on the shared domain');
-  check(u.media === 'https://alice.pod/solid/activitypods-js/ap/media/'
-    && u.state === 'https://alice.pod/solid/activitypods-js/ap-state/',
+  check(u.media === 'https://alice.pod/solid/fedipod/ap/media/'
+    && u.state === 'https://alice.pod/solid/fedipod/ap-state/',
     'but media and state stay on the pod');
-  check(u.toPod('https://fedipod.net/u/me/ap/notes/x') === 'https://alice.pod/solid/activitypods-js/ap/notes/x'
-    && u.toPublic('https://alice.pod/solid/activitypods-js/ap/actor') === 'https://fedipod.net/u/me/ap/actor'
+  check(u.toPod('https://fedipod.net/u/me/ap/notes/x') === 'https://alice.pod/solid/fedipod/ap/notes/x'
+    && u.toPublic('https://alice.pod/solid/fedipod/ap/actor') === 'https://fedipod.net/u/me/ap/actor'
     && u.toPod('https://elsewhere.example/z') === 'https://elsewhere.example/z',
     'toPod/toPublic round-trip advertised↔pod ids and leave foreign ids alone');
 
@@ -10638,7 +10660,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
   check(seen[0] === 'https://fedipod.net/u/me/ap/notes/n1', 'with no map RemotePod writes the url as given');
   rp.setUrlMap(u.toPod);
   await rp.fetch('https://fedipod.net/u/me/ap/notes/n1');
-  check(seen[1] === 'https://alice.pod/solid/activitypods-js/ap/notes/n1',
+  check(seen[1] === 'https://alice.pod/solid/fedipod/ap/notes/n1',
     'with the map installed the same advertised url is written to the pod');
   // An access rule names the POD resource, whatever url it was handed. One
   // naming the advertised url guarded a resource the pod does not have and
@@ -10650,8 +10672,8 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
   rp.aclWritable = async () => true;
   rp.put = async (url, body) => { aclPut.push({ url, body }); return true; };
   await rp.setAcl('https://fedipod.net/u/me/ap/private/', []);
-  check(aclAsked[0] === 'https://alice.pod/solid/activitypods-js/ap/private/'
-    && aclPut[0]?.url === 'https://alice.pod/solid/activitypods-js/ap/private/.acl'
+  check(aclAsked[0] === 'https://alice.pod/solid/fedipod/ap/private/'
+    && aclPut[0]?.url === 'https://alice.pod/solid/fedipod/ap/private/.acl'
     && /accessTo <\.\/>/.test(aclPut[0]?.body || '')            // relative to the pod's own .acl
     && !/fedipod\.net/.test(aclPut[0]?.body || ''),
     'an access rule written from an advertised url names the pod resource, not the front');
@@ -10680,7 +10702,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
   });
   check(pub.urls.actor === 'https://fedipod.net/u/me/ap/actor' && typeof mapInstalled === 'function',
     'the Publisher advertises the fronted actor and installs the pod map on its remote');
-  check(mapInstalled('https://fedipod.net/u/me/ap/notes/x') === 'https://alice.pod/solid/activitypods-js/ap/notes/x',
+  check(mapInstalled('https://fedipod.net/u/me/ap/notes/x') === 'https://alice.pod/solid/fedipod/ap/notes/x',
     'and the installed map is the fronted→pod one');
   const note = await pub.publishNote('hello from the fronted identity', { visibility: 'public' });
   check(note.id.startsWith('https://fedipod.net/u/me/ap/notes/') && note.attributedTo === 'https://fedipod.net/u/me/ap/actor',
@@ -11281,7 +11303,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
 
   const PROFILE = 'https://p.example/profile/card';
   const card = `<${PROFILE}#me> <http://xmlns.com/foaf/0.1/name> "Mei" .`;
-  const account = { actorUrl: 'https://p.example/activitypods-js/ap/actor',
+  const account = { actorUrl: 'https://p.example/fedipod/ap/actor',
     accountName: '@mei@p.example', kind: 'person' };
 
   const sent = [];

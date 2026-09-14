@@ -33208,6 +33208,47 @@ async function provisionKey(pod, { stateUrl, keysUrl, envelope }) {
   await pod.putJson(keysUrl, envelope, "application/json");
 }
 
+// lib/pod/root.mjs
+var OWNER_LOOKUP_MS = 5e3;
+var PUBLIC_DOC_MAX_BYTES = 1024 * 1024;
+async function podLayout(fetchImpl, providerOrigin, { timeoutMs = OWNER_LOOKUP_MS } = {}) {
+  let origin;
+  try {
+    origin = new URL(providerOrigin).origin;
+  } catch {
+    return null;
+  }
+  let res;
+  try {
+    res = await fetchImpl(
+      `${origin}/.well-known/solid`,
+      { headers: { accept: "text/turtle" }, signal: AbortSignal.timeout(timeoutMs) }
+    );
+  } catch {
+    return null;
+  }
+  if (res.status === 501) return "host";
+  if (res.status !== 200) return null;
+  let body = "";
+  try {
+    body = await readCapped(res, 64 * 1024);
+  } catch {
+    return null;
+  }
+  return /ns\/pim\/space#Storage|pim:Storage/u.test(body) ? "path" : null;
+}
+async function resourceExists(fetchImpl, url, { timeoutMs = OWNER_LOOKUP_MS } = {}) {
+  try {
+    const res = await fetchImpl(
+      url,
+      { headers: { accept: "application/activity+json" }, signal: AbortSignal.timeout(timeoutMs) }
+    );
+    return !!res && res.status === 200;
+  } catch {
+    return false;
+  }
+}
+
 // web/app/idb-kv.mjs
 var DB = "fedipod-accounts";
 function open() {
@@ -33310,6 +33351,7 @@ async function signUp(answers, { onStep = () => {
       acct.running("checking your pod");
       const head = await fetch(brought, { method: "HEAD" }).catch(() => null);
       if (!head || head.status >= 400) throw new Error(`the pod at ${brought} did not answer (HTTP ${head?.status || "no response"})`);
+      if (await resourceExists(fetch, actorUrlFor(brought))) throw new Error("The pod already hosts a FediPod account. If you want a second account, put it on a different pod.");
       prog.pod = brought;
       acct.skip("using the pod you brought");
     }
@@ -33448,36 +33490,6 @@ function podBaseOfWebId(webId) {
   u.search = "";
   const dir = u.pathname.replace(/profile\/card$/u, "").replace(/[^/]*$/u, "");
   return `${u.origin}${dir.endsWith("/") ? dir : dir + "/"}`;
-}
-
-// lib/pod/root.mjs
-var OWNER_LOOKUP_MS = 5e3;
-var PUBLIC_DOC_MAX_BYTES = 1024 * 1024;
-async function podLayout(fetchImpl, providerOrigin, { timeoutMs = OWNER_LOOKUP_MS } = {}) {
-  let origin;
-  try {
-    origin = new URL(providerOrigin).origin;
-  } catch {
-    return null;
-  }
-  let res;
-  try {
-    res = await fetchImpl(
-      `${origin}/.well-known/solid`,
-      { headers: { accept: "text/turtle" }, signal: AbortSignal.timeout(timeoutMs) }
-    );
-  } catch {
-    return null;
-  }
-  if (res.status === 501) return "host";
-  if (res.status !== 200) return null;
-  let body = "";
-  try {
-    body = await readCapped(res, 64 * 1024);
-  } catch {
-    return null;
-  }
-  return /ns\/pim\/space#Storage|pim:Storage/u.test(body) ? "path" : null;
 }
 
 // web/app/oidc-session.mjs

@@ -14,6 +14,7 @@ import { createAccountWithPod, mintCredential, makeDpopSession, revokeCredential
 import { generateKeys, wrapKeys } from './keystore.mjs';
 import { BrowserRemotePod } from './pod-remote.mjs';
 import * as podState from '../../lib/pod/state.mjs';
+import { resourceExists } from '../../lib/pod/root.mjs';
 import { cacheOpenedKeys } from './keys-browser.mjs';
 
 // The container everything the agent publishes hangs under. New pods made here
@@ -102,6 +103,7 @@ export async function signUp(answers, { onStep = () => {}, frontOrigin = null } 
       acct.running('checking your pod');
       const head = await fetch(brought, { method: 'HEAD' }).catch(() => null);
       if (!head || head.status >= 400) throw new Error(`the pod at ${brought} did not answer (HTTP ${head?.status || 'no response'})`);
+      if (await resourceExists(fetch, actorUrlFor(brought))) throw new Error('The pod already hosts a FediPod account. If you want a second account, put it on a different pod.');
       prog.pod = brought;
       acct.skip('using the pod you brought');
     }

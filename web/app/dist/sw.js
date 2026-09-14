@@ -10279,7 +10279,7 @@ var init_wire = __esm({
     AS_CTX = "https://www.w3.org/ns/activitystreams";
     SEC_CTX = "https://w3id.org/security/v1";
     PUBLIC = "https://www.w3.org/ns/activitystreams#Public";
-    DEFAULT_ROOT = "activitypods-js/";
+    DEFAULT_ROOT = "fedipod/";
     assertionKeyId = (urls) => urls.actor + "#ed25519-key";
     OUTBOX_PAGE_SIZE = 20;
     outboxPageId = (outboxId, n) => `${outboxId}-${n}`;
