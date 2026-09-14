@@ -167,6 +167,28 @@ try {
   check(attached['wren@wren.example']?.inboxOnly === true && attached['wren@wren.example'].actorUrl === 'https://wren.example/ap/actor',
     'the row it writes is keyed by full address and keeps the identity on their own pod');
 
+  // The same account on the same pod may correct where its tree lives: a
+  // row made by an older sign-up named the pod root, and every delivery to
+  // it was written where nothing reads (2026-09-14, @fp1). A different pod
+  // is still "taken".
+  const secretBefore = attached['wren@wren.example'].hmacSecret;
+  const fixRow = await get('/api/attach', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', authorization: 'Bearer pretend' },
+    body: JSON.stringify({ handle: 'wren', podHome: 'https://wren.example/fedipod/', actorUrl: 'https://wren.example/fedipod/ap/actor' }),
+  });
+  check(fixRow.status === 201 && attached['wren@wren.example'].podHome === 'https://wren.example/fedipod/'
+    && attached['wren@wren.example'].actorUrl === 'https://wren.example/fedipod/ap/actor'
+    && attached['wren@wren.example'].hmacSecret === secretBefore,
+    'the same account on the same pod corrects its row and keeps its secret');
+  const stealRow = await get('/api/attach', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', authorization: 'Bearer pretend' },
+    body: JSON.stringify({ handle: 'wren', podHome: 'https://other.example/fedipod/' }),
+  });
+  check(stealRow.status >= 400 && attached['wren@wren.example'].podHome === 'https://wren.example/fedipod/',
+    `while a different pod is still refused (${stealRow.status})`);
+
   // ---- the roster the host reads --------------------------------------------
   const finch = await get('/api/attach', {
     method: 'POST',
