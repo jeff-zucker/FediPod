@@ -1,6 +1,6 @@
 // run-agent.mjs — fedipod: a standalone single-actor ActivityPub
 // agent. The remote pod is a RELAY: it serves the public wire face
-// (/activitypods-js/ap/) and buffers inbound mail in a public-append inbox
+// (/fedipod/ap/) and buffers inbound mail in a public-append inbox
 // while this process is off, and it keeps one private document, the lease,
 // because a lock only one machine can reach coordinates nothing.
 //

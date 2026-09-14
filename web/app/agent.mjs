@@ -189,7 +189,7 @@ export class BrowserAgent {
     // builds its own urls from `config.root` (publisher.mjs), and a config
     // without one falls to the Node default — so an account set up elsewhere
     // and signed into here would keep its state under `fedipod/` while every
-    // document it published landed under `activitypods-js/`. One root, decided
+    // document it published landed under a different root. One root, decided
     // once, carried by the config everything downstream reads.
     this.store.setConfig({ ...(this.store.getConfig() || {}), ...cfg, root });
     config = this.store.getConfig();

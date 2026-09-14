@@ -6314,7 +6314,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
     let bootstrapGateway = 'unset'; let attachArgs = null;
     const HF = fs.mkdtempSync('/tmp/fedipod-front-');
     fs.writeFileSync(path.join(HF, 'credential.json'),
-      JSON.stringify({ remotePod: 'https://prov.example/me/', webId: 'https://prov.example/me/profile/card#me', issuerOrigin: 'https://prov.example' }));
+      JSON.stringify({ remotePod: 'https://prov.example/me/', root: 'fedipod/', webId: 'https://prov.example/me/profile/card#me', issuerOrigin: 'https://prov.example' }));
     const agent = {
       home: HF,
       bootstrap: async (o) => { bootstrapGateway = o.gateway || null; },
@@ -6332,8 +6332,8 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
       },
     });
     check(rF.phase === 'done', `a fronted path-pod setup completes (${rF.error || 'ok'})`);
-    check(attachArgs && attachArgs.podHome === 'https://prov.example/me/activitypods-js/'
-      && attachArgs.actorUrl === 'https://prov.example/me/activitypods-js/ap/actor',
+    check(attachArgs && attachArgs.podHome === 'https://prov.example/me/fedipod/'
+      && attachArgs.actorUrl === 'https://prov.example/me/fedipod/ap/actor',
       'the attach names the pod tree, not the gateway');
     check(bootstrapGateway && bootstrapGateway.frontActor === 'https://fedipod.net/u/me/ap/actor' && bootstrapGateway.mode === 'trust',
       'and bootstrap is given the gateway config, so connect mints the key against the gateway actor');

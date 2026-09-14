@@ -59,7 +59,7 @@ A followed group's own announced deletion of a post it carried to you is honoure
 ## Inviting people
 
 A group has a page anyone can open, at `ap/profile.html` under its pod's
-app container — `<pod>/activitypods-js/ap/profile.html`. It
+app container — `<pod>/fedipod/ap/profile.html`. It
 carries the group's address and a Follow box that sends a visitor to their
 own server's follow screen, so it is the link to put where people will find
 it. Posts the group carries appear in members' timelines as the group

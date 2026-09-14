@@ -17,7 +17,7 @@ import * as podState from '../../lib/pod/state.mjs';
 import { cacheOpenedKeys } from './keys-browser.mjs';
 
 // The container everything the agent publishes hangs under. New pods made here
-// use `fedipod/`; the agent's own default stays `activitypods-js/` for installs
+// use `fedipod/`; new installs default to `fedipod/` too, and older ones keep
 // that predate this, so those pods are untouched. The name is stored on the
 // credential and the config, so the agent reads it rather than guessing.
 export const AP_ROOT = 'fedipod/';
