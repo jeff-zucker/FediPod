@@ -1,5 +1,18 @@
 # Changes
 
+## 2026-09-14 (people with profile fields can be found again — version 1.3.2, fedipod-server 0.13.1)
+
+Looking someone up by handle found nobody when their profile carried fields
+such as a website or pronouns, and a follow from such a person could not be
+read. The reader that turns an actor document into an account was picking
+one of the fields instead of the account. It reads the account now, on every
+build.
+
+From the browser build, reads sent through fedipod.net were also refused as
+"no such account", because the browser named the account by its bare handle
+and fedipod.net files it by its full address. The browser uses the full
+address now. Search and follow from the browser work against mastodon.social.
+
 ## 2026-09-13 (the browser can look people up again — version 1.3.1)
 
 Searching for someone by handle from the browser build found nobody on
