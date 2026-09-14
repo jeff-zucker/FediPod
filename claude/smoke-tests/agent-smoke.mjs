@@ -2026,6 +2026,29 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     'the browser relays under the key the front gave its door, full address included');
   check(/doorKeyOf\(config\.gateway\?\.url\) \|\| config\.handle/.test(read('web/app/agent.mjs')),
     'and the browser agent hands that key to the relay, falling back to the handle only without a door');
+  // The browser publisher had no mention resolver at all, so no mention from
+  // the browser ever resolved: a direct message went to nobody and a mention
+  // notified no one (2026-09-14). It gets the installed agent's.
+  check(/resolveMention: \(h\) => resolveHandle\(this, h\)/.test(read('web/app/agent.mjs')),
+    'the browser publisher resolves the handles a post names');
+  // And the handle lookup goes through the agent's own remote read, which in
+  // the browser is the relay — WebFinger was the one lookup made directly.
+  const social = await import(path.join(root, 'lib/core/social.mjs'));
+  const asked = [];
+  const fakeAgent = {
+    store: { isBlocked: () => false, getActors: () => ({}), cacheActor: () => {}, read: (n, d) => d, write: () => {} },
+    intake: {
+      deliverer: { signedFetch: async (u) => { asked.push(u); return new Response(JSON.stringify({
+        subject: 'acct:me@sharon.example',
+        links: [{ rel: 'self', type: 'application/activity+json', href: 'https://sharon.example/fedipod/ap/actor' }] }), { status: 200 }); } },
+      fetchAP: async (u) => (u === 'https://sharon.example/fedipod/ap/actor'
+        ? { id: u, type: 'Person', preferredUsername: 'me', inbox: u.replace(/actor$/, 'inbox/') } : null),
+    },
+  };
+  const found = await social.resolveHandle(fakeAgent, '@me@sharon.example');
+  check(found?.id === 'https://sharon.example/fedipod/ap/actor'
+    && asked[0] === 'https://sharon.example/.well-known/webfinger?resource=acct%3Ame%40sharon.example',
+    "a handle is looked up through the agent's own remote read, not a bare fetch");
 
   // `host` is a forbidden header, so the request the worker builds cannot carry
   // one from the fetch it intercepted — and the facade reads it to say where it

@@ -25,7 +25,7 @@ import { BrowserAtproto } from './atproto-browser.mjs';
 import { BskyFeed } from '../../lib/connections/bskyfeed.mjs';
 import { BrowserFediAccounts } from './fediacct-browser.mjs';
 import { AcctFeed } from '../../lib/connections/acctfeed.mjs';
-import { followActor, unfollowActor } from '../../lib/core/social.mjs';
+import { followActor, unfollowActor, resolveHandle } from '../../lib/core/social.mjs';
 import { ImportWorker } from '../../lib/connections/import.mjs';
 
 // The authorities this identity answers on: exactly one, this origin. The Node
@@ -212,6 +212,10 @@ export class BrowserAgent {
     this.publisher = new Publisher({
       config: this.store.getConfig(), remote: this.remote, store: this.store,
       deliverer: this.deliverer, publicKeyPem: keys.rsaPublicPem, assertionKey: null, log: this.log,
+      // Who a post names, resolved — the same lookup the installed agent
+      // gives its publisher. Without it no mention from the browser ever
+      // resolved: a direct message went to nobody, a mention notified no one.
+      resolveMention: (h) => resolveHandle(this, h),
     });
 
     // The Bluesky connection, stamped to this actor. The same client the Node

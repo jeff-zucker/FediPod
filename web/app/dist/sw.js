@@ -64122,7 +64122,7 @@ __export(social_exports, {
 });
 init_node_crypto();
 init_wire();
-async function lookupWebFinger(acct) {
+async function lookupWebFinger(acct, { fetchImpl = null } = {}) {
   const clean = String(acct || "").replace(/^acct:/, "");
   const at = clean.lastIndexOf("@");
   if (at < 1) return null;
@@ -64130,9 +64130,8 @@ async function lookupWebFinger(acct) {
   if (!host || /[/\\?#]/.test(host)) return null;
   const { safeFetch: safeFetch2, readCapped: readCapped3 } = await Promise.resolve().then(() => (init_safefetch(), safefetch_exports));
   const url = `https://${host}/.well-known/webfinger?resource=${encodeURIComponent(`acct:${clean}`)}`;
-  const res = await safeFetch2(url, {
-    headers: { accept: "application/jrd+json, application/json" }
-  }).catch(() => null);
+  const headers = { accept: "application/jrd+json, application/json" };
+  const res = await (fetchImpl ? fetchImpl(url, { headers }) : safeFetch2(url, { headers })).catch(() => null);
   if (!res || res.status >= 400) return null;
   let jrd2;
   try {
@@ -64168,13 +64167,15 @@ async function resolveHandle(agent2, handle7) {
   const clean = String(handle7 || "").replace(/^@/, "");
   if (!/^[^@]+@[^@]+$/.test(clean)) throw new Error("handle must look like user@host");
   if (agent2.store.isBlocked("https://" + clean.split("@")[1] + "/")) throw new Error("domain is blocked");
-  const jrd2 = await lookupWebFinger("acct:" + clean);
+  const remote = agent2.intake?.deliverer?.signedFetch ? (u, i) => agent2.intake.deliverer.signedFetch(u, i) : null;
+  const lookup2 = (a) => lookupWebFinger(a, { fetchImpl: remote });
+  const jrd2 = await lookup2("acct:" + clean);
   const self2 = selfLink(jrd2);
   if (!self2?.href) throw new Error(`webfinger found no actor for ${clean}`);
   const doc = await agent2.intake.fetchAP(self2.href);
   if (!doc?.id) throw new Error(`actor document unusable for ${clean}`);
   if (agent2.store.isBlocked(doc.id)) throw new Error("actor is blocked");
-  await confirmDelegation(clean.slice(clean.lastIndexOf("@") + 1), doc);
+  await confirmDelegation(clean.slice(clean.lastIndexOf("@") + 1), doc, lookup2);
   await cacheCounts(agent2, doc);
   return doc;
 }
@@ -69764,7 +69765,11 @@ var BrowserAgent = class _BrowserAgent {
       deliverer: this.deliverer,
       publicKeyPem: keys.rsaPublicPem,
       assertionKey: null,
-      log: this.log
+      log: this.log,
+      // Who a post names, resolved — the same lookup the installed agent
+      // gives its publisher. Without it no mention from the browser ever
+      // resolved: a direct message went to nobody, a mention notified no one.
+      resolveMention: (h) => resolveHandle(this, h)
     });
     this.atproto = new BrowserAtproto({ store: this.store, actorId: this.urls.actor, log: this.log });
     this.publisher.atproto = this.atproto;
