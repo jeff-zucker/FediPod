@@ -1,5 +1,21 @@
 # Changes
 
+## 2026-09-14 (private messages between FediPod accounts arrive — version 1.4.1, fedipod-server 0.14.1)
+
+A direct or followers-only post from one FediPod account to another was
+thrown away on arrival: the receiver insisted on fetching the note from the
+sender's private container, which nobody else can read. A delivery the door
+verified is now read from the copy it carries.
+
+From the browser build, the people a post names are now looked up at all,
+and looked up through fedipod.net rather than by a direct request to the
+other pod's host. A direct message from the browser therefore reaches its
+addressee.
+
+An account whose row at fedipod.net named the wrong place can correct it by
+attaching again from the same account on the same pod. The door also records
+the pod's answer when a delivery cannot be written.
+
 ## 2026-09-14 (conversations under Bluesky posts, and direct messages that say so — version 1.4.0, fedipod-server 0.14.0)
 
 Opening a Bluesky post now shows the conversation under it, with the
