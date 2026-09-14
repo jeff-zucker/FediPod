@@ -320,9 +320,11 @@ if (typeof document !== 'undefined') (async () => {
     $('preview').textContent = (handle && host) ? `@${handle}@${host}` : '@…@…';
   };
   // The shape choice is fixed for a path pod, and open for a host-root pod.
+  // A path pod has no choice to make: the radios go away and the note says why.
   const applyShape = () => {
     const fixed = pathPod();
-    for (const r of f().shape) { r.disabled = fixed; if (fixed) r.checked = r.value === 'front'; }
+    for (const r of f().shape) { if (fixed) r.checked = r.value === 'front'; }
+    $('shape-group').hidden = fixed;
     $('shape-hint').hidden = !fixed;
   };
   const applyMode = () => {

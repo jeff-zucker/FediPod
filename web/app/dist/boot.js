@@ -34010,9 +34010,9 @@ ${e.detail}` : "");
   const applyShape = () => {
     const fixed = pathPod();
     for (const r of f().shape) {
-      r.disabled = fixed;
       if (fixed) r.checked = r.value === "front";
     }
+    $("shape-group").hidden = fixed;
     $("shape-hint").hidden = !fixed;
   };
   const applyMode = () => {
