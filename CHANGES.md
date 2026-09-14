@@ -1,5 +1,14 @@
 # Changes
 
+## 2026-09-14 (a search result can be opened — version 1.3.3, fedipod-server 0.13.2)
+
+In the browser build, clicking an account or post you had just been shown
+could answer "Record not found". The browser stops the agent whenever it
+idles, and the table that turned an id back into an address went with it.
+An id is now worked out from what the agent holds, so a fresh agent answers
+for ids an earlier one handed out. An account on a non-default port is also
+found when a client asks for it without the port.
+
 ## 2026-09-14 (people with profile fields can be found again — version 1.3.2, fedipod-server 0.13.1)
 
 Looking someone up by handle found nobody when their profile carried fields
