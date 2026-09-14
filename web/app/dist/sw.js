@@ -34555,8 +34555,40 @@ var PodStore = class {
     this.cache.set("ids.json", ids);
     return id;
   }
+  // The map first, for ids minted under an older scheme. Then, because the
+  // id IS the hash of the url, whatever this store knows is scanned for the
+  // url that hashes to it — actors, posts, contacts, requests, media. The
+  // browser build's worker is stopped whenever it idles, and the in-memory
+  // map went with it: a client clicking an account it had just been shown
+  // reached a fresh worker that held the actor and could not name it.
   urlFor(id) {
-    return this.getIds()[id] || null;
+    const ids = this.getIds();
+    if (ids[id]) return ids[id];
+    if (!/^[a-f0-9]{16}$/u.test(String(id))) return null;
+    const hash = (u) => node_crypto_default.createHash("sha256").update(u).digest("hex").slice(0, 16);
+    const seen = /* @__PURE__ */ new Set();
+    const candidates = function* (store) {
+      for (const u of Object.keys(store.getActors())) yield u;
+      for (const st2 of store.getStatuses()) {
+        yield st2.noteId;
+        yield st2.actor;
+        for (const a of st2.attachments || []) if (a?.url) yield a.url;
+      }
+      const c = store.getContacts();
+      for (const f of [...c.followers, ...c.following]) if (f?.actor) yield f.actor;
+      for (const r of store.getRequests()) if (r?.actor) yield r.actor;
+      for (const u of Object.keys(store.getMedia())) yield u;
+    };
+    for (const u of candidates(this)) {
+      if (typeof u !== "string" || seen.has(u)) continue;
+      seen.add(u);
+      if (hash(u) === id) {
+        ids[id] = u;
+        this.cache.set("ids.json", ids);
+        return u;
+      }
+    }
+    return null;
   }
 };
 
@@ -65431,7 +65463,8 @@ async function handle4(api, ctx) {
     }
     const hit = Object.entries(api.store.getActors()).find(([u, a]) => {
       try {
-        return `${a.preferredUsername}@${new URL(u).host}` === acct;
+        const at = new URL(u);
+        return `${a.preferredUsername}@${at.host}` === acct || `${a.preferredUsername}@${at.hostname}` === acct;
       } catch {
         return false;
       }

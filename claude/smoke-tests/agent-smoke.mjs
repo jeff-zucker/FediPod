@@ -1858,6 +1858,21 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   st.write('ids.json', { legacyid: 'https://y.example/n/2' });
   check(st.idFor('https://y.example/n/2') === 'legacyid',
     'while an id a client is still holding keeps resolving');
+  // The map is in memory only, and the browser build's worker is stopped
+  // whenever it idles — so an id shown by one worker reached a fresh one
+  // that could not name it, and a click on a search result said "Record not
+  // found" (2026-09-14). The id is the hash of the url: whatever the store
+  // knows is scanned for it.
+  const fresh = new PodStore({ log: () => {} });
+  const who = 'https://h.example:3000/fedipod/ap/actor';
+  fresh.cacheActor(who, { id: who, type: 'Person', preferredUsername: 'port' });
+  fresh.addStatus({ noteId: 'https://h.example:3000/fedipod/ap/notes/n1', actor: who, content: '<p>x</p>', published: '2026-09-14T00:00:00.000Z', kind: 'remote' });
+  check(fresh.urlFor(st.idFor(who)) === who,
+    'an id minted elsewhere resolves from the actor cache alone, port and all');
+  check(fresh.urlFor(st.idFor('https://h.example:3000/fedipod/ap/notes/n1')) === 'https://h.example:3000/fedipod/ap/notes/n1',
+    'and a post id resolves from the statuses');
+  check(fresh.urlFor('0123456789abcdef') === null && fresh.urlFor('not-an-id') === null,
+    'while an id nothing hashes to is still nobody');
 
   // portFree/freePortFrom lived twice and had already drifted — one returned
   // null on exhaustion, the other threw, and both spawn agents.
@@ -8528,6 +8543,13 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
   const gunreb = await (await fetch(`${gbase}/api/v1/statuses/b1/unreblog`, { method: 'POST', headers: ghdr, body: '{}' })).json();
   check(gunreb.reblogged === false && minted21.some(m => m[0] === 'delete' && m[1] === 'at://did:plc:me/app.bsky.feed.repost/r1'),
     'unreblog deletes the repost');
+  // An account on a non-default port is shown as user@host:port; a client
+  // that drops the port when it asks for it again is still answered.
+  actors21['https://h.example:3000/fedipod/ap/actor'] = { preferredUsername: 'port', name: 'Port', type: 'Person' };
+  const withPort = await fetch(`${gbase}/api/v1/accounts/lookup?acct=${encodeURIComponent('port@h.example:3000')}`, { headers: ghdr });
+  const noPort = await fetch(`${gbase}/api/v1/accounts/lookup?acct=${encodeURIComponent('port@h.example')}`, { headers: ghdr });
+  check(withPort.status === 200 && noPort.status === 200 && (await noPort.json()).acct === 'port@h.example:3000',
+    'an account on a port is found by its address with or without the port');
   const grep2res = await fetch(`${gbase}/api/v1/statuses`, {
     method: 'POST', headers: ghdr, body: JSON.stringify({ status: 'hi <from> fp', in_reply_to_id: 'b1' }),
   });
