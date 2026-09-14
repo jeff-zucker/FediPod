@@ -55946,6 +55946,17 @@ async function mentionsFor(publisher, content, inReplyTo) {
   }
   return mentions;
 }
+function assertDirectAddressed(content, mentions) {
+  const wanted = [...new Set(mentionsIn(content))];
+  const missing = wanted.filter((h) => !mentions.some((m) => m.handle === h));
+  let why = null;
+  if (!wanted.length) why = "a direct message names who it is for \u2014 mention them as @name@host";
+  else if (missing.length) why = `could not find ${missing.map((h) => "@" + h).join(", ")} \u2014 the direct message was not sent`;
+  if (!why) return;
+  const e = new Error(why);
+  e.code = "unaddressed";
+  throw e;
+}
 async function publishNote(publisher, content, { inReplyTo, attachments, visibility = "public", spoilerText = null } = {}) {
   const { urls } = publisher;
   const priv = visibility === "private" || visibility === "direct";
@@ -55956,6 +55967,7 @@ async function publishNote(publisher, content, { inReplyTo, attachments, visibil
   const published = (/* @__PURE__ */ new Date()).toISOString();
   const slug = published.slice(0, 10) + "-" + node_crypto_default.randomBytes(4).toString("hex");
   const mentions = await publisher._mentionsFor(content, inReplyTo);
+  if (visibility === "direct") assertDirectAddressed(content, mentions);
   const note = noteDoc({
     urls,
     slug,
@@ -56157,6 +56169,7 @@ async function publishQuestion(publisher, content, {
   const published = (/* @__PURE__ */ new Date()).toISOString();
   const slug = published.slice(0, 10) + "-" + node_crypto_default.randomBytes(4).toString("hex");
   const mentions = await publisher._mentionsFor(content, inReplyTo);
+  if (visibility === "direct") assertDirectAddressed(content, mentions);
   const poll = {
     multiple: !!multiple,
     expiresAt: expiresAt || null,
@@ -65958,10 +65971,16 @@ async function handle6(api, ctx) {
       api.store.setScheduled(sched);
       return send(200, api.scheduledJson(entry));
     }
-    const note = await api.agent.publisher.publishNote(
-      body.status,
-      { inReplyTo, attachments, visibility, spoilerText }
-    );
+    let note;
+    try {
+      note = await api.agent.publisher.publishNote(
+        body.status,
+        { inReplyTo, attachments, visibility, spoilerText }
+      );
+    } catch (e) {
+      if (e.code === "unaddressed") return send(422, { error: e.message });
+      throw e;
+    }
     const s = api.store.getStatuses().find((x) => x.noteId === note.id);
     return send(200, api.status(s));
   }

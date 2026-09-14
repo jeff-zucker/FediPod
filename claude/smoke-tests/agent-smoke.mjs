@@ -792,6 +792,25 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     'a direct note is addressed to the people it names and nobody else');
   check(dmSent.i.length === 1 && dmSent.i[0] === 'https://b.example/u/kofi/inbox',
     'and is delivered to their inbox alone — no followers');
+  // A direct message to someone the agent cannot find used to be kept in the
+  // private container and delivered to nobody, with nothing said (2026-09-14,
+  // a message to @me@sharontest.solidcommunity.net). Refused instead, before
+  // anything is written, naming who could not be found.
+  const sentBefore = sent.length; const putBefore = JSON.stringify(putDocs);
+  const unaddressed = async (text) => { try { await pub.publishNote(text, { visibility: 'direct' }); return null; } catch (e) { return e; } };
+  const ghostDm = await unaddressed('psst @ghost@z.example');
+  check(ghostDm?.code === 'unaddressed' && /could not find @ghost@z\.example/.test(ghostDm.message),
+    'a direct message to someone who cannot be found is refused, naming them');
+  const nobodyDm = await unaddressed('psst nobody in particular');
+  check(nobodyDm?.code === 'unaddressed' && /names who it is for/.test(nobodyDm.message),
+    'and one naming nobody at all is refused too');
+  const halfDm = await unaddressed('psst @kofi@b.example and @ghost@z.example');
+  check(halfDm?.code === 'unaddressed' && /@ghost@z\.example/.test(halfDm.message) && !/@kofi/.test(halfDm.message),
+    'one that names someone real and someone missing is refused for the missing one');
+  check(sent.length === sentBefore && JSON.stringify(putDocs) === putBefore,
+    'and nothing was written or delivered for any of them');
+  const openDm = await pub.publishNote('open @kofi@b.example', { visibility: 'direct' });
+  check(openDm.to[0] === 'https://b.example/u/kofi', 'while one everybody in it resolves still goes');
   check(JSON.stringify(putDocs[OUTBOX] || null) === outboxBefore,
     'neither private nor direct touched the public outbox');
   pub._privateVerdict = undefined;
@@ -8344,7 +8363,8 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
   check(calls.length === 1 && patched.at(-1)[1].atproto.uri === 'at://d/c/r1',
     'a public post mirrors and the status records the at:// uri');
   await pub20.publishNote('quiet one', { visibility: 'unlisted' });
-  await pub20.publishNote('secret', { visibility: 'direct' });
+  pub20.resolveMention = async () => ({ id: 'https://b.example/u/kofi', inbox: 'https://b.example/u/kofi/inbox' });
+  await pub20.publishNote('secret @kofi@b.example', { visibility: 'direct' });
   check(calls.length === 1, 'unlisted and direct posts NEVER reach the mirror');
 
   pub20.atproto.crossPost = async () => { throw new Error('pds down'); };
@@ -8630,6 +8650,14 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
   const noPort = await fetch(`${gbase}/api/v1/accounts/lookup?acct=${encodeURIComponent('port@h.example')}`, { headers: ghdr });
   check(withPort.status === 200 && noPort.status === 200 && (await noPort.json()).acct === 'port@h.example:3000',
     'an account on a port is found by its address with or without the port');
+  // A direct message the publisher refuses as unaddressed reaches the client
+  // as its own mistake to fix, with the reason — not as a server fault.
+  gapi.agent.publisher.publishNote = async () => { const e = new Error('could not find @ghost@z.example — the direct message was not sent'); e.code = 'unaddressed'; throw e; };
+  const dmRes = await fetch(`${gbase}/api/v1/statuses`, { method: 'POST', headers: ghdr,
+    body: JSON.stringify({ status: 'psst @ghost@z.example', visibility: 'direct' }) });
+  check(dmRes.status === 422 && /could not find @ghost@z\.example/.test((await dmRes.json()).error),
+    'a refused direct message answers 422 with who could not be found');
+  delete gapi.agent.publisher.publishNote;
   const grep2res = await fetch(`${gbase}/api/v1/statuses`, {
     method: 'POST', headers: ghdr, body: JSON.stringify({ status: 'hi <from> fp', in_reply_to_id: 'b1' }),
   });
