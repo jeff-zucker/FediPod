@@ -6178,8 +6178,9 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
     `a pod at its own host root resolves (${rooted.address})`);
 
   const onPath = await ask({ mode: 'existing', pod: 'https://shared.example/me/', handle: 'you', kind: 'person' });
-  check(onPath.ok && onPath.resolvable === false && onPath.warnings.includes('pod-is-a-path'),
-    'a pod on a path is a warning a person may accept');
+  check(onPath.ok && onPath.fronted === true && onPath.forced === true
+    && onPath.address === '@you@fedipod.net' && !(onPath.warnings || []).includes('pod-is-a-path'),
+    'a person on a path pod is fronted: the address lives at the gateway');
 
   const grouped = await ask({ mode: 'existing', pod: 'https://shared.example/me/', handle: 'g', kind: 'group' });
   check(grouped.ok === false && grouped.refusal === 'group-needs-host-root',
@@ -6281,6 +6282,65 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
     && r2.steps.find(s => s.key === 'bootstrap').state === 'error'
     && r2.steps.find(s => s.key === 'credential').state === 'skipped',
     'and it stops at bootstrap, before the write that would 401');
+
+  // --- 12e. the address shape: path pods and the choice (preflight) ---
+  {
+    const { preflight } = await import(path.join(root, 'lib/device/setup.mjs'));
+    const base = { handle: 'me', issuer: 'https://prov.example', gatewayOrigin: 'https://fedipod.net' };
+    const hostRoot = preflight({ ...base, mode: 'existing', pod: 'https://me.prov.example/', kind: 'person', shape: 'pod' });
+    check(hostRoot.address === '@me@me.prov.example' && !hostRoot.fronted && hostRoot.resolvable,
+      'a host-root pod keeps its address on the pod by default');
+    const hostRootFront = preflight({ ...base, mode: 'existing', pod: 'https://me.prov.example/', kind: 'person', shape: 'front' });
+    check(hostRootFront.fronted && hostRootFront.forced === false && hostRootFront.address === '@me@fedipod.net',
+      'a host-root pod may choose the gateway, and it is not forced');
+    const pathPerson = preflight({ ...base, mode: 'existing', pod: 'https://prov.example/me/', kind: 'person', shape: 'pod' });
+    check(pathPerson.ok && pathPerson.fronted && pathPerson.forced === true
+      && pathPerson.address === '@me@fedipod.net' && !(pathPerson.warnings || []).includes('pod-is-a-path'),
+      'a person on a path pod is fronted, not warned: the address lives at the gateway');
+    const pathGroup = preflight({ ...base, mode: 'existing', pod: 'https://prov.example/me/', kind: 'group', shape: 'pod' });
+    check(!pathGroup.ok && pathGroup.refusal === 'group-needs-host-root',
+      'a group on a path pod is still refused');
+    const newFront = preflight({ ...base, mode: 'new', podName: 'me', kind: 'person', shape: 'front' });
+    check(newFront.fronted && newFront.address === '@me@fedipod.net', 'a new pod may be asked to live at the gateway');
+    const newFrontGroup = preflight({ ...base, mode: 'new', podName: 'me', kind: 'group', shape: 'front' });
+    check(!newFrontGroup.ok && newFrontGroup.refusal === 'group-needs-host-root', 'a new group cannot be fronted');
+    const otherGateway = preflight({ ...base, mode: 'existing', pod: 'https://prov.example/me/', kind: 'person', shape: 'pod', gatewayOrigin: 'https://gw.other' });
+    check(otherGateway.address === '@me@gw.other', 'the gateway host in the address is the one named');
+  }
+
+  // --- 12f. a fronted setup attaches before bootstrap and carries the config ---
+  {
+    const { runSetup, newRun } = await import(path.join(root, 'lib/device/setup.mjs'));
+    let bootstrapGateway = 'unset'; let attachArgs = null;
+    const HF = fs.mkdtempSync('/tmp/fedipod-front-');
+    fs.writeFileSync(path.join(HF, 'credential.json'),
+      JSON.stringify({ remotePod: 'https://prov.example/me/', webId: 'https://prov.example/me/profile/card#me', issuerOrigin: 'https://prov.example' }));
+    const agent = {
+      home: HF,
+      bootstrap: async (o) => { bootstrapGateway = o.gateway || null; },
+      connect: async () => {}, urls: { actor: 'https://fedipod.net/u/me/ap/actor' },
+      publisher: { publishProfile: async () => ({ unreachable: [] }) },
+      store: { attach() {}, load: async () => {}, getConfig: () => ({ gateway: bootstrapGateway || undefined }), setConfig() {}, flush: async () => {} },
+    };
+    const rF = newRun();
+    await runSetup({
+      home: HF, agent, run: rF,
+      answers: { mode: 'existing', pod: 'https://prov.example/me/', handle: 'me', issuer: 'https://prov.example', email: 'e@x', password: 'pw', shape: 'pod' },
+      deps: {
+        checkPodUsable: async () => ({ ok: true }),
+        attachGateway: async (a) => { attachArgs = a; return { url: 'https://fedipod.net/u/me/ap/inbox/', frontActor: 'https://fedipod.net/u/me/ap/actor', hmacSecret: 'S', mode: 'trust' }; },
+      },
+    });
+    check(rF.phase === 'done', `a fronted path-pod setup completes (${rF.error || 'ok'})`);
+    check(attachArgs && attachArgs.podHome === 'https://prov.example/me/activitypods-js/'
+      && attachArgs.actorUrl === 'https://prov.example/me/activitypods-js/ap/actor',
+      'the attach names the pod tree, not the gateway');
+    check(bootstrapGateway && bootstrapGateway.frontActor === 'https://fedipod.net/u/me/ap/actor' && bootstrapGateway.mode === 'trust',
+      'and bootstrap is given the gateway config, so connect mints the key against the gateway actor');
+    check(rF.result && rF.result.fronted && rF.result.address === '@me@fedipod.net',
+      'the run reports the gateway address');
+    fs.rmSync(HF, { recursive: true, force: true });
+  }
 
   fs.rmSync(H1, { recursive: true, force: true });
   fs.rmSync(H2, { recursive: true, force: true });

@@ -93,12 +93,18 @@ function answers() {
   const f = $('form').elements;
   const kind = f.kind.value;
   const mode = state.resumable ? 'existing' : f.mode.value;
+  const issuer = mode === 'new'
+    ? (f.issuerNew.value || (f.issuerOther ? f.issuerOther.value : '')).trim()
+    : f.issuer.value.trim();
   const a = {
     kind,
     mode,
     handle: f.handle.value.trim(),
-    issuer: (mode === 'new' ? f.issuerNew.value : f.issuer.value).trim(),
+    issuer,
     email: f.email.value.trim(),
+    // Where the address lives; a group cannot front (yet), so it stays 'pod'.
+    shape: (kind === 'group') ? 'pod' : (f.shape ? f.shape.value : 'pod'),
+    gatewayOrigin: (f.gatewayOrigin ? f.gatewayOrigin.value.trim() : '') || 'https://fedipod.net',
   };
   if (mode === 'new') a.podName = f.podName.value.trim() || a.handle;
   else a.pod = f.pod.value.trim();
@@ -128,6 +134,9 @@ function onEdit() {
   $('row-pod').hidden = mode === 'new';
   $('row-issuer-new').hidden = mode !== 'new';
   $('row-issuer-existing').hidden = mode === 'new';
+  const f = $('form').elements;
+  if ($('row-issuer-other')) $('row-issuer-other').hidden = !(mode === 'new' && f.issuerNew.value === '');
+  if ($('row-gateway')) $('row-gateway').hidden = !(f.shape && f.shape.value === 'front');
   clearTimeout(editTimer);
   editTimer = setTimeout(preview, 150);
 }
@@ -140,6 +149,26 @@ async function preview() {
   const { json } = await postJson('/setup/check', a);
   if (!json) return;
   $('preview').textContent = json.address || '…';
+  // The address-shape choice: hidden for a group (a group cannot front yet),
+  // locked to the gateway for a pod on a path of a shared host, an open choice
+  // for a pod at its own host.
+  const f = $('form').elements;
+  const shapeFs = $('fs-shape');
+  if (shapeFs) {
+    const isGroup = a.kind === 'group';
+    shapeFs.hidden = isGroup || (a.mode === 'existing' && !a.pod);
+    const forced = !!json.forced;
+    for (const r of f.shape) r.disabled = forced;
+    if (forced) { for (const r of f.shape) r.checked = r.value === 'front'; }
+    if ($('row-gateway')) $('row-gateway').hidden = !(f.shape.value === 'front');
+    const note = $('shape-note');
+    if (note) {
+      note.hidden = !forced;
+      note.textContent = forced
+        ? 'Your pod is on a path of a shared host, so its address lives at the gateway. Your posts, key and data stay on your pod.'
+        : '';
+    }
+  }
   const notes = $('preview-notes');
   for (const w of json.warnings || []) {
     const p = document.createElement('p');

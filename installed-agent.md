@@ -13,6 +13,11 @@ connect to it; and it can host a [group](groups.md).
 - A Solid pod with a host name of its own, such as
   `https://alice.solidcommunity.net/`. A pod on a path of a shared host cannot
   be a Fediverse address.
+<!-- CLAUDE 2026-09-14 — path pods now work, fronted; delete these markers when done -->
+  A pod on a path of a shared host, such as `https://server.example/alice/`,
+  works too: its address then lives at a gateway, `@handle@fedipod.net`, with
+  the posts, key and data staying on the pod.
+<!-- /CLAUDE -->
 - Followers-only and direct posts need a pod that enforces WAC access control;
   on one that does not, the composer refuses those two and says why.
 - While the agent is off, your mail waits on your pod's host. Run it as a

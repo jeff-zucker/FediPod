@@ -130,9 +130,20 @@ button:disabled { opacity: .5; cursor: default; }
         <label for="issuer-new">Solid pod provider</label>
         <select id="issuer-new" name="issuerNew" aria-describedby="issuer-new-hint">
           <option value="https://solidcommunity.net">solidcommunity.net</option>
+          <option value="https://privatedatapod.com">privatedatapod.com</option>
+          <option value="https://solid.redpencil.io">redpencil.io</option>
+          <option value="https://pods.solidcommunity.au">solidcommunity.au</option>
+          <option value="https://solidweb.me">solidweb.me</option>
+          <option value="https://teamid.live">teamid.live</option>
+          <option value="">Other…</option>
         </select>
-        <p class="hint" id="issuer-new-hint">Providers that give each pod its own subdomain, so the
-          Fediverse address works everywhere.</p>
+        <div id="row-issuer-other" hidden>
+          <label for="issuerOther">Provider address</label>
+          <input type="url" id="issuerOther" name="issuerOther" autocomplete="url" placeholder="https://pods.example.org">
+        </div>
+        <p class="hint" id="issuer-new-hint">The Community Solid Server providers from
+          solidproject.org. A provider that puts pods on paths gives your address at a
+          gateway instead.</p>
       </div>
 
       <div id="row-issuer-existing" hidden>
@@ -169,6 +180,18 @@ button:disabled { opacity: .5; cursor: default; }
     <p id="row-reenter" class="warn" hidden>Finishing a setup that already has an account credential.
       Wrong account or pod?
       <button type="button" id="form-reenter" title="   Discard the credential and enter the account and pod again">Re-enter credentials</button></p>
+
+    <fieldset id="fs-shape" hidden>
+      <legend>Where your address lives</legend>
+      <label class="choice"><input type="radio" name="shape" value="pod" checked> On your pod</label>
+      <label class="choice"><input type="radio" name="shape" value="front"> At a gateway</label>
+      <div id="row-gateway" hidden>
+        <label for="gatewayOrigin">Gateway</label>
+        <input type="url" id="gatewayOrigin" name="gatewayOrigin" value="https://fedipod.net" autocomplete="url">
+        <p class="hint">The gateway answers your address and forwards your mail to your pod.</p>
+      </div>
+      <p class="hint" id="shape-note" hidden></p>
+    </fieldset>
 
     <h2>You will be</h2>
     <p class="address" id="preview">…</p>
