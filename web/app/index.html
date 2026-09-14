@@ -139,11 +139,10 @@ a { color: var(--accent); }
         <input type="url" id="provider" name="provider" autocomplete="url" placeholder="https://solidcommunity.net">
 
         <div id="podname-field">
-          <label for="podName">Pod username/subdomain</label>
+          <label for="podName">Pod username</label>
           <input type="text" id="podName" name="podName" autocomplete="off" aria-describedby="podname-hint">
-          <p class="hint" id="podname-hint">The subdomain of your pod. On solidcommunity.net, alice
-            becomes the pod https://alice.solidcommunity.net. A provider that puts pods on paths
-            gives you https://provider/alice/ instead; that works too.</p>
+          <p class="hint" id="podname-hint">Depending on your provider's setup, your pod will be at
+            either https://USERNAME.podprovider or https://podprovider/USERNAME.</p>
         </div>
 
         <div id="pod-field" hidden>
