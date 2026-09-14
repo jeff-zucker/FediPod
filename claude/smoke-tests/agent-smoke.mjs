@@ -4942,6 +4942,38 @@ if (up) {
     && !homeAfter.json.some(s => s.uri === 'https://m.example/n/s1')
     && notifs.json.some(n => n.status?.uri === 'https://m.example/n/s1'),
     'stranger addressed to us → mention (notified, out of home)');
+  // From someone FOLLOWED: a direct message, and a post that names us, are
+  // notified — a direct message from a friend used to raise nothing and sat
+  // unseen in the private mentions (2026-09-14). A plain public post from
+  // them is timeline only, as before.
+  const BOB2 = 'https://m.example/u/bob';                 // followed, accepted (store2 contacts)
+  const notifsBefore = (await call('/api/v1/notifications')).json.length;
+  spamIntake.fetchAP = async (u) => ({
+    id: u, type: 'Note', attributedTo: BOB2, content: '<p>psst</p>',
+    published: '2026-07-28T08:10:00Z', to: [urls2.actor], cc: [],
+  });
+  await spamIntake.handle({ type: 'Create', actor: BOB2, object: { id: 'https://m.example/n/dm1', to: [urls2.actor] } });
+  const dm1 = store2.getStatuses().find(s => s.noteId === 'https://m.example/n/dm1');
+  check(dm1?.direct === true && dm1.kind === 'timeline'
+    && store2.getNotifications().some(n => n.type === 'mention' && n.noteId === 'https://m.example/n/dm1'),
+    'a direct message from someone followed is notified');
+  spamIntake.fetchAP = async (u) => ({
+    id: u, type: 'Note', attributedTo: BOB2, content: '<p>hey @you</p>',
+    published: '2026-07-28T08:11:00Z', to: ['https://www.w3.org/ns/activitystreams#Public'], cc: [urls2.actor],
+    tag: [{ type: 'Mention', href: urls2.actor, name: '@you@pod.example' }],
+  });
+  await spamIntake.handle({ type: 'Create', actor: BOB2, object: { id: 'https://m.example/n/m1', to: ['https://www.w3.org/ns/activitystreams#Public'] } });
+  check(store2.getNotifications().some(n => n.type === 'mention' && n.noteId === 'https://m.example/n/m1'),
+    'and so is a public post of theirs that names us');
+  spamIntake.fetchAP = async (u) => ({
+    id: u, type: 'Note', attributedTo: BOB2, content: '<p>weather</p>',
+    published: '2026-07-28T08:12:00Z', to: ['https://www.w3.org/ns/activitystreams#Public'], cc: [BOB2 + '/followers'],
+  });
+  await spamIntake.handle({ type: 'Create', actor: BOB2, object: { id: 'https://m.example/n/plain1', to: ['https://www.w3.org/ns/activitystreams#Public'] } });
+  check((await call('/api/v1/notifications')).json.length === notifsBefore + 2
+    && !store2.getNotifications().some(n => n.noteId === 'https://m.example/n/plain1'),
+    'while a plain public post from them is timeline only');
+
   // Not addressed to us at all → refused before any dereference.
   const reason = await spamIntake.handle({
     type: 'Create', actor: STRANGER, object: { id: 'https://m.example/n/s2', to: ['https://www.w3.org/ns/activitystreams#Public'] },

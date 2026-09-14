@@ -57665,7 +57665,9 @@ async function ingestNote(intake, objectId, actor, { via } = {}) {
     ...attachments.length ? { attachments } : {},
     ...via ? { via } : {}
   });
-  if (!followed || note.inReplyTo && String(note.inReplyTo).startsWith(intake.urls.notes)) {
+  const namesUs = mentions.some((m) => m.href === intake.urls.actor);
+  const replyToOurs = !!note.inReplyTo && String(note.inReplyTo).startsWith(intake.urls.notes);
+  if (!followed || replyToOurs || direct || namesUs) {
     intake.store.addNotification({ type: "mention", actor: author, noteId: note.id });
   }
   if (note.inReplyTo && String(note.inReplyTo).startsWith(intake.urls.notes)) {
