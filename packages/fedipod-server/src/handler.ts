@@ -13,7 +13,7 @@ import { HttpHandler, getLoggerFor } from '@solid/community-server';
 import type {
   HttpHandlerInput, ResourceStore, Initializable, Finalizable, ClusterManager,
 } from '@solid/community-server';
-import { claims, agentClaims, INBOX_PATH } from './claims';
+import { claims, agentClaims } from './claims';
 import { nodeToWhatwg, applyToNode } from './adapt';
 import { makeStoreIO } from './store-css';
 import { makeStoreSession } from './store-pod';
@@ -106,7 +106,7 @@ function deriveHandle(podBase: string): string {
 /** A door path always has both slashes, so claiming and stripping agree. */
 function normalizeUiPath(raw?: string): string {
   if (raw === '') return '';
-  const path = raw ?? '/fedipod/';
+  const path = raw ?? '/fp/';
   return `/${path.replace(/^\/+|\/+$/gu, '')}/`;
 }
 
@@ -519,7 +519,9 @@ export class FediPodServerHandler extends HttpHandler implements Initializable, 
         return;
       }
       const pathname = new URL(request.url ?? '/', `https://${host}`).pathname;
-      if (pathname === INBOX_PATH && String(request.method).toUpperCase() === 'POST') {
+      // This identity's own inbox path — /<its root>/ap/inbox/, from its actor.
+      const inboxPath = new URL(identity.actorUrl).pathname.replace(/ap\/actor$/u, 'ap/inbox/');
+      if (pathname === inboxPath && String(request.method).toUpperCase() === 'POST') {
         await this.deliverAtDoor(identity, request, response);
         return;
       }

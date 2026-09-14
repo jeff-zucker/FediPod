@@ -10759,7 +10759,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
     'and holds no client credentials, because there is nobody to authenticate to');
   check(agent.store.getConfig()?.handle === 'alice',
     'a pod with no identity on it is provisioned on first start');
-  check([ ...disk.keys() ].some(k => k.startsWith(POD + 'activitypods-js/ap-state/')),
+  check([ ...disk.keys() ].some(k => k.startsWith(POD + 'fedipod/ap-state/')),
     'and its state is written to the pod, through the injected session');
   check(agent.intake?.push === false && agent.intake?.wsState === 'in-process',
     'the notification socket is not used in-process');
@@ -10767,7 +10767,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
   // The drain wakes on an inbox write, and on nothing else.
   let drains = 0;
   agent.intake.drain = async () => { drains++; };
-  const inbox = POD + 'activitypods-js/ap/inbox/';
+  const inbox = POD + 'fedipod/ap/inbox/';
   const emit = (target, activity) => listeners.forEach(fn => fn({ path: target },
     { value: `https://www.w3.org/ns/activitystreams#${activity}` }));
   emit(inbox + 'a.json', 'Create');
@@ -10775,7 +10775,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
   await new Promise(r => setTimeout(r, 400));
   check(drains === 1, 'two deliveries at once cost one sweep, not two');
   emit(inbox + 'a.json', 'Delete');
-  emit(POD + 'activitypods-js/ap/notes/x.json', 'Create');
+  emit(POD + 'fedipod/ap/notes/x.json', 'Create');
   await new Promise(r => setTimeout(r, 400));
   check(drains === 1, "the drain's own deletes, and writes elsewhere, do not wake it");
 
@@ -10799,19 +10799,19 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
     'the instance document answers a stranger — that is what makes the pod an instance');
   check((await ask('GET', '/status', secret)).status === 404,
     "the operator's routes are not at the origin root");
-  check((await ask('GET', '/fedipod/status')).status === 401,
+  check((await ask('GET', '/fp/status')).status === 401,
     'and behind the door they need the secret');
-  const statusRes = await ask('GET', '/fedipod/status', secret);
+  const statusRes = await ask('GET', '/fp/status', secret);
   check(statusRes.status === 200 && JSON.parse(statusRes.body).handle === 'alice',
     'with it, the door answers for this identity');
-  check((await ask('POST', '/fedipod/new-actor', secret)).status === 404,
+  check((await ask('POST', '/fp/new-actor', secret)).status === 404,
     'routes that spawn local agents are gone, not merely refused');
   check((await ask('GET', '/api/v1/accounts/verify_credentials')).status === 401,
     'and the client API still turns away a caller with no token');
 
   await embedded.stop();
   check(agent.intake.stopped === true, 'stopping the server stops the identity');
-  check(JSON.parse(disk.get(POD + 'activitypods-js/ap-state/lease.json').body).expiresAt <= Date.now(),
+  check(JSON.parse(disk.get(POD + 'fedipod/ap-state/lease.json').body).expiresAt <= Date.now(),
     'and hands back the lease, so the next agent need not wait out its term');
 
   // The door takes a resolver, so a rotated secret bites on the next request.

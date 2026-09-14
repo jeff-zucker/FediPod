@@ -207,10 +207,10 @@ check(await remote.delete(podBase + 'ap/inbox/one.json') === true, 'RemotePod de
 const refuses = async (url) => remote.delete(url).then(() => false).catch(() => true);
 check(await refuses(podBase + 'profile/card'), 'the deny-list still refuses to delete the WebID document');
 check(await refuses(podBase + 'ap/inbox/.acl'), 'and an access-control document');
-check(await refuses(podBase + 'activitypods-js/ap-state/lease.json'), 'and the lease');
+check(await refuses(podBase + 'fedipod/ap-state/lease.json'), 'and the lease');
 
 // The lease, unmodified, coordinating through the store.
-const leaseUrl = podBase + 'activitypods-js/ap-state/lease.json';
+const leaseUrl = podBase + 'fedipod/ap-state/lease.json';
 const first = new Lease({ url: leaseUrl, fetchImpl: (u, i) => remote.fetch(u, i), log: () => {} });
 check(await first.acquire() === true, 'an agent acquires the lease through the store');
 const second = new Lease({ url: leaseUrl, fetchImpl: (u, i) => remote.fetch(u, i), log: () => {} });
@@ -254,7 +254,7 @@ check(optRes.s === 503, 'the surface answers 503 while the identity is still com
 // the way to it, so what this harness can show is the other half: an opt-in
 // is NOT refused because the pod would not take it. The pod-side placement is
 // proven against a real CSS in test/e2e/live-agent.mjs.
-const secretUrl = `${OPT_POD}activitypods-js/ap-state/door-secret.json`;
+const secretUrl = `${OPT_POD}fedipod/ap-state/door-secret.json`;
 const secretOnPod = await realStore.getRepresentation({ path: secretUrl }, {})
   .then(async (r) => JSON.parse(await readableToString(r.data)))
   .catch(() => null);
@@ -349,7 +349,7 @@ fs.rmSync(optDataDir, { recursive: true, force: true });
   const RDFT = $rdf.Namespace('http://www.w3.org/1999/02/22-rdf-syntax-ns#');
   const AS = $rdf.Namespace('https://www.w3.org/ns/activitystreams#');
   const me = $rdf.sym(`${PROFILE}#me`);
-  const actor = $rdf.sym('https://p.example/activitypods-js/ap/actor');
+  const actor = $rdf.sym('https://p.example/fedipod/ap/actor');
   const pod = Object.create(RemotePod.prototype);
   const metadata = { contentType: 'text/n3', identifier: DataFactory.namedNode(PROFILE) };
 

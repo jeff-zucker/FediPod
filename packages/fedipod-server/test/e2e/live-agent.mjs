@@ -175,7 +175,7 @@ try {
     'each opt-in reply carries a door secret of its own');
 
   // ---- the identity provisions itself -------------------------------------
-  const actorUrl = `${POD}activitypods-js/ap/actor`;
+  const actorUrl = `${POD}fedipod/ap/actor`;
   const gotActor = await until('the agent publishes its actor document', async () =>
     (await fetch(actorUrl, { headers: { accept: 'application/activity+json' }})).status === 200);
   if (gotActor) {
@@ -204,9 +204,9 @@ try {
       'the actor names an outbox a client can actually write to');
     const readOutbox = await fetch(actorNow.outbox, { redirect: 'manual' });
     check(readOutbox.status === 303
-      && readOutbox.headers.get('location') === `${POD}activitypods-js/ap/outbox`,
+      && readOutbox.headers.get('location') === `${POD}fedipod/ap/outbox`,
     "and reading it goes on to the pod's own collection");
-    check(actorNow.inbox === `${POD}activitypods-js/ap/inbox/`,
+    check(actorNow.inbox === `${POD}fedipod/ap/inbox/`,
       'while the inbox still names the pod, which is what buffers deliveries');
   }
 
@@ -219,15 +219,15 @@ try {
     return href === actorUrl;
   });
   check(fronted, 'the front resolves @alice@localhost to the identity on its pod');
-  const stateRes = await fetch(`${POD}activitypods-js/ap-state/`, { headers: { accept: 'text/turtle' }});
+  const stateRes = await fetch(`${POD}fedipod/ap-state/`, { headers: { accept: 'text/turtle' }});
   check(stateRes.status === 401 || stateRes.status === 403,
     'the agent state tree is not readable by a stranger');
 
   const gotSecond = await until('a second opted-in pod gets its own identity', async () =>
-    (await fetch(`${POD2}activitypods-js/ap/actor`,
+    (await fetch(`${POD2}fedipod/ap/actor`,
       { headers: { accept: 'application/activity+json' }})).status === 200);
   if (gotSecond) {
-    const carol = await (await fetch(`${POD2}activitypods-js/ap/actor`,
+    const carol = await (await fetch(`${POD2}fedipod/ap/actor`,
       { headers: { accept: 'application/activity+json' }})).json();
     check(carol.preferredUsername === 'carol', 'the second identity is @carol, on its own origin');
   }
@@ -259,12 +259,12 @@ try {
   check(noPassword.status === 403, 'sign-in is refused until the identity has a password');
 
   // The operator sets one through their own door, which the secret guards.
-  const noGate = await fetch(`${POD}fedipod/config`, {
+  const noGate = await fetch(`${POD}fp/config`, {
     method: 'POST', headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ password: PASSWORD }),
   });
   check(noGate.status === 401 || noGate.status === 403, "the operator's door is shut without the secret");
-  const setPassword = await fetch(`${POD}fedipod/config`, {
+  const setPassword = await fetch(`${POD}fp/config`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'x-dk-token': doorSecret('alice') },
     body: JSON.stringify({ password: PASSWORD }),
@@ -319,7 +319,7 @@ try {
 
   // ---- somebody follows, and the identity answers --------------------------
   const remoteActor = `${REMOTE}u/bob`;
-  const put = await fetch(`${POD}activitypods-js/ap/inbox/e2e-follow.json`, {
+  const put = await fetch(`${POD}fedipod/ap/inbox/e2e-follow.json`, {
     method: 'PUT',
     headers: { 'content-type': 'application/activity+json' },
     body: JSON.stringify({
@@ -372,7 +372,7 @@ try {
   // The actor names its inbox on the pod, and the server that stores it is
   // the one the POST reaches: the signature is checked there and a receipt
   // is written beside the activity, so the identity acts on a verified sender.
-  const podInbox = `${POD}activitypods-js/ap/inbox/`;
+  const podInbox = `${POD}fedipod/ap/inbox/`;
   const follow = (who, n) => JSON.stringify({
     '@context': 'https://www.w3.org/ns/activitystreams',
     type: 'Follow', id: `${REMOTE}activities/${n}`, actor: `${REMOTE}u/${who}`, object: actorUrl,
@@ -445,23 +445,23 @@ try {
     'and nothing is delivered here — the actor names the pod inbox for that');
 
   // ---- the operator's door -------------------------------------------------
-  check((await fetch(`${POD}fedipod/status`)).status === 401, "the operator's own routes need the secret");
-  check((await fetch(`${POD}fedipod/status`, { headers: { 'x-dk-token': doorSecret('carol') }})).status === 401,
+  check((await fetch(`${POD}fp/status`)).status === 401, "the operator's own routes need the secret");
+  check((await fetch(`${POD}fp/status`, { headers: { 'x-dk-token': doorSecret('carol') }})).status === 401,
     "one identity's secret does not open another identity's door");
-  const status = await fetch(`${POD}fedipod/status`, { headers: { 'x-dk-token': doorSecret('alice') }});
+  const status = await fetch(`${POD}fp/status`, { headers: { 'x-dk-token': doorSecret('alice') }});
   check(status.status === 200 && (await status.json()).handle === 'alice', 'and answer with it');
-  check((await fetch(`${POD}fedipod/shutdown`, { method: 'POST', headers: { 'x-dk-token': doorSecret('alice') }})).status === 404,
+  check((await fetch(`${POD}fp/shutdown`, { method: 'POST', headers: { 'x-dk-token': doorSecret('alice') }})).status === 404,
     'routes that manage a local process are not there to be found');
-  const page = await fetch(`${POD}fedipod/`, { headers: { 'x-dk-token': doorSecret('alice') }});
+  const page = await fetch(`${POD}fp/`, { headers: { 'x-dk-token': doorSecret('alice') }});
   check(page.status === 200 && (await page.text()).toLowerCase().includes('<!doctype html'),
     'the web client is served behind the door');
-  const record = await fetch(`${POD}fedipod/admin/`, { headers: { 'x-dk-token': doorSecret('alice') }});
+  const record = await fetch(`${POD}fp/admin/`, { headers: { 'x-dk-token': doorSecret('alice') }});
   check(record.status === 200, "the operator's own pages are served behind it too");
   // The pages ask for their assets and their API relative to where they are
   // served, so the same build works at an origin root and behind a door.
-  check((await fetch(`${POD}fedipod/admin/bar.css`, { headers: { 'x-dk-token': doorSecret('alice') }})).status === 200,
+  check((await fetch(`${POD}fp/admin/bar.css`, { headers: { 'x-dk-token': doorSecret('alice') }})).status === 200,
     'and their stylesheets resolve from there');
-  check((await fetch(`${POD}fedipod/admin/client/`, { headers: { 'x-dk-token': doorSecret('alice') }})).status === 200,
+  check((await fetch(`${POD}fp/admin/client/`, { headers: { 'x-dk-token': doorSecret('alice') }})).status === 200,
     'as does the client wrapper');
 
   // ---- CORS ----------------------------------------------------------------
@@ -491,16 +491,16 @@ try {
     'proving pod control buys an identity: 201, with the door secret, once');
 
   const danaUp = await until("dana's identity comes up", async () =>
-    (await fetch(`${DANA}activitypods-js/ap/actor`, { headers: { accept: 'application/activity+json' }})).status === 200);
+    (await fetch(`${DANA}fedipod/ap/actor`, { headers: { accept: 'application/activity+json' }})).status === 200);
   if (danaUp) {
-    const dana = await (await fetch(`${DANA}activitypods-js/ap/actor`,
+    const dana = await (await fetch(`${DANA}fedipod/ap/actor`,
       { headers: { accept: 'application/activity+json' }})).json();
     check(dana.preferredUsername === 'dana', 'provisioned as @dana, from the opt-in alone');
   }
-  check((await fetch(`${DANA}fedipod/status`)).status === 401, "dana's door needs a secret");
-  const danaStatus = await fetch(`${DANA}fedipod/status`, { headers: { 'x-dk-token': optInBody.doorSecret }});
+  check((await fetch(`${DANA}fp/status`)).status === 401, "dana's door needs a secret");
+  const danaStatus = await fetch(`${DANA}fp/status`, { headers: { 'x-dk-token': optInBody.doorSecret }});
   check(danaStatus.status === 200, 'the returned secret opens it');
-  check((await fetch(`${DANA}fedipod/status`, { headers: { 'x-dk-token': doorSecret('alice') }})).status === 401,
+  check((await fetch(`${DANA}fp/status`, { headers: { 'x-dk-token': doorSecret('alice') }})).status === 401,
     "alice's secret does not open dana's door");
 
   const reOptIn = await danaSession.fetch(`${BASE}api/agent`, {
@@ -510,9 +510,9 @@ try {
   const rotated = await reOptIn.json();
   check(reOptIn.status === 201 && rotated.status === 'rotated' && rotated.doorSecret !== optInBody.doorSecret,
     'opting in again rotates the secret — that is lost-secret recovery');
-  check((await fetch(`${DANA}fedipod/status`, { headers: { 'x-dk-token': optInBody.doorSecret }})).status === 401,
+  check((await fetch(`${DANA}fp/status`, { headers: { 'x-dk-token': optInBody.doorSecret }})).status === 401,
     'the old secret stops working at once');
-  check((await fetch(`${DANA}fedipod/status`, { headers: { 'x-dk-token': rotated.doorSecret }})).status === 200,
+  check((await fetch(`${DANA}fp/status`, { headers: { 'x-dk-token': rotated.doorSecret }})).status === 200,
     'and the new one works, with no restart');
 
   const optOut = await danaSession.fetch(`${BASE}api/agent`, {
@@ -524,7 +524,7 @@ try {
     const st = (await fetch(`${DANA}api/v1/instance`)).status;
     return st === 401 || st === 404;
   }, 15_000), 'the client API is gone from that origin');
-  const pileUp = await fetch(`${DANA}activitypods-js/ap/inbox/after-optout.json`, {
+  const pileUp = await fetch(`${DANA}fedipod/ap/inbox/after-optout.json`, {
     method: 'PUT', headers: { 'content-type': 'application/activity+json' },
     body: JSON.stringify({ type: 'Like', id: 'urn:e2e:late' }),
   });
