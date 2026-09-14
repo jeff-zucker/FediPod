@@ -10607,10 +10607,12 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
   check((await agentPost({ action: 'opt-in', podBase: 'https://tamara.host/' }, ctxAgent)).status === 403,
     "a token for one pod cannot opt in another — even one sharing the origin's shape");
   const pathCtx = { ...ctxAgent, verifier: async () => ({ webid: 'https://shared.host/pods/mei/profile/card#me' }) };
-  check((await agentPost({ action: 'opt-in', podBase: 'https://shared.host/pods/mei/' }, pathCtx)).status === 403,
-    'a path pod cannot opt in — an identity needs an origin of its own');
+  check((await agentPost({ action: 'opt-in', podBase: 'https://shared.host/pods/mei/' }, pathCtx)).status === 201,
+    'a path pod CAN opt in — the Server hosts an identity on a path of its host (mode d)');
   check((await agentPost({ action: 'opt-in', podBase: 'https://shared.host/pods/' }, pathCtx)).status === 403,
-    'nor can its owner claim an ancestor of a sibling pod on the shared origin');
+    'but its owner cannot claim an ancestor of a sibling pod on the shared origin');
+  check((await agentPost({ action: 'opt-in', podBase: ORIGIN + '/' }, ctxAgent)).status === 403,
+    "and the gateway's own origin root is not a pod — the front lives there, not an identity");
   const okIn = await agentPost({ action: 'opt-in', podBase: 'https://mei.host/' }, ctxAgent);
   const okInBody = await okIn.clone?.().json?.() ?? JSON.parse(okIn.body);
   check(okIn.status === 201 && okInBody.doorSecret === 's3' && /x-dk-token: s3/.test(okInBody.command || ''),
@@ -10619,8 +10621,14 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
     'and can opt out the same way');
   check((await agentPost({ action: 'sideways', podBase: 'https://mei.host/' }, ctxAgent)).status === 400,
     'an unknown action is refused');
-  check(calls.length === 2 && calls[0][1].webId === 'https://mei.host/profile/card#me',
-    'the pod server was handed the proven WebID, not the claimed one');
+  // Two opt-ins were proven and accepted (the path pod and mei.host) plus one
+  // opt-out; each opt-in handed the server the PROVEN WebID, not the claimed one.
+  check(calls.length === 3
+    && calls.find((c) => c[0] === 'in' && c[1].podBase === 'https://shared.host/pods/mei/')?.[1].webId
+      === 'https://shared.host/pods/mei/profile/card#me'
+    && calls.find((c) => c[0] === 'in' && c[1].podBase === 'https://mei.host/')?.[1].webId
+      === 'https://mei.host/profile/card#me',
+  'the pod server was handed the proven WebID, not the claimed one — for the path pod too');
 }
 
 // --- 30. fronted identity: apUrls publicBase split + agent publishes under it ---

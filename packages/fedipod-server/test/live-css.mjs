@@ -273,14 +273,17 @@ check(again.httpStatus === 201 && again.status === 'rotated' && again.doorSecret
   'a second opt-in rotates the secret — proving pod control again is the recovery');
 
 // Sign-up is the only account path, so its refusals are the wire's refusals.
+// The gateway's own ORIGIN ROOT is not a pod — but a pod on a PATH of the host
+// is (the Server suffix mode, proven live in live-suffix.mjs), so what is
+// refused here is the apex itself, not the path.
 const onFront = await optHandler.optInPod({
-  podBase: 'https://fedipod.net/alice/', webId: 'https://fedipod.net/alice/profile/card#me' });
+  podBase: 'https://fedipod.net/', webId: 'https://fedipod.net/profile/card#me' });
 check(onFront.httpStatus === 409 && /front/.test(String(onFront.error)),
-  "a pod on the front's own host is refused");
+  "the gateway's own origin root is refused — it is the front, not a pod");
 const sameOrigin = await optHandler.optInPod({
   podBase: OPT_POD + 'two/', webId: OPT_POD + 'two/profile/card#me' });
-check(sameOrigin.httpStatus === 409 && /origin of its own/.test(String(sameOrigin.error)),
-  'a second identity on an origin already carrying one is refused');
+check(sameOrigin.httpStatus === 409 && /nests|subtree/.test(String(sameOrigin.error)),
+  'a pod nesting under an identity already on the origin is refused');
 const sameName = await optHandler.optInPod({
   podBase: 'http://dana.example/', webId: 'http://dana.example/profile/card#me' });
 check(sameName.httpStatus === 409 && /cannot share/.test(String(sameName.error)),

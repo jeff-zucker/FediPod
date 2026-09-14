@@ -10,7 +10,7 @@ import assert from 'node:assert/strict';
 import { Readable } from 'node:stream';
 import { claims, agentClaims } from '../dist/claims.js';
 import { nodeToWhatwg, applyToNode } from '../dist/adapt.js';
-import { makeDirectory, makeStorePodPut, makeAgentRegistry, frontRow } from '../dist/directory.js';
+import { makeDirectory, makeStorePodPut, makeAgentRegistry, agentKey, frontRow } from '../dist/directory.js';
 
 test('claims only the front host, only its routes', () => {
   const F = 'fedipod.net';
@@ -35,9 +35,13 @@ test('claims every route the front core serves, pages and the files they load', 
   }
 });
 
+// The path here is already relative to the identity's mount: the handler
+// matches host and mount to one identity and strips the mount before asking
+// this, so a host-root pod's `/ap/actor` and a suffix pod's `/aisha/ap/actor`
+// both arrive as `/ap/actor`. See the handler's resolveClaim/stripMount and the
+// suffix e2e for the host+mount resolution itself.
 test('an identity claims its protocol routes and its door, and nothing else', () => {
-  const hosts = new Set(['alice.example.org']);
-  const owns = (pathname, host = 'alice.example.org') => agentClaims({ host, pathname }, hosts);
+  const owns = (pathname, method) => agentClaims({ pathname, method });
   assert.equal(owns('/api/v1/instance'), true);
   assert.equal(owns('/oauth/authorize'), true);
   assert.equal(owns('/ap/actor'), true);
@@ -51,29 +55,27 @@ test('an identity claims its protocol routes and its door, and nothing else', ()
   assert.equal(owns('/profile/card'), false, 'a pod resource is the pod\'s');
   assert.equal(owns('/ap/inbox/x.json'), false, 'inbox items are pod resources, read and written as such');
   const inbox = '/fedipod/ap/inbox/';
-  assert.equal(agentClaims({ host: 'alice.example.org', pathname: inbox, method: 'POST' }, hosts), true,
+  assert.equal(agentClaims({ pathname: inbox, method: 'POST' }), true,
     'a delivery POSTed to the inbox is verified at the door');
-  assert.equal(agentClaims({ host: 'alice.example.org', pathname: inbox, method: 'GET' }, hosts), false,
+  assert.equal(agentClaims({ pathname: inbox, method: 'GET' }), false,
     'reading the container is the pod\'s');
-  assert.equal(agentClaims({ host: 'alice.example.org', pathname: inbox, method: 'PUT' }, hosts), false,
+  assert.equal(agentClaims({ pathname: inbox, method: 'PUT' }), false,
     'and so is a write by name — an outside door forwards that way');
-  assert.equal(agentClaims({ host: 'alice.example.org', pathname: inbox + 'item.json', method: 'POST' }, hosts), false,
+  assert.equal(agentClaims({ pathname: inbox + 'item.json', method: 'POST' }), false,
     'only the container itself takes deliveries');
-  assert.equal(owns('/api/v1/instance', 'carol.example.org'), false, 'another host is not this identity');
-  assert.equal(agentClaims({ host: 'alice.example.org', pathname: '/fp/' }, hosts, ''), false,
+  assert.equal(agentClaims({ pathname: '/fp/' }, ''), false,
     'with no door configured there are no pages to claim');
-  assert.equal(agentClaims({ host: 'alice.example.org', pathname: '/api/' }, new Set()), false,
-    'and with no identities nothing is claimed at all');
 });
 
-test('a claim set is live — a host added at runtime claims from that instant', () => {
-  const hosts = new Set();
-  const ask = () => agentClaims({ host: 'dana.example.org', pathname: '/api/v1/instance' }, hosts);
-  assert.equal(ask(), false);
-  hosts.add('dana.example.org');
-  assert.equal(ask(), true, 'opt-in claims with no new handler');
-  hosts.delete('dana.example.org');
-  assert.equal(ask(), false, 'opt-out un-claims the same way');
+test('the registry key is host+path, so several pods can share a host', () => {
+  // A host-root pod's key is just its host — the shape rows had before suffix
+  // pods, so old rows still resolve. A suffix pod folds its path in.
+  assert.equal(agentKey('mei.example.org', 'https://mei.example.org/'), 'mei.example.org');
+  assert.equal(agentKey('server.example', 'https://server.example/aisha/'), 'server.example/aisha');
+  assert.notEqual(
+    agentKey('server.example', 'https://server.example/aisha/'),
+    agentKey('server.example', 'https://server.example/tamara/'),
+    'two suffix pods on one host get distinct keys');
 });
 
 test('the opt-in registry keeps rows and an index, and forgets cleanly', async () => {
@@ -84,14 +86,20 @@ test('the opt-in registry keeps rows and an index, and forgets cleanly', async (
     remove: async (u) => { disk.delete(u); },
   };
   const reg = makeAgentRegistry(io, 'http://s/agents/');
-  assert.deepEqual(await reg.listHosts(), [], 'empty registry lists nothing');
+  assert.deepEqual(await reg.listKeys(), [], 'empty registry lists nothing');
   await reg.add({ podBase: 'http://mei.s/', handle: 'mei', host: 'mei.s', webId: 'http://mei.s/profile/card#me', optedInAt: 't' });
-  assert.deepEqual(await reg.listHosts(), [ 'mei.s' ]);
+  assert.deepEqual(await reg.listKeys(), [ 'mei.s' ], 'a host-root pod keys by its host');
   assert.equal((await reg.get('mei.s'))?.handle, 'mei');
   await reg.add({ podBase: 'http://mei.s/', handle: 'mei', host: 'mei.s', webId: 'http://mei.s/profile/card#me', optedInAt: 't2' });
-  assert.deepEqual(await reg.listHosts(), [ 'mei.s' ], 're-adding does not duplicate the index');
+  assert.deepEqual(await reg.listKeys(), [ 'mei.s' ], 're-adding does not duplicate the index');
+  // A suffix pod on the same host keys by host+path, so it sits beside, not over.
+  await reg.add({ podBase: 'http://mei.s/aisha/', handle: 'aisha', host: 'mei.s', webId: 'http://mei.s/aisha/profile/card#me', optedInAt: 't3' });
+  assert.deepEqual(await reg.listKeys(), [ 'mei.s', 'mei.s/aisha' ], 'a suffix pod is a distinct key on the shared host');
+  assert.equal((await reg.get('mei.s/aisha'))?.handle, 'aisha');
+  assert.equal((await reg.get('mei.s'))?.handle, 'mei', 'and does not disturb the host-root row');
+  await reg.remove('mei.s/aisha');
   await reg.remove('mei.s');
-  assert.deepEqual(await reg.listHosts(), []);
+  assert.deepEqual(await reg.listKeys(), []);
   assert.equal(await reg.get('mei.s'), null);
   await reg.remove('mei.s');   // absence is not an error
 });

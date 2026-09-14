@@ -75,34 +75,48 @@ export interface AgentRegistryRecord {
   podBase: string; handle: string; host: string; webId: string; optedInAt: string;
 }
 
-export interface AgentRegistry {
-  listHosts(): Promise<string[]>;
-  get(host: string): Promise<AgentRegistryRecord | null>;
-  add(record: AgentRegistryRecord): Promise<void>;
-  remove(host: string): Promise<void>;
+/**
+ * The registry key for an opted-in pod: its host plus its path. Several pods
+ * can share a host (suffix pods on one origin), so the host alone is not
+ * unique. A host-root or subdomain pod has an empty path, so its key is just
+ * its host — exactly the shape rows were keyed by before suffix pods existed,
+ * which is why old rows still resolve with no migration.
+ */
+export function agentKey(host: string, podBase: string): string {
+  return host + new URL(podBase).pathname.replace(/\/+$/u, '');
 }
 
-// The registry of runtime-opted-in pods, keyed by host (the claim key). The
-// IO layer cannot enumerate a container, so index.json carries the host list;
+export interface AgentRegistry {
+  listKeys(): Promise<string[]>;
+  get(key: string): Promise<AgentRegistryRecord | null>;
+  add(record: AgentRegistryRecord): Promise<void>;
+  remove(key: string): Promise<void>;
+}
+
+// The registry of runtime-opted-in pods, keyed by agentKey (host+path). The
+// IO layer cannot enumerate a container, so index.json carries the key list;
 // the row is written FIRST, so a crash between the two writes still leaves a
-// row the next boot claims once the index catches up on the next change.
+// row the next boot claims once the index catches up on the next change. The
+// index field stays named `hosts`: for a host-root pod a key IS its host, so
+// documents an older server wrote are read back unchanged.
 export function makeAgentRegistry(io: IO, containerUrl: string): AgentRegistry {
   const table = jsonTable<AgentRegistryRecord>(io, containerUrl);
   const index = jsonTable<{ hosts: string[] }>(io, containerUrl);
   const INDEX = 'index';
-  const hosts = async (): Promise<string[]> => (await index.get(INDEX))?.hosts ?? [];
+  const keys = async (): Promise<string[]> => (await index.get(INDEX))?.hosts ?? [];
   return {
-    listHosts: hosts,
-    get: (host) => table.get(host),
+    listKeys: keys,
+    get: (key) => table.get(key),
     async add(record: AgentRegistryRecord): Promise<void> {
-      await table.put(record.host, record);
-      const list = await hosts();
-      if (!list.includes(record.host)) await index.put(INDEX, { hosts: [ ...list, record.host ] });
+      const key = agentKey(record.host, record.podBase);
+      await table.put(key, record);
+      const list = await keys();
+      if (!list.includes(key)) await index.put(INDEX, { hosts: [ ...list, key ] });
     },
-    async remove(host: string): Promise<void> {
-      const list = await hosts();
-      await index.put(INDEX, { hosts: list.filter((h) => h !== host) });
-      await table.remove(host);
+    async remove(key: string): Promise<void> {
+      const list = await keys();
+      await index.put(INDEX, { hosts: list.filter((h) => h !== key) });
+      await table.remove(key);
     },
   };
 }

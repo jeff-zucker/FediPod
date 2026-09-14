@@ -17,7 +17,7 @@ import { claims, agentClaims } from './claims';
 import { nodeToWhatwg, applyToNode } from './adapt';
 import { makeStoreIO } from './store-css';
 import { makeStoreSession } from './store-pod';
-import { makeDirectory, makeStorePodPut, makeAgentRegistry, frontRow } from './directory';
+import { makeDirectory, makeStorePodPut, makeAgentRegistry, agentKey, frontRow } from './directory';
 import type { IO, Directory, AgentRegistry } from './directory';
 
 export interface FediPodServerArgs {
@@ -57,6 +57,30 @@ export interface FediPodServerArgs {
   agentAutoFront?: boolean;
   /** An internal container URL where the runtime opt-in rows live. */
   agentRegistryContainer?: string;
+}
+
+/**
+ * A pod this server claims the routes of, whether or not its identity has
+ * finished starting. `mount` is the pod's own path (`''` for a host-root or
+ * subdomain pod, `/aisha` for a suffix pod on `https://host/aisha/`); a request
+ * belongs to this claim when its host matches and its path is at or under the
+ * mount.
+ */
+interface AgentClaim {
+  host: string;
+  mount: string;
+  podBase: string;
+  handle: string;
+}
+
+/** The pod's path as a mount prefix: `''` for a host root, else `/aisha`. */
+function mountOf(podBase: string): string {
+  return new URL(podBase).pathname.replace(/\/+$/u, '');
+}
+
+/** Whether `a` is `b` or an ancestor path of `b` (both mount-shaped, no trailing slash). */
+function pathContains(a: string, b: string): boolean {
+  return a === b || b.startsWith(a + '/') || a === '';
 }
 
 /** One running identity, and the call that stops it. */
@@ -116,12 +140,17 @@ export class FediPodServerHandler extends HttpHandler implements Initializable, 
   public readonly dir: Directory;
   private readonly podPut: (url: string, body: string, contentType: string) => Promise<boolean>;
   private readonly logger = getLoggerFor(this);
-  private readonly agentHosts = new Set<string>();
+  // Every pod whose routes this server claims, keyed by pod base. A claim
+  // records the host it answers on and the mount — the pod's own path, `''` for
+  // a host-root or subdomain pod, `/aisha` for a suffix pod on `server/aisha/`.
+  // A suffix pod shares its host (often the front's own) with others, so a
+  // request is matched to an identity by host AND mount, never host alone.
+  private readonly claimed = new Map<string, AgentClaim>();    // pod base → claim
   private readonly agentHandles = new Map<string, string>();   // handle → pod base
   private readonly frontHost: string;
   private readonly uiPath: string;
   private readonly identities = new Map<string, EmbeddedIdentity>();
-  private readonly surfaces = new Map<string, EmbeddedIdentity>();
+  private readonly surfaces = new Map<string, EmbeddedIdentity>();   // pod base → running identity
   private readonly registry: AgentRegistry | null;
   private readonly doorSecrets = new Map<string, string>();    // pod base → its door secret
   private readonly starting = new Set<string>();
@@ -156,31 +185,77 @@ export class FediPodServerHandler extends HttpHandler implements Initializable, 
   }
 
   /**
-   * Whether this pod may become an identity here: a real URL, an origin of its
-   * own, not the front's host, and a handle no other identity already uses —
-   * two pods must never share <agentDataDir>/<handle>/.
+   * Whether this pod may become an identity here, and the claim it earns: a
+   * real URL, a place no other identity already sits, and a handle no other
+   * identity uses — two pods must never share <agentDataDir>/<handle>/.
+   *
+   * A HOST-ROOT or subdomain pod needs an origin of its own, and it may not be
+   * the front's host: the whole surface answers at the origin root, so two of
+   * them, or one sharing the front, would collide. A SUFFIX pod lives on a path
+   * (`server/aisha/`), so it may share its host — with the front and with other
+   * suffix pods — provided no claim already contains or nests under its path.
    */
-  private validateAgentHost(podBase: string): string {
+  private validateAgentPod(podBase: string): AgentClaim {
     let host: string;
+    let mount: string;
     try {
-      host = new URL(podBase).host.toLowerCase();
+      const u = new URL(podBase);
+      host = u.host.toLowerCase();
+      mount = mountOf(podBase);
     } catch {
       throw new Error(`not a pod URL: ${podBase}`);
     }
-    // The Mastodon client API is rooted at an origin, so two identities
-    // cannot share one — and an identity cannot share the front's origin.
-    if (this.agentHosts.has(host)) {
-      throw new Error(`the host ${host} already carries an identity — an identity needs an origin of its own`);
-    }
-    if (host.split(':')[0] === String(this.frontHost).toLowerCase()) {
-      throw new Error(`${podBase} is on the front's own host — give the identity its own origin`);
+    if (mount === '') {
+      // A pod at the root of its host: it owns the whole origin, so it cannot
+      // share it with the front or with any other claim.
+      if (host.split(':')[0] === String(this.frontHost).toLowerCase()) {
+        throw new Error(`${podBase} is on the front's own host — give the identity its own origin, or host it on a path`);
+      }
+      for (const c of this.claimed.values()) {
+        if (c.host === host) {
+          throw new Error(`the host ${host} already carries an identity — a host-root identity needs an origin of its own`);
+        }
+      }
+    } else {
+      // A pod on a path: it owns only its subtree. Refuse anything that already
+      // contains it or that it would contain, so no identity can answer under
+      // another's path (and none straddles the front's own routes underneath).
+      for (const c of this.claimed.values()) {
+        if (c.host !== host) continue;
+        if (pathContains(c.mount, mount) || pathContains(mount, c.mount)) {
+          throw new Error(`${podBase} nests with the identity already at ${c.podBase} — a path pod owns only its own subtree`);
+        }
+      }
     }
     const handle = deriveHandle(podBase);
     const holder = this.agentHandles.get(handle);
     if (holder && holder !== podBase) {
       throw new Error(`the name ${handle} already belongs to ${holder} — two identities cannot share it`);
     }
-    return host;
+    return { host, mount, podBase, handle };
+  }
+
+  /**
+   * The claim a request belongs to, or null. A request matches when its host is
+   * the claim's host and its path is at or under the claim's mount; the deepest
+   * mount wins, so a suffix pod's own routes are never swallowed by a shallower
+   * claim on the same host.
+   */
+  private resolveClaim(host: string, pathname: string): AgentClaim | null {
+    let best: AgentClaim | null = null;
+    for (const c of this.claimed.values()) {
+      if (c.host !== host) continue;
+      if (c.mount === '' || pathname === c.mount || pathname.startsWith(c.mount + '/')) {
+        if (!best || c.mount.length > best.mount.length) best = c;
+      }
+    }
+    return best;
+  }
+
+  /** A request path relative to a mount: `/aisha/ap/actor` under `/aisha` → `/ap/actor`. */
+  private stripMount(pathname: string, mount: string): string {
+    if (!mount) return pathname;
+    return pathname.slice(mount.length) || '/';
   }
 
   /**
@@ -219,18 +294,19 @@ export class FediPodServerHandler extends HttpHandler implements Initializable, 
     // persist, and the next start recovers them.
     const pods: string[] = [];
     try {
-      const hosts = await this.registry.listHosts();
-      for (const host of hosts) {
-        const row = await this.registry.get(host);
+      const keys = await this.registry.listKeys();
+      for (const key of keys) {
+        const row = await this.registry.get(key);
         if (!row) continue;
-        if (this.agentHosts.has(row.host) || this.identities.has(row.podBase)) continue;   // already claimed
+        if (this.claimed.has(row.podBase) || this.identities.has(row.podBase)) continue;   // already claimed
+        let claim: AgentClaim;
         try {
-          this.validateAgentHost(row.podBase);
+          claim = this.validateAgentPod(row.podBase);
         } catch (e: unknown) {
           this.logger.error(`opted-in pod ${row.podBase} no longer valid: ${(e as Error).message}`);
           continue;
         }
-        this.agentHosts.add(row.host);
+        this.claimed.set(row.podBase, claim);
         this.agentHandles.set(row.handle, row.podBase);
         pods.push(row.podBase);
       }
@@ -324,9 +400,15 @@ export class FediPodServerHandler extends HttpHandler implements Initializable, 
             return;
           }
           this.identities.set(podBase, identity);
-          this.surfaces.set(identity.host, identity);
+          this.surfaces.set(podBase, identity);
           this.logger.info(`FediPod agent @${identity.handle} running on ${podBase}`);
-          if (this.args.agentAutoFront) await this.frontIdentity(podBase, identity);
+          // A suffix pod cannot answer WebFinger for itself — its host root is
+          // the front's — so it is followable ONLY through the door's apex
+          // dispatch. Front it whether or not auto-front is on: the row is the
+          // whole of what makes @handle@host resolve to it.
+          if (this.args.agentAutoFront || this.claimed.get(podBase)?.mount) {
+            await this.frontIdentity(podBase, identity);
+          }
           return;
         } catch (e: unknown) {
           const wait = START_RETRY_MS[Math.min(attempt, START_RETRY_MS.length - 1)];
@@ -374,13 +456,19 @@ export class FediPodServerHandler extends HttpHandler implements Initializable, 
   }
 
   public async canHandle({ request }: HttpHandlerInput): Promise<void> {
-    const host = request.headers.host as string | undefined;
+    const host = String(request.headers.host ?? '').toLowerCase();
     const pathname = new URL(request.url ?? '/', `https://${host}`).pathname;
+    // The front's own routes win first, so a suffix pod can never shadow the
+    // door's dispatch, its WebFinger or its API even where its mount would
+    // otherwise contain that path.
+    if (claims({ host, pathname }, this.frontHost)) return;
     // Claimed from the opt-in roster, never from what is running: a pod resource
     // must not be served by CSS for the seconds before an identity finishes
-    // starting, and then stop being served once it has.
-    if (claims({ host, pathname }, this.frontHost)) return;
-    if (agentClaims({ host, pathname, method: request.method }, this.agentHosts, this.uiPath)) return;
+    // starting, and then stop being served once it has. The path is matched
+    // relative to the claim's mount, so a suffix pod's `/aisha/ap/actor` is
+    // judged as `/ap/actor`.
+    const c = this.resolveClaim(host, pathname);
+    if (c && agentClaims({ pathname: this.stripMount(pathname, c.mount), method: request.method }, this.uiPath)) return;
     throw new Error('not a gateway route');   // reject → CSS's LDP handler takes it
   }
 
@@ -396,9 +484,17 @@ export class FediPodServerHandler extends HttpHandler implements Initializable, 
     return !cluster || cluster.isSingleThreaded() || cluster.isPrimary();
   }
 
-  /** The running identity answering on a host, if it has finished starting. */
-  public surfaceFor(host?: string): EmbeddedIdentity | undefined {
-    return this.surfaces.get(String(host ?? '').toLowerCase());
+  /**
+   * The identity a request belongs to (matched by host and mount) and the
+   * request path relative to that identity's mount, or null. The identity is
+   * undefined when the pod is claimed but still starting. Used by the streaming
+   * upgrade, which has only the request to go on.
+   */
+  public matchIdentity(host?: string, pathname = '/'):
+  { identity: EmbeddedIdentity | undefined; rel: string } | null {
+    const c = this.resolveClaim(String(host ?? '').toLowerCase(), pathname);
+    if (!c) return null;
+    return { identity: this.surfaces.get(c.podBase), rel: this.stripMount(pathname, c.mount) };
   }
 
   /**
@@ -424,12 +520,13 @@ export class FediPodServerHandler extends HttpHandler implements Initializable, 
         doorSecret: door.secret, doorPath: this.uiPath, status: 'rotated' };
     }
 
-    let host: string;
+    let claim: AgentClaim;
     try {
-      host = this.validateAgentHost(base);
+      claim = this.validateAgentPod(base);
     } catch (e: unknown) {
       return { httpStatus: 409, error: (e as Error).message };
     }
+    const { host } = claim;
     try {
       await this.registry.add({ podBase: base, handle, host, webId, optedInAt: new Date().toISOString() });
     } catch (e: unknown) {
@@ -438,7 +535,7 @@ export class FediPodServerHandler extends HttpHandler implements Initializable, 
     }
     // From this instant the pod's identity routes answer 503 instead of LDP,
     // until the agent registers its surface.
-    this.agentHosts.add(host);
+    this.claimed.set(base, claim);
     this.agentHandles.set(handle, base);
     const door = await this.doorSecretFor(base, undefined, { rotate: true });
     this.doorSecrets.set(base, door.secret);
@@ -454,17 +551,18 @@ export class FediPodServerHandler extends HttpHandler implements Initializable, 
     if (!this.registry) return { httpStatus: 501, error: 'this server does not offer runtime opt-in' };
     const base = podBase.endsWith('/') ? podBase : `${podBase}/`;
     const host = new URL(base).host.toLowerCase();
-    const row = await this.registry.get(host);
+    const key = agentKey(host, base);
+    const row = await this.registry.get(key);
     if (!row || row.podBase !== base) return { httpStatus: 404, error: 'this pod has not opted in' };
-    this.agentHosts.delete(host);                     // routes fall to LDP now
+    this.claimed.delete(base);                         // routes fall to LDP now
     this.startCancelled.add(base);                    // a pending start stands down
     const identity = this.identities.get(base);
     this.identities.delete(base);
-    this.surfaces.delete(host);
+    this.surfaces.delete(base);
     this.agentHandles.delete(row.handle);
     this.doorSecrets.delete(base);
     if (identity) await identity.stop();
-    await this.registry.remove(host);
+    await this.registry.remove(key);
     this.logger.info(`runtime opt-out: @${row.handle} on ${base} — the pod serves plain LDP again`);
     return { httpStatus: 200, ok: true, stopped: Boolean(identity) };
   }
@@ -501,8 +599,13 @@ export class FediPodServerHandler extends HttpHandler implements Initializable, 
 
   public async handle({ request, response }: HttpHandlerInput): Promise<void> {
     const host = String(request.headers.host ?? '').toLowerCase();
-    if (this.agentHosts.has(host)) {
-      const identity = this.surfaces.get(host);
+    const pathname = new URL(request.url ?? '/', `https://${host}`).pathname;
+    // The front's own routes win first — its dispatch, WebFinger and API sit at
+    // the apex above every suffix pod — so a claim is consulted only where the
+    // front does not answer.
+    const claimed = claims({ host, pathname }, this.frontHost) ? null : this.resolveClaim(host, pathname);
+    if (claimed) {
+      const identity = this.surfaces.get(claimed.podBase);
       if (!identity) {
         // Claimed, but nothing here can answer for it. Saying which of the two
         // reasons it is beats letting the pod answer for a route that is not
@@ -518,8 +621,8 @@ export class FediPodServerHandler extends HttpHandler implements Initializable, 
         response.end(JSON.stringify({ error: 'this identity is still starting' }));
         return;
       }
-      const pathname = new URL(request.url ?? '/', `https://${host}`).pathname;
-      // This identity's own inbox path — /<its root>/ap/inbox/, from its actor.
+      // This identity's own inbox path — <mount>/<root>/ap/inbox/, from its
+      // actor, so it already carries the mount for a suffix pod.
       const inboxPath = new URL(identity.actorUrl).pathname.replace(/ap\/actor$/u, 'ap/inbox/');
       if (pathname === inboxPath && String(request.method).toUpperCase() === 'POST') {
         await this.deliverAtDoor(identity, request, response);

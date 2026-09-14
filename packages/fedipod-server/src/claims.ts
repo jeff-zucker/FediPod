@@ -35,20 +35,25 @@ const AGENT_PREFIXES = [ '/api/', '/oauth/' ];
 
 // An identity's inbox is the container `/<root>/ap/inbox/`, matched by shape
 // rather than a fixed root. A POST here is a delivery, verified at the door
-// before it is written; the handler checks the exact path per identity.
+// before it is written; the handler checks the exact path per identity. The
+// path is relative to the identity's mount (see agentClaims), so a suffix pod's
+// `/aisha/fedipod/ap/inbox/` arrives here already stripped to `/fedipod/ap/inbox/`.
 export const isInboxPath = (pathname: string): boolean => /^\/[^/]+\/ap\/inbox\/$/u.test(pathname);
 
 /**
- * True when this request belongs to an identity's client surface.
- * `agentHosts` is keyed by host including port, as the Host header carries it.
+ * True when this path belongs to an identity's client surface.
+ *
+ * `pathname` is RELATIVE to the identity's mount: the handler has already
+ * matched the request's host and mount to one identity (see resolveClaim) and
+ * stripped the mount, so a host-root/subdomain pod passes its path unchanged
+ * and a suffix pod on `/aisha/` passes the part after `/aisha`. That keeps this
+ * a pure statement about which routes an identity owns, with no notion of host
+ * or of where on the origin it lives.
  */
 export function agentClaims(
-  input: { host?: string; pathname: string; method?: string },
-  agentHosts: Set<string>,
+  input: { pathname: string; method?: string },
   uiPath = '/fp/',
 ): boolean {
-  if (!input.host || agentHosts.size === 0) return false;
-  if (!agentHosts.has(String(input.host).toLowerCase())) return false;
   const { pathname } = input;
   if (isInboxPath(pathname)) return String(input.method ?? '').toUpperCase() === 'POST';
   if (AGENT_PATHS.has(pathname)) return true;

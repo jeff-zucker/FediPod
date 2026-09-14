@@ -85,7 +85,7 @@ function cookieValue(header, name) {
 // AP_ALLOWED_HOSTS has nothing but this token, so the gate has to be total.
 // `token` may be a function, resolved per request: an identity's secret can
 // rotate while the server runs, and the very next request sees the new one.
-function makeGate(token, { allowOrigins = [], publicEndpoints = false, secureCookie = false } = {}) {
+function makeGate(token, { allowOrigins = [], publicEndpoints = false, secureCookie = false, cookiePath = '/' } = {}) {
   const tokenNow = () => (typeof token === 'function' ? token() : token);
   // gate(req, res) → true when the gate handled the response (caller stops).
   function gate(req, res) {
@@ -102,7 +102,10 @@ function makeGate(token, { allowOrigins = [], publicEndpoints = false, secureCoo
       url.searchParams.delete(COOKIE);
       url.searchParams.delete('dk-bless');
       res.writeHead(302, {
-        'set-cookie': `${COOKIE}=${t}; Path=/; HttpOnly; SameSite=Strict; Max-Age=31536000`
+        // Path scopes the cookie to this identity's own door: on a shared
+        // origin (suffix pods) two co-tenants must not clobber each other's,
+        // and a whole-origin cookie would. Defaults to '/'.
+        'set-cookie': `${COOKIE}=${t}; Path=${cookiePath}; HttpOnly; SameSite=Strict; Max-Age=31536000`
           + (secureCookie ? '; Secure' : ''),
         'location': url.pathname + url.search,
       });

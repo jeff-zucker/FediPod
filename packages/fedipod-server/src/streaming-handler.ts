@@ -32,13 +32,18 @@ export class FediPodStreamingHandler extends WebSocketHandler {
   public async canHandle({ upgradeRequest }: WebSocketHandlerInput): Promise<void> {
     const host = upgradeRequest.headers.host;
     const { pathname } = new URL(upgradeRequest.url ?? '/', `http://${host}`);
-    if (!pathname.startsWith(STREAMING_PATH) || !this.server.surfaceFor(host)) {
+    // Matched relative to the identity's mount, so a suffix pod's own streaming
+    // socket at `/aisha/api/v1/streaming` is recognised as `/api/v1/streaming`.
+    const match = this.server.matchIdentity(host, pathname);
+    if (!match || !match.rel.startsWith(STREAMING_PATH)) {
       throw new Error('not a FediPod streaming socket');
     }
   }
 
   public async handle({ webSocket, upgradeRequest }: WebSocketHandlerInput): Promise<void> {
-    const identity = this.server.surfaceFor(upgradeRequest.headers.host);
+    const host = upgradeRequest.headers.host;
+    const { pathname } = new URL(upgradeRequest.url ?? '/', `http://${host}`);
+    const identity = this.server.matchIdentity(host, pathname)?.identity;
     const streaming = identity?.surface?.streaming as {
       authorizeUpgrade: (req: unknown, url: URL) => string | null;
       adopt: (ws: unknown) => unknown;
