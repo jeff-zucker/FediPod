@@ -5,7 +5,7 @@ discovery and stores the public record: the actor, its outbox, followers and
 posts, and the inbox that receives deliveries. The agent provides the
 ActivityPub actions: it drains the inbox, builds the timeline, signs and
 delivers, and answers the Mastodon client. The agent runs either in your
-browser, served by fedipod.net, or as [the installed agent](installed-agent.md)
+browser, served by fedipod.net, or as [the DeviceAgent](device-agent.md)
 on your own machine. Private direct messages, followers-only posts and the
 pending-follow and blocked collections live on the pod in an area protected by
 access control.
@@ -13,7 +13,7 @@ access control.
 A [gateway](gateway.md) can stand in front of the pod: an always-on door that
 verifies each delivery where the signature can still be checked, drops spam,
 and forwards the rest to the pod inbox with a receipt. It holds no key. The
-browser version always has one; the installed agent may use one. Any
+browser version always has one; the DeviceAgent may use one. Any
 lightweight host will do, Netlify included.
 
 [FediPod Server](packages/fedipod-server/README.md) puts the agent inside a
@@ -22,13 +22,13 @@ Fediverse account fed by the server itself.
 
 ![The browser version](https://raw.githubusercontent.com/jeff-zucker/FediPod/main/browser.svg)
 
-![The installed agent, with a gateway](https://raw.githubusercontent.com/jeff-zucker/FediPod/main/architecture.svg)
+![The DeviceAgent, with a gateway](https://raw.githubusercontent.com/jeff-zucker/FediPod/main/architecture.svg)
 
 ## Protocol conformance
 
 FediPod is a full ActivityPub server, on both of the spec's profiles:
 server-to-server (§7) and client-to-server (§6). `POST /ap/outbox` on the
-installed agent takes an activity, or a bare Note, and does the id-minting,
+DeviceAgent takes an activity, or a bare Note, and does the id-minting,
 side-effects and delivery, authenticated by a Solid-OIDC token whose WebID is
 the owner's. The Mastodon REST API is the everyday client interface; C2S is
 the spec's own.

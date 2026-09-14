@@ -150,7 +150,7 @@ async function preview() {
   if (!json) return;
   $('preview').textContent = json.address || '…';
   // The address-shape choice: hidden for a group (a group cannot front yet),
-  // locked to the gateway for a pod on a path of a shared host, an open choice
+  // locked to the gateway for a pod on a suffix-based host, an open choice
   // for a pod at its own host.
   const f = $('form').elements;
   const shapeFs = $('fs-shape');
@@ -165,7 +165,7 @@ async function preview() {
     if (note) {
       note.hidden = !forced;
       note.textContent = forced
-        ? 'Your pod is on a path of a shared host, so its address lives at the gateway. Your posts, key and data stay on your pod.'
+        ? 'Your pod is on a suffix-based host, so its address lives at the gateway. Your posts, key and data stay on your pod.'
         : '';
     }
   }

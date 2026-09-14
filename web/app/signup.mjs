@@ -53,7 +53,7 @@ const progressKey = (a) => [a.issuer, a.mode, a.handle, a.mode === 'new' ? (a.po
  * `shape` is where the address lives. On the pod, `@handle@yourpod`, with the
  * gateway as a mail door only — the default. At the gateway, `@handle@front`,
  * a fronted identity whose documents still live on the pod. A pod on a path of
- * a shared host cannot answer WebFinger, so it is fronted whatever was asked.
+ * a suffix-based host cannot answer WebFinger, so it is fronted whatever was asked.
  *
  * returns: { credential, config, actorUrl, address, keysPublic }
  */
@@ -116,7 +116,7 @@ export async function signUp(answers, { onStep = () => {}, frontOrigin = null } 
   const pathPod = new URL(pod).pathname !== '/';
   const fronted = pathPod || wantsFront;
   if (fronted && !frontOrigin) {
-    throw new Error(`${pod} is a path on a shared host, so its address must live at a gateway, and this page has none.`);
+    throw new Error(`${pod} is a suffix-based host, so its address must live at a gateway, and this page has none.`);
   }
   if (pathPod && !wantsFront) await assertFrontNameFree(frontOrigin, handle);
 

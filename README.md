@@ -16,9 +16,9 @@ There are also a number of [other ways to run FediPod](#other-ways-to-run-fedipo
 - A Solid pod with a host name of its own, such as
   `https://alice.solidcommunity.net/`. Sign-up can create one for you at
   solidcommunity.net or another provider, or use a pod you already have. A
-  pod that lives on a path of a shared host, like `https://server.example/alice/`,
+  pod that lives on a suffix-based host, like `https://server.example/alice/`,
   cannot be a Fediverse address.
-  A pod on a path of a shared host, like `https://server.example/alice/`,
+  A pod on a suffix-based host, like `https://server.example/alice/`,
   works too. Its address is then `@handle@fedipod.net`, because the shared
   host cannot answer for the handle; your posts, key and data stay on your pod.
 - Followers-only and direct posts need a pod that enforces WAC access control.
@@ -33,7 +33,7 @@ There are also a number of [other ways to run FediPod](#other-ways-to-run-fedipo
    permanent; display name, bio and pictures are set later in the client.
    With a pod at its own host you also choose where the address lives: on
    your pod, `@handle@yourpod`, or at this site, `@handle@fedipod.net`. A pod
-   on a path of a shared host gets the fedipod.net address. The choice is
+   on a suffix-based host gets the fedipod.net address. The choice is
    permanent.
 4. Enter your pod password once. It creates the account and locks your
    signing key. The password is not stored.
@@ -73,7 +73,7 @@ an alias, so a Move from it lands here.
 **The manage page.** `manage account` in the bar opens it: your profile,
 aliases, the gateway, key rotation, recovering posts, parking, moving to
 another server, retiring, and clearing a backlog. It is the same interface
-the installed agent has, described in [the admin interface](gui.md).
+the DeviceAgent has, described in [the admin interface](gui.md).
 
 **More than one browser.** One browser runs your account at a time. Opening
 it in a second browser shows your timeline read-only, and the moment you act
@@ -103,7 +103,7 @@ to a gateway of your own. Your address and your data do not change.
 
 ## Other ways to run FediPod
 
-- [The installed agent](installed-agent.md) runs on your own machine and
+- [The DeviceAgent](device-agent.md) runs on your own machine and
   adds scheduled posts, push notifications, live updates, group hosting and
   the use of any Mastodon client.
 - [Groups](groups.md): hosting a discussion group of Fediverse and Bluesky

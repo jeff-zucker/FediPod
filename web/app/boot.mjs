@@ -70,7 +70,7 @@ window.fedipodUnlock = async (password) => {
   if (!session) throw new Error('Sign in first.');
   // The config on the pod says where this account's state lives; the key sits
   // beside it. Both are read with the session, as the owner.
-  const podFromWebId = podBaseOfWebId(session.webId);   // a path on a shared host, or its own host
+  const podFromWebId = podBaseOfWebId(session.webId);   // a suffix-based host, or its own host
   const state = `${podFromWebId}${AP_ROOT}ap-state/`;
   // Through the transport rather than the bare session: this is a pod read
   // like any other, and going round it skipped the retry ladder that exists
@@ -288,7 +288,7 @@ if (typeof document !== 'undefined') (async () => {
   // brought by its address, which may be its own host or a path on a shared one.
   const podHostOf = () => { const sub = f().podName.value.trim().toLowerCase(); const ph = providerHost(); return (sub && ph) ? `${sub}.${ph}` : ''; };
   const podUrl = () => { let v = f().pod.value.trim(); if (!v) return ''; if (!/^https?:\/\//i.test(v)) v = 'https://' + v; if (!v.endsWith('/')) v += '/'; try { return new URL(v).href; } catch { return ''; } };
-  // A pod on a path of a shared host cannot answer WebFinger, so its address
+  // A pod on a suffix-based host cannot answer WebFinger, so its address
   // lives at this site; a pod at its own host root gets the choice.
   const isPathPod = (u) => { try { return new URL(u).pathname !== '/'; } catch { return false; } };
   // Where the chosen provider puts new pods, asked of the provider itself

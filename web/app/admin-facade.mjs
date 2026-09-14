@@ -317,7 +317,7 @@ export class AdminFacade {
         const aliases = [...(cfg.aliases || [])];
         if (body.add) {
           if (!webfingerHost(urls.base) && !cfg.gateway?.frontActor) {
-            return json(400, { error: 'this pod is a path on a shared host, so other servers could never resolve it as a Move target' });
+            return json(400, { error: 'this pod is a suffix-based host, so other servers could never resolve it as a Move target' });
           }
           const id = await this.resolveActor(body.add);
           if (!id) return json(400, { error: `could not fetch the old account (${body.add}) — enter its URL or @user@host, and it must answer` });

@@ -2,7 +2,7 @@
 
 In the browser version at fedipod.net, `manage account` in the bar opens this
 same page for your account. The rest of this page describes it as the
-installed agent serves it; the controls are the same, minus the manual inbox
+DeviceAgent serves it; the controls are the same, minus the manual inbox
 drain and the local log, which a browser does not have.
 
 Open `https://localhost:8030/` while any agent is running — it forwards you to the agent — then choose `manage account` and select the actor you want from the local actors dropdown.

@@ -181,7 +181,7 @@ try {
     && attBody.address === '@wren@wren.example' && typeof attBody.hmacSecret === 'string',
     'attaching a proven pod returns a full-address door and a secret');
   check(/^fedipod gateway /.test(attBody.command || ''),
-    `and the command it hands over is one an installed agent has (${(attBody.command || '').slice(0, 24)}…)`);
+    `and the command it hands over is one an DeviceAgent has (${(attBody.command || '').slice(0, 24)}…)`);
   check(attached['wren@wren.example']?.inboxOnly === true && attached['wren@wren.example'].actorUrl === 'https://wren.example/ap/actor',
     'the row it writes is keyed by full address and keeps the identity on their own pod');
 
@@ -316,7 +316,7 @@ try {
   const face = await get('/u/alice/ap/actor');
   check(face.status === 200, 'the fronted actor is served');
 
-  // ---- a pod on a path of a shared host, fronted (issue #7) ----------------
+  // ---- a pod on a suffix-based host, fronted (issue #7) ----------------
   // Nothing answers WebFinger at that host's root for it, so its address lives
   // here: attach fronted, and the front answers the name, serves the actor with
   // every id rewritten onto itself, and sends media back to the pod.
@@ -328,7 +328,7 @@ try {
   });
   const pathBody = await pathAtt.json();
   check(pathAtt.status === 201 && pathBody.address === `@pwren@${HOST}` && pathBody.frontActor === `${ORIGIN}/u/pwren/ap/actor`,
-    `a pod on a path of a shared host attaches fronted and gets its address here (${pathAtt.status} ${pathBody.address})`);
+    `a pod on a suffix-based host attaches fronted and gets its address here (${pathAtt.status} ${pathBody.address})`);
   const pathWf = await get(`/.well-known/webfinger?resource=acct:pwren@${HOST}`);
   const pathJrd = pathWf.status === 200 ? await pathWf.json() : {};
   check(pathWf.status === 200 && (pathJrd.links || []).some(l => l.rel === 'self' && l.href === `${ORIGIN}/u/pwren/ap/actor`)

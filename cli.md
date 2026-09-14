@@ -33,7 +33,7 @@ prompt. `--profile NAME` names the new identity when you have more than one.
 `--address pod` (the default) puts your address on your pod, `@you@yourpod`;
 `--address front` puts it at a gateway, `@you@the-gateway`, with your posts,
 key and data still on your pod. `--gateway <url>` names the gateway
-(`https://fedipod.net` by default). A pod on a path of a shared host cannot
+(`https://fedipod.net` by default). A pod on a suffix-based host cannot
 answer WebFinger for a handle, so it always takes a gateway address, whichever
 `--address` you gave.
 <!-- /CLAUDE -->

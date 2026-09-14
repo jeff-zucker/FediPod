@@ -32,7 +32,7 @@ sign-up refuses rather than half-working.
 - **Community Solid Server 7.**
 - **Pods on subdomains.** Each account answers on its own pod's address, so
   every pod needs a host to itself. A server that puts its pods on paths of
-  one shared host cannot offer accounts at all.
+  one suffix-based host cannot offer accounts at all.
 - **A single worker.** Run the server as one copy of itself — `--workers 1`,
   which is the default. With more, it still serves pods normally, but no pod
   can be an account: sign-up is refused, and an account set up earlier goes on

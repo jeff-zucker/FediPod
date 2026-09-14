@@ -1,10 +1,10 @@
 # Changes
 
-## 2026-09-14 (a pod on a path of a shared host can be an account — version 1.5.0, fedipod-server 0.15.0)
+## 2026-09-14 (a pod on a suffix-based host can be an account — version 1.5.0, fedipod-server 0.15.0)
 
-Sign-up in the browser takes a pod on a path of a shared host, like
+Sign-up in the browser takes a pod on a suffix-based host, like
 `https://server.example/alice/`, as well as a pod at its own host. Such a pod's
-address is `@handle@fedipod.net`, because nothing at the shared host can
+address is `@handle@fedipod.net`, because nothing at the suffix-based host can
 answer for the handle; the posts, key and data stay on the pod. A pod at its
 own host chooses at sign-up where its address lives: on the pod, as before, or
 at fedipod.net. The choice is permanent.
@@ -197,7 +197,7 @@ and is unaffected.
 
 A full read of the project turned up a long list. Everything serious in it is
 fixed — the browser build's whole share, and every critical or high finding on
-the installed agent, the gateway and the pod server. Nothing here is a new
+the DeviceAgent, the gateway and the pod server. Nothing here is a new
 feature except where it says so.
 
 ### Things another website could do to you, and now cannot
@@ -270,7 +270,7 @@ feature except where it says so.
 - **Keyword filters do something.** They were stored, listed, and applied by
   nobody.
 - **GIFs show.** Every one rendered blank, being labelled as a kind of video.
-- **CSV import works in the browser**, the same importer the installed agent
+- **CSV import works in the browser**, the same importer the DeviceAgent
   runs. It used to answer "not available".
 - **Park and revive work in the browser** — go quiet without giving up your
   name. This matters more here than on an install: close the tab and nothing
@@ -300,9 +300,9 @@ rewrote its two largest documents once per incoming post, and re-created
 containers that already existed each time the browser restarted it. All fixed;
 a gateway now passes on how long a receiving server asked to be left alone.
 
-### And on the installed agent, the gateway and the pod server
+### And on the DeviceAgent, the gateway and the pod server
 
-- **Any page you visited could take over an installed agent**, in three
+- **Any page you visited could take over an DeviceAgent**, in three
   requests and with nothing typed. A site could register itself as a client
   pointing back at its own server, send your browser to the sign-in page, and
   collect a key to your account — the agent's certificate is trusted by your

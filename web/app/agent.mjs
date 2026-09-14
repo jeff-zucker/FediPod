@@ -160,7 +160,7 @@ export class BrowserAgent {
     if (oidc) {
       session = { fetch: (u, i) => oidc.fetch(u, i) };
       webId = oidc.webId;
-      remotePod = podBaseOfWebId(webId);              // the pod, which on a shared host is a path
+      remotePod = podBaseOfWebId(webId);              // the pod, which on a suffix-based host is a path
     } else {
       const dpop = await makeDpopSession(credential);
       session = { fetch: (u, i) => dpop.fetch(u, i) };
@@ -224,7 +224,7 @@ export class BrowserAgent {
     this.publisher = new Publisher({
       config: this.store.getConfig(), remote: this.remote, store: this.store,
       deliverer: this.deliverer, publicKeyPem: keys.rsaPublicPem, assertionKey: null, log: this.log,
-      // Who a post names, resolved — the same lookup the installed agent
+      // Who a post names, resolved — the same lookup the DeviceAgent
       // gives its publisher. Without it no mention from the browser ever
       // resolved: a direct message went to nobody, a mention notified no one.
       resolveMention: (h) => resolveHandle(this, h),

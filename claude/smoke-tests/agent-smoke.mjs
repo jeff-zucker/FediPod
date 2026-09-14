@@ -2028,11 +2028,11 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     'and the browser agent hands that key to the relay, falling back to the handle only without a door');
   // The browser publisher had no mention resolver at all, so no mention from
   // the browser ever resolved: a direct message went to nobody and a mention
-  // notified no one (2026-09-14). It gets the installed agent's.
+  // notified no one (2026-09-14). It gets the DeviceAgent's.
   check(/resolveMention: \(h\) => resolveHandle\(this, h\)/.test(read('web/app/agent.mjs')),
     'the browser publisher resolves the handles a post names');
   // A fronted identity in the BrowserAgent (2026-09-14, issue #7): a pod on a
-  // path of a shared host takes its address at the Gateway, and a host-root
+  // suffix-based host takes its address at the Gateway, and a host-root
   // pod may choose to. The agent builds its advertised urls from the config it
   // read, installs the pod map, and keys its signing-key cache by the pod actor.
   const agentSrc = read('web/app/agent.mjs');
@@ -2056,7 +2056,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   const hostApi = new MastoApiF({ agent: { configured: () => true, store: {}, publisher: { urls: frontedUrls, config: {} } }, log: () => {} });
   check(hostApi.host === 'fedipod.net', 'the client is shown the Gateway host as the owner\'s when fronted');
   // The pod a WebID lives in is the path up to its profile, not the origin: a
-  // pod on a shared host was named by the wrong pod on every boot and unlock.
+  // pod on a suffix-based host was named by the wrong pod on every boot and unlock.
   const { podBaseOfWebId } = await import(path.join(root, 'lib/pod/urls.mjs'));
   check(podBaseOfWebId('https://alice.pod/profile/card#me') === 'https://alice.pod/'
     && podBaseOfWebId('https://server.example/alice/profile/card#me') === 'https://server.example/alice/'

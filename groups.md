@@ -14,7 +14,7 @@ and pick group rather than person, or take the group path on a signup page.
 You can turn on join review as you create it. The group's pod must be the root
 of its own host, so its handle resolves.
 
-**Running a group needs the installed agent.** The in-browser build makes
+**Running a group needs the DeviceAgent.** The in-browser build makes
 personal identities only — the sign-up wizard has no group option, and the
 moderation surface (join review, members, muting, the moderation queue) is not
 part of that build. You can *join* a group from the browser exactly as from
