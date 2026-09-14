@@ -13,6 +13,7 @@ import { signUp, handleProblem, AP_ROOT } from './signup.mjs';
 import * as podActor from '../../lib/pod/actor.mjs';
 import * as podState from '../../lib/pod/state.mjs';
 import { podBaseOfWebId } from '../../lib/pod/urls.mjs';
+import { podLayout } from '../../lib/pod/root.mjs';
 import { BrowserRemotePod } from './pod-remote.mjs';
 import { beginLogin, completeLogin, getSession, signOut } from './oidc-session.mjs';
 import { unwrapKeys, isKeyEnvelope } from './keystore.mjs';
@@ -290,7 +291,19 @@ if (typeof document !== 'undefined') (async () => {
   // A pod on a path of a shared host cannot answer WebFinger, so its address
   // lives at this site; a pod at its own host root gets the choice.
   const isPathPod = (u) => { try { return new URL(u).pathname !== '/'; } catch { return false; } };
-  const pathPod = () => f().mode.value === 'existing' && isPathPod(podUrl());
+  // Where the chosen provider puts new pods, asked of the provider itself
+  // (lib/pod/root.mjs podLayout) and remembered per provider: 'host', 'path',
+  // or null when it would not say.
+  const layouts = new Map();
+  let layout = null;
+  const learnLayout = async () => {
+    const origin = providerHost() ? new URL(providerUrl()).origin : '';
+    if (!origin) { layout = null; return; }
+    if (!layouts.has(origin)) layouts.set(origin, podLayout(fetch, origin).catch(() => null));
+    const known = await layouts.get(origin);
+    if (providerHost() && new URL(providerUrl()).origin === origin) { layout = known; applyShape(); previewAddr(); }
+  };
+  const pathPod = () => (f().mode.value === 'existing' ? isPathPod(podUrl()) : layout === 'path');
   const shape = () => (pathPod() ? 'front' : f().shape.value);
   const answers = () => {
     const mode = f().mode.value;
@@ -319,7 +332,8 @@ if (typeof document !== 'undefined') (async () => {
     $('provider-other-field').hidden = f().provider.value !== '';
   };
   for (const el of $('form').elements) for (const evt of ['input', 'change']) el.addEventListener(evt, () => { applyMode(); applyShape(); previewAddr(); });
-  applyMode();
+  for (const evt of ['input', 'change']) { $('provider').addEventListener(evt, learnLayout); $('providerOther').addEventListener(evt, learnLayout); }
+  applyMode(); learnLayout();
 
   // Step machine: one screen at a time, each gated by its own validation.
   const STEP_IDS = ['step-1', 'step-2'];
@@ -327,7 +341,7 @@ if (typeof document !== 'undefined') (async () => {
   const goStep = (n) => {
     STEP_IDS.forEach((id, i) => { $(id).hidden = i !== n - 1; });
     $('err-1').textContent = ''; $('form-error').textContent = '';
-    if (n === 2) { applyShape(); previewAddr(); }
+    if (n === 2) { applyShape(); previewAddr(); learnLayout(); }
     if (FOCUS[n]) $(FOCUS[n]).focus();
   };
   const validateStep1 = () => {

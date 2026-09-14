@@ -2071,6 +2071,22 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     'a JRD carries aliases only when given some');
   check(/podForFrontedAddress\(parsed\.handle\)/.test(read('web/app/boot.mjs')),
     'sign-in by an address at this site resolves the pod through the WebFinger alias');
+  // Where a provider puts new pods is asked of the provider: a CSS on
+  // subdomains answers 501 to the root storage description, one on paths
+  // answers 200 with the root as a storage (probed 2026-09-14: teamid.live,
+  // solidweb.me and redpencil.io on paths; solidcommunity.net, solidcommunity.au
+  // and privatedatapod.com on subdomains). The form fixes the address shape
+  // to the Gateway for a path-pod provider before the pod exists.
+  const { podLayout } = await import(path.join(root, 'lib/pod/root.mjs'));
+  const answering = (status, body = '') => async () => new Response(body, { status, headers: { 'content-type': 'text/turtle' } });
+  check(await podLayout(answering(501), 'https://sub.example') === 'host'
+    && await podLayout(answering(200, '<https://path.example/> a <http://www.w3.org/ns/pim/space#Storage> .'), 'https://path.example') === 'path'
+    && await podLayout(answering(200, '<https://x.example/> a <http://example.org/Other> .'), 'https://x.example') === null
+    && await podLayout(answering(404), 'https://y.example') === null
+    && await podLayout(async () => { throw new Error('no route'); }, 'https://z.example') === null,
+    'podLayout tells a subdomain provider from a path one by its root storage description, and says nothing otherwise');
+  check(/layout === 'path'/.test(read('web/app/boot.mjs')) && /podLayout\(fetch, origin\)/.test(read('web/app/boot.mjs')),
+    'and the sign-up form fixes the shape to the Gateway when the provider keeps pods on paths');
   // And the handle lookup goes through the agent's own remote read, which in
   // the browser is the relay — WebFinger was the one lookup made directly.
   const social = await import(path.join(root, 'lib/core/social.mjs'));

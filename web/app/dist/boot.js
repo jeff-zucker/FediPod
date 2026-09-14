@@ -33450,6 +33450,36 @@ function podBaseOfWebId(webId) {
   return `${u.origin}${dir.endsWith("/") ? dir : dir + "/"}`;
 }
 
+// lib/pod/root.mjs
+var OWNER_LOOKUP_MS = 5e3;
+var PUBLIC_DOC_MAX_BYTES = 1024 * 1024;
+async function podLayout(fetchImpl, providerOrigin, { timeoutMs = OWNER_LOOKUP_MS } = {}) {
+  let origin;
+  try {
+    origin = new URL(providerOrigin).origin;
+  } catch {
+    return null;
+  }
+  let res;
+  try {
+    res = await fetchImpl(
+      `${origin}/.well-known/solid`,
+      { headers: { accept: "text/turtle" }, signal: AbortSignal.timeout(timeoutMs) }
+    );
+  } catch {
+    return null;
+  }
+  if (res.status === 501) return "host";
+  if (res.status !== 200) return null;
+  let body = "";
+  try {
+    body = await readCapped(res, 64 * 1024);
+  } catch {
+    return null;
+  }
+  return /ns\/pim\/space#Storage|pim:Storage/u.test(body) ? "path" : null;
+}
+
 // web/app/oidc-session.mjs
 var DB2 = "fedipod-oidc";
 var STORE = "session";
@@ -33905,8 +33935,8 @@ ${e.detail}` : "");
   });
   const f = () => $("form").elements;
   const providerUrl = () => {
-    let v = f().provider.value.trim();
-    if (!v) v = "https://solidcommunity.net";
+    let v = (f().provider.value || f().providerOther.value).trim();
+    if (!v) return "";
     if (!/^https?:\/\//i.test(v)) v = "https://" + v;
     return v;
   };
@@ -33940,7 +33970,23 @@ ${e.detail}` : "");
       return false;
     }
   };
-  const pathPod = () => f().mode.value === "existing" && isPathPod(podUrl());
+  const layouts = /* @__PURE__ */ new Map();
+  let layout = null;
+  const learnLayout = async () => {
+    const origin = providerHost() ? new URL(providerUrl()).origin : "";
+    if (!origin) {
+      layout = null;
+      return;
+    }
+    if (!layouts.has(origin)) layouts.set(origin, podLayout(fetch, origin).catch(() => null));
+    const known = await layouts.get(origin);
+    if (providerHost() && new URL(providerUrl()).origin === origin) {
+      layout = known;
+      applyShape();
+      previewAddr();
+    }
+  };
+  const pathPod = () => f().mode.value === "existing" ? isPathPod(podUrl()) : layout === "path";
   const shape = () => pathPod() ? "front" : f().shape.value;
   const answers = () => {
     const mode = f().mode.value;
@@ -33973,13 +34019,19 @@ ${e.detail}` : "");
     const existing = f().mode.value === "existing";
     $("pod-field").hidden = !existing;
     $("podname-field").hidden = existing;
+    $("provider-other-field").hidden = f().provider.value !== "";
   };
-  for (const el of $("form").elements) el.addEventListener("input", () => {
+  for (const el of $("form").elements) for (const evt of ["input", "change"]) el.addEventListener(evt, () => {
     applyMode();
     applyShape();
     previewAddr();
   });
+  for (const evt of ["input", "change"]) {
+    $("provider").addEventListener(evt, learnLayout);
+    $("providerOther").addEventListener(evt, learnLayout);
+  }
   applyMode();
+  learnLayout();
   const STEP_IDS = ["step-1", "step-2"];
   const FOCUS = { 1: "provider", 2: "handle" };
   const goStep = (n) => {
@@ -33991,11 +34043,12 @@ ${e.detail}` : "");
     if (n === 2) {
       applyShape();
       previewAddr();
+      learnLayout();
     }
     if (FOCUS[n]) $(FOCUS[n]).focus();
   };
   const validateStep1 = () => {
-    if (!providerHost()) return "A valid pod provider URL is required.";
+    if (!providerHost()) return f().provider.value === "" ? "A pod provider address is required under Other\u2026." : "A valid pod provider URL is required.";
     if (f().mode.value === "existing") {
       if (!podUrl()) return "A pod address is required, like https://alice.solidcommunity.net/ or https://server.example/alice/.";
     } else {
