@@ -275,6 +275,8 @@ pre { overflow-x: auto; background: #0001; padding: .6rem; border-radius: .3rem;
 
 <section id="pane-identity" hidden>
   <dl id="facts"></dl>
+  <!-- State documents the agent could not read on its last load, if any. -->
+  <p class="err" id="state-skipped" role="alert" hidden></p>
   <!-- Declared here, and render() puts these on the kind row — the row they
        belong to is generated, so this is the only place they can be written
        down. Each reads as the setting it would change, so what it shows IS the

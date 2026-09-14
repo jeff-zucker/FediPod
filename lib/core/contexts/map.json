@@ -12,5 +12,6 @@
   "https://w3id.org/fep/5711": "fep-5711.json",
   "https://join-lemmy.org/context.json": "join-lemmy.json",
   "http://joinmastodon.org/ns": "joinmastodon.json",
-  "https://purl.archive.org/miscellany": "miscellany.json"
+  "https://purl.archive.org/miscellany": "miscellany.json",
+  "http://www.w3.org/ns/anno.jsonld": "anno.json"
 }

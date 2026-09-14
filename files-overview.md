@@ -30,8 +30,10 @@ that cleaned up the pod library.
   `storage`, `lease` as they are; `polls` indirectly. Not `keys.mjs`, which
   reads PEM files from disk: `web/app/keystore.mjs` and `keys-browser.mjs`
   stand in for it.
-- **Client face**: `mastoapi.mjs` only. No streaming, push, C2S or
-  Solid-OIDC verification in the browser.
+- **Client face**: `mastoapi.mjs`, and the client-to-server dispatcher
+  (`lib/client/c2s.mjs`) for posts the Gateway's outbox door takes on the
+  owner's behalf. No streaming, push, `/ap/outbox` of its own or Solid-OIDC
+  verification in the browser.
 - **Connections**: all but `bskygroup.mjs`; the browser hosts no groups.
 - **Gateway**: none. The browser trusts the gateway's receipt instead of
   verifying signatures, and `safefetch.mjs` is replaced by a shim that keeps

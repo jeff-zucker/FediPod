@@ -24,13 +24,18 @@ for (const m of module_.matchAll(/"([^"]+)":\s*(\w+),/gu)) {
   if (idents[m[2]]) map[m[1]] = idents[m[2]];
 }
 
+// Held beside fedify's set, not from it: fetched once by hand and kept.
+const EXTRA = { 'http://www.w3.org/ns/anno.jsonld': 'anno.json' };
+
 for (const file of Object.values(map)) fs.copyFileSync(path.join(src, file), path.join(dest, file));
+Object.assign(map, EXTRA);
 fs.writeFileSync(path.join(dest, 'map.json'), `${JSON.stringify(map, null, 2)}\n`);
 
 const names = Object.fromEntries(Object.keys(map).map((u, i) => [u, `ctx${i}`]));
 const header = fs.readFileSync(path.join(dest, 'index.mjs'), 'utf8').split('\nimport ')[0];
 let out = `${header}\n`;
 for (const [url, file] of Object.entries(map)) out += `import ${names[url]} from './${file}' with { type: 'json' };\n`;
+// (EXTRA entries ride along in `map` above, so index.mjs and map.json keep them.)
 out += '\n/** URL → the context document itself. Nothing outside this map is ever resolved. */\nexport const CONTEXTS = {\n';
 for (const url of Object.keys(map)) out += `  '${url}': ${names[url]},\n`;
 out += '};\n';

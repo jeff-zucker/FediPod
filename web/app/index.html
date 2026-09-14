@@ -110,20 +110,30 @@ a { color: var(--accent); }
 </section>
 
 <!-- Shown only on a browser that has signed in but has never opened the signing
-     key. The key is kept on the pod encrypted under the account password, so
-     the pod's host cannot sign as you; a browser opens it once and remembers. -->
+     key. The key is kept on the pod encrypted under the sign-up password, so
+     the pod's host cannot sign as you; a browser opens it once and remembers.
+     The second block is for someone who no longer has that password: a new
+     key, locked under the password they use now. -->
 <section id="unlock" hidden>
   <h2>Unlock your signing key</h2>
-  <p>Your signing key is stored on your pod, locked under your account password,
-  so nobody who can read your pod — your pod's host included — can post as you.
-  This browser has not opened it yet.</p>
+  <p>Your signing key is stored on your pod, locked under the password you gave
+  when you signed up, so nobody who can read your pod — your pod's host included
+  — can post as you. This browser has not opened it yet.</p>
   <p class="row">
     <input type="password" id="unlock-password" autocomplete="current-password"
-      placeholder="Your account password" aria-label="Your account password">
+      placeholder="Your password" aria-label="Your password">
     <button type="button" class="primary" id="unlock-go">unlock</button>
   </p>
   <p class="err" id="unlock-error" role="alert"></p>
   <p class="hint">This browser only — it is not sent anywhere.</p>
+  <h2>Changed your pod password, or lost the old one?</h2>
+  <p>Make a new signing key, locked under the password you use now. Your account,
+  address, posts and followers stay as they are; other servers learn the new key
+  the next time they hear from you.</p>
+  <p><button type="button" id="unlock-newkey">make a new signing key</button></p>
+  <p id="unlock-newkey-confirm" hidden>This replaces the key on your pod. Type the
+  password you use now in the field above, then
+  <button type="button" id="unlock-newkey-go">make the new key</button></p>
 </section>
 
 

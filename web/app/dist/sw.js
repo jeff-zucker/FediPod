@@ -9596,6 +9596,7 @@ __export(wire_exports, {
   acceptActivity: () => acceptActivity,
   actorDoc: () => actorDoc,
   addRemoveActivity: () => addRemoveActivity,
+  addressing: () => addressing,
   announceActivity: () => announceActivity,
   apUrls: () => apUrls2,
   assertionKeyId: () => assertionKeyId,
@@ -10056,6 +10057,14 @@ function contentHtml(text, mentions = []) {
   }
   return "<p>" + html.replace(/\n+/g, "</p><p>") + "</p>";
 }
+function addressing(urls, visibility, who = []) {
+  return {
+    public: { to: [PUBLIC], cc: [urls.followers, ...who] },
+    unlisted: { to: [urls.followers], cc: [PUBLIC, ...who] },
+    private: { to: [urls.followers], cc: who },
+    direct: { to: who, cc: [] }
+  }[visibility] || { to: [PUBLIC], cc: [urls.followers, ...who] };
+}
 function noteDoc({
   urls,
   slug,
@@ -10071,12 +10080,7 @@ function noteDoc({
 }) {
   const id = (container || urls.notes) + slug;
   const who = mentions.map((m) => m.actor);
-  const addressing = {
-    public: { to: [PUBLIC], cc: [urls.followers, ...who] },
-    unlisted: { to: [urls.followers], cc: [PUBLIC, ...who] },
-    private: { to: [urls.followers], cc: who },
-    direct: { to: who, cc: [] }
-  }[visibility] || { to: [PUBLIC], cc: [urls.followers, ...who] };
+  const addressed = addressing(urls, visibility, who);
   const note = {
     "@context": AS_CTX,
     id,
@@ -10084,8 +10088,8 @@ function noteDoc({
     attributedTo: urls.actor,
     content: contentHtml(content, mentions),
     published,
-    to: addressing.to,
-    cc: addressing.cc,
+    to: addressed.to,
+    cc: addressed.cc,
     replies: repliesId(id)
   };
   if (summary) note.summary = summary;
@@ -24128,20 +24132,20 @@ var require_yallist = __commonJS({
       return acc;
     };
     Yallist.prototype.toArray = function() {
-      var arr = new Array(this.length);
+      var arr2 = new Array(this.length);
       for (var i = 0, walker = this.head; walker !== null; i++) {
-        arr[i] = walker.value;
+        arr2[i] = walker.value;
         walker = walker.next;
       }
-      return arr;
+      return arr2;
     };
     Yallist.prototype.toArrayReverse = function() {
-      var arr = new Array(this.length);
+      var arr2 = new Array(this.length);
       for (var i = 0, walker = this.tail; walker !== null; i++) {
-        arr[i] = walker.value;
+        arr2[i] = walker.value;
         walker = walker.prev;
       }
-      return arr;
+      return arr2;
     };
     Yallist.prototype.slice = function(from, to) {
       to = to || this.length;
@@ -24469,11 +24473,11 @@ var require_lru_cache = __commonJS({
       del(key) {
         del(this, this[CACHE].get(key));
       }
-      load(arr) {
+      load(arr2) {
         this.reset();
         const now = Date.now();
-        for (let l = arr.length - 1; l >= 0; l--) {
-          const hit = arr[l];
+        for (let l = arr2.length - 1; l >= 0; l--) {
+          const hit = arr2[l];
           const expiresAt = hit.e || 0;
           if (expiresAt === 0)
             this.set(hit.k, hit.v);
@@ -30207,26 +30211,26 @@ var require_base64_js = __commonJS({
       var lens = getLens(b642);
       var validLen = lens[0];
       var placeHoldersLen = lens[1];
-      var arr = new Arr(_byteLength(b642, validLen, placeHoldersLen));
+      var arr2 = new Arr(_byteLength(b642, validLen, placeHoldersLen));
       var curByte = 0;
       var len2 = placeHoldersLen > 0 ? validLen - 4 : validLen;
       var i2;
       for (i2 = 0; i2 < len2; i2 += 4) {
         tmp = revLookup[b642.charCodeAt(i2)] << 18 | revLookup[b642.charCodeAt(i2 + 1)] << 12 | revLookup[b642.charCodeAt(i2 + 2)] << 6 | revLookup[b642.charCodeAt(i2 + 3)];
-        arr[curByte++] = tmp >> 16 & 255;
-        arr[curByte++] = tmp >> 8 & 255;
-        arr[curByte++] = tmp & 255;
+        arr2[curByte++] = tmp >> 16 & 255;
+        arr2[curByte++] = tmp >> 8 & 255;
+        arr2[curByte++] = tmp & 255;
       }
       if (placeHoldersLen === 2) {
         tmp = revLookup[b642.charCodeAt(i2)] << 2 | revLookup[b642.charCodeAt(i2 + 1)] >> 4;
-        arr[curByte++] = tmp & 255;
+        arr2[curByte++] = tmp & 255;
       }
       if (placeHoldersLen === 1) {
         tmp = revLookup[b642.charCodeAt(i2)] << 10 | revLookup[b642.charCodeAt(i2 + 1)] << 4 | revLookup[b642.charCodeAt(i2 + 2)] >> 2;
-        arr[curByte++] = tmp >> 8 & 255;
-        arr[curByte++] = tmp & 255;
+        arr2[curByte++] = tmp >> 8 & 255;
+        arr2[curByte++] = tmp & 255;
       }
-      return arr;
+      return arr2;
     }
     function tripletToBase64(num) {
       return lookup2[num >> 18 & 63] + lookup2[num >> 12 & 63] + lookup2[num >> 6 & 63] + lookup2[num & 63];
@@ -30368,13 +30372,13 @@ var require_buffer = __commonJS({
     }
     function typedArraySupport() {
       try {
-        const arr = new Uint8Array(1);
+        const arr2 = new Uint8Array(1);
         const proto = { foo: function() {
           return 42;
         } };
         Object.setPrototypeOf(proto, Uint8Array.prototype);
-        Object.setPrototypeOf(arr, proto);
-        return arr.foo() === 42;
+        Object.setPrototypeOf(arr2, proto);
+        return arr2.foo() === 42;
       } catch (e) {
         return false;
       }
@@ -30894,14 +30898,14 @@ var require_buffer = __commonJS({
       }
       throw new TypeError("val must be string, number or Buffer");
     }
-    function arrayIndexOf(arr, val, byteOffset, encoding, dir) {
+    function arrayIndexOf(arr2, val, byteOffset, encoding, dir) {
       let indexSize = 1;
-      let arrLength = arr.length;
+      let arrLength = arr2.length;
       let valLength = val.length;
       if (encoding !== void 0) {
         encoding = String(encoding).toLowerCase();
         if (encoding === "ucs2" || encoding === "ucs-2" || encoding === "utf16le" || encoding === "utf-16le") {
-          if (arr.length < 2 || val.length < 2) {
+          if (arr2.length < 2 || val.length < 2) {
             return -1;
           }
           indexSize = 2;
@@ -30921,7 +30925,7 @@ var require_buffer = __commonJS({
       if (dir) {
         let foundIndex = -1;
         for (i = byteOffset; i < arrLength; i++) {
-          if (read2(arr, i) === read2(val, foundIndex === -1 ? 0 : i - foundIndex)) {
+          if (read2(arr2, i) === read2(val, foundIndex === -1 ? 0 : i - foundIndex)) {
             if (foundIndex === -1) foundIndex = i;
             if (i - foundIndex + 1 === valLength) return foundIndex * indexSize;
           } else {
@@ -30934,7 +30938,7 @@ var require_buffer = __commonJS({
         for (i = byteOffset; i >= 0; i--) {
           let found = true;
           for (let j = 0; j < valLength; j++) {
-            if (read2(arr, i + j) !== read2(val, j)) {
+            if (read2(arr2, i + j) !== read2(val, j)) {
               found = false;
               break;
             }
@@ -33960,11 +33964,11 @@ var require_src = __commonJS({
     function serializeFunction(fn) {
       return JSON.stringify(fn);
     }
-    function serializeArray(arr) {
+    function serializeArray(arr2) {
       let str = "[";
-      const length = arr.length;
+      const length = arr2.length;
       for (let i = 0; i < length; i++) {
-        const val = arr[i];
+        const val = arr2[i];
         if (i !== 0) str += ",";
         str += serialize3(val);
       }
@@ -34119,6 +34123,7 @@ function dropFollower(contacts, actor, why) {
 }
 var PodStore = class {
   constructor({ storage = null, log: log2 = console.log } = {}) {
+    this.lastSkipped = [];
     this.storage = storage;
     this.log = log2;
     this.cache = /* @__PURE__ */ new Map();
@@ -34181,6 +34186,7 @@ var PodStore = class {
         this.log(`state load ${name}: unparsable (${e.message})`);
       }
     }
+    this.lastSkipped = skipped;
     if (skipped.length) this.log(`state load skipped ${skipped.length}: ${skipped.join(", ")}`);
     this.log(`state loaded: ${this.cache.size} doc(s) from ${this.base} (${fetched} re-fetched)`);
   }
@@ -36882,11 +36888,11 @@ function arrayToStatements(rdfFactory, subject, data) {
   }, subject);
   return statements;
 }
-function ArrayIndexOf(arr, item, i = 0) {
-  var length = arr.length;
+function ArrayIndexOf(arr2, item, i = 0) {
+  var length = arr2.length;
   if (i < 0) i = length + i;
   for (; i < length; i++) {
-    if (arr[i] === item) {
+    if (arr2[i] === item) {
       return i;
     }
   }
@@ -45218,8 +45224,8 @@ async function writeProfilePage(pod, urls, html) {
   await pod.put(urls.profileHtml, html, "text/html");
   await pod.setAcl(urls.profileHtml, PUBLIC_READ2);
 }
-function linkInWebIdProfile(pod, { actorUrl, accountName, kind = "person" }) {
-  return pod.linkAccountInProfile({ actorUrl, accountName, kind });
+function linkInWebIdProfile(pod, { actorUrl, accountName, kind = "person", outbox = null }) {
+  return pod.linkAccountInProfile({ actorUrl, accountName, kind, outbox });
 }
 
 // lib/pod/inbox.mjs
@@ -55489,6 +55495,126 @@ var miscellany_default = {
   }
 };
 
+// lib/core/contexts/anno.json
+var anno_default = {
+  "@context": {
+    oa: "http://www.w3.org/ns/oa#",
+    dc: "http://purl.org/dc/elements/1.1/",
+    dcterms: "http://purl.org/dc/terms/",
+    dctypes: "http://purl.org/dc/dcmitype/",
+    foaf: "http://xmlns.com/foaf/0.1/",
+    rdf: "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
+    rdfs: "http://www.w3.org/2000/01/rdf-schema#",
+    skos: "http://www.w3.org/2004/02/skos/core#",
+    xsd: "http://www.w3.org/2001/XMLSchema#",
+    iana: "http://www.iana.org/assignments/relation/",
+    owl: "http://www.w3.org/2002/07/owl#",
+    as: "http://www.w3.org/ns/activitystreams#",
+    schema: "http://schema.org/",
+    id: { "@type": "@id", "@id": "@id" },
+    type: { "@type": "@id", "@id": "@type" },
+    Annotation: "oa:Annotation",
+    Dataset: "dctypes:Dataset",
+    Image: "dctypes:StillImage",
+    Video: "dctypes:MovingImage",
+    Audio: "dctypes:Sound",
+    Text: "dctypes:Text",
+    TextualBody: "oa:TextualBody",
+    ResourceSelection: "oa:ResourceSelection",
+    SpecificResource: "oa:SpecificResource",
+    FragmentSelector: "oa:FragmentSelector",
+    CssSelector: "oa:CssSelector",
+    XPathSelector: "oa:XPathSelector",
+    TextQuoteSelector: "oa:TextQuoteSelector",
+    TextPositionSelector: "oa:TextPositionSelector",
+    DataPositionSelector: "oa:DataPositionSelector",
+    SvgSelector: "oa:SvgSelector",
+    RangeSelector: "oa:RangeSelector",
+    TimeState: "oa:TimeState",
+    HttpRequestState: "oa:HttpRequestState",
+    CssStylesheet: "oa:CssStyle",
+    Choice: "oa:Choice",
+    Person: "foaf:Person",
+    Software: "as:Application",
+    Organization: "foaf:Organization",
+    AnnotationCollection: "as:OrderedCollection",
+    AnnotationPage: "as:OrderedCollectionPage",
+    Audience: "schema:Audience",
+    Motivation: "oa:Motivation",
+    bookmarking: "oa:bookmarking",
+    classifying: "oa:classifying",
+    commenting: "oa:commenting",
+    describing: "oa:describing",
+    editing: "oa:editing",
+    highlighting: "oa:highlighting",
+    identifying: "oa:identifying",
+    linking: "oa:linking",
+    moderating: "oa:moderating",
+    questioning: "oa:questioning",
+    replying: "oa:replying",
+    reviewing: "oa:reviewing",
+    assessing: "oa:assessing",
+    tagging: "oa:tagging",
+    auto: "oa:autoDirection",
+    ltr: "oa:ltrDirection",
+    rtl: "oa:rtlDirection",
+    body: { "@type": "@id", "@id": "oa:hasBody" },
+    target: { "@type": "@id", "@id": "oa:hasTarget" },
+    source: { "@type": "@id", "@id": "oa:hasSource" },
+    selector: { "@type": "@id", "@id": "oa:hasSelector" },
+    state: { "@type": "@id", "@id": "oa:hasState" },
+    scope: { "@type": "@id", "@id": "oa:hasScope" },
+    refinedBy: { "@type": "@id", "@id": "oa:refinedBy" },
+    startSelector: { "@type": "@id", "@id": "oa:hasStartSelector" },
+    endSelector: { "@type": "@id", "@id": "oa:hasEndSelector" },
+    renderedVia: { "@type": "@id", "@id": "oa:renderedVia" },
+    creator: { "@type": "@id", "@id": "dcterms:creator" },
+    generator: { "@type": "@id", "@id": "as:generator" },
+    rights: { "@type": "@id", "@id": "dcterms:rights" },
+    homepage: { "@type": "@id", "@id": "foaf:homepage" },
+    via: { "@type": "@id", "@id": "oa:via" },
+    canonical: { "@type": "@id", "@id": "oa:canonical" },
+    stylesheet: { "@type": "@id", "@id": "oa:styledBy" },
+    cached: { "@type": "@id", "@id": "oa:cachedSource" },
+    conformsTo: { "@type": "@id", "@id": "dcterms:conformsTo" },
+    items: { "@type": "@id", "@id": "as:items", "@container": "@list" },
+    partOf: { "@type": "@id", "@id": "as:partOf" },
+    first: { "@type": "@id", "@id": "as:first" },
+    last: { "@type": "@id", "@id": "as:last" },
+    next: { "@type": "@id", "@id": "as:next" },
+    prev: { "@type": "@id", "@id": "as:prev" },
+    audience: { "@type": "@id", "@id": "schema:audience" },
+    motivation: { "@type": "@vocab", "@id": "oa:motivatedBy" },
+    purpose: { "@type": "@vocab", "@id": "oa:hasPurpose" },
+    textDirection: { "@type": "@vocab", "@id": "oa:textDirection" },
+    accessibility: "schema:accessibilityFeature",
+    bodyValue: "oa:bodyValue",
+    format: "dc:format",
+    language: "dc:language",
+    processingLanguage: "oa:processingLanguage",
+    value: "rdf:value",
+    exact: "oa:exact",
+    prefix: "oa:prefix",
+    suffix: "oa:suffix",
+    styleClass: "oa:styleClass",
+    name: "foaf:name",
+    email: "foaf:mbox",
+    email_sha1: "foaf:mbox_sha1sum",
+    nickname: "foaf:nick",
+    label: "rdfs:label",
+    created: { "@id": "dcterms:created", "@type": "xsd:dateTime" },
+    modified: { "@id": "dcterms:modified", "@type": "xsd:dateTime" },
+    generated: { "@id": "dcterms:issued", "@type": "xsd:dateTime" },
+    sourceDate: { "@id": "oa:sourceDate", "@type": "xsd:dateTime" },
+    sourceDateStart: { "@id": "oa:sourceDateStart", "@type": "xsd:dateTime" },
+    sourceDateEnd: { "@id": "oa:sourceDateEnd", "@type": "xsd:dateTime" },
+    start: { "@id": "oa:start", "@type": "xsd:nonNegativeInteger" },
+    end: { "@id": "oa:end", "@type": "xsd:nonNegativeInteger" },
+    total: { "@id": "as:totalItems", "@type": "xsd:nonNegativeInteger" },
+    startIndex: { "@id": "as:startIndex", "@type": "xsd:nonNegativeInteger" }
+  }
+};
+
 // lib/core/contexts/index.mjs
 var CONTEXTS = {
   "https://www.w3.org/ns/activitystreams": activitystreams_default,
@@ -55504,7 +55630,8 @@ var CONTEXTS = {
   "https://w3id.org/fep/5711": fep_5711_default,
   "https://join-lemmy.org/context.json": join_lemmy_default,
   "http://joinmastodon.org/ns": joinmastodon_default,
-  "https://purl.archive.org/miscellany": miscellany_default
+  "https://purl.archive.org/miscellany": miscellany_default,
+  "http://www.w3.org/ns/anno.jsonld": anno_default
 };
 
 // lib/core/graphview.mjs
@@ -55762,146 +55889,6 @@ async function readLenient(raw) {
   }
 }
 
-// lib/core/publisher/restore.mjs
-var ACCEPT_AP = 'application/activity+json, application/ld+json; profile="https://www.w3.org/ns/activitystreams"';
-var REBUILD_MAX_PER_RUN = 200;
-async function reconcileFollowers(publisher, contacts) {
-  let published = [];
-  try {
-    published = await publisher.readPublishedFollowers() || [];
-  } catch {
-    return 0;
-  }
-  const known2 = new Set(contacts.followers.map((f) => f.actor));
-  const removed = new Set((contacts.removedFollowers || []).map((r) => r.actor));
-  const missing = published.filter((a) => typeof a === "string" && !known2.has(a) && !removed.has(a));
-  if (!missing.length) return 0;
-  let recovered = 0;
-  for (const actor of missing.slice(0, 200)) {
-    try {
-      const res = await publisher.deliverer.signedFetch(actor, { headers: { accept: ACCEPT_AP } });
-      if (!res.ok) continue;
-      const { doc, view, degraded } = await readLenient(await res.json());
-      const actorDoc2 = view ?? doc;
-      if (degraded) publisher.log?.(`actor ${actor} grounded to read: ${degraded}`);
-      if (!actorDoc2?.inbox) continue;
-      contacts.followers.push({
-        actor,
-        inbox: actorDoc2.inbox,
-        sharedInbox: actorDoc2.endpoints?.sharedInbox || null,
-        recovered: true,
-        // Said explicitly, because onUndo reads it: the pod publishes WHO
-        // follows, never the id of the Follow that did it, so a recovered
-        // record has nothing an Undo can be matched against and must not be
-        // evictable by one naming anything at all.
-        followId: null
-      });
-      recovered++;
-    } catch {
-    }
-  }
-  if (recovered) {
-    publisher.store.setContacts(contacts);
-    publisher.log(`reconciled ${recovered} follower(s) the pod knew about and this machine did not \u2014 a restored or copied state was behind`);
-  }
-  return recovered;
-}
-async function reconcileOutbox(publisher, outbox) {
-  let published = [];
-  try {
-    published = await publisher.readPublishedOutbox() || [];
-  } catch {
-    return 0;
-  }
-  if (!Array.isArray(published) || !published.length) return 0;
-  const idOf = (i) => typeof i === "string" ? i : i?.id || null;
-  const known2 = new Set(outbox.map(idOf).filter(Boolean));
-  const removed = new Set(publisher.store.read("outbox-removed.json", []).map((r) => r.id));
-  const missing = published.filter((i) => {
-    const id = idOf(i);
-    return id && !known2.has(id) && !removed.has(id);
-  });
-  if (!missing.length) return 0;
-  outbox.push(...missing);
-  publisher.store.write("outbox.json", outbox);
-  publisher.log(`reconciled ${missing.length} outbox entr(ies) the pod carried and this machine did not`);
-  return missing.length;
-}
-async function rebuildStatuses(publisher, { fromNotes = false } = {}) {
-  const { urls } = publisher;
-  const ids = /* @__PURE__ */ new Set();
-  const boosts = [];
-  let indexed = false;
-  const published = await publisher.readPublishedOutbox().catch(() => null);
-  if (published) {
-    indexed = true;
-    for (const item of published) {
-      if (typeof item === "string") {
-        if (item.startsWith(urls.notes)) ids.add(item);
-      } else if (item?.type === "Announce") boosts.push(item);
-    }
-  }
-  if (fromNotes) {
-    for (const child of await list2(publisher.remote, urls).catch(() => [])) {
-      ids.add(child.url);
-    }
-    indexed = true;
-  }
-  if (!indexed) return { indexed: 0, recovered: 0, reblogs: 0, landed: false, why: "the pod would not answer for its outbox" };
-  const statuses = publisher.store.getStatuses();
-  const have = new Set(statuses.map((s) => s.noteId));
-  const removed = new Set(publisher.store.read("outbox-removed.json", []).map((r) => r.id));
-  const recovered = [];
-  let budget = REBUILD_MAX_PER_RUN;
-  for (const id of ids) {
-    if (budget <= 0) {
-      publisher.log(`rebuild: stopping at ${REBUILD_MAX_PER_RUN} this run \u2014 run it again for the rest`);
-      break;
-    }
-    if (have.has(id) || removed.has(id)) continue;
-    budget--;
-    const note = await read(publisher.remote, id).catch(() => null);
-    if (note?.type !== "Note" || note.id !== id || note.attributedTo !== urls.actor) continue;
-    const attachments = attachmentsOf(note);
-    const mentions = (Array.isArray(note.tag) ? note.tag : []).filter((t) => t?.type === "Mention" && t.href).map((t) => ({ href: t.href, name: t.name }));
-    recovered.push({
-      noteId: note.id,
-      actor: urls.actor,
-      content: note.content || "",
-      published: note.published || null,
-      ...note.inReplyTo ? { inReplyTo: note.inReplyTo } : {},
-      kind: "post",
-      slug: note.id.slice(urls.notes.length),
-      ...attachments.length ? { attachments } : {},
-      ...mentions.length ? { mentions } : {},
-      recovered: true
-    });
-  }
-  const merged = [...statuses, ...recovered];
-  let reblogs = 0;
-  for (const act of boosts) {
-    const object = typeof act.object === "string" ? act.object : act.object?.id;
-    const s = object && merged.find((x) => x.noteId === object);
-    if (!s || s.reblogged) continue;
-    s.reblogged = true;
-    s.announceActivity = act;
-    reblogs++;
-  }
-  if (!recovered.length && !reblogs) return { indexed: ids.size, recovered: 0, reblogs: 0, landed: true };
-  merged.sort((a, b) => String(b.published || "").localeCompare(String(a.published || "")));
-  const kept = merged.slice(0, 1e3);
-  publisher.store.write("statuses.json", kept);
-  const landed = await publisher.store.commit();
-  publisher.log(`rebuilt ${recovered.length} post(s) and ${reblogs} boost(s) from the pod${landed ? "" : " \u2014 THE STATE WRITE DID NOT LAND"}`);
-  return {
-    indexed: ids.size,
-    recovered: recovered.length,
-    reblogs,
-    landed,
-    dropped: Math.max(0, merged.length - kept.length)
-  };
-}
-
 // lib/core/publisher/notes.mjs
 init_node_crypto();
 init_wire();
@@ -55965,7 +55952,21 @@ function assertDirectAddressed(content, mentions) {
   e.code = "unaddressed";
   throw e;
 }
-async function publishNote(publisher, content, { inReplyTo, attachments, visibility = "public", spoilerText = null } = {}) {
+var SLUG_OK = /^[A-Za-z0-9._-]{1,64}$/u;
+var safeSlug = (s) => typeof s === "string" && SLUG_OK.test(s) && !/^\.+$/u.test(s) ? s : null;
+async function slugFor(publisher, container, wanted, published) {
+  const name = safeSlug(wanted);
+  if (name && !await read(publisher.remote, container + name).catch(() => null)) return name;
+  return published.slice(0, 10) + "-" + node_crypto_default.randomBytes(4).toString("hex");
+}
+function rowContent(obj) {
+  if (typeof obj?.content === "string" && obj.content.trim()) return sanitizeHtml(obj.content);
+  const plain = [obj?.bodyValue, obj?.name, obj?.summary].find((v) => typeof v === "string" && v.trim());
+  if (plain) return contentHtml(plain);
+  const esc = (v) => String(v).replace(/[&<>"]/gu, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+  return `<p><a href="${esc(obj?.id || "")}">${esc(obj?.type || "object")}</a></p>`;
+}
+async function publishNote(publisher, content, { inReplyTo, attachments, visibility = "public", spoilerText = null, slug: wanted = null } = {}) {
   const { urls } = publisher;
   const priv = visibility === "private" || visibility === "direct";
   if (priv) {
@@ -55973,7 +55974,7 @@ async function publishNote(publisher, content, { inReplyTo, attachments, visibil
     if (ready !== true) throw new Error(ready);
   }
   const published = (/* @__PURE__ */ new Date()).toISOString();
-  const slug = published.slice(0, 10) + "-" + node_crypto_default.randomBytes(4).toString("hex");
+  const slug = await slugFor(publisher, priv ? urls.privateNotes : urls.notes, wanted, published);
   const mentions = await publisher._mentionsFor(content, inReplyTo);
   if (visibility === "direct") assertDirectAddressed(content, mentions);
   const note = noteDoc({
@@ -56009,6 +56010,7 @@ async function publishNote(publisher, content, { inReplyTo, attachments, visibil
     ...attachments?.length ? { attachments } : {},
     ...note.tag?.length ? { mentions: note.tag.map((t) => ({ href: t.href, name: t.name })) } : {}
   });
+  if (await publisher.store.commit?.() === false) publisher.log(`post published but its timeline row was refused: ${note.id}`);
   const create = createActivity(note, urls);
   await writeCreate(publisher.remote, create.id, create);
   const contacts = publisher.store.getContacts();
@@ -56032,6 +56034,57 @@ async function publishNote(publisher, content, { inReplyTo, attachments, visibil
     }
   }
   return note;
+}
+async function publishObject(publisher, object, { visibility = "public", slug: wanted = null } = {}) {
+  const { urls } = publisher;
+  const priv = visibility === "private" || visibility === "direct";
+  if (priv) {
+    const ready = await publisher.privateReady();
+    if (ready !== true) throw new Error(ready);
+  }
+  const published = (/* @__PURE__ */ new Date()).toISOString();
+  const container = priv ? urls.privateNotes : urls.notes;
+  const pod = publisher.config?.remotePod || urls.base;
+  const ownId = typeof object.id === "string" && /^https?:\/\//u.test(object.id) && object.id.startsWith(pod) ? object.id : null;
+  const name = await slugFor(publisher, container, wanted, published);
+  const addressed = addressing(urls, visibility);
+  let doc = null;
+  const id = ownId || container + name;
+  if (!ownId) {
+    doc = { ...object, id, attributedTo: urls.actor, published: object.published || published, to: addressed.to, cc: addressed.cc };
+    if (!doc["@context"]) doc["@context"] = AS_CTX;
+    if (typeof doc.content === "string") doc.content = sanitizeHtml(doc.content);
+    await write4(publisher.remote, id, doc);
+  }
+  if (!priv) await publisher.recordOutbox(id);
+  const row = doc || object;
+  publisher.store.addStatus({
+    noteId: id,
+    actor: urls.actor,
+    content: rowContent(row),
+    published: row.published || published,
+    kind: "post",
+    slug: name,
+    visibility
+  });
+  if (await publisher.store.commit?.() === false) publisher.log(`object published but its timeline row was refused: ${id}`);
+  const createId = doc ? createActivityId(id) : createActivityId(container + name);
+  const create = {
+    "@context": AS_CTX,
+    id: createId,
+    type: "Create",
+    actor: urls.actor,
+    published: row.published || published,
+    to: addressed.to,
+    cc: addressed.cc,
+    object: doc || id
+  };
+  await writeCreate(publisher.remote, create.id, create);
+  const contacts = publisher.store.getContacts();
+  const inboxes = visibility === "direct" ? [] : [...new Set(contacts.followers.map((f) => f.sharedInbox || f.inbox).filter(Boolean))];
+  await publisher.deliverer.deliverToAll(inboxes, create);
+  publisher.log(`${row.type || "object"} published: ${id} \u2192 ${inboxes.length} inbox(es)`);
+  return { id, createId, copied: !ownId };
 }
 async function updateNote(publisher, s, { content, spoilerText = null, attachments = null } = {}) {
   const { urls } = publisher;
@@ -56082,6 +56135,158 @@ async function updateNote(publisher, s, { content, spoilerText = null, attachmen
   await publisher.deliverer.deliverToAll(inboxes, update);
   publisher.log(`note edited: ${note.id} \u2192 ${inboxes.length} inbox(es)`);
   return patched;
+}
+
+// lib/core/publisher/restore.mjs
+var ACCEPT_AP = 'application/activity+json, application/ld+json; profile="https://www.w3.org/ns/activitystreams"';
+var REBUILD_MAX_PER_RUN = 200;
+async function reconcileFollowers(publisher, contacts) {
+  let published = [];
+  try {
+    published = await publisher.readPublishedFollowers() || [];
+  } catch {
+    return 0;
+  }
+  const known2 = new Set(contacts.followers.map((f) => f.actor));
+  const removed = new Set((contacts.removedFollowers || []).map((r) => r.actor));
+  const missing = published.filter((a) => typeof a === "string" && !known2.has(a) && !removed.has(a));
+  if (!missing.length) return 0;
+  let recovered = 0;
+  for (const actor of missing.slice(0, 200)) {
+    try {
+      const res = await publisher.deliverer.signedFetch(actor, { headers: { accept: ACCEPT_AP } });
+      if (!res.ok) continue;
+      const { doc, view, degraded } = await readLenient(await res.json());
+      const actorDoc2 = view ?? doc;
+      if (degraded) publisher.log?.(`actor ${actor} grounded to read: ${degraded}`);
+      if (!actorDoc2?.inbox) continue;
+      contacts.followers.push({
+        actor,
+        inbox: actorDoc2.inbox,
+        sharedInbox: actorDoc2.endpoints?.sharedInbox || null,
+        recovered: true,
+        // Said explicitly, because onUndo reads it: the pod publishes WHO
+        // follows, never the id of the Follow that did it, so a recovered
+        // record has nothing an Undo can be matched against and must not be
+        // evictable by one naming anything at all.
+        followId: null
+      });
+      recovered++;
+    } catch {
+    }
+  }
+  if (recovered) {
+    publisher.store.setContacts(contacts);
+    publisher.log(`reconciled ${recovered} follower(s) the pod knew about and this machine did not \u2014 a restored or copied state was behind`);
+  }
+  return recovered;
+}
+async function reconcileOutbox(publisher, outbox) {
+  let published = [];
+  try {
+    published = await publisher.readPublishedOutbox() || [];
+  } catch {
+    return 0;
+  }
+  if (!Array.isArray(published) || !published.length) return 0;
+  const idOf2 = (i) => typeof i === "string" ? i : i?.id || null;
+  const known2 = new Set(outbox.map(idOf2).filter(Boolean));
+  const removed = new Set(publisher.store.read("outbox-removed.json", []).map((r) => r.id));
+  const missing = published.filter((i) => {
+    const id = idOf2(i);
+    return id && !known2.has(id) && !removed.has(id);
+  });
+  if (!missing.length) return 0;
+  outbox.push(...missing);
+  publisher.store.write("outbox.json", outbox);
+  publisher.log(`reconciled ${missing.length} outbox entr(ies) the pod carried and this machine did not`);
+  return missing.length;
+}
+async function rebuildStatuses(publisher, { fromNotes = false } = {}) {
+  const { urls } = publisher;
+  const ids = /* @__PURE__ */ new Set();
+  const boosts = [];
+  let indexed = false;
+  const published = await publisher.readPublishedOutbox().catch(() => null);
+  if (published) {
+    indexed = true;
+    for (const item of published) {
+      if (typeof item === "string") {
+        if (item.startsWith(urls.notes)) ids.add(item);
+      } else if (item?.type === "Announce") boosts.push(item);
+    }
+  }
+  if (fromNotes) {
+    for (const child of await list2(publisher.remote, urls).catch(() => [])) {
+      ids.add(child.url);
+    }
+    indexed = true;
+  }
+  if (!indexed) return { indexed: 0, recovered: 0, reblogs: 0, landed: false, why: "the pod would not answer for its outbox" };
+  const statuses = publisher.store.getStatuses();
+  const have = new Set(statuses.map((s) => s.noteId));
+  const removed = new Set(publisher.store.read("outbox-removed.json", []).map((r) => r.id));
+  const recovered = [];
+  let budget = REBUILD_MAX_PER_RUN;
+  for (const id of ids) {
+    if (budget <= 0) {
+      publisher.log(`rebuild: stopping at ${REBUILD_MAX_PER_RUN} this run \u2014 run it again for the rest`);
+      break;
+    }
+    if (have.has(id) || removed.has(id)) continue;
+    budget--;
+    const note = await read(publisher.remote, id).catch(() => null);
+    if (!note?.type || note.id !== id || note.attributedTo !== urls.actor) continue;
+    const attachments = attachmentsOf(note);
+    const mentions = (Array.isArray(note.tag) ? note.tag : []).filter((t) => t?.type === "Mention" && t.href).map((t) => ({ href: t.href, name: t.name }));
+    recovered.push({
+      noteId: note.id,
+      actor: urls.actor,
+      content: rowContent(note),
+      published: note.published || null,
+      ...note.inReplyTo ? { inReplyTo: note.inReplyTo } : {},
+      kind: "post",
+      slug: note.id.slice(urls.notes.length),
+      ...attachments.length ? { attachments } : {},
+      ...mentions.length ? { mentions } : {},
+      recovered: true
+    });
+  }
+  const merged = [...statuses, ...recovered];
+  let reblogs = 0;
+  for (const act of boosts) {
+    const object = typeof act.object === "string" ? act.object : act.object?.id;
+    const s = object && merged.find((x) => x.noteId === object);
+    if (!s || s.reblogged) continue;
+    s.reblogged = true;
+    s.announceActivity = act;
+    reblogs++;
+  }
+  if (!recovered.length && !reblogs) return { indexed: ids.size, recovered: 0, reblogs: 0, landed: true };
+  merged.sort((a, b) => String(b.published || "").localeCompare(String(a.published || "")));
+  const kept = merged.slice(0, 1e3);
+  publisher.store.write("statuses.json", kept);
+  const landed = await publisher.store.commit();
+  publisher.log(`rebuilt ${recovered.length} post(s) and ${reblogs} boost(s) from the pod${landed ? "" : " \u2014 THE STATE WRITE DID NOT LAND"}`);
+  return {
+    indexed: ids.size,
+    recovered: recovered.length,
+    reblogs,
+    landed,
+    dropped: Math.max(0, merged.length - kept.length)
+  };
+}
+async function healStatuses(publisher) {
+  const { urls, store } = publisher;
+  const own = store.read("outbox.json", []).map((i) => typeof i === "string" ? i : null).filter((id) => id && id.startsWith(urls.notes));
+  if (!own.length) return { missing: 0, recovered: 0 };
+  const have = new Set(store.getStatuses().map((s) => s.noteId));
+  const removed = new Set(store.read("outbox-removed.json", []).map((r2) => r2.id));
+  const missing = own.filter((id) => !have.has(id) && !removed.has(id));
+  if (!missing.length) return { missing: 0, recovered: 0 };
+  const r = await rebuildStatuses(publisher);
+  publisher.log(`timeline index healed: ${missing.length} own post(s) were missing, ${r.recovered} recovered`);
+  return { missing: missing.length, recovered: r.recovered };
 }
 
 // lib/core/publisher/questions.mjs
@@ -56225,6 +56430,7 @@ async function publishQuestion(publisher, content, {
     ...spoilerText ? { spoiler: spoilerText } : {},
     ...question.tag?.length ? { mentions: question.tag.map((t) => ({ href: t.href, name: t.name })) } : {}
   });
+  if (await publisher.store.commit?.() === false) publisher.log(`poll published but its timeline row was refused: ${question.id}`);
   const create = publisher._pollActivity("Create", question, createActivityId(question.id));
   await writeCreate(publisher.remote, create.id, create);
   const contacts = publisher.store.getContacts();
@@ -56405,6 +56611,14 @@ var Publisher = class {
   // republish button. Without it, an actor lost from the pod would match the
   // digest, be skipped, and leave the agent reporting success while nobody can
   // resolve it.
+  // The Gateway's outbox door for this account, when a Gateway is attached:
+  // beside its inbox door, or under the fronted actor.
+  gatewayOutbox() {
+    const gw = this.config.gateway;
+    if (!(gw && gw.url && gw.mode && gw.mode !== "off")) return null;
+    if (gw.frontActor) return String(gw.frontActor).replace(/ap\/actor\/?$/u, "ap/outbox");
+    return String(gw.url).replace(/ap\/inbox\/?$/u, "ap/outbox");
+  }
   async publishProfile({ force = false } = {}) {
     const { urls } = this;
     const host = new URL(urls.base).host;
@@ -56434,7 +56648,8 @@ var Publisher = class {
       inbox: gwActive ? gw.url : null,
       // The agent's own outbox endpoint, where it is reachable: a client
       // following the actor must arrive somewhere that will take a write.
-      outbox: this.clientOrigin ? `${this.clientOrigin}ap/outbox` : null,
+      // Otherwise the Gateway's outbox door, when one is attached.
+      outbox: this.clientOrigin ? `${this.clientOrigin}ap/outbox` : this.gatewayOutbox(),
       // How a client-to-server client finds the way in with nothing configured
       // by hand. Advertised only where the surface is publicly reachable.
       oauthAuthorize: this.clientOrigin ? `${this.clientOrigin}oauth/authorize` : null,
@@ -56485,7 +56700,9 @@ var Publisher = class {
       const wrote = await linkInWebIdProfile(this.remote, {
         actorUrl: urls.actor,
         accountName: `@${this.config.handle}@${host}`,
-        kind: this.config.kind
+        kind: this.config.kind,
+        // Where a Solid client posts: dokieli reads `as:outbox` off the WebID.
+        outbox: this.clientOrigin ? `${this.clientOrigin}ap/outbox` : this.gatewayOutbox()
       });
       if (wrote) this.log("WebID profile now lists the actor as a foaf:account");
     } catch (e) {
@@ -56732,6 +56949,9 @@ var Publisher = class {
   rebuildStatuses(...a) {
     return rebuildStatuses(this, ...a);
   }
+  healStatuses(...a) {
+    return healStatuses(this, ...a);
+  }
   // notes.mjs
   ensureMediaContainer(...a) {
     return ensureMediaContainer(this, ...a);
@@ -56750,6 +56970,9 @@ var Publisher = class {
   }
   publishNote(...a) {
     return publishNote(this, ...a);
+  }
+  publishObject(...a) {
+    return publishObject(this, ...a);
   }
   updateNote(...a) {
     return updateNote(this, ...a);
@@ -56833,13 +57056,13 @@ var MAX_FORWARDS_PER_DRAIN = 20;
 var ACCEPT_AP2 = 'application/activity+json, application/ld+json; profile="https://www.w3.org/ns/activitystreams"';
 function trimActivity(a) {
   if (!a || typeof a !== "object") return a ?? null;
-  const idOf = (v) => typeof v === "string" ? v : v?.id ?? null;
+  const idOf2 = (v) => typeof v === "string" ? v : v?.id ?? null;
   const out = {};
   for (const k of ["id", "type", "actor", "target"]) {
-    const v = idOf(a[k]);
+    const v = idOf2(a[k]);
     if (v) out[k] = String(v).slice(0, 2048);
   }
-  const obj = idOf(a.object);
+  const obj = idOf2(a.object);
   if (obj) out.object = String(obj).slice(0, 2048);
   else if (a.object && typeof a.object === "object" && a.object.type) {
     out.object = { type: String(a.object.type).slice(0, 64) };
@@ -60814,8 +61037,8 @@ function walkPath(graph2, subject, path, visited = new node_set_default()) {
   pathValues.addAll(deeperValues);
   return pathValues;
 }
-function flatMap(arr, func) {
-  return [...arr].reduce((acc, x) => acc.concat(func(x)), []);
+function flatMap(arr2, func) {
+  return [...arr2].reduce((acc, x) => acc.concat(func(x)), []);
 }
 
 // node_modules/rdf-validate-shacl/src/dataset-utils.js
@@ -62764,8 +62987,10 @@ var ATTEMPTS_TTL_MS = 7 * 24 * 60 * 6e4;
 var MAX_ITEM_ATTEMPTS = 5;
 var MAX_ITEMS_PER_DRAIN = 50;
 var Intake = class {
-  constructor({ config, urls, remote, store, deliverer, publisher, log: log2 = console.log, lease = null, archive = null, push = true, pollSeconds = null }) {
-    Object.assign(this, { config, urls, remote, store, deliverer, publisher, log: log2, lease, archive, push, pollSeconds });
+  // `ownerPost(activity, { raw, slug })` is the client-to-server dispatcher,
+  // for an item the Gateway's outbox door took on the owner's behalf.
+  constructor({ config, urls, remote, store, deliverer, publisher, log: log2 = console.log, lease = null, archive = null, push = true, pollSeconds = null, ownerPost = null }) {
+    Object.assign(this, { config, urls, remote, store, deliverer, publisher, log: log2, lease, archive, push, pollSeconds, ownerPost });
     this.serial = Date.now();
     this.stopped = false;
     this.lastDrain = null;
@@ -63073,9 +63298,10 @@ var Intake = class {
         }
         const receipt = activity ? await this._readReceipt(url) : null;
         if (activity && this.gatewaySecret()) this._bumpGatewayStat(!!receipt?.verified);
-        const rejection = activity ? await this.handle(activity, receipt) : "unparsable JSON";
-        if (!rejection && raw) await this._archive(url, raw, activity);
-        if (!rejection) await this._maybeForward(activity);
+        const owned = activity && this.isOwnerPost(receipt);
+        const rejection = !activity ? "unparsable JSON" : owned ? await this.ownerPostFrom(activity, raw, receipt) : await this.handle(activity, receipt);
+        if (!rejection && raw && !owned) await this._archive(url, raw, activity);
+        if (!rejection && !owned) await this._maybeForward(activity);
         if (rejection) {
           this.store.addDeadLetter({
             inboxUrl: url,
@@ -63223,6 +63449,28 @@ var Intake = class {
   _readReceipt(...a) {
     return readReceipt(this, ...a);
   }
+  // A receipt the door stamped `c2s` for THIS actor, and only a receipt whose
+  // HMAC verified (readReceipt returns nothing else). A stranger appending an
+  // item that claims to be ours has no such receipt and is read as mail.
+  isOwnerPost(receipt) {
+    return !!(this.ownerPost && receipt?.verified && receipt.method === "c2s" && receipt.actor === this.urls.actor);
+  }
+  // Publish what the owner posted at the door. The bytes as the client wrote
+  // them go to the dispatcher (an object stored as sent must be the client's
+  // document, not our reading of it); the graph is what it decides from.
+  // Returns null when published, else the reason it was not — a dead letter.
+  async ownerPostFrom(activity, raw, receipt) {
+    let asSent = null;
+    try {
+      asSent = raw ? JSON.parse(raw) : null;
+    } catch {
+      asSent = null;
+    }
+    const r = await this.ownerPost(activity, { raw: asSent, slug: receipt.slug || null });
+    if (!r || r.status >= 300) return `owner post refused (${r?.status || "?"}): ${r?.body?.error || ""}`;
+    this.log(`owner post from the outbox door published: ${r.body?.object || r.body?.id || activity.type}`);
+    return null;
+  }
   receiptVouchesFor(...a) {
     return receiptVouchesFor(this, ...a);
   }
@@ -63303,6 +63551,846 @@ var Intake = class {
   }
   addReply(...a) {
     return addReply(this, ...a);
+  }
+};
+
+// lib/core/social.mjs
+var social_exports = {};
+__export(social_exports, {
+  admitRequest: () => admitRequest,
+  announceModeration: () => announceModeration,
+  applyModeration: () => applyModeration,
+  blockActor: () => blockActor,
+  confirmDelegation: () => confirmDelegation,
+  deleteNote: () => deleteNote,
+  ejectFollower: () => ejectFollower,
+  favourite: () => favourite,
+  followActor: () => followActor,
+  followHandle: () => followHandle,
+  lookupWebFinger: () => lookupWebFinger,
+  pinStatus: () => pinStatus,
+  reblog: () => reblog,
+  refuseRequest: () => refuseRequest,
+  resolveHandle: () => resolveHandle,
+  retractAnnouncement: () => retractAnnouncement,
+  selfLink: () => selfLink,
+  unblockActor: () => unblockActor,
+  unfavourite: () => unfavourite,
+  unfollowActor: () => unfollowActor,
+  unreblog: () => unreblog,
+  votePoll: () => votePoll
+});
+init_node_crypto();
+init_wire();
+async function lookupWebFinger(acct, { fetchImpl = null } = {}) {
+  const clean = String(acct || "").replace(/^acct:/, "");
+  const at = clean.lastIndexOf("@");
+  if (at < 1) return null;
+  const [user, host] = [clean.slice(0, at), clean.slice(at + 1)];
+  if (!host || /[/\\?#]/.test(host)) return null;
+  const { safeFetch: safeFetch2, readCapped: readCapped3 } = await Promise.resolve().then(() => (init_safefetch(), safefetch_exports));
+  const url = `https://${host}/.well-known/webfinger?resource=${encodeURIComponent(`acct:${clean}`)}`;
+  const headers = { accept: "application/jrd+json, application/json" };
+  const res = await (fetchImpl ? fetchImpl(url, { headers }) : safeFetch2(url, { headers })).catch(() => null);
+  if (!res || res.status >= 400) return null;
+  let jrd2;
+  try {
+    jrd2 = JSON.parse(await readCapped3(res, 256 * 1024));
+  } catch {
+    return null;
+  }
+  const subject = String(jrd2?.subject || "").replace(/^acct:/, "").toLowerCase();
+  if (subject && subject !== clean.toLowerCase()) {
+    return null;
+  }
+  return jrd2;
+}
+var selfLink = (jrd2) => jrd2?.links?.find((l) => l.rel === "self" && /application\/(activity\+json|ld\+json)/.test(l.type || ""));
+async function confirmDelegation(asked, doc, lookup2 = lookupWebFinger) {
+  let home;
+  try {
+    home = new URL(doc.id).host.toLowerCase();
+  } catch {
+    throw new Error(`actor id is not a URL (${doc.id})`);
+  }
+  if (home === asked.toLowerCase()) return;
+  const user = doc.preferredUsername;
+  if (!user) {
+    throw new Error(`${asked} points at ${doc.id} on another host, which names no username to confirm it by`);
+  }
+  const back = await lookup2(`acct:${user}@${home}`);
+  if (selfLink(back)?.href !== doc.id) {
+    throw new Error(`${asked} claims ${doc.id}, but ${home} does not agree that is @${user}@${home} \u2014 refusing to take one host's word for another's actor`);
+  }
+}
+async function resolveHandle(agent2, handle7) {
+  const clean = String(handle7 || "").replace(/^@/, "");
+  if (!/^[^@]+@[^@]+$/.test(clean)) throw new Error("handle must look like user@host");
+  if (agent2.store.isBlocked("https://" + clean.split("@")[1] + "/")) throw new Error("domain is blocked");
+  const remote = agent2.intake?.deliverer?.signedFetch ? (u, i) => agent2.intake.deliverer.signedFetch(u, i) : null;
+  const lookup2 = (a) => lookupWebFinger(a, { fetchImpl: remote });
+  const jrd2 = await lookup2("acct:" + clean);
+  const self2 = selfLink(jrd2);
+  if (!self2?.href) throw new Error(`webfinger found no actor for ${clean}`);
+  const doc = await agent2.intake.fetchAP(self2.href);
+  if (!doc?.id) throw new Error(`actor document unusable for ${clean}`);
+  if (agent2.store.isBlocked(doc.id)) throw new Error("actor is blocked");
+  await confirmDelegation(clean.slice(clean.lastIndexOf("@") + 1), doc, lookup2);
+  await cacheCounts(agent2, doc);
+  return doc;
+}
+async function cacheCounts(agent2, doc) {
+  const total = async (url) => {
+    if (!url) return null;
+    try {
+      const res = await agent2.intake.fetchAP(url);
+      return Number.isInteger(res?.totalItems) ? res.totalItems : null;
+    } catch {
+      return null;
+    }
+  };
+  const [followers, following] = await Promise.all([total(doc.followers), total(doc.following)]);
+  if (followers === null && following === null) return;
+  const actors = agent2.store.getActors();
+  if (!actors[doc.id]) return;
+  actors[doc.id] = { ...actors[doc.id], counts: { followers, following } };
+  agent2.store.write("actors.json", actors);
+}
+async function followActor(agent2, actorUrl, { publish = true, doc: fetched = null } = {}) {
+  const doc = fetched || await agent2.intake.fetchAP(actorUrl);
+  if (!doc?.inbox) throw new Error(`actor document unusable (${actorUrl})`);
+  if (agent2.store.isBlocked(doc.id)) throw new Error("actor is blocked");
+  const contacts = agent2.store.getContacts();
+  let rec = contacts.following.find((f) => f.actor === doc.id);
+  if (!rec) {
+    rec = { actor: doc.id, inbox: doc.inbox, accepted: false };
+    contacts.following.push(rec);
+  }
+  const follow = followActivity({ urls: agent2.publisher.urls, targetActor: doc.id, serial: Date.now() });
+  rec.followActivity = follow;
+  agent2.store.setContacts(contacts);
+  await agent2.deliverer.deliver(doc.inbox, follow);
+  if (publish) await agent2.publisher.publishCollections({ following: true, pending: true });
+  return doc;
+}
+async function followHandle(agent2, handle7) {
+  const doc = await resolveHandle(agent2, handle7);
+  await followActor(agent2, doc.id);
+  const clean = String(handle7 || "").replace(/^@/, "");
+  const contacts = agent2.store.getContacts();
+  const rec = contacts.following.find((f) => f.actor === doc.id);
+  if (rec && !rec.handle) {
+    rec.handle = clean;
+    agent2.store.setContacts(contacts);
+  }
+  return { ok: true, actor: doc.id };
+}
+async function unfollowActor(agent2, actor) {
+  const contacts = agent2.store.getContacts();
+  const rec = contacts.following.find((f) => f.actor === actor);
+  if (!rec) throw new Error("not following that actor");
+  if (rec.followActivity) {
+    await agent2.deliverer.deliver(
+      rec.inbox,
+      undoActivity({ urls: agent2.publisher.urls, activity: rec.followActivity, serial: Date.now() })
+    );
+  }
+  contacts.following = contacts.following.filter((f) => f.actor !== actor);
+  agent2.store.setContacts(contacts);
+  await agent2.publisher.publishCollections({ following: true, pending: true });
+  return { ok: true };
+}
+async function favourite(agent2, s) {
+  if (s.favourited) return s;
+  const doc = await agent2.intake.fetchAP(s.actor);
+  if (!doc?.inbox) throw new Error("author inbox unavailable");
+  const act = likeActivity({ urls: agent2.publisher.urls, noteId: s.noteId, serial: Date.now() });
+  await agent2.deliverer.deliver(doc.endpoints?.sharedInbox || doc.inbox, act);
+  return agent2.store.updateStatus(s.noteId, { favourited: true, likeActivity: act });
+}
+async function unfavourite(agent2, s) {
+  if (s.likeActivity) {
+    const doc = await agent2.intake.fetchAP(s.actor).catch(() => null);
+    if (doc?.inbox) {
+      await agent2.deliverer.deliver(
+        doc.endpoints?.sharedInbox || doc.inbox,
+        undoActivity({ urls: agent2.publisher.urls, activity: s.likeActivity, serial: Date.now() })
+      );
+    }
+  }
+  return agent2.store.updateStatus(s.noteId, { favourited: false, likeActivity: void 0 });
+}
+async function reblog(agent2, s) {
+  if (s.reblogged) return s;
+  const { urls } = agent2.publisher;
+  const act = announceActivity({ urls, object: s.noteId, serial: Date.now() });
+  const inboxes = new Set(agent2.store.getContacts().followers.map((f) => f.sharedInbox || f.inbox).filter(Boolean));
+  if (s.actor !== urls.actor) {
+    const doc = await agent2.intake.fetchAP(s.actor).catch(() => null);
+    if (doc?.inbox) inboxes.add(doc.endpoints?.sharedInbox || doc.inbox);
+  }
+  await agent2.deliverer.deliverToAll([...inboxes], act);
+  const updated = agent2.store.updateStatus(s.noteId, { reblogged: true, announceActivity: act });
+  await agent2.publisher.recordOutbox(act);
+  if (await agent2.store.commit?.() === false) agent2.log(`boost sent but its timeline row was refused: ${s.noteId}`);
+  return updated;
+}
+async function unreblog(agent2, s) {
+  if (s.announceActivity) {
+    const undo = undoActivity({ urls: agent2.publisher.urls, activity: s.announceActivity, serial: Date.now() });
+    const inboxes = new Set(agent2.store.getContacts().followers.map((f) => f.sharedInbox || f.inbox).filter(Boolean));
+    const doc = await agent2.intake.fetchAP(s.actor).catch(() => null);
+    if (doc?.inbox && s.actor !== agent2.publisher.urls.actor) inboxes.add(doc.endpoints?.sharedInbox || doc.inbox);
+    await agent2.deliverer.deliverToAll([...inboxes], undo);
+    await agent2.publisher.unrecordOutbox((i) => i?.id === s.announceActivity.id);
+  }
+  return agent2.store.updateStatus(s.noteId, { reblogged: false, announceActivity: void 0 });
+}
+async function ejectFollower(agent2, actor) {
+  const { urls } = agent2.publisher;
+  const contacts = agent2.store.getContacts();
+  const rec = contacts.followers.find((f) => f.actor === actor);
+  if (!rec) throw new Error("not a member");
+  dropFollower(contacts, actor, "ejected");
+  agent2.store.setContacts(contacts);
+  const muted = agent2.store.getMuted();
+  muted.actors = [.../* @__PURE__ */ new Set([...muted.actors, actor])];
+  agent2.store.setMuted(muted);
+  await agent2.publisher.publishCollections({ followers: true });
+  await announceModeration(
+    agent2,
+    blockActivity({ urls, targetActor: actor, serial: Date.now() })
+  ).catch((e) => agent2.log?.(`moderation announce failed: ${e.message}`));
+  if (rec.bsky) {
+    await agent2.bskygroup?.blockDid(rec.bsky.did).catch((e) => agent2.log?.(`bluesky block failed for ${rec.bsky.handle}: ${e.message}`));
+    return { ok: true, actor, told: true };
+  }
+  if (rec.inbox) {
+    await agent2.deliverer.deliver(rec.inbox, rejectActivity({
+      urls,
+      followActivity: { id: rec.followId, type: "Follow", actor, object: urls.actor },
+      serial: Date.now()
+    }));
+  }
+  return { ok: true, actor, told: !!rec.inbox };
+}
+async function admitRequest(agent2, actor, { publish = true } = {}) {
+  const reqs = agent2.store.getRequests();
+  const req = reqs.find((r) => r.actor === actor);
+  if (!req) throw new Error("no such request");
+  const contacts = agent2.store.getContacts();
+  if (!contacts.followers.some((f) => f.actor === actor)) {
+    const bridgedDid = /^https:\/\/bsky\.brid\.gy\/ap\/(did:[^/]+)$/.exec(actor)?.[1];
+    if (bridgedDid) contacts.followers = contacts.followers.filter((f) => f.bsky?.did !== bridgedDid);
+    contacts.followers.push(req.bsky ? { actor, bsky: req.bsky } : { actor, inbox: req.inbox, sharedInbox: req.sharedInbox, followId: req.activity?.id });
+    agent2.store.setContacts(contacts);
+    agent2.store.addNotification({ type: "follow", actor, ...req.bsky ? { bsky: true } : {} });
+  }
+  agent2.store.setRequests(reqs.filter((r) => r.actor !== actor));
+  if (req.bsky) {
+    await agent2.bskygroup?.nudgeOnce(contacts.followers.find((f) => f.actor === actor));
+    return { ok: true, actor };
+  }
+  if (publish) await agent2.publisher.publishCollections({ followers: true, pending: true });
+  await agent2.deliverer.deliver(req.inbox, acceptActivity({
+    urls: agent2.publisher.urls,
+    followActivity: req.activity,
+    serial: Date.now()
+  }));
+  return { ok: true, actor };
+}
+async function refuseRequest(agent2, actor) {
+  const reqs = agent2.store.getRequests();
+  const req = reqs.find((r) => r.actor === actor);
+  if (!req) throw new Error("no such request");
+  agent2.store.setRequests(reqs.filter((r) => r.actor !== actor));
+  await agent2.publisher?.publishCollections({ pending: true }).catch(() => {
+  });
+  if (req.bsky) {
+    await agent2.bskygroup?.blockDid(req.bsky.did).catch((e) => agent2.log?.(`bluesky block failed for ${req.bsky.handle}: ${e.message}`));
+    return { ok: true, actor };
+  }
+  await agent2.deliverer.deliver(req.inbox, rejectActivity({
+    urls: agent2.publisher.urls,
+    followActivity: req.activity,
+    serial: Date.now()
+  }));
+  return { ok: true, actor };
+}
+async function retractAnnouncement(agent2, noteId) {
+  return agent2.intake.retract(noteId);
+}
+async function votePoll(agent2, s, choices) {
+  const { urls } = agent2.publisher;
+  const poll = s.poll || {};
+  const opts = poll.options || [];
+  if (poll.closed || poll.expiresAt && Date.parse(poll.expiresAt) < Date.now()) {
+    return { ok: false, error: "this poll has closed" };
+  }
+  if (poll.voted) return { ok: false, error: "already voted" };
+  if (s.actor === urls.actor) return { ok: false, error: "this is your own poll" };
+  const picks = [...new Set(choices)].filter((i) => i >= 0 && i < opts.length);
+  if (!picks.length) return { ok: false, error: "invalid choice" };
+  if (!poll.multiple && picks.length > 1) return { ok: false, error: "this poll takes one choice" };
+  const author = await agent2.intake.fetchAP(s.actor).catch(() => null);
+  const inbox = author?.endpoints?.sharedInbox || author?.inbox;
+  if (!inbox) return { ok: false, error: "could not reach the poll author" };
+  const published = (/* @__PURE__ */ new Date()).toISOString();
+  for (const i of picks) {
+    const id = urls.notes + published.slice(0, 10) + "-vote-" + node_crypto_default.randomBytes(4).toString("hex");
+    const note = {
+      "@context": AS_CTX,
+      id,
+      type: "Note",
+      attributedTo: urls.actor,
+      name: opts[i].title,
+      inReplyTo: s.noteId,
+      published,
+      to: [s.actor]
+    };
+    const create = {
+      "@context": AS_CTX,
+      id: createActivityId(id),
+      type: "Create",
+      actor: urls.actor,
+      published,
+      to: [s.actor],
+      object: note
+    };
+    await write4(agent2.remote, id, note);
+    await writeCreate(agent2.remote, create.id, create);
+    await agent2.deliverer.deliverToAll([inbox], create);
+  }
+  agent2.store.updateStatus(s.noteId, {
+    poll: {
+      ...poll,
+      voted: true,
+      ownVotes: picks,
+      options: opts.map((o, j) => picks.includes(j) ? { ...o, votes: (o.votes || 0) + 1 } : o)
+    }
+  });
+  return { ok: true };
+}
+async function deleteNote(agent2, s) {
+  const { urls } = agent2.publisher;
+  const inboxes = agent2.store.getContacts().followers.map((f) => f.sharedInbox || f.inbox).filter(Boolean);
+  await agent2.deliverer.deliverToAll(inboxes, deleteActivity({ urls, noteId: s.noteId }));
+  const stuck = [];
+  const deletedAt = (/* @__PURE__ */ new Date()).toISOString();
+  try {
+    await writeTombstone2(agent2.remote, s.noteId, noteTombstone(s.noteId, deletedAt));
+  } catch {
+    stuck.push(s.noteId);
+  }
+  if (!await dropCreate(agent2.remote, createActivityId(s.noteId))) {
+    stuck.push(createActivityId(s.noteId));
+  }
+  if (stuck.length) {
+    agent2.log?.(`delete ${s.noteId}: the pod kept ${stuck.length} document(s) \u2014 the post is STILL PUBLISHED`);
+    return {
+      ok: false,
+      stillPublished: stuck,
+      error: "the pod would not remove the post \u2014 it is still published, and has been kept here so you can try again"
+    };
+  }
+  await dropReplies(agent2.remote, repliesId(s.noteId));
+  if (s.atproto?.uri && agent2.atproto?.connected()) {
+    await agent2.atproto.deleteCrossPost(s.atproto.uri).then(() => agent2.log?.(`bluesky mirror deleted: ${s.atproto.uri}`)).catch((e) => agent2.log?.(`bluesky mirror not deleted (${e.message}): ${s.atproto.uri}`));
+  }
+  await agent2.publisher.unrecordOutbox((i) => i === s.noteId || i?.id && i.id === s.announceActivity?.id);
+  agent2.store.removeStatus(s.noteId);
+  return { ok: true };
+}
+async function announceModeration(agent2, activity) {
+  if (agent2.store.getConfig()?.kind !== "group") return null;
+  const { urls } = agent2.publisher;
+  const act = announceActivity({ urls, object: activity, serial: Date.now(), audience: urls.actor });
+  const inboxes = [...new Set(agent2.store.getContacts().followers.map((f) => f.sharedInbox || f.inbox).filter(Boolean))];
+  await agent2.deliverer.deliverToAll(inboxes, act);
+  await agent2.publisher.recordOutbox(act);
+  return act;
+}
+async function blockActor(agent2, actorUrl) {
+  if (!/^https?:\/\/\S+$/.test(String(actorUrl || ""))) throw new Error("actor must be a URL");
+  const b = agent2.store.getBlocklist();
+  if (!b.actors.includes(actorUrl)) b.actors.push(actorUrl);
+  agent2.store.setBlocklist(b);
+  await unfollowActor(agent2, actorUrl).catch(() => {
+  });
+  await agent2.publisher?.publishCollections({ blocked: true }).catch(() => {
+  });
+  await announceModeration(
+    agent2,
+    blockActivity({ urls: agent2.publisher.urls, targetActor: actorUrl, serial: Date.now() })
+  ).catch((e) => agent2.log?.(`moderation announce failed: ${e.message}`));
+  return { ok: true, actor: actorUrl };
+}
+async function unblockActor(agent2, actorUrl) {
+  const b = agent2.store.getBlocklist();
+  b.actors = b.actors.filter((a) => a !== actorUrl);
+  agent2.store.setBlocklist(b);
+  await agent2.publisher?.publishCollections({ blocked: true }).catch(() => {
+  });
+  await announceModeration(agent2, undoActivity({
+    urls: agent2.publisher.urls,
+    activity: { type: "Block", actor: agent2.publisher.urls.actor, object: actorUrl },
+    serial: Date.now()
+  })).catch((e) => agent2.log?.(`moderation announce failed: ${e.message}`));
+  return { ok: true, actor: actorUrl };
+}
+async function applyModeration(agent2, entry) {
+  const { urls } = agent2.publisher;
+  const target = typeof entry.activity?.object === "string" ? entry.activity.object : entry.activity?.object?.id;
+  switch (entry.type) {
+    case "Block": {
+      if (!target) throw new Error("the queued Block names nobody");
+      const member = agent2.store.getContacts().followers.some((f) => f.actor === target);
+      return member ? ejectFollower(agent2, target) : blockActor(agent2, target);
+    }
+    case "Undo": {
+      const inner = entry.activity?.object;
+      const unbanned = typeof inner === "object" && inner?.type === "Block" ? typeof inner.object === "string" ? inner.object : inner.object?.id : null;
+      if (!unbanned) throw new Error("the queued Undo does not name a Block");
+      const muted = agent2.store.getMuted();
+      muted.actors = muted.actors.filter((a) => a !== unbanned);
+      agent2.store.setMuted(muted);
+      return unblockActor(agent2, unbanned);
+    }
+    case "Delete": {
+      if (!target) throw new Error("the queued Delete names nothing");
+      return agent2.intake.retract(target);
+    }
+    case "Add":
+    case "Remove": {
+      if (!target) throw new Error("the queued roster change names nobody");
+      const cfg = { ...agent2.store.getConfig() };
+      const prev = cfg.moderators || [];
+      cfg.moderators = entry.type === "Add" ? [.../* @__PURE__ */ new Set([...prev, target])] : prev.filter((m) => m !== target);
+      agent2.store.setConfig(cfg);
+      if (agent2.publisher) agent2.publisher.config.moderators = cfg.moderators;
+      await agent2.publisher.publishProfile();
+      await announceModeration(agent2, addRemoveActivity({
+        urls,
+        type: entry.type,
+        object: target,
+        target: urls.moderators,
+        serial: Date.now()
+      })).catch((e) => agent2.log?.(`moderation announce failed: ${e.message}`));
+      return { ok: true, moderators: cfg.moderators };
+    }
+    default:
+      throw new Error(`no way to apply a queued ${entry.type}`);
+  }
+}
+async function pinStatus(agent2, s, pinned) {
+  if (s.actor !== agent2.publisher.urls.actor) throw new Error("not your status");
+  const updated = agent2.store.updateStatus(s.noteId, { pinned: !!pinned });
+  await agent2.publisher.publishFeatured().catch((e) => agent2.log?.(`featured: ${e.message}`));
+  agent2.publisher.publishProfile?.().catch(() => {
+  });
+  return updated || s;
+}
+
+// lib/client/c2s.mjs
+init_wire();
+var MAX_BODY = 512 * 1024;
+var MAX_INBOX_PAGE = 500;
+var ACTIVITY_TYPES = /* @__PURE__ */ new Set([
+  "Create",
+  "Update",
+  "Delete",
+  "Follow",
+  "Like",
+  "Announce",
+  "Undo",
+  "Block",
+  "Add",
+  "Remove",
+  "Accept",
+  "Reject",
+  "Move"
+]);
+var arr = (v) => v === void 0 || v === null ? [] : Array.isArray(v) ? v : [v];
+var idOf = (v) => typeof v === "string" ? v : v?.id || null;
+function readBody(req) {
+  return new Promise((resolve2, reject) => {
+    let size = 0;
+    const chunks = [];
+    req.on("data", (c) => {
+      size += c.length;
+      if (size > MAX_BODY) {
+        reject(new Error("body too large"));
+        req.destroy();
+        return;
+      }
+      chunks.push(c);
+    });
+    req.on("end", () => resolve2(Buffer.concat(chunks).toString("utf8")));
+    req.on("error", reject);
+  });
+}
+var C2S = class {
+  constructor({ agent: agent2, log: log2 = console.log, auth }) {
+    this.agent = agent2;
+    this.log = log2;
+    this.auth = auth;
+  }
+  get store() {
+    return this.agent.store;
+  }
+  get urls() {
+    return this.agent.publisher?.urls;
+  }
+  send(res, status2, obj, headers = {}) {
+    res.writeHead(status2, {
+      "content-type": "application/json; charset=utf-8",
+      "cache-control": "no-store",
+      ...headers
+    });
+    res.end(JSON.stringify(obj));
+    return true;
+  }
+  byIri(iri) {
+    return iri ? this.store.getStatuses().find((s) => s.noteId === iri) : null;
+  }
+  /** The months the archive holds, newest first. One container listing. */
+  async archiveMonths() {
+    const archive = this.agent.intake?.archive;
+    if (!archive) return [];
+    const { names } = await archive.list("");
+    return (names || []).map((n) => n.replace(/\/$/u, "")).filter((n) => /^\d{4}-\d{2}$/u.test(n)).sort().reverse();
+  }
+  /**
+   * The owner's own inbox, §5.2. Paged by month because that is how the
+   * archive is stored, so a page costs one listing and a read per item and no
+   * page is dearer for another month being large.
+   */
+  async sendInbox(res, url) {
+    const id = `${this.urls.base}ap/inbox`;
+    const page2 = url?.searchParams?.get("page") || null;
+    let months;
+    try {
+      months = await this.archiveMonths();
+    } catch (e) {
+      return this.send(res, 502, { error: `the archive could not be read: ${e.message}` });
+    }
+    if (!page2) {
+      if (!months.length && this.store.getConfig()?.archiveInbox === false) {
+        this.log("inbox read: nothing to show \u2014 this identity does not keep what it receives");
+      }
+      return this.send(res, 200, {
+        "@context": AS_CTX,
+        id,
+        type: "OrderedCollection",
+        ...months.length ? { first: `${id}?page=${months[0]}` } : { orderedItems: [] }
+      });
+    }
+    if (!/^\d{4}-\d{2}$/u.test(page2)) {
+      return this.send(res, 400, { error: "page names a month, written 2026-09" });
+    }
+    const archive = this.agent.intake?.archive;
+    let names = [];
+    try {
+      ({ names } = await archive.list(`${page2}/`));
+    } catch (e) {
+      return this.send(res, 502, { error: `the archive could not be read: ${e.message}` });
+    }
+    const files = (names || []).filter((n) => n.endsWith(".json")).sort();
+    if (files.length > MAX_INBOX_PAGE) {
+      this.log(`inbox read: ${page2} holds ${files.length} items; serving the first ${MAX_INBOX_PAGE}`);
+    }
+    const kept = [];
+    for (const file of files.slice(0, MAX_INBOX_PAGE)) {
+      const read2 = await archive.read(`${page2}/${file}`, { accept: "*/*" });
+      if (!read2?.ok || !read2.body) continue;
+      try {
+        const record = JSON.parse(read2.body);
+        kept.push({ at: record.receivedAt || "", activity: JSON.parse(record.raw) });
+      } catch {
+      }
+    }
+    kept.sort((a, b) => String(b.at).localeCompare(String(a.at)));
+    const older = months.filter((m) => m < page2)[0] || null;
+    return this.send(res, 200, {
+      "@context": AS_CTX,
+      id: `${id}?page=${page2}`,
+      type: "OrderedCollectionPage",
+      partOf: id,
+      ...older ? { next: `${id}?page=${older}` } : {},
+      orderedItems: kept.map((k) => k.activity)
+    });
+  }
+  async handle(req, res, pathname, url) {
+    if (pathname !== "/ap/outbox" && pathname !== "/ap/actor" && pathname !== "/ap/inbox") return false;
+    if (req.method === "OPTIONS") {
+      res.writeHead(204, pathname === "/ap/inbox" ? { allow: "GET, OPTIONS" } : { allow: "GET, POST, OPTIONS", "accept-post": "application/ld+json, application/activity+json" });
+      res.end();
+      return true;
+    }
+    if (!this.agent.configured() || !this.urls) {
+      return this.send(res, 409, { error: "agent not configured" });
+    }
+    if (pathname === "/ap/inbox") {
+      if (req.method !== "GET" && req.method !== "HEAD") {
+        return this.send(res, 405, { error: "deliveries go to this actor's inbox on the pod, which the actor document names; this address is the owner reading their own" });
+      }
+      const reader = await this.auth(req, pathname);
+      if (!reader.ok) return this.send(res, reader.status, { error: reader.error });
+      return this.sendInbox(res, url);
+    }
+    if (req.method === "GET" || req.method === "HEAD") {
+      const target = pathname === "/ap/actor" ? this.urls.actor : this.urls.outbox;
+      res.writeHead(303, { location: target, "cache-control": "no-store" });
+      res.end();
+      return true;
+    }
+    if (pathname !== "/ap/outbox" || req.method !== "POST") {
+      return this.send(res, 405, { error: "POST the outbox; GET redirects to the pod" });
+    }
+    const who = await this.auth(req, pathname);
+    if (!who.ok) return this.send(res, who.status, { error: who.error });
+    if (this.agent.viewer) {
+      const took = await this.agent.requestTakeover?.();
+      if (!took) return this.send(res, 503, { error: "another agent is active for this pod \u2014 takeover failed, try again" });
+    }
+    let activity;
+    let raw = null;
+    try {
+      const body = await readBody(req);
+      try {
+        raw = JSON.parse(body);
+      } catch {
+        raw = null;
+      }
+      const read2 = await readLenient(body);
+      activity = read2.view ?? read2.doc;
+    } catch (e) {
+      return this.send(res, 400, { error: `unreadable body: ${e.message}` });
+    }
+    if (!activity || typeof activity !== "object" || Array.isArray(activity) || !activity.type) {
+      return this.send(res, 400, { error: "a typed ActivityStreams object is required" });
+    }
+    const slug = safeSlug(req.headers.slug) || null;
+    const r = await this.dispatch(activity, { slug, raw });
+    return this.send(res, r.status, r.body, r.headers);
+  }
+  // Addressing → the facade's four visibilities, inverting the table the
+  // composer writes (wire.addressing). Nothing stated is a public post — what
+  // every client means by a post with no audience chosen, and what a client
+  // that never addresses (dokieli's annotations) needs.
+  visibilityOf(activity, object) {
+    const to = arr(activity.to ?? object?.to).map(idOf);
+    const cc = arr(activity.cc ?? object?.cc).map(idOf);
+    if (!to.length && !cc.length) return "public";
+    if (to.includes(PUBLIC)) return "public";
+    if (cc.includes(PUBLIC)) return "unlisted";
+    if (to.includes(this.urls.followers)) return "private";
+    return "direct";
+  }
+  async dispatch(activity, { slug = null, raw = null } = {}) {
+    const reply = (status2, body, headers = {}) => ({ status: status2, body, headers });
+    if (!activity || typeof activity !== "object" || Array.isArray(activity) || !activity.type) {
+      return reply(400, { error: "a typed ActivityStreams object is required" });
+    }
+    if (!ACTIVITY_TYPES.has(activity.type)) {
+      activity = { type: "Create", object: activity, to: activity.to, cc: activity.cc };
+    }
+    try {
+      return await this._dispatch(activity, { slug, raw, reply });
+    } catch (e) {
+      this.log(`c2s ${activity?.type}: ${e.message}`);
+      return reply(422, { error: e.message || String(e) });
+    }
+  }
+  async _dispatch(activity, { slug, raw, reply }) {
+    const agent2 = this.agent;
+    const object = typeof activity.object === "object" && activity.object !== null ? activity.object : null;
+    const objectId = idOf(activity.object);
+    switch (activity.type) {
+      case "Create": {
+        const makes = object?.type || "Note";
+        if (!object) return reply(422, { error: "a Create carries the object it creates" });
+        const visibility = this.visibilityOf(activity, object);
+        if (makes !== "Note" && makes !== "Question") {
+          const asSent = raw && typeof raw === "object" && !Array.isArray(raw) ? ACTIVITY_TYPES.has(raw.type) ? raw.object && typeof raw.object === "object" ? raw.object : null : raw : null;
+          const made = await agent2.publisher.publishObject(asSent || object, { visibility, slug });
+          return reply(201, { id: made.createId, object: made.id }, { location: made.createId });
+        }
+        const text = String(object.source?.content ?? object.content ?? "");
+        if (!text.trim()) return reply(422, { error: "the note has no content" });
+        if (makes === "Question") {
+          const one = arr(object.oneOf);
+          const many = arr(object.anyOf);
+          const titles = (one.length ? one : many).map((c) => String(c?.name ?? "").trim()).filter(Boolean);
+          try {
+            const question = await agent2.publisher.publishQuestion(text, {
+              options: titles,
+              multiple: !one.length && many.length > 0,
+              expiresAt: object.endTime || null,
+              inReplyTo: idOf(object.inReplyTo) || void 0,
+              visibility,
+              spoilerText: object.summary || null
+            });
+            return reply(
+              201,
+              { id: createActivityId(question.id), object: question.id },
+              { location: createActivityId(question.id) }
+            );
+          } catch (e) {
+            return reply(422, { error: e.message });
+          }
+        }
+        const attachments = arr(object.attachment).map((a) => ({
+          url: a?.url,
+          mediaType: a?.mediaType,
+          ...a?.name ? { description: a.name } : {}
+        })).filter((a) => a.url);
+        const note = await agent2.publisher.publishNote(text, {
+          inReplyTo: idOf(object.inReplyTo) || void 0,
+          attachments,
+          visibility,
+          spoilerText: object.summary || null,
+          slug
+        });
+        return reply(
+          201,
+          { id: createActivityId(note.id), object: note.id },
+          { location: createActivityId(note.id) }
+        );
+      }
+      case "Update": {
+        if (objectId === this.urls.actor) {
+          return reply(422, { error: "edit the profile on the admin surface; actor updates are not taken here" });
+        }
+        const s = this.byIri(objectId);
+        if (!s) return reply(404, { error: "no such note here" });
+        if (s.actor !== this.urls.actor || s.kind !== "post") {
+          return reply(403, { error: "not your note" });
+        }
+        const text = String(object?.source?.content ?? object?.content ?? "");
+        if (!text.trim()) return reply(422, { error: "the edit has no content" });
+        const attachments = object?.attachment !== void 0 ? arr(object.attachment).map((a) => ({
+          url: a?.url,
+          mediaType: a?.mediaType,
+          ...a?.name ? { description: a.name } : {}
+        })).filter((a) => a.url) : null;
+        await agent2.publisher.updateNote(s, {
+          content: text,
+          spoilerText: object?.summary || null,
+          attachments
+        });
+        return reply(200, { ok: true, object: s.noteId });
+      }
+      case "Delete": {
+        if (objectId === this.urls.actor) {
+          return reply(422, { error: "retiring the actor is done on the admin surface, where it asks twice" });
+        }
+        const s = this.byIri(objectId);
+        if (!s) return reply(404, { error: "no such note here" });
+        if (s.actor !== this.urls.actor || s.kind !== "post") {
+          return reply(403, { error: "not your note" });
+        }
+        const r = await deleteNote(agent2, s);
+        if (!r.ok) return reply(502, { error: r.error, stillPublished: r.stillPublished });
+        return reply(200, { ok: true });
+      }
+      case "Follow": {
+        if (!objectId) return reply(400, { error: "whom? object must name an actor" });
+        if (/^acct:|^@|^[^/@]+@[^/@]+$/.test(objectId) && !/^https?:/.test(objectId)) {
+          const r = await followHandle(agent2, objectId.replace(/^acct:/, ""));
+          const rec2 = this.store.getContacts().following.find((f) => f.actor === r.actor);
+          return reply(
+            201,
+            { id: rec2?.followActivity?.id, object: r.actor },
+            rec2?.followActivity?.id ? { location: rec2.followActivity.id } : {}
+          );
+        }
+        const doc = await followActor(agent2, objectId);
+        const rec = this.store.getContacts().following.find((f) => f.actor === doc.id);
+        return reply(
+          201,
+          { id: rec?.followActivity?.id, object: doc.id },
+          rec?.followActivity?.id ? { location: rec.followActivity.id } : {}
+        );
+      }
+      case "Like": {
+        const s = this.byIri(objectId);
+        if (!s) return reply(422, { error: "that note is not held here \u2014 like what the timeline holds" });
+        const updated = await favourite(agent2, s);
+        return reply(
+          201,
+          { id: updated.likeActivity?.id, object: s.noteId },
+          updated.likeActivity?.id ? { location: updated.likeActivity.id } : {}
+        );
+      }
+      case "Announce": {
+        const s = this.byIri(objectId);
+        if (!s) return reply(422, { error: "that note is not held here \u2014 boost what the timeline holds" });
+        const updated = await reblog(agent2, s);
+        return reply(
+          201,
+          { id: updated.announceActivity?.id, object: s.noteId },
+          updated.announceActivity?.id ? { location: updated.announceActivity.id } : {}
+        );
+      }
+      case "Undo": {
+        const inner = object;
+        const innerId = idOf(activity.object);
+        if (inner?.type === "Block") {
+          const target = idOf(inner.object);
+          if (!target) return reply(400, { error: "unblock whom?" });
+          await unblockActor(agent2, target);
+          return reply(200, { ok: true, object: target });
+        }
+        const statuses = this.store.getStatuses();
+        let s = innerId ? statuses.find((x) => x.likeActivity?.id === innerId) : null;
+        if (!s && inner?.type === "Like") s = this.byIri(idOf(inner.object));
+        if (s?.favourited) {
+          const updated = await unfavourite(agent2, s);
+          return reply(200, { ok: true, object: updated.noteId });
+        }
+        s = innerId ? statuses.find((x) => x.announceActivity?.id === innerId) : null;
+        if (!s && inner?.type === "Announce") s = this.byIri(idOf(inner.object));
+        if (s?.reblogged) {
+          const updated = await unreblog(agent2, s);
+          return reply(200, { ok: true, object: updated.noteId });
+        }
+        const following = this.store.getContacts().following;
+        const rec = following.find((f) => f.followActivity?.id === innerId) || (inner?.type === "Follow" ? following.find((f) => f.actor === idOf(inner.object)) : null);
+        if (rec) {
+          await unfollowActor(agent2, rec.actor);
+          return reply(200, { ok: true, object: rec.actor });
+        }
+        return reply(422, { error: "nothing here matches what that Undo names" });
+      }
+      case "Block": {
+        if (!objectId) return reply(400, { error: "block whom? object must name an actor" });
+        await blockActor(agent2, objectId);
+        return reply(200, { ok: true, object: objectId });
+      }
+      case "Add":
+      case "Remove": {
+        if (idOf(activity.target) !== this.urls.featured) {
+          return reply(422, { error: "the featured collection is the one Add/Remove edits here" });
+        }
+        const s = this.byIri(objectId);
+        if (!s) return reply(404, { error: "no such note here" });
+        const updated = await pinStatus(agent2, s, activity.type === "Add");
+        return reply(200, { ok: true, object: updated.noteId, pinned: !!updated.pinned });
+      }
+      case "Accept":
+      case "Reject": {
+        const requester = object?.actor ? idOf(object.actor) : objectId;
+        if (!requester) return reply(400, { error: "whose request? object must name the Follow or its actor" });
+        const r = activity.type === "Accept" ? await admitRequest(agent2, requester).catch((e) => ({ error: e.message })) : await refuseRequest(agent2, requester).catch((e) => ({ error: e.message }));
+        if (r.error) return reply(404, { error: r.error });
+        return reply(200, { ok: true, object: requester });
+      }
+      case "Move":
+        return reply(422, { error: "moving the account is done on the admin surface, where it asks twice" });
+      default:
+        return reply(422, { error: `no handler for ${activity.type}` });
+    }
   }
 };
 
@@ -63618,7 +64706,7 @@ function pollParams(body) {
 function htmlToText(html) {
   return String(html).replace(/<br\s*\/?>/gi, "\n").replace(/<\/p>\s*<p[^>]*>/gi, "\n\n").replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").trim();
 }
-function readBody(req) {
+function readBody2(req) {
   return new Promise((resolve2, reject) => {
     let data = "";
     req.on("data", (c) => {
@@ -63913,7 +65001,7 @@ function rateLimited(api) {
 async function handle(api, ctx) {
   const { req, res, pathname, url, send } = ctx;
   if (pathname === "/api/v1/apps" && req.method === "POST") {
-    const body = await readBody(req);
+    const body = await readBody2(req);
     const redirectUris = parseRedirects(body.redirect_uris);
     const app = api.registerApp({
       name: body.client_name,
@@ -63936,7 +65024,7 @@ async function handle(api, ctx) {
     let params = url.searchParams;
     let body = null;
     if (req.method === "POST") {
-      body = await readBody(req);
+      body = await readBody2(req);
       params = new URLSearchParams(body);
     }
     const redirect = params.get("redirect_uri") || "";
@@ -64011,7 +65099,7 @@ async function handle(api, ctx) {
     return true;
   }
   if (pathname === "/oauth/token" && req.method === "POST") {
-    const body = await readBody(req);
+    const body = await readBody2(req);
     const app = api.findApp(body.client_id || "");
     if (!app && body.code_verifier && /^https:\/\//iu.test(String(body.client_id || ""))) {
       const rec = api.consumeCode(body.code || "");
@@ -64091,7 +65179,7 @@ async function handle(api, ctx) {
     });
   }
   if (pathname === "/oauth/revoke" && req.method === "POST") {
-    const body = await readBody(req).catch(() => ({}));
+    const body = await readBody2(req).catch(() => ({}));
     const gone = body?.token;
     if (gone) {
       const kept = api.tokenRecords().filter((r) => r.token !== gone);
@@ -64101,442 +65189,6 @@ async function handle(api, ctx) {
     return send(200, {});
   }
   return false;
-}
-
-// lib/core/social.mjs
-var social_exports = {};
-__export(social_exports, {
-  admitRequest: () => admitRequest,
-  announceModeration: () => announceModeration,
-  applyModeration: () => applyModeration,
-  blockActor: () => blockActor,
-  confirmDelegation: () => confirmDelegation,
-  deleteNote: () => deleteNote,
-  ejectFollower: () => ejectFollower,
-  favourite: () => favourite,
-  followActor: () => followActor,
-  followHandle: () => followHandle,
-  lookupWebFinger: () => lookupWebFinger,
-  pinStatus: () => pinStatus,
-  reblog: () => reblog,
-  refuseRequest: () => refuseRequest,
-  resolveHandle: () => resolveHandle,
-  retractAnnouncement: () => retractAnnouncement,
-  selfLink: () => selfLink,
-  unblockActor: () => unblockActor,
-  unfavourite: () => unfavourite,
-  unfollowActor: () => unfollowActor,
-  unreblog: () => unreblog,
-  votePoll: () => votePoll
-});
-init_node_crypto();
-init_wire();
-async function lookupWebFinger(acct, { fetchImpl = null } = {}) {
-  const clean = String(acct || "").replace(/^acct:/, "");
-  const at = clean.lastIndexOf("@");
-  if (at < 1) return null;
-  const [user, host] = [clean.slice(0, at), clean.slice(at + 1)];
-  if (!host || /[/\\?#]/.test(host)) return null;
-  const { safeFetch: safeFetch2, readCapped: readCapped3 } = await Promise.resolve().then(() => (init_safefetch(), safefetch_exports));
-  const url = `https://${host}/.well-known/webfinger?resource=${encodeURIComponent(`acct:${clean}`)}`;
-  const headers = { accept: "application/jrd+json, application/json" };
-  const res = await (fetchImpl ? fetchImpl(url, { headers }) : safeFetch2(url, { headers })).catch(() => null);
-  if (!res || res.status >= 400) return null;
-  let jrd2;
-  try {
-    jrd2 = JSON.parse(await readCapped3(res, 256 * 1024));
-  } catch {
-    return null;
-  }
-  const subject = String(jrd2?.subject || "").replace(/^acct:/, "").toLowerCase();
-  if (subject && subject !== clean.toLowerCase()) {
-    return null;
-  }
-  return jrd2;
-}
-var selfLink = (jrd2) => jrd2?.links?.find((l) => l.rel === "self" && /application\/(activity\+json|ld\+json)/.test(l.type || ""));
-async function confirmDelegation(asked, doc, lookup2 = lookupWebFinger) {
-  let home;
-  try {
-    home = new URL(doc.id).host.toLowerCase();
-  } catch {
-    throw new Error(`actor id is not a URL (${doc.id})`);
-  }
-  if (home === asked.toLowerCase()) return;
-  const user = doc.preferredUsername;
-  if (!user) {
-    throw new Error(`${asked} points at ${doc.id} on another host, which names no username to confirm it by`);
-  }
-  const back = await lookup2(`acct:${user}@${home}`);
-  if (selfLink(back)?.href !== doc.id) {
-    throw new Error(`${asked} claims ${doc.id}, but ${home} does not agree that is @${user}@${home} \u2014 refusing to take one host's word for another's actor`);
-  }
-}
-async function resolveHandle(agent2, handle7) {
-  const clean = String(handle7 || "").replace(/^@/, "");
-  if (!/^[^@]+@[^@]+$/.test(clean)) throw new Error("handle must look like user@host");
-  if (agent2.store.isBlocked("https://" + clean.split("@")[1] + "/")) throw new Error("domain is blocked");
-  const remote = agent2.intake?.deliverer?.signedFetch ? (u, i) => agent2.intake.deliverer.signedFetch(u, i) : null;
-  const lookup2 = (a) => lookupWebFinger(a, { fetchImpl: remote });
-  const jrd2 = await lookup2("acct:" + clean);
-  const self2 = selfLink(jrd2);
-  if (!self2?.href) throw new Error(`webfinger found no actor for ${clean}`);
-  const doc = await agent2.intake.fetchAP(self2.href);
-  if (!doc?.id) throw new Error(`actor document unusable for ${clean}`);
-  if (agent2.store.isBlocked(doc.id)) throw new Error("actor is blocked");
-  await confirmDelegation(clean.slice(clean.lastIndexOf("@") + 1), doc, lookup2);
-  await cacheCounts(agent2, doc);
-  return doc;
-}
-async function cacheCounts(agent2, doc) {
-  const total = async (url) => {
-    if (!url) return null;
-    try {
-      const res = await agent2.intake.fetchAP(url);
-      return Number.isInteger(res?.totalItems) ? res.totalItems : null;
-    } catch {
-      return null;
-    }
-  };
-  const [followers, following] = await Promise.all([total(doc.followers), total(doc.following)]);
-  if (followers === null && following === null) return;
-  const actors = agent2.store.getActors();
-  if (!actors[doc.id]) return;
-  actors[doc.id] = { ...actors[doc.id], counts: { followers, following } };
-  agent2.store.write("actors.json", actors);
-}
-async function followActor(agent2, actorUrl, { publish = true, doc: fetched = null } = {}) {
-  const doc = fetched || await agent2.intake.fetchAP(actorUrl);
-  if (!doc?.inbox) throw new Error(`actor document unusable (${actorUrl})`);
-  if (agent2.store.isBlocked(doc.id)) throw new Error("actor is blocked");
-  const contacts = agent2.store.getContacts();
-  let rec = contacts.following.find((f) => f.actor === doc.id);
-  if (!rec) {
-    rec = { actor: doc.id, inbox: doc.inbox, accepted: false };
-    contacts.following.push(rec);
-  }
-  const follow = followActivity({ urls: agent2.publisher.urls, targetActor: doc.id, serial: Date.now() });
-  rec.followActivity = follow;
-  agent2.store.setContacts(contacts);
-  await agent2.deliverer.deliver(doc.inbox, follow);
-  if (publish) await agent2.publisher.publishCollections({ following: true, pending: true });
-  return doc;
-}
-async function followHandle(agent2, handle7) {
-  const doc = await resolveHandle(agent2, handle7);
-  await followActor(agent2, doc.id);
-  const clean = String(handle7 || "").replace(/^@/, "");
-  const contacts = agent2.store.getContacts();
-  const rec = contacts.following.find((f) => f.actor === doc.id);
-  if (rec && !rec.handle) {
-    rec.handle = clean;
-    agent2.store.setContacts(contacts);
-  }
-  return { ok: true, actor: doc.id };
-}
-async function unfollowActor(agent2, actor) {
-  const contacts = agent2.store.getContacts();
-  const rec = contacts.following.find((f) => f.actor === actor);
-  if (!rec) throw new Error("not following that actor");
-  if (rec.followActivity) {
-    await agent2.deliverer.deliver(
-      rec.inbox,
-      undoActivity({ urls: agent2.publisher.urls, activity: rec.followActivity, serial: Date.now() })
-    );
-  }
-  contacts.following = contacts.following.filter((f) => f.actor !== actor);
-  agent2.store.setContacts(contacts);
-  await agent2.publisher.publishCollections({ following: true, pending: true });
-  return { ok: true };
-}
-async function favourite(agent2, s) {
-  if (s.favourited) return s;
-  const doc = await agent2.intake.fetchAP(s.actor);
-  if (!doc?.inbox) throw new Error("author inbox unavailable");
-  const act = likeActivity({ urls: agent2.publisher.urls, noteId: s.noteId, serial: Date.now() });
-  await agent2.deliverer.deliver(doc.endpoints?.sharedInbox || doc.inbox, act);
-  return agent2.store.updateStatus(s.noteId, { favourited: true, likeActivity: act });
-}
-async function unfavourite(agent2, s) {
-  if (s.likeActivity) {
-    const doc = await agent2.intake.fetchAP(s.actor).catch(() => null);
-    if (doc?.inbox) {
-      await agent2.deliverer.deliver(
-        doc.endpoints?.sharedInbox || doc.inbox,
-        undoActivity({ urls: agent2.publisher.urls, activity: s.likeActivity, serial: Date.now() })
-      );
-    }
-  }
-  return agent2.store.updateStatus(s.noteId, { favourited: false, likeActivity: void 0 });
-}
-async function reblog(agent2, s) {
-  if (s.reblogged) return s;
-  const { urls } = agent2.publisher;
-  const act = announceActivity({ urls, object: s.noteId, serial: Date.now() });
-  const inboxes = new Set(agent2.store.getContacts().followers.map((f) => f.sharedInbox || f.inbox).filter(Boolean));
-  if (s.actor !== urls.actor) {
-    const doc = await agent2.intake.fetchAP(s.actor).catch(() => null);
-    if (doc?.inbox) inboxes.add(doc.endpoints?.sharedInbox || doc.inbox);
-  }
-  await agent2.deliverer.deliverToAll([...inboxes], act);
-  const updated = agent2.store.updateStatus(s.noteId, { reblogged: true, announceActivity: act });
-  await agent2.publisher.recordOutbox(act);
-  return updated;
-}
-async function unreblog(agent2, s) {
-  if (s.announceActivity) {
-    const undo = undoActivity({ urls: agent2.publisher.urls, activity: s.announceActivity, serial: Date.now() });
-    const inboxes = new Set(agent2.store.getContacts().followers.map((f) => f.sharedInbox || f.inbox).filter(Boolean));
-    const doc = await agent2.intake.fetchAP(s.actor).catch(() => null);
-    if (doc?.inbox && s.actor !== agent2.publisher.urls.actor) inboxes.add(doc.endpoints?.sharedInbox || doc.inbox);
-    await agent2.deliverer.deliverToAll([...inboxes], undo);
-    await agent2.publisher.unrecordOutbox((i) => i?.id === s.announceActivity.id);
-  }
-  return agent2.store.updateStatus(s.noteId, { reblogged: false, announceActivity: void 0 });
-}
-async function ejectFollower(agent2, actor) {
-  const { urls } = agent2.publisher;
-  const contacts = agent2.store.getContacts();
-  const rec = contacts.followers.find((f) => f.actor === actor);
-  if (!rec) throw new Error("not a member");
-  dropFollower(contacts, actor, "ejected");
-  agent2.store.setContacts(contacts);
-  const muted = agent2.store.getMuted();
-  muted.actors = [.../* @__PURE__ */ new Set([...muted.actors, actor])];
-  agent2.store.setMuted(muted);
-  await agent2.publisher.publishCollections({ followers: true });
-  await announceModeration(
-    agent2,
-    blockActivity({ urls, targetActor: actor, serial: Date.now() })
-  ).catch((e) => agent2.log?.(`moderation announce failed: ${e.message}`));
-  if (rec.bsky) {
-    await agent2.bskygroup?.blockDid(rec.bsky.did).catch((e) => agent2.log?.(`bluesky block failed for ${rec.bsky.handle}: ${e.message}`));
-    return { ok: true, actor, told: true };
-  }
-  if (rec.inbox) {
-    await agent2.deliverer.deliver(rec.inbox, rejectActivity({
-      urls,
-      followActivity: { id: rec.followId, type: "Follow", actor, object: urls.actor },
-      serial: Date.now()
-    }));
-  }
-  return { ok: true, actor, told: !!rec.inbox };
-}
-async function admitRequest(agent2, actor, { publish = true } = {}) {
-  const reqs = agent2.store.getRequests();
-  const req = reqs.find((r) => r.actor === actor);
-  if (!req) throw new Error("no such request");
-  const contacts = agent2.store.getContacts();
-  if (!contacts.followers.some((f) => f.actor === actor)) {
-    const bridgedDid = /^https:\/\/bsky\.brid\.gy\/ap\/(did:[^/]+)$/.exec(actor)?.[1];
-    if (bridgedDid) contacts.followers = contacts.followers.filter((f) => f.bsky?.did !== bridgedDid);
-    contacts.followers.push(req.bsky ? { actor, bsky: req.bsky } : { actor, inbox: req.inbox, sharedInbox: req.sharedInbox, followId: req.activity?.id });
-    agent2.store.setContacts(contacts);
-    agent2.store.addNotification({ type: "follow", actor, ...req.bsky ? { bsky: true } : {} });
-  }
-  agent2.store.setRequests(reqs.filter((r) => r.actor !== actor));
-  if (req.bsky) {
-    await agent2.bskygroup?.nudgeOnce(contacts.followers.find((f) => f.actor === actor));
-    return { ok: true, actor };
-  }
-  if (publish) await agent2.publisher.publishCollections({ followers: true, pending: true });
-  await agent2.deliverer.deliver(req.inbox, acceptActivity({
-    urls: agent2.publisher.urls,
-    followActivity: req.activity,
-    serial: Date.now()
-  }));
-  return { ok: true, actor };
-}
-async function refuseRequest(agent2, actor) {
-  const reqs = agent2.store.getRequests();
-  const req = reqs.find((r) => r.actor === actor);
-  if (!req) throw new Error("no such request");
-  agent2.store.setRequests(reqs.filter((r) => r.actor !== actor));
-  await agent2.publisher?.publishCollections({ pending: true }).catch(() => {
-  });
-  if (req.bsky) {
-    await agent2.bskygroup?.blockDid(req.bsky.did).catch((e) => agent2.log?.(`bluesky block failed for ${req.bsky.handle}: ${e.message}`));
-    return { ok: true, actor };
-  }
-  await agent2.deliverer.deliver(req.inbox, rejectActivity({
-    urls: agent2.publisher.urls,
-    followActivity: req.activity,
-    serial: Date.now()
-  }));
-  return { ok: true, actor };
-}
-async function retractAnnouncement(agent2, noteId) {
-  return agent2.intake.retract(noteId);
-}
-async function votePoll(agent2, s, choices) {
-  const { urls } = agent2.publisher;
-  const poll = s.poll || {};
-  const opts = poll.options || [];
-  if (poll.closed || poll.expiresAt && Date.parse(poll.expiresAt) < Date.now()) {
-    return { ok: false, error: "this poll has closed" };
-  }
-  if (poll.voted) return { ok: false, error: "already voted" };
-  if (s.actor === urls.actor) return { ok: false, error: "this is your own poll" };
-  const picks = [...new Set(choices)].filter((i) => i >= 0 && i < opts.length);
-  if (!picks.length) return { ok: false, error: "invalid choice" };
-  if (!poll.multiple && picks.length > 1) return { ok: false, error: "this poll takes one choice" };
-  const author = await agent2.intake.fetchAP(s.actor).catch(() => null);
-  const inbox = author?.endpoints?.sharedInbox || author?.inbox;
-  if (!inbox) return { ok: false, error: "could not reach the poll author" };
-  const published = (/* @__PURE__ */ new Date()).toISOString();
-  for (const i of picks) {
-    const id = urls.notes + published.slice(0, 10) + "-vote-" + node_crypto_default.randomBytes(4).toString("hex");
-    const note = {
-      "@context": AS_CTX,
-      id,
-      type: "Note",
-      attributedTo: urls.actor,
-      name: opts[i].title,
-      inReplyTo: s.noteId,
-      published,
-      to: [s.actor]
-    };
-    const create = {
-      "@context": AS_CTX,
-      id: createActivityId(id),
-      type: "Create",
-      actor: urls.actor,
-      published,
-      to: [s.actor],
-      object: note
-    };
-    await write4(agent2.remote, id, note);
-    await writeCreate(agent2.remote, create.id, create);
-    await agent2.deliverer.deliverToAll([inbox], create);
-  }
-  agent2.store.updateStatus(s.noteId, {
-    poll: {
-      ...poll,
-      voted: true,
-      ownVotes: picks,
-      options: opts.map((o, j) => picks.includes(j) ? { ...o, votes: (o.votes || 0) + 1 } : o)
-    }
-  });
-  return { ok: true };
-}
-async function deleteNote(agent2, s) {
-  const { urls } = agent2.publisher;
-  const inboxes = agent2.store.getContacts().followers.map((f) => f.sharedInbox || f.inbox).filter(Boolean);
-  await agent2.deliverer.deliverToAll(inboxes, deleteActivity({ urls, noteId: s.noteId }));
-  const stuck = [];
-  const deletedAt = (/* @__PURE__ */ new Date()).toISOString();
-  try {
-    await writeTombstone2(agent2.remote, s.noteId, noteTombstone(s.noteId, deletedAt));
-  } catch {
-    stuck.push(s.noteId);
-  }
-  if (!await dropCreate(agent2.remote, createActivityId(s.noteId))) {
-    stuck.push(createActivityId(s.noteId));
-  }
-  if (stuck.length) {
-    agent2.log?.(`delete ${s.noteId}: the pod kept ${stuck.length} document(s) \u2014 the post is STILL PUBLISHED`);
-    return {
-      ok: false,
-      stillPublished: stuck,
-      error: "the pod would not remove the post \u2014 it is still published, and has been kept here so you can try again"
-    };
-  }
-  await dropReplies(agent2.remote, repliesId(s.noteId));
-  if (s.atproto?.uri && agent2.atproto?.connected()) {
-    await agent2.atproto.deleteCrossPost(s.atproto.uri).then(() => agent2.log?.(`bluesky mirror deleted: ${s.atproto.uri}`)).catch((e) => agent2.log?.(`bluesky mirror not deleted (${e.message}): ${s.atproto.uri}`));
-  }
-  await agent2.publisher.unrecordOutbox((i) => i === s.noteId || i?.id && i.id === s.announceActivity?.id);
-  agent2.store.removeStatus(s.noteId);
-  return { ok: true };
-}
-async function announceModeration(agent2, activity) {
-  if (agent2.store.getConfig()?.kind !== "group") return null;
-  const { urls } = agent2.publisher;
-  const act = announceActivity({ urls, object: activity, serial: Date.now(), audience: urls.actor });
-  const inboxes = [...new Set(agent2.store.getContacts().followers.map((f) => f.sharedInbox || f.inbox).filter(Boolean))];
-  await agent2.deliverer.deliverToAll(inboxes, act);
-  await agent2.publisher.recordOutbox(act);
-  return act;
-}
-async function blockActor(agent2, actorUrl) {
-  if (!/^https?:\/\/\S+$/.test(String(actorUrl || ""))) throw new Error("actor must be a URL");
-  const b = agent2.store.getBlocklist();
-  if (!b.actors.includes(actorUrl)) b.actors.push(actorUrl);
-  agent2.store.setBlocklist(b);
-  await unfollowActor(agent2, actorUrl).catch(() => {
-  });
-  await agent2.publisher?.publishCollections({ blocked: true }).catch(() => {
-  });
-  await announceModeration(
-    agent2,
-    blockActivity({ urls: agent2.publisher.urls, targetActor: actorUrl, serial: Date.now() })
-  ).catch((e) => agent2.log?.(`moderation announce failed: ${e.message}`));
-  return { ok: true, actor: actorUrl };
-}
-async function unblockActor(agent2, actorUrl) {
-  const b = agent2.store.getBlocklist();
-  b.actors = b.actors.filter((a) => a !== actorUrl);
-  agent2.store.setBlocklist(b);
-  await agent2.publisher?.publishCollections({ blocked: true }).catch(() => {
-  });
-  await announceModeration(agent2, undoActivity({
-    urls: agent2.publisher.urls,
-    activity: { type: "Block", actor: agent2.publisher.urls.actor, object: actorUrl },
-    serial: Date.now()
-  })).catch((e) => agent2.log?.(`moderation announce failed: ${e.message}`));
-  return { ok: true, actor: actorUrl };
-}
-async function applyModeration(agent2, entry) {
-  const { urls } = agent2.publisher;
-  const target = typeof entry.activity?.object === "string" ? entry.activity.object : entry.activity?.object?.id;
-  switch (entry.type) {
-    case "Block": {
-      if (!target) throw new Error("the queued Block names nobody");
-      const member = agent2.store.getContacts().followers.some((f) => f.actor === target);
-      return member ? ejectFollower(agent2, target) : blockActor(agent2, target);
-    }
-    case "Undo": {
-      const inner = entry.activity?.object;
-      const unbanned = typeof inner === "object" && inner?.type === "Block" ? typeof inner.object === "string" ? inner.object : inner.object?.id : null;
-      if (!unbanned) throw new Error("the queued Undo does not name a Block");
-      const muted = agent2.store.getMuted();
-      muted.actors = muted.actors.filter((a) => a !== unbanned);
-      agent2.store.setMuted(muted);
-      return unblockActor(agent2, unbanned);
-    }
-    case "Delete": {
-      if (!target) throw new Error("the queued Delete names nothing");
-      return agent2.intake.retract(target);
-    }
-    case "Add":
-    case "Remove": {
-      if (!target) throw new Error("the queued roster change names nobody");
-      const cfg = { ...agent2.store.getConfig() };
-      const prev = cfg.moderators || [];
-      cfg.moderators = entry.type === "Add" ? [.../* @__PURE__ */ new Set([...prev, target])] : prev.filter((m) => m !== target);
-      agent2.store.setConfig(cfg);
-      if (agent2.publisher) agent2.publisher.config.moderators = cfg.moderators;
-      await agent2.publisher.publishProfile();
-      await announceModeration(agent2, addRemoveActivity({
-        urls,
-        type: entry.type,
-        object: target,
-        target: urls.moderators,
-        serial: Date.now()
-      })).catch((e) => agent2.log?.(`moderation announce failed: ${e.message}`));
-      return { ok: true, moderators: cfg.moderators };
-    }
-    default:
-      throw new Error(`no way to apply a queued ${entry.type}`);
-  }
-}
-async function pinStatus(agent2, s, pinned) {
-  if (s.actor !== agent2.publisher.urls.actor) throw new Error("not your status");
-  const updated = agent2.store.updateStatus(s.noteId, { pinned: !!pinned });
-  await agent2.publisher.publishFeatured().catch((e) => agent2.log?.(`featured: ${e.message}`));
-  agent2.publisher.publishProfile?.().catch(() => {
-  });
-  return updated || s;
 }
 
 // lib/client/masto/render.mjs
@@ -64809,11 +65461,11 @@ function account(api, actorUrl, { selfAcct } = {}) {
     fields: (self2 ? api.store.getConfig()?.fields : cached.fields) || []
   };
 }
-function page(api, items, url, { limit = 20, max = 40, idOf = (s) => api.store.idFor(s.noteId) } = {}) {
+function page(api, items, url, { limit = 20, max = 40, idOf: idOf2 = (s) => api.store.idFor(s.noteId) } = {}) {
   const n = Math.min(Number(url.searchParams.get("limit")) || limit, max);
   const ids = /* @__PURE__ */ new Map();
   const idAt = (s) => {
-    if (!ids.has(s)) ids.set(s, idOf(s));
+    if (!ids.has(s)) ids.set(s, idOf2(s));
     return ids.get(s);
   };
   const cut = (param) => {
@@ -64837,8 +65489,8 @@ function page(api, items, url, { limit = 20, max = 40, idOf = (s) => api.store.i
     for (const [k, v] of Object.entries(extra)) u.searchParams.set(k, v);
     return u.href;
   };
-  const links = [`<${q({ max_id: idOf(pageItems2[pageItems2.length - 1]) })}>; rel="next"`];
-  if (pageItems2.length) links.push(`<${q({ min_id: idOf(pageItems2[0]) })}>; rel="prev"`);
+  const links = [`<${q({ max_id: idOf2(pageItems2[pageItems2.length - 1]) })}>; rel="next"`];
+  if (pageItems2.length) links.push(`<${q({ min_id: idOf2(pageItems2[0]) })}>; rel="prev"`);
   return { items: pageItems2, headers: { link: links.join(", ") } };
 }
 async function bskyReply(api, send, body, parent, visibility) {
@@ -65425,7 +66077,7 @@ async function handle3(api, ctx) {
     const entry = api.store.getMedia()[mMedia[1]];
     if (!entry) return send(404, { error: "Record not found" });
     if (req.method === "PUT") {
-      const body = await readBody(req);
+      const body = await readBody2(req);
       if (typeof body.description === "string") {
         entry.description = body.description;
         api.store.setMedia(mMedia[1], entry);
@@ -65459,7 +66111,7 @@ async function handle4(api, ctx) {
     const ct = String(req.headers["content-type"] || "");
     let form = {}, files = {};
     if (ct.includes("multipart/form-data")) ({ fields: form, files } = await readMultipart(req));
-    else form = await readBody(req);
+    else form = await readBody2(req);
     const cfg = { ...api.store.getConfig() };
     const putImage = async (f) => {
       const ext = (f.filename || "").includes(".") ? f.filename.split(".").pop().replace(/[^\w]/g, "") : "bin";
@@ -65521,7 +66173,7 @@ async function handle4(api, ctx) {
   }
   if (pathname === "/api/v1/markers") {
     if (req.method === "POST") {
-      const body = await readBody(req);
+      const body = await readBody2(req);
       const markers = api.store.read("masto-markers.json", {});
       for (const [k, v] of Object.entries(body)) {
         const lastId = v?.last_read_id || v;
@@ -65596,7 +66248,7 @@ async function handle4(api, ctx) {
       return sub ? send(200, api.push.json(token, sub)) : send(404, { error: "Record not found" });
     }
     if (req.method === "POST") {
-      const body = await readBody(req);
+      const body = await readBody2(req);
       const sub = api.push.set(token, {
         endpoint: body.subscription?.endpoint,
         keys: body.subscription?.keys,
@@ -65606,7 +66258,7 @@ async function handle4(api, ctx) {
       return send(200, api.push.json(token, sub));
     }
     if (req.method === "PUT") {
-      const body = await readBody(req);
+      const body = await readBody2(req);
       const sub = api.push.setAlerts(token, body.data?.alerts);
       return sub ? send(200, api.push.json(token, sub)) : send(404, { error: "Record not found" });
     }
@@ -65699,7 +66351,7 @@ async function handle5(api, ctx) {
     return send(200, api.store.getLists().map(listJson));
   }
   if (pathname === "/api/v1/lists" && req.method === "POST") {
-    const body = await readBody(req);
+    const body = await readBody2(req);
     const title = String(body.title || "").trim();
     if (!title) return send(422, { error: "a title is required" });
     const lists = api.store.getLists();
@@ -65718,7 +66370,7 @@ async function handle5(api, ctx) {
       return send(200, {});
     }
     if (req.method === "PUT") {
-      const body = await readBody(req);
+      const body = await readBody2(req);
       if (body.title) l.title = String(body.title);
       if (body.replies_policy) l.repliesPolicy = body.replies_policy;
       api.store.setLists(lists);
@@ -65731,7 +66383,7 @@ async function handle5(api, ctx) {
     const l = lists.find((x) => x.id === mListAcc[1]);
     if (!l) return send(404, { error: "Record not found" });
     if (req.method === "GET") return send(200, (l.members || []).map((a) => api.account(a)));
-    const body = await readBody(req).catch(() => ({}));
+    const body = await readBody2(req).catch(() => ({}));
     const ids = [].concat(body.account_ids || body["account_ids[]"] || url.searchParams.getAll("account_ids[]")).filter(Boolean);
     const actors = ids.map((id) => api.store.urlFor(id)).filter(Boolean);
     if (req.method === "POST") l.members = [.../* @__PURE__ */ new Set([...l.members || [], ...actors])];
@@ -65763,7 +66415,7 @@ async function handle5(api, ctx) {
     return send(200, api.store.getFilters().map(filterJson));
   }
   if (pathname === "/api/v2/filters" && req.method === "POST") {
-    const body = await readBody(req);
+    const body = await readBody2(req);
     const title = String(body.title || "").trim();
     if (!title) return send(422, { error: "a title is required" });
     const filters = api.store.getFilters();
@@ -65789,7 +66441,7 @@ async function handle5(api, ctx) {
       return send(200, {});
     }
     if (req.method === "PUT") {
-      const body = await readBody(req);
+      const body = await readBody2(req);
       if (body.title) f.title = String(body.title);
       if (body.context) f.context = [].concat(body.context);
       if (body.filter_action) f.action = body.filter_action;
@@ -65846,7 +66498,7 @@ async function handle5(api, ctx) {
     if (sinceId) cut(sinceId, true);
     const page2 = q.get("min_id") && !q.get("since_id") ? items.slice(Math.max(0, items.length - limit)) : items.slice(0, limit);
     if (page2.length) {
-      const base = `${api.scheme || (req.socket?.encrypted ? "https" : "http")}://${req.headers.host}${pathname}`;
+      const base = `${api.scheme || (req.socket?.encrypted ? "https" : "http")}://${req.headers.host}${api.mount || ""}${pathname}`;
       const link = (params) => {
         const u = new URL(base);
         for (const [k, v] of q) if (k !== "max_id" && k !== "since_id" && k !== "min_id") u.searchParams.append(k, v);
@@ -65912,7 +66564,7 @@ init_node_crypto();
 async function handle6(api, ctx) {
   const { req, res, pathname, url, send } = ctx;
   if (pathname === "/api/v1/statuses" && req.method === "POST") {
-    const body = await readBody(req);
+    const body = await readBody2(req);
     if (!body.status) return send(422, { error: "status text required" });
     const visibility = body.visibility || "public";
     if (!["public", "unlisted", "private", "direct"].includes(visibility)) {
@@ -66030,7 +66682,7 @@ async function handle6(api, ctx) {
     const s = noteUrl && api.store.getStatuses().find((x) => x.noteId === noteUrl);
     if (!s) return send(404, { error: "Record not found" });
     if (s.actor !== api.urls.actor) return send(403, { error: "not your status" });
-    const body = await readBody(req);
+    const body = await readBody2(req);
     if (!body.status) return send(422, { error: "status text required" });
     const mediaIds = [].concat(body.media_ids || body["media_ids[]"] || []).filter(Boolean);
     const media = api.store.getMedia();
@@ -66148,7 +66800,7 @@ async function handle6(api, ctx) {
       return send(200, {});
     }
     if (req.method === "PUT") {
-      const body = await readBody(req);
+      const body = await readBody2(req);
       const at = Date.parse(body.scheduled_at || "");
       if (!Number.isFinite(at)) return send(422, { error: "scheduled_at required" });
       e.scheduledAt = new Date(at).toISOString();
@@ -66162,7 +66814,7 @@ async function handle6(api, ctx) {
     const s = noteUrl && api.store.getStatuses().find((x) => x.noteId === noteUrl);
     if (!s?.poll) return send(404, { error: "Record not found" });
     if (mPoll[2] && req.method === "POST") {
-      const body = await readBody(req);
+      const body = await readBody2(req);
       const choices = [].concat(body.choices || body["choices[]"] || []).map(Number).filter(Number.isInteger);
       if (!choices.length) return send(422, { error: "choices required" });
       const r = await votePoll(api.agent, s, choices);
@@ -66211,11 +66863,13 @@ var MastoApi = class _MastoApi {
     allowed = null,
     scheme = null,
     embedded = false,
+    mount = "",
     streaming = true,
     webPush = true,
     scheduling = true
   }) {
     this.agent = agent2;
+    this.mount = mount;
     this.embedded = embedded;
     this.log = log2;
     this.allowed = allowed;
@@ -66907,7 +67561,7 @@ var PodTransport = class {
    * says all of it. The parsed graph must mention the WebID before anything is
    * written back — an empty or foreign body must never become the new profile.
    */
-  async linkAccountInProfile({ actorUrl, accountName, kind = "person" }) {
+  async linkAccountInProfile({ actorUrl, accountName, kind = "person", outbox = null }) {
     const docUrl = this.webId.split("#")[0];
     const res = await this.fetch(docUrl, { headers: { accept: "text/turtle" } });
     if (res.status >= 400) throw new Error(`[${this.label}] GET ${docUrl} \u2192 ${res.status}`);
@@ -66923,10 +67577,16 @@ var PodTransport = class {
       [me, FOAF("account"), actor],
       [actor, RDF4("type"), FOAF("OnlineAccount")],
       [actor, RDF4("type"), kind === "group" ? AS("Group") : AS("Person")],
-      [actor, FOAF("accountName"), literal2(accountName)]
+      [actor, FOAF("accountName"), literal2(accountName)],
+      // Where a Solid client posts on this person's behalf (`as:outbox` on the
+      // WebID is what dokieli reads); only where a door exists to take it.
+      ...outbox ? [[me, AS("outbox"), namedNode2(outbox)]] : []
     ];
     const missing = wanted.filter(([s, p, o]) => !g.holds(s, p, o, doc));
-    const stale = g.statementsMatching(actor, FOAF("accountName"), null, doc).filter((st2) => st2.object.value !== accountName);
+    const stale = [
+      ...g.statementsMatching(actor, FOAF("accountName"), null, doc).filter((st2) => st2.object.value !== accountName),
+      ...outbox ? g.statementsMatching(me, AS("outbox"), null, doc).filter((st2) => st2.object.value !== outbox) : []
+    ];
     if (!missing.length && !stale.length) return false;
     const deletes = stale.map((st2) => [st2.subject, st2.predicate, st2.object]);
     if (await this.patchDocument(docUrl, missing, deletes)) return true;
@@ -69664,6 +70324,7 @@ var BrowserAgent = class _BrowserAgent {
     this.lease.startRenewal();
     try {
       await this.store.load({ force: true }).catch((e) => this.log(`re-reading state: ${e.message}`));
+      await this.publisher.healStatuses().catch((e) => this.log(`healing the timeline index: ${e.message}`));
       this.deliverer?.startQueue?.();
       await this.publisher.publishProfile();
       await this.store.flush?.();
@@ -69794,6 +70455,7 @@ var BrowserAgent = class _BrowserAgent {
     this.publisher.atproto = this.atproto;
     this.fediaccts = new BrowserFediAccounts({ store: this.store, actorId: this.urls.actor, log: this.log });
     this.lease = new Lease({ url: this.urls.state + "lease.json", fetchImpl: podFetch, log: this.log });
+    this.c2s = new C2S({ agent: this, log: this.log });
     this.intake = new Intake({
       config: this.store.getConfig(),
       urls: this.urls,
@@ -69803,7 +70465,8 @@ var BrowserAgent = class _BrowserAgent {
       publisher: this.publisher,
       log: this.log,
       push: true,
-      lease: this.lease
+      lease: this.lease,
+      ownerPost: (a, o) => this.c2s.dispatch(a, o)
     });
     this.masto = new MastoApi({
       agent: this,
@@ -69863,7 +70526,8 @@ var BrowserAgent = class _BrowserAgent {
       atproto: this.atproto?.status() || null,
       podRequests: this.remote?.stats?.() || null,
       update: null,
-      inboxCooldownFor: 0
+      inboxCooldownFor: 0,
+      stateSkipped: this.store?.lastSkipped || []
     };
   }
   // Rotate the signing key (POST /rotate-key). Mint a fresh keypair, replace the

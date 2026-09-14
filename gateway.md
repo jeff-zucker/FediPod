@@ -10,6 +10,9 @@ Your name, your signing key and your data stay on your own pod. The gateway is
 **keyless** — it never holds the key you sign with, so it cannot post as you,
 read your private things, or be you anywhere. The worst a broken one can do is
 push items into your inbox, and those still face your agent's own checks.
+With the outbox door below, a gateway can also hand your agent a post marked as
+yours, which your agent then signs and sends. It still holds no key, but what you
+trust it with grows by that much.
 
 A FediPod install works without any gateway at all. Deliveries go straight to
 your pod inbox, which holds them whether your agent is running or not.
@@ -101,6 +104,19 @@ your agent mints it and shows it to you once; you carry it to the gateway
 yourself. When you attach to a multi-user gateway, the direction is reversed:
 the gateway mints the secret and answers the attach with it, and your agent
 records it.
+
+## The outbox door
+
+The gateway also takes your own posts from any app that speaks ActivityPub
+client-to-server, dokieli for one. Your actor document names the door as your
+outbox, and your WebID profile names it as `as:outbox`. The app sends the post
+there, signed in at your pod. The door checks that the token is yours, puts the
+post in your inbox marked as yours, and answers with the address the post will
+have. Your agent publishes it and sends it to your followers the next time it
+runs: for a browser account, the next time you open the site.
+
+A post with no audience of its own goes out as a public post. A post that is
+not a note, an annotation say, is kept as the app sent it, under your name.
 
 ## What the gateway can see
 

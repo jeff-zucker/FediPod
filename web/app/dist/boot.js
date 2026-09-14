@@ -33075,7 +33075,7 @@ var PodTransport = class {
    * says all of it. The parsed graph must mention the WebID before anything is
    * written back — an empty or foreign body must never become the new profile.
    */
-  async linkAccountInProfile({ actorUrl, accountName, kind = "person" }) {
+  async linkAccountInProfile({ actorUrl, accountName, kind = "person", outbox = null }) {
     const docUrl = this.webId.split("#")[0];
     const res = await this.fetch(docUrl, { headers: { accept: "text/turtle" } });
     if (res.status >= 400) throw new Error(`[${this.label}] GET ${docUrl} \u2192 ${res.status}`);
@@ -33091,10 +33091,16 @@ var PodTransport = class {
       [me, FOAF("account"), actor],
       [actor, RDF3("type"), FOAF("OnlineAccount")],
       [actor, RDF3("type"), kind === "group" ? AS("Group") : AS("Person")],
-      [actor, FOAF("accountName"), literal2(accountName)]
+      [actor, FOAF("accountName"), literal2(accountName)],
+      // Where a Solid client posts on this person's behalf (`as:outbox` on the
+      // WebID is what dokieli reads); only where a door exists to take it.
+      ...outbox ? [[me, AS("outbox"), namedNode2(outbox)]] : []
     ];
     const missing = wanted.filter(([s, p, o]) => !g.holds(s, p, o, doc));
-    const stale = g.statementsMatching(actor, FOAF("accountName"), null, doc).filter((st2) => st2.object.value !== accountName);
+    const stale = [
+      ...g.statementsMatching(actor, FOAF("accountName"), null, doc).filter((st2) => st2.object.value !== accountName),
+      ...outbox ? g.statementsMatching(me, AS("outbox"), null, doc).filter((st2) => st2.object.value !== outbox) : []
+    ];
     if (!missing.length && !stale.length) return false;
     const deletes = stale.map((st2) => [st2.subject, st2.predicate, st2.object]);
     if (await this.patchDocument(docUrl, missing, deletes)) return true;
@@ -33202,6 +33208,7 @@ var BrowserRemotePod = class extends PodTransport {
 // lib/pod/state.mjs
 var readWrappedKeys = (pod, urls) => pod.getJson(urls.state + "keys.json");
 var readConfig = (pod, urls) => pod.getJson(urls.state + "config.json");
+var writeWrappedKeys = (pod, urls, envelope) => pod.putJson(urls.state + "keys.json", envelope, "application/json");
 var writeConfig = (pod, urls, config) => pod.putJson(urls.state + "config.json", config, "application/json");
 async function provisionKey(pod, { stateUrl, keysUrl, envelope }) {
   await pod.setAcl(stateUrl, []);
@@ -33737,8 +33744,7 @@ async function bootWorker({ reset = false } = {}) {
   worker.postMessage({ type: "boot", frontOrigin: location.origin });
   await booted;
 }
-window.fedipodUnlock = async (password) => {
-  if (!password) throw new Error("Enter your account password.");
+async function readAccountState() {
   const session = await getSession();
   if (!session) throw new Error("Sign in first.");
   const podFromWebId = podBaseOfWebId(session.webId);
@@ -33750,11 +33756,26 @@ window.fedipodUnlock = async (password) => {
     readConfig(remote, urls),
     readWrappedKeys(remote, urls)
   ]);
-  if (!cfg || !doc) throw new Error(`could not read this account's config and key under ${state}`);
+  if (!cfg) throw new Error(`could not read this account's config under ${state}`);
+  const actorUrl = `${cfg.remotePod}${cfg.root || AP_ROOT}ap/actor`;
+  return { remote, urls, cfg, doc, actorUrl };
+}
+window.fedipodUnlock = async (password) => {
+  if (!password) throw new Error("Enter your password.");
+  const { doc, actorUrl } = await readAccountState();
+  if (!doc) throw new Error("could not read this account's key on the pod");
   if (!isKeyEnvelope(doc)) throw new Error("this account's key is not locked \u2014 nothing to unlock");
   const rec = await unwrapKeys(doc, password);
-  const actorUrl = `${cfg.remotePod}${cfg.root || AP_ROOT}ap/actor`;
   await cacheOpenedKeys(actorUrl, rec);
+  await bootWorker();
+};
+window.fedipodNewKey = async (password) => {
+  if (!password) throw new Error("Enter the password you use for your pod now.");
+  const { remote, urls, cfg, actorUrl } = await readAccountState();
+  const keys = await generateKeys();
+  keys.mintedFor = cfg.gateway?.frontActor || actorUrl;
+  await writeWrappedKeys(remote, urls, await wrapKeys(keys, password));
+  await cacheOpenedKeys(actorUrl, keys);
   await bootWorker();
 };
 window.fedipodSignup = async ({ onStep, ...answers }) => {
@@ -33861,6 +33882,25 @@ if (typeof document !== "undefined") (async () => {
   $("unlock-password")?.addEventListener("keydown", (e) => {
     if (e.key === "Enter") doUnlock();
   });
+  $("unlock-newkey")?.addEventListener("click", () => {
+    $("unlock-newkey-confirm").hidden = false;
+    $("unlock-password").focus();
+  });
+  const doNewKey = async () => {
+    $("unlock-error").textContent = "";
+    const btn = $("unlock-newkey-go");
+    btn.disabled = true;
+    try {
+      await window.fedipodNewKey($("unlock-password").value);
+      $("unlock-password").value = "";
+      location.href = "/admin/client/";
+    } catch (err) {
+      $("unlock-error").textContent = err.message || String(err);
+      btn.disabled = false;
+      $("unlock-password").select();
+    }
+  };
+  $("unlock-newkey-go")?.addEventListener("click", doNewKey);
   if (params.has("signout") || params.has("add")) {
     if (params.has("signout")) {
       try {

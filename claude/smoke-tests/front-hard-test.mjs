@@ -65,7 +65,7 @@ const pod = http.createServer((req, res) => {
       blocklist: { domains: ['spam.example'], actors: [] },
     }));
   }
-  if (req.method === 'PUT' && url.startsWith('/ap/inbox/')) {
+  if (req.method === 'PUT' && url.includes('/ap/inbox/')) {
     const chunks = [];
     req.on('data', c => chunks.push(c));
     req.on('end', () => {
@@ -387,6 +387,45 @@ try {
       'a pod naming no owner leaves where the WebID lives as the only evidence');
     check((await optIn({ webid: POD + 'profile/card#me' })).status === 201,
       'and there, a WebID under the pod is still proof enough');
+  }
+
+  // ---- the outbox door: the owner's own post, from another client ----------
+  // dokieli's request, as it sends it: a preflight, then a bare Web Annotation
+  // with a Slug and the owner's pod token, from its own origin.
+  {
+    const outbox = '/u/pwren/ap/outbox';
+    const count = () => inboxWrites.filter(w => w.url.includes('/pods/wren/fedipod/ap/inbox/') && !w.url.endsWith('.receipt.json')).length;
+    const pre = await get(outbox, { method: 'OPTIONS', headers: { origin: 'https://dokie.li' } });
+    check(pre.status === 204 && pre.headers.get('accept-post') === 'application/ld+json, application/activity+json'
+      && /Slug/.test(pre.headers.get('access-control-allow-headers') || '') && pre.headers.get('access-control-allow-origin') === '*',
+      'the door answers a preflight: JSON only in Accept-Post, and the headers a browser client sends');
+    const annotation = JSON.stringify({ '@context': 'http://www.w3.org/ns/anno.jsonld', type: 'Annotation', id: '',
+      motivation: 'commenting', bodyValue: 'well said', target: 'https://doc.example/paper#p2' });
+    const post = (headers, body = annotation) => get(outbox, { method: 'POST', body,
+      headers: { 'content-type': 'application/ld+json; profile="https://www.w3.org/ns/activitystreams"', slug: 'anno-42', origin: 'https://dokie.li', ...headers } });
+    check((await post({})).status === 401, 'no token → 401');
+    check((await post({ authorization: 'Bearer someone-else' })).status === 403, "someone else's token → 403, not a post");
+    const before = count();
+    const ok = await post({ authorization: 'Bearer path-owner' });
+    const okBody = await ok.json().catch(() => ({}));
+    check(ok.status === 202 && ok.headers.get('location') === `${ORIGIN}/u/pwren/ap/notes/anno-42`
+      && okBody.object === `${ORIGIN}/u/pwren/ap/notes/anno-42`,
+      `the owner's post is accepted with the address it will have (${ok.status} ${ok.headers.get('location')})`);
+    check(ok.headers.get('access-control-allow-origin') === '*', 'and the answer carries CORS, so the client can read it');
+    const item = inboxWrites.filter(w => w.url.includes('/pods/wren/fedipod/ap/inbox/') && !w.url.endsWith('.receipt.json')).at(-1);
+    check(count() === before + 1 && item && item.body === annotation, 'the bytes as sent land in the pod inbox');
+    const rcpt = JSON.parse(inboxWrites.find(w => w.url === item.url + '.receipt.json')?.body || 'null');
+    const { verifyReceipt } = await import('../../lib/gateway/httpsig.mjs');
+    const secret = attached.pwren?.hmacSecret;      // a fronted row is keyed by its bare handle
+    check(rcpt?.method === 'c2s' && rcpt.actor === `${ORIGIN}/u/pwren/ap/actor` && rcpt.slug === 'anno-42'
+      && rcpt.keyId === POD + 'pods/wren/profile/card#me' && !!secret && verifyReceipt(rcpt, secret),
+      'with a receipt beside it stamped c2s for this actor under the account secret, carrying the slug');
+    check((await post({ authorization: 'Bearer path-owner' }, 'not json')).status === 400, 'a body that is not JSON → 400');
+    check((await post({ authorization: 'Bearer path-owner', slug: '../up' })).status === 202
+      && !inboxWrites.at(-1).body.includes('../'), 'an unsafe Slug is dropped, and the post still lands');
+    const doorRead = await fetch(`${ORIGIN}/u/alice/ap/outbox`, { redirect: 'manual' });
+    check(doorRead.status === 303 && doorRead.headers.get('location') === POD + 'ap/outbox',
+      "a read of a mail-door account's outbox is sent to the pod document");
   }
 
 } finally {

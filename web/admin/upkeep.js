@@ -145,8 +145,16 @@ const INBOX_PROMPT_AT = 500;
 let dismissed = false;
 
 async function renderInbox() {
-  if (dismissed) return;
   const { json: st } = await api('/status');
+  // A state document the last load could not read is a timeline or a contact
+  // list quietly missing; the page says which, under the facts.
+  const skipped = st?.stateSkipped || [];
+  const line = $('state-skipped');
+  line.hidden = !skipped.length;
+  line.textContent = skipped.length
+    ? `${skipped.length} state document${skipped.length === 1 ? '' : 's'} could not be read on the last load: ${skipped.join(', ')}.`
+    : '';
+  if (dismissed) return;
   const box = st?.inbox;
   const panel = $('pane-inbox');
   if (!box || box.count < INBOX_PROMPT_AT) { panel.hidden = true; return; }

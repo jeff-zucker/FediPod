@@ -9,15 +9,14 @@ one timeline. Your posts, followers and settings stay on your pod.
 The easiest way to run FediPod is to use it in any browser at https://fedipod.net. Nothing to install. A wizard will walk you through getting a pod (you can also bring your own) and creating a Fediverse identity attached to the pod.  
 
 There are also a number of [other ways to run FediPod](#other-ways-to-run-fedipod) which offer a variety of scenarios.  If interested in the code, see also : [architecture overview](architecture.md) and [files overview](files-overview.md).
+Which specs FediPod follows, and where it stops short: [specs-in-use.md](specs-in-use.md).
 
 ## Requirements
 
 - A current browser, on a desktop or a phone.
 - A Solid pod with a host name of its own, such as
   `https://alice.solidcommunity.net/`. Sign-up can create one for you at
-  solidcommunity.net or another provider, or use a pod you already have. A
-  pod that lives on a suffix-based host, like `https://server.example/alice/`,
-  cannot be a Fediverse address.
+  solidcommunity.net or another provider, or use a pod you already have.
   A pod on a suffix-based host, like `https://server.example/alice/`,
   works too. Its address is then `@handle@fedipod.net`, because the shared
   host cannot answer for the handle; your posts, key and data stay on your pod.
@@ -41,6 +40,8 @@ There are also a number of [other ways to run FediPod](#other-ways-to-run-fedipo
 Your account then opens in the client. To use it from another browser, go to
 https://fedipod.net, enter your address, sign in at your pod, and unlock your
 key with your password once on that browser.
+If you have changed your pod password since you signed up, choose "make a new
+signing key" on that screen and use the password you use now.
 
 ## What you can do
 
@@ -69,6 +70,11 @@ hands back stays in your browser unless you choose to keep it on your pod.
 **Moving in.** Mastodon-format exports of follows, blocks, mutes, lists and
 domain blocks import from the manage page. Your old account can be listed as
 an alias, so a Move from it lands here.
+
+**Posting from another app.** Any app that speaks ActivityPub
+client-to-server, dokieli for one, can post as you. It sends to the outbox
+address in your actor document, which your WebID profile also names, signed in
+at your pod. The post goes out the next time you open fedipod.net.
 
 **The manage page.** `manage account` in the bar opens it: your profile,
 aliases, the gateway, key rotation, recovering posts, parking, moving to

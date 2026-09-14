@@ -37,6 +37,7 @@ import { RemotePod } from './lib/device/remote.mjs';
 import { Deliverer } from './lib/core/deliver.mjs';
 import { Publisher } from './lib/core/publisher/index.mjs';
 import { Intake } from './lib/core/intake/index.mjs';
+import { C2S } from './lib/client/c2s.mjs';
 import { TagFeed } from './lib/connections/tagfeed.mjs';
 import { ImportWorker } from './lib/connections/import.mjs';
 import { Atproto } from './lib/connections/atproto.mjs';
@@ -122,6 +123,7 @@ export class Agent {
       update: this.updateInfo || null,
       inboxCooldownFor: this.intake?.drainCooldownUntil
         ? Math.max(0, Math.round((this.intake.drainCooldownUntil - Date.now()) / 1000)) : 0,
+      stateSkipped: this.store.lastSkipped || [],
     };
   }
 
@@ -336,11 +338,15 @@ export class Agent {
     });
     // Intake is constructed even for viewers — its signed fetchAP powers
     // search/deref; start() (draining) is active-only.
+    // The dispatcher the admin surface also builds; this one is for what the
+    // Gateway's outbox door took on the owner's behalf and the drain finds.
+    this.c2s = new C2S({ agent: this, log: this.log });
     this.intake = new Intake({
       config, urls: this.urls, remote: this.remote, store: this.store,
       deliverer: this.deliverer, publisher: this.publisher, log: this.log, lease: this.lease,
       archive: this.privateStorage(cred, 'archive'),
       push: !this.embedded, pollSeconds: this.pollSeconds || null,
+      ownerPost: (a, o) => this.c2s.dispatch(a, o),
     });
     // The CSV-import worker: paced, resumable, armed only while active.
     this.importer?.stop();
@@ -514,6 +520,9 @@ export class Agent {
     this.viewer = false;
     clearInterval(this.refreshTimer);
     if (promoted) await this.refreshBeforeActing();
+    // Own posts the outbox names and the timeline index lacks come back here,
+    // before anything acts on the index.
+    await this.publisher.healStatuses().catch(e => this.log(`healing the timeline index: ${e.message}`));
     this.lease.onLost = () => this.demote();
     this.lease.startRenewal();
     this.deliverer.startQueue();

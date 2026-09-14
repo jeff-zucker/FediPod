@@ -652,6 +652,197 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   }
 }
 
+// --- 5c0. a post's timeline row lands before the post is answered, and a lost one comes back ---
+{
+  const { Publisher } = await import(path.join(root, 'lib/core/publisher/index.mjs'));
+  const { PodStore } = await import(path.join(root, 'lib/core/store.mjs'));
+  // The row's PUT is refused outright: the post still returns, the refusal is
+  // said, and the write was attempted BEFORE the answer, not by a debounce
+  // firing after it.
+  const writes = [];
+  const refusing = new PodStore({ log: () => {}, storage: {
+    base: 'https://pod.example/fedipod/ap-state/',
+    write: async (name) => { writes.push(name); return name === 'statuses.json' ? { ok: false, retry: false, why: 'refused' } : { ok: true }; },
+  } });
+  const logs = [];
+  const pub = new Publisher({
+    config: { remotePod: 'https://pod.example/', handle: 'you', name: 'You' },
+    remote: { putJson: async () => {}, setAcl: async () => {}, delete: async () => true },
+    store: refusing, deliverer: { deliverToAll: async () => {} }, publicKeyPem: 'x', log: (m) => logs.push(m),
+  });
+  const made = await pub.publishNote('hello');
+  check(writes.includes('statuses.json'), 'the timeline row is written before publishNote answers, not 300 ms after');
+  check(logs.some(l => /timeline row was refused/.test(l) && l.includes(made.id)),
+    'a refused row is said loudly, and the post still returns');
+  check(refusing.getStatuses().some(s => s.noteId === made.id), 'and the row stays in the cache for this session');
+  for (const [file, what] of [['lib/core/publisher/questions.mjs', 'a poll'], ['lib/core/social.mjs', 'a boost']]) {
+    check(/store\.commit\?\.\(\)/.test(fs.readFileSync(path.join(root, file), 'utf8')), `${what} lands its row the same way`);
+  }
+
+  // The index lost or short: what the outbox names and the index lacks comes
+  // back when the agent becomes active, and a healthy account costs nothing.
+  const POD = 'https://pod.example/'; const N = POD + 'fedipod/ap/notes/'; const ACTOR = POD + 'fedipod/ap/actor';
+  const note = (slug) => ({ id: N + slug, type: 'Note', attributedTo: ACTOR, content: `<p>${slug}</p>`, published: '2026-07-01T00:00:00.000Z' });
+  const docs = {
+    [POD + 'fedipod/ap/outbox']: { type: 'OrderedCollection', orderedItems: [N + 'b-02', N + 'b-01'] },
+    [N + 'b-01']: note('b-01'), [N + 'b-02']: note('b-02'),
+  };
+  let reads = 0;
+  const mk = (store) => new Publisher({ config: { remotePod: POD, handle: 'me' }, store, log: () => {},
+    remote: { getJson: async (u) => { reads++; return docs[u] ?? null; }, listContainer: async () => [] } });
+  const lost = new PodStore({ log: () => {} });
+  lost.write('outbox.json', [N + 'b-02', N + 'b-01']);
+  const h1 = await mk(lost).healStatuses();
+  check(h1.missing === 2 && lost.getStatuses().length === 2,
+    `statuses.json gone: both posts the outbox names come back (${h1.recovered})`);
+  const short = new PodStore({ log: () => {} });
+  short.write('outbox.json', [N + 'b-02', N + 'b-01']);
+  short.write('statuses.json', [{ noteId: N + 'b-01', kind: 'post', content: 'MINE' }]);
+  const h2 = await mk(short).healStatuses();
+  check(h2.missing === 1 && short.getStatuses().length === 2 && short.getStatuses().find(s => s.noteId === N + 'b-01').content === 'MINE',
+    'one row lost: it comes back and the row that was there is untouched');
+  reads = 0;
+  const fine = new PodStore({ log: () => {} });
+  fine.write('outbox.json', [N + 'b-01']);
+  fine.write('statuses.json', [{ noteId: N + 'b-01', kind: 'post', content: 'x' }]);
+  const h3 = await mk(fine).healStatuses();
+  check(h3.missing === 0 && reads === 0, 'a healthy account is checked from the cache alone — no request');
+  check(/healStatuses\(\)/.test(fs.readFileSync(path.join(root, 'web/app/agent.mjs'), 'utf8'))
+    && /healStatuses\(\)/.test(fs.readFileSync(path.join(root, 'run-agent.mjs'), 'utf8')),
+    'both the BrowserAgent and the DeviceAgent heal the index when they become active');
+}
+
+// --- 5c0b. what the last load could not read is kept, reported and shown ---
+{
+  const { PodStore } = await import(path.join(root, 'lib/core/store.mjs'));
+  const st = new PodStore({ log: () => {}, storage: {
+    kind: 'pod', base: 'https://pod.example/fedipod/ap-state/',
+    list: async () => ({ names: ['config.json', 'statuses.json'], etag: 'e1' }),
+    read: async (name) => (name === 'statuses.json'
+      ? { ok: false, status: 500 }
+      : { ok: true, status: 200, body: JSON.stringify({ handle: 'me' }), etag: 'c1' }),
+    write: async () => ({ ok: true }),
+  } });
+  await st.load();
+  check(st.lastSkipped.length === 1 && /^statuses\.json \(HTTP 500\)$/.test(st.lastSkipped[0]),
+    'the store keeps what the last load could not read');
+  check(st.getStatuses().length === 0 && st.getConfig()?.handle === 'me', 'and the rest of the state still loads');
+  const src = (f) => fs.readFileSync(path.join(root, f), 'utf8');
+  check(/stateSkipped: this\.store\?\.lastSkipped/.test(src('web/app/agent.mjs')) && /stateSkipped: this\.store\.lastSkipped/.test(src('run-agent.mjs')),
+    'both agents report it in /status');
+  check(/id="state-skipped"/.test(src('web/admin/index.html')) && /stateSkipped/.test(src('web/admin/upkeep.js')),
+    'and the record page shows it under the facts');
+}
+
+// --- 5c0c. any object as a post: stored as sent, listed, delivered, rebuilt ---
+{
+  const { Publisher } = await import(path.join(root, 'lib/core/publisher/index.mjs'));
+  const { PodStore } = await import(path.join(root, 'lib/core/store.mjs'));
+  const { readLenient } = await import(path.join(root, 'lib/core/as2.mjs'));
+  const { CONTEXTS } = await import(path.join(root, 'lib/core/contexts/index.mjs'));
+  const POD = 'https://pod.example/'; const N = POD + 'fedipod/ap/notes/';
+  const ANNO = 'http://www.w3.org/ns/anno.jsonld';
+  const annotation = {
+    '@context': ANNO, type: 'Annotation', id: '', motivation: 'commenting',
+    bodyValue: 'a fine sentence', target: { type: 'SpecificResource', source: 'https://doc.example/paper' },
+    content: '<p>ok</p><script>alert(1)</script>',
+  };
+  // The context is held, so the annotation reads as written and nothing is fetched.
+  check(!!CONTEXTS[ANNO], 'the Web Annotation context is held on disk');
+  const read = await readLenient(JSON.stringify(annotation));
+  check(read.degraded === null && read.graph, 'an annotation naming it reads as JSON-LD as written, not degraded');
+
+  const put = []; const sent = [];
+  const existing = new Set([N + 'taken']);
+  const store = new PodStore({ log: () => {} });
+  store.write('contacts.json', { followers: [{ actor: 'https://far.example/u/kwame', inbox: 'https://far.example/inbox' }], following: [] });
+  const pub = new Publisher({
+    config: { remotePod: POD, handle: 'me', name: 'Me' }, store, log: () => {},
+    remote: { putJson: async (u, b) => { put.push({ u, b }); }, setAcl: async () => {}, delete: async () => true,
+      getJson: async (u) => (existing.has(u) ? { id: u } : null) },
+    deliverer: { deliverToAll: async (inboxes, a) => sent.push({ inboxes, a }) }, publicKeyPem: 'x',
+  });
+  const made = await pub.publishObject(annotation, { visibility: 'public', slug: 'anno-9' });
+  check(made.id === N + 'anno-9' && made.copied, `the slug names the document when it is free (${made.id})`);
+  const doc = put.find(x => x.u === N + 'anno-9')?.b;
+  check(doc?.['@context'] === ANNO && doc.type === 'Annotation' && doc.motivation === 'commenting'
+    && doc.attributedTo === POD + 'fedipod/ap/actor' && doc.id === N + 'anno-9',
+    'the object is stored as sent — its own context and terms — under this actor, with the id it was given');
+  check(Array.isArray(doc.to) && doc.to.includes(wire.PUBLIC) && doc.cc.includes(POD + 'fedipod/ap/followers'),
+    'public by default: to Public, cc the followers');
+  check(doc.content === '<p>ok</p>', 'content is sanitized like a note\'s');
+  const create = put.find(x => x.u === N + 'anno-9-create')?.b;
+  check(create?.type === 'Create' && create.object?.id === N + 'anno-9' && create.actor === POD + 'fedipod/ap/actor',
+    'the Create sits beside it and embeds it');
+  check(sent.length === 1 && sent[0].inboxes.includes('https://far.example/inbox') && sent[0].a.id === N + 'anno-9-create',
+    'and the Create is what followers receive');
+  check(store.read('outbox.json', []).includes(N + 'anno-9'), 'the outbox lists it');
+  const row = store.getStatuses().find(s => s.noteId === N + 'anno-9');
+  check(row?.kind === 'post' && row.content === '<p>ok</p>', 'the timeline row shows its content');
+
+  // A taken slug is not overwritten; a minted name is used instead.
+  const made2 = await pub.publishObject({ type: 'Annotation', bodyValue: 'again' }, { slug: 'taken' });
+  check(made2.id !== N + 'taken' && made2.id.startsWith(N), `a taken slug yields a minted name (${made2.id.slice(N.length)})`);
+  const row2 = store.getStatuses().find(s => s.noteId === made2.id);
+  check(row2?.content === '<p>again</p>', 'with no content, the body text is what the timeline shows');
+
+  // An object that already lives on this pod is named, not copied.
+  const mine = POD + 'annotations/2026/one';
+  const made3 = await pub.publishObject({ '@context': ANNO, type: 'Annotation', id: mine, bodyValue: 'here' }, {});
+  check(made3.id === mine && !made3.copied && !put.some(x => x.u === mine), 'an object with an id under the pod is not copied');
+  const create3 = put.find(x => x.b?.type === 'Create' && x.b.object === mine);
+  check(create3 && create3.u.startsWith(N) && create3.u.endsWith('-create'), 'its Create names it and lives in the notes container');
+
+  // The rebuild takes any object of ours, not only Notes.
+  const docs = { [POD + 'fedipod/ap/outbox']: { type: 'OrderedCollection', orderedItems: [N + 'anno-9'] }, [N + 'anno-9']: doc };
+  const lost = new PodStore({ log: () => {} });
+  const pub2 = new Publisher({ config: { remotePod: POD, handle: 'me' }, store: lost, log: () => {},
+    remote: { getJson: async (u) => docs[u] ?? null, listContainer: async () => [] } });
+  const r = await pub2.rebuildStatuses();
+  check(r.recovered === 1 && lost.getStatuses()[0]?.noteId === N + 'anno-9' && lost.getStatuses()[0]?.content === '<p>ok</p>',
+    'a rebuild brings an annotation back like a note');
+}
+
+// --- 5c0d. the owner's post from the outbox door: drain → dispatcher; the door advertised ---
+{
+  const { Intake } = await import(path.join(root, 'lib/core/intake/index.mjs'));
+  const { PodStore } = await import(path.join(root, 'lib/core/store.mjs'));
+  const { Publisher } = await import(path.join(root, 'lib/core/publisher/index.mjs'));
+  const urls = wire.apUrls('https://pod.example/');
+  const posts = [];
+  const st = new PodStore({ log: () => {} });
+  st.setConfig({ remotePod: 'https://pod.example/', handle: 'p', kind: 'person',
+    gateway: { url: 'https://gw.example/u/p/ap/inbox/', hmacSecret: 's', mode: 'trust' } });
+  const ik = new Intake({ config: st.getConfig(), urls, remote: {}, store: st, log: () => {},
+    deliverer: { deliverToAll: async () => {} }, publisher: { urls },
+    ownerPost: async (activity, o) => { posts.push({ activity, ...o }); return { status: 201, body: { object: 'x' } }; } });
+  const rcpt = (over = {}) => ({ verified: true, method: 'c2s', actor: urls.actor,
+    keyId: 'https://pod.example/profile/card#me', slug: 'anno-1', ...over });
+  check(ik.isOwnerPost(rcpt()), 'a verified c2s receipt for this actor marks an owner post');
+  check(!ik.isOwnerPost(rcpt({ verified: false })) && !ik.isOwnerPost(rcpt({ method: 'httpsig' }))
+    && !ik.isOwnerPost(rcpt({ actor: 'https://evil.example/u/m' })) && !ik.isOwnerPost(null),
+    'unverified, not c2s, another actor, or no receipt: read as mail');
+  const raw = JSON.stringify({ '@context': 'http://www.w3.org/ns/anno.jsonld', type: 'Annotation', id: '', bodyValue: 'hi' });
+  const r = await ik.ownerPostFrom({ type: 'http://www.w3.org/ns/oa#Annotation' }, raw, rcpt());
+  check(r === null && posts[0]?.raw?.type === 'Annotation' && posts[0].raw.bodyValue === 'hi' && posts[0].slug === 'anno-1',
+    'the dispatcher gets the bytes as sent and the slug; a 201 is a publish');
+  ik.ownerPost = async () => ({ status: 422, body: { error: 'no handler for Foo' } });
+  const bad = await ik.ownerPostFrom({ type: 'Foo' }, raw, rcpt());
+  check(/refused \(422\)/.test(bad || ''), 'a refusal comes back as the reason, for the dead letter');
+
+  const mk = (gateway) => new Publisher({ config: { remotePod: 'https://pod.example/', handle: 'p', gateway }, store: st, log: () => {}, remote: {} });
+  check(mk({ url: 'https://gw.example/u/p/ap/inbox/', hmacSecret: 's', mode: 'trust' }).gatewayOutbox() === 'https://gw.example/u/p/ap/outbox',
+    'a mail-door account advertises the door beside its inbox');
+  check(mk({ url: 'https://gw.example/u/p/ap/inbox/', frontActor: 'https://gw.example/u/p/ap/actor', hmacSecret: 's', mode: 'trust' }).gatewayOutbox()
+    === 'https://gw.example/u/p/ap/outbox', 'a fronted account, under its front actor');
+  check(mk({ url: 'https://gw.example/u/p/ap/inbox/', hmacSecret: 's', mode: 'off' }).gatewayOutbox() === null && mk(undefined).gatewayOutbox() === null,
+    'and none without a working gateway');
+  const withDoor = wire.actorDoc({ urls, handle: 'p', name: 'P', publicKeyPem: 'x', outbox: 'https://gw.example/u/p/ap/outbox' });
+  const without = wire.actorDoc({ urls, handle: 'p', name: 'P', publicKeyPem: 'x' });
+  check(withDoor.outbox === 'https://gw.example/u/p/ap/outbox' && without.outbox === urls.outbox,
+    'the actor names the door as its outbox, and the pod document without one');
+}
+
 // --- 5c1. a Create is a document of its own, so a group's Announce resolves ---
 {
   const { Publisher } = await import(path.join(root, 'lib/core/publisher/index.mjs'));
@@ -2120,6 +2311,16 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   const paneAt = bootSrc.indexOf("key-password-needed");
   check(unlockAt > 0 && paneAt > 0 && unlockAt < paneAt,
     'the unlock button is wired before anything that can show its pane and return');
+  // The same pane's new-key button, for the same reason.
+  const newKeyAt = bootSrc.indexOf("$('unlock-newkey-go')?.addEventListener");
+  check(newKeyAt > 0 && newKeyAt < paneAt,
+    'the new-key button on the unlock pane is wired before the pane can show and return');
+  // A new key from the unlock pane is wrapped under the password typed now and
+  // written over the pod's copy; nothing is unwrapped, so the old password is
+  // never needed — which is the whole point for someone who has lost it.
+  const newKeyFn = bootSrc.slice(bootSrc.indexOf('window.fedipodNewKey'), bootSrc.indexOf('window.fedipodSignup'));
+  check(/wrapKeys\(keys, password\)/.test(newKeyFn) && /writeWrappedKeys\(/.test(newKeyFn) && !/unwrapKeys/.test(newKeyFn),
+    'a new key from the unlock pane is wrapped under the given password and written over the pod copy, unwrapping nothing');
 
   // readBody destroyed the socket and never settled, so the handler awaited
   // for the life of the process.
@@ -9679,12 +9880,45 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
   await ask24(api24, { type: 'Create', object: { type: 'Note', content: 'd' }, to: [ALICE24] });
   check(published24.map(x => x.visibility).join(',') === 'public,unlisted,private,direct',
     `four addressings → the four visibilities (got ${published24.map(x => x.visibility).join(',')})`);
+  // Nothing stated is a public post — what every client means by a post with
+  // no audience chosen, and what a client that never addresses needs.
   const unaddressed = await ask24(api24, { type: 'Create', object: { type: 'Note', content: 'x' } });
-  check(unaddressed.status === 400, `a post with NO stated audience is refused, not guessed (got ${unaddressed.status})`);
+  check(unaddressed.status === 201 && published24.at(-1)?.visibility === 'public',
+    `a post with NO stated audience is a public post (got ${unaddressed.status}, ${published24.at(-1)?.visibility})`);
   const cw = await ask24(api24, { type: 'Create',
     object: { type: 'Note', content: 'spoiled', summary: 'CW: test' }, to: [wire24.PUBLIC] });
   check(cw.status === 201 && published24.at(-1)?.spoilerText === 'CW: test',
     'summary rides through as the content warning');
+
+  // The Slug a client sends names the document it is making; the publisher
+  // gets it and decides whether it is free.
+  await ask24(api24, { type: 'Note', content: 'named', to: [wire24.PUBLIC] }, { headers: { slug: 'my-note-7' } });
+  check(published24.at(-1)?.slug === 'my-note-7', 'the Slug header reaches the publisher');
+  await ask24(api24, { type: 'Note', content: 'unnamed', to: [wire24.PUBLIC] }, { headers: { slug: '../etc' } });
+  check(published24.at(-1)?.slug === null, 'and an unsafe Slug is dropped, not passed');
+
+  // Not a Note and not a poll: the object goes to publishObject as sent, with
+  // the audience read the same way — a Web Annotation, the way dokieli sends
+  // one: no addressing, an empty id, its own context.
+  const objects24 = [];
+  agent24.publisher.publishObject = async (object, opts) => {
+    objects24.push({ object, ...opts });
+    return { id: urls24.notes + 'anno-1', createId: urls24.notes + 'anno-1-create', copied: true };
+  };
+  const anno = await ask24(api24, {
+    '@context': 'http://www.w3.org/ns/anno.jsonld', type: 'Annotation', id: '',
+    motivation: 'commenting', bodyValue: 'a fine sentence', target: 'https://doc.example/paper#p3',
+  }, { headers: { slug: 'anno-1' } });
+  check(anno.status === 201 && anno.headers.location === urls24.notes + 'anno-1-create',
+    `a bare Annotation is wrapped and created → 201 + Location (got ${anno.status} ${anno.headers.location})`);
+  check(objects24[0]?.object?.type === 'Annotation' && objects24[0]?.object?.bodyValue === 'a fine sentence'
+    && objects24[0]?.visibility === 'public' && objects24[0]?.slug === 'anno-1',
+    'the object reaches the publisher as sent, public by default, with its slug');
+  // dispatch answers values, so the drain can hand it an activity with no request in sight.
+  const direct = await api24.dispatch({ type: 'Block', object: 'https://bad.example/u/troll3' });
+  check(direct.status === 200 && direct.body?.object === 'https://bad.example/u/troll3'
+    && st24.getBlocklist().actors.includes('https://bad.example/u/troll3'),
+    'dispatch works with an activity alone — no request, no response');
 
   // Someone else's note is not ours to edit or delete.
   const foreignEdit = await ask24(api24, { type: 'Update', object: { id: THEIRS, content: 'hijack' } });
@@ -9740,7 +9974,8 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
     type: 'Create', to: ['https://www.w3.org/ns/activitystreams#Public'],
     object: { type: 'Article', name: 'A title', content: 'which?' },
   });
-  check(article.status === 422, `an object type we do not make → 422 (got ${article.status})`);
+  check(article.status === 201 && objects24.at(-1)?.object?.type === 'Article' && objects24.at(-1)?.object?.name === 'A title',
+    `an object type we do not make ourselves is stored as sent and created (got ${article.status})`);
   const badBody = await ask24(api24, null);
   check(badBody.status === 400, `an empty body → 400 (got ${badBody.status})`);
 
@@ -11324,6 +11559,10 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
   check(sent.length === 1 && sent[0].includes('solid:InsertDeletePatch') && sent[0].includes('solid:inserts')
     && !sent[0].includes('foaf/0.1/name'),
   'the profile gains the account statements alone, and what else it says is not touched');
+  sent.length = 0;
+  await pod.linkAccountInProfile({ ...account, outbox: 'https://gw.example/u/mei/ap/outbox' });
+  check(sent.length === 1 && sent[0].includes('activitystreams#outbox') && sent[0].includes('https://gw.example/u/mei/ap/outbox'),
+    'with a door to post through, the profile also gains as:outbox naming it — what a Solid client reads');
 
   const put = [];
   pod = podFor(async (url, init) => {

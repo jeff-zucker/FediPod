@@ -12,6 +12,7 @@ import { PodStore } from '../../lib/core/store.mjs';
 import { HttpStorage } from '../../lib/core/storage.mjs';
 import { Publisher } from '../../lib/core/publisher/index.mjs';
 import { Intake } from '../../lib/core/intake/index.mjs';
+import { C2S } from '../../lib/client/c2s.mjs';
 import { Lease } from '../../lib/core/lease.mjs';
 import { MastoApi } from '../../lib/client/masto/index.mjs';
 import { TagFeed } from '../../lib/connections/tagfeed.mjs';
@@ -84,6 +85,9 @@ export class BrowserAgent {
       // whole document back over newer state. Read what is actually there
       // before acting on it.
       await this.store.load({ force: true }).catch((e) => this.log(`re-reading state: ${e.message}`));
+      // Own posts the outbox names and the timeline index lacks come back
+      // here, before anything acts on the index.
+      await this.publisher.healStatuses().catch((e) => this.log(`healing the timeline index: ${e.message}`));
       // And start delivering again, since demote() stopped it. startQueue() is
       // idempotent, so a goActive() that was already active costs nothing.
       this.deliverer?.startQueue?.();
@@ -257,9 +261,14 @@ export class BrowserAgent {
     // read-only until the owner acts on it and it takes over. Written with fresh
     // fetches, never the cached store. Passed into Intake so the drain checks it.
     this.lease = new Lease({ url: this.urls.state + 'lease.json', fetchImpl: podFetch, log: this.log });
+    // The client-to-server dispatcher, here only for what the Gateway's
+    // outbox door takes on the owner's behalf: the browser answers no
+    // /ap/outbox of its own.
+    this.c2s = new C2S({ agent: this, log: this.log });
     this.intake = new Intake({
       config: this.store.getConfig(), urls: this.urls, remote: this.remote,
       store: this.store, deliverer: this.deliverer, publisher: this.publisher, log: this.log, push: true, lease: this.lease,
+      ownerPost: (a, o) => this.c2s.dispatch(a, o),
     });
     // The Mastodon facade the service worker serves.
     //
@@ -356,6 +365,7 @@ export class BrowserAgent {
       podRequests: this.remote?.stats?.() || null,
       update: null,
       inboxCooldownFor: 0,
+      stateSkipped: this.store?.lastSkipped || [],
     };
   }
 

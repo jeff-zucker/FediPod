@@ -16,7 +16,7 @@ import { podBaseOfWebId } from '../../lib/pod/urls.mjs';
 import { podLayout } from '../../lib/pod/root.mjs';
 import { BrowserRemotePod } from './pod-remote.mjs';
 import { beginLogin, completeLogin, getSession, signOut } from './oidc-session.mjs';
-import { unwrapKeys, isKeyEnvelope } from './keystore.mjs';
+import { generateKeys, wrapKeys, unwrapKeys, isKeyEnvelope } from './keystore.mjs';
 import { cacheOpenedKeys } from './keys-browser.mjs';
 
 const REDIRECT = `${location.origin}/`;   // the app root doubles as the OIDC callback
@@ -64,27 +64,47 @@ async function bootWorker({ reset = false } = {}) {
 //
 // The unwrap happens HERE, in the page, and not in the worker: the worker boots
 // itself whenever the browser restarts it, with nobody present to type anything.
-window.fedipodUnlock = async (password) => {
-  if (!password) throw new Error('Enter your account password.');
+//
+// Both paths below read the account's config and key the same way: with the
+// session, as the owner, through the transport rather than the bare session —
+// a pod read like any other, with the retry ladder that exists because the pod
+// host throttles bursts.
+async function readAccountState() {
   const session = await getSession();
   if (!session) throw new Error('Sign in first.');
-  // The config on the pod says where this account's state lives; the key sits
-  // beside it. Both are read with the session, as the owner.
   const podFromWebId = podBaseOfWebId(session.webId);   // a suffix-based host, or its own host
   const state = `${podFromWebId}${AP_ROOT}ap-state/`;
-  // Through the transport rather than the bare session: this is a pod read
-  // like any other, and going round it skipped the retry ladder that exists
-  // because the pod host throttles bursts.
   const remote = new BrowserRemotePod(session, { webId: session.webId, role: 'signup', log: () => {} });
   const urls = { state };
   const [cfg, doc] = await Promise.all([
     podState.readConfig(remote, urls), podState.readWrappedKeys(remote, urls),
   ]);
-  if (!cfg || !doc) throw new Error(`could not read this account's config and key under ${state}`);
+  if (!cfg) throw new Error(`could not read this account's config under ${state}`);
+  const actorUrl = `${cfg.remotePod}${cfg.root || AP_ROOT}ap/actor`;
+  return { remote, urls, cfg, doc, actorUrl };
+}
+
+window.fedipodUnlock = async (password) => {
+  if (!password) throw new Error('Enter your password.');
+  const { doc, actorUrl } = await readAccountState();
+  if (!doc) throw new Error('could not read this account\'s key on the pod');
   if (!isKeyEnvelope(doc)) throw new Error('this account\'s key is not locked — nothing to unlock');
   const rec = await unwrapKeys(doc, password);          // throws 'wrong password'
-  const actorUrl = `${cfg.remotePod}${cfg.root || AP_ROOT}ap/actor`;
   await cacheOpenedKeys(actorUrl, rec);
+  await bootWorker();
+};
+
+// The same pane, for someone who no longer has the sign-up password: a new key,
+// wrapped under the password they use now, written over the pod's copy. Nothing
+// is unwrapped, so the old password is never needed. The boot that follows
+// publishes the new public key (agent.goActive → publishProfile).
+window.fedipodNewKey = async (password) => {
+  if (!password) throw new Error('Enter the password you use for your pod now.');
+  const { remote, urls, cfg, actorUrl } = await readAccountState();
+  const keys = await generateKeys();
+  keys.mintedFor = cfg.gateway?.frontActor || actorUrl;   // one key, one actor (signup.mjs)
+  await podState.writeWrappedKeys(remote, urls, await wrapKeys(keys, password));
+  await cacheOpenedKeys(actorUrl, keys);
   await bootWorker();
 };
 
@@ -213,6 +233,25 @@ if (typeof document !== 'undefined') (async () => {
   };
   $('unlock-go')?.addEventListener('click', doUnlock);
   $('unlock-password')?.addEventListener('keydown', (e) => { if (e.key === 'Enter') doUnlock(); });
+  // The new-key path: one click reveals the confirmation, the second acts.
+  $('unlock-newkey')?.addEventListener('click', () => {
+    $('unlock-newkey-confirm').hidden = false;
+    $('unlock-password').focus();
+  });
+  const doNewKey = async () => {
+    $('unlock-error').textContent = '';
+    const btn = $('unlock-newkey-go'); btn.disabled = true;
+    try {
+      await window.fedipodNewKey($('unlock-password').value);
+      $('unlock-password').value = '';
+      location.href = '/admin/client/';
+    } catch (err) {
+      $('unlock-error').textContent = err.message || String(err);
+      btn.disabled = false;
+      $('unlock-password').select();
+    }
+  };
+  $('unlock-newkey-go')?.addEventListener('click', doNewKey);
 
 
   // The client shell's bar returns here for two things, and neither continues

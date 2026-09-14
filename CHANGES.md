@@ -1,5 +1,27 @@
 # Changes
 
+## 2026-09-14 (posting from other apps, a new key from the unlock screen, the timeline that keeps its posts — version 1.8.0, fedipod-server 0.18.0)
+
+Any app that speaks ActivityPub client-to-server, dokieli for one, can post as
+you. Your actor document and your WebID profile name your outbox: the agent's
+own endpoint on the DeviceAgent and the Server, the Gateway's outbox door for
+an account behind a Gateway. The door checks your pod sign-in, keeps the post
+in your inbox marked as yours, and your agent publishes and delivers it the
+next time it runs. A post that is not a note, a Web Annotation say, is kept as
+the app sent it, under your name. A post with no audience stated is public.
+
+On the unlock screen, someone who has changed or lost the password they signed
+up with makes a new signing key locked under the password they use now, and
+is in. The old key is replaced on the pod and the new public key published.
+
+A post, poll or boost is answered as done only once its row on your own
+timeline is on the pod, and an agent becoming active puts back any own post
+its timeline index lacks. The manage page says which state documents could not
+be read on the last load, when any.
+
+`specs-in-use.md`, which specs FediPod follows and where it stops short, is
+at the repository root and linked from the README.
+
 ## 2026-09-14 (the DeviceAgent takes a suffix-based pod too — version 1.6.0, fedipod-server 0.16.0)
 
 Setting up the DeviceAgent — the version you install on your own machine —
