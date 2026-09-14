@@ -1,5 +1,25 @@
 # Changes
 
+## 2026-09-14 (a pod on a path of a shared host can be an account — version 1.5.0, fedipod-server 0.15.0)
+
+Sign-up in the browser takes a pod on a path of a shared host, like
+`https://server.example/alice/`, as well as a pod at its own host. Such a pod's
+address is `@handle@fedipod.net`, because nothing at the shared host can
+answer for the handle; the posts, key and data stay on the pod. A pod at its
+own host chooses at sign-up where its address lives: on the pod, as before, or
+at fedipod.net. The choice is permanent.
+
+The provider list on the sign-up page is the Community Solid Server providers
+from solidproject.org, with "Other…" for any other. The form asks the chosen
+provider where it puts new pods and fixes the address to fedipod.net for one
+that keeps them on paths.
+
+Sign-in on a new browser by a fedipod.net address finds the pod through the
+address's WebFinger. Pictures under a fedipod.net address are answered by
+pointing at the pod. An access rule written for a fedipod.net address now
+guards the pod resource it was meant for; before, it guarded nothing and
+locked the owner out of the container.
+
 ## 2026-09-14 (private messages between FediPod accounts arrive — version 1.4.1, fedipod-server 0.14.1)
 
 A direct or followers-only post from one FediPod account to another was
