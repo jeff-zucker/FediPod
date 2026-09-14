@@ -1,5 +1,13 @@
 # Changes
 
+## 2026-09-14 (the DeviceAgent takes a suffix-based pod too — version 1.6.0, fedipod-server 0.16.0)
+
+Setting up the DeviceAgent — the version you install on your own machine —
+now takes a pod on a suffix-based host, like `https://server.example/alice/`,
+the same way the browser does. Its address lives at a gateway,
+`@handle@fedipod.net`, and the posts, key and data stay on the pod. A pod at
+its own host chooses at setup between its own address and a gateway's.
+
 ## 2026-09-14 (a pod on a suffix-based host can be an account — version 1.5.0, fedipod-server 0.15.0)
 
 Sign-up in the browser takes a pod on a suffix-based host, like

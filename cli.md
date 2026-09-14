@@ -29,14 +29,12 @@ pod account as part of it, `--keys pod` puts the signing key in pod state for
 multi-device use, and `AP_PASSWORD` supplies the pod password without a
 prompt. `--profile NAME` names the new identity when you have more than one.
 
-<!-- CLAUDE 2026-09-14 — the address-shape flags; delete these markers when done -->
 `--address pod` (the default) puts your address on your pod, `@you@yourpod`;
 `--address front` puts it at a gateway, `@you@the-gateway`, with your posts,
 key and data still on your pod. `--gateway <url>` names the gateway
 (`https://fedipod.net` by default). A pod on a suffix-based host cannot
 answer WebFinger for a handle, so it always takes a gateway address, whichever
 `--address` you gave.
-<!-- /CLAUDE -->
 
 ## Which identity a command acts on
 
