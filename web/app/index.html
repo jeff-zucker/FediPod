@@ -136,7 +136,14 @@ a { color: var(--accent); }
         </div>
 
         <label for="provider">Pod provider</label>
-        <input type="url" id="provider" name="provider" autocomplete="url" placeholder="https://solidcommunity.net">
+        <select id="provider" name="provider">
+          <option value="https://solidcommunity.net">solidcommunity.net</option>
+          <option value="">Other…</option>
+        </select>
+        <div id="provider-other-field" hidden>
+          <label for="providerOther">Provider address</label>
+          <input type="url" id="providerOther" name="providerOther" autocomplete="url" placeholder="https://pods.example.org">
+        </div>
 
         <div id="podname-field">
           <label for="podName">Pod username</label>
@@ -153,8 +160,8 @@ a { color: var(--accent); }
             shared host.</p>
         </div>
 
-        <label for="email">Pod email</label>
-        <input type="email" id="email" name="email" autocomplete="email" placeholder="you@example.org">
+        <label for="email">Email (used as pod id)</label>
+        <input type="email" id="email" name="email" autocomplete="username" placeholder="you@example.org">
 
         <label for="password">Pod password</label>
         <input type="password" id="password" name="password" autocomplete="current-password"

@@ -280,7 +280,8 @@ if (typeof document !== 'undefined') (async () => {
   // --- register form: two screens, pod first then Fediverse identity ---
   const f = () => $('form').elements;
   // The pod provider is a free-text URL; default and normalise to a scheme.
-  const providerUrl = () => { let v = f().provider.value.trim(); if (!v) v = 'https://solidcommunity.net'; if (!/^https?:\/\//i.test(v)) v = 'https://' + v; return v; };
+  // The provider is picked from the list, or typed under "Other…".
+  const providerUrl = () => { let v = (f().provider.value || f().providerOther.value).trim(); if (!v) return ''; if (!/^https?:\/\//i.test(v)) v = 'https://' + v; return v; };
   const providerHost = () => { try { return new URL(providerUrl()).host; } catch { return ''; } };
   // A new pod is named by its subdomain under the provider; an existing pod is
   // brought by its address, which may be its own host or a path on a shared one.
@@ -315,8 +316,9 @@ if (typeof document !== 'undefined') (async () => {
     const existing = f().mode.value === 'existing';
     $('pod-field').hidden = !existing;
     $('podname-field').hidden = existing;
+    $('provider-other-field').hidden = f().provider.value !== '';
   };
-  for (const el of $('form').elements) el.addEventListener('input', () => { applyMode(); applyShape(); previewAddr(); });
+  for (const el of $('form').elements) for (const evt of ['input', 'change']) el.addEventListener(evt, () => { applyMode(); applyShape(); previewAddr(); });
   applyMode();
 
   // Step machine: one screen at a time, each gated by its own validation.
@@ -329,7 +331,7 @@ if (typeof document !== 'undefined') (async () => {
     if (FOCUS[n]) $(FOCUS[n]).focus();
   };
   const validateStep1 = () => {
-    if (!providerHost()) return 'A valid pod provider URL is required.';
+    if (!providerHost()) return f().provider.value === '' ? 'A pod provider address is required under Other….' : 'A valid pod provider URL is required.';
     if (f().mode.value === 'existing') {
       if (!podUrl()) return 'A pod address is required, like https://alice.solidcommunity.net/ or https://server.example/alice/.';
     } else {
