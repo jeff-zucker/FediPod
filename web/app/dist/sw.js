@@ -55555,10 +55555,16 @@ function indexQuads(quads) {
   }
   return { bySubject, objects, blanks };
 }
-function findRoot({ bySubject, objects }) {
-  for (const s of bySubject.keys()) if (!objects.has(s)) return s;
-  for (const [s, preds] of bySubject) if (preds.has(RDF_TYPE)) return s;
-  return bySubject.keys().next().value ?? null;
+function findRoot({ bySubject, objects, blanks }) {
+  const all = [...bySubject.keys()];
+  const named = all.filter((s) => !blanks.has(s));
+  const free = all.filter((s) => !objects.has(s));
+  const freeNamed = free.find((s) => !blanks.has(s));
+  if (freeNamed) return freeNamed;
+  if (free.length) return free[0];
+  for (const s of named) if (bySubject.get(s).has(RDF_TYPE)) return s;
+  for (const s of all) if (bySubject.get(s).has(RDF_TYPE)) return s;
+  return named[0] ?? all[0] ?? null;
 }
 function readList(head, ctx, depth, path) {
   const out = [];
@@ -55636,7 +55642,7 @@ function makeView(subject, ctx, depth = 0, seen = /* @__PURE__ */ new Set()) {
 function graphView(quads, { root = null } = {}) {
   if (!quads || !quads.length) return null;
   const ctx = indexQuads(quads);
-  const subject = root ?? findRoot(ctx);
+  const subject = root && ctx.bySubject.has(root) ? root : findRoot(ctx);
   if (!subject) return null;
   const view = makeView(subject, ctx);
   return view && typeof view === "object" ? view : null;
@@ -55695,19 +55701,21 @@ function groundContext(input) {
   return { ...input, "@context": kept.length === 1 ? kept[0] : kept };
 }
 async function readLenient(raw) {
+  let input = null;
+  try {
+    input = typeof raw === "string" ? JSON.parse(raw) : raw ?? null;
+  } catch {
+  }
+  const own = input && typeof input === "object" ? input.id ?? input["@id"] : null;
+  const root = typeof own === "string" && /^https?:\/\//u.test(own) ? own : null;
   try {
     const { doc, graph: graph2 } = await parseAS2(raw);
-    return { doc, graph: graph2, view: graphView(graph2), degraded: null };
+    return { doc, graph: graph2, view: graphView(graph2, { root }), degraded: null };
   } catch (e) {
-    let input = null;
-    try {
-      input = typeof raw === "string" ? JSON.parse(raw) : raw ?? null;
-    } catch {
-    }
     if (!input || typeof input !== "object") return { doc: null, graph: null, view: null, degraded: e.message };
     try {
       const { graph: graph2 } = await parseAS2(groundContext(input));
-      return { doc: input, graph: graph2, view: graphView(graph2), degraded: e.message };
+      return { doc: input, graph: graph2, view: graphView(graph2, { root }), degraded: e.message };
     } catch (inner) {
       return { doc: input, graph: null, view: null, degraded: `${e.message}; grounded read also failed: ${inner.message}` };
     }
@@ -67364,6 +67372,14 @@ var Deliverer = class {
 
 // web/app/deliver-relay.mjs
 init_fedify_sig();
+function doorKeyOf(doorInboxUrl) {
+  try {
+    const seg2 = new URL(doorInboxUrl).pathname.split("/");
+    return seg2[1] === "u" && seg2[2] ? decodeURIComponent(seg2[2]) : null;
+  } catch {
+    return null;
+  }
+}
 var RelayDeliverer = class extends Deliverer {
   constructor(opts) {
     super(opts);
@@ -69616,7 +69632,9 @@ var BrowserAgent = class _BrowserAgent {
       actorId: this.urls.actor,
       log: this.log,
       relayUrl: `${frontOrigin.replace(/\/$/, "")}/api/relay`,
-      handle: config.handle,
+      // The relay finds the account by the front's own key for it, which for a
+      // mail-door account is the full address, not the bare handle.
+      handle: doorKeyOf(config.gateway?.url) || config.handle,
       sessionFetch: session.fetch
     });
     this.publisher = new Publisher({

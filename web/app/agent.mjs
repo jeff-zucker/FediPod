@@ -19,7 +19,7 @@ import { makeDpopSession } from './pod-auth.mjs';
 import { BrowserRemotePod } from './pod-remote.mjs';
 import { importSigningKey, loadKeysFromPod, cacheOpenedKeys } from './keys-browser.mjs';
 import { generateKeys, wrapKeys } from './keystore.mjs';
-import { RelayDeliverer } from './deliver-relay.mjs';
+import { RelayDeliverer, doorKeyOf } from './deliver-relay.mjs';
 import { AdminFacade } from './admin-facade.mjs';
 import { BrowserAtproto } from './atproto-browser.mjs';
 import { BskyFeed } from '../../lib/connections/bskyfeed.mjs';
@@ -203,7 +203,10 @@ export class BrowserAgent {
       passive: true,
       store: this.store, rsaPrivate: keys.rsaPrivate, keyId: this.urls.actor + '#main-key',
       actorId: this.urls.actor, log: this.log,
-      relayUrl: `${frontOrigin.replace(/\/$/, '')}/api/relay`, handle: config.handle, sessionFetch: session.fetch,
+      relayUrl: `${frontOrigin.replace(/\/$/, '')}/api/relay`,
+      // The relay finds the account by the front's own key for it, which for a
+      // mail-door account is the full address, not the bare handle.
+      handle: doorKeyOf(config.gateway?.url) || config.handle, sessionFetch: session.fetch,
     });
 
     this.publisher = new Publisher({

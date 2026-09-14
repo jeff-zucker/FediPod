@@ -1981,6 +1981,22 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   // mastodon.social (2026-09-13). The relay permits it (RELAY_HEADERS).
   check(/accept: s\.headers\.accept/.test(read('web/app/deliver-relay.mjs')),
     'the browser hands the relay the Accept header it signed');
+  // The relay looks an account up by the front's own key for it. A mail-door
+  // account is keyed by its full address, and the browser used to send the
+  // bare handle — so every relayed read answered 404 "no such account" and a
+  // search for anyone found nobody (2026-09-13, @fp1@fp1.solidcommunity.net).
+  const { doorKeyOf } = await import(path.join(root, 'web/app/deliver-relay.mjs'));
+  check(doorKeyOf('https://fedipod.net/u/fp1%40fp1.solidcommunity.net/ap/inbox/') === 'fp1@fp1.solidcommunity.net'
+    && doorKeyOf('https://fedipod.net/u/jeff/ap/inbox/') === 'jeff'
+    && doorKeyOf('https://pod.example/fedipod/ap/inbox/') === null && doorKeyOf(undefined) === null,
+    'the browser relays under the key the front gave its door, full address included');
+  check(/doorKeyOf\(config\.gateway\?\.url\) \|\| config\.handle/.test(read('web/app/agent.mjs')),
+    'and the browser agent hands that key to the relay, falling back to the handle only without a door');
+  // The signature covers `accept`, and a read without it gets the HTML page:
+  // dropping it at the relay made every actor lookup from the browser fail on
+  // mastodon.social (2026-09-13). The relay permits it (RELAY_HEADERS).
+  check(/accept: s\.headers\.accept/.test(read('web/app/deliver-relay.mjs')),
+    'the browser hands the relay the Accept header it signed');
 
   // `host` is a forbidden header, so the request the worker builds cannot carry
   // one from the fetch it intercepted — and the facade reads it to say where it
@@ -11572,6 +11588,45 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
   const other = await as2.parseAS2(aliased);
   check(other.doc.type === 'Create',
     'an activity whose terms are aliased means the same thing and arrives saying so');
+
+  // The document's own node is the one read, whatever else the graph holds.
+  // A Mastodon actor points at itself through its key's `owner`, and its
+  // profile fields are blank PropertyValue nodes that come first in quad
+  // order — which is how every such actor came back as a profile field
+  // (2026-09-13: searching for @jeff_zucker@mastodon.social found nobody,
+  // and a Follow from anyone with fields on their profile could not be read).
+  const mastodonActor = JSON.stringify({
+    '@context': ['https://www.w3.org/ns/activitystreams', 'https://w3id.org/security/v1',
+      { schema: 'http://schema.org#', PropertyValue: 'schema:PropertyValue', value: 'schema:value' }],
+    id: 'https://m.example/users/sam', type: 'Person', preferredUsername: 'sam',
+    inbox: 'https://m.example/users/sam/inbox',
+    attachment: [
+      { type: 'PropertyValue', name: 'Site', value: 'https://sam.example' },
+      { type: 'PropertyValue', name: 'Pronouns', value: 'they/them' },
+    ],
+    publicKey: { id: 'https://m.example/users/sam#main-key', owner: 'https://m.example/users/sam', publicKeyPem: '-----BEGIN PUBLIC KEY-----\nx\n-----END PUBLIC KEY-----\n' },
+  });
+  const who = await as2.readLenient(mastodonActor);
+  check(!who.degraded && who.view?.id === 'https://m.example/users/sam' && who.view.type === 'Person'
+    && who.view.inbox === 'https://m.example/users/sam/inbox' && who.view.preferredUsername === 'sam',
+    'an actor with profile fields and a key that points back at it is read as the actor');
+  check(Array.isArray(who.view.attachment) && who.view.attachment.length === 2
+    && who.view.attachment.some(a => a.name === 'Pronouns'),
+    'with its fields still on it');
+  // The same document with its id withheld from the reader's hint: the named
+  // subject still wins over the blank ones.
+  const { graphView } = await import(path.join(root, 'lib/core/graphview.mjs'));
+  const unhinted = graphView(who.graph);
+  check(unhinted?.id === 'https://m.example/users/sam',
+    'and with no hint at all, a named node is preferred to a blank one');
+  // A Note whose tags are blank Mention nodes reads as the Note.
+  const tagged = await as2.readLenient(JSON.stringify({
+    '@context': 'https://www.w3.org/ns/activitystreams',
+    id: 'https://m.example/n/9', type: 'Note', content: 'hi @you',
+    tag: [{ type: 'Mention', href: 'https://pod.example/ap/actor', name: '@you' }],
+  }));
+  check(tagged.view?.id === 'https://m.example/n/9' && tagged.view.type === 'Note',
+    'a note with mention tags reads as the note, not as a tag');
 
   // Refusals, each with a reason the caller can log.
   const refused = async (label, input) => {

@@ -10,6 +10,20 @@
 import { Deliverer } from '../../lib/core/deliver.mjs';
 import { sign } from './shims/fedify-sig.mjs';
 
+/**
+ * The name the front keys this account's row by, read off its door inbox:
+ * `<front>/u/<key>/ap/inbox/`. A mail-door account is keyed by its full
+ * address (`you@your.pod`), not the bare handle, because "you" alone is not
+ * unique across pods — and the relay looks the account up by that key.
+ * Null when the URL is not a door of that shape.
+ */
+export function doorKeyOf(doorInboxUrl) {
+  try {
+    const seg = new URL(doorInboxUrl).pathname.split('/');
+    return seg[1] === 'u' && seg[2] ? decodeURIComponent(seg[2]) : null;
+  } catch { return null; }
+}
+
 export class RelayDeliverer extends Deliverer {
   constructor(opts) {
     super(opts);
