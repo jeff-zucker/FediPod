@@ -1004,6 +1004,28 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     'mentions and hashtags share the tag list');
 }
 
+// --- 5c1f. the outbox lists activities: a post's Create, an Announce whole ---
+{
+  const w = await import(path.join(root, 'lib/core/wire.mjs'));
+  const ann = { id: 'https://p/ap/actor#announce-1', type: 'Announce', object: 'https://x/n' };
+  const page = w.outboxPage('https://p/ap/outbox', 1, ['https://p/ap/notes/n1', ann]);
+  check(page.orderedItems[0] === 'https://p/ap/notes/n1-create' && page.orderedItems[1] === ann,
+    'a note is published as its Create id; an Announce goes in as it is');
+  check(w.outboxLocalItem('https://p/ap/notes/n1-create') === 'https://p/ap/notes/n1'
+    && w.outboxLocalItem(ann) === ann,
+    'and the published shape maps back to the recorded one');
+  const { Publisher } = await import(path.join(root, 'lib/core/publisher/index.mjs'));
+  const docs = {
+    'https://pod.example/fedipod/ap/outbox': { first: 'https://pod.example/fedipod/ap/outbox-1' },
+    'https://pod.example/fedipod/ap/outbox-1': { orderedItems: ['https://pod.example/fedipod/ap/notes/a-create', ann] },
+  };
+  const pub = new Publisher({ config: { remotePod: 'https://pod.example/', handle: 'me' },
+    remote: { getJson: async (u) => docs[u] || null }, store: { read: () => [], write: () => {} }, log: () => {} });
+  const back = await pub.readPublishedOutbox();
+  check(back[0] === 'https://pod.example/fedipod/ap/notes/a' && back[1] === ann,
+    'reading the pod\'s outbox back gives note ids, so rebuild and reconcile see what they always did');
+}
+
 // --- 5b2. editing, visibility and content warnings ---
 {
   const { Publisher } = await import(path.join(root, 'lib/core/publisher/index.mjs'));

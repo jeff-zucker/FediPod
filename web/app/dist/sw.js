@@ -9629,11 +9629,13 @@ __export(wire_exports, {
   orderedCollection: () => orderedCollection,
   outboxHead: () => outboxHead,
   outboxItemId: () => outboxItemId,
+  outboxLocalItem: () => outboxLocalItem,
   outboxPage: () => outboxPage,
   outboxPageCount: () => outboxPageCount,
   outboxPageId: () => outboxPageId,
   outboxPages: () => outboxPages,
   outboxPaging: () => outboxPaging,
+  outboxWireItem: () => outboxWireItem,
   pageItems: () => pageItems,
   profilePageHtml: () => profilePageHtml,
   publicHandle: () => publicHandle,
@@ -9929,7 +9931,7 @@ function outboxPage(outboxId, n, items) {
     id: outboxPageId(outboxId, n),
     type: "OrderedCollectionPage",
     partOf: outboxId,
-    orderedItems: items,
+    orderedItems: items.map(outboxWireItem),
     ...n > 1 ? { next: outboxPageId(outboxId, n - 1) } : {}
   };
 }
@@ -10303,7 +10305,7 @@ function addRemoveActivity({ urls, type, object, target, serial }) {
     target
   };
 }
-var import_sanitize_html, AS_CTX, SEC_CTX, PUBLIC, DEFAULT_ROOT, assertionKeyId, OUTBOX_PAGE_SIZE, outboxPageId, outboxPageCount, outboxItemId, FOLLOWERS_PAGE_SIZE, followersPageId, followersPageCount, ALLOWED_TAGS, ALLOWED_ATTRS, MAX_ATTACHMENTS, MAX_ATTACHMENT_URL, attachmentUrl, HTML_ESCAPES, MENTION_RE, HASHTAG_RE;
+var import_sanitize_html, AS_CTX, SEC_CTX, PUBLIC, DEFAULT_ROOT, assertionKeyId, OUTBOX_PAGE_SIZE, outboxPageId, outboxPageCount, outboxItemId, outboxWireItem, outboxLocalItem, FOLLOWERS_PAGE_SIZE, followersPageId, followersPageCount, ALLOWED_TAGS, ALLOWED_ATTRS, MAX_ATTACHMENTS, MAX_ATTACHMENT_URL, attachmentUrl, HTML_ESCAPES, MENTION_RE, HASHTAG_RE;
 var init_wire = __esm({
   "lib/core/wire.mjs"() {
     init_urls();
@@ -10318,6 +10320,8 @@ var init_wire = __esm({
     outboxPageId = (outboxId, n) => `${outboxId}-${n}`;
     outboxPageCount = (total) => Math.max(1, Math.ceil(total / OUTBOX_PAGE_SIZE));
     outboxItemId = (i) => typeof i === "string" ? i : i?.id || null;
+    outboxWireItem = (i) => typeof i === "string" ? createActivityId(i) : i;
+    outboxLocalItem = (i) => typeof i === "string" && i.endsWith("-create") ? i.slice(0, -"-create".length) : i;
     FOLLOWERS_PAGE_SIZE = 20;
     followersPageId = (id, n) => `${id}-${n}`;
     followersPageCount = (total) => Math.max(1, Math.ceil(total / FOLLOWERS_PAGE_SIZE));
@@ -45463,8 +45467,9 @@ async function publishOutbox(publisher, outbox, { acls = false, force = false } 
   );
   return wrote;
 }
-function readPublishedOutbox(publisher) {
-  return readPublished(publisher.remote, publisher.urls);
+async function readPublishedOutbox(publisher) {
+  const items = await readPublished(publisher.remote, publisher.urls);
+  return Array.isArray(items) ? items.map(outboxLocalItem) : items;
 }
 async function publishFollowers(publisher, actors, { acls = false, force = false } = {}) {
   const { urls } = publisher;
