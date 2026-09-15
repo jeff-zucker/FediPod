@@ -232,6 +232,7 @@ export class BrowserAgent {
       // gives its publisher. Without it no mention from the browser ever
       // resolved: a direct message went to nobody, a mention notified no one.
       resolveMention: (h) => resolveHandle(this, h),
+      resolveActor: (u) => this.intake.fetchAP(u),
     });
 
     // The Bluesky connection, stamped to this actor. The same client the Node

@@ -927,6 +927,59 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     'but a person the author does retype is mentioned normally');
 }
 
+// --- 5c1d. a reply reaches the server of the person it answers ---
+// Delivered without a Mention tag: their server files it in the thread and
+// does not notify them; the text still decides who is notified.
+{
+  const { Publisher } = await import(path.join(root, 'lib/core/publisher/index.mjs'));
+  const PARENT = 'https://m.example/users/kwame/statuses/77';
+  const sent = [];
+  const asked = [];
+  const mk = (statuses) => new Publisher({
+    config: { remotePod: 'https://pod.example/', handle: 'you', name: 'You' },
+    remote: { putJson: async () => {}, setAcl: async () => {}, delete: async () => true },
+    store: {
+      getStatuses: () => statuses,
+      read: () => [], write: () => {}, addStatus: () => {}, isBlocked: () => false,
+      getContacts: () => ({ followers: [{ inbox: 'https://f.example/inbox' }], following: [] }),
+    },
+    deliverer: { deliverToAll: async (i) => sent.push([...i]) }, publicKeyPem: 'x', log: () => {},
+    probeFetch: async () => ({ status: 401 }),
+    resolveMention: async (h) => ({
+      'kwame@m.example': { id: 'https://m.example/users/kwame', type: 'Person', inbox: 'https://m.example/users/kwame/inbox' },
+    })[h] || null,
+    resolveActor: async (u) => {
+      asked.push(u);
+      return ({
+        'https://m.example/users/kwame': { id: 'https://m.example/users/kwame', type: 'Person',
+          inbox: 'https://m.example/users/kwame/inbox', endpoints: { sharedInbox: 'https://m.example/inbox' } },
+        [PARENT]: { id: PARENT, type: 'Note', attributedTo: 'https://m.example/users/kwame' },
+      })[u] || null;
+    },
+  });
+  const held = [{ noteId: PARENT, actor: 'https://m.example/users/kwame', kind: 'timeline' }];
+  const n = await mk(held).publishNote('agreed', { inReplyTo: PARENT });
+  check(n.cc.includes('https://m.example/users/kwame') && !n.tag?.length,
+    'the parent author is in cc and NOT tagged — delivered, not notified');
+  check(sent.at(-1).includes('https://m.example/inbox') && sent.at(-1).includes('https://f.example/inbox'),
+    `the Create goes to their shared inbox as well as to followers (${JSON.stringify(sent.at(-1))})`);
+  const n2 = await mk(held).publishNote('agreed @kwame@m.example', { inReplyTo: PARENT });
+  check(n2.cc.filter(a => a === 'https://m.example/users/kwame').length === 1 && n2.tag?.length === 1,
+    'a retyped handle is one cc entry and one tag, not two');
+  const n3 = await mk(held).publishNote('psst @kwame@m.example', { inReplyTo: PARENT, visibility: 'direct' });
+  check(!n3.cc.length && n3.to.length === 1 && sent.at(-1).length === 1,
+    'a direct reply goes only to whom the text names');
+  const mine = [{ noteId: PARENT, actor: 'https://pod.example/fedipod/ap/actor', kind: 'post' }];
+  const n4 = await mk(mine).publishNote('self-reply', { inReplyTo: PARENT });
+  check(!n4.cc.includes('https://pod.example/fedipod/ap/actor') && sent.at(-1).length === 1,
+    'answering your own post adds nobody');
+  asked.length = 0;
+  const n5 = await mk([]).publishNote('from another app', { inReplyTo: PARENT });
+  check(asked.includes(PARENT) && n5.cc.includes('https://m.example/users/kwame')
+    && sent.at(-1).includes('https://m.example/inbox'),
+    'a parent the agent never held is fetched to find its author');
+}
+
 // --- 5b2. editing, visibility and content warnings ---
 {
   const { Publisher } = await import(path.join(root, 'lib/core/publisher/index.mjs'));

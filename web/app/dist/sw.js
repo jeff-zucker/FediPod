@@ -10076,11 +10076,13 @@ function noteDoc({
   visibility = "public",
   summary = null,
   updated = null,
-  container = null
+  container = null,
+  also = []
 }) {
   const id = (container || urls.notes) + slug;
   const who = mentions.map((m) => m.actor);
-  const addressed = addressing(urls, visibility, who);
+  const extra = visibility === "direct" ? [] : also.filter((a) => a && !who.includes(a));
+  const addressed = addressing(urls, visibility, [...who, ...extra]);
   const note = {
     "@context": AS_CTX,
     id,
@@ -55941,6 +55943,24 @@ async function mentionsFor(publisher, content, inReplyTo) {
   }
   return mentions;
 }
+async function replyTarget(publisher, inReplyTo, mentions = [], visibility = "public") {
+  if (!inReplyTo || visibility === "direct" || !publisher.resolveActor) return null;
+  const parent = publisher.store.getStatuses().find((s) => s.noteId === inReplyTo);
+  let actor = parent?.actor || null;
+  if (!parent) {
+    const doc2 = await publisher.resolveActor(inReplyTo).catch(() => null);
+    const by = doc2?.attributedTo;
+    actor = typeof by === "string" ? by : (Array.isArray(by) ? by[0] : by)?.id || null;
+    if (typeof actor === "object") actor = actor?.id || null;
+  }
+  if (!actor || actor === publisher.urls.actor) return null;
+  if (mentions.some((m) => m.actor === actor)) return null;
+  if (publisher.store.isBlocked?.(actor)) return null;
+  const doc = await publisher.resolveActor(actor).catch(() => null);
+  const inbox = doc?.endpoints?.sharedInbox || doc?.inbox || null;
+  if (!inbox) publisher.log(`reply: no inbox found for ${actor} \u2014 they get it only through followers`);
+  return { actor, inbox };
+}
 function assertDirectAddressed(content, mentions) {
   const wanted = [...new Set(mentionsIn(content))];
   const missing = wanted.filter((h) => !mentions.some((m) => m.handle === h));
@@ -55977,6 +55997,7 @@ async function publishNote(publisher, content, { inReplyTo, attachments, visibil
   const slug = await slugFor(publisher, priv ? urls.privateNotes : urls.notes, wanted, published);
   const mentions = await publisher._mentionsFor(content, inReplyTo);
   if (visibility === "direct") assertDirectAddressed(content, mentions);
+  const reply = await replyTarget(publisher, inReplyTo, mentions, visibility);
   const note = noteDoc({
     urls,
     slug,
@@ -55987,7 +56008,8 @@ async function publishNote(publisher, content, { inReplyTo, attachments, visibil
     mentions,
     visibility,
     summary: spoilerText,
-    container: priv ? urls.privateNotes : urls.notes
+    container: priv ? urls.privateNotes : urls.notes,
+    also: reply ? [reply.actor] : []
   });
   await write4(publisher.remote, note.id, note);
   await writeEmptyReplies(
@@ -56016,7 +56038,8 @@ async function publishNote(publisher, content, { inReplyTo, attachments, visibil
   const contacts = publisher.store.getContacts();
   const inboxes = [...new Set([
     ...visibility === "direct" ? [] : contacts.followers.map((f) => f.sharedInbox || f.inbox),
-    ...mentions.map((m) => m.inbox)
+    ...mentions.map((m) => m.inbox),
+    reply?.inbox
   ].filter(Boolean))];
   await publisher.deliverer.deliverToAll(inboxes, create);
   publisher.log(`note published: ${note.id} \u2192 ${inboxes.length} inbox(es)`);
@@ -56103,6 +56126,7 @@ async function updateNote(publisher, s, { content, spoilerText = null, attachmen
   const atts = attachments ?? s.attachments ?? [];
   const container = String(s.noteId).startsWith(urls.privateNotes) ? urls.privateNotes : urls.notes;
   const slug = s.slug || String(s.noteId).slice(container.length);
+  const reply = await replyTarget(publisher, s.inReplyTo, mentions, s.visibility || "public");
   const note = noteDoc({
     urls,
     slug,
@@ -56114,7 +56138,8 @@ async function updateNote(publisher, s, { content, spoilerText = null, attachmen
     visibility: s.visibility || "public",
     summary: spoilerText,
     updated,
-    container
+    container,
+    also: reply ? [reply.actor] : []
   });
   await write4(publisher.remote, note.id, note);
   await writeCreate(publisher.remote, createActivityId(note.id), createActivity(note, urls));
@@ -56130,7 +56155,8 @@ async function updateNote(publisher, s, { content, spoilerText = null, attachmen
   const contacts = publisher.store.getContacts();
   const inboxes = [...new Set([
     ...s.visibility === "direct" ? [] : contacts.followers.map((f) => f.sharedInbox || f.inbox),
-    ...mentions.map((m) => m.inbox)
+    ...mentions.map((m) => m.inbox),
+    reply?.inbox
   ].filter(Boolean))];
   await publisher.deliverer.deliverToAll(inboxes, update);
   publisher.log(`note edited: ${note.id} \u2192 ${inboxes.length} inbox(es)`);
@@ -56383,6 +56409,7 @@ async function publishQuestion(publisher, content, {
   const slug = published.slice(0, 10) + "-" + node_crypto_default.randomBytes(4).toString("hex");
   const mentions = await publisher._mentionsFor(content, inReplyTo);
   if (visibility === "direct") assertDirectAddressed(content, mentions);
+  const reply = await replyTarget(publisher, inReplyTo, mentions, visibility);
   const poll = {
     multiple: !!multiple,
     expiresAt: expiresAt || null,
@@ -56391,7 +56418,7 @@ async function publishQuestion(publisher, content, {
     votersCount: 0,
     // Resolved once, here: a tally rewrite must not cost a webfinger lookup
     // per vote for people the poll named.
-    mentionInboxes: [...new Set(mentions.map((m) => m.inbox).filter(Boolean))]
+    mentionInboxes: [...new Set([...mentions.map((m) => m.inbox), reply?.inbox].filter(Boolean))]
   };
   const question = questionDoc({
     urls,
@@ -56403,6 +56430,7 @@ async function publishQuestion(publisher, content, {
     mentions,
     visibility,
     summary: spoilerText,
+    also: reply ? [reply.actor] : [],
     container: priv ? urls.privateNotes : urls.notes,
     options: poll.options,
     multiple: poll.multiple,
@@ -56427,6 +56455,7 @@ async function publishQuestion(publisher, content, {
     visibility,
     poll,
     inReplyTo,
+    ...reply ? { replyActor: reply.actor } : {},
     ...spoilerText ? { spoiler: spoilerText } : {},
     ...question.tag?.length ? { mentions: question.tag.map((t) => ({ href: t.href, name: t.name })) } : {}
   });
@@ -56507,6 +56536,7 @@ async function republishPoll(publisher, questionId, { closing = null } = {}) {
     inReplyTo: s.inReplyTo,
     attachments: [],
     mentions,
+    also: s.replyActor ? [s.replyActor] : [],
     visibility: s.visibility || "public",
     summary: s.spoiler || null,
     container,
@@ -56580,6 +56610,7 @@ var Publisher = class {
     log: log2 = console.log,
     probeFetch = null,
     resolveMention = null,
+    resolveActor = null,
     clientOrigin = null
   }) {
     this.config = config;
@@ -56594,6 +56625,7 @@ var Publisher = class {
     if (this.urls.toPod && this.remote?.setUrlMap) this.remote.setUrlMap(this.urls.toPod);
     this.probeFetch = probeFetch || ((u, i) => this.remote.probe(u, i));
     this.resolveMention = resolveMention;
+    this.resolveActor = resolveActor;
     this.pollTimers = /* @__PURE__ */ new Map();
     this.log = log2;
   }
@@ -70449,7 +70481,8 @@ var BrowserAgent = class _BrowserAgent {
       // Who a post names, resolved — the same lookup the DeviceAgent
       // gives its publisher. Without it no mention from the browser ever
       // resolved: a direct message went to nobody, a mention notified no one.
-      resolveMention: (h) => resolveHandle(this, h)
+      resolveMention: (h) => resolveHandle(this, h),
+      resolveActor: (u) => this.intake.fetchAP(u)
     });
     this.atproto = new BrowserAtproto({ store: this.store, actorId: this.urls.actor, log: this.log });
     this.publisher.atproto = this.atproto;

@@ -331,6 +331,7 @@ export class Agent {
       deliverer: this.deliverer, publicKeyPem: keys.rsaPublicPem,
       assertionKey: keys.edPublicMultibase, log: this.log,
       resolveMention: (h) => resolveHandle(this, h),
+      resolveActor: (u) => this.intake.fetchAP(u),
       // Inside a pod server the client surface answers on the pod's own
       // origin, so it can be advertised. Standalone it is on loopback, and
       // naming it in a world-readable actor would send clients nowhere.
