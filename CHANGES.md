@@ -8,6 +8,9 @@ name, address and bio. The page is rewritten only when one of those
 changes. When you joined is recorded from now on; an account made before
 this is dated by its oldest post, and your client shows that date too.
 
+The gateway's roster names a pod on a path of a shared host by its host and
+path, so two pods on one host can be told apart.
+
 ## 2026-09-15 (a profile anyone can open — version 1.10.0, fedipod-server 0.20.0)
 
 Someone who knows your address can open your profile without a Fediverse
