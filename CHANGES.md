@@ -27,6 +27,13 @@ collections.
 A client paging through a timeline is sent to the address it reached, not to
 the pod's host. Deliveries signed with RFC 9421 verify at the door.
 
+An app posting through the outbox address must show the proof that goes
+with its Solid sign-in token; a token on its own is refused. The people such
+a post names in `bto` or `bcc` receive it and are never listed on it, and
+the people it names in `to` or `cc` receive it and are. A fedipod.net
+address can be looked up from a page on any site, and the server's NodeInfo
+document is served under the media type its schema names.
+
 ## 2026-09-14 (posting from other apps, a new key from the unlock screen, the timeline that keeps its posts — version 1.8.0, fedipod-server 0.18.0)
 
 Any app that speaks ActivityPub client-to-server, dokieli for one, can post as

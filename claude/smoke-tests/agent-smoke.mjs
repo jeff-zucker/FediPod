@@ -238,6 +238,8 @@ if (up) {
   const niPtrBody = await niPtr.json();
   const niDoc = await fetchLocal(`https://127.0.0.1:${PORT}/nodeinfo/2.0`, { headers: gh });
   const niDocBody = await niDoc.json();
+  check(/^application\/json; profile="http:\/\/nodeinfo\.diaspora\.software\/ns\/schema\/2\.0#"$/.test(niDoc.headers.get('content-type') || ''),
+    `the nodeinfo document carries the schema's media type (${niDoc.headers.get('content-type')})`);
   check(niPtr.status === 200 && /\/nodeinfo\/2\.0$/.test(niPtrBody.links?.[0]?.href)
     && niDoc.status === 200 && niDocBody.software?.name === 'hometown'
     && niDocBody.protocols?.includes('activitypub'),
@@ -1163,6 +1165,42 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     'a verified Block drops their follow of us, ours of them, their pending request, and republishes');
   await three.intake.handle({ type: 'Block', actor: X, object: 'https://someone.else/actor' }, { verified: true, actor: X });
   check(three.state.republished.length === 1, 'a Block of someone else is not ours to act on');
+}
+
+// --- 5c1j. who a client addressed by id: to/cc listed and delivered, bto/bcc delivered and never listed ---
+{
+  const { C2S } = await import(path.join(root, 'lib/client/c2s.mjs'));
+  const { Publisher } = await import(path.join(root, 'lib/core/publisher/index.mjs'));
+  const put = {}; const sent = [];
+  const actors = {
+    'https://a.example/u/pri': { id: 'https://a.example/u/pri', type: 'Person', inbox: 'https://a.example/u/pri/inbox' },
+    'https://b.example/u/sec': { id: 'https://b.example/u/sec', type: 'Person', inbox: 'https://b.example/u/sec/inbox' },
+  };
+  const pub = new Publisher({
+    config: { remotePod: 'https://pod.example/', handle: 'me', name: 'Me' },
+    remote: { putJson: async (u, d) => { put[u] = d; }, setAcl: async () => {}, delete: async () => true, getJson: async () => null },
+    store: { read: () => [], write: () => {}, addStatus: () => {}, getStatuses: () => [], isBlocked: () => false,
+      getContacts: () => ({ followers: [{ inbox: 'https://f.example/inbox' }], following: [] }), commit: async () => true },
+    deliverer: { deliverToAll: async (i, a) => sent.push({ i: [...i], a }) }, publicKeyPem: 'x', log: () => {},
+    resolveActor: async (u) => actors[u] || null,
+  });
+  const c2s = new C2S({ agent: { publisher: pub, urls: pub.urls, store: pub.store, remote: {} }, log: () => {}, auth: async () => ({ ok: true }) });
+  const r = await c2s.dispatch({
+    '@context': 'http://www.w3.org/ns/anno.jsonld', type: 'Annotation', bodyValue: 'noted',
+    to: ['https://www.w3.org/ns/activitystreams#Public', 'https://a.example/u/pri'],
+    bcc: ['https://b.example/u/sec'],
+  }, { slug: 'anno-bcc' });
+  check(r.status === 201, `the annotation is accepted (${r.status} ${JSON.stringify(r.body)})`);
+  const stored = put[r.body.object];
+  check(stored && !('bto' in stored) && !('bcc' in stored) && stored.cc.includes('https://a.example/u/pri'),
+    'the stored object lists the to/cc actor and carries no bto or bcc');
+  const create = put[r.body.id];
+  check(create && !('bcc' in create) && !('bcc' in (create.object || {})),
+    'nor does the Create around it');
+  const last = sent.at(-1);
+  check(last.i.includes('https://a.example/u/pri/inbox') && last.i.includes('https://b.example/u/sec/inbox')
+    && last.i.includes('https://f.example/inbox'),
+    `and both addressed actors are delivered to, beside the followers (${JSON.stringify(last.i)})`);
 }
 
 // --- 5b2. editing, visibility and content warnings ---
@@ -10099,11 +10137,14 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
   const blockBody = { type: 'Block', object: 'https://bad.example/u/troll' };
   const noAuth = await ask24(apiAuth, blockBody);
   check(noAuth.status === 401, `no credentials → 401 (got ${noAuth.status})`);
-  const wrongWho = await ask24(apiAuth, blockBody, { headers: { authorization: 'DPoP other' } });
+  const wrongWho = await ask24(apiAuth, blockBody, { headers: { authorization: 'DPoP other', dpop: 'proof' } });
   check(wrongWho.status === 403, `a valid token for a DIFFERENT WebID → 403, not a post (got ${wrongWho.status})`);
-  const badTok = await ask24(apiAuth, blockBody, { headers: { authorization: 'DPoP junk' } });
+  const noProof = await ask24(apiAuth, blockBody, { headers: { authorization: 'DPoP good' } });
+  check(noProof.status === 401 && /DPoP/.test(noProof.headers['www-authenticate'] || ''),
+    `a Solid token without its DPoP proof → 401 asking for one (got ${noProof.status})`);
+  const badTok = await ask24(apiAuth, blockBody, { headers: { authorization: 'DPoP junk', dpop: 'proof' } });
   check(badTok.status === 401, `an unverifiable token → 401 (got ${badTok.status})`);
-  const asOwner = await ask24(apiAuth, blockBody, { headers: { authorization: 'DPoP good' } });
+  const asOwner = await ask24(apiAuth, blockBody, { headers: { authorization: 'DPoP good', dpop: 'proof' } });
   check(asOwner.status === 200, `the owner's own WebID → acts (got ${asOwner.status})`);
   const asBearer = await ask24(apiAuth, { type: 'Block', object: 'https://bad.example/u/troll2' },
     { headers: { authorization: 'Bearer smoke-ok' } });
@@ -10828,7 +10869,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
     : authz === 'DPoP bob' ? 'https://bob.pod/profile/card#me' : null });
   const ctx = { host: 'fedipod.net', frontOrigin: ORIGIN, lookup: (h) => dir[h] || null, verifier, fetchImpl };
   const call = (body, authz) => front.routeFront(new Request(ORIGIN + '/api/relay', {
-    method: 'POST', headers: { 'content-type': 'application/json', ...(authz ? { authorization: authz } : {}) },
+    method: 'POST', headers: { 'content-type': 'application/json', ...(authz ? { authorization: authz, dpop: 'proof' } : {}) },
     body: JSON.stringify(body) }), ctx);
   const note = JSON.stringify({ type: 'Create', actor: dir.me.actorUrl });
   const digest = 'SHA-256=' + nodeCrypto.createHash('sha256').update(note).digest('base64');
@@ -11085,7 +11126,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
   // wired agentControl in; the ownership check is stricter than attach's.
   const agentPost = (body, ctx_) => front.routeFront(
     new Request(ORIGIN + '/api/agent', { method: 'POST',
-      headers: { 'content-type': 'application/json', authorization: 'DPoP stub' },
+      headers: { 'content-type': 'application/json', authorization: 'DPoP stub', dpop: 'proof' },
       body: JSON.stringify(body) }), ctx_);
   check((await agentPost({ action: 'opt-in', podBase: 'https://mei.host/' }, ctx)).status === 501,
     'a front with no pod server behind it answers 501 to opt-in');

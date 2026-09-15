@@ -17,8 +17,7 @@ outbox, collections) as static read-only resources.
 FediPod also implements ActivityPub's client-to-server protocol (§6). The
 DeviceAgent and the Server take `POST /ap/outbox` on the agent: an activity,
 or a bare object wrapped in a Create per §6.2.1, authenticated by a Solid-OIDC
-token (its DPoP proof checked when the client sends one) whose WebID must be
-this identity's owner, or by the
+token, DPoP-bound, whose WebID must be this identity's owner, or by the
 facade's own bearer (`lib/client/c2s.mjs`, `lib/client/oidc-auth.mjs`). The
 Gateway takes the same POST at the account's outbox address on its own origin
 (`lib/gateway/front-core.mjs`, `lib/gateway/gateway-core.mjs`
@@ -211,7 +210,9 @@ Item-by-item answers to the Solid/ActivityPub interop checklist.
 
 ### Outbox endpoint
 
-- **Posting to outbox** — yes. The dispatcher (`lib/client/c2s.mjs`) takes
+- **Posting to outbox** — yes. Actors the client addresses by id in `to`
+  and `cc` are listed and delivered to; those in `bto` and `bcc` are
+  delivered to and never listed. The dispatcher (`lib/client/c2s.mjs`) takes
   Create of any object (a Note, a Question, or anything else — a Web
   Annotation is stored as sent, its own context kept, under this actor),
   Update, Delete, Follow, Like, Announce, Undo, Block, Add/Remove (pins),

@@ -56003,6 +56003,17 @@ async function replyTarget(publisher, inReplyTo, mentions = [], visibility = "pu
   if (!inbox) publisher.log(`reply: no inbox found for ${actor} \u2014 they get it only through followers`);
   return { actor, inbox };
 }
+async function inboxesFor(publisher, actorIds = []) {
+  const out = [];
+  for (const id of [...new Set(actorIds.filter((a) => typeof a === "string" && a && a !== publisher.urls.actor))]) {
+    if (!publisher.resolveActor) break;
+    const doc = await publisher.resolveActor(id).catch(() => null);
+    const inbox = doc?.endpoints?.sharedInbox || doc?.inbox;
+    if (inbox) out.push(inbox);
+    else publisher.log(`addressed actor ${id} has no inbox the agent can find \u2014 not delivered to`);
+  }
+  return out;
+}
 function assertDirectAddressed(content, mentions) {
   const wanted = [...new Set(mentionsIn(content))];
   const missing = wanted.filter((h) => !mentions.some((m) => m.handle === h));
@@ -56028,7 +56039,7 @@ function rowContent(obj) {
   const esc = (v) => String(v).replace(/[&<>"]/gu, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
   return `<p><a href="${esc(obj?.id || "")}">${esc(obj?.type || "object")}</a></p>`;
 }
-async function publishNote(publisher, content, { inReplyTo, attachments, visibility = "public", spoilerText = null, sensitive = false, slug: wanted = null } = {}) {
+async function publishNote(publisher, content, { inReplyTo, attachments, visibility = "public", spoilerText = null, sensitive = false, slug: wanted = null, also = [], deliverTo = [] } = {}) {
   const { urls } = publisher;
   const priv = visibility === "private" || visibility === "direct";
   if (priv) {
@@ -56052,8 +56063,9 @@ async function publishNote(publisher, content, { inReplyTo, attachments, visibil
     summary: spoilerText,
     sensitive,
     container: priv ? urls.privateNotes : urls.notes,
-    also: reply ? [reply.actor] : []
+    also: [...also, ...reply ? [reply.actor] : []]
   });
+  const addressedInboxes = await inboxesFor(publisher, [...also, ...deliverTo]);
   await write4(publisher.remote, note.id, note);
   await writeEmptyReplies(
     publisher.remote,
@@ -56083,7 +56095,8 @@ async function publishNote(publisher, content, { inReplyTo, attachments, visibil
   const inboxes = [...new Set([
     ...visibility === "direct" ? [] : contacts.followers.map((f) => f.sharedInbox || f.inbox),
     ...mentions.map((m) => m.inbox),
-    reply?.inbox
+    reply?.inbox,
+    ...addressedInboxes
   ].filter(Boolean))];
   await publisher.deliverer.deliverToAll(inboxes, create);
   publisher.log(`note published: ${note.id} \u2192 ${inboxes.length} inbox(es)`);
@@ -56102,7 +56115,7 @@ async function publishNote(publisher, content, { inReplyTo, attachments, visibil
   }
   return note;
 }
-async function publishObject(publisher, object, { visibility = "public", slug: wanted = null } = {}) {
+async function publishObject(publisher, object, { visibility = "public", slug: wanted = null, also = [], deliverTo = [] } = {}) {
   const { urls } = publisher;
   const priv = visibility === "private" || visibility === "direct";
   if (priv) {
@@ -56114,11 +56127,13 @@ async function publishObject(publisher, object, { visibility = "public", slug: w
   const pod = publisher.config?.remotePod || urls.base;
   const ownId = typeof object.id === "string" && /^https?:\/\//u.test(object.id) && object.id.startsWith(pod) ? object.id : null;
   const name = await slugFor(publisher, container, wanted, published);
-  const addressed = addressing(urls, visibility);
+  const addressed = addressing(urls, visibility, visibility === "direct" ? also : []);
+  if (visibility !== "direct") addressed.cc = [.../* @__PURE__ */ new Set([...addressed.cc, ...also])];
   let doc = null;
   const id = ownId || container + name;
   if (!ownId) {
-    doc = { ...object, id, attributedTo: urls.actor, published: object.published || published, to: addressed.to, cc: addressed.cc };
+    const { bto, bcc, ...sent } = object;
+    doc = { ...sent, id, attributedTo: urls.actor, published: object.published || published, to: addressed.to, cc: addressed.cc };
     if (!doc["@context"]) doc["@context"] = AS_CTX;
     if (typeof doc.content === "string") doc.content = sanitizeHtml(doc.content);
     await write4(publisher.remote, id, doc);
@@ -56148,7 +56163,10 @@ async function publishObject(publisher, object, { visibility = "public", slug: w
   };
   await writeCreate(publisher.remote, create.id, create);
   const contacts = publisher.store.getContacts();
-  const inboxes = visibility === "direct" ? [] : [...new Set(contacts.followers.map((f) => f.sharedInbox || f.inbox).filter(Boolean))];
+  const inboxes = [...new Set([
+    ...visibility === "direct" ? [] : contacts.followers.map((f) => f.sharedInbox || f.inbox),
+    ...await inboxesFor(publisher, [...also, ...deliverTo])
+  ].filter(Boolean))];
   await publisher.deliverer.deliverToAll(inboxes, create);
   publisher.log(`${row.type || "object"} published: ${id} \u2192 ${inboxes.length} inbox(es)`);
   return { id, createId, copied: !ownId };
@@ -64276,7 +64294,7 @@ var C2S = class {
         return this.send(res, 405, { error: "deliveries go to this actor's inbox on the pod, which the actor document names; this address is the owner reading their own" });
       }
       const reader = await this.auth(req, pathname);
-      if (!reader.ok) return this.send(res, reader.status, { error: reader.error });
+      if (!reader.ok) return this.send(res, reader.status, { error: reader.error }, reader.headers || {});
       return this.sendInbox(res, url);
     }
     if (req.method === "GET" || req.method === "HEAD") {
@@ -64289,7 +64307,7 @@ var C2S = class {
       return this.send(res, 405, { error: "POST the outbox; GET redirects to the pod" });
     }
     const who = await this.auth(req, pathname);
-    if (!who.ok) return this.send(res, who.status, { error: who.error });
+    if (!who.ok) return this.send(res, who.status, { error: who.error }, who.headers || {});
     if (this.agent.viewer) {
       const took = await this.agent.requestTakeover?.();
       if (!took) return this.send(res, 503, { error: "another agent is active for this pod \u2014 takeover failed, try again" });
@@ -64343,6 +64361,13 @@ var C2S = class {
       return reply(422, { error: e.message || String(e) });
     }
   }
+  // The actors a client addressed by id, beyond the audience words: the ones
+  // in to/cc are listed and delivered to; the ones in bto/bcc are delivered
+  // to and never listed (§6).
+  addressedActors(activity, object) {
+    const pick = (...fields) => [...new Set(fields.flatMap((f) => arr(activity[f] ?? object?.[f]).map(idOf)))].filter((a) => typeof a === "string" && /^https?:\/\//u.test(a) && a !== PUBLIC && a !== this.urls.followers && a !== this.urls.actor);
+    return { also: pick("to", "cc"), deliverTo: pick("bto", "bcc") };
+  }
   async _dispatch(activity, { slug, raw, reply }) {
     const agent2 = this.agent;
     const object = typeof activity.object === "object" && activity.object !== null ? activity.object : null;
@@ -64352,9 +64377,10 @@ var C2S = class {
         const makes = object?.type || "Note";
         if (!object) return reply(422, { error: "a Create carries the object it creates" });
         const visibility = this.visibilityOf(activity, object);
+        const { also, deliverTo } = this.addressedActors(activity, object);
         if (makes !== "Note" && makes !== "Question") {
           const asSent = raw && typeof raw === "object" && !Array.isArray(raw) ? ACTIVITY_TYPES.has(raw.type) ? raw.object && typeof raw.object === "object" ? raw.object : null : raw : null;
-          const made = await agent2.publisher.publishObject(asSent || object, { visibility, slug });
+          const made = await agent2.publisher.publishObject(asSent || object, { visibility, slug, also, deliverTo });
           return reply(201, { id: made.createId, object: made.id }, { location: made.createId });
         }
         const text = String(object.source?.content ?? object.content ?? "");
@@ -64393,7 +64419,9 @@ var C2S = class {
           visibility,
           spoilerText: object.summary || null,
           sensitive: object.sensitive === true,
-          slug
+          slug,
+          also,
+          deliverTo
         });
         return reply(
           201,

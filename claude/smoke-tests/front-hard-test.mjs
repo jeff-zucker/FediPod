@@ -157,6 +157,8 @@ try {
   check(wf.status === 200 && jrd.subject === `acct:alice@${HOST}`
     && jrd.links?.[0]?.href === POD + 'ap/actor',
     'WebFinger resolves the handle to the actor on their own pod');
+  check(wf.headers.get('access-control-allow-origin') === '*',
+    'and the JRD may be read from any origin');
   check((await get('/.well-known/webfinger?resource=acct:nobody@' + HOST)).status === 404,
     'and 404s a handle nobody holds');
 
@@ -171,7 +173,7 @@ try {
   // ---- attaching a pod ------------------------------------------------------
   const att = await get('/api/attach', {
     method: 'POST',
-    headers: { 'content-type': 'application/json', authorization: 'Bearer pretend' },
+    headers: { 'content-type': 'application/json', authorization: 'Bearer pretend', dpop: 'proof' },
     // A real pod is https, and the route rightly insists — attach only records
     // the row, so this one is never fetched.
     body: JSON.stringify({ handle: 'wren', podHome: 'https://wren.example/' }),
@@ -192,7 +194,7 @@ try {
   const secretBefore = attached['wren@wren.example'].hmacSecret;
   const fixRow = await get('/api/attach', {
     method: 'POST',
-    headers: { 'content-type': 'application/json', authorization: 'Bearer pretend' },
+    headers: { 'content-type': 'application/json', authorization: 'Bearer pretend', dpop: 'proof' },
     body: JSON.stringify({ handle: 'wren', podHome: 'https://wren.example/fedipod/', actorUrl: 'https://wren.example/fedipod/ap/actor' }),
   });
   check(fixRow.status === 201 && attached['wren@wren.example'].podHome === 'https://wren.example/fedipod/'
@@ -201,7 +203,7 @@ try {
     'the same account on the same pod corrects its row and keeps its secret');
   const stealRow = await get('/api/attach', {
     method: 'POST',
-    headers: { 'content-type': 'application/json', authorization: 'Bearer pretend' },
+    headers: { 'content-type': 'application/json', authorization: 'Bearer pretend', dpop: 'proof' },
     body: JSON.stringify({ handle: 'wren', podHome: 'https://other.example/fedipod/' }),
   });
   check(stealRow.status >= 400 && attached['wren@wren.example'].podHome === 'https://wren.example/fedipod/',
@@ -210,7 +212,7 @@ try {
   // ---- the roster the host reads --------------------------------------------
   const finch = await get('/api/attach', {
     method: 'POST',
-    headers: { 'content-type': 'application/json', authorization: 'Bearer pretend' },
+    headers: { 'content-type': 'application/json', authorization: 'Bearer pretend', dpop: 'proof' },
     body: JSON.stringify({ handle: 'finch', podHome: 'https://wren.example/', fronted: true }),
   });
   check(finch.status === 201, 'a fronted attach also lands (for the roster below)');
@@ -218,9 +220,9 @@ try {
   check(adminPage.status === 200 && /roster/.test(await adminPage.text()),
     'the roster page is served at /roster');
   check((await get('/api/roster')).status === 401, 'the roster refuses an unproven reader');
-  check((await get('/api/roster', { headers: { authorization: 'Bearer someone-else' } })).status === 403,
+  check((await get('/api/roster', { headers: { authorization: 'Bearer someone-else', dpop: 'proof' } })).status === 403,
     'and a proven WebID that is not the admin');
-  const rosterRes = await get('/api/roster', { headers: { authorization: 'Bearer pretend' } });
+  const rosterRes = await get('/api/roster', { headers: { authorization: 'Bearer pretend', dpop: 'proof' } });
   const roster = await rosterRes.json();
   const byHandle = Object.fromEntries((roster.accounts || []).map(a => [a.handle, a]));
   check(rosterRes.status === 200 && byHandle.alice && byHandle.wren && byHandle.finch,
@@ -233,14 +235,14 @@ try {
   // ---- revoking an account ---------------------------------------------------
   const revoke = (handle, authz) => get('/api/revoke', {
     method: 'POST',
-    headers: { 'content-type': 'application/json', ...(authz ? { authorization: authz } : {}) },
+    headers: { 'content-type': 'application/json', ...(authz ? { authorization: authz, dpop: 'proof' } : {}) },
     body: JSON.stringify({ handle }),
   });
   check((await revoke('finch')).status === 401, 'revoking needs a proven reader');
   check((await revoke('finch', 'Bearer someone-else')).status === 403, 'who is the admin');
   check((await revoke('nobody', 'Bearer pretend')).status === 404, 'and an account that exists');
   const gone = await (await revoke('finch', 'Bearer pretend')).json();
-  const after = await (await get('/api/roster', { headers: { authorization: 'Bearer pretend' } })).json();
+  const after = await (await get('/api/roster', { headers: { authorization: 'Bearer pretend', dpop: 'proof' } })).json();
   check(gone.removed === true && !after.accounts.some(a => a.handle === 'finch'),
     'a removed account leaves the roster');
   check((await get(`/.well-known/webfinger?resource=acct:finch@${HOST}`)).status === 404,
@@ -323,7 +325,7 @@ try {
   const pathHome = POD + 'pods/wren/fedipod/';
   const pathAtt = await get('/api/attach', {
     method: 'POST',
-    headers: { 'content-type': 'application/json', authorization: 'Bearer path-owner' },
+    headers: { 'content-type': 'application/json', authorization: 'Bearer path-owner', dpop: 'proof' },
     body: JSON.stringify({ handle: 'pwren', podHome: pathHome, actorUrl: pathHome + 'ap/actor', fronted: true }),
   });
   const pathBody = await pathAtt.json();
@@ -363,7 +365,7 @@ try {
     const optIn = ({ link = null, webid = OWNER, podBase = POD }) => routeFront(
       new Request(ORIGIN + '/api/agent', {
         method: 'POST',
-        headers: { authorization: 'Bearer x', 'content-type': 'application/json' },
+        headers: { authorization: 'Bearer x', dpop: 'proof', 'content-type': 'application/json' },
         body: JSON.stringify({ action: 'opt-in', podBase }),
       }), {
         host: HOST, frontOrigin: ORIGIN,
@@ -404,9 +406,9 @@ try {
     const post = (headers, body = annotation) => get(outbox, { method: 'POST', body,
       headers: { 'content-type': 'application/ld+json; profile="https://www.w3.org/ns/activitystreams"', slug: 'anno-42', origin: 'https://dokie.li', ...headers } });
     check((await post({})).status === 401, 'no token → 401');
-    check((await post({ authorization: 'Bearer someone-else' })).status === 403, "someone else's token → 403, not a post");
+    check((await post({ authorization: 'Bearer someone-else', dpop: 'proof' })).status === 403, "someone else's token → 403, not a post");
     const before = count();
-    const ok = await post({ authorization: 'Bearer path-owner' });
+    const ok = await post({ authorization: 'Bearer path-owner', dpop: 'proof' });
     const okBody = await ok.json().catch(() => ({}));
     check(ok.status === 202 && ok.headers.get('location') === `${ORIGIN}/u/pwren/ap/notes/anno-42`
       && okBody.object === `${ORIGIN}/u/pwren/ap/notes/anno-42`,
@@ -420,8 +422,8 @@ try {
     check(rcpt?.method === 'c2s' && rcpt.actor === `${ORIGIN}/u/pwren/ap/actor` && rcpt.slug === 'anno-42'
       && rcpt.keyId === POD + 'pods/wren/profile/card#me' && !!secret && verifyReceipt(rcpt, secret),
       'with a receipt beside it stamped c2s for this actor under the account secret, carrying the slug');
-    check((await post({ authorization: 'Bearer path-owner' }, 'not json')).status === 400, 'a body that is not JSON → 400');
-    check((await post({ authorization: 'Bearer path-owner', slug: '../up' })).status === 202
+    check((await post({ authorization: 'Bearer path-owner', dpop: 'proof' }, 'not json')).status === 400, 'a body that is not JSON → 400');
+    check((await post({ authorization: 'Bearer path-owner', dpop: 'proof', slug: '../up' })).status === 202
       && !inboxWrites.at(-1).body.includes('../'), 'an unsafe Slug is dropped, and the post still lands');
     const doorRead = await fetch(`${ORIGIN}/u/alice/ap/outbox`, { redirect: 'manual' });
     check(doorRead.status === 303 && doorRead.headers.get('location') === POD + 'ap/outbox',
