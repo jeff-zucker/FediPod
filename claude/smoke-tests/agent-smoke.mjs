@@ -1093,6 +1093,78 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     'a queued delivery answered 410 is dropped, and everyone behind a gone shared inbox is forgotten');
 }
 
+// --- 5c1i. an Undo unsays a favourite or a boost; a verified Block drops the follow both ways ---
+{
+  const { Intake } = await import(path.join(root, 'lib/core/intake/index.mjs'));
+  const ME = 'https://p.example/ap/actor';
+  const MINE = 'https://p.example/ap/notes/n1';
+  const THEIRS = 'https://other.example/notes/9';
+  const mk = () => {
+    const state = {
+      contacts: { followers: [{ actor: 'https://a.example/u/x', inbox: 'https://a.example/u/x/inbox' }],
+        following: [{ actor: 'https://a.example/u/x', accepted: true }, { actor: 'https://b.example/u/y', accepted: true }] },
+      notifications: [
+        { id: '1', type: 'favourite', actor: 'https://a.example/u/x', noteId: MINE },
+        { id: '2', type: 'favourite', actor: 'https://b.example/u/y', noteId: MINE },
+        { id: '3', type: 'reblog', actor: 'https://a.example/u/x', noteId: MINE },
+      ],
+      statuses: [
+        { noteId: MINE, actor: ME, kind: 'post' },
+        { noteId: THEIRS, actor: 'https://other.example/u/o', kind: 'timeline', via: 'https://a.example/u/x' },
+      ],
+      requests: [{ actor: 'https://a.example/u/x', activity: { type: 'Follow' } }],
+      republished: [],
+    };
+    const intake = new Intake({
+      config: { gateway: { mode: 'trust' } }, urls: { inbox: 'https://p.example/in/', actor: ME, notes: 'https://p.example/ap/notes/' },
+      remote: {},
+      store: {
+        read: (n, d) => d, write: () => {},
+        getContacts: () => JSON.parse(JSON.stringify(state.contacts)),
+        setContacts: (c) => { state.contacts = c; },
+        getStatuses: () => state.statuses, removeStatus: (id) => { state.statuses = state.statuses.filter(s => s.noteId !== id); },
+        getNotifications: () => state.notifications,
+        removeNotifications: (pred) => { const b = state.notifications.length; state.notifications = state.notifications.filter(n => !pred(n)); return b - state.notifications.length; },
+        getRequests: () => state.requests, setRequests: (r) => { state.requests = r; },
+        getActors: () => ({}), isBlocked: () => false, addNotification: () => {}, addDeadLetter: () => {},
+        getConfig: () => ({ gateway: { mode: 'trust' } }),
+      },
+      deliverer: {}, publisher: { publishCollections: async (w) => { state.republished.push(w); } }, log: () => {},
+    });
+    return { intake, state };
+  };
+  const X = 'https://a.example/u/x';
+  const one = mk();
+  await one.intake.onUndo({ type: 'Undo', actor: X, object: { type: 'Like', actor: X, object: MINE } }, X);
+  check(one.state.notifications.map(n => n.id).join() === '2,3',
+    'Undo{Like} removes that favourite and nobody else\'s');
+  await one.intake.onUndo({ type: 'Undo', actor: X, object: { type: 'Announce', actor: X, object: MINE } }, X);
+  check(one.state.notifications.map(n => n.id).join() === '2',
+    'Undo{Announce} on our post removes the boost notification');
+  await one.intake.onUndo({ type: 'Undo', actor: X, object: { type: 'Announce', actor: X, object: THEIRS } }, X);
+  check(!one.state.statuses.some(s => s.noteId === THEIRS),
+    'Undo{Announce} by the one who carried a post takes it off the timeline');
+  const two = mk();
+  await two.intake.onUndo({ type: 'Undo', actor: 'https://b.example/u/y', object: { type: 'Announce', actor: 'https://b.example/u/y', object: THEIRS } }, 'https://b.example/u/y');
+  check(two.state.statuses.some(s => s.noteId === THEIRS), 'but not by someone who did not carry it');
+  await two.intake.onUndo({ type: 'Undo', actor: 'https://z.example/u/z', object: { type: 'Like', actor: X, object: MINE } }, 'https://z.example/u/z');
+  check(two.state.notifications.length === 3, 'and one cannot unsay another\'s favourite');
+  // Block: unverified is ignored; verified drops both directions and the request.
+  const three = mk();
+  await three.intake.handle({ type: 'Block', actor: X, object: ME });
+  check(three.state.contacts.followers.length === 1 && three.state.contacts.following.length === 2,
+    'an unverified Block changes nothing');
+  three.intake.receiptVouchesFor = () => true;
+  await three.intake.handle({ type: 'Block', actor: X, object: ME }, { verified: true, actor: X });
+  check(three.state.contacts.followers.length === 0 && three.state.contacts.removedFollowers?.[0]?.why === 'blocked-us'
+    && three.state.contacts.following.map(f => f.actor).join() === 'https://b.example/u/y'
+    && three.state.requests.length === 0
+    && three.state.republished.some(w => w.followers && w.following && w.pending),
+    'a verified Block drops their follow of us, ours of them, their pending request, and republishes');
+  await three.intake.handle({ type: 'Block', actor: X, object: 'https://someone.else/actor' }, { verified: true, actor: X });
+  check(three.state.republished.length === 1, 'a Block of someone else is not ours to act on');
+}
+
 // --- 5b2. editing, visibility and content warnings ---
 {
   const { Publisher } = await import(path.join(root, 'lib/core/publisher/index.mjs'));

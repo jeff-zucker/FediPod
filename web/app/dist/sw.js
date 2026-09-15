@@ -34516,6 +34516,14 @@ var PodStore = class {
   // — not from the pod, not from the RDF. Unverified entries are dropped first
   // now, so a flood can only ever evict itself, and a stranger's genuine
   // favourite still shows up, which is what recording them at all is for.
+  // What an Undo unsays: the favourite or boost it names, matched by a
+  // predicate on what was recorded. Returns how many went.
+  removeNotifications(pred) {
+    const all = this.getNotifications();
+    const kept = all.filter((n) => !pred(n));
+    if (kept.length !== all.length) this.write("notifications.json", kept);
+    return all.length - kept.length;
+  }
   addNotification(n) {
     const all = this.getNotifications();
     const id = node_crypto_default.createHash("sha256").update(JSON.stringify(n)).digest("hex").slice(0, 16);
@@ -57665,6 +57673,8 @@ async function onFollow(intake, activity, actor, { trusted = false } = {}) {
   intake.log(`Accept sent \u2192 ${doc.inbox}`);
 }
 async function onUndo(intake, activity, actor, { trusted = false } = {}) {
+  const inner = activity.object && typeof activity.object === "object" ? activity.object : null;
+  if (inner?.type === "Like" || inner?.type === "Announce") return onUndoReaction(intake, inner, actor, { trusted });
   if (typeof activity.object === "object" && activity.object?.type && activity.object.type !== "Follow") return;
   const named = typeof activity.object === "string" ? activity.object : activity.object?.id;
   if (!named && !trusted) return;
@@ -57751,6 +57761,47 @@ async function onAnnounce(intake, activity, actor, objectId) {
     return;
   }
   return intake.ingestNote(objectId, actor, { via: actor });
+}
+async function onUndoReaction(intake, inner, actor, { trusted = false } = {}) {
+  const innerActor = typeof inner.actor === "string" ? inner.actor : inner.actor?.id;
+  if (innerActor && innerActor !== actor) return;
+  const wrapped = inner.object;
+  const target = wrapped && typeof wrapped === "object" && (wrapped.type === "Create" || wrapped.type === "Update") ? wrapped.object : wrapped;
+  const objectId = typeof target === "string" ? target : target?.id;
+  if (!objectId) return;
+  if (objectId.startsWith(intake.urls.notes)) {
+    const type = inner.type === "Like" ? "favourite" : "reblog";
+    const gone = intake.store.removeNotifications((n) => n.type === type && n.actor === actor && n.noteId === objectId);
+    if (gone) intake.log(`${inner.type} withdrawn by ${actor} on ${objectId}`);
+    return;
+  }
+  if (inner.type !== "Announce") return;
+  const followed = trusted || intake.store.getContacts().following.some((f) => f.actor === actor && f.accepted);
+  if (!followed) return;
+  const s = intake.store.getStatuses().find((x) => x.noteId === objectId);
+  if (!s || s.kind === "post" || s.via !== actor) return;
+  await intake.forget(s);
+  intake.log(`boost withdrawn by ${actor}: ${objectId} left the timeline`);
+}
+async function onBlock(intake, activity, actor, { trusted = false } = {}) {
+  const objectId = typeof activity.object === "string" ? activity.object : activity.object?.id;
+  if (objectId !== intake.urls.actor) return;
+  if (!trusted) {
+    intake.log(`Block from ${actor} arrived unverified \u2014 ignored`);
+    return;
+  }
+  const contacts = intake.store.getContacts();
+  const wasFollower = contacts.followers.some((f) => f.actor === actor);
+  const wasFollowing = contacts.following.some((f) => f.actor === actor);
+  if (wasFollower) dropFollower(contacts, actor, "blocked-us");
+  contacts.following = contacts.following.filter((f) => f.actor !== actor);
+  intake.store.setContacts(contacts);
+  const reqs = intake.store.getRequests();
+  const left = reqs.filter((r) => r.actor !== actor);
+  if (left.length !== reqs.length) intake.store.setRequests(left);
+  await intake.republish({ followers: wasFollower, following: wasFollowing, pending: true });
+  const what = [wasFollower && "their follow of us", wasFollowing && "our follow of them"].filter(Boolean).join(" and ");
+  intake.log(`blocked by ${actor}: ${what || "no relationship"} dropped`);
 }
 async function onDelete(intake, activity, actor) {
   const objectId = typeof activity.object === "string" ? activity.object : activity.object?.id;
@@ -63498,6 +63549,8 @@ var Intake = class {
       case "Add":
       case "Remove":
         return this.onAddRemove(activity, actor);
+      case "Block":
+        return this.onBlock(activity, actor, { trusted });
       default:
         this.log(`ignored ${activity.type} from ${actor}`);
     }
@@ -63590,6 +63643,9 @@ var Intake = class {
   }
   onUndo(...a) {
     return onUndo(this, ...a);
+  }
+  onBlock(...a) {
+    return onBlock(this, ...a);
   }
   onCreate(...a) {
     return onCreate(this, ...a);
