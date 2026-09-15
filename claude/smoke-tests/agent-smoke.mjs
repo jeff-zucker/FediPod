@@ -10123,6 +10123,19 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
   delete cfg23.createdAt; pub23.config = cfg23;
   await pub23.publishProfilePage({ force: true });
   check(cfg23.createdAt === '2026-05-01T09:00:00.000Z', 'an older account is dated by its oldest post');
+  // A fronted identity's page names the address at the Gateway, not the pod's host.
+  const pages = [];
+  const fronted23 = new Pub23({
+    config: { remotePod: 'https://pod.example/', handle: 'apfed', name: 'Mei', createdAt: '2026-03-07T10:00:00.000Z',
+      gateway: { url: 'https://fedipod.net/u/mei/ap/inbox/', frontActor: 'https://fedipod.net/u/mei/ap/actor', mode: 'trust' } },
+    remote: { put: async (u, body) => { pages.push(body); }, putJson: async () => {}, setAcl: async () => {}, delete: async () => true },
+    store: { read: () => ({}), write: () => {}, getStatuses: () => [], getConfig: () => ({}), setConfig: () => {},
+      getContacts: () => ({ followers: [], following: [] }) },
+    log: () => {},
+  });
+  await fronted23.publishProfilePage({ force: true });
+  check(pages[0]?.includes('@mei@fedipod.net') && !pages[0].includes('@apfed@'),
+    'a fronted identity\'s page carries its address at the Gateway');
 
   // The actor advertises the page as its url, and mention ANCHORS point at the
   // mentioned actor's page — the tag keeps the id, which servers match on.

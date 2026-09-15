@@ -56813,16 +56813,18 @@ var Publisher = class {
   // content changed.
   async publishProfilePage({ force = false } = {}) {
     const { urls } = this;
-    const host = publicHandle(this.config).split("@")[1] || new URL(urls.base).host;
+    const host = new URL(urls.base).host;
     if (!this.config.createdAt) {
       const oldest = this.store.getStatuses().filter((s) => s.kind === "post" && s.published).map((s) => s.published).sort()[0];
       this.config.createdAt = oldest || (/* @__PURE__ */ new Date()).toISOString();
       this.store.setConfig?.({ ...this.store.getConfig?.(), createdAt: this.config.createdAt });
     }
     const pinned = this.store.getStatuses().filter((s) => s.kind === "post" && s.pinned && s.visibility !== "private" && s.visibility !== "direct").sort((a, b) => String(b.published).localeCompare(String(a.published))).slice(0, 5).map((s) => ({ content: s.content, published: s.published, url: s.noteId }));
+    const frontActor = this.config.gateway?.frontActor;
+    const address = frontActor ? `@${publicHandle(this.config)}@${new URL(frontActor).host}` : webfingerHost(urls.base) ? `@${this.config.handle}@${host}` : urls.actor;
     const html = profilePageHtml({
       name: this.config.name || this.config.handle,
-      address: webfingerHost(urls.base) ? `@${this.config.handle}@${host}` : urls.actor,
+      address,
       summary: this.config.summary ? contentHtml(this.config.summary) : null,
       icon: this.config.icon || null,
       image: this.config.image || null,
