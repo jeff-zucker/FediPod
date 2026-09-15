@@ -66516,6 +66516,31 @@ async function handle4(api, ctx) {
     }
   }
   if (/^\/api\/v1\/accounts\/[a-f0-9]+\/featured_tags$/.test(pathname)) return send(200, []);
+  if (pathname === "/api/v1/directory") return send(200, api.urls?.actor ? [api.account(api.urls.actor)] : []);
+  if (pathname === "/api/v1/suggestions" || pathname === "/api/v1/trends") return send(200, []);
+  const mAccLists = /^\/api\/v1\/accounts\/([a-f0-9]+)\/lists$/.exec(pathname);
+  if (mAccLists && req.method === "GET") {
+    const actorUrl = api.store.urlFor(mAccLists[1]);
+    if (!actorUrl) return send(404, { error: "Record not found" });
+    return send(200, api.store.getLists().filter((l) => (l.members || []).includes(actorUrl)).map((l) => ({ id: l.id, title: l.title, replies_policy: l.repliesPolicy || "list", exclusive: false })));
+  }
+  if (pathname === "/api/v1/mutes" && req.method === "GET") {
+    return send(200, (api.store.getMuted().actors || []).map((a) => api.account(a)));
+  }
+  if (pathname === "/api/v1/blocks" && req.method === "GET") {
+    return send(200, (api.store.getBlocklist().actors || []).map((a) => api.account(a)));
+  }
+  if (pathname === "/api/v1/domain_blocks") {
+    const b = api.store.getBlocklist();
+    if (req.method === "GET") return send(200, [...b.domains]);
+    const body = await readBody2(req);
+    const domain = String(body.domain || url.searchParams.get("domain") || "").trim().toLowerCase();
+    if (!/^[a-z0-9.-]+\.[a-z]{2,}$/u.test(domain)) return send(422, { error: "a domain is required" });
+    if (req.method === "POST" && !b.domains.includes(domain)) b.domains.push(domain);
+    if (req.method === "DELETE") b.domains = b.domains.filter((d) => d !== domain);
+    api.store.setBlocklist(b);
+    return send(200, {});
+  }
   const mAccList = /^\/api\/v1\/accounts\/([a-f0-9]+)\/(following|followers)$/.exec(pathname);
   if (mAccList && req.method === "GET") {
     const actorUrl = api.store.urlFor(mAccList[1]);
@@ -66538,9 +66563,13 @@ async function handle4(api, ctx) {
   if (mAccStatuses) {
     const actorUrl = api.store.urlFor(mAccStatuses[1]);
     const all = api.store.getStatuses();
-    const pinnedOnly = url.searchParams.get("pinned") === "true";
+    const q = url.searchParams;
+    const is = (name) => q.get(name) === "true" || q.get(name) === "1";
+    const pinnedOnly = is("pinned");
+    const tagged = String(q.get("tagged") || "").replace(/^#/, "").toLowerCase();
+    const isBoost = (s) => !!s.via && s.via !== s.actor;
     const { items, headers } = api.page(
-      all.filter((s) => s.actor === actorUrl && (!pinnedOnly || s.pinned)),
+      all.filter((s) => s.actor === actorUrl && (!pinnedOnly || s.pinned)).filter((s) => !is("exclude_replies") || !s.inReplyTo).filter((s) => !is("exclude_reblogs") || !isBoost(s)).filter((s) => !is("only_media") || (s.attachments || []).length > 0).filter((s) => !tagged || (s.tags || []).some((t) => String(t.name).toLowerCase() === tagged)),
       url
     );
     return send(200, items.map((s) => api.statusOrBoost(s, { all })), headers);
@@ -66721,6 +66750,26 @@ async function handle5(api, ctx) {
       accounts: [...c.accounts.size ? c.accounts : [me]].map((a) => api.account(a)),
       last_status: api.status(c.last, { all })
     })));
+  }
+  if (pathname === "/api/v1/timelines/direct" && req.method === "GET") {
+    const all = api.store.getStatuses();
+    const items = all.filter((s) => s.direct || s.visibility === "direct");
+    const { items: page2, headers } = api.page(items, url);
+    return send(200, page2.map((s) => api.status(s, { all })), headers);
+  }
+  if (pathname === "/api/v1/notifications/clear" && req.method === "POST") {
+    api.store.removeNotifications(() => true);
+    return send(200, {});
+  }
+  const mNotif = /^\/api\/v1\/notifications\/([A-Za-z0-9_-]+)(\/dismiss)?$/.exec(pathname);
+  if (mNotif) {
+    const n = api.store.getNotifications().find((x) => x.id === mNotif[1]);
+    if (!n) return send(404, { error: "Record not found" });
+    if (mNotif[2] && req.method === "POST") {
+      api.store.removeNotifications((x) => x.id === n.id);
+      return send(200, {});
+    }
+    if (!mNotif[2] && req.method === "GET") return send(200, api.notification(n));
   }
   if (pathname === "/api/v1/notifications") {
     const limit = Math.min(Number(url.searchParams.get("limit")) || 30, 60);

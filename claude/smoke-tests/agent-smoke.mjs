@@ -4970,6 +4970,47 @@ async function call(pathAndQuery, { method = 'GET', body = null, contentType = '
     `the timeline's Link header names the client's own address (${link})`);
 }
 
+// The screens that used to 404: directory, suggestions, trends, an account's
+// lists, mutes, blocks, domain blocks, the direct timeline, one notification,
+// dismiss and clear, and the profile's status filters.
+{
+  const dir = await call('/api/v1/directory');
+  check(dir.status === 200 && dir.json.length === 1 && dir.json[0].url === urls2.actor, 'the directory lists this account');
+  check((await call('/api/v1/suggestions')).json?.length === 0 && (await call('/api/v1/trends')).json?.length === 0,
+    'suggestions and trends are empty, not missing');
+  const lists0 = store2.getLists(); store2.setLists([...lists0, { id: 'abc123', title: 'pals', members: [ALICE] }]);
+  const onLists = await call(`/api/v1/accounts/${store2.idFor(ALICE)}/lists`);
+  check(onLists.status === 200 && onLists.json.length === 1 && onLists.json[0].title === 'pals', 'an account\'s lists are the ones it is on');
+  store2.setLists(lists0);
+  store2.setMuted({ actors: [DAN] });
+  const mutes = await call('/api/v1/mutes');
+  check(mutes.status === 200 && mutes.json.length === 1 && mutes.json[0].url === DAN, 'the mutes page lists the muted');
+  store2.setMuted({ actors: [] });
+  const db0 = await call('/api/v1/domain_blocks');
+  const added = await call('/api/v1/domain_blocks', { method: 'POST', body: JSON.stringify({ domain: 'Spam.Example' }) });
+  const db1 = await call('/api/v1/domain_blocks');
+  const removed = await call('/api/v1/domain_blocks', { method: 'DELETE', body: JSON.stringify({ domain: 'spam.example' }) });
+  const db2 = await call('/api/v1/domain_blocks');
+  check(db0.status === 200 && added.status === 200 && db1.json.includes('spam.example') && removed.status === 200
+    && !db2.json.includes('spam.example'), 'domain blocks are listed, added lower-cased, and removed');
+  const direct = await call('/api/v1/timelines/direct');
+  check(direct.status === 200 && Array.isArray(direct.json) && direct.json.every(s => s.visibility === 'direct'),
+    `the direct timeline answers with direct posts only (${direct.json?.length})`);
+  const first = store2.getNotifications()[0];
+  const one = await call(`/api/v1/notifications/${first.id}`);
+  check(one.status === 200 && one.json.id === first.id, 'one notification is read by id');
+  const gone = await call(`/api/v1/notifications/${first.id}/dismiss`, { method: 'POST' });
+  check(gone.status === 200 && !store2.getNotifications().some(n => n.id === first.id), 'dismiss removes that one');
+  check((await call(`/api/v1/notifications/${first.id}`)).status === 404, 'and it is then not found');
+  store2.addNotification({ type: first.type, actor: first.actor, ...(first.noteId ? { noteId: first.noteId } : {}) });   // the checks below expect it
+  const me7 = store2.idFor(urls2.actor);
+  const noReplies = await call(`/api/v1/accounts/${me7}/statuses?exclude_replies=true`);
+  const onlyMedia = await call(`/api/v1/accounts/${me7}/statuses?only_media=true`);
+  check(noReplies.status === 200 && noReplies.json.every(st => !st.in_reply_to_id)
+    && onlyMedia.status === 200 && onlyMedia.json.every(st => st.media_attachments.length > 0),
+    'a profile\'s statuses honour exclude_replies and only_media');
+}
+
 const notif = await call('/api/v1/notifications');
 check(notif.status === 200 && notif.json.length === 2 && notif.json[0].type === 'favourite'
   && notif.json[0].status?.uri === OWN && notif.json[1].type === 'follow',
