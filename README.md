@@ -37,6 +37,9 @@ Which specs FediPod follows, and where it stops short: [specs-in-use.md](specs-i
 4. Enter your pod password once. It creates the account and locks your
    signing key. The password is not stored.
 
+Anyone can open your profile at `https://fedipod.net/@handle`, signed in or
+not.
+
 Your account then opens in the client. To use it from another browser, go to
 https://fedipod.net, enter your address, sign in at your pod, and unlock your
 key with your password once on that browser.
