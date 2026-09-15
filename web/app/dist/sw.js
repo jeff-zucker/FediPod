@@ -63353,23 +63353,10 @@ var Intake = class {
   // handle(), which ingests a Create only when concernsUs passes — addressed to
   // us, a mention, a reply to ours, or from someone we follow — and drops the
   // rest.
-  //
-  // `container`: another inbox container on this pod to read instead of the
-  // advertised one — the container of a root this identity moved away from,
-  // where a Gateway kept writing until its row was corrected. Same rules,
-  // every item deleted once handled.
-  async prune({ before, keepConcerning = false, container = null } = {}) {
+  async prune({ before, keepConcerning = false } = {}) {
     const cutoff = Date.parse(before);
     if (!Number.isFinite(cutoff)) throw new Error(`"${before}" is not a date`);
-    let urls = this.urls;
-    if (container) {
-      const pod = new URL(this.urls.base).origin;
-      if (typeof container !== "string" || !container.startsWith(pod + "/") || !container.endsWith("/")) {
-        throw new Error(`container must be a container on this pod (${pod}/\u2026/), got ${container}`);
-      }
-      urls = { ...this.urls, inbox: container };
-    }
-    const all = await list(this.remote, urls);
+    const all = await list(this.remote, this.urls);
     const older = all.filter((e) => !e.url.endsWith(".keep") && e.modified && Date.parse(e.modified) < cutoff);
     const out = { considered: older.length, applied: 0, dropped: 0, discarded: 0, failed: 0 };
     for (const item of older) {
@@ -63405,7 +63392,7 @@ var Intake = class {
         this.log(`prune ${item.url}: ${e.message}`);
       }
     }
-    this.log(`pruned ${container ? container + " " : ""}before ${before}: applied ${out.applied}, dropped ${out.dropped} small Create(s), discarded ${out.discarded} unread${out.failed ? `, ${out.failed} failed` : ""}`);
+    this.log(`pruned before ${before}: applied ${out.applied}, dropped ${out.dropped} small Create(s), discarded ${out.discarded} unread${out.failed ? `, ${out.failed} failed` : ""}`);
     await this.store.flush();
     const removed = out.applied + out.dropped + out.discarded;
     if (this.inboxStats && removed) {
