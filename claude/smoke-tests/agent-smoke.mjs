@@ -1026,6 +1026,29 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     'reading the pod\'s outbox back gives note ids, so rebuild and reconcile see what they always did');
 }
 
+// --- 5c1g. a Move republishes the same actor document, plus movedTo ---
+{
+  const { Publisher } = await import(path.join(root, 'lib/core/publisher/index.mjs'));
+  const put = {};
+  const st = { config: { remotePod: 'https://pod.example/', handle: 'mv', name: 'Mv', moderators: ['https://x/m'],
+    gateway: { url: 'https://door.example/u/mv/ap/inbox/', mode: 'trust', outbox: 'https://door.example/u/mv/ap/outbox' } } };
+  const pub = new Publisher({
+    config: st.config,
+    remote: { putJson: async (u, d) => { put[u] = d; }, setAcl: async () => {}, delete: async () => true,
+      getJson: async () => null, webId: 'https://pod.example/profile/card#me' },
+    store: { read: () => ({}), write: () => {}, getConfig: () => st.config, setConfig: (c) => { st.config = c; },
+      getContacts: () => ({ followers: [], following: [] }), flush: async () => {} },
+    deliverer: { deliverToAll: async () => {} }, publicKeyPem: 'x', log: () => {},
+    probeFetch: async () => ({ status: 401 }),
+  });
+  await pub.publishMove('https://elsewhere.example/users/mv');
+  const doc = put[pub.urls.actor];
+  check(doc?.movedTo === 'https://elsewhere.example/users/mv', 'the moved actor says where it went');
+  check(doc?.inbox === 'https://door.example/u/mv/ap/inbox/' && doc?.attributedTo === pub.urls.moderators
+    && doc?.pendingFollowers === pub.urls.pendingFollowers && doc?.blocked === pub.urls.blocked,
+    `and still advertises its gateway inbox, moderators and private collections (${JSON.stringify({ inbox: doc?.inbox, attributedTo: doc?.attributedTo, pendingFollowers: doc?.pendingFollowers })})`);
+}
+
 // --- 5b2. editing, visibility and content warnings ---
 {
   const { Publisher } = await import(path.join(root, 'lib/core/publisher/index.mjs'));

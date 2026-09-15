@@ -56699,19 +56699,17 @@ var Publisher = class {
     if (gw.frontActor) return String(gw.frontActor).replace(/ap\/actor\/?$/u, "ap/outbox");
     return String(gw.url).replace(/ap\/inbox\/?$/u, "ap/outbox");
   }
-  async publishProfile({ force = false } = {}) {
+  // Every actor document this identity publishes, from one place: the
+  // profile publish and a Move both write it, and a Move that rebuilt it
+  // by hand dropped the gateway inbox, the outbox door and the collections.
+  actorDocFor({ priv = false, moderators = null, inbox = null, movedTo = this.config.movedTo || null } = {}) {
     const { urls } = this;
-    const host = new URL(urls.base).host;
-    const priv = await this.privateReady() === true;
-    const moderators = (this.config.moderators || []).length ? urls.moderators : null;
-    const gw = this.config.gateway;
-    const gwActive = gw && gw.url && gw.mode && gw.mode !== "off";
-    const actorDoc2 = actorDoc({
+    return actorDoc({
       urls,
       handle: publicHandle(this.config),
       name: this.config.name,
       publicKeyPem: this.publicKeyPem,
-      movedTo: this.config.movedTo || null,
+      movedTo,
       kind: this.config.kind,
       approveJoins: followsNeedApproval(this.config),
       assertionKey: this.assertionKey,
@@ -56725,7 +56723,7 @@ var Publisher = class {
       pendingFollowers: priv ? urls.pendingFollowers : null,
       pendingFollowing: priv ? urls.pendingFollowing : null,
       blocked: priv ? urls.blocked : null,
-      inbox: gwActive ? gw.url : null,
+      inbox,
       // The agent's own outbox endpoint, where it is reachable: a client
       // following the actor must arrive somewhere that will take a write.
       // Otherwise the Gateway's outbox door, when one is attached.
@@ -56735,6 +56733,15 @@ var Publisher = class {
       oauthAuthorize: this.clientOrigin ? `${this.clientOrigin}oauth/authorize` : null,
       oauthToken: this.clientOrigin ? `${this.clientOrigin}oauth/token` : null
     });
+  }
+  async publishProfile({ force = false } = {}) {
+    const { urls } = this;
+    const host = new URL(urls.base).host;
+    const priv = await this.privateReady() === true;
+    const moderators = (this.config.moderators || []).length ? urls.moderators : null;
+    const gw = this.config.gateway;
+    const gwActive = gw && gw.url && gw.mode && gw.mode !== "off";
+    const actorDoc2 = this.actorDocFor({ priv, moderators, inbox: gwActive ? gw.url : null });
     const surface = node_crypto_default.createHash("sha256").update(JSON.stringify({
       actor: actorDoc2,
       handle: this.config.handle,
@@ -56945,21 +56952,15 @@ var Publisher = class {
     await this.deliverer.deliverToAll(inboxes, moveActivity(urls, target, Date.parse(at)));
     this.config.movedTo = target;
     this.store.setConfig({ ...this.store.getConfig(), movedTo: target, movedAt: at });
-    await writeMoved(this.remote, urls, actorDoc({
-      urls,
-      handle: publicHandle(this.config),
-      name: this.config.name,
-      publicKeyPem: this.publicKeyPem,
-      movedTo: target,
-      kind: this.config.kind,
-      approveJoins: followsNeedApproval(this.config),
-      assertionKey: this.assertionKey,
-      summary: this.config.summary || null,
-      icon: this.config.icon || null,
-      image: this.config.image || null,
-      fields: this.config.fields || [],
-      webId: this.remote.webId || null,
-      aliases: this.config.aliases || []
+    const gw = this.config.gateway;
+    const gwActive = gw && gw.url && gw.mode && gw.mode !== "off";
+    const priv = await this.privateReady() === true;
+    const moderators = (this.config.moderators || []).length ? urls.moderators : null;
+    await writeMoved(this.remote, urls, this.actorDocFor({
+      priv,
+      moderators,
+      inbox: gwActive ? gw.url : null,
+      movedTo: target
     }));
     await this.store.flush();
     this.log(`moved to ${target}: Move sent to ${inboxes.length} inbox(es), actor now advertises movedTo`);
