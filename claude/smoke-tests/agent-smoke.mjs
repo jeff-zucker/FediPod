@@ -10421,6 +10421,25 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
     await sign27(mkReq(), keys.rsaPrivate, new URL(KID)), { documentLoader: loaderFor(actorDoc27) });
   check(refetched.verified === true, 'and the same signature verifies once the current key is loaded');
 
+  // RFC 9421: Signature-Input beside Signature, Content-Digest for the body,
+  // a `created` parameter instead of Date. Mastodon verifies these already
+  // and has said it will send them; the door must take them as it takes the
+  // draft, and tell a swapped body apart just the same.
+  const r9421 = await sign27(mkReq(), keys.rsaPrivate, new URL(KID), { spec: 'rfc9421' });
+  check(r9421.headers.has('signature-input') && r9421.headers.has('content-digest'),
+    'the library signs RFC 9421 with Signature-Input and Content-Digest');
+  const good9421 = await httpsig.verifyHttpSignature(r9421, { documentLoader: loaderFor(actorDoc27) });
+  check(good9421.verified === true && good9421.method === 'rfc9421' && good9421.actor === AID,
+    `an RFC 9421 signed delivery verifies at the door and is labelled as such (${good9421.reason || 'ok'})`);
+  const swapped9421 = new Request(r9421.url, { method: 'POST', headers: r9421.headers, body: '{"type":"Delete"}' });
+  const bad9421 = await httpsig.verifyHttpSignature(swapped9421, { documentLoader: loaderFor(actorDoc27) });
+  check(bad9421.verified === false && bad9421.reason === 'bad-signature' && bad9421.method === 'rfc9421',
+    'a body swapped under an RFC 9421 signature fails on Content-Digest');
+  const wrong9421 = await httpsig.verifyHttpSignature(
+    await sign27(mkReq(), keys.rsaPrivate, new URL(KID), { spec: 'rfc9421' }), { documentLoader: loaderFor(wrongDoc) });
+  check(wrong9421.verified === false && wrong9421.reason === 'bad-signature',
+    'and the wrong key fails it the same way');
+
   // The SSRF-safe loader refuses a private-address keyId before any fetch.
   process.env.AP_ALLOW_PRIVATE_TARGETS = '';
   const loader = httpsig.makeSafeLoader({});
