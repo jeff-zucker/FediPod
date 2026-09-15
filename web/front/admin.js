@@ -52,7 +52,11 @@ $('roster-form').addEventListener('submit', (ev) => {
       cell(a.kind);
       cell(a.fronted ? 'lives here' : 'gateway only');
       const pod = document.createElement('a');
-      pod.href = a.podHome; pod.textContent = new URL(a.podHome).host;
+      // The pod as a person names it: its host, plus its path for a pod on a
+      // path of a shared host. The trailing segment is the FediPod root.
+      const u = new URL(a.podHome);
+      pod.href = a.podHome;
+      pod.textContent = u.host + u.pathname.replace(/[^/]+\/$/u, '').replace(/\/$/u, '');
       cell(pod);
       const rm = document.createElement('button');
       rm.type = 'button'; rm.textContent = 'Remove';
