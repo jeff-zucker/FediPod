@@ -1169,6 +1169,50 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   check(three.state.republished.length === 1, 'a Block of someone else is not ours to act on');
 }
 
+// --- 5c1k. the Gateway's row is checked against this pod, and corrected when it disagrees ---
+{
+  const { confirmGatewayRow, rowKeyOf } = await import(path.join(root, 'lib/core/gateway-row.mjs'));
+  check(rowKeyOf('https://fedipod.net/u/mei/ap/inbox/') === 'mei' && rowKeyOf('https://fedipod.net/u/mei%40pod.example/ap/inbox/') === 'mei@pod.example',
+    'the row key is read from the door address, decoded');
+  const mk = (recordedHome, attachStatus = 201) => {
+    const calls = [];
+    const fetchImpl = async (u, i) => {
+      calls.push(['GET', u]);
+      if (u.includes('/.well-known/webfinger')) return new Response(JSON.stringify({ links: [
+        { rel: 'self', href: 'x' }, { rel: 'http://webfinger.net/rel/profile-page', href: recordedHome + 'ap/profile.html' }] }), { status: 200 });
+      if (u.endsWith('/ap/outbox')) return new Response('', { status: 303, headers: { location: recordedHome + 'ap/outbox' } });
+      return new Response('', { status: 404 });
+    };
+    const sessionFetch = async (u, i) => { calls.push(['POST', u, JSON.parse(i.body)]); return new Response('{}', { status: attachStatus }); };
+    return { calls, fetchImpl, sessionFetch };
+  };
+  const same = mk('https://pod.example/fedipod/');
+  check(await confirmGatewayRow({ gateway: { url: 'https://fedipod.net/u/mei/ap/inbox/', frontActor: 'https://fedipod.net/u/mei/ap/actor' },
+    podHome: 'https://pod.example/fedipod/', fetchImpl: same.fetchImpl, sessionFetch: same.sessionFetch }) === 'ok'
+    && !same.calls.some(c => c[0] === 'POST'),
+    'a fronted row naming this pod is left alone after one public read');
+  const moved = mk('https://pod.example/old-root/');
+  check(await confirmGatewayRow({ gateway: { url: 'https://fedipod.net/u/mei/ap/inbox/', frontActor: 'https://fedipod.net/u/mei/ap/actor' },
+    podHome: 'https://pod.example/fedipod/', fetchImpl: moved.fetchImpl, sessionFetch: moved.sessionFetch }) === 'fixed'
+    && moved.calls.some(c => c[0] === 'POST' && c[1] === 'https://fedipod.net/api/attach'
+      && c[2].handle === 'mei' && c[2].podHome === 'https://pod.example/fedipod/' && c[2].fronted === true),
+    'a row naming an old root is corrected by attaching again, fronted');
+  const onPod = mk('https://pod.example/old-root/');
+  check(await confirmGatewayRow({ gateway: { url: 'https://fedipod.net/u/mei%40pod.example/ap/inbox/' },
+    podHome: 'https://pod.example/fedipod/', fetchImpl: onPod.fetchImpl, sessionFetch: onPod.sessionFetch }) === 'fixed'
+    && onPod.calls.some(c => c[0] === 'GET' && c[1].endsWith('/u/mei%40pod.example/ap/outbox'))
+    && onPod.calls.some(c => c[0] === 'POST' && c[2].handle === 'mei' && c[2].fronted === false),
+    'an address on the pod is checked through its outbox redirect and corrected unfronted');
+  const refused = mk('https://pod.example/old-root/', 403);
+  check(await confirmGatewayRow({ gateway: { url: 'https://fedipod.net/u/mei/ap/inbox/', frontActor: 'x' },
+    podHome: 'https://pod.example/fedipod/', fetchImpl: refused.fetchImpl, sessionFetch: refused.sessionFetch }) === 'failed',
+    'a refused attach is reported, not retried');
+  const dark = { fetchImpl: async () => new Response('', { status: 500 }), sessionFetch: async () => { throw new Error('no'); } };
+  check(await confirmGatewayRow({ gateway: { url: 'https://fedipod.net/u/mei/ap/inbox/', frontActor: 'x' }, podHome: 'https://pod.example/fedipod/', ...dark }) === 'unknown',
+    'a front that cannot be read leaves the row alone');
+  check(await confirmGatewayRow({ gateway: null, podHome: 'x', sessionFetch: async () => {} }) === 'ok', 'no gateway, nothing to check');
+}
+
 // --- 5c1j. who a client addressed by id: to/cc listed and delivered, bto/bcc delivered and never listed ---
 {
   const { C2S } = await import(path.join(root, 'lib/client/c2s.mjs'));

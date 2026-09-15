@@ -29,6 +29,7 @@ import { AcctFeed } from '../../lib/connections/acctfeed.mjs';
 import { followActor, unfollowActor, resolveHandle } from '../../lib/core/social.mjs';
 import { podBaseOfWebId } from '../../lib/pod/urls.mjs';
 import { ImportWorker } from '../../lib/connections/import.mjs';
+import { confirmGatewayRow } from '../../lib/core/gateway-row.mjs';
 
 // The authorities this identity answers on: exactly one, this origin. The Node
 // agent gets this from lib/guard.mjs, which is not in the browser bundle and
@@ -89,6 +90,10 @@ export class BrowserAgent {
       // here, before anything acts on the index.
       await this.publisher.healStatuses().catch((e) => this.log(`healing the timeline index: ${e.message}`));
       await this.publisher.publishProfilePage().catch((e) => this.log(`profile page: ${e.message}`));
+      await confirmGatewayRow({
+        gateway: this.store.getConfig()?.gateway, podHome: this.urls.home, kind: this.store.getConfig()?.kind,
+        sessionFetch: (u, i) => this.session.fetch(u, i), log: this.log,
+      }).catch((e) => this.log(`gateway row: ${e.message}`));
       // And start delivering again, since demote() stopped it. startQueue() is
       // idempotent, so a goActive() that was already active costs nothing.
       this.deliverer?.startQueue?.();
