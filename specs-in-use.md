@@ -16,12 +16,10 @@ outbox, collections) as static read-only resources.
 
 FediPod also implements ActivityPub's client-to-server protocol (§6). The
 DeviceAgent and the Server take `POST /ap/outbox` on the agent: an activity,
-<!-- CLAUDE 2026-09-15 — DPoP is checked when present, not required; delete these markers when done -->
 or a bare object wrapped in a Create per §6.2.1, authenticated by a Solid-OIDC
 token (its DPoP proof checked when the client sends one) whose WebID must be
 this identity's owner, or by the
-facade's own bearer
-<!-- /CLAUDE --> (`lib/client/c2s.mjs`, `lib/client/oidc-auth.mjs`). The
+facade's own bearer (`lib/client/c2s.mjs`, `lib/client/oidc-auth.mjs`). The
 Gateway takes the same POST at the account's outbox address on its own origin
 (`lib/gateway/front-core.mjs`, `lib/gateway/gateway-core.mjs`
 handleOwnerPost): it checks the owner's token, writes the post into the pod
@@ -44,12 +42,12 @@ everyday client interface; client-to-server is the spec's own.
   RFC 9421. Inbound verification differs by build. Server: verified — a POST
   to the pod's own inbox container is claimed by the component, checked with
   `lib/gateway/httpsig.mjs` while the headers exist, and written with an HMAC
-<!-- CLAUDE 2026-09-15 — correct file names; RFC 9421 accepted; delete these markers when done -->
   receipt the drain trusts (`lib/server/embed.mjs`,
   `packages/fedipod-server/src/handler.ts`, the receipt itself in
   `lib/gateway/gateway-core.mjs`). Both the cavage draft and RFC 9421
   (`Signature-Input`, `Content-Digest`) are accepted at the door.
-<!-- /CLAUDE --> BrowserAgent and DeviceAgent:
+
+BrowserAgent and DeviceAgent:
   verified only when the owner attaches to a Gateway
   (`lib/gateway/gateway-core.mjs`, `netlify/`), which verifies at the door and
   forwards with the receipt. Without a receipt, authenticity is
@@ -60,11 +58,10 @@ everyday client interface; client-to-server is the spec's own.
   `publishMove`, and inbound — the actor lists old accounts elsewhere as
   aliases (`config.aliases` → `alsoKnownAs`), which is what a Mastodon-family
   server checks before sending its Move here; the follower wave lands via
-<!-- CLAUDE 2026-09-15 — inbound Move was undocumented; delete these markers when done -->
   auto-accept (`autoAcceptFollows`) or bulk admit. A Move from an account
   you follow is checked at its origin and shown as a notification; following
   the new account is your choice.
-<!-- /CLAUDE --> Mastodon-format CSV exports
+Mastodon-format CSV exports
   (follows, blocks, mutes, lists, domain blocks) import through a paced worker
   (`lib/connections/import.mjs`).
 - **NodeInfo 2.0** — server self-description at `.well-known/nodeinfo`.
@@ -87,11 +84,9 @@ everyday client interface; client-to-server is the spec's own.
   private ACL, the same bar private posts clear.
 - **FEP-c648** — the `blocked` collection: blocked actor IRIs, owner-only, same
   ACL bar. Domain blocks stay local; the FEP's `blocks` activity-log half is
-<!-- CLAUDE 2026-09-15 — groups do mint Block; inbound Block now honoured; delete these markers when done -->
   not implemented (a person mints no Block activities; a group's Block
   travels inside its moderation Announce). A Block that arrives verified
   drops the sender's follow of you and yours of them.
-<!-- /CLAUDE -->
 
 ## Client side (talking to the user's app)
 
@@ -138,10 +133,9 @@ Item-by-item answers to the Solid/ActivityPub interop checklist.
 
 - **LDN inboxes** — yes in practice: the inbox is a public-Append LDP
   container on the pod that remote servers POST to (the LDN receiver
-<!-- CLAUDE 2026-09-15 — same IRI; delete these markers when done -->
   pattern); discovered via the actor doc's `inbox`, which the
   ActivityStreams context maps to `ldp:inbox`.
-<!-- /CLAUDE --> With a
+  With a
   Gateway attached, or on the Server, the advertised inbox is the door that
   verifies and forwards into that container.
 - **ActivityPub Actors** — yes; full actor doc (Person or Group) on the pod
@@ -151,20 +145,17 @@ Item-by-item answers to the Solid/ActivityPub interop checklist.
 - **Actor and webid relationships** — yes, both directions: the WebID profile
   lists the actor as a `foaf:account` (typed `foaf:OnlineAccount` and
   `as:Person` or `as:Group`, with the handle as `foaf:accountName`), and the
-<!-- CLAUDE 2026-09-15 — gap recorded; delete these markers when done -->
   actor doc names the WebID in `alsoKnownAs`. Retiring the account leaves
   the profile's link in place.
-<!-- /CLAUDE -->
 
 ### Authentication and authorisation
 
 - **Webid with WAC or ACP** — WAC yes: the agent writes `.acl` docs (public
   Read on published docs, public Append-only on the inbox, owner full
-<!-- CLAUDE 2026-09-15 — what ACP detection does; delete these markers when done -->
   control). ACP: detected and left alone — on a pod whose access control is
   ACP nothing is written, so public documents are not made readable there
   and private posts stay off.
-<!-- /CLAUDE -->
+
 - **Post signing** — outbound yes (draft-cavage, RSA-SHA256). Inbound: see
   HTTP Signatures above — verified on the Server and behind a Gateway;
   otherwise intake verifies by re-fetching the claimed object and actor from
@@ -182,12 +173,10 @@ Item-by-item answers to the Solid/ActivityPub interop checklist.
   deciding.
 - **Verification of post actors** — yes, by dereference: actor and object are
   re-fetched from their origin, which must vouch for them.
-<!-- CLAUDE 2026-09-15 — Undo of reactions now honoured; delete these markers when done -->
 - **Side effects** — yes; each activity type applies its effects (followers,
   timelines, notifications, Undo/Delete honored). An Undo of a Like or an
   Announce takes back what it left; a carried post leaves the timeline when
   its carrier unsays the carry.
-<!-- /CLAUDE -->
 - **json-ld context caching** — yes. Every ActivityStreams document is read as
   JSON-LD (`lib/core/as2.mjs`): expanded to a graph, which is what a shape is
   checked against, and compacted against the standard context, which is what
@@ -201,22 +190,18 @@ Item-by-item answers to the Solid/ActivityPub interop checklist.
 
 ### Sending activities
 
-<!-- CLAUDE 2026-09-15 — the key is published on two builds; delete these markers when done -->
 - **Actor public key** — yes, in the actor doc (`publicKey`). The DeviceAgent
   and the Server also publish an Ed25519 key as `assertionMethod`
   (FEP-521a), which signs their activities (FEP-8b32); the BrowserAgent has
   none.
-<!-- /CLAUDE -->
 - **Handling of private key** — never in a public document. BrowserAgent: on
   the pod, in an owner-only container, encrypted under the account password;
   an opened copy stays in that browser's storage as a non-extractable key.
   DeviceAgent: PEM on disk with 0600 permissions, or in the owner-only pod
   state. Server: in the owner-only pod state. Gateway: holds no key.
-<!-- CLAUDE 2026-09-15 — reply delivery and 410; delete these markers when done -->
 - **Sending a signed activity** — yes; every delivery is signed. A reply is
   delivered to the author of the post it answers, mentioned or not; an inbox
   that answers 410 is not retried and the follower behind it is dropped.
-<!-- /CLAUDE -->
 
 ### Following activities
 
@@ -253,7 +238,6 @@ Item-by-item answers to the Solid/ActivityPub interop checklist.
 
 ### Serving activities
 
-<!-- CLAUDE 2026-09-15 — following is flat; outbox lists activities; delete these markers when done -->
 - **Inbox and outbox collections** — outbox and followers served as paged
   AS2 collections; following, featured and the private collections as flat
   ones. The outbox lists the Create of each post and every Announce.
@@ -261,22 +245,17 @@ Item-by-item answers to the Solid/ActivityPub interop checklist.
   inbox is never public: the pod's container takes deliveries append-only and
   the agent drains it, and the owner reads what arrived at `GET /ap/inbox` on
   the agent, authenticated as themselves.
-<!-- CLAUDE 2026-09-15 — other containers exist; delete these markers when done -->
 - **Relation to endpoints and LDP containers** — collections are plain pod
   resources; the inbox is the one container other servers write to.
-<!-- /CLAUDE -->
-<!-- CLAUDE 2026-09-15 — not every document; delete these markers when done -->
 - **Conformance with activity+json** — yes; the ActivityStreams documents are
   stored and served as `application/activity+json`,
 <!-- /CLAUDE --> and the agent sends and accepts the standard
   AP content types.
-<!-- CLAUDE 2026-09-15 — followers-only posts share these; delete these markers when done -->
 - **Direct messages** — yes; direct posts are addressed only to the named
   actors and delivered straight to their inboxes. They and followers-only
   posts live in the pod's owner-only private container, never appear on the
   public surface or in the outbox collection, and are never re-broadcast by
   group fan-out.
-<!-- /CLAUDE -->
 
 ### Inbox and outbox processing architectures
 
