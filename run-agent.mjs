@@ -588,6 +588,10 @@ export class Agent {
     if (repair) {
       this.ensureActorPublished()
         .catch(e => this.log(`actor check failed: ${e.message}`));
+      // The human page, rewritten only when what it shows has changed: one
+      // local digest compare, and a write the first time after an upgrade.
+      this.publisher.publishProfilePage()
+        .catch(e => this.log(`profile page: ${e.message}`));
     }
     this.seedFollowNotifications().catch(e => this.log(`notification seeding failed: ${e.message}`));
   }

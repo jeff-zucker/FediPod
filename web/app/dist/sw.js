@@ -70612,6 +70612,7 @@ var BrowserAgent = class _BrowserAgent {
     try {
       await this.store.load({ force: true }).catch((e) => this.log(`re-reading state: ${e.message}`));
       await this.publisher.healStatuses().catch((e) => this.log(`healing the timeline index: ${e.message}`));
+      await this.publisher.publishProfilePage().catch((e) => this.log(`profile page: ${e.message}`));
       this.deliverer?.startQueue?.();
       await this.publisher.publishProfile();
       await this.store.flush?.();

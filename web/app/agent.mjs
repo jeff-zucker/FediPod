@@ -88,6 +88,7 @@ export class BrowserAgent {
       // Own posts the outbox names and the timeline index lacks come back
       // here, before anything acts on the index.
       await this.publisher.healStatuses().catch((e) => this.log(`healing the timeline index: ${e.message}`));
+      await this.publisher.publishProfilePage().catch((e) => this.log(`profile page: ${e.message}`));
       // And start delivering again, since demote() stopped it. startQueue() is
       // idempotent, so a goActive() that was already active costs nothing.
       this.deliverer?.startQueue?.();
