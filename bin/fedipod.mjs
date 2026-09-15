@@ -93,7 +93,7 @@ const COMMANDS = new Map([
   ['update', service.update], ['install-service', service.service], ['uninstall-service', service.service],
   ['park', account.parkRevive], ['revive', account.parkRevive], ['retire', account.retire],
   ['gateway', account.gateway], ['front', account.gateway], ['describe', account.describe],
-  ['alias', account.alias], ['import', account.importCmd], ['rebuild', account.rebuild],
+  ['alias', account.alias], ['import', account.importCmd], ['rebuild', account.rebuild], ['drain', account.drain],
   ['archive', account.archive], ['bsky', account.bsky],
   ...['members', 'announced', 'pending', 'requests', 'mute', 'unmute', 'eject', 'retract', 'approve', 'decline',
     'review', 'joins', 'admit', 'refuse', 'modqueue'].map((c) => [c, account.group]),

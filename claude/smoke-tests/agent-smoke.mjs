@@ -1213,6 +1213,33 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   check(await confirmGatewayRow({ gateway: null, podHome: 'x', sessionFetch: async () => {} }) === 'ok', 'no gateway, nothing to check');
 }
 
+// --- 5c1l. a prune can read another inbox container on this pod ---
+{
+  const { Intake } = await import(path.join(root, 'lib/core/intake/index.mjs'));
+  const listed = []; const deleted = [];
+  const OLD = 'https://p.example/old-root/ap/inbox/';
+  const intake = new Intake({
+    config: {}, urls: { base: 'https://p.example/', inbox: 'https://p.example/fedipod/ap/inbox/', actor: 'https://p.example/fedipod/ap/actor', notes: 'https://p.example/fedipod/ap/notes/' },
+    remote: {
+      listContainer: async (u) => { listed.push(u); return [{ url: u + 'a.json', size: 10, modified: '2026-09-14T00:00:00Z' }]; },
+      getJson: async () => null, delete: async (u) => { deleted.push(u); return true; },
+      fetch: async () => new Response('{"type":"Follow","actor":"https://x.example/u/a","object":"https://p.example/fedipod/ap/actor"}', { status: 200, headers: { 'content-type': 'application/activity+json' } }),
+    },
+    store: { read: (n, d) => d, write: () => {}, getContacts: () => ({ followers: [], following: [] }), setContacts: () => {},
+      getStatuses: () => [], getActors: () => ({}), getRequests: () => [], setRequests: () => {}, isBlocked: () => false,
+      addNotification: () => {}, addDeadLetter: () => {}, flush: async () => {}, getConfig: () => ({}) },
+    deliverer: {}, publisher: { publishCollections: async () => {} }, log: () => {},
+  });
+  intake._persisted = async () => true;
+  intake.handle = async () => null;
+  const out = await intake.prune({ before: new Date().toISOString(), keepConcerning: true, container: OLD }).catch(e => ({ error: e.message }));
+  check(!out.error && listed[0] === OLD && deleted[0] === OLD + 'a.json' && out.applied === 1,
+    `a prune with a container reads and empties THAT container (${JSON.stringify(out)})`);
+  let refused = null;
+  await intake.prune({ before: new Date().toISOString(), container: 'https://other.example/ap/inbox/' }).catch(e => { refused = e.message; });
+  check(/on this pod/.test(refused || ''), 'and a container on another host is refused');
+}
+
 // --- 5c1j. who a client addressed by id: to/cc listed and delivered, bto/bcc delivered and never listed ---
 {
   const { C2S } = await import(path.join(root, 'lib/client/c2s.mjs'));

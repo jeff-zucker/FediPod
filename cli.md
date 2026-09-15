@@ -68,6 +68,13 @@ A deeper version of the GUI's **Recover posts**: reads every note the pod
 still holds, and can bring back a post whose deletion half-failed. Adds only;
 nothing local is overwritten.  Agent must be running.
 
+```
+fedipod drain --container https://POD/OLD-ROOT/ap/inbox/
+```
+Reads everything waiting in another inbox container on this pod through the
+normal intake and deletes each item once handled. For the container of a
+root this identity moved away from. Agent must be running.
+
 ## Security
 
 ```
