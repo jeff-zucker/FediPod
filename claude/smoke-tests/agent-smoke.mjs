@@ -540,8 +540,10 @@ const urlsNoSlash = wire.apUrls('https://pod.example/', 'other-root');
 check(urlsNoSlash.actor === 'https://pod.example/other-root/ap/actor'
   && urlsNoSlash.state === 'https://pod.example/other-root/ap-state/',
   `a root without a trailing slash is normalized (${urlsNoSlash.actor})`);
-const jrd = wire.jrd({ handle: 'jeff', host: 'pod.example', actor: urls.actor });
+const jrd = wire.jrd({ handle: 'jeff', host: 'pod.example', actor: urls.actor, page: urls.profileHtml });
 check(jrd.subject === 'acct:jeff@pod.example' && jrd.links[0].href === urls.actor, 'webfinger JRD shape');
+check(jrd.links[1]?.rel === 'http://webfinger.net/rel/profile-page' && jrd.links[1].type === 'text/html'
+  && jrd.links[1].href === urls.profileHtml, 'and it links the profile page a person can open');
 const actor = wire.actorDoc({ urls, handle: 'jeff', name: 'Jeff', publicKeyPem: 'PEM' });
 check(actor.inbox === urls.inbox && actor.publicKey.id === urls.actor + '#main-key', 'actor doc shape');
 const note = wire.noteDoc({ urls, slug: 'x', content: 'a<b>&\n\nc', published: '2026-07-28T00:00:00Z' });
@@ -11372,6 +11374,9 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
   const inst = await ask('GET', '/api/v1/instance');
   check(inst.status === 200,
     `the instance document answers a stranger — that is what makes the pod an instance (${inst.status} ${String(inst.body).slice(0, 200)})`);
+  const atMe = await ask('GET', '/@alice'); const atNobody = await ask('GET', '/@nobody');
+  check(atMe.status === 302 && atNobody.status === 404,
+    `the short profile address answers for this identity and nobody else (${atMe.status} ${String(atMe.body).slice(0, 80)} / ${atNobody.status})`);
   check((await ask('GET', '/status', secret)).status === 404,
     "the operator's routes are not at the origin root");
   check((await ask('GET', '/fp/status')).status === 401,

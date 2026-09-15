@@ -9664,11 +9664,14 @@ function hostMeta(base) {
 </XRD>
 `;
 }
-function jrd({ handle: handle7, host, actor, aliases = [] }) {
+function jrd({ handle: handle7, host, actor, aliases = [], page: page2 = null }) {
   return {
     subject: `acct:${handle7}@${host}`,
     ...aliases.length ? { aliases } : {},
-    links: [{ rel: "self", type: "application/activity+json", href: actor }]
+    links: [
+      { rel: "self", type: "application/activity+json", href: actor },
+      ...page2 ? [{ rel: "http://webfinger.net/rel/profile-page", type: "text/html", href: page2 }] : []
+    ]
   };
 }
 function followsNeedApproval(config = {}) {
@@ -56784,7 +56787,7 @@ var Publisher = class {
     await writeWebfinger(
       this.remote,
       urls,
-      jrd({ handle: this.config.handle, host, actor: urls.actor })
+      jrd({ handle: this.config.handle, host, actor: urls.actor, page: urls.profileHtml })
     );
     await writeHostMeta(this.remote, urls, hostMeta(urls.base));
     const nodeinfoDocUrl = urls.home + "ap/nodeinfo-2.0";

@@ -159,6 +159,12 @@ try {
     'WebFinger resolves the handle to the actor on their own pod');
   check(wf.headers.get('access-control-allow-origin') === '*',
     'and the JRD may be read from any origin');
+  check(jrd.links.some((l) => l.rel === 'http://webfinger.net/rel/profile-page' && l.href === POD + 'ap/profile.html'),
+    `and it links the profile page on the pod (${JSON.stringify(jrd.links)})`);
+  const at = await get('/@alice', { redirect: 'manual' });
+  check(at.status === 302 && at.headers.get('location') === POD + 'ap/profile.html',
+    `https://<front>/@alice sends a person to that page (${at.status} ${at.headers.get('location')})`);
+  check((await get('/@nobody', { redirect: 'manual' })).status === 404, 'and 404s a handle nobody holds');
   check((await get('/.well-known/webfinger?resource=acct:nobody@' + HOST)).status === 404,
     'and 404s a handle nobody holds');
 

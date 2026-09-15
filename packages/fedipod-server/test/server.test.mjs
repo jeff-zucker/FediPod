@@ -17,6 +17,7 @@ test('claims only the front host, only its routes', () => {
   assert.equal(claims({ host: 'fedipod.net', pathname: '/.well-known/webfinger' }, F), true);
   assert.equal(claims({ host: 'fedipod.net:443', pathname: '/' }, F), true);
   assert.equal(claims({ host: 'fedipod.net', pathname: '/u/alice/ap/actor' }, F), true);
+  assert.equal(claims({ host: 'fedipod.net', pathname: '/@alice' }, F), true, 'the short profile address is the front\'s');
   assert.equal(claims({ host: 'fedipod.net', pathname: '/some/pod/doc' }, F), false, 'a non-front path falls through');
   assert.equal(claims({ host: 'alice.fedipod.net', pathname: '/.well-known/webfinger' }, F), false,
     'a pod subdomain is never claimed');

@@ -1,5 +1,14 @@
 # Changes
 
+## 2026-09-15 (a profile anyone can open — version 1.10.0, fedipod-server 0.20.0)
+
+Someone who knows your address can open your profile without a Fediverse
+account. `https://fedipod.net/@handle` opens the profile page of an account
+at fedipod.net, and the same short address works on the host of an account
+whose address is its pod's, on the DeviceAgent and the Server. The WebFinger
+answer for every account links that page, which is where other software
+looks for it.
+
 ## 2026-09-15 (replies reach their thread, and what other servers say is acted on — version 1.9.0, fedipod-server 0.19.0)
 
 A reply now reaches the server of the person it answers whether or not their

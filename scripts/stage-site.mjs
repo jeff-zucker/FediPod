@@ -94,6 +94,7 @@ fs.writeFileSync(path.join(site, '_redirects'), [
   '/api/agent              /.netlify/functions/front  200',
   '/u/*                    /.netlify/functions/front  200',
   '/.well-known/*          /.netlify/functions/front  200',
+  '/@*                     /.netlify/functions/front  200',
   '/install                /.netlify/functions/front  200',
   '/run                    /.netlify/functions/front  200',
   '/roster                 /.netlify/functions/front  200',

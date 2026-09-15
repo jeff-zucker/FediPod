@@ -14,7 +14,8 @@ export function claims(input: { host?: string; pathname: string }, frontHost: st
   if (!input.host || !frontHost) return false;
   const bare = String(input.host).split(':')[0].toLowerCase();
   if (bare !== String(frontHost).toLowerCase()) return false;   // a pod subdomain → not ours
-  return FRONT_PATHS.has(input.pathname) || input.pathname.startsWith('/u/');
+  return FRONT_PATHS.has(input.pathname) || input.pathname.startsWith('/u/')
+    || input.pathname.startsWith('/@');   // the short profile address
 }
 
 // What an identity answers on its own pod's origin: the protocol routes other
@@ -31,7 +32,7 @@ const AGENT_PATHS = new Set([
   // at this name before, so no pod resource is displaced.
   '/.well-known/oauth-authorization-server',
 ]);
-const AGENT_PREFIXES = [ '/api/', '/oauth/' ];
+const AGENT_PREFIXES = [ '/api/', '/oauth/', '/@' ];   // /@handle: the short profile address
 
 // An identity's inbox is the container `/<root>/ap/inbox/`, matched by shape
 // rather than a fixed root. A POST here is a delivery, verified at the door
