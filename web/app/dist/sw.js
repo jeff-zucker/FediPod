@@ -65570,7 +65570,7 @@ function page(api, items, url, { limit = 20, max = 40, idOf: idOf2 = (s) => api.
   }
   const pageItems2 = items.slice(0, n);
   if (!pageItems2.length) return { items: pageItems2, headers: {} };
-  const base = `http://${api.host}${url.pathname}`;
+  const base = url.origin + url.pathname;
   const q = (extra) => {
     const u = new URL(base);
     for (const [k, v] of url.searchParams) if (!["max_id", "since_id", "min_id"].includes(k)) u.searchParams.set(k, v);
@@ -67020,7 +67020,13 @@ var MastoApi = class _MastoApi {
       res.end(body);
       return true;
     };
-    const ctx = { req, res, pathname, url, send };
+    const scheme = String(this.scheme || (req.headers?.["x-forwarded-proto"] === "https" || req.socket?.encrypted ? "https" : "http")).replace(/:.*$/, "");
+    let self2 = url;
+    try {
+      self2 = new URL(`${scheme}://${req.headers?.host || "localhost"}${this.mount || ""}${pathname}${url.search || ""}`);
+    } catch {
+    }
+    const ctx = { req, res, pathname, url: self2, send };
     if (await handle(this, ctx)) return true;
     if (!pathname.startsWith("/api/")) return false;
     if (await handle2(this, ctx)) return true;

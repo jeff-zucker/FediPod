@@ -4834,17 +4834,28 @@ const bearer = masto2.mintToken();
 async function call(pathAndQuery, { method = 'GET', body = null, contentType = 'application/json' } = {}) {
   const req2 = Readable.from(body === null ? [] : [Buffer.isBuffer(body) ? body : Buffer.from(body)]);
   req2.method = method;
-  req2.headers = { authorization: `Bearer ${bearer}`, 'content-type': contentType };
+  req2.headers = { authorization: `Bearer ${bearer}`, 'content-type': contentType, host: 'client.example:8030' };
   const res = {
-    status: 0, body: '',
-    writeHead(s) { this.status = s; },
+    status: 0, body: '', headers: {},
+    writeHead(s, h) { this.status = s; this.headers = h || {}; },
     end(b) { this.body = String(b || ''); },
   };
   const u = new URL('http://x' + pathAndQuery);
   await masto2.handle(req2, res, u.pathname, u);
   let parsed = null;
   try { parsed = JSON.parse(res.body); } catch {}
-  return { status: res.status, json: parsed };
+  return { status: res.status, json: parsed, headers: res.headers };
+}
+
+// A client pages by following the Link header, so it must name the address
+// the client reached — not the pod's host, and not a scheme guessed at.
+{
+  const pg = await call('/api/v1/timelines/home?limit=1');
+  const link = pg.headers.link || '';
+  check(pg.status === 200 && pg.json.length === 1
+    && /<http:\/\/client\.example:8030\/api\/v1\/timelines\/home\?limit=1&max_id=[a-f0-9]+>; rel="next"/.test(link)
+    && /rel="prev"/.test(link) && !link.includes(masto2.host),
+    `the timeline's Link header names the client's own address (${link})`);
 }
 
 const notif = await call('/api/v1/notifications');
@@ -11245,8 +11256,9 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
     return { status, body };
   };
   const secret = { 'x-dk-token': 'embed-secret' };
-  check((await ask('GET', '/api/v1/instance')).status === 200,
-    'the instance document answers a stranger — that is what makes the pod an instance');
+  const inst = await ask('GET', '/api/v1/instance');
+  check(inst.status === 200,
+    `the instance document answers a stranger — that is what makes the pod an instance (${inst.status} ${String(inst.body).slice(0, 200)})`);
   check((await ask('GET', '/status', secret)).status === 404,
     "the operator's routes are not at the origin root");
   check((await ask('GET', '/fp/status')).status === 401,
