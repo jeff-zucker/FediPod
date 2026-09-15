@@ -1049,6 +1049,50 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     `and still advertises its gateway inbox, moderators and private collections (${JSON.stringify({ inbox: doc?.inbox, attributedTo: doc?.attributedTo, pendingFollowers: doc?.pendingFollowers })})`);
 }
 
+// --- 5c1h. a 410 inbox is gone: no retry, and its followers are forgotten ---
+{
+  const { Deliverer } = await import(path.join(root, 'lib/core/deliver.mjs'));
+  const mk = () => {
+    const state = { queue: [], contacts: { followers: [
+      { actor: 'https://gone.example/u/a', inbox: 'https://gone.example/u/a/inbox', sharedInbox: 'https://gone.example/inbox' },
+      { actor: 'https://gone.example/u/b', inbox: 'https://gone.example/u/b/inbox', sharedInbox: 'https://gone.example/inbox' },
+      { actor: 'https://fine.example/u/c', inbox: 'https://fine.example/u/c/inbox' },
+    ], following: [] } };
+    let republished = 0;
+    const d = new Deliverer({
+      store: { getQueue: () => state.queue, setQueue: (q) => { state.queue = q; },
+        getContacts: () => state.contacts, setContacts: (c) => { state.contacts = c; }, addDeadLetter: () => {} },
+      keyId: 'k', rsaPrivate: null, log: () => {}, passive: true,
+      onGone: async () => { republished++; },
+    });
+    d.deliverNow = async (inbox) => {
+      const status = inbox.startsWith('https://gone.example/u/a') ? 410
+        : inbox.startsWith('https://fine.example') ? 404 : 503;
+      const e = new Error(`POST ${inbox} → ${status}`); e.status = status; throw e;
+    };
+    return { d, state, count: () => republished };
+  };
+  const one = mk();
+  await one.d.deliver('https://gone.example/u/a/inbox', { type: 'Create', actor: 'me' });
+  check(one.state.queue.length === 0, 'a 410 is not queued for retry');
+  check(one.state.contacts.followers.map(f => f.actor).join() === 'https://gone.example/u/b,https://fine.example/u/c'
+    && one.state.contacts.removedFollowers?.[0]?.why === 'inbox-gone' && one.count() === 1,
+    'the follower at that inbox is dropped with a mark, and the collection republished');
+  await one.d.deliver('https://fine.example/u/c/inbox', { type: 'Create', actor: 'me' });
+  check(one.state.queue.length === 0 && one.state.contacts.followers.length === 2,
+    'a 404 is not retried either, but keeps the follower');
+  await one.d.deliver('https://gone.example/inbox', { type: 'Create', actor: 'me' });
+  check(one.state.queue.length === 1, 'a 503 still queues');
+  // The same on a retry from the queue, and a gone SHARED inbox forgets everyone behind it.
+  const two = mk();
+  two.d.deliverNow = async () => { const e = new Error('410'); e.status = 410; throw e; };
+  two.state.queue = [{ inbox: 'https://gone.example/inbox', activity: { type: 'Create' }, attempts: 3, nextAt: 0 }];
+  await two.d.drainQueue();
+  check(two.state.queue.length === 0 && two.state.contacts.followers.length === 1
+    && two.state.contacts.followers[0].actor === 'https://fine.example/u/c',
+    'a queued delivery answered 410 is dropped, and everyone behind a gone shared inbox is forgotten');
+}
+
 // --- 5b2. editing, visibility and content warnings ---
 {
   const { Publisher } = await import(path.join(root, 'lib/core/publisher/index.mjs'));

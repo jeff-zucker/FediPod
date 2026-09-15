@@ -223,6 +223,7 @@ export class BrowserAgent {
       // The relay finds the account by the front's own key for it, which for a
       // mail-door account is the full address, not the bare handle.
       handle: doorKeyOf(config.gateway?.url) || config.handle, sessionFetch: session.fetch,
+      onGone: () => this.publisher.publishCollections({ followers: true }),
     });
 
     this.publisher = new Publisher({

@@ -325,6 +325,7 @@ export class Agent {
       actorId: this.urls.actor, edPrivate: keys.edPrivate,
       proofKeyId: assertionKeyId(this.urls),
       log: this.log, passive: this.viewer,
+      onGone: () => this.publisher.publishCollections({ followers: true }),
     });
     this.publisher = new Publisher({
       config, remote: this.remote, store: this.store,

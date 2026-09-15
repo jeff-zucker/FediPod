@@ -32684,11 +32684,12 @@ async function verifyHttpSignature(request, { documentLoader, keyCache, timeWind
   } catch {
     result = null;
   }
+  const method = request.headers.has("signature-input") ? "rfc9421" : "draft-cavage";
   if (result?.verified) {
     const key = result.key;
     return {
       verified: true,
-      method: "draft-cavage",
+      method,
       keyId: key.id?.href ?? null,
       actor: key.ownerId?.href ?? null,
       reason: null,
@@ -32709,7 +32710,7 @@ async function verifyHttpSignature(request, { documentLoader, keyCache, timeWind
   if (kind === "keyFetchError") {
     return {
       verified: false,
-      method: "draft-cavage",
+      method,
       keyId: null,
       actor: null,
       reason: "key-unfetchable",
@@ -32718,7 +32719,7 @@ async function verifyHttpSignature(request, { documentLoader, keyCache, timeWind
   }
   return {
     verified: false,
-    method: "draft-cavage",
+    method,
     keyId: null,
     actor: null,
     reason: "bad-signature",
@@ -68030,6 +68031,7 @@ var hostOf = (inbox) => {
   }
 };
 var aboutTheHost = (e) => !e.status || e.status >= 500 || e.status === 429;
+var unsalvageable = (e) => e.status === 404 || e.status === 410;
 var Deliverer = class {
   // passive: signing-only (viewer-mode agents) — no queue drain timer, so a
   // read-only agent never mutates shared delivery state. startQueue() flips
@@ -68042,9 +68044,11 @@ var Deliverer = class {
     edPrivate = null,
     proofKeyId = null,
     log: log2 = console.log,
-    passive = false
+    passive = false,
+    onGone = null
   }) {
     this.store = store;
+    this.onGone = onGone;
     this.keyId = keyId;
     this.rsaPrivate = rsaPrivate;
     this.actorId = actorId;
@@ -68140,6 +68144,10 @@ var Deliverer = class {
       await this.deliverNow(inbox, signed);
       this.log(`delivered ${signed.type} \u2192 ${inbox}`);
     } catch (e) {
+      if (unsalvageable(e)) {
+        await this._unsalvageable(inbox, e);
+        return;
+      }
       this.log(`delivery failed (${e.message}) \u2014 queued`);
       const wait = e.retryAfterMs || 6e4;
       if (aboutTheHost(e)) {
@@ -68147,6 +68155,26 @@ var Deliverer = class {
         this._cooling.set(host, Date.now() + wait);
       }
       this._enqueue({ inbox, activity: signed, attempts: 1, nextAt: Date.now() + wait });
+    }
+  }
+  // Not retried, and on a 410 the followers who received there are dropped,
+  // so the next fan-out stops asking; the followers collection is republished
+  // through onGone. A 404 drops only this delivery.
+  async _unsalvageable(inbox, e) {
+    if (e.status !== 410) {
+      this.log(`delivery dropped (${e.message}) \u2014 nothing answers there`);
+      return;
+    }
+    const contacts = this.store.getContacts?.();
+    const left = (contacts?.followers || []).filter((f) => f.inbox === inbox || f.sharedInbox === inbox);
+    this.log(`${inbox} is gone (410) \u2014 delivery dropped${left.length ? `, ${left.length} follower(s) there forgotten` : ""}`);
+    if (!left.length) return;
+    for (const f of left) dropFollower(contacts, f.actor, "inbox-gone");
+    this.store.setContacts(contacts);
+    try {
+      await this.onGone?.();
+    } catch (err) {
+      this.log(`followers republish after 410: ${err.message}`);
     }
   }
   // The queue has a ceiling: a fan-out into a sea of down servers must not grow
@@ -68233,6 +68261,11 @@ var Deliverer = class {
         changed = true;
         this.log(`retry ok: ${item.activity.type} \u2192 ${item.inbox}`);
       } catch (e) {
+        if (unsalvageable(e)) {
+          changed = true;
+          await this._unsalvageable(item.inbox, e);
+          continue;
+        }
         item.attempts += 1;
         changed = true;
         const wait = e.retryAfterMs || ladderFor(item);
@@ -70526,7 +70559,8 @@ var BrowserAgent = class _BrowserAgent {
       // The relay finds the account by the front's own key for it, which for a
       // mail-door account is the full address, not the bare handle.
       handle: doorKeyOf(config.gateway?.url) || config.handle,
-      sessionFetch: session.fetch
+      sessionFetch: session.fetch,
+      onGone: () => this.publisher.publishCollections({ followers: true })
     });
     this.publisher = new Publisher({
       config: this.store.getConfig(),
