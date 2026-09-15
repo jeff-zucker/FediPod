@@ -27,7 +27,6 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { confirmGatewayRow } from './lib/core/gateway-row.mjs';
 
 import { PodStore } from './lib/core/store.mjs';
 import { apRoot, rootOf, writeJsonAtomic } from './lib/device/home.mjs';
@@ -593,13 +592,6 @@ export class Agent {
       // local digest compare, and a write the first time after an upgrade.
       this.publisher.publishProfilePage()
         .catch(e => this.log(`profile page: ${e.message}`));
-      // The Gateway's row must name THIS pod: a root that moved leaves it
-      // serving old documents and dropping mail where nobody drains.
-      const cfg = this.store.getConfig?.() || {};
-      confirmGatewayRow({
-        gateway: cfg.gateway, podHome: this.urls?.home, kind: cfg.kind,
-        sessionFetch: (u, i) => this.remote.session.fetch(u, i), log: this.log,
-      }).catch(e => this.log(`gateway row: ${e.message}`));
     }
     this.seedFollowNotifications().catch(e => this.log(`notification seeding failed: ${e.message}`));
   }

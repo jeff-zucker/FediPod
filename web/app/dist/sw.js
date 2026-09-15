@@ -56835,13 +56835,9 @@ var Publisher = class {
     });
     const digest = node_crypto_default.createHash("sha256").update(html).digest("hex").slice(0, 32);
     const seen = this.store.read("published.json", {});
-    if (!force && seen.pageDigest === digest) {
-      this.log("profile page unchanged");
-      return false;
-    }
+    if (!force && seen.pageDigest === digest) return false;
     await writeProfilePage(this.remote, urls, html);
     this.store.write("published.json", { ...this.store.read("published.json", {}), pageDigest: digest });
-    this.log(`profile page written: ${urls.profileHtml}`);
     return true;
   }
   async publishProfile({ force = false } = {}) {
@@ -63357,10 +63353,23 @@ var Intake = class {
   // handle(), which ingests a Create only when concernsUs passes — addressed to
   // us, a mention, a reply to ours, or from someone we follow — and drops the
   // rest.
-  async prune({ before, keepConcerning = false } = {}) {
+  //
+  // `container`: another inbox container on this pod to read instead of the
+  // advertised one — the container of a root this identity moved away from,
+  // where a Gateway kept writing until its row was corrected. Same rules,
+  // every item deleted once handled.
+  async prune({ before, keepConcerning = false, container = null } = {}) {
     const cutoff = Date.parse(before);
     if (!Number.isFinite(cutoff)) throw new Error(`"${before}" is not a date`);
-    const all = await list(this.remote, this.urls);
+    let urls = this.urls;
+    if (container) {
+      const pod = new URL(this.urls.base).origin;
+      if (typeof container !== "string" || !container.startsWith(pod + "/") || !container.endsWith("/")) {
+        throw new Error(`container must be a container on this pod (${pod}/\u2026/), got ${container}`);
+      }
+      urls = { ...this.urls, inbox: container };
+    }
+    const all = await list(this.remote, urls);
     const older = all.filter((e) => !e.url.endsWith(".keep") && e.modified && Date.parse(e.modified) < cutoff);
     const out = { considered: older.length, applied: 0, dropped: 0, discarded: 0, failed: 0 };
     for (const item of older) {
@@ -63396,7 +63405,7 @@ var Intake = class {
         this.log(`prune ${item.url}: ${e.message}`);
       }
     }
-    this.log(`pruned before ${before}: applied ${out.applied}, dropped ${out.dropped} small Create(s), discarded ${out.discarded} unread${out.failed ? `, ${out.failed} failed` : ""}`);
+    this.log(`pruned ${container ? container + " " : ""}before ${before}: applied ${out.applied}, dropped ${out.dropped} small Create(s), discarded ${out.discarded} unread${out.failed ? `, ${out.failed} failed` : ""}`);
     await this.store.flush();
     const removed = out.applied + out.dropped + out.discarded;
     if (this.inboxStats && removed) {
@@ -70570,61 +70579,6 @@ var AcctFeed = class {
 
 // web/app/agent.mjs
 init_urls();
-
-// lib/core/gateway-row.mjs
-function rowKeyOf(doorInboxUrl) {
-  try {
-    const seg2 = new URL(doorInboxUrl).pathname.split("/");
-    return seg2[1] === "u" && seg2[2] ? decodeURIComponent(seg2[2]) : null;
-  } catch {
-    return null;
-  }
-}
-async function recordedPodHome({ front, key, fronted, fetchImpl = fetch }) {
-  if (fronted) {
-    const host = new URL(front).host;
-    const r2 = await fetchImpl(
-      `${front}/.well-known/webfinger?resource=acct:${encodeURIComponent(key + "@" + host)}`,
-      { headers: { accept: "application/jrd+json, application/json" } }
-    ).catch(() => null);
-    if (!r2?.ok) return null;
-    const jrd2 = await r2.json().catch(() => null);
-    const page2 = (jrd2?.links || []).find((l) => l?.rel === "http://webfinger.net/rel/profile-page")?.href;
-    return typeof page2 === "string" && page2.endsWith("ap/profile.html") ? page2.slice(0, -"ap/profile.html".length) : null;
-  }
-  const r = await fetchImpl(`${front}/u/${encodeURIComponent(key)}/ap/outbox`, { redirect: "manual" }).catch(() => null);
-  const loc = r?.headers?.get?.("location");
-  return typeof loc === "string" && loc.endsWith("ap/outbox") ? loc.slice(0, -"ap/outbox".length) : null;
-}
-async function confirmGatewayRow({ gateway, podHome, kind = "person", fetchImpl = fetch, sessionFetch, log: log2 = () => {
-} }) {
-  if (!gateway?.url || !podHome || !sessionFetch) return "ok";
-  const front = new URL(gateway.url).origin;
-  const key = rowKeyOf(gateway.url);
-  if (!key) return "unknown";
-  const fronted = !!gateway.frontActor;
-  const recorded = await recordedPodHome({ front, key, fronted, fetchImpl });
-  if (!recorded) {
-    log2(`gateway row: could not read where ${front} thinks this pod is \u2014 left as is`);
-    return "unknown";
-  }
-  if (recorded === podHome) return "ok";
-  log2(`gateway row names ${recorded}, this pod is ${podHome} \u2014 attaching again`);
-  const res = await sessionFetch(`${front}/api/attach`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ handle: key.split("@")[0], podHome, kind: kind === "group" ? "group" : "person", fronted })
-  }).catch(() => null);
-  if (res?.status === 201) {
-    log2(`gateway row corrected: ${front} now reaches ${podHome}`);
-    return "fixed";
-  }
-  const d = res ? await res.json().catch(() => ({})) : {};
-  log2(`gateway row NOT corrected (HTTP ${res?.status ?? "none"}${d.error ? ": " + d.error : ""}) \u2014 reads and mail through ${front} still use ${recorded}`);
-  return "failed";
-}
-
-// web/app/agent.mjs
 var originAuthorities = (host) => ({
   set: /* @__PURE__ */ new Set([String(host || "").toLowerCase()]),
   has(authority) {
@@ -70674,13 +70628,6 @@ var BrowserAgent = class _BrowserAgent {
       await this.store.load({ force: true }).catch((e) => this.log(`re-reading state: ${e.message}`));
       await this.publisher.healStatuses().catch((e) => this.log(`healing the timeline index: ${e.message}`));
       await this.publisher.publishProfilePage().catch((e) => this.log(`profile page: ${e.message}`));
-      await confirmGatewayRow({
-        gateway: this.store.getConfig()?.gateway,
-        podHome: this.urls.home,
-        kind: this.store.getConfig()?.kind,
-        sessionFetch: (u, i) => this.session.fetch(u, i),
-        log: this.log
-      }).catch((e) => this.log(`gateway row: ${e.message}`));
       this.deliverer?.startQueue?.();
       await this.publisher.publishProfile();
       await this.store.flush?.();
