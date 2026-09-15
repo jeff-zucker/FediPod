@@ -55,6 +55,9 @@ queue is its own list, separate from post review, and appears on the group's
 admin page as **Moderation requests** when something is waiting: carry it out,
 or turn it down.
 A followed group's own announced deletion of a post it carried to you is honoured.
+<!-- CLAUDE 2026-09-15 — Undo of a carry now honoured; delete these markers when done -->
+A group that withdraws a post it carried to you takes it off your timeline too.
+<!-- /CLAUDE -->
 
 ## Inviting people
 

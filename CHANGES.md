@@ -1,5 +1,32 @@
 # Changes
 
+## 2026-09-15 (replies reach their thread, and what other servers say is acted on — version 1.9.0, fedipod-server 0.19.0)
+
+A reply now reaches the server of the person it answers whether or not their
+handle is in the text, so the thread is whole where they read it. Their
+notification is still the text's to decide: retype the handle and they are
+told, trim it and they are not.
+
+A content warning marks the post sensitive, which is what other servers hide
+it behind; media marked sensitive is hidden the same way. A `#word` in a post
+is a hashtag other servers file it under.
+
+The outbox lists each post's Create activity and each boost, as ActivityPub
+describes an outbox.
+
+A server that answers that an account is gone is believed: the delivery is
+not retried and the follower is dropped. A withdrawn favourite or boost
+leaves your notifications; a post someone stopped boosting leaves your
+timeline. A block from a sender the door verified drops their follow of you
+and yours of them.
+
+Moving the account to another server keeps everything the actor advertised:
+its gateway inbox, its outbox door, its moderators and its private
+collections.
+
+A client paging through a timeline is sent to the address it reached, not to
+the pod's host. Deliveries signed with RFC 9421 verify at the door.
+
 ## 2026-09-14 (posting from other apps, a new key from the unlock screen, the timeline that keeps its posts — version 1.8.0, fedipod-server 0.18.0)
 
 Any app that speaks ActivityPub client-to-server, dokieli for one, can post as
