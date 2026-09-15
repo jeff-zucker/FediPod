@@ -9589,6 +9589,7 @@ __export(wire_exports, {
   AS_CTX: () => AS_CTX,
   DEFAULT_ROOT: () => DEFAULT_ROOT,
   FOLLOWERS_PAGE_SIZE: () => FOLLOWERS_PAGE_SIZE,
+  HASHTAG_RE: () => HASHTAG_RE,
   MENTION_RE: () => MENTION_RE,
   OUTBOX_PAGE_SIZE: () => OUTBOX_PAGE_SIZE,
   PUBLIC: () => PUBLIC,
@@ -9615,6 +9616,7 @@ __export(wire_exports, {
   followersPageId: () => followersPageId,
   followersPaging: () => followersPaging,
   followsNeedApproval: () => followsNeedApproval,
+  hashtagsIn: () => hashtagsIn,
   hostMeta: () => hostMeta,
   jrd: () => jrd,
   likeActivity: () => likeActivity,
@@ -9639,6 +9641,7 @@ __export(wire_exports, {
   rejectActivity: () => rejectActivity,
   repliesId: () => repliesId,
   sanitizeHtml: () => sanitizeHtml,
+  tagHref: () => tagHref,
   titledContent: () => titledContent,
   tombstoneDoc: () => tombstoneDoc,
   undoActivity: () => undoActivity,
@@ -10046,8 +10049,27 @@ function attachmentsOf(note) {
 function mentionsIn(text) {
   return [...new Set(String(text).match(MENTION_RE) || [])].map((m) => m.slice(1));
 }
-function contentHtml(text, mentions = []) {
+function hashtagsIn(text) {
+  const seen = /* @__PURE__ */ new Map();
+  for (const m of String(text).matchAll(HASHTAG_RE)) {
+    const key = m[2].toLowerCase();
+    if (!seen.has(key)) seen.set(key, m[2]);
+  }
+  return [...seen.values()];
+}
+function tagHref(urls, name) {
+  return urls.profileHtml + "?tag=" + encodeURIComponent(String(name).toLowerCase());
+}
+function contentHtml(text, mentions = [], hashtags = []) {
   let html = String(text).replace(/[&<>]/g, (c) => HTML_ESCAPES[c]);
+  if (hashtags.length) {
+    const byName = new Map(hashtags.filter((h) => h?.name && h?.href).map((h) => [h.name.toLowerCase(), h.href]));
+    html = html.replace(HASHTAG_RE, (all, lead, name) => {
+      const href = byName.get(name.toLowerCase());
+      if (!href) return all;
+      return `${lead}<a href="${String(href).replace(/[&<>"]/g, (c) => HTML_ESCAPES[c] || "&quot;")}" class="mention hashtag" rel="tag">#<span>${name}</span></a>`;
+    });
+  }
   for (const m of mentions) {
     if (!m?.handle || !m?.actor) continue;
     const href = String(m.page || m.actor).replace(/[&<>"]/g, (c) => HTML_ESCAPES[c] || "&quot;");
@@ -10075,6 +10097,7 @@ function noteDoc({
   mentions = [],
   visibility = "public",
   summary = null,
+  sensitive = false,
   updated = null,
   container = null,
   also = []
@@ -10083,22 +10106,26 @@ function noteDoc({
   const who = mentions.map((m) => m.actor);
   const extra = visibility === "direct" ? [] : also.filter((a) => a && !who.includes(a));
   const addressed = addressing(urls, visibility, [...who, ...extra]);
+  const hashtags = hashtagsIn(content).map((name) => ({ name, href: tagHref(urls, name) }));
   const note = {
     "@context": AS_CTX,
     id,
     type: "Note",
     attributedTo: urls.actor,
-    content: contentHtml(content, mentions),
+    content: contentHtml(content, mentions, hashtags),
     published,
     to: addressed.to,
     cc: addressed.cc,
     replies: repliesId(id)
   };
   if (summary) note.summary = summary;
+  if (summary || sensitive) note.sensitive = true;
   if (updated) note.updated = updated;
-  if (mentions.length) {
-    note.tag = mentions.map((m) => ({ type: "Mention", href: m.actor, name: "@" + m.handle }));
-  }
+  const tag = [
+    ...mentions.map((m) => ({ type: "Mention", href: m.actor, name: "@" + m.handle })),
+    ...hashtags.map((h) => ({ type: "Hashtag", href: h.href, name: "#" + h.name }))
+  ];
+  if (tag.length) note.tag = tag;
   if (inReplyTo) note.inReplyTo = inReplyTo;
   if (attachments?.length) {
     note.attachment = attachments.map((a) => ({
@@ -10276,7 +10303,7 @@ function addRemoveActivity({ urls, type, object, target, serial }) {
     target
   };
 }
-var import_sanitize_html, AS_CTX, SEC_CTX, PUBLIC, DEFAULT_ROOT, assertionKeyId, OUTBOX_PAGE_SIZE, outboxPageId, outboxPageCount, outboxItemId, FOLLOWERS_PAGE_SIZE, followersPageId, followersPageCount, ALLOWED_TAGS, ALLOWED_ATTRS, MAX_ATTACHMENTS, MAX_ATTACHMENT_URL, attachmentUrl, HTML_ESCAPES, MENTION_RE;
+var import_sanitize_html, AS_CTX, SEC_CTX, PUBLIC, DEFAULT_ROOT, assertionKeyId, OUTBOX_PAGE_SIZE, outboxPageId, outboxPageCount, outboxItemId, FOLLOWERS_PAGE_SIZE, followersPageId, followersPageCount, ALLOWED_TAGS, ALLOWED_ATTRS, MAX_ATTACHMENTS, MAX_ATTACHMENT_URL, attachmentUrl, HTML_ESCAPES, MENTION_RE, HASHTAG_RE;
 var init_wire = __esm({
   "lib/core/wire.mjs"() {
     init_urls();
@@ -10331,6 +10358,7 @@ var init_wire = __esm({
     };
     HTML_ESCAPES = { "&": "&amp;", "<": "&lt;", ">": "&gt;" };
     MENTION_RE = /@([A-Za-z0-9_.-]+)@([A-Za-z0-9.-]+\.[A-Za-z]{2,}(?::\d+)?)/g;
+    HASHTAG_RE = /(^|[^\/\w)])#([\p{L}\p{N}_]*[\p{L}_][\p{L}\p{N}_]*)/gu;
   }
 });
 
@@ -55986,7 +56014,7 @@ function rowContent(obj) {
   const esc = (v) => String(v).replace(/[&<>"]/gu, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
   return `<p><a href="${esc(obj?.id || "")}">${esc(obj?.type || "object")}</a></p>`;
 }
-async function publishNote(publisher, content, { inReplyTo, attachments, visibility = "public", spoilerText = null, slug: wanted = null } = {}) {
+async function publishNote(publisher, content, { inReplyTo, attachments, visibility = "public", spoilerText = null, sensitive = false, slug: wanted = null } = {}) {
   const { urls } = publisher;
   const priv = visibility === "private" || visibility === "direct";
   if (priv) {
@@ -56008,6 +56036,7 @@ async function publishNote(publisher, content, { inReplyTo, attachments, visibil
     mentions,
     visibility,
     summary: spoilerText,
+    sensitive,
     container: priv ? urls.privateNotes : urls.notes,
     also: reply ? [reply.actor] : []
   });
@@ -56029,8 +56058,9 @@ async function publishNote(publisher, content, { inReplyTo, attachments, visibil
     text: content,
     visibility,
     ...spoilerText ? { spoiler: spoilerText } : {},
+    ...note.sensitive ? { sensitive: true } : {},
     ...attachments?.length ? { attachments } : {},
-    ...note.tag?.length ? { mentions: note.tag.map((t) => ({ href: t.href, name: t.name })) } : {}
+    ...rowTags(note)
   });
   if (await publisher.store.commit?.() === false) publisher.log(`post published but its timeline row was refused: ${note.id}`);
   const create = createActivity(note, urls);
@@ -56109,7 +56139,13 @@ async function publishObject(publisher, object, { visibility = "public", slug: w
   publisher.log(`${row.type || "object"} published: ${id} \u2192 ${inboxes.length} inbox(es)`);
   return { id, createId, copied: !ownId };
 }
-async function updateNote(publisher, s, { content, spoilerText = null, attachments = null } = {}) {
+function rowTags(note) {
+  const tags = [].concat(note.tag || []);
+  const mentions = tags.filter((t) => t.type === "Mention").map((t) => ({ href: t.href, name: t.name }));
+  const hashtags = tags.filter((t) => t.type === "Hashtag").map((t) => ({ name: String(t.name).replace(/^#/, ""), url: t.href }));
+  return { ...mentions.length ? { mentions } : {}, ...hashtags.length ? { tags: hashtags } : {} };
+}
+async function updateNote(publisher, s, { content, spoilerText = null, sensitive = null, attachments = null } = {}) {
   const { urls } = publisher;
   const updated = (/* @__PURE__ */ new Date()).toISOString();
   const inText = new Set(mentionsIn(content));
@@ -56137,6 +56173,7 @@ async function updateNote(publisher, s, { content, spoilerText = null, attachmen
     mentions,
     visibility: s.visibility || "public",
     summary: spoilerText,
+    sensitive: sensitive ?? !!s.sensitive,
     updated,
     container,
     also: reply ? [reply.actor] : []
@@ -56148,8 +56185,10 @@ async function updateNote(publisher, s, { content, spoilerText = null, attachmen
     text: content,
     editedAt: updated,
     spoiler: spoilerText || void 0,
+    sensitive: note.sensitive || void 0,
     attachments: atts.length ? atts : void 0,
-    mentions: note.tag?.length ? note.tag.map((t) => ({ href: t.href, name: t.name })) : void 0
+    mentions: rowTags(note).mentions,
+    tags: rowTags(note).tags
   });
   const update = updateActivity(note, urls);
   const contacts = publisher.store.getContacts();
@@ -56382,7 +56421,8 @@ async function publishQuestion(publisher, content, {
   expiresAt = null,
   inReplyTo = void 0,
   visibility = "public",
-  spoilerText = null
+  spoilerText = null,
+  sensitive = false
 } = {}) {
   const { urls } = publisher;
   const priv = visibility === "private" || visibility === "direct";
@@ -56430,6 +56470,7 @@ async function publishQuestion(publisher, content, {
     mentions,
     visibility,
     summary: spoilerText,
+    sensitive,
     also: reply ? [reply.actor] : [],
     container: priv ? urls.privateNotes : urls.notes,
     options: poll.options,
@@ -56457,7 +56498,8 @@ async function publishQuestion(publisher, content, {
     inReplyTo,
     ...reply ? { replyActor: reply.actor } : {},
     ...spoilerText ? { spoiler: spoilerText } : {},
-    ...question.tag?.length ? { mentions: question.tag.map((t) => ({ href: t.href, name: t.name })) } : {}
+    ...question.sensitive ? { sensitive: true } : {},
+    ...rowTags(question)
   });
   if (await publisher.store.commit?.() === false) publisher.log(`poll published but its timeline row was refused: ${question.id}`);
   const create = publisher._pollActivity("Create", question, createActivityId(question.id));
@@ -56539,6 +56581,7 @@ async function republishPoll(publisher, questionId, { closing = null } = {}) {
     also: s.replyActor ? [s.replyActor] : [],
     visibility: s.visibility || "public",
     summary: s.spoiler || null,
+    sensitive: !!s.sensitive,
     container,
     options: poll.options,
     multiple: !!poll.multiple,
@@ -57907,6 +57950,7 @@ async function ingestNote(intake, objectId, actor, { via, inline = null } = {}) 
   const followed = via || known2 || !known2 && await intake.isCoMember(author);
   const kind = followed ? "timeline" : "mention";
   const mentions = [].concat(note.tag || []).filter((t) => t?.type === "Mention" && t.href && t.name).slice(0, MAX_MENTIONS).map((t) => ({ href: httpOnly(String(t.href).slice(0, MAX_URL_CHARS)), name: String(t.name).slice(0, 256) })).filter((m) => m.href);
+  const hashtags = [].concat(note.tag || []).filter((t) => t?.type === "Hashtag" && t.name).slice(0, MAX_MENTIONS).map((t) => ({ name: String(t.name).replace(/^#/, "").slice(0, 128), url: httpOnly(String(t.href || "").slice(0, MAX_URL_CHARS)) })).filter((t) => t.name);
   const emojis = emojisOf(note);
   const poll = pollOf(note);
   const audience = [].concat(note.to || [], note.cc || []).map(String);
@@ -57923,6 +57967,8 @@ async function ingestNote(intake, objectId, actor, { via, inline = null } = {}) 
     ...nonPublic ? { nonPublic: true } : {},
     // The author's content warning, shown as one: plain text only.
     ...note.summary ? { spoiler: String(note.summary).replace(/<[^>]*>/g, "") } : {},
+    ...note.sensitive === true ? { sensitive: true } : {},
+    ...hashtags.length ? { tags: hashtags } : {},
     ...poll ? { poll } : {},
     ...emojis.length ? { emojis } : {},
     ...mentions.length ? { mentions } : {},
@@ -64261,7 +64307,8 @@ var C2S = class {
               expiresAt: object.endTime || null,
               inReplyTo: idOf(object.inReplyTo) || void 0,
               visibility,
-              spoilerText: object.summary || null
+              spoilerText: object.summary || null,
+              sensitive: object.sensitive === true
             });
             return reply(
               201,
@@ -64282,6 +64329,7 @@ var C2S = class {
           attachments,
           visibility,
           spoilerText: object.summary || null,
+          sensitive: object.sensitive === true,
           slug
         });
         return reply(
@@ -64309,6 +64357,7 @@ var C2S = class {
         await agent2.publisher.updateNote(s, {
           content: text,
           spoilerText: object?.summary || null,
+          sensitive: object?.sensitive === void 0 ? null : object.sensitive === true,
           attachments
         });
         return reply(200, { ok: true, object: s.noteId });
@@ -65640,7 +65689,7 @@ function status(api, s, { all } = {}) {
     created_at: s.published || (/* @__PURE__ */ new Date()).toISOString(),
     in_reply_to_id: s.inReplyTo ? api.store.idFor(s.inReplyTo) : null,
     in_reply_to_account_id: null,
-    sensitive: !!s.spoiler,
+    sensitive: !!(s.spoiler || s.sensitive),
     spoiler_text: s.spoiler || "",
     visibility: s.visibility || "public",
     language: null,
@@ -65680,7 +65729,7 @@ function status(api, s, { all } = {}) {
         acct: bare.includes("@") ? bare : host ? `${user}@${host}` : bare
       };
     }),
-    tags: [],
+    tags: (s.tags || []).map((t) => ({ name: t.name, url: t.url })),
     emojis: (s.emojis || []).map((e) => ({
       shortcode: e.shortcode,
       url: e.url,
@@ -66612,6 +66661,7 @@ async function handle6(api, ctx) {
       if (ready !== true) return send(422, { error: ready });
     }
     const spoilerText = String(body.spoiler_text || "").trim() || null;
+    const sensitive = body.sensitive === true || body.sensitive === "true" || body.sensitive === "1";
     const mediaIds = [].concat(body.media_ids || body["media_ids[]"] || []).filter(Boolean);
     const media = api.store.getMedia();
     const attachments = mediaIds.map((id) => media[id] && { id, ...media[id] }).filter(Boolean);
@@ -66642,7 +66692,8 @@ async function handle6(api, ctx) {
           expiresAt: new Date(Date.now() + seconds * 1e3).toISOString(),
           inReplyTo,
           visibility,
-          spoilerText
+          spoilerText,
+          sensitive
         });
         return send(200, api.status(api.store.getStatuses().find((x) => x.noteId === q.id)));
       } catch (e) {
@@ -66671,7 +66722,7 @@ async function handle6(api, ctx) {
     try {
       note = await api.agent.publisher.publishNote(
         body.status,
-        { inReplyTo, attachments, visibility, spoilerText }
+        { inReplyTo, attachments, visibility, spoilerText, sensitive }
       );
     } catch (e) {
       if (e.code === "unaddressed") return send(422, { error: e.message });
@@ -66695,7 +66746,7 @@ async function handle6(api, ctx) {
     return send(200, [{
       content: s.content || "",
       spoiler_text: s.spoiler || "",
-      sensitive: !!s.spoiler,
+      sensitive: !!(s.spoiler || s.sensitive),
       created_at: s.editedAt || s.published,
       account: api.account(s.actor),
       media_attachments: (s.attachments || []).map((a) => api.mediaJson(a)),
@@ -66720,9 +66771,10 @@ async function handle6(api, ctx) {
     const media = api.store.getMedia();
     const attachments = mediaIds.length ? mediaIds.map((id) => media[id] && { id, ...media[id] }).filter(Boolean) : null;
     const spoilerText = String(body.spoiler_text || "").trim() || null;
+    const sensitive = body.sensitive === void 0 ? null : body.sensitive === true || body.sensitive === "true" || body.sensitive === "1";
     const patched = await api.agent.publisher.updateNote(
       s,
-      { content: body.status, spoilerText, attachments }
+      { content: body.status, spoilerText, sensitive, attachments }
     );
     return send(200, api.status(patched || s));
   }

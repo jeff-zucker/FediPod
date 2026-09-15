@@ -980,6 +980,30 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     'a parent the agent never held is fetched to find its author');
 }
 
+// --- 5c1e. hashtags are tags, and a content warning is sensitive ---
+{
+  const { hashtagsIn, noteDoc, apUrls } = await import(path.join(root, 'lib/core/wire.mjs'));
+  check(JSON.stringify(hashtagsIn('#Solid and #fediverse, again #solid; not https://x.example/p#frag nor a#b'))
+    === JSON.stringify(['Solid', 'fediverse']),
+    'hashtags are read once each, case-folded, and a URL fragment or glued # is not one');
+  const urls = apUrls('https://pod.example/', 'fedipod');
+  const n = noteDoc({ urls, slug: 'h1', content: 'hello #Solid world', published: 'now' });
+  const ht = (n.tag || []).find(t => t.type === 'Hashtag');
+  check(ht && ht.name === '#Solid' && ht.href.startsWith(urls.profileHtml) && ht.href.includes('tag=solid'),
+    `a Hashtag tag names the tag and links to a page of ours (${JSON.stringify(ht)})`);
+  check(/<a href="[^"]+" class="mention hashtag" rel="tag">#<span>Solid<\/span><\/a>/.test(n.content),
+    'and the text links it the way other servers render one');
+  check(n.sensitive === undefined, 'a plain note carries no sensitive flag');
+  const cw = noteDoc({ urls, slug: 'h2', content: 'spoilers', published: 'now', summary: 'ending' });
+  check(cw.sensitive === true && cw.summary === 'ending', 'a content warning marks the note sensitive');
+  const m = noteDoc({ urls, slug: 'h3', content: 'pic', published: 'now', sensitive: true });
+  check(m.sensitive === true && !m.summary, 'media marked sensitive is sensitive without a warning');
+  const both = noteDoc({ urls, slug: 'h4', content: 'hi @mei@b.example #tag', published: 'now',
+    mentions: [{ handle: 'mei@b.example', actor: 'https://b.example/u/mei' }] });
+  check(both.tag.length === 2 && both.tag[0].type === 'Mention' && both.tag[1].type === 'Hashtag',
+    'mentions and hashtags share the tag list');
+}
+
 // --- 5b2. editing, visibility and content warnings ---
 {
   const { Publisher } = await import(path.join(root, 'lib/core/publisher/index.mjs'));
