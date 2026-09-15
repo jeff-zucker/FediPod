@@ -207,6 +207,12 @@ try {
     && attached['wren@wren.example'].actorUrl === 'https://wren.example/fedipod/ap/actor'
     && attached['wren@wren.example'].hmacSecret === secretBefore,
     'the same account on the same pod corrects its row and keeps its secret');
+  const atRemote = await get('/@wren@wren.example', { redirect: 'manual' });
+  check(atRemote.status === 302 && atRemote.headers.get('location') === 'https://wren.example/fedipod/ap/profile.html',
+    `https://<front>/@wren@wren.example sends a person to the profile page on wren's pod (${atRemote.status} ${atRemote.headers.get('location')})`);
+  check((await get(`/@alice@${HOST}`, { redirect: 'manual' })).status === 302
+    && (await get('/@wren@elsewhere.example', { redirect: 'manual' })).status === 404,
+    'the front\'s own host is the bare handle, and a host nobody attached from is 404');
   const stealRow = await get('/api/attach', {
     method: 'POST',
     headers: { 'content-type': 'application/json', authorization: 'Bearer pretend', dpop: 'proof' },

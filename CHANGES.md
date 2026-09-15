@@ -5,7 +5,9 @@
 Someone who knows your address can open your profile without a Fediverse
 account. `https://fedipod.net/@handle` opens the profile page of an account
 at fedipod.net, and the same short address works on the host of an account
-whose address is its pod's, on the DeviceAgent and the Server. The WebFinger
+whose address is its pod's, on the DeviceAgent and the Server. For an
+account attached to fedipod.net with its address on its pod,
+`https://fedipod.net/@handle@pod-host` opens the page too. The WebFinger
 answer for every account links that page, which is where other software
 looks for it.
 
