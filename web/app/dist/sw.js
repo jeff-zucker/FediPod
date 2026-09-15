@@ -9797,9 +9797,30 @@ function actorDoc({
     publicKey: { id: urls.actor + "#main-key", owner: urls.actor, publicKeyPem }
   };
 }
-function profilePageHtml({ name, address, summary = null, icon = null, kind = "person" }) {
+function profilePageHtml({
+  name,
+  address,
+  summary = null,
+  icon = null,
+  image = null,
+  fields = [],
+  joined = null,
+  pinned = [],
+  kind = "person"
+}) {
   const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ ...HTML_ESCAPES, '"': "&quot;" })[c]);
   const what = kind === "group" ? "a group" : "an account";
+  const month = (iso) => {
+    const d = new Date(iso);
+    return Number.isNaN(d.getTime()) ? null : d.toLocaleDateString("en", { month: "long", year: "numeric", timeZone: "UTC" });
+  };
+  const day = (iso) => {
+    const d = new Date(iso);
+    return Number.isNaN(d.getTime()) ? "" : d.toISOString().slice(0, 10);
+  };
+  const fieldRows = fields.filter((f) => f?.name && f?.value !== void 0 && f?.value !== null && String(f.value) !== "");
+  const joinedText = joined ? month(joined) : null;
+  const pins = pinned.filter((x) => x && typeof x.content === "string");
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -9809,14 +9830,23 @@ function profilePageHtml({ name, address, summary = null, icon = null, kind = "p
 <style>
 :root { color-scheme: light dark; }
 body { font: 112.5%/1.5 system-ui, sans-serif; max-width: 34rem; margin: 3rem auto; padding: 0 1rem; }
-img.avatar { width: 6rem; height: 6rem; border-radius: 1rem; object-fit: cover; }
+img.header { width: 100%; max-height: 12rem; object-fit: cover; border-radius: 1rem; }
+img.avatar { width: 6rem; height: 6rem; border-radius: 1rem; object-fit: cover; margin-top: 1rem; }
 h1 { margin: .5rem 0 0; }
 .address { font-size: 1.1rem; user-select: all; }
+dl.fields { display: grid; grid-template-columns: max-content 1fr; gap: .4rem 1rem; margin: 1.5rem 0; }
+dl.fields dt { font-weight: 600; }
+dl.fields dd { margin: 0; overflow-wrap: anywhere; }
+.joined { margin: 1rem 0; }
+section.pinned h2 { font-size: 1.1rem; margin: 2rem 0 .5rem; }
+article.pin { border: 1px solid #8884; border-radius: 1rem; padding: 1rem 1.2rem; margin: 1rem 0; }
+article.pin p:last-child { margin-bottom: 0; }
+article.pin .when { font-size: 1rem; }
 form { margin-top: 2rem; }
 label { display: block; margin-bottom: .3rem; }
 input { font: inherit; padding: .5rem; width: 14rem; max-width: 100%; }
 button { font: inherit; padding: .5rem 1rem; }
-.hint { color: #777; font-size: .9rem; }
+.hint { color: #666; font-size: 1rem; }
 .err { color: #b00020; }
 .err:empty { display: none; }
 @media (prefers-color-scheme: dark) {
@@ -9827,10 +9857,22 @@ button { font: inherit; padding: .5rem 1rem; }
 </head>
 <body>
 <main>
+${image ? `<img class="header" src="${esc(image)}" alt="">` : ""}
 ${icon ? `<img class="avatar" src="${esc(icon)}" alt="">` : ""}
 <h1>${esc(name)}</h1>
 <p class="address">${esc(address)}</p>
 ${summary ? `<div>${summary}</div>` : ""}
+${fieldRows.length ? `<dl class="fields">
+${fieldRows.map((f) => `<dt>${esc(f.name)}</dt><dd>${esc(f.value)}</dd>`).join("\n")}
+</dl>` : ""}
+${joinedText ? `<p class="joined">Joined ${esc(joinedText)}</p>` : ""}
+${pins.length ? `<section class="pinned">
+<h2>Pinned</h2>
+${pins.map((x) => `<article class="pin">
+${x.content}
+<p class="when">${x.url ? `<a href="${esc(x.url)}">${esc(day(x.published))}</a>` : esc(day(x.published))}</p>
+</article>`).join("\n")}
+</section>` : ""}
 <p>This is ${what} on the Fediverse. To follow it, paste the address above
 into the search box of Mastodon or any Fediverse app \u2014 or use the form.</p>
 <form id="follow">
@@ -56764,6 +56806,38 @@ var Publisher = class {
       oauthToken: this.clientOrigin ? `${this.clientOrigin}oauth/token` : null
     });
   }
+  // The human half: a page a browser can open and follow from. The actor
+  // document is for servers; this is the address you hand to a person. It
+  // shows who the account is, its fields, when it joined and what it pinned;
+  // the counts and the posts live in the collections. Written only when its
+  // content changed.
+  async publishProfilePage({ force = false } = {}) {
+    const { urls } = this;
+    const host = publicHandle(this.config).split("@")[1] || new URL(urls.base).host;
+    if (!this.config.createdAt) {
+      const oldest = this.store.getStatuses().filter((s) => s.kind === "post" && s.published).map((s) => s.published).sort()[0];
+      this.config.createdAt = oldest || (/* @__PURE__ */ new Date()).toISOString();
+      this.store.setConfig?.({ ...this.store.getConfig?.(), createdAt: this.config.createdAt });
+    }
+    const pinned = this.store.getStatuses().filter((s) => s.kind === "post" && s.pinned && s.visibility !== "private" && s.visibility !== "direct").sort((a, b) => String(b.published).localeCompare(String(a.published))).slice(0, 5).map((s) => ({ content: s.content, published: s.published, url: s.noteId }));
+    const html = profilePageHtml({
+      name: this.config.name || this.config.handle,
+      address: webfingerHost(urls.base) ? `@${this.config.handle}@${host}` : urls.actor,
+      summary: this.config.summary ? contentHtml(this.config.summary) : null,
+      icon: this.config.icon || null,
+      image: this.config.image || null,
+      fields: this.config.fields || [],
+      joined: this.config.createdAt,
+      pinned,
+      kind: this.config.kind
+    });
+    const digest = node_crypto_default.createHash("sha256").update(html).digest("hex").slice(0, 32);
+    const seen = this.store.read("published.json", {});
+    if (!force && seen.pageDigest === digest) return false;
+    await writeProfilePage(this.remote, urls, html);
+    this.store.write("published.json", { ...this.store.read("published.json", {}), pageDigest: digest });
+    return true;
+  }
   async publishProfile({ force = false } = {}) {
     const { urls } = this;
     const host = new URL(urls.base).host;
@@ -56780,6 +56854,7 @@ var Publisher = class {
       version: AGENT_VERSION,
       moderators: this.config.moderators || []
     })).digest("hex").slice(0, 32);
+    await this.publishProfilePage({ force });
     if (!force && this.store.read("published.json", {}).surfaceDigest === surface) {
       this.log("profile unchanged \u2014 nothing republished");
       return { unreachable: [], updated: 0, skipped: true };
@@ -56806,13 +56881,6 @@ var Publisher = class {
       );
     }
     if (gwActive) await this.publishGatewayPolicy();
-    await writeProfilePage(this.remote, urls, profilePageHtml({
-      name: this.config.name || this.config.handle,
-      address: webfingerHost(urls.base) ? `@${this.config.handle}@${host}` : urls.actor,
-      summary: this.config.summary ? contentHtml(this.config.summary) : null,
-      icon: this.config.icon || null,
-      kind: this.config.kind
-    }));
     try {
       const wrote = await linkInWebIdProfile(this.remote, {
         actorUrl: urls.actor,
@@ -64148,6 +64216,9 @@ async function pinStatus(agent2, s, pinned) {
   if (s.actor !== agent2.publisher.urls.actor) throw new Error("not your status");
   const updated = agent2.store.updateStatus(s.noteId, { pinned: !!pinned });
   await agent2.publisher.publishFeatured().catch((e) => agent2.log?.(`featured: ${e.message}`));
+  if (agent2.publisher.publishProfilePage) {
+    await agent2.publisher.publishProfilePage().catch((e) => agent2.log?.(`profile page: ${e.message}`));
+  }
   agent2.publisher.publishProfile?.().catch(() => {
   });
   return updated || s;
@@ -65616,7 +65687,7 @@ function account(api, actorUrl, { selfAcct } = {}) {
     bot: false,
     discoverable: true,
     group: self2 ? api.store.getConfig()?.kind === "group" : cached.type === "Group",
-    created_at: "2026-01-01T00:00:00.000Z",
+    created_at: self2 && api.store.getConfig()?.createdAt || "2026-01-01T00:00:00.000Z",
     note: (self2 ? api.store.getConfig()?.summary : cached.summary) || "",
     url: actorUrl,
     uri: actorUrl,

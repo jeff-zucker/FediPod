@@ -10042,6 +10042,43 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
   check(page.includes('@group@activitypub.example') && page.includes('authorize_interaction')
     && page.includes('a group on the Fediverse'),
     'the page shows the address, says what it is, and carries the remote-follow control');
+  check(!page.includes('class="fields"') && !page.includes('Joined') && !page.includes('class="pinned"'),
+    'with nothing more to say, the page says nothing more');
+  const full = wire23.profilePageHtml({
+    name: 'Mei', address: '@mei@pod.example', icon: 'https://pod.example/i.png',
+    image: 'https://pod.example/h.png',
+    fields: [{ name: 'Web', value: 'https://mei.example' }, { name: '<b>x</b>', value: '' }],
+    joined: '2026-03-07T10:00:00.000Z',
+    pinned: [{ content: '<p>hello <b>world</b></p>', published: '2026-05-01T09:00:00.000Z', url: 'https://pod.example/fedipod/ap/notes/p1' }],
+  });
+  check(full.includes('class="header" src="https://pod.example/h.png"'), 'the header image is shown');
+  check(full.includes('<dt>Web</dt><dd>https://mei.example</dd>') && !full.includes('<b>x</b>') && !full.includes('&lt;b&gt;x'),
+    'fields are rows, escaped, and an empty one is left out');
+  check(full.includes('Joined March 2026'), 'the joined month is shown');
+  check(full.includes('<p>hello <b>world</b></p>') && full.includes('href="https://pod.example/fedipod/ap/notes/p1">2026-05-01<'),
+    'a pinned post is shown with its date linking to the post');
+
+  // The page is written when its content changes and not otherwise; a pin
+  // changes it, a republish of the same profile does not.
+  const { Publisher: Pub23 } = await import(path.join(root, 'lib/core/publisher/index.mjs'));
+  const writes = []; let cfg23 = { remotePod: 'https://pod.example/', handle: 'mei', name: 'Mei', createdAt: '2026-03-07T10:00:00.000Z' };
+  const rows = [{ noteId: 'https://pod.example/fedipod/ap/notes/p1', kind: 'post', content: '<p>one</p>', published: '2026-05-01T09:00:00.000Z', visibility: 'public' }];
+  const state23 = {};
+  const pub23 = new Pub23({
+    config: cfg23,
+    remote: { put: async (u, body) => { writes.push(u); }, putJson: async () => {}, setAcl: async () => {}, delete: async () => true },
+    store: { read: (n, d) => state23[n] ?? d, write: (n, v) => { state23[n] = v; }, getStatuses: () => rows,
+      getConfig: () => cfg23, setConfig: (c) => { cfg23 = c; }, getContacts: () => ({ followers: [], following: [] }) },
+    log: () => {},
+  });
+  check(await pub23.publishProfilePage() === true && writes.length === 1, 'the page is written once');
+  check(await pub23.publishProfilePage() === false && writes.length === 1, 'and not again for the same content');
+  rows[0].pinned = true;
+  check(await pub23.publishProfilePage() === true && writes.length === 2, 'pinning a post rewrites it');
+  // An account from before the date was recorded takes its oldest post's date.
+  delete cfg23.createdAt; pub23.config = cfg23;
+  await pub23.publishProfilePage({ force: true });
+  check(cfg23.createdAt === '2026-05-01T09:00:00.000Z', 'an older account is dated by its oldest post');
 
   // The actor advertises the page as its url, and mention ANCHORS point at the
   // mentioned actor's page — the tag keeps the id, which servers match on.

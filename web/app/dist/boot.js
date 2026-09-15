@@ -33444,6 +33444,7 @@ async function signUp(answers, { onStep = () => {
     handle,
     name: handle,
     issuer: credential.issuerOrigin,
+    createdAt: (/* @__PURE__ */ new Date()).toISOString(),
     ...gateway ? { gateway } : {}
   };
   const cfgRemote = new BrowserRemotePod(session, { webId: credential.webId, role: "signup", log: () => {

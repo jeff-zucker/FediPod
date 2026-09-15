@@ -234,6 +234,7 @@ export async function signUp(answers, { onStep = () => {}, frontOrigin = null } 
 
   const config = {
     remotePod: pod, root: AP_ROOT, handle, name: handle, issuer: credential.issuerOrigin,
+    createdAt: new Date().toISOString(),
     ...(gateway ? { gateway } : {}),
   };
   // Write the config to the pod (owner-only, beside the key) so a returning

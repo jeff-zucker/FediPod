@@ -1,5 +1,13 @@
 # Changes
 
+## 2026-09-15 (the profile page says more — version 1.11.0, fedipod-server 0.21.0)
+
+Your profile page, the one anyone can open, now shows your header image,
+your profile fields, when you joined, and your pinned posts, beside your
+name, address and bio. The page is rewritten only when one of those
+changes. When you joined is recorded from now on; an account made before
+this is dated by its oldest post, and your client shows that date too.
+
 ## 2026-09-15 (a profile anyone can open — version 1.10.0, fedipod-server 0.20.0)
 
 Someone who knows your address can open your profile without a Fediverse
