@@ -9,7 +9,8 @@
   /* The site's shared tokens are in tokens.css (web/admin/tokens.css): the
      palette, the 20px base and the family. Only this page's layout is here. */
   body { font: 1rem/1.55 var(--font); background: var(--bg); color: var(--fg); max-width: 40rem; margin: 1.5rem auto; padding: 0 1rem 3rem; }
-  a { color: var(--accent); }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
   h1, h2 { color: var(--heading); }
   header.top { display: flex; gap: 1rem; align-items: baseline; flex-wrap: wrap; border-bottom: 1px solid var(--line); padding-bottom: .6rem; margin-bottom: 1rem; }
   header.top h1 { font-size: 1.4rem; margin: 0; }
@@ -21,8 +22,7 @@
   ul.list { list-style: none; padding: 0; margin: 0; }
   ul.list li { padding: .8rem 0; border-bottom: 1px solid var(--line); }
   ul.list li .title { font-weight: 700; font-size: 1.15rem; color: var(--heading); }
-  ul.list li a.title { font-weight: 600; text-decoration: underline; color: var(--accent); }
-  ul.list li a.title:hover { text-decoration-thickness: 2px; }
+
   ul.list li .meta { color: var(--sub); }
   article.post { padding: 1rem 1.1rem; margin: .8rem 0; border: 1px solid var(--line); border-radius: .4rem; background: var(--bg); }
   article.post .who { color: var(--sub); display: flex; gap: .6rem; flex-wrap: wrap; justify-content: space-between; align-items: baseline; }
@@ -57,7 +57,7 @@
   button { font: inherit; font-weight: 600; padding: .6rem 1.3rem; border-radius: .4rem; border: 1px solid var(--btn); background: var(--btn); color: var(--btn-text); cursor: pointer; }
   button:hover { background: var(--btn-hover); border-color: var(--btn-hover); }
   button.primary { font-weight: 700; }
-  button.link { background: none; border: none; color: var(--accent); font-weight: normal; padding: 0 .2rem; text-decoration: underline; }
+  button.link { background: none; border: none; color: var(--accent); font-weight: normal; padding: 0 .2rem; }
   button.plain { background: transparent; color: var(--accent); border-color: var(--line); }
   button.plain:hover { background: var(--field-bg); }
   button[disabled] { opacity: .5; cursor: not-allowed; }
