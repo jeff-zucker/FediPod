@@ -55,6 +55,10 @@ if (cmd === 'init') {
   const agent = new ForumAgent({ home, log });
   const up = await agent.connect();
   if (!up) { console.error('nothing to host — run init first'); process.exit(1); }
+  // Every timer in the agent is unreferenced (the DeviceAgent's web server is
+  // what holds that process open); here nothing else would, and the host
+  // exited quietly once the push socket went idle. This holds it.
+  setInterval(() => {}, 1 << 30);
   const shutdown = () => { agent.stop().finally(() => process.exit(0)); setTimeout(() => process.exit(0), 3000).unref(); };
   process.on('SIGTERM', shutdown);
   process.on('SIGINT', shutdown);
