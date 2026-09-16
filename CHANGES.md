@@ -1,5 +1,27 @@
 # Changes
 
+## 2026-09-16 (quote posts and emoji reactions — version 1.14.0, fedipod-server 0.24.0)
+
+A post can quote another post. In the client, choose Quote on a post whose
+author allows it, write yours, and it goes out naming theirs; the quoted post
+shows inside yours. The quoted author's server is asked, the way Mastodon
+asks, and the quote is marked pending until they answer, accepted when they
+allow it, and taken off your post if they refuse. Quotes of your own posts
+need no asking. Every post you publish says that anyone may quote it when the
+world can read it, and nobody when it is followers-only or direct, which is
+what lets Mastodon offer its Quote button on your posts; when someone quotes
+one, their post is kept, the permission is published beside yours, and you
+get a notification. Posts that quote, arriving from any server that writes
+the quote in one of the ways in use, show the quoted post inside them.
+
+Emoji reactions from Misskey, Sharkey, Pleroma and Akkoma reach you as
+notifications showing the emoji, custom ones included. Taking a reaction back
+removes it.
+
+The client is told the server speaks Mastodon API version 7, so it offers
+quoting, reads notifications in grouped form, and offers the blur action on a
+filter.
+
 ## 2026-09-16 (fedipod.net refreshes itself — version 1.13.0, fedipod-server 0.23.0)
 
 A fedipod.net page that is open when a newer build goes up reloads itself,
