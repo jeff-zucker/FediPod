@@ -42,6 +42,10 @@ export function forumUrls(remotePod, root = ROOT, { publicBase = null, front = n
   // Everything the forum holds, newest first, across every category: what a
   // reader arriving at the forum sees before they know its categories.
   site.latest = face + 'ap/latest';
+  // The moderators' own container: the queue of reports and held posts,
+  // readable by the moderators' WebIDs and nobody else. Under the pod's own
+  // root, not the advertised face — nothing here is published.
+  site.mod = (remotePod.endsWith('/') ? remotePod : remotePod + '/') + (root.endsWith('/') ? root : root + '/') + 'mod/';
   site.siteHtml = face + 'ap/site.html';
   site.root = root.endsWith('/') ? root : root + '/';
   site.category = (slug) => {

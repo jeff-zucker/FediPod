@@ -2,6 +2,7 @@
 // fedipod-bb.mjs — run a forum from this machine.
 //
 //   fedipod-bb init --home DIR --handle forum --name "The Forum" \
+//       [--moderator-webid https://you.example/profile/card#me] \
 //       --category gardening:Gardening --category compost:Compost [--moderator <actor>]
 //     The pod's credential is DIR/credential.json, made by
 //     `fedipod setup --cli … --home DIR`. Writes the forum's config and
@@ -47,6 +48,9 @@ if (cmd === 'init') {
   const agent = new ForumAgent({ home, log });
   const cfg = await agent.init({
     handle, name: flag('name') || handle, categories, moderators: flags('moderator'),
+    // A moderator's WebID, so the pod itself can let them read the queue;
+    // their actor id is what the wire uses and cannot be granted access.
+    moderatorWebIds: flags('moderator-webid'),
     approveJoins: args.includes('--approve-joins'), review: args.includes('--review'),
   });
   console.log(JSON.stringify(cfg, null, 2));

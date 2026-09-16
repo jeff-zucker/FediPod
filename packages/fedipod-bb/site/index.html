@@ -36,6 +36,8 @@
     border: 1px solid var(--line); }
   .topline button:hover, p.chips button.new:hover { background: var(--field-bg); }
   p.chips button.new { margin-left: auto; }
+  input[type=file] { font: inherit; font-size: 16px; }
+  .filelabel { font-weight: 600; }
   p.empty.row { display: flex; gap: .8rem; align-items: center; flex-wrap: wrap; }
   p.empty.row button.new { margin-left: 0; }
   /* The category chips are links: each one is an address for that view. */
@@ -100,6 +102,7 @@
   /* A reply sits under what it answers, with a line back to it. */
   .nest { margin-left: calc(var(--depth) * 1.4rem); border-left: 2px solid var(--line); padding-left: .8rem; }
   @media (max-width: 40rem) { .nest { margin-left: calc(var(--depth) * .5rem); } }
+  article.post .body img { max-width: 100%; height: auto; border-radius: .3rem; margin: .4rem 0; }
   article.post .body pre { overflow-x: auto; background: var(--field-bg); padding: .7rem .8rem; border-radius: .3rem; }
   article.post .body code { background: var(--field-bg); padding: .05em .35em; border-radius: .2rem; }
   article.post .body blockquote { margin: .5rem 0; padding-left: .8rem; border-left: 3px solid var(--line); color: var(--sub); }
@@ -183,6 +186,11 @@
     </div>
     <label for="reply-text" id="reply-text-label">Your reply</label>
     <textarea id="reply-text" placeholder="Write your reply"></textarea>
+    <p class="row">
+      <label class="filelabel" for="reply-image">Add an image</label>
+      <input type="file" id="reply-image" accept="image/*">
+      <span class="hint" id="reply-image-said"></span>
+    </p>
     <div class="row">
       <button id="reply-cancel" class="plain">Cancel</button>
       <button id="reply-send" class="primary">Post reply</button>

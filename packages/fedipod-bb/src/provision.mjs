@@ -6,10 +6,15 @@ import * as containers from '../../../lib/pod/containers.mjs';
 
 // The forum level: the site actor's home and state, owner-only; its notes
 // and media, public.
-export async function provisionForum(remote, site) {
+export async function provisionForum(remote, site, { moderatorWebIds = [] } = {}) {
   await containers.provisionPrivate(remote, site);
   await containers.provisionPublic(remote, site.notes);
   await containers.provisionPublic(remote, site.media);
+  // What only the moderators may see: reports name people, and held posts
+  // are somebody's words that the forum has not carried. Not public, not
+  // owner-only either — each moderator's WebID may read it.
+  await remote.putJson(site.mod + '.keep', { '@context': 'https://www.w3.org/ns/activitystreams', type: 'Object' }, 'application/activity+json');
+  await remote.setAcl(site.mod, [], { readAgents: moderatorWebIds });
 }
 
 // A category: a group's home and state, owner-only; its public trees, plus

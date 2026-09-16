@@ -198,6 +198,9 @@ async function route() {
   const [kind, a, b, c] = hash.split('/');
   $('reply-row').hidden = true;
   $('reply-dlg').close();
+  if (kind === 'replies') return showReplies();
+  if (kind === 'saved') return showSaved();
+  if (kind === 'queue') return showQueue();
   if (kind === 'c' && a) { if (feedFilter !== a) shown = 30; feedFilter = a; return showForum(); }
   if (kind === 't' && a && b) return showTopic(a, b, c || null);
   return showForum();
@@ -211,6 +214,66 @@ let shown = 30;                // how many of the index's rows are on the page
 // What this reader keeps for themselves, under the account they signed in as.
 const own = () => keptByReader({ storage: localStorage, who: account()?.handle || null });
 
+// Answers to this reader's own posts, newest first. The forum publishes what
+// each post answers, so nobody has to be told whom to notify.
+async function showReplies() {
+  crumbs([['Home', '#/'], ['Replies to you', null]]);
+  const me = podAcct?.actor || login.account()?.url;
+  if (!me) { $('main').innerHTML = '<p class="empty">Sign in to see answers to your posts.</p>'; return; }
+  $('main').innerHTML = '<p class="dim">Looking…</p>';
+  const latest = await read.latest(base, { limit: 200 });
+  const mineIds = new Set(latest.filter(p => p.author === me).map(p => p.id));
+  const answers = latest.filter(p => p.inReplyTo && mineIds.has(p.inReplyTo) && p.author !== me);
+  if (!answers.length) { $('main').innerHTML = '<p class="empty">Nobody has answered you yet.</p>'; return; }
+  const items = [];
+  for (const p of answers) {
+    const cat = cats().find(c => c.id === p.category) || null;
+    const who = cat && p.author ? await read.author(cat.base, p.author) : null;
+    const tid = p.topic ? p.topic.split('/').pop() : null;
+    const href = cat && tid ? `#/t/${esc(cat.slug)}/${esc(tid)}/${esc(await cacheKey(p.id))}` : '#/';
+    items.push(`<li><a class="title" href="${href}">${esc(p.topicName || 'Topic')}</a>
+      <div class="meta">${who ? esc(who.handle) : esc(authorLabel(p.author || ''))} · ${esc(when(p.published))}</div>
+      <article class="post"><div class="body">${p.content || ''}</div></article></li>`);
+  }
+  $('main').innerHTML = `<ul class="list">${items.join('')}</ul>`;
+}
+
+// Posts this reader kept. The list is theirs and lives in this browser.
+function showSaved() {
+  crumbs([['Home', '#/'], ['Saved', null]]);
+  const rows = own().saved();
+  if (!rows.length) { $('main').innerHTML = '<p class="empty">Nothing saved yet. Use Save on a post.</p>'; return; }
+  $('main').innerHTML = `<ul class="list">${rows.map(r => {
+    const cat = cats().find(c => c.slug === r.cat) || null;
+    const tid = r.topic ? r.topic.split('/').pop() : null;
+    const href = cat && tid ? `#/t/${esc(cat.slug)}/${esc(tid)}` : '#/';
+    return `<li><a class="title" href="${href}">${esc(r.text || r.id)}</a>
+      <div class="meta">saved ${esc(when(r.at))}${cat ? ' · ' + esc(cat.name) : ''}</div></li>`;
+  }).join('')}</ul>`;
+}
+
+// The moderators' queue: reports, posts held from people who have not joined,
+// and asks not yet acted on. Read from the forum's pod with the moderator's
+// own login — it is not public and never passes through the Gateway.
+async function showQueue() {
+  crumbs([['Home', '#/'], ['Queue', null]]);
+  if (!podAcct) { $('main').innerHTML = '<p class="empty">The queue is read with your pod account.</p>'; return; }
+  $('main').innerHTML = '<p class="dim">Reading the queue…</p>';
+  try {
+    const said = await serverKind(new URL(front).host, front, undefined, forum.handle || 'forum');
+    if (!said?.podHome) throw new Error('this forum does not say where its pod is');
+    const q = await pod.modQueue(said.podHome);
+    const rows = q?.rows || [];
+    if (!rows.length) { $('main').innerHTML = '<p class="empty">Nothing is waiting.</p>'; return; }
+    $('main').innerHTML = `<ul class="list">${rows.map(r => `<li>
+      <div class="title">${esc(r.type)}${r.category ? ' · ' + esc(r.category) : ''}</div>
+      <div class="meta">${esc(r.by ? authorLabel(r.by) : '')} · ${esc(when(r.at))}${r.verified ? ' · checked' : ''}</div>
+      ${r.object ? `<div class="dim">${esc(r.object)}</div>` : ''}
+      ${r.why ? `<article class="post"><div class="body">${esc(r.why)}</div></article>` : ''}
+    </li>`).join('')}</ul>`;
+  } catch (e) { $('main').innerHTML = `<p class="err">${esc(e.message)}</p>`; }
+}
+
 async function showForum() {
   const here = cats().find(c => c.slug === feedFilter) || null;
   crumbs(here ? [['Home', '#/'], [here.name, `#/c/${here.slug}`]] : [['Home', '#/']]);
@@ -220,6 +283,8 @@ async function showForum() {
   // first one when the whole forum is.
   const into = cats().find(c => c.slug === feedFilter) || cats()[0] || null;
   const head = `<p class="hint chips">Categories: ${chip('all', 'All')}${cats().map(c => chip(c.slug || '', c.name)).join('')}
+    ${account() ? '<a class="chip" href="#/replies">Replies to you</a><a class="chip" href="#/saved">Saved</a>' : ''}
+    ${iModerate() ? '<a class="chip" href="#/queue">Queue</a>' : ''}
     ${account() ? '<a class="chip" href="#/replies">Replies to you</a><a class="chip" href="#/saved">Saved</a>' : ''}
     ${here && account() && podAcct ? `<button class="new" data-act="${own().isJoined(here.id) ? 'leave' : 'join'}" data-cat="${esc(here.id)}">${own().isJoined(here.id) ? 'Leave' : 'Join'}</button>` : ''}
     ${into ? `<button class="new" data-act="newtopic" data-slug="${esc(into.slug || '')}">New topic</button>` : ''}</p>`;
@@ -576,6 +641,23 @@ async function removePost(id) {
   } catch (e) { alert(e.message); }
 }
 $('reply-cancel').addEventListener('click', () => $('reply-dlg').close());
+$('reply-image').addEventListener('change', async (e) => {
+  const file = e.target.files?.[0];
+  const said = $('reply-image-said');
+  if (!file) return;
+  if (!podAcct) { said.textContent = 'adding an image needs your pod account'; e.target.value = ''; return; }
+  said.textContent = 'putting it in your pod…';
+  try {
+    const url = await pod.upload({ actor: podAcct.actor, podHome: podAcct.podHome, file });
+    const box = $('reply-text');
+    const alt = file.name.replace(/\.[^.]+$/u, '').replace(/[-_]+/gu, ' ');
+    box.value = `${box.value}${box.value && !box.value.endsWith('\n') ? '\n\n' : ''}![${alt}](${url})\n`;
+    said.textContent = 'added';
+    box.focus();
+  } catch (err) { said.textContent = err.message; }
+  e.target.value = '';
+});
+
 $('fedi-login').addEventListener('click', async () => {
   $('reply-err').textContent = '';
   $('fedi-login').disabled = true;

@@ -131,7 +131,7 @@ export class ForumAgent {
 
   // The first act on a fresh pod: the forum's containers, its config, and
   // nothing else — the actors are published on the first connect.
-  async init({ handle, name, categories = [], moderators = [], approveJoins = false, review = false, replyPolicy = 'review' }) {
+  async init({ handle, name, categories = [], moderators = [], moderatorWebIds = [], approveJoins = false, review = false, replyPolicy = 'review' }) {
     const cred = this.readCredential();
     if (!cred) throw new Error('no credential.json — make one first');
     await this.attachRemote(cred);
@@ -156,7 +156,7 @@ export class ForumAgent {
       ...existing, kind: 'application', handle, name: name || existing.name || handle,
       ...(renamed ? { republish: true } : {}),
       remotePod: cred.remotePod, root: cred.root || ROOT,
-      categories: cats, moderators, approveJoins, review, replyPolicy,
+      categories: cats, moderators, moderatorWebIds, approveJoins, review, replyPolicy,
     });
     await store.flush();
     this.log(`forum ${handle} initialised with ${cats.length} categor${cats.length === 1 ? 'y' : 'ies'}`);
@@ -499,6 +499,26 @@ export class ForumAgent {
     return true;
   }
 
+  // The moderators' queue, written where only they can read it: what each
+  // category is holding, and who asked for what.
+  async publishModQueue() {
+    const rows = [];
+    for (const cat of this.categories) {
+      for (const e of cat.store.read('modqueue.json', [])) {
+        rows.push({ category: cat.slug, id: e.id, type: e.type, by: e.moderator, at: e.at,
+          object: typeof e.activity?.object === 'string' ? e.activity.object : e.activity?.object?.id || null,
+          why: e.activity?.content || null, verified: !!e.verified });
+      }
+      for (const p of cat.store.getPending?.() || []) {
+        rows.push({ category: cat.slug, id: 'pending:' + p.noteId, type: 'Held', by: p.actor || null, at: p.at || null, object: p.noteId });
+      }
+    }
+    rows.sort((a, b) => String(b.at).localeCompare(String(a.at)));
+    await this.remote.putJson(this.site.mod + 'queue.json',
+      { at: new Date().toISOString(), rows }, 'application/json');
+    return rows.length;
+  }
+
   // Answers to one post, counted in the topic that holds it, and written
   // into the copy the website reads.
   async countReplies(cat, tid, postId) {
@@ -566,6 +586,7 @@ export class ForumAgent {
     if (!entry) throw new Error(`no such queue entry: ${entryId}`);
     const r = await moderation.applyForumModeration(this, cat, entry);
     cat.store.write('modqueue.json', cat.store.read('modqueue.json', []).filter(e => e.id !== entryId));
+    await this.publishModQueue().catch(e => this.log(`queue: ${e.message}`));
     return r;
   }
 
@@ -581,7 +602,7 @@ export class ForumAgent {
     // writes saying what the pod already said, and a busy pod answered 429.
     const made = this.store.read('provisioned.json', {});
     if (force || !made.forum) {
-      await provisionForum(this.remote, this.site);
+      await provisionForum(this.remote, this.site, { moderatorWebIds: this.config.moderatorWebIds || [] });
       this.store.write('provisioned.json', { ...made, forum: new Date().toISOString() });
     }
     for (const cat of this.categories) {
@@ -631,7 +652,9 @@ export class ForumAgent {
     for (const cat of this.categories) cat.deliverer.startQueue();
     this.siteAgent.deliverer.startQueue();
     await this.publishAll();
-    this.intake.afterDrain = () => this.applyVerifiedAsks().catch(e => this.log(`asks: ${e.message}`));
+    this.intake.afterDrain = () => this.applyVerifiedAsks()
+      .then(() => this.publishModQueue())
+      .catch(e => this.log(`asks: ${e.message}`));
     await this.intake.start();
     await publish.publishHeartbeat(this.siteAgent).catch(e => this.log(`heartbeat: ${e.message}`));
     this.heartbeatTimer = setInterval(() => {

@@ -20,6 +20,22 @@ const stamp = () => new Date().toISOString().slice(0, 10);
 // their actor answers at — the same one for a plain pod, the front's for an
 // account fronted at a Gateway. The two must agree, or a receiving server is
 // right to refuse a post whose author lives on another host (FEP-fe34).
+// A picture goes into the reader's own pod, in the container their account
+// already keeps media in — public to read, like the posts that will show it.
+export async function upload({ actor, podHome, file }) {
+  const s = await getSession();
+  if (!s) throw new Error('sign in to your pod first');
+  if (!/^image\//u.test(file.type)) throw new Error('that is not an image');
+  if (file.size > 5 * 1024 * 1024) throw new Error('images are limited to 5 MB');
+  const home = (podHome || actor.replace(/ap\/actor$/u, '')).replace(/\/?$/u, '/');
+  const ext = (file.name.match(/\.[a-z0-9]{1,5}$/iu) || [''])[0].toLowerCase() || '.img';
+  const at = `${home}ap/media/${stamp()}-${crypto.randomUUID().slice(0, 8)}${ext}`;
+  const put = await s.fetch(at, { method: 'PUT', headers: { 'content-type': file.type }, body: file });
+  if (!put.ok) throw new Error(`your pod refused the image (HTTP ${put.status})`);
+  // Published under the address the account answers at, like its posts.
+  return actor.replace(/ap\/actor$/u, '') + at.slice(home.length);
+}
+
 export const placeOf = (actor, podHome) => ({
   actor,
   id: (name) => actor.replace(/ap\/actor$/u, 'ap/notes/') + name,
@@ -176,6 +192,19 @@ export async function moderate({ actor, podHome, inbox, activity }) {
   const sent = await fetch(inbox, { method: 'POST', headers: { 'content-type': 'application/ld+json' }, body: JSON.stringify(doc) });
   if (!sent.ok) throw new Error(`the forum did not take the request (HTTP ${sent.status})`);
   return doc.id;
+}
+
+// The moderators' queue, read with the moderator's own pod login. It is not
+// public and never passes through the Gateway: only a WebID the forum named
+// can read it, which is the pod's own rule doing the work.
+export async function modQueue(podHome) {
+  const s = await getSession();
+  if (!s) throw new Error('sign in with your pod to see the queue');
+  const url = podHome.replace(/\/?$/u, '/') + 'mod/queue.json';
+  const r = await s.fetch(url, { headers: { accept: 'application/json' } });
+  if (r.status === 401 || r.status === 403) throw new Error('this account is not a moderator of this forum');
+  if (!r.ok) throw new Error(`the queue could not be read (HTTP ${r.status})`);
+  return r.json();
 }
 
 export async function join({ actor, category, inbox }) {
