@@ -12,6 +12,7 @@
 
 import { reader, placeOf, authorLabel } from './read.mjs';
 import { MastoLogin, hostOfHandle, serverKind } from './masto.mjs';
+import * as pod from './pod.mjs';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -35,6 +36,8 @@ const read = reader();
 const login = new MastoLogin({ storage: localStorage, redirectUri: location.origin + location.pathname + location.search });
 
 let forum = null;
+let podAcct = null;          // { handle, actor, webId } when signed in with a pod
+const account = () => podAcct || login.account();
 const cats = () => forum?.categories || [];
 const catBySlug = (slug) => cats().find(c => c.slug === slug || c.base.endsWith('/c/' + slug + '/'));
 const handleOf = (cat) => {
@@ -139,7 +142,7 @@ function replyBox(ctx) {
   box.hidden = false;
   $('reply-title').textContent = ctx.title;
   $('reply-err').textContent = '';
-  const acct = login.account();
+  const acct = account();
   $('reply-signed-out').hidden = !!acct;
   $('reply-signed-in').hidden = !acct;
   $('fedi-note').textContent = '';
@@ -156,7 +159,9 @@ async function signIn(handleInput) {
   if (!host) throw new Error('a handle looks like @you@your.server');
   const at = replyCtx?.cat ? handleOf(replyCtx.cat) : 'the category';
   $('fedi-note').textContent = `Asking ${host}…`;
-  const { kind } = await serverKind(host, front);
+  const handle = String(handleInput).trim().replace(/^@/u, '').split('@')[0];
+  const said = await serverKind(host, front, undefined, handle);
+  const kind = said.kind;
   if (kind === 'mastodon-api') {
     sessionStorage.setItem('bb:return', location.hash);
     location.href = await login.begin(host);
@@ -165,11 +170,10 @@ async function signIn(handleInput) {
   const note = $('fedi-note');
   note.textContent = '';
   if (kind === 'fedipod') {
-    note.append(`Your FediPod account posts from your own client. Open it, write, and name ${at}. `);
-    const a = document.createElement('a');
-    a.href = front + '/app/';
-    a.textContent = 'Open FediPod';
-    note.append(a);
+    if (!said.issuer || !said.actor) throw new Error(`${host} did not say where ${handleInput} signs in`);
+    sessionStorage.setItem('bb:return', location.hash);
+    sessionStorage.setItem('bb:pod', JSON.stringify({ handle: `@${handle}@${host}`, actor: said.actor, podHome: said.podHome }));
+    location.href = await pod.signIn({ issuer: said.issuer, redirectUri: location.origin + location.pathname });
     return;
   }
   note.textContent = kind === 'lemmy'
@@ -186,7 +190,24 @@ $('fedi-login').addEventListener('click', async () => {
   $('fedi-login').disabled = false;
 });
 $('fedi-handle').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('fedi-login').click(); });
-$('masto-logout').addEventListener('click', () => { login.signOut(); if (replyCtx) replyBox(replyCtx); });
+$('masto-logout').addEventListener('click', async () => {
+  if (podAcct) { await pod.signOut(); podAcct = null; sessionStorage.removeItem('bb:pod'); } else login.signOut();
+  if (replyCtx) replyBox(replyCtx);
+});
+
+// A post written into the reader's own pod and announced to the forum. The
+// category is named on its own pod, which is where a delivery is taken.
+async function postFromPod({ title, body }) {
+  const cat = replyCtx.cat;
+  const inbox = await pod.podInboxOf(cat.id);
+  if (!inbox) throw new Error('the forum did not say where to send it');
+  await pod.join({ actor: podAcct.actor, category: cat.id, inbox });
+  return pod.post({
+    actor: podAcct.actor, podHome: podAcct.podHome, category: cat.id, categoryHandle: handleOf(cat), inbox,
+    title, text: body, inReplyTo: replyCtx.inReplyToUrl,
+    context: replyCtx.topicId ? replyCtx.topicId : null,
+  });
+}
 $('reply-send').addEventListener('click', async () => {
   if (!replyCtx) return;
   const body = $('reply-text').value.trim();
@@ -198,8 +219,10 @@ $('reply-send').addEventListener('click', async () => {
   $('reply-err').textContent = '';
   $('reply-send').disabled = true;
   try {
-    const made = await login.post({ text, mention: handleOf(replyCtx.cat), inReplyToUrl: replyCtx.inReplyToUrl });
-    const acct = login.account();
+    const made = podAcct
+      ? await postFromPod({ title, body })
+      : await login.post({ text, mention: handleOf(replyCtx.cat), inReplyToUrl: replyCtx.inReplyToUrl });
+    const acct = account();
     if (replyCtx.topicId) remember(replyCtx.topicId, { id: made.uri || made.url, author: acct.url || acct.handle, text, at: new Date().toISOString() });
     $('reply-text').value = '';
     $('topic-title').value = '';
@@ -211,6 +234,24 @@ $('reply-send').addEventListener('click', async () => {
 // Back from the reader's server with a code: finish the sign-in, then clean
 // the address so a reload does not replay it.
 (async () => {
+  // Back from a pod's sign-in: the session is this browser's, and the handle
+  // it belongs to was put aside before leaving.
+  const waiting = sessionStorage.getItem('bb:pod');
+  if (waiting) {
+    try {
+      const who = JSON.parse(waiting);
+      const s = params.get('code') ? await pod.complete(location.href) : await pod.session();
+      if (s) {
+        podAcct = { ...who, webId: s.webId };
+        sessionStorage.removeItem('bb:pod');
+        params.delete('code'); params.delete('state'); params.delete('iss');
+        const q = String(params);
+        const back = sessionStorage.getItem('bb:return') || '';
+        sessionStorage.removeItem('bb:return');
+        history.replaceState(null, '', `${location.pathname}${q ? '?' + q : ''}${back}`);
+      }
+    } catch (e) { $('reply-err').textContent = e.message; }
+  }
   const code = params.get('code');
   const state = params.get('state');
   if (code && state) {

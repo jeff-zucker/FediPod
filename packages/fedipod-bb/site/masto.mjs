@@ -26,9 +26,10 @@ export const hostOfHandle = (s) => {
 // (Mastodon, Pleroma, Akkoma, GoToSocial, a FediPod agent) signs in here;
 // 'lemmy' takes part by its community address; 'fedipod' is an account at
 // this Gateway, whose client is the FediPod app.
-export async function serverKind(host, front, f = globalThis.fetch.bind(globalThis)) {
+export async function serverKind(host, front, f = globalThis.fetch.bind(globalThis), handle = '') {
   try {
-    const r = await f(`${front}/api/server?host=${encodeURIComponent(host)}`, { headers: { accept: 'application/json' } });
+    const q = `host=${encodeURIComponent(host)}${handle ? `&handle=${encodeURIComponent(handle)}` : ''}`;
+    const r = await f(`${front}/api/server?${q}`, { headers: { accept: 'application/json' } });
     if (!r.ok) return { kind: 'unknown', host };
     return await r.json();
   } catch { return { kind: 'unknown', host }; }

@@ -158,8 +158,9 @@ fs.writeFileSync(path.join(site, '_redirects'), [
 // own /u/<handle>/ or a pod named outright. Its script is a module file of
 // its own, so it is served under the same `script-src 'self'` as the app.
 fs.mkdirSync(path.join(site, 'bb'), { recursive: true });
-for (const f of ['index.html', 'bb.js', 'read.mjs', 'masto.mjs']) cp(`packages/fedipod-bb/site/${f}`, `bb/${f}`);
+for (const f of ['index.html', 'bb.js', 'read.mjs', 'masto.mjs', 'pod.mjs']) cp(`packages/fedipod-bb/site/${f}`, `bb/${f}`);
 cp('web/admin/tokens.css', 'bb/tokens.css');   // the site's shared palette, size and family
+cp('web/app/oidc-session.mjs', 'bb/oidc-session.mjs');   // signing in to a pod, the browser build's own
 // Each file the forum page loads is named with a hash of its content. A
 // browser holding the last build cannot serve half of it back: the page is
 // revalidated (no-cache below) and every url under it changes with its bytes.
@@ -168,7 +169,9 @@ cp('web/admin/tokens.css', 'bb/tokens.css');   // the site's shared palette, siz
   const stamp = (n) => createHash('sha256').update(fs.readFileSync(bb(n))).digest('hex').slice(0, 10);
   const sub = (n, pairs) => { let t = fs.readFileSync(bb(n), 'utf8');
     for (const [a, b] of pairs) t = t.split(a).join(b); fs.writeFileSync(bb(n), t); };
-  sub('bb.js', [["'./read.mjs'", `'./read.mjs?v=${stamp('read.mjs')}'`], ["'./masto.mjs'", `'./masto.mjs?v=${stamp('masto.mjs')}'`]]);
+  sub('pod.mjs', [["'./oidc-session.mjs'", `'./oidc-session.mjs?v=${stamp('oidc-session.mjs')}'`]]);
+  sub('bb.js', [["'./read.mjs'", `'./read.mjs?v=${stamp('read.mjs')}'`], ["'./masto.mjs'", `'./masto.mjs?v=${stamp('masto.mjs')}'`],
+    ["'./pod.mjs'", `'./pod.mjs?v=${stamp('pod.mjs')}'`]]);
   sub('index.html', [['"/bb/bb.js"', `"/bb/bb.js?v=${stamp('bb.js')}"`], ['"/bb/tokens.css"', `"/bb/tokens.css?v=${stamp('tokens.css')}"`]]);
 }
 injectUpdate(path.join(site, 'bb/index.html'));
