@@ -63,19 +63,16 @@
 <section class="reply" id="reply" hidden>
   <h2 id="reply-title">Reply</h2>
   <div id="reply-signed-out">
-    <p class="hint">Posts here come from your own Fediverse account, wherever it lives. Sign in once with its handle.</p>
     <div class="row">
       <label for="fedi-handle">Your handle</label>
       <input type="text" id="fedi-handle" placeholder="@you@your.server" autocomplete="off">
       <button id="fedi-login">Sign in</button>
     </div>
     <p class="hint" id="fedi-note"></p>
-    <p class="hint">No account yet? A FediPod account lives on a Solid pod and speaks to the whole Fediverse; it takes a minute.</p>
-    <p class="row"><a id="fedipod-signup" class="big" href="/new-account">Get a FediPod account</a></p>
+    <p class="row">No account yet? <a id="fedipod-signup" class="big" href="/new-account">Get a FediPod account</a></p>
   </div>
   <div id="reply-signed-in" hidden>
-    <p class="hint">Posting as <b id="reply-as"></b>. It goes out from your own server and shows here once the forum has placed it.
-      <button id="masto-logout" class="link">Sign out</button></p>
+    <p class="hint">Posting as <b id="reply-as"></b> <button id="masto-logout" class="link">Sign out</button></p>
     <div class="row" id="topic-title-row" hidden>
       <label for="topic-title">Title</label>
       <input type="text" id="topic-title" placeholder="What the topic is about" autocomplete="off">
@@ -83,7 +80,6 @@
     <textarea id="reply-text" placeholder="Write your reply"></textarea>
     <div class="row">
       <button id="reply-send" class="primary">Post reply</button>
-      <span class="hint" id="reply-note"></span>
     </div>
   </div>
   <p class="err" id="reply-err" role="alert"></p>

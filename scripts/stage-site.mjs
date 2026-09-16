@@ -12,6 +12,7 @@
 // whatever source change caused them — a dist that does not match its own
 // source is the hardest kind of thing to see in the browser build.
 import fs from 'node:fs'; import path from 'node:path'; import { fileURLToPath } from 'node:url';
+import { createHash } from 'node:crypto';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const site = path.join(root, 'web/app/site');
 fs.rmSync(site, { recursive: true, force: true }); fs.mkdirSync(path.join(site, 'app'), { recursive: true });
@@ -159,6 +160,17 @@ fs.writeFileSync(path.join(site, '_redirects'), [
 fs.mkdirSync(path.join(site, 'bb'), { recursive: true });
 for (const f of ['index.html', 'bb.js', 'read.mjs', 'masto.mjs']) cp(`packages/fedipod-bb/site/${f}`, `bb/${f}`);
 cp('web/admin/tokens.css', 'bb/tokens.css');   // the site's shared palette, size and family
+// Each file the forum page loads is named with a hash of its content. A
+// browser holding the last build cannot serve half of it back: the page is
+// revalidated (no-cache below) and every url under it changes with its bytes.
+{
+  const bb = (n) => path.join(site, 'bb', n);
+  const stamp = (n) => createHash('sha256').update(fs.readFileSync(bb(n))).digest('hex').slice(0, 10);
+  const sub = (n, pairs) => { let t = fs.readFileSync(bb(n), 'utf8');
+    for (const [a, b] of pairs) t = t.split(a).join(b); fs.writeFileSync(bb(n), t); };
+  sub('bb.js', [["'./read.mjs'", `'./read.mjs?v=${stamp('read.mjs')}'`], ["'./masto.mjs'", `'./masto.mjs?v=${stamp('masto.mjs')}'`]]);
+  sub('index.html', [['"/bb/bb.js"', `"/bb/bb.js?v=${stamp('bb.js')}"`], ['"/bb/tokens.css"', `"/bb/tokens.css?v=${stamp('tokens.css')}"`]]);
+}
 injectUpdate(path.join(site, 'bb/index.html'));
 injectUpdate(path.join(site, 'index.html'));
 fs.writeFileSync(path.join(site, '_headers'), [
@@ -183,6 +195,9 @@ fs.writeFileSync(path.join(site, '_headers'), [
   // connect-src reaches https:; it renders posts the forum's host sanitised,
   // and inline script is still refused.
   '/bb/*',
+  // Revalidate every time: the page and its modules are small, and a stale
+  // page with fresh modules (or the reverse) is the failure this prevents.
+  '  Cache-Control: no-cache',
   "  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https: data:; connect-src 'self' https:; object-src 'none'; base-uri 'none'; frame-ancestors 'self'; form-action 'self'",
   '  X-Content-Type-Options: nosniff',
   '  Referrer-Policy: same-origin',

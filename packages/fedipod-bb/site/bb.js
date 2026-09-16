@@ -95,8 +95,7 @@ async function showCategory(slug) {
     return `<li><a class="title" href="#/t/${esc(slug)}/${esc(tid)}">${esc(t.name)}</a>
       <div class="meta">${t.count} post${t.count === 1 ? '' : 's'} · last ${esc(when(t.updated))}</div></li>`;
   });
-  $('main').innerHTML = `<p class="hint">Follow this forum category (<code>${esc(handleOf(cat))}</code>) from your Fediverse account to see posts in your timeline or just view them here.</p>
-    ${items.length ? `<ul class="list">${items.join('')}</ul>` : '<p class="empty">No topics yet. The first post mentioning this category opens one.</p>'}`;
+  $('main').innerHTML = `${items.length ? `<ul class="list">${items.join('')}</ul>` : '<p class="empty">No topics yet. The first post mentioning this category opens one.</p>'}`;
   replyBox({ cat, title: 'Start a topic', inReplyToUrl: null, topicId: null });
 }
 
@@ -139,7 +138,6 @@ function replyBox(ctx) {
   const box = $('reply');
   box.hidden = false;
   $('reply-title').textContent = ctx.title;
-  $('reply-handle').textContent = handleOf(ctx.cat);
   $('reply-err').textContent = '';
   const acct = login.account();
   $('reply-signed-out').hidden = !!acct;
@@ -147,10 +145,7 @@ function replyBox(ctx) {
   $('fedi-note').textContent = '';
   $('topic-title-row').hidden = !!ctx.topicId;
   $('reply-text').placeholder = ctx.topicId ? 'Write your reply' : 'Your opening post';
-  if (acct) {
-    $('reply-as').textContent = acct.handle;
-    $('reply-note').textContent = `Your server will address it to your followers too. It names ${handleOf(ctx.cat)} so the forum receives it.`;
-  }
+  if (acct) $('reply-as').textContent = acct.handle;
 }
 
 // From a handle to a way in. A server that speaks the Mastodon API signs the
