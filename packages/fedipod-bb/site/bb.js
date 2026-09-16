@@ -66,6 +66,7 @@ async function load() {
 }
 
 function crumbs(parts) {
+  $('forum-status').hidden = parts.length > 1;
   $('crumbs').innerHTML = parts.map(([label, href], i) => (href && i < parts.length - 1 ? `<a href="${esc(href)}">${esc(label)}</a>` : esc(label))).join(' › ');
 }
 
@@ -80,7 +81,7 @@ async function route() {
 }
 
 function showForum() {
-  crumbs([[forum.name, '#/']]);
+  crumbs([['Home', '#/']]);
   const items = cats().map(c => `<li><a class="title" href="#/c/${esc(c.slug || '')}">${esc(c.name)}</a>
     <div class="meta">${c.members} member${c.members === 1 ? '' : 's'} · ${esc(handleOf(c))}</div>
     ${c.summary ? `<div class="dim">${c.summary}</div>` : ''}</li>`);
@@ -91,7 +92,7 @@ function showForum() {
 async function showCategory(slug) {
   const cat = catBySlug(slug);
   if (!cat) { $('main').innerHTML = '<p class="err">No such category.</p>'; return; }
-  crumbs([[forum.name, '#/'], [cat.name, `#/c/${slug}`]]);
+  crumbs([['Home', '#/'], [cat.name, `#/c/${slug}`]]);
   $('main').innerHTML = '<p class="dim">Loading topics…</p>';
   const { topics } = await read.topics(cat.base);
   // Each topic shows its opening post: a reader sees what was written
@@ -102,8 +103,8 @@ async function showCategory(slug) {
     const full = await read.topic(t.id);
     const first = full?.posts?.[0] ? await read.post(cat.base, full.posts[0]) : null;
     const who = first?.author ? await read.author(cat.base, first.author) : null;
-    items.push(`<li><a class="title" href="#/t/${esc(slug)}/${esc(tid)}">${esc(t.name)}</a>
-      <div class="meta">${who ? esc(who.handle) + ' · ' : ''}${t.count} post${t.count === 1 ? '' : 's'} · last ${esc(when(t.updated))}</div>
+    items.push(`<li><div class="title">${esc(t.name)}</div>
+      <div class="meta">${who ? esc(who.handle) + ' · ' : ''}<a href="#/t/${esc(slug)}/${esc(tid)}">${t.count} post${t.count === 1 ? '' : 's'}</a> · last ${esc(when(t.updated))}</div>
       ${first && !first.gone ? `<article class="post"><div class="body">${first.content || ''}</div></article>` : ''}</li>`);
   }
   $('main').innerHTML = `${items.length ? `<ul class="list">${items.join('')}</ul>` : '<p class="empty">No topics yet. The first post mentioning this category opens one.</p>'}`;
@@ -114,11 +115,11 @@ async function showTopic(slug, tid) {
   const cat = catBySlug(slug);
   if (!cat) { $('main').innerHTML = '<p class="err">No such category.</p>'; return; }
   const topicId = cat.base + 'ap/topic/' + tid;
-  crumbs([[forum.name, '#/'], [cat.name, `#/c/${slug}`], ['topic', null]]);
+  crumbs([['Home', '#/'], [cat.name, `#/c/${slug}`], ['topic', null]]);
   $('main').innerHTML = '<p class="dim">Loading…</p>';
   const t = await read.topic(topicId);
   if (!t) { $('main').innerHTML = '<p class="err">No such topic.</p>'; return; }
-  crumbs([[forum.name, '#/'], [cat.name, `#/c/${slug}`], [t.name, null]]);
+  crumbs([['Home', '#/'], [cat.name, `#/c/${slug}`], [t.name, null]]);
   const posts = [];
   for (const id of t.posts) posts.push({ id, ...(await read.post(cat.base, id)) });
   const authors = new Map();

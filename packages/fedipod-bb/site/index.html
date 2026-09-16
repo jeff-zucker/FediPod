@@ -20,10 +20,11 @@
   .hint { color: var(--sub); }
   ul.list { list-style: none; padding: 0; margin: 0; }
   ul.list li { padding: .8rem 0; border-bottom: 1px solid var(--line); }
+  ul.list li .title { font-weight: 700; font-size: 1.15rem; color: var(--heading); }
   ul.list li a.title { font-weight: 600; text-decoration: underline; color: var(--accent); }
   ul.list li a.title:hover { text-decoration-thickness: 2px; }
   ul.list li .meta { color: var(--sub); }
-  article.post { padding: 1rem 0; border-bottom: 1px solid var(--line); }
+  article.post { padding: 1rem 1.1rem; margin: .8rem 0; border: 1px solid var(--line); border-radius: .4rem; background: var(--bg); }
   article.post .who { color: var(--sub); display: flex; gap: .6rem; flex-wrap: wrap; }
   article.post .who b { color: var(--fg); }
   article.post .body { margin-top: .4rem; overflow-wrap: anywhere; }
@@ -34,7 +35,7 @@
   dialog::backdrop { background: rgba(0, 0, 0, .45); }
   section.reply { padding: 1.1rem 1.2rem; background: var(--surface); }
   section.reply h2 { margin-top: 0; }
-  ul.list li article.post { border-bottom: none; padding: .4rem 0 0; }
+  ul.list li article.post { margin: .6rem 0 .2rem; }
   ul.list li article.post .body { max-height: 12rem; overflow: hidden; }
   section.reply h2 { font-size: 1.2rem; margin: 0 0 .5rem; }
   textarea, input[type=text] { font: inherit; padding: .55rem .6rem; box-sizing: border-box; border: 1px solid var(--field-border); border-radius: .3rem; background: var(--field-bg); color: var(--field-text); }

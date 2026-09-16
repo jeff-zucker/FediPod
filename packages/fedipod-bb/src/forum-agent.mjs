@@ -409,11 +409,11 @@ export class ForumAgent {
 
   // Publish every actor whose document is not yet up, and the forum's lists.
   async publishAll({ force = false } = {}) {
-    if (this.config.republish) {
-      force = true;
-      this.store.setConfig({ ...this.store.getConfig(), republish: false });
-      this.config = this.store.getConfig();
-    }
+    // Cleared at the END, not here: a publish that dies part-way used to lower
+    // the flag on its way in, so the next start thought the work was done and
+    // the forum kept the name and ids it was told to replace.
+    const asked = !!this.config.republish;
+    if (asked) force = true;
     await provisionForum(this.remote, this.site);
     for (const cat of this.categories) {
       await provisionCategory(this.remote, cat.urls);
@@ -437,6 +437,11 @@ export class ForumAgent {
     if (force || !seen.actorDigest) await this.siteAgent.publisher.publishProfile({ force });
     await publish.publishCategories(this.siteAgent, this.categories.map(c => c.urls.actor), { force });
     await publish.publishAdministrators(this.siteAgent, this.config.moderators || [], { force });
+    if (asked) {
+      this.store.setConfig({ ...this.store.getConfig(), republish: false });
+      this.config = this.store.getConfig();
+      await this.store.flush().catch(() => {});
+    }
   }
 
   async startActive() {
