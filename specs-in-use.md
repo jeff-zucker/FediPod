@@ -108,6 +108,26 @@ Mastodon-format CSV exports
   reaction control.
 <!-- /CLAUDE -->
 
+<!-- CLAUDE 2026-09-15 — FediPod-BB, the forum package; delete these markers when done -->
+- **FEP-7888 (conversation contexts)** — in FediPod-BB (`packages/fedipod-bb`):
+  a topic is an `OrderedCollection` owned by its category (`attributedTo`),
+  named on every post as `context`; a post is placed by its `context`, else
+  by its reply chain, else opens a topic. Not read by FediPod's own timeline,
+  which threads by `inReplyTo` alone.
+- **FEP-f15d (context relocation and removal)** — FediPod-BB announces
+  `Remove{topic, target: category}` and `Move{topic, origin, target}`, and a
+  `Delete{post, origin: topic}` for a post taken out of a topic; the same
+  three arriving from a listed moderator are queued as asks.
+- **FEP-11dd (context ownership)** — a topic holds what its category carried
+  and nothing else; a non-member's post is neither carried nor placed.
+- **FEP-4f05 (soft deletion)** — a removed copy or topic is a `Tombstone`
+  with `formerType`.
+- **Group actors as forum categories (FEP-1b12)** — FediPod-BB runs one
+  FediPod group per category, unchanged; the forum adds one inbox above them
+  and routes by addressing. Not yet: FEP-f228 backfilling of a remote
+  context; `postingRestrictedToMods` and the other Lemmy terms.
+<!-- /CLAUDE -->
+
 ## Client side (talking to the user's app)
 
 - **Mastodon REST API** — the facade clients log into and post through

@@ -54,6 +54,17 @@ const pod = http.createServer((req, res) => {
     res.writeHead(200, { 'content-type': 'image/png' });
     return res.end(Buffer.from([0x89, 0x50, 0x4e, 0x47]));
   }
+  // A forum on this pod: one category, a group whose door is the forum's.
+  const FB = POD + 'fedipod-bb/';
+  if (url === '/fedipod-bb/c/gardening/ap/actor') {
+    res.writeHead(200, { 'content-type': 'application/activity+json' });
+    return res.end(JSON.stringify({
+      '@context': 'https://www.w3.org/ns/activitystreams',
+      id: FB + 'c/gardening/ap/actor', type: 'Group', preferredUsername: 'gardening',
+      inbox: FB + 'ap/inbox/', outbox: FB + 'c/gardening/ap/outbox',
+      attributedTo: FB + 'c/gardening/ap/moderators',
+    }));
+  }
   if (url === '/ap/gateway-policy.json') {
     policyServed++;
     res.writeHead(200, { 'content-type': 'application/json' });
@@ -440,6 +451,51 @@ try {
     const doorRead = await fetch(`${ORIGIN}/u/alice/ap/outbox`, { redirect: 'manual' });
     check(doorRead.status === 303 && doorRead.headers.get('location') === POD + 'ap/outbox',
       "a read of a mail-door account's outbox is sent to the pod document");
+  }
+
+  // ---- a forum: one row per category, one inbox behind them ----------------
+  {
+    const attachRow = (body) => get('/api/attach', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: 'Bearer path-owner', dpop: 'proof' },
+      body: JSON.stringify({ ...body, fronted: true, inboxUrl: POD + 'fedipod-bb/ap/inbox/' }),
+    });
+    const site = await attachRow({ handle: 'forum', podHome: POD + 'fedipod-bb/', actorUrl: POD + 'fedipod-bb/ap/actor', kind: 'application' });
+    const gard = await attachRow({ handle: 'gardening', podHome: POD + 'fedipod-bb/c/gardening/', actorUrl: POD + 'fedipod-bb/c/gardening/ap/actor', kind: 'group' });
+    const comp = await attachRow({ handle: 'compost', podHome: POD + 'fedipod-bb/c/compost/', actorUrl: POD + 'fedipod-bb/c/compost/ap/actor', kind: 'group' });
+    check(site.status === 201 && gard.status === 201 && comp.status === 201,
+      `a forum attaches its site and each category as rows of their own (${site.status} ${gard.status} ${comp.status})`);
+    check(attached.gardening?.inboxUrl === POD + 'fedipod-bb/ap/inbox/' && attached.gardening.kind === 'group'
+      && attached.gardening.podHome === POD + 'fedipod-bb/c/gardening/',
+      'a category row names its own tree and the forum\'s inbox');
+    const badInbox = await get('/api/attach', {
+      method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer path-owner', dpop: 'proof' },
+      body: JSON.stringify({ handle: 'weeds', podHome: POD + 'fedipod-bb/c/weeds/', fronted: true, inboxUrl: 'https://elsewhere.example/inbox/' }),
+    });
+    check(badInbox.status === 400, 'an inbox on another host is refused');
+    const wf = async (h) => (await get(`/.well-known/webfinger?resource=acct:${h}@${HOST}`)).json();
+    const wfG = await wf('gardening');
+    const wfC = await wf('compost');
+    const self = (j) => j.links?.find(l => l.rel === 'self')?.href;
+    check(self(wfG) === `${ORIGIN}/u/gardening/ap/actor` && self(wfC) === `${ORIGIN}/u/compost/ap/actor`,
+      'two category handles resolve to two actors on one pod');
+    check((wfG.aliases || []).includes(POD + 'fedipod-bb/c/gardening/ap/actor'), 'each naming its pod actor as an alias');
+    const face = await (await get('/u/gardening/ap/actor')).json();
+    check(face.id === `${ORIGIN}/u/gardening/ap/actor` && face.type === 'Group'
+      && face.inbox === `${ORIGIN}/u/gardening/ap/inbox/` && face.attributedTo === `${ORIGIN}/u/gardening/ap/moderators`,
+      'the category actor is served under its front id, with its door and roster on the front');
+    const before = inboxWrites.filter(w => w.url.includes('/fedipod-bb/ap/inbox/') && !w.url.endsWith('.receipt.json')).length;
+    const r = await fetch(`${ORIGIN}/u/gardening/ap/inbox/`, {
+      method: 'POST', headers: { 'content-type': 'application/activity+json' },
+      body: JSON.stringify({ '@context': 'https://www.w3.org/ns/activitystreams', id: 'https://m.example/f/9', type: 'Follow',
+        actor: 'https://m.example/u/mei', object: `${ORIGIN}/u/gardening/ap/actor` }),
+    });
+    const after = inboxWrites.filter(w => w.url.includes('/fedipod-bb/ap/inbox/') && !w.url.endsWith('.receipt.json')).length;
+    check(r.status === 202 && after === before + 1,
+      `a delivery through a category's door is written into the forum's one inbox (${r.status})`);
+    check(!inboxWrites.some(w => w.url.includes('/fedipod-bb/c/gardening/ap/inbox/')), 'and never into the category\'s own');
+    check(inboxWrites.some(w => w.url.includes('/fedipod-bb/ap/inbox/') && w.url.endsWith('.receipt.json')),
+      'with a receipt beside it, signed with that row\'s secret');
   }
 
 } finally {

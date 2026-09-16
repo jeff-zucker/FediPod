@@ -23,6 +23,8 @@ cp('web/app/update.js', 'update.js');
 // Every page carries the version it was staged with and the script that
 // compares it with the site's and reloads once when a newer build is up.
 const VERSION = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')).version;
+// Hosts that are the forum page and nothing else: domain aliases of this site.
+const BB_HOSTS = (process.env.BB_HOSTS || 'bb.fedipod.net').split(',').map(s => s.trim()).filter(Boolean);
 const withUpdate = (html) => html.replace('</head>',
   `<meta name="fedipod-version" content="${VERSION}">\n<script src="/update.js" defer></script>\n</head>`);
 const injectUpdate = (file) => fs.writeFileSync(file, withUpdate(fs.readFileSync(file, 'utf8')));
@@ -107,6 +109,18 @@ fs.writeFileSync(path.join(site, '_redirects'), [
   '/run                    /.netlify/functions/front  200',
   '/roster                 /.netlify/functions/front  200',
   '/solid-oidc-client.js   /.netlify/functions/front  200',
+  '# The forum at its own host: bb.<domain> is a domain alias of this site, and',
+  '# every path there is the forum page (forced: / would otherwise be the app).',
+  '# The page names its forum by the first path segment and reads through <domain>.',
+  ...BB_HOSTS.flatMap(h => [
+    `http://${h}/*          https://${h}/:splat  301!`,
+    `https://${h}/bb.js     /bb/bb.js       200!`,
+    `https://${h}/read.mjs  /bb/read.mjs    200!`,
+    `https://${h}/masto.mjs /bb/masto.mjs   200!`,
+    `https://${h}/update.js /update.js      200!`,
+    `https://${h}/api/*     /.netlify/functions/front  200!`,
+    `https://${h}/*         /bb/index.html  200!`,
+  ]),
   '# the in-browser app, served static (these win over the project catch-all)',
   '/            /index.html    200',
   '/sw.js       /sw.js         200',
@@ -114,6 +128,8 @@ fs.writeFileSync(path.join(site, '_redirects'), [
 
   '/app         /app/          301',
   '/app/*       /app/:splat    200',
+  '/bb          /bb/           301',
+  '/bb/*        /bb/:splat     200',
   '/admin       /admin/        301',
   '/admin/*     /admin/:splat  200',
   '', ].join('\n'));
@@ -138,6 +154,12 @@ fs.writeFileSync(path.join(site, '_redirects'), [
 // would cost the boundary nothing. `/app/*` needs `https:` for images and
 // media because the whole point of the client is rendering other servers'
 // avatars and attachments.
+// FediPod-BB: the forum website, static, reading a forum through this site's
+// own /u/<handle>/ or a pod named outright. Its script is a module file of
+// its own, so it is served under the same `script-src 'self'` as the app.
+fs.mkdirSync(path.join(site, 'bb'), { recursive: true });
+for (const f of ['index.html', 'bb.js', 'read.mjs', 'masto.mjs']) cp(`packages/fedipod-bb/site/${f}`, `bb/${f}`);
+injectUpdate(path.join(site, 'bb/index.html'));
 injectUpdate(path.join(site, 'index.html'));
 fs.writeFileSync(path.join(site, '_headers'), [
   // The worker and the update script are fetched fresh, so a new build is
@@ -154,6 +176,14 @@ fs.writeFileSync(path.join(site, '_headers'), [
   '',
   '/admin/*',
   "  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https: data: blob:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'self'; form-action 'self'",
+  '  X-Content-Type-Options: nosniff',
+  '  Referrer-Policy: same-origin',
+  '',
+  // The forum site reads a pod and talks to a reader's Mastodon server, so
+  // connect-src reaches https:; it renders posts the forum's host sanitised,
+  // and inline script is still refused.
+  '/bb/*',
+  "  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https: data:; connect-src 'self' https:; object-src 'none'; base-uri 'none'; frame-ancestors 'self'; form-action 'self'",
   '  X-Content-Type-Options: nosniff',
   '  Referrer-Policy: same-origin',
   '', ].join('\n'));

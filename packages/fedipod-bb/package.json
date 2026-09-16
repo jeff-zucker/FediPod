@@ -1,0 +1,13 @@
+{
+  "name": "fedipod-bb",
+  "version": "0.1.0",
+  "private": true,
+  "description": "FediPod-BB: a forum website whose record lives on a Solid pod.",
+  "license": "MIT",
+  "type": "module",
+  "main": "src/index.mjs",
+  "bin": { "fedipod-bb": "bin/fedipod-bb.mjs" },
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
+  }
+}

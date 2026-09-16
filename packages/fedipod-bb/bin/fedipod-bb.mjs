@@ -1,0 +1,77 @@
+#!/usr/bin/env node
+// fedipod-bb.mjs — run a forum from this machine.
+//
+//   fedipod-bb init --home DIR --handle forum --name "The Forum" \
+//       --category gardening:Gardening --category compost:Compost [--moderator <actor>]
+//     The pod's credential is DIR/credential.json, made by
+//     `fedipod setup --cli … --home DIR`. Writes the forum's config and
+//     containers to the pod; publishes nothing yet.
+//   fedipod-bb start --home DIR
+//     Host the forum from here. Publishes every actor on first start, then
+//     drains the forum's inbox, places posts in topics and carries them.
+//     Several moderators may run this on their own machines; one acts, the
+//     others watch and take over when it stops.
+//   fedipod-bb status --home DIR
+//     What the forum's state says, without hosting.
+//   fedipod-bb attach --home DIR --front https://fedipod.net
+//     Take addresses at a Gateway: @<handle>@<front> for the forum and one
+//     per category. Deliveries arrive verified at the front and are written
+//     into the forum's inbox; every actor is republished with its front ids
+//     on the next start.
+
+import fs from 'node:fs';
+import path from 'node:path';
+import { ForumAgent } from '../src/forum-agent.mjs';
+
+const args = process.argv.slice(2);
+const cmd = args[0];
+const flag = (name) => { const i = args.indexOf('--' + name); return i >= 0 ? args[i + 1] : null; };
+const flags = (name) => args.flatMap((a, i) => (a === '--' + name && args[i + 1] ? [args[i + 1]] : []));
+const home = flag('home') || process.env.FEDIPOD_BB_HOME;
+if (!home) { console.error('--home DIR is required'); process.exit(2); }
+
+const logFile = path.join(home, 'forum.log');
+const log = (...a) => {
+  const line = `${new Date().toISOString()} ${a.join(' ')}`;
+  console.log('[bb]', ...a);
+  try { fs.appendFileSync(logFile, line + '\n'); } catch { /* logging never throws */ }
+};
+
+if (cmd === 'init') {
+  const handle = flag('handle');
+  if (!handle) { console.error('--handle is required'); process.exit(2); }
+  const categories = flags('category').map(c => {
+    const [slug, name] = c.split(':');
+    return { slug, name: name || slug };
+  });
+  const agent = new ForumAgent({ home, log });
+  const cfg = await agent.init({
+    handle, name: flag('name') || handle, categories, moderators: flags('moderator'),
+    approveJoins: args.includes('--approve-joins'), review: args.includes('--review'),
+  });
+  console.log(JSON.stringify(cfg, null, 2));
+} else if (cmd === 'start') {
+  fs.mkdirSync(home, { recursive: true, mode: 0o700 });
+  const agent = new ForumAgent({ home, log });
+  const up = await agent.connect();
+  if (!up) { console.error('nothing to host — run init first'); process.exit(1); }
+  const shutdown = () => { agent.stop().finally(() => process.exit(0)); setTimeout(() => process.exit(0), 3000).unref(); };
+  process.on('SIGTERM', shutdown);
+  process.on('SIGINT', shutdown);
+} else if (cmd === 'attach') {
+  const front = flag('front');
+  if (!front) { console.error('--front <https://gateway-origin> is required'); process.exit(2); }
+  const agent = new ForumAgent({ home, log });
+  if (!await agent.connect({ act: false })) { console.error('nothing to attach — run init first'); process.exit(1); }
+  const r = await agent.attach({ front });
+  console.log(`attached at ${r.front}: ${r.handles.map(h => '@' + h).join(', ')} — start the forum to publish its new addresses`);
+  process.exit(0);
+} else if (cmd === 'status') {
+  const agent = new ForumAgent({ home, log: () => {} });
+  const up = await agent.connect({ act: false });
+  console.log(JSON.stringify(up ? agent.status() : { mode: 'unconfigured' }, null, 2));
+  process.exit(0);
+} else {
+  console.log('usage: fedipod-bb <init|start|status|attach> --home DIR [--handle H --name N --category slug:Name … | --front URL]');
+  process.exit(2);
+}

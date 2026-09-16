@@ -119,6 +119,13 @@ key: it verifies incoming mail, drops the junk, forwards the rest to your pod,
 and hands your browser the app. You can detach from it at any time and attach
 to a gateway of your own. Your address and your data do not change.
 
+<!-- CLAUDE 2026-09-15 — FediPod-BB pointer; delete these markers when done -->
+**A forum.** FediPod-BB, in `packages/fedipod-bb`, is a discussion board
+whose record lives on a Solid pod: categories are groups, topics are
+context collections, and a website at `/bb/` shows them. Its README says how
+to run one.
+<!-- /CLAUDE -->
+
 ## Other ways to run FediPod
 
 - [The DeviceAgent](device-agent.md) runs on your own machine and
