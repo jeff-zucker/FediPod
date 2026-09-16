@@ -111,6 +111,28 @@ report is queued for the moderators. Under a topic's title a moderator gets
 rename, pin, pin site-wide and delete. Every moderator request is published
 at the moderator's own pod and fetched back from there before the forum acts
 on it (FEP-fe34), which is what makes a button on a public page safe.
+<!-- CLAUDE 2026-09-16 - votes, profiles, the queue, members-only; delete these markers when done -->
+A post can be voted for: a `Like` to the category, its `Undo` to take it
+back, counted per person and published with the post as AS2 `likes`. The
+index sorts by newest or by votes, and searches what it is holding - topic
+names, authors and the words of the posts. A byline opens that person's
+posts in this forum.
+
+A moderator's queue lives at `<pod>/fedipod-bb/mod/queue.json`, with a
+record of what was done beside it in `log.json`. Neither is public: the
+container's access rule names the moderators' WebIDs, and the page reads it
+with the moderator's own login rather than through the Gateway. From it a
+moderator lets a held post through (`Accept`), turns it away (`Reject`) or
+bans its author (`Block`) - each published at their own pod and checked
+there, like every other ask.
+
+A category may be members-only: `--members-only <slug>` with
+`--member <slug>:<webid>`. Its trees are then readable by those WebIDs
+rather than by the world, and the page reads them with the member's pod
+session. The actor itself stays public, since a server that cannot read it
+cannot deliver to the category at all. Only a WebID can be named this way -
+serving a member who has only a Fediverse account is the Server build's job,
+which is not built.
 <!-- /CLAUDE -->
 To reply, a reader signs in once with a
 Mastodon account: the page registers itself on their server, sends them to

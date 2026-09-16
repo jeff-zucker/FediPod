@@ -49,7 +49,7 @@ export function authorLabel(actorId) {
   } catch { return String(actorId); }
 }
 
-export function reader({ fetch: f = globalThis.fetch.bind(globalThis) } = {}) {
+export function reader({ fetch: f = globalThis.fetch.bind(globalThis), session = null } = {}) {
   // A topic's name and how many posts are in it, read once however many of
   // its posts a feed carries.
   const topicInfo = async (topicId, seen) => {
@@ -62,6 +62,13 @@ export function reader({ fetch: f = globalThis.fetch.bind(globalThis) } = {}) {
   };
   const get = async (url) => {
     const r = await f(url, { headers: { accept: ACCEPT } });
+    // A members-only category answers 401 or 403 to the world. A reader who
+    // is signed in asks again as themselves, and the pod decides.
+    if (r && (r.status === 401 || r.status === 403) && session?.fetch) {
+      const mine = await session.fetch(url, { headers: { accept: ACCEPT } }).catch(() => null);
+      if (mine?.ok) { try { return await mine.json(); } catch { return null; } }
+      return null;
+    }
     if (!r || !r.ok) return null;
     try { return await r.json(); } catch { return null; }
   };
@@ -176,6 +183,7 @@ export function reader({ fetch: f = globalThis.fetch.bind(globalThis) } = {}) {
           inReplyTo: idOf(copy.inReplyTo) || null,
           // Answers to THIS post, as the forum counted them.
           replies: Number(copy.replies?.totalItems) || 0,
+          likes: Number(copy.likes?.totalItems) || 0,
           category: idOf([].concat(copy.audience || [])[0]) || null,
           page: [].concat(copy.url || []).map(u => (typeof u === 'string' ? u : null)).find(Boolean) || null,
         });

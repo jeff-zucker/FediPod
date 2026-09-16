@@ -38,7 +38,9 @@ const params = new URLSearchParams(location.search);
 const place = placeOf({ origin: location.origin, pathname: location.pathname, search: location.search });
 const { front, base } = place;
 const frontHost = new URL(front).host;
-const read = reader();
+// The reader asks anonymously first; where a category is members-only it
+// asks again with the pod session, if there is one.
+let read = reader();
 const login = new MastoLogin({ storage: localStorage, redirectUri: location.origin + location.pathname + location.search });
 // What this reader has already read. Theirs, in their own browser: a public
 // forum has nowhere to keep it and no business keeping it.
@@ -85,7 +87,9 @@ function byline(p, author) {
   const handle = esc(author.handle);
   const name = author.name && author.name !== author.handle ? esc(author.name) : null;
   const inner = name ? `${name} <span class="dim">${handle}</span>` : handle;
-  return `<a href="${esc(author.url)}">${inner}</a>`;
+  // Their posts in this forum, not their page elsewhere: that is what a
+  // reader here is asking for when they click a name.
+  return `<a href="#/who/${encodeURIComponent(author.id)}">${inner}</a>`;
 }
 
 // Where this post can be READ away from here. A pod answers its post's own
@@ -152,6 +156,7 @@ function card(p, { author = null, cat = null, extra = '', waiting = false, ancho
     <div class="body">${p.gone ? 'This post was removed.' : (body(p, cat) || '<span class="dim">(not readable here)</span>')}</div>
     ${p.gone || waiting || !p.id ? '' : `<div class="acts" data-post="${esc(p.id)}">
       <button data-act="reply" aria-label="Reply to ${whose}">Reply</button>
+      ${account() ? `<button data-act="${own().isLiked(p.id) ? 'unlike' : 'like'}" aria-label="${own().isLiked(p.id) ? 'Take back your vote' : 'Vote for this post'}">▲ ${p.likes || 0}</button>` : `<span class="votes" aria-label="${p.likes || 0} votes">▲ ${p.likes || 0}</span>`}
       <button data-act="share" aria-label="Copy a link to the post by ${whose}">Share</button>
       ${account() ? `<button data-act="${own().isSaved(p.id) ? 'unsave' : 'save'}" aria-label="${own().isSaved(p.id) ? 'Remove this post from your saved list' : 'Save this post to your own list'}">${own().isSaved(p.id) ? 'Saved' : 'Save'}</button>` : ''}
       ${mine(p) || !account() ? '' : `<button data-act="report" aria-label="Report the post by ${whose}">Report</button>`}
@@ -201,6 +206,7 @@ async function route() {
   if (kind === 'replies') return showReplies();
   if (kind === 'saved') return showSaved();
   if (kind === 'queue') return showQueue();
+  if (kind === 'who' && a) return showWho(decodeURIComponent(a));
   if (kind === 'c' && a) { if (feedFilter !== a) shown = 30; feedFilter = a; return showForum(); }
   if (kind === 't' && a && b) return showTopic(a, b, c || null);
   return showForum();
@@ -211,6 +217,8 @@ async function route() {
 // in the topic, one click away.
 let feedFilter = 'all';        // 'all', or a category's slug
 let shown = 30;                // how many of the index's rows are on the page
+let order = 'new';             // 'new' by the clock, 'top' by votes
+let finding = '';              // what the reader is looking for, if anything
 // What this reader keeps for themselves, under the account they signed in as.
 const own = () => keptByReader({ storage: localStorage, who: account()?.handle || null });
 
@@ -270,8 +278,36 @@ async function showQueue() {
       <div class="meta">${esc(r.by ? authorLabel(r.by) : '')} · ${esc(when(r.at))}${r.verified ? ' · checked' : ''}</div>
       ${r.object ? `<div class="dim">${esc(r.object)}</div>` : ''}
       ${r.why ? `<article class="post"><div class="body">${esc(r.why)}</div></article>` : ''}
+      ${r.object ? `<div class="acts mod" data-post="${esc(r.object)}" data-cat="${esc(r.category || '')}">
+        ${r.type === 'Held' || r.type === 'Create' ? '<button data-act="approve">Let it through</button><button data-act="refuse">Turn it away</button>' : ''}
+        ${r.by ? '<button data-act="ban" data-who="' + esc(r.by) + '">Ban them</button>' : ''}
+      </div>` : ''}
     </li>`).join('')}</ul>`;
   } catch (e) { $('main').innerHTML = `<p class="err">${esc(e.message)}</p>`; }
+}
+
+async function showWho(handleOrId) {
+  crumbs([['Home', '#/'], ['Someone', null]]);
+  $('main').innerHTML = '<p class="dim">Looking…</p>';
+  const latest = await read.latest(base, { limit: 200 });
+  const theirs = latest.filter(p => p.author === handleOrId);
+  const cat = theirs[0] ? cats().find(c => c.id === theirs[0].category) : cats()[0];
+  const card = cat ? await read.author(cat.base, handleOrId) : null;
+  crumbs([['Home', '#/'], [card?.handle || authorLabel(handleOrId), null]]);
+  const head = `<div class="topline"><h1>${esc(card?.name || card?.handle || authorLabel(handleOrId))}</h1></div>
+    <p class="hint">${esc(card?.handle || authorLabel(handleOrId))}${card?.url ? ` · <a href="${esc(card.url)}">their page</a>` : ''}
+      · ${theirs.length} post${theirs.length === 1 ? '' : 's'} here</p>`;
+  if (!theirs.length) { $('main').innerHTML = head + '<p class="empty">Nothing from them in what the forum is holding.</p>'; return; }
+  const items = [];
+  for (const p of theirs) {
+    const c = cats().find(x => x.id === p.category) || null;
+    const tid = p.topic ? p.topic.split('/').pop() : null;
+    const href = c && tid ? `#/t/${esc(c.slug)}/${esc(tid)}/${esc(await cacheKey(p.id))}` : '#/';
+    items.push(`<li><a class="title" href="${href}">${esc(p.topicName || 'Topic')}</a>
+      <div class="meta">${c ? esc(c.name) + ' · ' : ''}${esc(when(p.published))} · ▲ ${p.likes || 0}</div>
+      <article class="post"><div class="body">${p.content || ''}</div></article></li>`);
+  }
+  $('main').innerHTML = head + `<ul class="list">${items.join('')}</ul>`;
 }
 
 async function showForum() {
@@ -285,14 +321,22 @@ async function showForum() {
   const head = `<p class="hint chips">Categories: ${chip('all', 'All')}${cats().map(c => chip(c.slug || '', c.name)).join('')}
     ${account() ? '<a class="chip" href="#/replies">Replies to you</a><a class="chip" href="#/saved">Saved</a>' : ''}
     ${iModerate() ? '<a class="chip" href="#/queue">Queue</a>' : ''}
+    <button class="chip${order === 'new' ? ' on' : ''}" data-act="order" data-order="new">Newest</button>
+    <button class="chip${order === 'top' ? ' on' : ''}" data-act="order" data-order="top">Top</button>
+    <label class="vh" for="find">Search this forum</label>
+    <input type="text" id="find" placeholder="Search" value="${esc(finding)}" autocomplete="off">
     ${account() ? '<a class="chip" href="#/replies">Replies to you</a><a class="chip" href="#/saved">Saved</a>' : ''}
     ${here && account() && podAcct ? `<button class="new" data-act="${own().isJoined(here.id) ? 'leave' : 'join'}" data-cat="${esc(here.id)}">${own().isJoined(here.id) ? 'Leave' : 'Join'}</button>` : ''}
     ${into ? `<button class="new" data-act="newtopic" data-slug="${esc(into.slug || '')}">New topic</button>` : ''}</p>`;
   $('main').innerHTML = head + '<p class="dim">Loading…</p>';
   say('Loading the latest posts');
   const latest = await read.latest(base);
-  const mine = latest.filter(p => feedFilter === 'all'
-    || (cats().find(c => c.id === p.category)?.slug === feedFilter));
+  const looking = finding.trim().toLowerCase();
+  const mine = latest.filter(p => (feedFilter === 'all'
+    || (cats().find(c => c.id === p.category)?.slug === feedFilter))
+    // Searching what the page has: a topic's name, an author's handle, and
+    // the words of the post itself.
+    && (!looking || [p.topicName, p.author, p.content].some(v => String(v || '').toLowerCase().includes(looking))));
   // Pinned topics first. A pin belongs to a category; the forum has a
   // featured collection of its own for a pin that holds everywhere.
   const pins = { cat: new Set(), site: new Set(await read.featured(base)) };
@@ -301,7 +345,9 @@ async function showForum() {
     for (const id of await read.featured(c.base)) pins.cat.add(id);
   }
   const rank = (p) => (pins.site.has(p.topic) ? 2 : pins.cat.has(p.topic) ? 1 : 0);
-  mine.sort((a, b) => rank(b) - rank(a));
+  // Pinned first whatever the order; then the clock, or the votes.
+  mine.sort((a, b) => rank(b) - rank(a)
+    || (order === 'top' ? (b.likes || 0) - (a.likes || 0) : String(b.published).localeCompare(String(a.published))));
   if (!mine.length) {
     // The one thing to do on an empty page is the one thing offered.
     $('main').innerHTML = head + '<p class="empty">Nothing posted here yet. Use the button at the upper right to create a topic.</p>';
@@ -463,8 +509,12 @@ $('main').addEventListener('click', (e) => {
   if (act === 'remove') return modRemove(id);
   const topic = b.dataset.topic || b.closest('[data-topic]')?.dataset.topic;
   if (act === 'more') { shown += 30; return showForum(); }
+  if (act === 'order') { order = b.dataset.order === 'top' ? 'top' : 'new'; shown = 30; return showForum(); }
   if (act === 'join' || act === 'leave') return joinOrLeave(b.dataset.cat, act === 'join');
   if (act === 'save' || act === 'unsave') return saveOrNot(id, act === 'save');
+  if (act === 'like' || act === 'unlike') return voteOn(id, act === 'like');
+  if (act === 'approve' || act === 'refuse') return modHeld(id, b.closest('[data-cat]')?.dataset.cat, act === 'approve');
+  if (act === 'ban') return modBan(b.dataset.who, b.closest('[data-cat]')?.dataset.cat);
   if (act === 'newpost') return openReply({ inReplyToUrl: replyCtx?.inReplyToUrl || null });
   if (act === 'newtopic') {
     const cat = catBySlug(b.dataset.slug);
@@ -553,9 +603,9 @@ async function report(id) {
   } catch (e) { alert(e.message); }
 }
 
-async function asksTo(activity) {
+async function asksTo(activity, forCat = null) {
   if (!podAcct) throw new Error('moderating from here needs your pod account');
-  const cat = replyCtx.cat;
+  const cat = forCat || replyCtx.cat;
   const inbox = await pod.podInboxOf(cat.id, { front, handle: cat.slug || null });
   await pod.moderate({ actor: podAcct.actor, podHome: podAcct.podHome, inbox, activity });
   alert('Sent to the forum. It takes effect once the forum has checked who asked.');
@@ -596,6 +646,20 @@ async function joinOrLeave(categoryId, on) {
   } catch (e) { alert(e.message); }
 }
 
+// A vote goes to the category as a Like, and its Undo takes it back. The
+// forum counts them; this browser only remembers which way this reader went.
+async function voteOn(postId, up) {
+  if (!podAcct) { alert('voting needs your pod account'); return; }
+  const cat = replyCtx?.cat || cats().find(c => c.slug === feedFilter) || cats()[0];
+  if (!cat) return;
+  try {
+    const inbox = await pod.podInboxOf(cat.id, { front, handle: cat.slug || null });
+    await pod.vote({ actor: podAcct.actor, post: postId, category: cat.id, inbox, up });
+    if (up) own().like(postId); else own().unlike(postId);
+    say(up ? 'Voted. The count follows once the forum has taken it.' : 'Vote taken back.');
+  } catch (e) { alert(e.message); }
+}
+
 // A saved post is this reader's own note to come back to, in this browser.
 function saveOrNot(postId, on) {
   const m = own();
@@ -605,6 +669,29 @@ function saveOrNot(postId, on) {
       cat: replyCtx?.cat?.slug || null, text: (card?.querySelector('.body')?.textContent || '').trim().slice(0, 140) });
   } else m.unsave(postId);
   route();
+}
+
+// A held post: let through, or turned away. Both are asks like any other,
+// published at the moderator's own pod and checked there.
+async function modHeld(postId, slug, through) {
+  const cat = cats().find(c => c.slug === slug) || replyCtx?.cat;
+  if (!cat) { alert('which category is that in?'); return; }
+  try {
+    await asksTo({ type: through ? 'Accept' : 'Reject', object: postId }, cat);
+    say(through ? 'Let through. It is carried once the forum has checked who asked.' : 'Turned away.');
+  } catch (e) { alert(e.message); }
+}
+
+// Banning: the category blocks them, which is the whole of what a group can
+// enforce — it stops carrying them and ends the following.
+async function modBan(who, slug) {
+  const cat = cats().find(c => c.slug === slug) || replyCtx?.cat;
+  if (!cat || !who) return;
+  if (!confirm(`Ban ${authorLabel(who)} from ${cat.name}? Their posts stop being carried.`)) return;
+  try {
+    await asksTo({ type: 'Block', object: who }, cat);
+    say('Asked. It takes effect once the forum has checked who asked.');
+  } catch (e) { alert(e.message); }
 }
 
 async function modLock(topicId, on) {
@@ -641,6 +728,19 @@ async function removePost(id) {
   } catch (e) { alert(e.message); }
 }
 $('reply-cancel').addEventListener('click', () => $('reply-dlg').close());
+let findTimer = null;
+$('main').addEventListener('input', (e) => {
+  if (e.target?.id !== 'find') return;
+  finding = e.target.value;
+  clearTimeout(findTimer);
+  findTimer = setTimeout(async () => {
+    const where = e.target.selectionStart;
+    await showForum();
+    const box = document.getElementById('find');
+    if (box) { box.focus(); box.setSelectionRange(where, where); }
+  }, 250);
+});
+
 $('reply-image').addEventListener('change', async (e) => {
   const file = e.target.files?.[0];
   const said = $('reply-image-said');
@@ -733,7 +833,7 @@ $('reply-send').addEventListener('click', async () => {
   if (kept && !sessionStorage.getItem('bb:pod')) {
     try {
       const s = await pod.session();
-      if (s) podAcct = { ...JSON.parse(kept), webId: s.webId };
+      if (s) { podAcct = { ...JSON.parse(kept), webId: s.webId }; read = reader({ session: s }); }
       else localStorage.removeItem('bb:acct');
     } catch { localStorage.removeItem('bb:acct'); }
   }
@@ -744,6 +844,7 @@ $('reply-send').addEventListener('click', async () => {
       const s = params.get('code') ? await pod.complete(location.href) : await pod.session();
       if (s) {
         podAcct = { ...who, webId: s.webId };
+        read = reader({ session: s });
         try { localStorage.setItem('bb:acct', JSON.stringify(who)); } catch { /* blocked storage */ }
         sessionStorage.removeItem('bb:pod');
         params.delete('code'); params.delete('state'); params.delete('iss');

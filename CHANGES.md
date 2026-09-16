@@ -42,6 +42,13 @@ delete. A moderator's request is published at their own pod first, and the
 forum acts on it only after fetching it back there — a delivery into a
 public inbox proves nothing about who sent it.
 
+Posts can be voted for, and the index sorted by votes or by time and
+searched. A name opens that person's posts in the forum. Moderators get a
+queue of reports and held posts, with a record of what was done, readable by
+them alone: from it a held post can be let through or turned away, and its
+author banned. A category can be made readable only by the people named for
+it, which the pod itself enforces.
+
 The page is built to be read by whoever is reading it. Every control names
 what it acts on, so a screen reader hears "Reply to Mei" rather than a
 thread of identical Reply buttons; there is a skip link, the landmarks and

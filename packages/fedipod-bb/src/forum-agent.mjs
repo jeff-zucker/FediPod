@@ -28,6 +28,16 @@ import * as moderation from './moderation.mjs';
 import { provisionForum, provisionCategory } from './provision.mjs';
 
 const idOf = (v) => (typeof v === 'string' ? v : v?.id);
+
+// A Like of a post, or the taking back of one. Anything else is not a vote.
+function voteIn(activity) {
+  const t = activity?.type;
+  if (t === 'Like') return { post: idOf(activity.object), actor: idOf(activity.actor), up: true };
+  if (t === 'Undo' && activity.object && typeof activity.object === 'object' && activity.object.type === 'Like') {
+    return { post: idOf(activity.object.object), actor: idOf(activity.actor), up: false };
+  }
+  return null;
+}
 const arr = (v) => (v === undefined || v === null ? [] : [].concat(v));
 const HEARTBEAT_MS = 10 * 60_000;
 const VIEWER_REFRESH_MS = 5 * 60_000;
@@ -42,6 +52,11 @@ export class ForumIntake extends Intake {
   }
 
   async handle(activity, receipt = null) {
+    const vote = voteIn(activity);
+    if (vote) {
+      const done = await this.forum.countVote(vote);
+      if (done) return undefined;
+    }
     const cats = this.forum.route(activity);
     if (cats.length) {
       const results = [];
@@ -131,7 +146,8 @@ export class ForumAgent {
 
   // The first act on a fresh pod: the forum's containers, its config, and
   // nothing else — the actors are published on the first connect.
-  async init({ handle, name, categories = [], moderators = [], moderatorWebIds = [], approveJoins = false, review = false, replyPolicy = 'review' }) {
+  async init({ handle, name, categories = [], moderators = [], moderatorWebIds = [],
+    membersOnly = [], memberWebIds = {}, approveJoins = false, review = false, replyPolicy = 'review' }) {
     const cred = this.readCredential();
     if (!cred) throw new Error('no credential.json — make one first');
     await this.attachRemote(cred);
@@ -156,7 +172,8 @@ export class ForumAgent {
       ...existing, kind: 'application', handle, name: name || existing.name || handle,
       ...(renamed ? { republish: true } : {}),
       remotePod: cred.remotePod, root: cred.root || ROOT,
-      categories: cats, moderators, moderatorWebIds, approveJoins, review, replyPolicy,
+      categories: cats, moderators, moderatorWebIds, membersOnly, memberWebIds,
+      approveJoins, review, replyPolicy,
     });
     await store.flush();
     this.log(`forum ${handle} initialised with ${cats.length} categor${cats.length === 1 ? 'y' : 'ies'}`);
@@ -472,6 +489,16 @@ export class ForumAgent {
     }
   }
 
+  // Who may read a members-only category: the WebIDs the forum was given for
+  // it. Null means the category is open, which is the usual case.
+  membersOf(cat) {
+    const closed = (this.config.membersOnly || []).includes(cat.slug);
+    if (!closed) return null;
+    const named = this.config.memberWebIds || {};
+    const list = [...new Set([...(named[cat.slug] || []), ...(this.config.moderatorWebIds || [])])];
+    return list.length ? list : null;
+  }
+
   // A pin that holds across the whole forum, not just one category: the site
   // actor has a featured collection of its own, and this is it.
   async sitePin(topicId, on) {
@@ -501,7 +528,25 @@ export class ForumAgent {
 
   // The moderators' queue, written where only they can read it: what each
   // category is holding, and who asked for what.
+  // What was done, and by whom: a record for the moderators, beside their
+  // queue and under the same rule.
+  async noteModLog(entry, outcome) {
+    const log = this.store.read('modlog.json', []);
+    log.unshift({
+      at: new Date().toISOString(), type: entry.type, by: entry.moderator,
+      object: typeof entry.activity?.object === 'string' ? entry.activity.object : entry.activity?.object?.id || null,
+      outcome: outcome && typeof outcome === 'object' ? Object.keys(outcome).join(',') : String(outcome ?? ''),
+    });
+    this.store.write('modlog.json', log.slice(0, 500));
+    await this.remote.putJson(this.site.mod + 'log.json', { at: new Date().toISOString(), rows: log.slice(0, 500) }, 'application/json')
+      .catch(e => this.log(`mod log: ${e.message}`));
+  }
+
   async publishModQueue() {
+    // The rule follows the configuration: moderators come and go, and the
+    // container was provisioned once, long before this one was named.
+    await this.remote.setAcl(this.site.mod, [], { readAgents: this.config.moderatorWebIds || [] })
+      .catch(e => this.log(`queue rule: ${e.message}`));
     const rows = [];
     for (const cat of this.categories) {
       for (const e of cat.store.read('modqueue.json', [])) {
@@ -517,6 +562,27 @@ export class ForumAgent {
     await this.remote.putJson(this.site.mod + 'queue.json',
       { at: new Date().toISOString(), rows }, 'application/json');
     return rows.length;
+  }
+
+  // One vote per person per post. The count lives with the post's copy, as
+  // AS2's `likes`, so the website reads it with the post and nothing has to
+  // be asked for separately.
+  async countVote({ post, actor, up }) {
+    if (!post || !actor) return false;
+    const cat = this.categories.find(c => !!topics.topicOf(c.store, post));
+    if (!cat) return false;
+    const votes = cat.store.read('votes.json', {});
+    const held = new Set(votes[post] || []);
+    if (up) held.add(actor); else held.delete(actor);
+    votes[post] = [...held];
+    cat.store.write('votes.json', votes);
+    const copy = await this.remote.getJson(cat.urls.cached(post)).catch(() => null);
+    if (copy && copy.type !== 'Tombstone') {
+      await publish.cachePost(cat, copy, { likes: held.size });
+      await publish.publishLatest(this.siteAgent, { force: true }).catch(() => {});
+    }
+    this.log(`${up ? 'vote' : 'vote withdrawn'} on ${post} — ${held.size}`);
+    return true;
   }
 
   // Answers to one post, counted in the topic that holds it, and written
@@ -586,6 +652,7 @@ export class ForumAgent {
     if (!entry) throw new Error(`no such queue entry: ${entryId}`);
     const r = await moderation.applyForumModeration(this, cat, entry);
     cat.store.write('modqueue.json', cat.store.read('modqueue.json', []).filter(e => e.id !== entryId));
+    await this.noteModLog(entry, r);
     await this.publishModQueue().catch(e => this.log(`queue: ${e.message}`));
     return r;
   }
@@ -608,7 +675,7 @@ export class ForumAgent {
     for (const cat of this.categories) {
       const done = this.store.read('provisioned.json', {});
       if (force || !done[cat.slug]) {
-        await provisionCategory(this.remote, cat.urls);
+        await provisionCategory(this.remote, cat.urls, { memberWebIds: this.membersOf(cat) });
         this.store.write('provisioned.json', { ...done, [cat.slug]: new Date().toISOString() });
       }
       await this.carryOldTopics(cat);

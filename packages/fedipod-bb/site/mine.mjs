@@ -24,6 +24,12 @@ export function mine({ storage, who }) {
     join: (id) => write(storage, who, 'joined', [...new Set([...read(storage, who, 'joined'), id])]),
     leave: (id) => write(storage, who, 'joined', read(storage, who, 'joined').filter(x => x !== id)),
 
+    // Posts this reader has voted for. The forum's count is the truth; this
+    // is only so the button can show which way it goes.
+    isLiked: (id) => read(storage, who, 'liked').includes(id),
+    like: (id) => write(storage, who, 'liked', [...new Set([...read(storage, who, 'liked'), id])]),
+    unlike: (id) => write(storage, who, 'liked', read(storage, who, 'liked').filter(x => x !== id)),
+
     // Posts kept to come back to.
     saved: () => read(storage, who, 'saved'),
     isSaved: (id) => read(storage, who, 'saved').some(x => x.id === id),

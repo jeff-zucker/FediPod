@@ -20,9 +20,18 @@ export async function provisionForum(remote, site, { moderatorWebIds = [] } = {}
 // A category: a group's home and state, owner-only; its public trees, plus
 // the topic container and the cache, public. The topic container's rule is
 // what every topic head and page inherits.
-export async function provisionCategory(remote, cat) {
+export async function provisionCategory(remote, cat, { memberWebIds = null } = {}) {
   await containers.provisionPrivate(remote, cat);
   for (const base of [cat.notes, cat.media, cat.topicContainer, cat.cache]) {
-    await containers.provisionPublic(remote, base);
+    // A members-only category: the same containers, readable by the people
+    // named rather than by the world. The actor itself stays public — a
+    // server that cannot read the actor cannot deliver to the category at
+    // all, and members join from outside.
+    if (memberWebIds) {
+      await remote.putJson(base + '.keep', { '@context': 'https://www.w3.org/ns/activitystreams', type: 'Object' }, 'application/activity+json');
+      await remote.setAcl(base, [], { readAgents: memberWebIds });
+    } else {
+      await containers.provisionPublic(remote, base);
+    }
   }
 }

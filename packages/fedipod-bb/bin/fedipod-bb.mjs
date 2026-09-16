@@ -51,6 +51,17 @@ if (cmd === 'init') {
     // A moderator's WebID, so the pod itself can let them read the queue;
     // their actor id is what the wire uses and cannot be granted access.
     moderatorWebIds: flags('moderator-webid'),
+    // A members-only category, and who may read it: --members-only <slug>
+    // and --member <slug>:<webid>. Only a WebID can be named; a follower
+    // from Mastodon has none, and serving them is the Server build's job.
+    membersOnly: flags('members-only'),
+    memberWebIds: flags('member').reduce((m, v) => {
+      const at = v.indexOf(':');
+      if (at < 1) return m;
+      const slug = v.slice(0, at);
+      (m[slug] ||= []).push(v.slice(at + 1));
+      return m;
+    }, {}),
     approveJoins: args.includes('--approve-joins'), review: args.includes('--review'),
   });
   console.log(JSON.stringify(cfg, null, 2));

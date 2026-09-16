@@ -167,6 +167,9 @@ export const isLocked = (cat, tid) => !!topics.list(cat.store).find(t => t.tid =
 export function isForumAsk(cat, activity) {
   const t = activity?.type;
   if (t === 'Flag') return true;
+  // A held post let through, or turned away: both name a post the forum is
+  // holding rather than one it has carried.
+  if (t === 'Accept' || t === 'Reject') return !!idOf(activity.object);
   if (t === 'Add' || t === 'Remove' || t === 'Move') return !!tidOf(cat, idOf(activity.object));
   // A topic renamed, or closed to further replies: the name and the closing
   // are the topic's own, and only the forum can write them, so a moderator
@@ -188,6 +191,19 @@ export async function applyForumModeration(forum, cat, entry) {
       if ('closed' in asked) return lockTopic(cat, tid, !!asked.closed);
       if (asked.name) return renameTopic(cat, tid, asked.name);
       break;
+    }
+    // A held post let through: the category carries it after all.
+    case 'Accept': {
+      if (!object) break;
+      await cat.intake.amplify(object, { approved: true });
+      return { approved: object };
+    }
+    // Turned away: nothing is carried and the holding ends.
+    case 'Reject': {
+      if (!object) break;
+      cat.store.write('modqueue.json', cat.store.read('modqueue.json', [])
+        .filter(e => (typeof e.activity?.object === 'string' ? e.activity.object : e.activity?.object?.id) !== object));
+      return { refused: object };
     }
     case 'Add': {
       const tid = tidOf(cat, object);

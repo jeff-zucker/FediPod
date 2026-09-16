@@ -119,7 +119,7 @@ async function flat({ remote, store }, key, url, doc, force) {
 // Content is sanitised again on the way in; nothing else is changed, so the
 // copy says what the author said, under the author's own id. Returns the
 // copy's url.
-export async function cachePost({ remote, urls }, note, { topic = null, replies = null } = {}) {
+export async function cachePost({ remote, urls }, note, { topic = null, replies = null, likes = null } = {}) {
   const copy = { ...note };
   if (topic) copy.context = topic;
   if (!copy.audience) copy.audience = urls.actor;
@@ -127,6 +127,9 @@ export async function cachePost({ remote, urls }, note, { topic = null, replies 
   // The author's own replies collection is theirs and says something else:
   // this is what the forum holds, in the topic it placed the post in.
   if (Number.isFinite(replies)) copy.replies = { type: 'Collection', totalItems: replies };
+  // How many said they liked it (AS2 `likes`). A Dislike is an activity AS2
+  // has; a place to publish a count of them is not, so none is invented.
+  if (Number.isFinite(likes)) copy.likes = { type: 'Collection', totalItems: likes };
   if (typeof copy.content === 'string') copy.content = sanitizeHtml(copy.content);
   if (!copy['@context']) copy['@context'] = 'https://www.w3.org/ns/activitystreams';
   const url = urls.cached(note.id);

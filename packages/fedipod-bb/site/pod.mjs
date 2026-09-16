@@ -197,6 +197,18 @@ export async function moderate({ actor, podHome, inbox, activity }) {
 // The moderators' queue, read with the moderator's own pod login. It is not
 // public and never passes through the Gateway: only a WebID the forum named
 // can read it, which is the pod's own rule doing the work.
+// A vote: a Like of the post, and its Undo to take it back. One per person;
+// the forum counts them and publishes the total with the post.
+export async function vote({ actor, post, category, inbox, up }) {
+  const like = { '@context': AS, id: `${actor}#like-${Date.now()}`, type: 'Like', actor, object: post, to: [category] };
+  const body = up ? like
+    : { '@context': AS, id: `${actor}#unlike-${Date.now()}`, type: 'Undo', actor, to: [category],
+      object: { type: 'Like', actor, object: post } };
+  const r = await fetch(inbox, { method: 'POST', headers: { 'content-type': 'application/ld+json' }, body: JSON.stringify(body) });
+  if (!r.ok) throw new Error(`the forum did not take the vote (HTTP ${r.status})`);
+  return true;
+}
+
 export async function modQueue(podHome) {
   const s = await getSession();
   if (!s) throw new Error('sign in with your pod to see the queue');
