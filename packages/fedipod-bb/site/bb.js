@@ -64,6 +64,26 @@ function body(p, cat) {
   return d.innerHTML;
 }
 
+// The author as they are known: their name when the forum kept a card for
+// them, and always the handle, which is the thing that is theirs everywhere.
+function byline(p, author) {
+  if (!author) return esc(p.author ? authorLabel(p.author) : '');
+  const handle = esc(author.handle);
+  const name = author.name && author.name !== author.handle ? esc(author.name) : null;
+  const inner = name ? `${name} <span class="dim">${handle}</span>` : handle;
+  return `<a href="${esc(author.url)}">${inner}</a>`;
+}
+
+function card(p, { author = null, cat = null, extra = '', waiting = false } = {}) {
+  const at = p.published ? when(p.published) : '';
+  return `<article class="post${p.gone ? ' gone' : ''}${extra}">
+    <div class="who"><b>${waiting ? '<span class="dim">waiting for the forum · </span>' : ''}${byline(p, author)}</b>
+      <span class="when">${esc(at)}${p.id ? ` <a href="${esc(p.id)}" class="dim">original</a>` : ''}</span></div>
+    ${p.name ? `<h2>${esc(p.name)}</h2>` : ''}
+    <div class="body">${p.gone ? 'This post was removed.' : (body(p, cat) || '<span class="dim">(not readable here)</span>')}</div>
+  </article>`;
+}
+
 const waitingKey = (topicId) => 'bb:waiting:' + topicId;
 const waiting = (topicId) => { try { return JSON.parse(localStorage.getItem(waitingKey(topicId)) || '[]'); } catch { return []; } };
 const remember = (topicId, entry) => { try { localStorage.setItem(waitingKey(topicId), JSON.stringify([...waiting(topicId), entry].slice(-20))); } catch { /* full or blocked */ } };
@@ -123,8 +143,8 @@ async function showCategory(slug) {
     const first = full?.posts?.[0] ? await read.post(cat.base, full.posts[0]) : null;
     const who = first?.author ? await read.author(cat.base, first.author) : null;
     items.push(`<li><div class="title">${esc(t.name)}</div>
-      <div class="meta">${who ? esc(who.handle) + ' · ' : ''}<a href="#/t/${esc(slug)}/${esc(tid)}">${t.count} post${t.count === 1 ? '' : 's'}</a> · last ${esc(when(t.updated))}</div>
-      ${first && !first.gone ? `<article class="post"><div class="body">${body(first, cat)}</div></article>` : ''}</li>`);
+      <div class="meta"><a href="#/t/${esc(slug)}/${esc(tid)}">${t.count} post${t.count === 1 ? '' : 's'}</a> · last ${esc(when(t.updated))}</div>
+      ${first ? card(first, { author: who, cat }) : ''}</li>`);
   }
   $('main').innerHTML = `${items.length ? `<ul class="list">${items.join('')}</ul>` : '<p class="empty">No topics yet. The first post mentioning this category opens one.</p>'}`;
   replyBox({ cat, title: 'Start a topic', inReplyToUrl: null, topicId: null });
@@ -146,19 +166,12 @@ async function showTopic(slug, tid) {
     if (!p.author || authors.has(p.author)) continue;
     authors.set(p.author, await read.author(cat.base, p.author));
   }
-  const who = (p) => { const a = p.author && authors.get(p.author); return a ? `<a href="${esc(a.url)}">${esc(a.handle)}</a>` : esc(p.author ? authorLabel(p.author) : ''); };
   const placed = new Set(t.posts);
   const pending = waiting(topicId).filter(w => !placed.has(w.id));
-  const article = (p, extra = '') => `<article class="post${p.gone ? ' gone' : ''}${extra}">
-    <div class="who"><b>${who(p)}</b><span class="when">${esc(when(p.published))}
-      ${p.id ? `<a href="${esc(p.id)}" class="dim">original</a>` : ''}</span></div>
-    ${p.name ? `<h2>${esc(p.name)}</h2>` : ''}
-    <div class="body">${p.gone ? 'This post was removed.' : (body(p, cat) || '<span class="dim">(not readable here)</span>')}</div>
-  </article>`;
   $('main').innerHTML = `<h1>${esc(t.name)}</h1>
-    ${posts.map(p => article(p)).join('')}
-    ${pending.map(w => article({ author: w.author, published: w.at, content: esc(w.text).replace(/\n/g, '<br>') }, ' waiting')
-      .replace('<div class="who">', '<div class="who"><span class="dim">waiting for the forum ·</span>')).join('')}`;
+    ${posts.map(p => card(p, { author: p.author ? authors.get(p.author) : null, cat })).join('')}
+    ${pending.map(w => card({ author: w.author, published: w.at, content: esc(w.text).replace(/\n/g, '<br>') },
+      { cat, extra: ' waiting', waiting: true })).join('')}`;
   replyBox({ cat, title: 'Reply', inReplyToUrl: t.posts[t.posts.length - 1] || null, topicId });
 }
 
