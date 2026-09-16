@@ -248,6 +248,7 @@ export class ForumAgent {
     });
     cat.intake.recentNotes = new Map();
     cat.intake.onCarried = (ev) => this.onCarried(cat, ev);
+    cat.intake.onReport = (activity, actor, opts) => cat.intake.queueModeration(activity, actor, opts);
     cat.intake.onCarriedEdit = (ev) => this.onCarriedEdit(cat, ev);
     cat.intake.onCarriedGone = (ev) => this.onCarriedGone(cat, ev);
     cat.intake.isModerationAskExtra = (a) => moderation.isForumAsk(cat, a);
@@ -336,7 +337,8 @@ export class ForumAgent {
       this.log(`${cat.slug}: ${noteId} not placed — topic ${tid} is locked`);
       return;
     }
-    await publish.cachePost(cat, note);
+    await publish.cachePost(cat, note, { topic: cat.urls.topic(tid) });
+    this.noteLatest(cat, note);
     // The author's card, from the actor the intake already holds; fetched
     // once when it does not, so the website can name them.
     const author = idOf([].concat(note.attributedTo || [])[0]);
@@ -347,6 +349,7 @@ export class ForumAgent {
     }
     await publish.publishTopic(cat, tid);
     await publish.publishTopicIndex(cat);
+    await publish.publishLatest(this.siteAgent, { force: true });
     this.log(`${cat.slug}: ${noteId} in topic ${tid}`);
   }
 
@@ -402,7 +405,8 @@ export class ForumAgent {
   // reads is rewritten from the note as verified at its origin, and a changed
   // title is the topic's title when that post opened it.
   async onCarriedEdit(cat, { noteId, note }) {
-    await publish.cachePost(cat, note);
+    await publish.cachePost(cat, note, { topic: (() => { const tid = topics.topicOf(cat.store, noteId); return tid ? cat.urls.topic(tid) : null; })() });
+    await publish.publishLatest(this.siteAgent, { force: true });
     const tid = topics.topicOf(cat.store, noteId);
     if (!tid) return;
     await publish.publishTopic(cat, tid, { force: true });
@@ -413,7 +417,9 @@ export class ForumAgent {
   // already been taken back by the group itself.
   async onCarriedGone(cat, { noteId }) {
     const tid = topics.topicOf(cat.store, noteId);
+    this.dropLatest(cat, noteId);
     await publish.tombstoneCached(cat, noteId);
+    await publish.publishLatest(this.siteAgent, { force: true });
     if (!tid) return;
     topics.remove(cat.store, tid, noteId);
     const left = topics.get(cat.store, tid);
@@ -423,6 +429,72 @@ export class ForumAgent {
     }
     await publish.publishTopic(cat, tid, { force: true });
     await publish.publishTopicIndex(cat, { force: true });
+  }
+
+  // Queued asks from listed moderators that can be verified at their own
+  // origin are applied; everything else waits for a person.
+  async applyVerifiedAsks() {
+    for (const cat of this.categories) {
+      const q = cat.store.read('modqueue.json', []);
+      for (const entry of [...q]) {
+        if (!(this.config.moderators || []).includes(entry.moderator)) continue;
+        const id = entry.activity?.id;
+        if (typeof id !== 'string') continue;
+        if (!cat.intake.sameIdentity(id, entry.moderator)) continue;
+        const doc = await cat.intake.fetchAP(id).catch(() => null);
+        if (!doc || doc.type !== entry.type) continue;
+        if (idOf(doc.actor) !== entry.moderator) continue;
+        try {
+          await this.applyModeration(cat.slug, entry.id);
+          this.log(`applied ${entry.type} from ${entry.moderator}`);
+        } catch (e) { this.log(`ask ${entry.id}: ${e.message}`); }
+      }
+    }
+  }
+
+  // The forum's own index of its newest posts, across every category.
+  noteLatest(cat, note) {
+    const copy = cat.urls.cached(note.id);
+    const at = note.published || new Date().toISOString();
+    const rows = this.store.read('latest.json', []).filter(e => e.copy !== copy);
+    rows.push({ copy, at });
+    rows.sort((a, b) => String(b.at).localeCompare(String(a.at)));
+    this.store.write('latest.json', rows.slice(0, publish.LATEST_MAX));
+  }
+
+  // Everything the forum already holds, read back out of the topics, for an
+  // index that did not exist when those posts arrived.
+  // Copies kept before the forum recorded which topic they were in: the
+  // topic knows, so the copy is rewritten from it.
+  async stampOldCopies(cat) {
+    for (const entry of topics.list(cat.store)) {
+      const doc = topics.get(cat.store, entry.tid);
+      for (const p of doc?.posts || []) {
+        const url = cat.urls.cached(p.id);
+        const copy = await this.remote.getJson(url).catch(() => null);
+        if (!copy || copy.type === 'Tombstone' || copy.context) continue;
+        await publish.cachePost(cat, copy, { topic: cat.urls.topic(entry.tid) });
+        this.log(`${p.id} now says which topic it is in`);
+      }
+    }
+  }
+
+  rebuildLatest() {
+    const rows = [];
+    for (const cat of this.categories) {
+      for (const entry of topics.list(cat.store)) {
+        const doc = topics.get(cat.store, entry.tid);
+        for (const p of doc?.posts || []) rows.push({ copy: cat.urls.cached(p.id), at: p.published || entry.created || '' });
+      }
+    }
+    rows.sort((a, b) => String(b.at).localeCompare(String(a.at)));
+    this.store.write('latest.json', rows.slice(0, publish.LATEST_MAX));
+    return rows.length;
+  }
+
+  dropLatest(cat, noteId) {
+    const copy = cat.urls.cached(noteId);
+    this.store.write('latest.json', this.store.read('latest.json', []).filter(e => e.copy !== copy));
   }
 
   async applyModeration(slug, entryId) {
@@ -447,6 +519,7 @@ export class ForumAgent {
     for (const cat of this.categories) {
       await provisionCategory(this.remote, cat.urls);
       await this.carryOldTopics(cat);
+      await this.stampOldCopies(cat).catch(e => this.log(`stamping ${cat.slug}: ${e.message}`));
       const seen = cat.store.read('published.json', {});
       if (force || !seen.actorDigest) {
         await cat.publisher.publishProfile({ force });
@@ -465,6 +538,11 @@ export class ForumAgent {
     const seen = this.store.read('published.json', {});
     if (force || !seen.actorDigest) await this.siteAgent.publisher.publishProfile({ force });
     await publish.publishCategories(this.siteAgent, this.categories.map(c => c.urls.actor), { force });
+    if (!this.store.read('latest.json', []).length) {
+      const n = this.rebuildLatest();
+      if (n) this.log(`latest: ${n} post(s) read back out of the topics`);
+    }
+    await publish.publishLatest(this.siteAgent, { force: true });
     await publish.publishAdministrators(this.siteAgent, this.config.moderators || [], { force });
     if (asked) {
       this.store.setConfig({ ...this.store.getConfig(), republish: false });
@@ -481,6 +559,7 @@ export class ForumAgent {
     for (const cat of this.categories) cat.deliverer.startQueue();
     this.siteAgent.deliverer.startQueue();
     await this.publishAll();
+    this.intake.afterDrain = () => this.applyVerifiedAsks().catch(e => this.log(`asks: ${e.message}`));
     await this.intake.start();
     await publish.publishHeartbeat(this.siteAgent).catch(e => this.log(`heartbeat: ${e.message}`));
     this.heartbeatTimer = setInterval(() => {

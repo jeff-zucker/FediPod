@@ -53,8 +53,19 @@ if (cmd === 'init') {
 } else if (cmd === 'start') {
   fs.mkdirSync(home, { recursive: true, mode: 0o700 });
   const agent = new ForumAgent({ home, log });
-  const up = await agent.connect();
-  if (!up) { console.error('nothing to host — run init first'); process.exit(1); }
+  let up = false;
+  for (let attempt = 1; !up; attempt++) {
+    try {
+      up = await agent.connect();
+      if (!up) { console.error('nothing to host — run init first'); process.exit(1); }
+    } catch (e) {
+      // The pod under load, a network blip, a slow start: all of them are
+      // waits, not failures. The lease expires on its own if we never get up.
+      const wait = Math.min(15 * attempt, 120);
+      log(`start failed (${e.message}) — trying again in ${wait}s`);
+      await new Promise(r => setTimeout(r, wait * 1000));
+    }
+  }
   // Every timer in the agent is unreferenced (the DeviceAgent's web server is
   // what holds that process open); here nothing else would, and the host
   // exited quietly once the push socket went idle. This holds it.

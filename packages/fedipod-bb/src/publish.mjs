@@ -90,6 +90,14 @@ export async function publishCategories({ remote, store, urls }, actorIds, { for
   return flat({ remote, store }, 'categories', urls.categories, fwire.categoriesCollection(urls.categories, actorIds), force);
 }
 
+// How many of the newest posts the forum keeps an index of.
+export const LATEST_MAX = 50;
+
+export async function publishLatest({ remote, store, urls }, { force = false } = {}) {
+  const items = store.read('latest.json', []).slice(0, LATEST_MAX).map(e => e.copy);
+  return flat({ remote, store }, 'latest', urls.latest, fwire.latestCollection(urls.latest, items), force);
+}
+
 export async function publishAdministrators({ remote, store, urls }, actorIds, { force = false } = {}) {
   return flat({ remote, store }, 'administrators', urls.administrators, fwire.administratorsCollection(urls.administrators, actorIds), force);
 }
@@ -107,8 +115,10 @@ async function flat({ remote, store }, key, url, doc, force) {
 // Content is sanitised again on the way in; nothing else is changed, so the
 // copy says what the author said, under the author's own id. Returns the
 // copy's url.
-export async function cachePost({ remote, urls }, note) {
+export async function cachePost({ remote, urls }, note, { topic = null } = {}) {
   const copy = { ...note };
+  if (topic) copy.context = topic;
+  if (!copy.audience) copy.audience = urls.actor;
   if (typeof copy.content === 'string') copy.content = sanitizeHtml(copy.content);
   if (!copy['@context']) copy['@context'] = 'https://www.w3.org/ns/activitystreams';
   const url = urls.cached(note.id);

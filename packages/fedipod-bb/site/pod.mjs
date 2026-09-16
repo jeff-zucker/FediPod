@@ -148,6 +148,33 @@ export async function remove({ actor, podHome, id, category, inbox }) {
   return { id };
 }
 
+// Reporting a post to the forum's moderators. A Flag names what is being
+// reported and, when the reader says why, carries their words with it.
+export async function report({ actor, object, category, inbox, why = '' }) {
+  const flag = { '@context': AS, id: `${actor}#flag-${Date.now()}`, type: 'Flag', actor,
+    object: [].concat(object), audience: category, to: [category],
+    ...(why ? { content: String(why).slice(0, 2000) } : {}) };
+  const r = await fetch(inbox, { method: 'POST', headers: { 'content-type': 'application/ld+json' }, body: JSON.stringify(flag) });
+  if (!r.ok) throw new Error(`the forum did not take the report (HTTP ${r.status})`);
+  return true;
+}
+
+// A moderator's ask, published at the moderator's own address before it is
+// sent: the forum fetches it back there and believes it because only its
+// author could have put it there (FEP-fe34). A delivery alone proves nothing.
+export async function moderate({ actor, podHome, inbox, activity }) {
+  const s = await getSession();
+  if (!s) throw new Error('sign in to your pod first');
+  const name = `${stamp()}-${String(activity.type).toLowerCase()}-${crypto.randomUUID().slice(0, 8)}`;
+  const place = placeOf(actor, podHome);
+  const doc = { '@context': AS, ...activity, id: place.id(name), actor, published: new Date().toISOString() };
+  const put = await s.fetch(place.at(name), { method: 'PUT', headers: { 'content-type': 'application/activity+json' }, body: JSON.stringify(doc) });
+  if (!put.ok) throw new Error(`your pod refused to publish the request (HTTP ${put.status})`);
+  const sent = await fetch(inbox, { method: 'POST', headers: { 'content-type': 'application/ld+json' }, body: JSON.stringify(doc) });
+  if (!sent.ok) throw new Error(`the forum did not take the request (HTTP ${sent.status})`);
+  return doc.id;
+}
+
 export async function join({ actor, category, inbox }) {
   const follow = { '@context': AS, id: `${actor}#follow-${Date.now()}`, type: 'Follow', actor, object: category, to: [category] };
   const r = await fetch(inbox, { method: 'POST', headers: { 'content-type': 'application/ld+json' }, body: JSON.stringify(follow) });

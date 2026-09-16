@@ -88,6 +88,10 @@ export function topicsPaging(topicIds, index = []) {
 // ── the forum ──────────────────────────────────────────────────────────
 export const categoriesCollection = (id, actorIds) => orderedCollection(id, actorIds);
 export const administratorsCollection = (id, actorIds) => orderedCollection(id, actorIds);
+// The latest posts: the forum's own copies of them, newest first. Its items
+// are the copies rather than the authors' ids, because one fetch of a copy
+// tells a reader everything — who wrote it, when, and which topic it is in.
+export const latestCollection = (id, copyUrls) => orderedCollection(id, copyUrls);
 
 // The forum's own actor: an Application, the service that speaks for the
 // site. Everything else is what any FediPod actor carries.

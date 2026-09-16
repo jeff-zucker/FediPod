@@ -50,6 +50,15 @@ export function authorLabel(actorId) {
 }
 
 export function reader({ fetch: f = globalThis.fetch.bind(globalThis) } = {}) {
+  // A topic's name, read once however many of its posts a feed carries.
+  const nameOfTopic = async (topicId, seen) => {
+    if (!topicId) return null;
+    if (seen.has(topicId)) return seen.get(topicId);
+    const head = await get(topicId);
+    const name = head?.name || null;
+    seen.set(topicId, name);
+    return name;
+  };
   const get = async (url) => {
     const r = await f(url, { headers: { accept: ACCEPT } });
     if (!r || !r.ok) return null;
@@ -130,6 +139,40 @@ export function reader({ fetch: f = globalThis.fetch.bind(globalThis) } = {}) {
         handle: card.preferredUsername && host ? `@${card.preferredUsername}@${host}` : authorLabel(actorId),
         icon: card.icon?.url || null, url: card.url || card.id || actorId,
       };
+    },
+
+    // The forum's newest posts, across every category: the index names the
+    // forum's own copies, so one fetch of each tells who wrote it, when, and
+    // which topic and category it belongs to.
+    async latest(base, { limit = 30 } = {}) {
+      const head = await get(base + 'ap/latest');
+      const ids = (head?.orderedItems || []).map(idOf).filter(Boolean).slice(0, limit);
+      const out = [];
+      const named = new Map();
+      for (const url of ids) {
+        const copy = await get(url);
+        if (!copy || copy.type === 'Tombstone') continue;
+        out.push({
+          id: copy.id || url,
+
+          author: idOf([].concat(copy.attributedTo || [])[0]) || null,
+          name: copy.name || null,
+          content: typeof copy.content === 'string' ? copy.content : '',
+          published: copy.published || null,
+          topic: idOf(copy.context) || null,
+          topicName: await nameOfTopic(idOf(copy.context), named),
+          category: idOf([].concat(copy.audience || [])[0]) || null,
+          page: [].concat(copy.url || []).map(u => (typeof u === 'string' ? u : null)).find(Boolean) || null,
+        });
+      }
+      return out;
+    },
+
+    // Who moderates a category. The category says so itself (FEP-1b12), which
+    // is what lets a page show a moderator their own buttons.
+    async moderators(cbase) {
+      const c = await get(cbase + 'ap/moderators');
+      return (c?.orderedItems || []).map(idOf).filter(Boolean);
     },
 
     // The readable copy of a post, or null when the forum holds none.

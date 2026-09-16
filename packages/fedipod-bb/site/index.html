@@ -28,6 +28,10 @@
   article.post .who { color: var(--sub); font-size: 16px; display: flex; gap: .6rem; flex-wrap: wrap; justify-content: space-between; align-items: baseline; }
   article.post .who .when { margin-left: auto; display: flex; gap: .6rem; }
   article.post .acts { display: flex; gap: .5rem; margin-top: .7rem; justify-content: flex-end; }
+  .acts.mod { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; margin: .6rem 0; }
+  .acts.mod button { font-size: 16px; font-weight: 600; padding: .3rem .8rem; border-radius: .3rem;
+    background: transparent; color: var(--accent); border: 1px solid var(--line); }
+  .acts.mod button:hover { background: var(--field-bg); }
   article.post .acts button { font-size: 16px; font-weight: 600; padding: .3rem .8rem; border-radius: .3rem;
     background: transparent; color: var(--accent); border: 1px solid var(--line); }
   article.post .acts button:hover { background: var(--field-bg); }
@@ -41,6 +45,8 @@
   article.post .body > :last-child { margin-bottom: 0; }
   article.post.waiting { background: var(--surface); border: 1px solid var(--line); border-radius: .4rem; padding: 1rem; }
   article.post.gone .body { color: var(--sub); font-style: italic; }
+  article.post.picked { border-color: var(--accent); border-width: 2px; }
+  ul.list li span.title { font-weight: 700; font-size: 1.15rem; color: var(--heading); }
   dialog { border: 2px solid var(--dialog-edge); border-radius: .5rem; padding: 0; background: var(--bg); color: var(--fg);
     width: min(38rem, calc(100vw - 2rem)); box-shadow: 0 .6rem 2rem rgba(0, 0, 0, .35); }
   dialog::backdrop { background: rgba(0, 0, 0, .45); }
@@ -76,6 +82,7 @@
 <header class="top">
   <h1><a id="forum-link" href="#/">Forum</a></h1>
   <span class="dim" id="forum-status"></span>
+  <span class="dim" id="who-am-i"></span>
 </header>
 <nav class="crumbs" id="crumbs"></nav>
 <main id="main">
@@ -99,10 +106,6 @@
     <div class="row" id="topic-title-row" hidden>
       <label for="topic-title">Topic name</label>
       <input type="text" id="topic-title" placeholder="What this topic is about" autocomplete="off">
-    </div>
-    <div class="row" id="post-title-row">
-      <label for="post-title">Title</label>
-      <input type="text" id="post-title" placeholder="This post's own title (optional)" autocomplete="off">
     </div>
     <textarea id="reply-text" placeholder="Write your reply"></textarea>
     <div class="row">

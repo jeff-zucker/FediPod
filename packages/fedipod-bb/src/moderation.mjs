@@ -152,7 +152,7 @@ export const isLocked = (cat, tid) => !!topics.list(cat.store).find(t => t.tid =
 export function isForumAsk(cat, activity) {
   const t = activity?.type;
   if (t === 'Flag') return true;
-  if (t === 'Remove' || t === 'Move') return !!tidOf(cat, idOf(activity.object));
+  if (t === 'Add' || t === 'Remove' || t === 'Move') return !!tidOf(cat, idOf(activity.object));
   if (t === 'Delete') return !!tidOf(cat, idOf(activity.origin));
   return false;
 }
@@ -161,9 +161,17 @@ export function isForumAsk(cat, activity) {
 export async function applyForumModeration(forum, cat, entry) {
   const object = idOf(entry.activity?.object);
   switch (entry.type) {
+    case 'Add': {
+      const tid = tidOf(cat, object);
+      if (!tid || idOf(entry.activity?.target) !== cat.urls.featured) break;
+      return pinTopic(cat, tid, true);
+    }
     case 'Remove': {
       const tid = tidOf(cat, object);
       if (!tid) break;
+      // From the featured collection: unpinned. From the category itself:
+      // gone (FEP-f15d).
+      if (idOf(entry.activity?.target) === cat.urls.featured) return pinTopic(cat, tid, false);
       return deleteTopic(cat, tid);
     }
     case 'Move': {

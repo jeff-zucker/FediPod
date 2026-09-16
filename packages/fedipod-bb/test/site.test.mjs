@@ -164,3 +164,36 @@ test('replying from a Mastodon account: register, approve, exchange, resolve, po
   login.signOut();
   assert.equal(login.account(), null);
 });
+
+test('the latest feed: the forum\'s newest posts, each named by its topic', async () => {
+  const pod = fakePod();
+  const site = forumUrls(POD);
+  const g = site.category('gardening');
+  const gStore = memStore();
+  const siteStore = memStore();
+  const ctx = { remote: pod, store: gStore, urls: g };
+  const A = 'https://mei.pod.example/fedipod/ap/notes/a';
+  const B = 'https://mei.pod.example/fedipod/ap/notes/b';
+  const tid = topics.open(gStore, { title: 'Tomato blight', post: { id: A, author: MEI, published: '2026-09-15T10:00:00Z' } });
+  topics.append(gStore, tid, { id: B, author: MEI, published: '2026-09-15T11:00:00Z' });
+  await publish.cachePost(ctx, { id: A, type: 'Note', attributedTo: MEI, content: '<p>One.</p>', published: '2026-09-15T10:00:00Z', context: g.topic(tid), audience: g.actor });
+  await publish.cachePost(ctx, { id: B, type: 'Note', attributedTo: MEI, content: '<p>Two.</p>', published: '2026-09-15T11:00:00Z', context: g.topic(tid), audience: g.actor });
+  await publish.publishTopic(ctx, tid);
+  // The index the host keeps: newest first, naming the copies it holds.
+  siteStore.write('latest.json', [
+    { copy: g.cached(B), at: '2026-09-15T11:00:00Z' },
+    { copy: g.cached(A), at: '2026-09-15T10:00:00Z' },
+  ]);
+  await publish.publishLatest({ remote: pod, store: siteStore, urls: site });
+
+  const read = reader({ fetch: fetchOver(pod.docs) });
+  const feed = await read.latest(POD + 'fedipod-bb/');
+  assert.deepEqual(feed.map(p => p.id), [B, A], 'newest first');
+  assert.equal(feed[0].content, '<p>Two.</p>');
+  assert.equal(feed[0].topicName, 'Tomato blight', 'a post is named by its topic, having no title of its own');
+  assert.equal(feed[0].category, g.actor);
+  assert.equal(feed[0].topic, g.topic(tid));
+  await publish.tombstoneCached(ctx, B, { formerType: 'Note' });
+  const after = await read.latest(POD + 'fedipod-bb/');
+  assert.deepEqual(after.map(p => p.id), [A], 'a removed post leaves the feed');
+});

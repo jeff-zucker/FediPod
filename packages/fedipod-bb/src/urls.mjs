@@ -39,6 +39,9 @@ export function forumUrls(remotePod, root = ROOT, { publicBase = null, front = n
   site.front = origin;
   site.categories = face + 'ap/categories';
   site.administrators = face + 'ap/administrators';
+  // Everything the forum holds, newest first, across every category: what a
+  // reader arriving at the forum sees before they know its categories.
+  site.latest = face + 'ap/latest';
   site.siteHtml = face + 'ap/site.html';
   site.root = root.endsWith('/') ? root : root + '/';
   site.category = (slug) => {
