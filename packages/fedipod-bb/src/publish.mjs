@@ -149,8 +149,10 @@ export async function tombstoneCached({ remote, urls }, postId, { formerType = '
 export async function publishHeartbeat({ remote, urls }, { version = null, at = new Date().toISOString() } = {}) {
   // Under the advertised face, like every read document, so a fronted forum's
   // reader finds it at the front and the transport lands it on the pod.
-  const url = urls.actor.replace(/ap\/actor$/u, '') + 'ap/heartbeat.json';
-  await remote.putJson(url, { at, ...(version ? { version } : {}) }, 'application/json');
+  // Typed and named like the actor: a pod refuses to hand a plain-JSON
+  // document to a reader asking for ActivityPub, and the front asks that way.
+  const url = urls.actor.replace(/ap\/actor$/u, '') + 'ap/heartbeat';
+  await remote.putJson(url, { at, ...(version ? { version } : {}) }, 'application/activity+json');
   await remote.setAcl(url, ['Read']);
   return url;
 }

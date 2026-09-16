@@ -33,7 +33,7 @@ to the category it names, places carried posts in topics, and carries them
 to the category's followers. Several moderators run `start` on their own
 machines against the same pod: one hosts, the others watch, and when the
 host stops another takes over within five minutes. A public
-`ap/heartbeat.json` says when the forum was last hosted. `status` prints
+`ap/heartbeat` says when the forum was last hosted. `status` prints
 what the pod's state says without hosting.
 
 Every category is a FediPod group: joining is a Follow, a member's public

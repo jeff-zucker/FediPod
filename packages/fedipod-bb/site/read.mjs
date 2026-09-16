@@ -89,7 +89,7 @@ export function reader({ fetch: f = globalThis.fetch.bind(globalThis) } = {}) {
           members: Number(followers?.totalItems) || 0,
         });
       }
-      const heartbeat = await get(base + 'ap/heartbeat.json');
+      const heartbeat = await get(base + 'ap/heartbeat');
       return { id: actor.id, name: actor.name || actor.preferredUsername, summary: actor.summary || null,
         handle: actor.preferredUsername || null, categories, lastHosted: heartbeat?.at || null };
     },

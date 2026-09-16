@@ -139,7 +139,7 @@ test('a forum hosts its categories as groups and drains one inbox to all of them
   assert.deepEqual(pod.docs.get(site.categories).orderedItems, agent.categories.map(c => c.urls.actor));
   assert.ok(pod.acls.some(([u, m]) => u === g.urls.inbox && m.length === 0), 'the category\'s own inbox is shut');
   assert.ok(pod.acls.some(([u, m]) => u === site.inbox && m.includes('Append')), 'the forum inbox takes mail');
-  assert.ok(pod.docs.get(site.home + 'ap/heartbeat.json')?.at, 'a heartbeat says the forum is hosted');
+  assert.ok(pod.docs.get(site.home + 'ap/heartbeat')?.at, 'a heartbeat says the forum is hosted');
 
   const delivered = [];
   wire(agent, delivered);
@@ -245,7 +245,7 @@ test('two devices share the forum: the second watches, and hosts when the first 
   await one.stop();                                   // releases the lease
   assert.equal(await two.tryPromote(), true, 'the lease freed: the second device hosts');
   assert.equal(two.viewer, false);
-  assert.ok(pod.docs.get(two.site.home + 'ap/heartbeat.json'));
+  assert.ok(pod.docs.get(two.site.home + 'ap/heartbeat'));
   await two.stop();
 });
 

@@ -50,7 +50,7 @@ test('the website reads a forum the host wrote: categories, topics, posts and th
   pod.docs.set(g.followers, { id: g.followers, type: 'OrderedCollection', totalItems: 3 });
   await publish.publishCategories({ remote: pod, store: siteStore, urls: site }, [g.actor]);
   await publish.publishHeartbeat({ remote: pod, urls: site }, { at: '2026-09-15T12:00:00Z' });
-  assert.ok(pod.docs.has(POD + 'fedipod-bb/ap/heartbeat.json'), 'the heartbeat sits under the forum\'s face');
+  assert.ok(pod.docs.has(POD + 'fedipod-bb/ap/heartbeat'), 'the heartbeat sits under the forum\'s face');
   const A1 = 'https://mei.pod.example/fedipod/ap/notes/blight';
   const R1 = 'https://mei.pod.example/fedipod/ap/notes/blight-r1';
   const tid = topics.open(gStore, { title: 'Tomato blight', post: { id: A1, author: MEI, published: '2026-09-15T10:00:00Z', inReplyTo: null } });
