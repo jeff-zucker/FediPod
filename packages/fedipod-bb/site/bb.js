@@ -95,7 +95,7 @@ async function showCategory(slug) {
     return `<li><a class="title" href="#/t/${esc(slug)}/${esc(tid)}">${esc(t.name)}</a>
       <div class="meta">${t.count} post${t.count === 1 ? '' : 's'} · last ${esc(when(t.updated))}</div></li>`;
   });
-  $('main').innerHTML = `<p class="hint">Follow <code>${esc(handleOf(cat))}</code> from Mastodon or Lemmy to see new topics where you are.</p>
+  $('main').innerHTML = `<p class="hint">Follow <code>${esc(handleOf(cat))}</code> from your Fediverse account to see new topics where you are.</p>
     ${items.length ? `<ul class="list">${items.join('')}</ul>` : '<p class="empty">No topics yet. The first post mentioning this category opens one.</p>'}`;
   replyBox({ cat, title: 'Start a topic', inReplyToUrl: null, topicId: null });
 }
