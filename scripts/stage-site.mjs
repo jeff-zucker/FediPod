@@ -19,12 +19,19 @@ const cp = (from, to) => fs.copyFileSync(path.join(root, from), path.join(site, 
 cp('web/app/index.html', 'index.html');
 cp('web/app/dist/boot.js', 'boot.js');
 cp('web/app/dist/sw.js', 'sw.js');
+cp('web/app/update.js', 'update.js');
+// Every page carries the version it was staged with and the script that
+// compares it with the site's and reloads once when a newer build is up.
+const VERSION = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')).version;
+const withUpdate = (html) => html.replace('</head>',
+  `<meta name="fedipod-version" content="${VERSION}">\n<script src="/update.js" defer></script>\n</head>`);
+const injectUpdate = (file) => fs.writeFileSync(file, withUpdate(fs.readFileSync(file, 'utf8')));
 const copyDir = (from, to) => { fs.mkdirSync(to, { recursive: true });
   for (const e of fs.readdirSync(from, { withFileTypes: true })) {
     const s = path.join(from, e.name), d = path.join(to, e.name);
     if (e.isDirectory()) copyDir(s, d);
     else if (e.name === 'sw.js' || e.name === 'sw.js.map') { /* drop Phanpy's own worker */ }
-    else if (e.name === 'index.html') fs.writeFileSync(d, fs.readFileSync(s, 'utf8').replace(/<script id="vite-plugin-pwa:inline-sw">[\s\S]*?<\/script>/i, ''));
+    else if (e.name === 'index.html') fs.writeFileSync(d, withUpdate(fs.readFileSync(s, 'utf8').replace(/<script id="vite-plugin-pwa:inline-sw">[\s\S]*?<\/script>/i, '')));
     else fs.copyFileSync(s, d);
   } };
 copyDir(path.join(root, 'phanpy/dist'), path.join(site, 'app'));
@@ -50,6 +57,7 @@ const copyAdmin = (from, to) => { fs.mkdirSync(to, { recursive: true });
       // the worker — the /?signout page (boot.js) does the teardown.
       .replace('>manage account</a>', '>manage account</a>\n  <a id="bar-signout" href="/?signout" title="   Sign out of FediPod and clear this browser">sign out</a>')
       .replace('</head>', '<style>#actor-pick{display:none!important}</style>\n</head>');
+    text = withUpdate(text);
     if (/[/\\]client$/.test(from)) {
       // The client shell frames the client at /app/ (locally the client is the
       // origin root, so the source says "../../").
@@ -130,7 +138,15 @@ fs.writeFileSync(path.join(site, '_redirects'), [
 // would cost the boundary nothing. `/app/*` needs `https:` for images and
 // media because the whole point of the client is rendering other servers'
 // avatars and attachments.
+injectUpdate(path.join(site, 'index.html'));
 fs.writeFileSync(path.join(site, '_headers'), [
+  // The worker and the update script are fetched fresh, so a new build is
+  // seen the moment it is up; the pages themselves revalidate by default.
+  '/sw.js',
+  '  Cache-Control: no-cache',
+  '/update.js',
+  '  Cache-Control: no-cache',
+  '',
   '/app/*',
   "  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https: data: blob:; media-src 'self' https: blob:; connect-src 'self' https:; font-src 'self' data:; object-src 'none'; base-uri 'none'; frame-ancestors 'self'; form-action 'self'",
   '  X-Content-Type-Options: nosniff',

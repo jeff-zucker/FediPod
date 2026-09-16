@@ -1,5 +1,12 @@
 # Changes
 
+## 2026-09-16 (fedipod.net refreshes itself — version 1.13.0, fedipod-server 0.23.0)
+
+A fedipod.net page that is open when a newer build goes up reloads itself,
+once, on its own. If you are in the middle of writing a post it shows a
+line with a reload button instead and waits for you. No more refreshing
+twice to be sure.
+
 ## 2026-09-15 (the screens that used to be empty — version 1.12.0, fedipod-server 0.22.0)
 
 In any Mastodon client, the directory, suggestions and trends screens

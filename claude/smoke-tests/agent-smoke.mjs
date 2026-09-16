@@ -1169,6 +1169,27 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   check(three.state.republished.length === 1, 'a Block of someone else is not ours to act on');
 }
 
+// --- 5c1m. every staged page carries its build version and the update script ---
+{
+  const { execFileSync } = await import('node:child_process');
+  execFileSync(process.execPath, [path.join(root, 'scripts/stage-site.mjs')], { stdio: 'ignore' });
+  const version = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')).version;
+  const site = path.join(root, 'web/app/site');
+  const pages = ['index.html', 'app/index.html', 'admin/index.html', 'admin/client/index.html'];
+  const bad = pages.filter((p) => {
+    const html = fs.readFileSync(path.join(site, p), 'utf8');
+    return !html.includes(`<meta name="fedipod-version" content="${version}">`) || !html.includes('<script src="/update.js" defer></script>');
+  });
+  check(bad.length === 0, `every staged page names build ${version} and loads /update.js${bad.length ? ' — missing in ' + bad.join(', ') : ''}`);
+  check(fs.existsSync(path.join(site, 'update.js')), 'the update script is staged');
+  const headers = fs.readFileSync(path.join(site, '_headers'), 'utf8');
+  check(/\/sw\.js\n  Cache-Control: no-cache/.test(headers) && /\/update\.js\n  Cache-Control: no-cache/.test(headers),
+    'the worker and the update script are never cached');
+  const js = fs.readFileSync(path.join(root, 'web/app/update.js'), 'utf8');
+  check(js.includes("'controllerchange'") && js.includes('/api/handle?handle=__probe__') && js.includes('textarea'),
+    'the script reloads on a worker takeover, compares versions with the site, and guards a draft');
+}
+
 // --- 5c1j. who a client addressed by id: to/cc listed and delivered, bto/bcc delivered and never listed ---
 {
   const { C2S } = await import(path.join(root, 'lib/client/c2s.mjs'));

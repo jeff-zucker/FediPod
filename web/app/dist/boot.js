@@ -91,9 +91,9 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
   mod
 ));
 
-// node_modules/@frogcat/ttl2jsonld/ttl2jsonld.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@frogcat/ttl2jsonld/ttl2jsonld.js
 var require_ttl2jsonld = __commonJS({
-  "node_modules/@frogcat/ttl2jsonld/ttl2jsonld.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@frogcat/ttl2jsonld/ttl2jsonld.js"(exports, module2) {
     (function(root, factory) {
       if (typeof define === "function" && define.amd) {
         define([], factory);
@@ -4767,9 +4767,9 @@ var require_ttl2jsonld = __commonJS({
   }
 });
 
-// node_modules/solid-namespace/index.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/solid-namespace/index.js
 var require_solid_namespace = __commonJS({
-  "node_modules/solid-namespace/index.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/solid-namespace/index.js"(exports, module2) {
     var aliases = {
       acl: "http://www.w3.org/ns/auth/acl#",
       arg: "http://www.w3.org/ns/pim/arg#",
@@ -4837,9 +4837,9 @@ var require_solid_namespace = __commonJS({
   }
 });
 
-// node_modules/@xmldom/xmldom/lib/conventions.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@xmldom/xmldom/lib/conventions.js
 var require_conventions = __commonJS({
-  "node_modules/@xmldom/xmldom/lib/conventions.js"(exports) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@xmldom/xmldom/lib/conventions.js"(exports) {
     "use strict";
     function find(list, predicate, ac) {
       if (ac === void 0) {
@@ -5046,9 +5046,9 @@ var require_conventions = __commonJS({
   }
 });
 
-// node_modules/@xmldom/xmldom/lib/errors.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@xmldom/xmldom/lib/errors.js
 var require_errors = __commonJS({
-  "node_modules/@xmldom/xmldom/lib/errors.js"(exports) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@xmldom/xmldom/lib/errors.js"(exports) {
     "use strict";
     var conventions = require_conventions();
     function extendError(constructor, writableName) {
@@ -5205,9 +5205,9 @@ var require_errors = __commonJS({
   }
 });
 
-// node_modules/@xmldom/xmldom/lib/grammar.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@xmldom/xmldom/lib/grammar.js
 var require_grammar = __commonJS({
-  "node_modules/@xmldom/xmldom/lib/grammar.js"(exports) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@xmldom/xmldom/lib/grammar.js"(exports) {
     "use strict";
     function detectUnicodeSupport(RegExpImpl) {
       try {
@@ -5412,9 +5412,9 @@ var require_grammar = __commonJS({
   }
 });
 
-// node_modules/@xmldom/xmldom/lib/dom.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@xmldom/xmldom/lib/dom.js
 var require_dom = __commonJS({
-  "node_modules/@xmldom/xmldom/lib/dom.js"(exports) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@xmldom/xmldom/lib/dom.js"(exports) {
     "use strict";
     var conventions = require_conventions();
     var find = conventions.find;
@@ -8079,9 +8079,9 @@ var require_dom = __commonJS({
   }
 });
 
-// node_modules/@xmldom/xmldom/lib/entities.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@xmldom/xmldom/lib/entities.js
 var require_entities = __commonJS({
-  "node_modules/@xmldom/xmldom/lib/entities.js"(exports) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@xmldom/xmldom/lib/entities.js"(exports) {
     "use strict";
     var freeze = require_conventions().freeze;
     exports.XML_ENTITIES = freeze({
@@ -10222,9 +10222,9 @@ var require_entities = __commonJS({
   }
 });
 
-// node_modules/@xmldom/xmldom/lib/sax.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@xmldom/xmldom/lib/sax.js
 var require_sax = __commonJS({
-  "node_modules/@xmldom/xmldom/lib/sax.js"(exports) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@xmldom/xmldom/lib/sax.js"(exports) {
     "use strict";
     var conventions = require_conventions();
     var g = require_grammar();
@@ -11004,9 +11004,9 @@ var require_sax = __commonJS({
   }
 });
 
-// node_modules/@xmldom/xmldom/lib/dom-parser.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@xmldom/xmldom/lib/dom-parser.js
 var require_dom_parser = __commonJS({
-  "node_modules/@xmldom/xmldom/lib/dom-parser.js"(exports) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@xmldom/xmldom/lib/dom-parser.js"(exports) {
     "use strict";
     var conventions = require_conventions();
     var dom = require_dom();
@@ -11272,9 +11272,9 @@ var require_dom_parser = __commonJS({
   }
 });
 
-// node_modules/@xmldom/xmldom/lib/index.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@xmldom/xmldom/lib/index.js
 var require_lib = __commonJS({
-  "node_modules/@xmldom/xmldom/lib/index.js"(exports) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@xmldom/xmldom/lib/index.js"(exports) {
     "use strict";
     var conventions = require_conventions();
     exports.assign = conventions.assign;
@@ -11316,9 +11316,9 @@ var require_lib = __commonJS({
   }
 });
 
-// node_modules/rdf-canonize/lib/IdentifierIssuer.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdf-canonize/lib/IdentifierIssuer.js
 var require_IdentifierIssuer = __commonJS({
-  "node_modules/rdf-canonize/lib/IdentifierIssuer.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdf-canonize/lib/IdentifierIssuer.js"(exports, module2) {
     "use strict";
     module2.exports = class IdentifierIssuer {
       /**
@@ -11389,9 +11389,9 @@ var require_IdentifierIssuer = __commonJS({
   }
 });
 
-// node_modules/setimmediate/setImmediate.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/setimmediate/setImmediate.js
 var require_setImmediate = __commonJS({
-  "node_modules/setimmediate/setImmediate.js"(exports) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/setimmediate/setImmediate.js"(exports) {
     (function(global2, undefined2) {
       "use strict";
       if (global2.setImmediate) {
@@ -11537,9 +11537,9 @@ var require_setImmediate = __commonJS({
   }
 });
 
-// node_modules/rdf-canonize/lib/platform-browser.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdf-canonize/lib/platform-browser.js
 var require_platform_browser = __commonJS({
-  "node_modules/rdf-canonize/lib/platform-browser.js"(exports) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdf-canonize/lib/platform-browser.js"(exports) {
     "use strict";
     require_setImmediate();
     exports.setImmediate = setImmediate;
@@ -11559,9 +11559,9 @@ var require_platform_browser = __commonJS({
   }
 });
 
-// node_modules/rdf-canonize/lib/MessageDigest-webcrypto.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdf-canonize/lib/MessageDigest-webcrypto.js
 var require_MessageDigest_webcrypto = __commonJS({
-  "node_modules/rdf-canonize/lib/MessageDigest-webcrypto.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdf-canonize/lib/MessageDigest-webcrypto.js"(exports, module2) {
     "use strict";
     var { bufferToHex, crypto: crypto2 } = require_platform_browser();
     var algorithmMap = /* @__PURE__ */ new Map([
@@ -11603,9 +11603,9 @@ var require_MessageDigest_webcrypto = __commonJS({
   }
 });
 
-// node_modules/rdf-canonize/lib/Permuter.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdf-canonize/lib/Permuter.js
 var require_Permuter = __commonJS({
-  "node_modules/rdf-canonize/lib/Permuter.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdf-canonize/lib/Permuter.js"(exports, module2) {
     "use strict";
     module2.exports = class Permuter {
       /**
@@ -11668,9 +11668,9 @@ var require_Permuter = __commonJS({
   }
 });
 
-// node_modules/rdf-canonize/lib/NQuads.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdf-canonize/lib/NQuads.js
 var require_NQuads = __commonJS({
-  "node_modules/rdf-canonize/lib/NQuads.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdf-canonize/lib/NQuads.js"(exports, module2) {
     "use strict";
     var RDF4 = "http://www.w3.org/1999/02/22-rdf-syntax-ns#";
     var RDF_LANGSTRING = RDF4 + "langString";
@@ -11984,9 +11984,9 @@ var require_NQuads = __commonJS({
   }
 });
 
-// node_modules/rdf-canonize/lib/RDFC10.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdf-canonize/lib/RDFC10.js
 var require_RDFC10 = __commonJS({
-  "node_modules/rdf-canonize/lib/RDFC10.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdf-canonize/lib/RDFC10.js"(exports, module2) {
     "use strict";
     var IdentifierIssuer = require_IdentifierIssuer();
     var MessageDigest = require_MessageDigest_webcrypto();
@@ -12305,9 +12305,9 @@ var require_RDFC10 = __commonJS({
   }
 });
 
-// node_modules/rdf-canonize/lib/RDFC10Sync.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdf-canonize/lib/RDFC10Sync.js
 var require_RDFC10Sync = __commonJS({
-  "node_modules/rdf-canonize/lib/RDFC10Sync.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdf-canonize/lib/RDFC10Sync.js"(exports, module2) {
     "use strict";
     var IdentifierIssuer = require_IdentifierIssuer();
     var MessageDigest = require_MessageDigest_webcrypto();
@@ -12614,9 +12614,9 @@ var require_RDFC10Sync = __commonJS({
   }
 });
 
-// node_modules/rdf-canonize/lib/index.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdf-canonize/lib/index.js
 var require_lib2 = __commonJS({
-  "node_modules/rdf-canonize/lib/index.js"(exports) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdf-canonize/lib/index.js"(exports) {
     "use strict";
     var RDFC10 = require_RDFC10();
     var RDFC10Sync = require_RDFC10Sync();
@@ -12687,16 +12687,16 @@ var require_lib2 = __commonJS({
   }
 });
 
-// node_modules/rdf-canonize/index.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdf-canonize/index.js
 var require_rdf_canonize = __commonJS({
-  "node_modules/rdf-canonize/index.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdf-canonize/index.js"(exports, module2) {
     module2.exports = require_lib2();
   }
 });
 
-// node_modules/jsonld/lib/types.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/jsonld/lib/types.js
 var require_types = __commonJS({
-  "node_modules/jsonld/lib/types.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/jsonld/lib/types.js"(exports, module2) {
     "use strict";
     var api = {};
     module2.exports = api;
@@ -12712,9 +12712,9 @@ var require_types = __commonJS({
   }
 });
 
-// node_modules/jsonld/lib/graphTypes.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/jsonld/lib/graphTypes.js
 var require_graphTypes = __commonJS({
-  "node_modules/jsonld/lib/graphTypes.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/jsonld/lib/graphTypes.js"(exports, module2) {
     "use strict";
     var types = require_types();
     var api = {};
@@ -12763,9 +12763,9 @@ var require_graphTypes = __commonJS({
   }
 });
 
-// node_modules/jsonld/lib/JsonLdError.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/jsonld/lib/JsonLdError.js
 var require_JsonLdError = __commonJS({
-  "node_modules/jsonld/lib/JsonLdError.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/jsonld/lib/JsonLdError.js"(exports, module2) {
     "use strict";
     module2.exports = class JsonLdError extends Error {
       /**
@@ -12785,9 +12785,9 @@ var require_JsonLdError = __commonJS({
   }
 });
 
-// node_modules/jsonld/lib/util.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/jsonld/lib/util.js
 var require_util = __commonJS({
-  "node_modules/jsonld/lib/util.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/jsonld/lib/util.js"(exports, module2) {
     "use strict";
     var graphTypes = require_graphTypes();
     var types = require_types();
@@ -13041,9 +13041,9 @@ var require_util = __commonJS({
   }
 });
 
-// node_modules/jsonld/lib/constants.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/jsonld/lib/constants.js
 var require_constants = __commonJS({
-  "node_modules/jsonld/lib/constants.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/jsonld/lib/constants.js"(exports, module2) {
     "use strict";
     var RDF4 = "http://www.w3.org/1999/02/22-rdf-syntax-ns#";
     var XSD2 = "http://www.w3.org/2001/XMLSchema#";
@@ -13071,9 +13071,9 @@ var require_constants = __commonJS({
   }
 });
 
-// node_modules/jsonld/lib/RequestQueue.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/jsonld/lib/RequestQueue.js
 var require_RequestQueue = __commonJS({
-  "node_modules/jsonld/lib/RequestQueue.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/jsonld/lib/RequestQueue.js"(exports, module2) {
     "use strict";
     module2.exports = class RequestQueue {
       /**
@@ -13105,9 +13105,9 @@ var require_RequestQueue = __commonJS({
   }
 });
 
-// node_modules/jsonld/lib/url.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/jsonld/lib/url.js
 var require_url = __commonJS({
-  "node_modules/jsonld/lib/url.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/jsonld/lib/url.js"(exports, module2) {
     "use strict";
     var types = require_types();
     var api = {};
@@ -13308,9 +13308,9 @@ var require_url = __commonJS({
   }
 });
 
-// node_modules/jsonld/lib/documentLoaders/xhr.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/jsonld/lib/documentLoaders/xhr.js
 var require_xhr = __commonJS({
-  "node_modules/jsonld/lib/documentLoaders/xhr.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/jsonld/lib/documentLoaders/xhr.js"(exports, module2) {
     "use strict";
     var { parseLinkHeader, buildHeaders } = require_util();
     var { LINK_HEADER_CONTEXT } = require_constants();
@@ -13406,9 +13406,9 @@ var require_xhr = __commonJS({
   }
 });
 
-// node_modules/jsonld/lib/platform-browser.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/jsonld/lib/platform-browser.js
 var require_platform_browser2 = __commonJS({
-  "node_modules/jsonld/lib/platform-browser.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/jsonld/lib/platform-browser.js"(exports, module2) {
     "use strict";
     var xhrLoader = require_xhr();
     var api = {};
@@ -13432,9 +13432,9 @@ var require_platform_browser2 = __commonJS({
   }
 });
 
-// node_modules/yallist/iterator.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/yallist/iterator.js
 var require_iterator = __commonJS({
-  "node_modules/yallist/iterator.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/yallist/iterator.js"(exports, module2) {
     "use strict";
     module2.exports = function(Yallist) {
       Yallist.prototype[Symbol.iterator] = function* () {
@@ -13446,9 +13446,9 @@ var require_iterator = __commonJS({
   }
 });
 
-// node_modules/yallist/yallist.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/yallist/yallist.js
 var require_yallist = __commonJS({
-  "node_modules/yallist/yallist.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/yallist/yallist.js"(exports, module2) {
     "use strict";
     module2.exports = Yallist;
     Yallist.Node = Node4;
@@ -13815,9 +13815,9 @@ var require_yallist = __commonJS({
   }
 });
 
-// node_modules/lru-cache/index.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/lru-cache/index.js
 var require_lru_cache = __commonJS({
-  "node_modules/lru-cache/index.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/lru-cache/index.js"(exports, module2) {
     "use strict";
     var Yallist = require_yallist();
     var MAX = /* @__PURE__ */ Symbol("max");
@@ -14084,9 +14084,9 @@ var require_lru_cache = __commonJS({
   }
 });
 
-// node_modules/jsonld/lib/ResolvedContext.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/jsonld/lib/ResolvedContext.js
 var require_ResolvedContext = __commonJS({
-  "node_modules/jsonld/lib/ResolvedContext.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/jsonld/lib/ResolvedContext.js"(exports, module2) {
     "use strict";
     var LRU = require_lru_cache();
     var MAX_ACTIVE_CONTEXTS = 10;
@@ -14110,9 +14110,9 @@ var require_ResolvedContext = __commonJS({
   }
 });
 
-// node_modules/jsonld/lib/ContextResolver.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/jsonld/lib/ContextResolver.js
 var require_ContextResolver = __commonJS({
-  "node_modules/jsonld/lib/ContextResolver.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/jsonld/lib/ContextResolver.js"(exports, module2) {
     "use strict";
     var {
       isArray: _isArray,
@@ -14318,17 +14318,17 @@ var require_ContextResolver = __commonJS({
   }
 });
 
-// node_modules/jsonld/lib/NQuads.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/jsonld/lib/NQuads.js
 var require_NQuads2 = __commonJS({
-  "node_modules/jsonld/lib/NQuads.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/jsonld/lib/NQuads.js"(exports, module2) {
     "use strict";
     module2.exports = require_rdf_canonize().NQuads;
   }
 });
 
-// node_modules/jsonld/lib/events.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/jsonld/lib/events.js
 var require_events = __commonJS({
-  "node_modules/jsonld/lib/events.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/jsonld/lib/events.js"(exports, module2) {
     "use strict";
     var JsonLdError = require_JsonLdError();
     var {
@@ -14443,9 +14443,9 @@ var require_events = __commonJS({
   }
 });
 
-// node_modules/jsonld/lib/context.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/jsonld/lib/context.js
 var require_context = __commonJS({
-  "node_modules/jsonld/lib/context.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/jsonld/lib/context.js"(exports, module2) {
     "use strict";
     var util = require_util();
     var JsonLdError = require_JsonLdError();
@@ -15653,9 +15653,9 @@ var require_context = __commonJS({
   }
 });
 
-// node_modules/jsonld/lib/expand.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/jsonld/lib/expand.js
 var require_expand = __commonJS({
-  "node_modules/jsonld/lib/expand.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/jsonld/lib/expand.js"(exports, module2) {
     "use strict";
     var JsonLdError = require_JsonLdError();
     var {
@@ -16714,9 +16714,9 @@ var require_expand = __commonJS({
   }
 });
 
-// node_modules/jsonld/lib/nodeMap.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/jsonld/lib/nodeMap.js
 var require_nodeMap = __commonJS({
-  "node_modules/jsonld/lib/nodeMap.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/jsonld/lib/nodeMap.js"(exports, module2) {
     "use strict";
     var { isKeyword } = require_context();
     var graphTypes = require_graphTypes();
@@ -16937,9 +16937,9 @@ var require_nodeMap = __commonJS({
   }
 });
 
-// node_modules/jsonld/lib/flatten.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/jsonld/lib/flatten.js
 var require_flatten = __commonJS({
-  "node_modules/jsonld/lib/flatten.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/jsonld/lib/flatten.js"(exports, module2) {
     "use strict";
     var {
       isSubjectReference: _isSubjectReference
@@ -16964,9 +16964,9 @@ var require_flatten = __commonJS({
   }
 });
 
-// node_modules/jsonld/lib/fromRdf.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/jsonld/lib/fromRdf.js
 var require_fromRdf = __commonJS({
-  "node_modules/jsonld/lib/fromRdf.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/jsonld/lib/fromRdf.js"(exports, module2) {
     "use strict";
     var JsonLdError = require_JsonLdError();
     var graphTypes = require_graphTypes();
@@ -17235,9 +17235,9 @@ var require_fromRdf = __commonJS({
   }
 });
 
-// node_modules/canonicalize/lib/canonicalize.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/canonicalize/lib/canonicalize.js
 var require_canonicalize = __commonJS({
-  "node_modules/canonicalize/lib/canonicalize.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/canonicalize/lib/canonicalize.js"(exports, module2) {
     "use strict";
     module2.exports = function serialize2(object) {
       if (typeof object === "number" && isNaN(object)) {
@@ -17272,9 +17272,9 @@ var require_canonicalize = __commonJS({
   }
 });
 
-// node_modules/jsonld/lib/toRdf.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/jsonld/lib/toRdf.js
 var require_toRdf = __commonJS({
-  "node_modules/jsonld/lib/toRdf.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/jsonld/lib/toRdf.js"(exports, module2) {
     "use strict";
     var { createNodeMap } = require_nodeMap();
     var { isKeyword } = require_context();
@@ -17623,9 +17623,9 @@ var require_toRdf = __commonJS({
   }
 });
 
-// node_modules/jsonld/lib/frame.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/jsonld/lib/frame.js
 var require_frame = __commonJS({
-  "node_modules/jsonld/lib/frame.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/jsonld/lib/frame.js"(exports, module2) {
     "use strict";
     var { isKeyword } = require_context();
     var graphTypes = require_graphTypes();
@@ -18152,9 +18152,9 @@ var require_frame = __commonJS({
   }
 });
 
-// node_modules/jsonld/lib/compact.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/jsonld/lib/compact.js
 var require_compact = __commonJS({
-  "node_modules/jsonld/lib/compact.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/jsonld/lib/compact.js"(exports, module2) {
     "use strict";
     var JsonLdError = require_JsonLdError();
     var {
@@ -19052,9 +19052,9 @@ var require_compact = __commonJS({
   }
 });
 
-// node_modules/jsonld/lib/JsonLdProcessor.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/jsonld/lib/JsonLdProcessor.js
 var require_JsonLdProcessor = __commonJS({
-  "node_modules/jsonld/lib/JsonLdProcessor.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/jsonld/lib/JsonLdProcessor.js"(exports, module2) {
     "use strict";
     module2.exports = (jsonld) => {
       class JsonLdProcessor {
@@ -19101,9 +19101,9 @@ var require_JsonLdProcessor = __commonJS({
   }
 });
 
-// node_modules/jsonld/lib/jsonld.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/jsonld/lib/jsonld.js
 var require_jsonld = __commonJS({
-  "node_modules/jsonld/lib/jsonld.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/jsonld/lib/jsonld.js"(exports, module2) {
     var canonize = require_rdf_canonize();
     var platform = require_platform_browser2();
     var util = require_util();
@@ -19693,9 +19693,9 @@ var require_jsonld = __commonJS({
   }
 });
 
-// node_modules/base64-js/index.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/base64-js/index.js
 var require_base64_js = __commonJS({
-  "node_modules/base64-js/index.js"(exports) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/base64-js/index.js"(exports) {
     "use strict";
     exports.byteLength = byteLength;
     exports.toByteArray = toByteArray;
@@ -19794,9 +19794,9 @@ var require_base64_js = __commonJS({
   }
 });
 
-// node_modules/ieee754/index.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/ieee754/index.js
 var require_ieee754 = __commonJS({
-  "node_modules/ieee754/index.js"(exports) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/ieee754/index.js"(exports) {
     exports.read = function(buffer, offset, isLE, mLen, nBytes) {
       var e, m;
       var eLen = nBytes * 8 - mLen - 1;
@@ -19877,9 +19877,9 @@ var require_ieee754 = __commonJS({
   }
 });
 
-// node_modules/buffer/index.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/buffer/index.js
 var require_buffer = __commonJS({
-  "node_modules/buffer/index.js"(exports) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/buffer/index.js"(exports) {
     "use strict";
     var base64 = require_base64_js();
     var ieee754 = require_ieee754();
@@ -21469,9 +21469,9 @@ var require_buffer = __commonJS({
   }
 });
 
-// node_modules/cross-fetch/dist/browser-ponyfill.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/cross-fetch/dist/browser-ponyfill.js
 var require_browser_ponyfill = __commonJS({
-  "node_modules/cross-fetch/dist/browser-ponyfill.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/cross-fetch/dist/browser-ponyfill.js"(exports, module2) {
     var __global__ = typeof globalThis !== "undefined" && globalThis || typeof self !== "undefined" && self || typeof global !== "undefined" && global;
     var __globalThis__ = (function() {
       function F() {
@@ -22288,7 +22288,7 @@ async function unwrapKeys(envelope, password) {
   return JSON.parse(new TextDecoder().decode(plaintext));
 }
 
-// node_modules/@babel/runtime/helpers/esm/typeof.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@babel/runtime/helpers/esm/typeof.js
 function _typeof(o) {
   "@babel/helpers - typeof";
   return _typeof = "function" == typeof Symbol && "symbol" == typeof Symbol.iterator ? function(o2) {
@@ -22298,7 +22298,7 @@ function _typeof(o) {
   }, _typeof(o);
 }
 
-// node_modules/@babel/runtime/helpers/esm/toPrimitive.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@babel/runtime/helpers/esm/toPrimitive.js
 function toPrimitive(t, r) {
   if ("object" != _typeof(t) || !t) return t;
   var e = t[Symbol.toPrimitive];
@@ -22310,13 +22310,13 @@ function toPrimitive(t, r) {
   return ("string" === r ? String : Number)(t);
 }
 
-// node_modules/@babel/runtime/helpers/esm/toPropertyKey.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@babel/runtime/helpers/esm/toPropertyKey.js
 function toPropertyKey(t) {
   var i = toPrimitive(t, "string");
   return "symbol" == _typeof(i) ? i : i + "";
 }
 
-// node_modules/@babel/runtime/helpers/esm/defineProperty.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@babel/runtime/helpers/esm/defineProperty.js
 function _defineProperty(e, r, t) {
   return (r = toPropertyKey(r)) in e ? Object.defineProperty(e, r, {
     value: t,
@@ -22326,7 +22326,7 @@ function _defineProperty(e, r, t) {
   }) : e[r] = t, e;
 }
 
-// node_modules/rdflib/esm/class-order.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdflib/esm/class-order.js
 var ClassOrder = {
   "Literal": 1,
   "Collection": 3,
@@ -22337,7 +22337,7 @@ var ClassOrder = {
 };
 var class_order_default = ClassOrder;
 
-// node_modules/rdflib/esm/node-internal.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdflib/esm/node-internal.js
 var Node2 = class {
   constructor(value) {
     _defineProperty(this, "termType", void 0);
@@ -22424,7 +22424,7 @@ var Node2 = class {
 _defineProperty(Node2, "fromValue", void 0);
 _defineProperty(Node2, "toJS", void 0);
 
-// node_modules/rdflib/esm/types.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdflib/esm/types.js
 var NamedNodeTermType = "NamedNode";
 var BlankNodeTermType = "BlankNode";
 var LiteralTermType = "Literal";
@@ -22447,7 +22447,7 @@ var TurtleContentType = "text/turtle";
 var TurtleLegacyContentType = "application/x-turtle";
 var XHTMLContentType = "application/xhtml+xml";
 
-// node_modules/rdflib/esm/blank-node.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdflib/esm/blank-node.js
 var BlankNode = class _BlankNode extends Node2 {
   static getId(id) {
     if (id) {
@@ -22516,7 +22516,7 @@ var BlankNode = class _BlankNode extends Node2 {
 _defineProperty(BlankNode, "nextId", 0);
 _defineProperty(BlankNode, "NTAnonymousNodePrefix", "_:");
 
-// node_modules/rdflib/esm/utils/termValue.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdflib/esm/utils/termValue.js
 function termValue(node) {
   if (typeof node === "string") {
     return node;
@@ -22524,7 +22524,7 @@ function termValue(node) {
   return node.value;
 }
 
-// node_modules/rdflib/esm/utils/terms.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdflib/esm/utils/terms.js
 function isStatement(obj) {
   return typeof obj === "object" && obj !== null && "subject" in obj;
 }
@@ -22562,7 +22562,7 @@ function isGraph(obj) {
   return isTerm(obj) && (obj.termType === NamedNodeTermType || obj.termType === VariableTermType || obj.termType === BlankNodeTermType || obj.termType === DefaultGraphTermType);
 }
 
-// node_modules/rdflib/esm/named-node.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdflib/esm/named-node.js
 var NamedNode = class _NamedNode extends Node2 {
   /**
    * Create a named (IRI) RDF Node
@@ -22652,7 +22652,7 @@ var NamedNode = class _NamedNode extends Node2 {
   }
 };
 
-// node_modules/rdflib/esm/xsd-internal.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdflib/esm/xsd-internal.js
 var xsd_internal_default = {
   boolean: new NamedNode("http://www.w3.org/2001/XMLSchema#boolean"),
   dateTime: new NamedNode("http://www.w3.org/2001/XMLSchema#dateTime"),
@@ -22663,7 +22663,7 @@ var xsd_internal_default = {
   string: new NamedNode("http://www.w3.org/2001/XMLSchema#string")
 };
 
-// node_modules/rdflib/esm/literal.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdflib/esm/literal.js
 var Literal = class _Literal extends Node2 {
   /**
    * Initializes a literal
@@ -22802,7 +22802,7 @@ var Literal = class _Literal extends Node2 {
   }
 };
 
-// node_modules/rdflib/esm/collection.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdflib/esm/collection.js
 function fromValue(value) {
   if (typeof value === "undefined" || value === null) {
     return value;
@@ -22887,11 +22887,11 @@ var Collection = class _Collection extends Node2 {
 };
 _defineProperty(Collection, "termType", CollectionTermType);
 
-// node_modules/rdflib/esm/utils/default-graph-uri.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdflib/esm/utils/default-graph-uri.js
 var defaultGraphURI = "chrome:theSession";
 var defaultGraphNode = new NamedNode(defaultGraphURI);
 
-// node_modules/rdflib/esm/default-graph.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdflib/esm/default-graph.js
 var DefaultGraph = class extends Node2 {
   constructor() {
     super("");
@@ -22910,7 +22910,7 @@ function isDefaultGraph(object) {
   return !!object && object.termType === DefaultGraphTermType;
 }
 
-// node_modules/rdflib/esm/statement.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdflib/esm/statement.js
 var defaultGraph = new DefaultGraph();
 var Statement = class _Statement {
   /**
@@ -22984,7 +22984,7 @@ var Statement = class _Statement {
   }
 };
 
-// node_modules/rdflib/esm/uri.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdflib/esm/uri.js
 var uri_exports = {};
 __export(uri_exports, {
   docpart: () => docpart,
@@ -23153,7 +23153,7 @@ function refTo(base, uri) {
   return s + uri.slice(i);
 }
 
-// node_modules/rdflib/esm/variable.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdflib/esm/variable.js
 var Variable = class _Variable extends Node2 {
   /**
    * Initializes this variable
@@ -23193,7 +23193,7 @@ var Variable = class _Variable extends Node2 {
   }
 };
 
-// node_modules/rdflib/esm/factories/factory-types.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdflib/esm/factories/factory-types.js
 var Feature = /* @__PURE__ */ (function(Feature2) {
   Feature2["collections"] = "COLLECTIONS";
   Feature2["defaultGraphType"] = "DEFAULT_GRAPH_TYPE";
@@ -23205,7 +23205,7 @@ var Feature = /* @__PURE__ */ (function(Feature2) {
   return Feature2;
 })({});
 
-// node_modules/rdflib/esm/factories/canonical-data-factory.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdflib/esm/factories/canonical-data-factory.js
 var defaultGraph2 = new DefaultGraph();
 var CanonicalDataFactory = {
   supports: {
@@ -23363,7 +23363,7 @@ var CanonicalDataFactory = {
 };
 var canonical_data_factory_default = CanonicalDataFactory;
 
-// node_modules/rdflib/esm/log.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdflib/esm/log.js
 var log = {
   debug(x) {
   },
@@ -23380,7 +23380,7 @@ var log = {
 };
 var log_default = log;
 
-// node_modules/rdflib/esm/namespace.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdflib/esm/namespace.js
 function Namespace(nsuri, factory) {
   const dataFactory = factory || {
     namedNode: (value) => new NamedNode(value)
@@ -23390,11 +23390,11 @@ function Namespace(nsuri, factory) {
   };
 }
 
-// node_modules/rdflib/esm/serializer.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdflib/esm/serializer.js
 var ttl2jsonld = __toESM(require_ttl2jsonld());
 var import_solid_namespace = __toESM(require_solid_namespace());
 
-// node_modules/rdflib/esm/utils-js.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdflib/esm/utils-js.js
 var import_xmldom = __toESM(require_lib());
 function mediaTypeClass(mediaType) {
   mediaType = mediaType.split(";")[0].trim();
@@ -23570,7 +23570,7 @@ function RDFArrayRemove(a, x) {
   throw new Error("RDFArrayRemove: Array did not contain " + x + " " + x.why);
 }
 
-// node_modules/rdflib/esm/xsd.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdflib/esm/xsd.js
 function createXSD(localFactory = canonical_data_factory_default) {
   return {
     boolean: localFactory.namedNode("http://www.w3.org/2001/XMLSchema#boolean"),
@@ -23584,7 +23584,7 @@ function createXSD(localFactory = canonical_data_factory_default) {
 }
 var defaultXSD = createXSD(canonical_data_factory_default);
 
-// node_modules/rdflib/esm/serializer.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdflib/esm/serializer.js
 function createSerializer(store) {
   return new Serializer(store);
 }
@@ -24436,7 +24436,7 @@ function backslashUify(str) {
   return res;
 }
 
-// node_modules/rdflib/esm/serialize.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdflib/esm/serialize.js
 function serialize(target, kb, base, contentType, callback, options) {
   base = base || target?.value;
   const opts = options || {};
@@ -24498,7 +24498,7 @@ function serialize(target, kb, base, contentType, callback, options) {
   }
 }
 
-// node_modules/rdflib/esm/utils.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdflib/esm/utils.js
 var appliedFactoryMethods = ["blankNode", "defaultGraph", "literal", "namedNode", "quad", "variable", "supports"];
 var rdf = {
   first: "http://www.w3.org/1999/02/22-rdf-syntax-ns#first",
@@ -24531,7 +24531,7 @@ function ArrayIndexOf(arr, item, i = 0) {
   return -1;
 }
 
-// node_modules/rdflib/esm/formula.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdflib/esm/formula.js
 var Formula = class _Formula extends Node2 {
   /**
    * Initializes this formula
@@ -25209,7 +25209,7 @@ var Formula = class _Formula extends Node2 {
   }
 };
 
-// node_modules/rdflib/esm/node.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdflib/esm/node.js
 Node2.fromValue = fromValue;
 var node_default = Node2;
 var ns = {
@@ -25232,7 +25232,7 @@ Node2.toJS = function(term2) {
   return term2.value;
 };
 
-// node_modules/rdflib/esm/query.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdflib/esm/query.js
 var Query = class {
   constructor(name, id) {
     this.pat = new IndexedFormula();
@@ -25617,7 +25617,7 @@ function indexedFormulaQuery(myQuery, callback, fetcher2, onDone) {
   }
 }
 
-// node_modules/rdflib/esm/store.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdflib/esm/store.js
 var owlNamespaceURI = "http://www.w3.org/2002/07/owl#";
 function handleFP(formula2, subj, pred, obj) {
   var o1 = formula2.any(subj, pred, void 0);
@@ -26510,7 +26510,7 @@ var IndexedFormula = class _IndexedFormula extends Formula {
 _defineProperty(IndexedFormula, "handleRDFType", void 0);
 IndexedFormula.handleRDFType = handleRDFType;
 
-// node_modules/rdflib/esm/lists.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdflib/esm/lists.js
 var RDF = Namespace("http://www.w3.org/1999/02/22-rdf-syntax-ns#");
 function substituteInDoc(store, x, y, doc) {
   for (const quad3 of store.statementsMatching(y, null, null, doc)) {
@@ -26572,7 +26572,7 @@ function convertFirstRestNil(store, doc) {
   });
 }
 
-// node_modules/rdflib/esm/n3parser.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdflib/esm/n3parser.js
 function hexify2(str) {
   return encodeURI(str);
 }
@@ -27870,7 +27870,7 @@ function BadSyntax(uri, lines, str, i, why) {
   return e;
 }
 
-// node_modules/rdflib/esm/factories/extended-term-factory.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdflib/esm/factories/extended-term-factory.js
 var ExtendedTermFactory = {
   ...canonical_data_factory_default,
   supports: {
@@ -27907,7 +27907,7 @@ var ExtendedTermFactory = {
 };
 var extended_term_factory_default = ExtendedTermFactory;
 
-// node_modules/rdflib/esm/jsonldparser.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdflib/esm/jsonldparser.js
 function jsonldObjectToTerm(kb, obj) {
   if (typeof obj === "string") {
     return kb.rdfFactory.literal(obj);
@@ -27996,10 +27996,10 @@ function createStatement(kb, id, property, value, base) {
   return kb.rdfFactory.quad(id, predicate, object, kb.rdfFactory.namedNode(base));
 }
 
-// node_modules/n3/src/N3Lexer.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/n3/src/N3Lexer.js
 var import_buffer = __toESM(require_buffer());
 
-// node_modules/n3/src/IRIs.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/n3/src/IRIs.js
 var RDF2 = "http://www.w3.org/1999/02/22-rdf-syntax-ns#";
 var XSD = "http://www.w3.org/2001/XMLSchema#";
 var SWAP = "http://www.w3.org/2000/10/swap/";
@@ -28033,7 +28033,7 @@ var IRIs_default = {
   }
 };
 
-// node_modules/n3/src/N3Lexer.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/n3/src/N3Lexer.js
 var { xsd } = IRIs_default;
 var escapeSequence = /\\u([a-fA-F0-9]{4})|\\U([a-fA-F0-9]{8})|\\([^])/g;
 var escapeReplacements = {
@@ -28483,7 +28483,7 @@ var N3Lexer = class {
   }
 };
 
-// node_modules/n3/src/N3DataFactory.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/n3/src/N3DataFactory.js
 var { rdf: rdf2, xsd: xsd2 } = IRIs_default;
 var DEFAULTGRAPH;
 var _blankNodeCounter = 0;
@@ -28729,7 +28729,7 @@ function fromQuad(inQuad) {
   return quad(fromTerm(inQuad.subject), fromTerm(inQuad.predicate), fromTerm(inQuad.object), fromTerm(inQuad.graph));
 }
 
-// node_modules/n3/src/N3Parser.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/n3/src/N3Parser.js
 var blankNodePrefix = 0;
 var N3Parser = class _N3Parser {
   constructor(options) {
@@ -29817,7 +29817,7 @@ N3Parser.SUPPORTED_VERSIONS = [
 ];
 initDataFactory(N3Parser.prototype, N3DataFactory_default);
 
-// node_modules/rdflib/esm/rdfaparser.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdflib/esm/rdfaparser.js
 if (typeof Node3 === "undefined") {
   Node3 = {
     ELEMENT_NODE: 1,
@@ -30706,7 +30706,7 @@ RDFaProcessor.dateTimeTypes = [{
 }];
 var parseRDFaDOM = RDFaProcessor.parseRDFaDOM;
 
-// node_modules/rdflib/esm/rdfxmlparser.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdflib/esm/rdfxmlparser.js
 var RDFParser = class _RDFParser {
   /*
    * @constructor
@@ -31106,7 +31106,7 @@ _defineProperty(RDFParser, "nodeType", {
   "NOTATION": 12
 });
 
-// node_modules/rdflib/esm/patch-parser.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdflib/esm/patch-parser.js
 function sparqlUpdateParser(str, kb, base) {
   var i, j, k;
   var keywords = ["INSERT", "DELETE", "WHERE"];
@@ -31171,7 +31171,7 @@ function sparqlUpdateParser(str, kb, base) {
   }
 }
 
-// node_modules/rdflib/esm/parse.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdflib/esm/parse.js
 function parse2(str, kb, base, contentType = "text/turtle", callback) {
   contentType = contentType || TurtleContentType;
   contentType = contentType.split(";")[0];
@@ -31266,7 +31266,7 @@ function parse2(str, kb, base, contentType = "text/turtle", callback) {
   }
 }
 
-// node_modules/rdflib/esm/fetcher.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdflib/esm/fetcher.js
 var import_cross_fetch = __toESM(require_browser_ponyfill());
 var Parsable = {
   "text/n3": true,
@@ -32630,7 +32630,7 @@ _defineProperty(Fetcher, "crossSiteProxyTemplate", void 0);
 Fetcher.HANDLERS = defaultHandlers;
 Fetcher.CONTENT_TYPE_BY_EXT = CONTENT_TYPE_BY_EXT;
 
-// node_modules/rdflib/esm/factories/rdflib-data-factory.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdflib/esm/factories/rdflib-data-factory.js
 var RDFlibDataFactory = {
   ...extended_term_factory_default,
   /**
@@ -32671,7 +32671,7 @@ var RDFlibDataFactory = {
 };
 var rdflib_data_factory_default = RDFlibDataFactory;
 
-// node_modules/rdflib/esm/index.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdflib/esm/index.js
 var boundDataFactory = {};
 for (const name in rdflib_data_factory_default) {
   if (typeof rdflib_data_factory_default[name] === "function") boundDataFactory[name] = rdflib_data_factory_default[name].bind(rdflib_data_factory_default);

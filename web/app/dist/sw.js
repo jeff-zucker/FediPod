@@ -100,6 +100,240 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
 ));
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 
+// web/app/shims/node-crypto.mjs
+var node_crypto_exports = {};
+__export(node_crypto_exports, {
+  createHash: () => createHash,
+  createHmac: () => createHmac,
+  createPrivateKey: () => createPrivateKey,
+  createPublicKey: () => createPublicKey,
+  default: () => node_crypto_default,
+  generateKeyPairSync: () => generateKeyPairSync,
+  randomBytes: () => randomBytes,
+  randomUUID: () => randomUUID,
+  scryptSync: () => scryptSync,
+  timingSafeEqual: () => timingSafeEqual,
+  webcrypto: () => webcrypto
+});
+function sha256(bytes) {
+  const l = bytes.length;
+  const withOne = l + 1;
+  const k = (56 - withOne % 64 + 64) % 64;
+  const total = withOne + k + 8;
+  const m = new Uint8Array(total);
+  m.set(bytes);
+  m[l] = 128;
+  const bits = l * 8;
+  const dv = new DataView(m.buffer);
+  dv.setUint32(total - 4, bits >>> 0);
+  dv.setUint32(total - 8, Math.floor(bits / 4294967296));
+  const H = new Uint32Array([1779033703, 3144134277, 1013904242, 2773480762, 1359893119, 2600822924, 528734635, 1541459225]);
+  const w = new Uint32Array(64);
+  for (let i = 0; i < total; i += 64) {
+    for (let t = 0; t < 16; t++) w[t] = dv.getUint32(i + t * 4);
+    for (let t = 16; t < 64; t++) {
+      const s0 = rotr(w[t - 15], 7) ^ rotr(w[t - 15], 18) ^ w[t - 15] >>> 3;
+      const s1 = rotr(w[t - 2], 17) ^ rotr(w[t - 2], 19) ^ w[t - 2] >>> 10;
+      w[t] = w[t - 16] + s0 + w[t - 7] + s1 >>> 0;
+    }
+    let [a, b, c, d, e, f, g, h] = H;
+    for (let t = 0; t < 64; t++) {
+      const S1 = rotr(e, 6) ^ rotr(e, 11) ^ rotr(e, 25);
+      const ch = e & f ^ ~e & g;
+      const t1 = h + S1 + ch + K[t] + w[t] >>> 0;
+      const S0 = rotr(a, 2) ^ rotr(a, 13) ^ rotr(a, 22);
+      const maj = a & b ^ a & c ^ b & c;
+      const t2 = S0 + maj >>> 0;
+      h = g;
+      g = f;
+      f = e;
+      e = d + t1 >>> 0;
+      d = c;
+      c = b;
+      b = a;
+      a = t1 + t2 >>> 0;
+    }
+    H[0] = H[0] + a >>> 0;
+    H[1] = H[1] + b >>> 0;
+    H[2] = H[2] + c >>> 0;
+    H[3] = H[3] + d >>> 0;
+    H[4] = H[4] + e >>> 0;
+    H[5] = H[5] + f >>> 0;
+    H[6] = H[6] + g >>> 0;
+    H[7] = H[7] + h >>> 0;
+  }
+  const out = new Uint8Array(32);
+  new DataView(out.buffer).setUint32(0, H[0]);
+  new DataView(out.buffer).setUint32(4, H[1]);
+  new DataView(out.buffer).setUint32(8, H[2]);
+  new DataView(out.buffer).setUint32(12, H[3]);
+  new DataView(out.buffer).setUint32(16, H[4]);
+  new DataView(out.buffer).setUint32(20, H[5]);
+  new DataView(out.buffer).setUint32(24, H[6]);
+  new DataView(out.buffer).setUint32(28, H[7]);
+  return out;
+}
+function hmacSha256(key, msg) {
+  if (key.length > 64) key = sha256(key);
+  const pad = new Uint8Array(64);
+  pad.set(key);
+  const ipad = new Uint8Array(64);
+  const opad = new Uint8Array(64);
+  for (let i = 0; i < 64; i++) {
+    ipad[i] = pad[i] ^ 54;
+    opad[i] = pad[i] ^ 92;
+  }
+  const inner = sha256(concat(ipad, msg));
+  return sha256(concat(opad, inner));
+}
+function createHash(alg) {
+  if (alg !== "sha256") throw new Error(`node-crypto shim: only sha256 is implemented (got ${alg})`);
+  let acc = new Uint8Array(0);
+  return { update(d, e) {
+    acc = concat(acc, toBytes(d, e));
+    return this;
+  }, digest(enc4) {
+    return encode(sha256(acc), enc4);
+  } };
+}
+function createHmac(alg, key) {
+  if (alg !== "sha256") throw new Error(`node-crypto shim: only hmac-sha256 is implemented (got ${alg})`);
+  const k = toBytes(key);
+  let acc = new Uint8Array(0);
+  return { update(d, e) {
+    acc = concat(acc, toBytes(d, e));
+    return this;
+  }, digest(enc4) {
+    return encode(hmacSha256(k, acc), enc4);
+  } };
+}
+function randomBytes(n) {
+  const b = new Uint8Array(n);
+  crypto.getRandomValues(b);
+  return globalThis.Buffer ? globalThis.Buffer.from(b) : b;
+}
+function timingSafeEqual(a, b) {
+  if (a.length !== b.length) return false;
+  let out = 0;
+  for (let i = 0; i < a.length; i++) out |= a[i] ^ b[i];
+  return out === 0;
+}
+var K, rotr, concat, toBytes, encode, webcrypto, randomUUID, unavailable, generateKeyPairSync, createPrivateKey, createPublicKey, scryptSync, node_crypto_default;
+var init_node_crypto = __esm({
+  "web/app/shims/node-crypto.mjs"() {
+    K = new Uint32Array([
+      1116352408,
+      1899447441,
+      3049323471,
+      3921009573,
+      961987163,
+      1508970993,
+      2453635748,
+      2870763221,
+      3624381080,
+      310598401,
+      607225278,
+      1426881987,
+      1925078388,
+      2162078206,
+      2614888103,
+      3248222580,
+      3835390401,
+      4022224774,
+      264347078,
+      604807628,
+      770255983,
+      1249150122,
+      1555081692,
+      1996064986,
+      2554220882,
+      2821834349,
+      2952996808,
+      3210313671,
+      3336571891,
+      3584528711,
+      113926993,
+      338241895,
+      666307205,
+      773529912,
+      1294757372,
+      1396182291,
+      1695183700,
+      1986661051,
+      2177026350,
+      2456956037,
+      2730485921,
+      2820302411,
+      3259730800,
+      3345764771,
+      3516065817,
+      3600352804,
+      4094571909,
+      275423344,
+      430227734,
+      506948616,
+      659060556,
+      883997877,
+      958139571,
+      1322822218,
+      1537002063,
+      1747873779,
+      1955562222,
+      2024104815,
+      2227730452,
+      2361852424,
+      2428436474,
+      2756734187,
+      3204031479,
+      3329325298
+    ]);
+    rotr = (x, n) => x >>> n | x << 32 - n;
+    concat = (a, b) => {
+      const o = new Uint8Array(a.length + b.length);
+      o.set(a);
+      o.set(b, a.length);
+      return o;
+    };
+    toBytes = (data, enc4) => {
+      if (data == null) return new Uint8Array(0);
+      if (typeof data === "string") {
+        if (enc4 === "hex") return Uint8Array.from(data.match(/.{1,2}/g) || [], (h) => parseInt(h, 16));
+        if (enc4 === "base64") return Uint8Array.from(atob(data), (c) => c.charCodeAt(0));
+        return new TextEncoder().encode(data);
+      }
+      return data instanceof Uint8Array ? data : new Uint8Array(data);
+    };
+    encode = (bytes, enc4) => {
+      if (!enc4 || enc4 === "buffer") return bytes;
+      if (enc4 === "hex") return [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
+      const b642 = btoa(String.fromCharCode(...bytes));
+      if (enc4 === "base64url") return b642.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+      return b642;
+    };
+    webcrypto = globalThis.crypto;
+    randomUUID = () => globalThis.crypto.randomUUID();
+    unavailable = (name) => () => {
+      throw new Error(`node:crypto ${name} is not available in the browser agent`);
+    };
+    generateKeyPairSync = unavailable("generateKeyPairSync");
+    createPrivateKey = unavailable("createPrivateKey");
+    createPublicKey = unavailable("createPublicKey");
+    scryptSync = unavailable("scryptSync");
+    node_crypto_default = {
+      createHash,
+      createHmac,
+      randomBytes,
+      webcrypto,
+      randomUUID,
+      timingSafeEqual,
+      generateKeyPairSync,
+      createPrivateKey,
+      createPublicKey,
+      scryptSync
+    };
+  }
+});
+
 // lib/pod/urls.mjs
 function apUrls(remotePod, root, { publicBase = null } = {}) {
   if (!root) throw new Error("apUrls: a container root is required \u2014 the caller states it, this library does not guess");
@@ -157,7 +391,117 @@ var init_urls = __esm({
   }
 });
 
-// node_modules/entities/dist/decode-codepoint.js
+// lib/core/profile-page.mjs
+function profilePageHtml({
+  name,
+  address,
+  summary = null,
+  icon = null,
+  image = null,
+  fields = [],
+  joined = null,
+  pinned = [],
+  kind = "person"
+}) {
+  const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ ...HTML_ESCAPES, '"': "&quot;" })[c]);
+  const what = kind === "group" ? "a group" : "an account";
+  const month = (iso) => {
+    const d = new Date(iso);
+    return Number.isNaN(d.getTime()) ? null : d.toLocaleDateString("en", { month: "long", year: "numeric", timeZone: "UTC" });
+  };
+  const day = (iso) => {
+    const d = new Date(iso);
+    return Number.isNaN(d.getTime()) ? "" : d.toISOString().slice(0, 10);
+  };
+  const fieldRows = fields.filter((f) => f?.name && f?.value !== void 0 && f?.value !== null && String(f.value) !== "");
+  const joinedText = joined ? month(joined) : null;
+  const pins = pinned.filter((x) => x && typeof x.content === "string");
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${esc(name)} (${esc(address)})</title>
+<style>
+:root { color-scheme: light dark; }
+body { font: 112.5%/1.5 system-ui, sans-serif; max-width: 34rem; margin: 3rem auto; padding: 0 1rem; }
+img.header { width: 100%; max-height: 12rem; object-fit: cover; border-radius: 1rem; }
+img.avatar { width: 6rem; height: 6rem; border-radius: 1rem; object-fit: cover; margin-top: 1rem; }
+h1 { margin: .5rem 0 0; }
+.address { font-size: 1.1rem; user-select: all; }
+dl.fields { display: grid; grid-template-columns: max-content 1fr; gap: .4rem 1rem; margin: 1.5rem 0; }
+dl.fields dt { font-weight: 600; }
+dl.fields dd { margin: 0; overflow-wrap: anywhere; }
+.joined { margin: 1rem 0; }
+section.pinned h2 { font-size: 1.1rem; margin: 2rem 0 .5rem; }
+article.pin { border: 1px solid #8884; border-radius: 1rem; padding: 1rem 1.2rem; margin: 1rem 0; }
+article.pin p:last-child { margin-bottom: 0; }
+article.pin .when { font-size: 1rem; }
+form { margin-top: 2rem; }
+label { display: block; margin-bottom: .3rem; }
+input { font: inherit; padding: .5rem; width: 14rem; max-width: 100%; }
+button { font: inherit; padding: .5rem 1rem; }
+.hint { color: #666; font-size: 1rem; }
+.err { color: #b00020; }
+.err:empty { display: none; }
+@media (prefers-color-scheme: dark) {
+  .hint { color: #aaa; }
+  .err { color: #ff8a80; }
+}
+</style>
+</head>
+<body>
+<main>
+${image ? `<img class="header" src="${esc(image)}" alt="">` : ""}
+${icon ? `<img class="avatar" src="${esc(icon)}" alt="">` : ""}
+<h1>${esc(name)}</h1>
+<p class="address">${esc(address)}</p>
+${summary ? `<div>${summary}</div>` : ""}
+${fieldRows.length ? `<dl class="fields">
+${fieldRows.map((f) => `<dt>${esc(f.name)}</dt><dd>${esc(f.value)}</dd>`).join("\n")}
+</dl>` : ""}
+${joinedText ? `<p class="joined">Joined ${esc(joinedText)}</p>` : ""}
+${pins.length ? `<section class="pinned">
+<h2>Pinned</h2>
+${pins.map((x) => `<article class="pin">
+${x.content}
+<p class="when">${x.url ? `<a href="${esc(x.url)}">${esc(day(x.published))}</a>` : esc(day(x.published))}</p>
+</article>`).join("\n")}
+</section>` : ""}
+<p>This is ${what} on the Fediverse. To follow it, paste the address above
+into the search box of Mastodon or any Fediverse app \u2014 or use the form.</p>
+<form id="follow">
+  <label for="server">your server</label>
+  <input id="server" type="text" placeholder="mastodon.social" autocomplete="off"
+    required aria-describedby="follow-err">
+  <button type="submit">Follow</button>
+  <p class="err" id="follow-err" role="alert"></p>
+</form>
+<p class="hint">The form sends you to your own server's follow screen.</p>
+</main>
+<script>
+document.getElementById('follow').addEventListener('submit', (ev) => {
+  ev.preventDefault();
+  const s = document.getElementById('server').value.trim().replace(/^https?:\\/\\//, '').replace(/\\/.*$/, '');
+  const err = document.getElementById('follow-err');
+  const addr = document.querySelector('.address').textContent.trim();
+  if (!s) { err.textContent = 'Enter your server, e.g. mastodon.social'; return; }
+  err.textContent = '';
+  location.href = 'https://' + s + '/authorize_interaction?uri=' + encodeURIComponent(addr);
+});
+<\/script>
+</body>
+</html>
+`;
+}
+var HTML_ESCAPES;
+var init_profile_page = __esm({
+  "lib/core/profile-page.mjs"() {
+    HTML_ESCAPES = { "&": "&amp;", "<": "&lt;", ">": "&gt;" };
+  }
+});
+
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/entities/dist/decode-codepoint.js
 function replaceCodePoint(codePoint) {
   if (codePoint >= 55296 && codePoint <= 57343 || codePoint > 1114111) {
     return 65533;
@@ -166,7 +510,7 @@ function replaceCodePoint(codePoint) {
 }
 var decodeMap;
 var init_decode_codepoint = __esm({
-  "node_modules/entities/dist/decode-codepoint.js"() {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/entities/dist/decode-codepoint.js"() {
     decodeMap = /* @__PURE__ */ new Map([
       [0, 65533],
       // C1 Unicode control character reference replacements
@@ -201,7 +545,7 @@ var init_decode_codepoint = __esm({
   }
 });
 
-// node_modules/entities/dist/internal/decode-shared.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/entities/dist/internal/decode-shared.js
 function decodeBase64(input) {
   const binary = atob(input);
   const evenLength = binary.length & ~1;
@@ -214,32 +558,32 @@ function decodeBase64(input) {
   return out;
 }
 var init_decode_shared = __esm({
-  "node_modules/entities/dist/internal/decode-shared.js"() {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/entities/dist/internal/decode-shared.js"() {
   }
 });
 
-// node_modules/entities/dist/generated/decode-data-html.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/entities/dist/generated/decode-data-html.js
 var htmlDecodeTree;
 var init_decode_data_html = __esm({
-  "node_modules/entities/dist/generated/decode-data-html.js"() {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/entities/dist/generated/decode-data-html.js"() {
     init_decode_shared();
     htmlDecodeTree = /* @__PURE__ */ decodeBase64("QR08ALkAAgH6AYsDNQR2BO0EPgXZBQEGLAbdBxMISQrvCmQLfQurDKQNLw4fD4YPpA+6D/IPAAAAAAAAAAAAAAAAKhBMEY8TmxUWF2EYLBkxGuAa3RsJHDscWR8YIC8jSCSIJcMl6ie3Ku8rEC0CLjoupS7kLgAIRU1hYmNmZ2xtbm9wcnN0dVQAWgBeAGUAaQBzAHcAfgCBAIQAhwCSAJoAoACsALMAbABpAGcAO4DGAMZAUAA7gCYAJkBjAHUAdABlADuAwQDBQHIiZXZlAAJhAAFpeW0AcgByAGMAO4DCAMJAEGRyAADgNdgE3XIAYQB2AGUAO4DAAMBA8CFoYZFj4SFjcgBhZAAAoFMqAAFncIsAjgBvAG4ABGFmAADgNdg43fAlbHlGdW5jdGlvbgCgYSBpAG4AZwA7gMUAxUAAAWNzpACoAHIAAOA12Jzc6SFnbgCgVCJpAGwAZABlADuAwwDDQG0AbAA7gMQAxEAABGFjZWZvcnN1xQDYANoA7QDxAPYA+QD8AAABY3LJAM8AayNzbGFzaAAAoBYidgHTANUAAKDnKmUAZAAAoAYjeQARZIABY3J0AOAA5QDrAGEidXNlAACgNSLuI291bGxpcwCgLCFhAJJjcgAA4DXYBd1wAGYAAOA12Dnd5SF2ZdhiYwDyAOoAbSJwZXEAAKBOIgAHSE9hY2RlZmhpbG9yc3UXARoBHwE6AVIBVQFiAWQBZgGCAakB6QHtAfIBYwB5ACdkUABZADuAqQCpQIABY3B5ACUBKAE1AfUhdGUGYWmg0iJ0KGFsRGlmZmVyZW50aWFsRAAAoEUhbCJleXMAAKAtIQACYWVpb0EBRAFKAU0B8iFvbgxhZABpAGwAO4DHAMdAcgBjAAhhbiJpbnQAAKAwIm8AdAAKYQABZG5ZAV0BaSJsbGEAuGB0I2VyRG90ALdg8gA5AWkAp2NyImNsZQAAAkRNUFRwAXQBeQF9AW8AdAAAoJkiaSJudXMAAKCWIuwhdXMAoJUiaSJtZXMAAKCXIm8AAAFjc4cBlAFrKndpc2VDb250b3VySW50ZWdyYWwAAKAyImUjQ3VybHkAAAFEUZwBpAFvJXVibGVRdW90ZQAAoB0gdSJvdGUAAKAZIAACbG5wdbABtgHNAdgBbwBuAGWgNyIAoHQqgAFnaXQAvAHBAcUB8iJ1ZW50AKBhIm4AdAAAoC8i7yV1ckludGVncmFsAKAuIgABZnLRAdMBAKACIe8iZHVjdACgECJuLnRlckNsb2Nrd2lzZUNvbnRvdXJJbnRlZ3JhbAAAoDMi7yFzcwCgLypjAHIAAOA12J7ccABDoNMiYQBwAACgTSKABURKU1phY2VmaW9zAAsCEgIVAhgCGwIsAjQCOQI9AnMCfwNvoEUh9CJyYWhkAKARKWMAeQACZGMAeQAFZGMAeQAPZIABZ3JzACECJQIoAuchZXIAoCEgcgAAoKEhaAB2AACg5CoAAWF5MAIzAvIhb24OYRRkbAB0oAciYQCUY3IAAOA12AfdAAFhZkECawIAAWNtRQJnAvIjaXRpY2FsAAJBREdUUAJUAl8CYwJjInV0ZQC0YG8AdAFZAloC2WJiJGxlQWN1dGUA3WJyImF2ZQBgYGkibGRlANxi7yFuZACgxCJmJWVyZW50aWFsRAAAoEYhcAR9AgAAAAAAAIECjgIAABoDZgAA4DXYO91EoagAhQKJAm8AdAAAoNwgcSJ1YWwAAKBQIuIhbGUAA0NETFJVVpkCqAK1Au8C/wIRA28AbgB0AG8AdQByAEkAbgB0AGUAZwByAGEA7ADEAW8AdAKvAgAAAACwAqhgbiNBcnJvdwAAoNMhAAFlb7kC0AJmAHQAgAFBUlQAwQLGAs0CciJyb3cAAKDQIekkZ2h0QXJyb3cAoNQhZQDlACsCbgBnAAABTFLWAugC5SFmdAABQVLcAuECciJyb3cAAKD4J+kkZ2h0QXJyb3cAoPon6SRnaHRBcnJvdwCg+SdpImdodAAAAUFU9gL7AnIicm93AACg0iFlAGUAAKCoInAAQQIGAwAAAAALA3Iicm93AACg0SFvJHduQXJyb3cAAKDVIWUlcnRpY2FsQmFyAACgJSJuAAADQUJMUlRhJAM2AzoDWgNxA3oDciJyb3cAAKGTIUJVLAMwA2EAcgAAoBMpcCNBcnJvdwAAoPUhciJldmUAEWPlIWZ00gJDAwAASwMAAFIDaSVnaHRWZWN0b3IAAKBQKWUkZVZlY3RvcgAAoF4p5SJjdG9yQqC9IWEAcgAAoFYpaSJnaHQA1AFiAwAAaQNlJGVWZWN0b3IAAKBfKeUiY3RvckKgwSFhAHIAAKBXKWUAZQBBoKQiciJyb3cAAKCnIXIAcgBvAPcAtAIAAWN0gwOHA3IA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YwAAoN8i4SFycnCgtiEAoD0pgKIqImJjZG9zACsVMBU6FT4VQRVyImNhcAAAoEgqAAFhdTQVNxVwAACgRipwAACgSipvAHQAAKCNInIAAKBFKgDgKiIA/gACYWxydksVURVuFXMVcgByAG2gtyEAoDwpeQCAAWV2dwBYFWUVaRVxAHACXxUAAAAAYxVyAGUA4wAXFXUA4wAZFWUAZQAAoM4iZSJkZ2UAAKDPImUAbgA7gKQApEBlI2Fycm93AAABbHJ7FX8V5SFmdACgtiFpImdodAAAoLchZQDkAG0VAAFjaYsVkRVvAG4AaQBuAPQAkwFuAHQAAKAxImwiY3R5AACgLSOACUFIYWJjZGVmaGlqbG9yc3R1d3oAuBW7Fb8V1RXgFegV+RUKFhUWHxZUFlcWZRbFFtsW7xb7FgUXChdyAPIAtAJhAHIAAKBlKQACZ2xyc8YVyhXOFdAV5yFlcgCgICDlIXRoAKA4IfIA9QxoAHagECAAoKMiawHZFd4VYSJyb3cAAKAPKWEA4wBfAgABYXnkFecV8iFvbg9hNGQAoUYhYW/tFfQVAAFnciEC8RVyAACgyiF0InNlcQAAoHcqgAFnbG0A/xUCFgUWO4CwALBAdABhALRjcCJ0eXYAAKCxKQABaXIOFhIW8yFodACgfykA4DXYId1hAHIAAAFschsWHRYAoMMhAKDCIYACYWVnc3YAKBauAjYWOhY+Fm0AAKHEIm9zLhY0Fm4AZABzoMQi9SFpdACgZiZhIm1tYQDdY2kAbgAAoPIiAKH3AGlvQxZRFmQAZQAAgfcAO29KFksW90BuI3RpbWVzAACgxyJuAPgAUBZjAHkAUmRjAG8CXhYAAAAAYhZyAG4AAKAeI28AcAAAoA0jgAJscHR1dwBuFnEWdRaSFp4W7CFhciRgZgAA4DXYVd0AotkCZW1wc30WhBaJFo0WcQBkoFAibwB0AACgUSJpIm51cwAAoDgi7CF1cwCgFCLxInVhcmUAoKEiYgBsAGUAYgBhAHIAdwBlAGQAZwDlANcAbgCAAWFkaAClFqoWtBZyAHIAbwD3APUMbwB3AG4AYQByAHIAbwB3APMA8xVhI3Jwb29uAAABbHK8FsAWZQBmAPQAHBZpAGcAaAD0AB4WYgHJFs8WawBhAHIAbwD3AJILbwLUFgAAAADYFnIAbgAAoB8jbwBwAACgDCOAAWNvdADhFukW7BYAAXJ55RboFgDgNdi53FVkbAAAoPYp8iFvaxFhAAFkcvMW9xZvAHQAAKDxImkA5qC/JVsSAAFhaP8WAhdyAPIANQNhAPIA1wvhIm5nbGUAoKYpAAFjaQ4XEBd5AF9k5yJyYXJyAKD/JwAJRGFjZGVmZ2xtbm9wcXJzdHV4MRc4F0YXWxcyBF4XaRd5F40XrBe0F78X2RcVGCEYLRg1GEAYAAFEbzUXgRZvAPQA+BUAAWNzPBdCF3UAdABlADuA6QDpQPQhZXIAoG4qAAJhaW95TRdQF1YXWhfyIW9uG2FyAGOgViI7gOoA6kDsIW9uAKBVIk1kbwB0ABdhAAFEcmIXZhdvAHQAAKBSIgDgNdgi3XKhmipuF3QXYQB2AGUAO4DoAOhAZKCWKm8AdAAAoJgqgKGZKmlscwCAF4UXhxfuInRlcnMAoOcjAKATIWSglSpvAHQAAKCXKoABYXBzAJMXlheiF2MAcgATYXQAeQBzogUinxcAAAAAoRdlAHQAAKAFInAAMaADIDMBqRerFwCgBCAAoAUgAAFnc7AXsRdLYXAAAKACIAABZ3C4F7sXbwBuABlhZgAA4DXYVt2AAWFscwDFF8sXzxdyAHOg1SJsAACg4yl1AHMAAKBxKmkAAKG1A2x21RfYF28AbgC1Y/VjAAJjc3V24BfoF/0XEBgAAWlv5BdWF3IAYwAAoFYiaQLuFwAAAADwF+0ADQThIW50AAFnbPUX+Rd0AHIAAKCWKuUhc3MAoJUqgAFhZWkAAxgGGAoYbABzAD1gcwB0AACgXyJ2AESgYSJEAACgeCrwImFyc2wAoOUpAAFEYRkYHRhvAHQAAKBTInIAcgAAoHEpgAFjZGkAJxgqGO0XcgAAoC8hbwD0AIwCAAFhaDEYMhi3YzuA8ADwQAABbXI5GD0YbAA7gOsA60BvAACgrCCAAWNpcABGGEgYSxhsACFgcwD0ACwEAAFlb08YVxhjAHQAYQB0AGkAbwDuABoEbgBlAG4AdABpAGEAbADlADME4Ql1GAAAgRgAAIMYiBgAAAAAoRilGAAAqhgAALsYvhjRGAAA1xgnGWwAbABpAG4AZwBkAG8AdABzAGUA8QBlF3kARGRtImFsZQAAoEAmgAFpbHIAjRiRGJ0Y7CFpZwCgA/tpApcYAAAAAJoYZwAAoAD7aQBnAACgBPsA4DXYI93sIWlnAKAB++whaWcA4GYAagCAAWFsdACvGLIYthh0AACgbSZpAGcAAKAC+24AcwAAoLElbwBmAJJh8AHCGAAAxhhmAADgNdhX3QABYWvJGMwYbADsAGsEdqDUIgCg2SphI3J0aW50AACgDSoAAWFv2hgiGQABY3PeGB8ZsQPnGP0YBRkSGRUZAAAdGbID7xjyGPQY9xj5GAAA+xg7gL0AvUAAoFMhO4C8ALxAAKBVIQCgWSEAoFshswEBGQAAAxkAoFQhAKBWIbQCCxkOGQAAAAAQGTuAvgC+QACgVyEAoFwhNQAAoFghtgEZGQAAGxkAoFohAKBdITgAAKBeIWwAAKBEIHcAbgAAoCIjYwByAADgNdi73IAIRWFiY2RlZmdpamxub3JzdHYARhlKGVoZXhlmGWkZkhmWGZkZnRmgGa0ZxhnLGc8Z4BkjGmygZyIAoIwqgAFjbXAAUBlTGVgZ9SF0ZfVhbQBhAOSgswM6FgCghipyImV2ZQAfYQABaXliGWUZcgBjAB1hM2RvAHQAIWGAoWUibHFzAMYEcBl6GfGhZSLOBAAAdhlsAGEAbgD0AN8EgKF+KmNkbACBGYQZjBljAACgqSpvAHQAb6CAKmyggioAoIQqZeDbIgD+cwAAoJQqcgAA4DXYJN3noGsirATtIWVsAKA3IWMAeQBTZIChdyJFYWoApxmpGasZAKCSKgCgpSoAoKQqAAJFYWVztBm2Gb0ZwhkAoGkicABwoIoq8iFveACgiipxoIgq8aCIKrUZaQBtAACg5yJwAGYAAOA12FjdYQB2AOUAYwIAAWNp0xnWGXIAAKAKIW0AAKFzImVs3BneGQCgjioAoJAqAIM+ADtjZGxxco0E6xn0GfgZ/BkBGgABY2nvGfEZAKCnKnIAAKB6Km8AdAAAoNci0CFhcgCglSl1ImVzdAAAoHwqgAJhZGVscwAKGvQZFhrVBCAa8AEPGgAAFBpwAHIAbwD4AFkZcgAAoHgpcQAAAWxxxAQbGmwAZQBzAPMASRlpAO0A5AQAAWVuJxouGnIjdG5lcXEAAOBpIgD+xQAsGgAFQWFiY2Vma29zeUAaQxpmGmoabRqDGocalhrCGtMacgDyAMwCAAJpbG1yShpOGlAaVBpyAHMA8ABxD2YAvWBpAGwA9AASBQABZHJYGlsaYwB5AEpkAKGUIWN3YBpkGmkAcgAAoEgpAKCtIWEAcgAAoA8h6SFyYyVhgAFhbHIAcxp7Gn8a8iF0c3WgZSZpAHQAAKBlJuwhaXAAoCYg4yFvbgCguSJyAADgNdgl3XMAAAFld4wakRphInJvdwAAoCUpYSJyb3cAAKAmKYACYW1vcHIAnxqjGqcauhq+GnIAcgAAoP8h9CFodACgOyJrAAABbHKsGrMaZSRmdGFycm93AACgqSHpJGdodGFycm93AKCqIWYAAOA12Fnd4iFhcgCgFSCAAWNsdADIGswa0BpyAADgNdi93GEAcwDoAGka8iFvaydhAAFicNca2xr1IWxsAKBDIOghZW4AoBAg4Qr2GgAA/RoAAAgbExsaGwAAIRs7GwAAAAA+G2IbmRuVG6sbAACyG80b0htjAHUAdABlADuA7QDtQAChYyBpeQEbBhtyAGMAO4DuAO5AOGQAAWN4CxsNG3kANWRjAGwAO4ChAKFAAAFmcssCFhsA4DXYJt1yAGEAdgBlADuA7ADsQIChSCFpbm8AJxsyGzYbAAFpbisbLxtuAHQAAKAMKnQAAKAtIuYhaW4AoNwpdABhAACgKSHsIWlnM2GAAWFvcABDG1sbXhuAAWNndABJG0sbWRtyACthgAFlbHAAcQVRG1UbaQBuAOUAyAVhAHIA9AByBWgAMWFmAACgtyJlAGQAtWEAoggiY2ZvdGkbbRt1G3kb4SFyZQCgBSFpAG4AdKAeImkAZQAAoN0pZABvAPQAWxsAoisiY2VscIEbhRuPG5QbYQBsAACguiIAAWdyiRuNG2UAcgDzACMQ4wCCG2EicmhrAACgFyryIW9kAKA8KgACY2dwdJ8boRukG6gbeQBRZG8AbgAvYWYAAOA12FrdYQC5Y3UAZQBzAHQAO4C/AL9AAAFjabUbuRtyAADgNdi+3G4AAKIIIkVkc3bCG8QbyBvQAwCg+SJvAHQAAKD1Inag9CIAoPMiaaBiIOwhZGUpYesB1hsAANkbYwB5AFZkbAA7gO8A70AAA2NmbW9zdeYb7hvyG/Ub+hsFHAABaXnqG+0bcgBjADVhOWRyAADgNdgn3eEhdGg3YnAAZgAA4DXYW93jAf8bAAADHHIAAOA12L/c8iFjeVhk6yFjeVRkAARhY2ZnaGpvcxUcGhwiHCYcKhwtHDAcNRzwIXBhdqC6A/BjAAFleR4cIRzkIWls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ZmdobG1vcHJzdHV3CiwNLBEsHSwnLDEsQCxLLFIsYix6LIQsjyzLLOgs7Sz/LAotcgDyAAkDYQByAACgYykAAWNyFSwbLHUAdABlADuA+gD6QPIACQ1yAOMBIywAACUseQBeZHYAZQBtYQABaXkrLDAscgBjADuA+wD7QENkgAFhYmgANyw6LD0scgDyANEO7CFhY3FhYQDyAOAOAAFpckQsSCzzIWh0AKB+KQDgNdgy3XIAYQB2AGUAO4D5APlAYQFWLF8scgAAAWxyWixcLACgvyEAoL4hbABrAACggCUAAWN0Zix2LG8CbCwAAAAAcyxyAG4AZaAcI3IAAKAcI28AcAAAoA8jcgBpAACg+CUAAWFsfiyBLGMAcgBrYTuAqACoQAABZ3CILIssbwBuAHNhZgAA4DXYZt0AA2FkaGxzdZksniynLLgsuyzFLHIAcgBvAPcACQ1vAHcAbgBhAHIAcgBvAPcA2A5hI3Jwb29uAAABbHKvLLMsZQBmAPQAWyxpAGcAaAD0AF0sdQDzAKYOaQAAocUDaGzBLMIs0mNvAG4AxWPwI2Fycm93cwCgyCGAAWNpdADRLOEs5CxvAtcsAAAAAN4scgBuAGWgHSNyAACgHSNvAHAAAKAOI24AZwBvYXIAaQAAoPklYwByAADgNdjK3IABZGlyAPMs9yz6LG8AdAAAoPAi7CFkZWlhaQBmoLUlAKC0JQABYW0DLQYtcgDyAMosbAA7gPwA/EDhIm5nbGUAoKcpgAdBQkRhY2RlZmxub3Byc3oAJy0qLTAtNC2bLZ0toS2/LcMtxy3TLdgt3C3gLfwtcgDyABADYQByAHag6CoAoOkqYQBzAOgA/gIAAW5yOC08LechcnQAoJwpgANla25wcnN0AJkpSC1NLVQtXi1iLYItYQBwAHAA4QAaHG8AdABoAGkAbgDnAKEXgAFoaXIAoSmzJFotbwBwAPQAdCVooJUh7wD4JgABaXVmLWotZwBtAOEAuygAAWJwbi14LXMjZXRuZXEAceCKIgD+AODLKgD+cyNldG5lcQBx4IsiAP4A4MwqAP4AAWhyhi2KLWUAdADhABIraSNhbmdsZQAAAWxyki2WLeUhZnQAoLIiaSJnaHQAAKCzInkAMmThIXNoAKCiIoABZWxyAKcttC24LWKiKCKuLQAAAACyLWEAcgAAoLsicQAAoFoi7CFpcACg7iIAAWJ0vC1eD2EA8gBfD3IAAOA12DPddAByAOkAlS1zAHUAAAFicM0t0C0A4IIi0iAA4IMi0iBwAGYAAOA12GfdcgBvAPAAWQt0AHIA6QCaLQABY3XkLegtcgAA4DXYy9wAAWJw7C30LW4AAAFFZXUt8S0A4IoiAP5uAAABRWV/LfktAOCLIgD+6SJnemFnAKCaKYADY2Vmb3BycwANLhAuJS4pLiMuLi40LukhcmN1YQABZGkULiEuAAFiZxguHC5hAHIAAKBfKmUAcaAnIgCgWSLlIXJwAKAYIXIAAOA12DTdcABmAADgNdho3WWgQCJhAHQA6ABqD2MAcgAA4DXYzNzjCuQRUC4AAFQuAABYLmIuAAAAAGMubS5wLnQuAAAAAIguki4AAJouJxIqEnQAcgDpAB0ScgAA4DXYNd0AAUFhWy5eLnIA8gDnAnIA8gCTB75jAAFBYWYuaS5yAPIA4AJyAPIAjAdhAPAAeh5pAHMAAKD7IoABZHB0APgReS6DLgABZmx9LoAuAOA12GnddQDzAP8RaQBtAOUABBIAAUFhiy6OLnIA8gDuAnIA8gCaBwABY3GVLgoScgAA4DXYzdwAAXB0nS6hLmwAdQDzACUScgDpACASAARhY2VmaW9zdbEuvC7ELsguzC7PLtQu2S5jAAABdXm2LrsudABlADuA/QD9QE9kAAFpecAuwy5yAGMAd2FLZG4AO4ClAKVAcgAA4DXYNt1jAHkAV2RwAGYAAOA12GrdYwByAADgNdjO3AABY23dLt8ueQBOZGwAO4D/AP9AAAVhY2RlZmhpb3N38y73Lv8uAi8MLxAvEy8YLx0vIi9jInV0ZQB6YQABYXn7Lv4u8iFvbn5hN2RvAHQAfGEAAWV0Bi8KL3QAcgDmAB8QYQC2Y3IAAOA12DfdYwB5ADZk5yJyYXJyAKDdIXAAZgAA4DXYa91jAHIAAOA12M/cAAFqbiYvKC8AoA0gagAAoAwg");
   }
 });
 
-// node_modules/entities/dist/generated/decode-data-xml.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/entities/dist/generated/decode-data-xml.js
 var xmlDecodeTree;
 var init_decode_data_xml = __esm({
-  "node_modules/entities/dist/generated/decode-data-xml.js"() {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/entities/dist/generated/decode-data-xml.js"() {
     init_decode_shared();
     xmlDecodeTree = /* @__PURE__ */ decodeBase64("AAJhZ2xxBwARABMAFQBtAg0AAAAAAA8AcAAmYG8AcwAnYHQAPmB0ADxg9SFvdCJg");
   }
 });
 
-// node_modules/entities/dist/internal/bin-trie-flags.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/entities/dist/internal/bin-trie-flags.js
 var BinTrieFlags;
 var init_bin_trie_flags = __esm({
-  "node_modules/entities/dist/internal/bin-trie-flags.js"() {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/entities/dist/internal/bin-trie-flags.js"() {
     (function(BinTrieFlags2) {
       BinTrieFlags2[BinTrieFlags2["VALUE_LENGTH"] = 49152] = "VALUE_LENGTH";
       BinTrieFlags2[BinTrieFlags2["FLAG13"] = 8192] = "FLAG13";
@@ -249,7 +593,7 @@ var init_bin_trie_flags = __esm({
   }
 });
 
-// node_modules/entities/dist/decode.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/entities/dist/decode.js
 function isNumber(code) {
   return code >= CharCodes.ZERO && code <= CharCodes.NINE;
 }
@@ -292,7 +636,7 @@ function determineBranch(decodeTree, current, nodeIndex, char) {
 }
 var CharCodes, TO_LOWER_BIT, EntityDecoderState, DecodingMode, EntityDecoder;
 var init_decode = __esm({
-  "node_modules/entities/dist/decode.js"() {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/entities/dist/decode.js"() {
     init_decode_codepoint();
     init_bin_trie_flags();
     init_decode_data_html();
@@ -625,7 +969,7 @@ var init_decode = __esm({
   }
 });
 
-// node_modules/htmlparser2/dist/Tokenizer.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/htmlparser2/dist/Tokenizer.js
 function isWhitespace(c) {
   return c === CharCodes2.Space || c === CharCodes2.NewLine || c === CharCodes2.Tab || c === CharCodes2.FormFeed || c === CharCodes2.CarriageReturn;
 }
@@ -637,7 +981,7 @@ function isASCIIAlpha(c) {
 }
 var CharCodes2, State, QuoteType, Sequences, specialStartSequences, Tokenizer;
 var init_Tokenizer = __esm({
-  "node_modules/htmlparser2/dist/Tokenizer.js"() {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/htmlparser2/dist/Tokenizer.js"() {
     init_decode();
     (function(CharCodes3) {
       CharCodes3[CharCodes3["Tab"] = 9] = "Tab";
@@ -1583,10 +1927,10 @@ var init_Tokenizer = __esm({
   }
 });
 
-// node_modules/htmlparser2/dist/Parser.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/htmlparser2/dist/Parser.js
 var fromCodePoint, formTags, pTag, headingTags, tableSectionTags, ddtTags, rtpTags, openImpliesClose, DOCUMENT_TYPE, voidElements, foreignContextElements, htmlIntegrationElements, svgTagNameAdjustments, ForeignContext, reNameEnd, Parser;
 var init_Parser = __esm({
-  "node_modules/htmlparser2/dist/Parser.js"() {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/htmlparser2/dist/Parser.js"() {
     init_Tokenizer();
     ({ fromCodePoint } = String);
     formTags = /* @__PURE__ */ new Set([
@@ -2167,7 +2511,7 @@ var init_Parser = __esm({
   }
 });
 
-// node_modules/domelementtype/dist/index.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/domelementtype/dist/index.js
 var dist_exports = {};
 __export(dist_exports, {
   CDATA: () => CDATA,
@@ -2187,7 +2531,7 @@ function isTag(element) {
 }
 var ElementType, Root, Text, Directive, Comment, Script, Style, Tag, CDATA, Doctype;
 var init_dist = __esm({
-  "node_modules/domelementtype/dist/index.js"() {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/domelementtype/dist/index.js"() {
     (function(ElementType2) {
       ElementType2["Root"] = "root";
       ElementType2["Text"] = "text";
@@ -2211,7 +2555,7 @@ var init_dist = __esm({
   }
 });
 
-// node_modules/domhandler/dist/node.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/domhandler/dist/node.js
 function isTag2(node) {
   return isTag(node);
 }
@@ -2300,7 +2644,7 @@ function cloneChildren(childs) {
 }
 var Node2, DataNode, Text2, Comment2, ProcessingInstruction, NodeWithChildren, CDATA2, Document, Element;
 var init_node = __esm({
-  "node_modules/domhandler/dist/node.js"() {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/domhandler/dist/node.js"() {
     init_dist();
     Node2 = class {
       /** Parent of the node */
@@ -2491,10 +2835,10 @@ var init_node = __esm({
   }
 });
 
-// node_modules/domhandler/dist/index.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/domhandler/dist/index.js
 var defaultOptions, DomHandler;
 var init_dist2 = __esm({
-  "node_modules/domhandler/dist/index.js"() {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/domhandler/dist/index.js"() {
     init_dist();
     init_node();
     init_node();
@@ -2645,7 +2989,7 @@ var init_dist2 = __esm({
   }
 });
 
-// node_modules/domutils/dist/querying.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/domutils/dist/querying.js
 function filter(test, node, recurse = true, limit = Number.POSITIVE_INFINITY) {
   return find(test, Array.isArray(node) ? node : [node], recurse, limit);
 }
@@ -2714,12 +3058,12 @@ function findAll(test, nodes) {
   }
 }
 var init_querying = __esm({
-  "node_modules/domutils/dist/querying.js"() {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/domutils/dist/querying.js"() {
     init_dist2();
   }
 });
 
-// node_modules/domutils/dist/legacy.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/domutils/dist/legacy.js
 function getAttribCheck(attrib, value) {
   if (typeof value === "function") {
     return (element) => isTag2(element) && value(element.attribs[attrib]);
@@ -2760,7 +3104,7 @@ function getElementsByTagType(type, nodes, recurse = true, limit = Number.POSITI
 }
 var Checks;
 var init_legacy = __esm({
-  "node_modules/domutils/dist/legacy.js"() {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/domutils/dist/legacy.js"() {
     init_dist2();
     init_querying();
     Checks = {
@@ -2789,7 +3133,7 @@ var init_legacy = __esm({
   }
 });
 
-// node_modules/entities/dist/escape.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/entities/dist/escape.js
 function encodeXML(input) {
   let out;
   let last = 0;
@@ -2837,7 +3181,7 @@ function getEscaper(regex, map) {
 }
 var xmlCodeMap, getCodePoint, XML_BITSET_VALUE, escapeAttribute, escapeText;
 var init_escape = __esm({
-  "node_modules/entities/dist/escape.js"() {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/entities/dist/escape.js"() {
     xmlCodeMap = /* @__PURE__ */ new Map([
       [34, "&quot;"],
       [38, "&amp;"],
@@ -2864,10 +3208,10 @@ var init_escape = __esm({
   }
 });
 
-// node_modules/entities/dist/index.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/entities/dist/index.js
 var EntityLevel, EncodingMode;
 var init_dist3 = __esm({
-  "node_modules/entities/dist/index.js"() {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/entities/dist/index.js"() {
     init_escape();
     (function(EntityLevel2) {
       EntityLevel2[EntityLevel2["XML"] = 0] = "XML";
@@ -2883,16 +3227,16 @@ var init_dist3 = __esm({
   }
 });
 
-// node_modules/dom-serializer/dist/foreign-names.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/dom-serializer/dist/foreign-names.js
 var elementNames, attributeNames;
 var init_foreign_names = __esm({
-  "node_modules/dom-serializer/dist/foreign-names.js"() {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/dom-serializer/dist/foreign-names.js"() {
     elementNames = new Map("altGlyph altGlyphDef altGlyphItem animateColor animateMotion animateTransform clipPath feBlend feColorMatrix feComponentTransfer feComposite feConvolveMatrix feDiffuseLighting feDisplacementMap feDistantLight feDropShadow feFlood feFuncA feFuncB feFuncG feFuncR feGaussianBlur feImage feMerge feMergeNode feMorphology feOffset fePointLight feSpecularLighting feSpotLight feTile feTurbulence foreignObject glyphRef linearGradient radialGradient textPath".split(" ").map((name) => [name.toLowerCase(), name]));
     attributeNames = new Map("definitionURL attributeName attributeType baseFrequency baseProfile calcMode clipPathUnits diffuseConstant edgeMode filterUnits glyphRef gradientTransform gradientUnits kernelMatrix kernelUnitLength keyPoints keySplines keyTimes lengthAdjust limitingConeAngle markerHeight markerUnits markerWidth maskContentUnits maskUnits numOctaves pathLength patternContentUnits patternTransform patternUnits pointsAtX pointsAtY pointsAtZ preserveAlpha preserveAspectRatio primitiveUnits refX refY repeatCount repeatDur requiredExtensions requiredFeatures specularConstant specularExponent spreadMethod startOffset stdDeviation stitchTiles surfaceScale systemLanguage tableValues targetX targetY textLength viewBox viewTarget xChannelSelector yChannelSelector zoomAndPan".split(" ").map((name) => [name.toLowerCase(), name]));
   }
 });
 
-// node_modules/dom-serializer/dist/index.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/dom-serializer/dist/index.js
 function render(node, options = {}) {
   const nodes = "length" in node ? node : [node];
   const xmlMode = options.xmlMode ?? false;
@@ -2985,7 +3329,7 @@ function formatAttributes(attributes, options, xmlMode) {
 }
 var unencodedElements, voidElements2, foreignElements, foreignModeIntegrationPoints, dist_default;
 var init_dist4 = __esm({
-  "node_modules/dom-serializer/dist/index.js"() {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/dom-serializer/dist/index.js"() {
     init_dist();
     init_dist3();
     init_foreign_names();
@@ -2997,7 +3341,7 @@ var init_dist4 = __esm({
   }
 });
 
-// node_modules/domutils/dist/stringify.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/domutils/dist/stringify.js
 function getOuterHTML(node, options) {
   return dist_default(node, options);
 }
@@ -3036,14 +3380,14 @@ function innerText(node) {
   return "";
 }
 var init_stringify = __esm({
-  "node_modules/domutils/dist/stringify.js"() {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/domutils/dist/stringify.js"() {
     init_dist4();
     init_dist();
     init_dist2();
   }
 });
 
-// node_modules/domutils/dist/feeds.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/domutils/dist/feeds.js
 function getFeed(document3) {
   const feedRoot = getOneElement(isValidFeed, document3);
   return feedRoot ? feedRoot.name === "feed" ? getAtomFeed(feedRoot) : getRssFeed(feedRoot) : null;
@@ -3153,7 +3497,7 @@ function isValidFeed(value) {
 }
 var MEDIA_KEYS_STRING, MEDIA_KEYS_INT;
 var init_feeds = __esm({
-  "node_modules/domutils/dist/feeds.js"() {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/domutils/dist/feeds.js"() {
     init_legacy();
     init_stringify();
     MEDIA_KEYS_STRING = ["url", "type", "lang"];
@@ -3170,7 +3514,7 @@ var init_feeds = __esm({
   }
 });
 
-// node_modules/domutils/dist/helpers.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/domutils/dist/helpers.js
 function removeSubsets(nodes) {
   let index = nodes.length;
   while (--index >= 0) {
@@ -3243,7 +3587,7 @@ function uniqueSort(nodes) {
 }
 var DocumentPosition;
 var init_helpers = __esm({
-  "node_modules/domutils/dist/helpers.js"() {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/domutils/dist/helpers.js"() {
     init_dist2();
     (function(DocumentPosition2) {
       DocumentPosition2[DocumentPosition2["DISCONNECTED"] = 1] = "DISCONNECTED";
@@ -3255,7 +3599,7 @@ var init_helpers = __esm({
   }
 });
 
-// node_modules/domutils/dist/manipulation.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/domutils/dist/manipulation.js
 function removeElement(element) {
   if (element.prev)
     element.prev.next = element.next;
@@ -3350,11 +3694,11 @@ function prepend(element, previous) {
   element.prev = previous;
 }
 var init_manipulation = __esm({
-  "node_modules/domutils/dist/manipulation.js"() {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/domutils/dist/manipulation.js"() {
   }
 });
 
-// node_modules/domutils/dist/traversal.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/domutils/dist/traversal.js
 function getChildren(element) {
   return hasChildren(element) ? element.children : [];
 }
@@ -3401,12 +3745,12 @@ function prevElementSibling(element) {
   return prev;
 }
 var init_traversal = __esm({
-  "node_modules/domutils/dist/traversal.js"() {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/domutils/dist/traversal.js"() {
     init_dist2();
   }
 });
 
-// node_modules/domutils/dist/index.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/domutils/dist/index.js
 var dist_exports2 = {};
 __export(dist_exports2, {
   DocumentPosition: () => DocumentPosition,
@@ -3446,7 +3790,7 @@ __export(dist_exports2, {
   uniqueSort: () => uniqueSort
 });
 var init_dist5 = __esm({
-  "node_modules/domutils/dist/index.js"() {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/domutils/dist/index.js"() {
     init_feeds();
     init_helpers();
     init_legacy();
@@ -3457,7 +3801,7 @@ var init_dist5 = __esm({
   }
 });
 
-// node_modules/htmlparser2/dist/index.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/htmlparser2/dist/index.js
 var dist_exports3 = {};
 __export(dist_exports3, {
   DefaultHandler: () => DomHandler,
@@ -3486,7 +3830,7 @@ function parseFeed(feed, options = parseFeedDefaultOptions) {
 }
 var parseFeedDefaultOptions;
 var init_dist6 = __esm({
-  "node_modules/htmlparser2/dist/index.js"() {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/htmlparser2/dist/index.js"() {
     init_Parser();
     init_Parser();
     init_dist2();
@@ -3500,9 +3844,9 @@ var init_dist6 = __esm({
   }
 });
 
-// node_modules/escape-string-regexp/index.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/escape-string-regexp/index.js
 var require_escape_string_regexp = __commonJS({
-  "node_modules/escape-string-regexp/index.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/escape-string-regexp/index.js"(exports, module2) {
     "use strict";
     module2.exports = (string) => {
       if (typeof string !== "string") {
@@ -3513,9 +3857,9 @@ var require_escape_string_regexp = __commonJS({
   }
 });
 
-// node_modules/is-plain-object/dist/is-plain-object.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/is-plain-object/dist/is-plain-object.js
 var require_is_plain_object = __commonJS({
-  "node_modules/is-plain-object/dist/is-plain-object.js"(exports) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/is-plain-object/dist/is-plain-object.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     function isObject(o) {
@@ -3537,9 +3881,9 @@ var require_is_plain_object = __commonJS({
   }
 });
 
-// node_modules/deepmerge/dist/cjs.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/deepmerge/dist/cjs.js
 var require_cjs = __commonJS({
-  "node_modules/deepmerge/dist/cjs.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/deepmerge/dist/cjs.js"(exports, module2) {
     "use strict";
     var isMergeableObject = function isMergeableObject2(value) {
       return isNonNullObject(value) && !isSpecial(value);
@@ -3640,9 +3984,9 @@ var require_cjs = __commonJS({
   }
 });
 
-// node_modules/parse-srcset/src/parse-srcset.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/parse-srcset/src/parse-srcset.js
 var require_parse_srcset = __commonJS({
-  "node_modules/parse-srcset/src/parse-srcset.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/parse-srcset/src/parse-srcset.js"(exports, module2) {
     (function(root, factory3) {
       if (typeof define === "function" && define.amd) {
         define([], factory3);
@@ -3799,9 +4143,9 @@ var require_parse_srcset = __commonJS({
   }
 });
 
-// node_modules/picocolors/picocolors.browser.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/picocolors/picocolors.browser.js
 var require_picocolors_browser = __commonJS({
-  "node_modules/picocolors/picocolors.browser.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/picocolors/picocolors.browser.js"(exports, module2) {
     var x = String;
     var create = function() {
       return { isColorSupported: false, reset: x, bold: x, dim: x, italic: x, underline: x, inverse: x, hidden: x, strikethrough: x, black: x, red: x, green: x, yellow: x, blue: x, magenta: x, cyan: x, white: x, gray: x, bgBlack: x, bgRed: x, bgGreen: x, bgYellow: x, bgBlue: x, bgMagenta: x, bgCyan: x, bgWhite: x, blackBright: x, redBright: x, greenBright: x, yellowBright: x, blueBright: x, magentaBright: x, cyanBright: x, whiteBright: x, bgBlackBright: x, bgRedBright: x, bgGreenBright: x, bgYellowBright: x, bgBlueBright: x, bgMagentaBright: x, bgCyanBright: x, bgWhiteBright: x };
@@ -3811,15 +4155,15 @@ var require_picocolors_browser = __commonJS({
   }
 });
 
-// (disabled):node_modules/postcss/lib/terminal-highlight
+// (disabled):../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/postcss/lib/terminal-highlight
 var require_terminal_highlight = __commonJS({
-  "(disabled):node_modules/postcss/lib/terminal-highlight"() {
+  "(disabled):../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/postcss/lib/terminal-highlight"() {
   }
 });
 
-// node_modules/postcss/lib/css-syntax-error.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/postcss/lib/css-syntax-error.js
 var require_css_syntax_error = __commonJS({
-  "node_modules/postcss/lib/css-syntax-error.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/postcss/lib/css-syntax-error.js"(exports, module2) {
     "use strict";
     var pico = require_picocolors_browser();
     var terminalHighlight = require_terminal_highlight();
@@ -3914,9 +4258,9 @@ var require_css_syntax_error = __commonJS({
   }
 });
 
-// node_modules/postcss/lib/stringifier.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/postcss/lib/stringifier.js
 var require_stringifier = __commonJS({
-  "node_modules/postcss/lib/stringifier.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/postcss/lib/stringifier.js"(exports, module2) {
     "use strict";
     var STYLE_TAG = /(<)(\/?style\b)/gi;
     var COMMENT_OPEN = /(<)(!--)/g;
@@ -4293,9 +4637,9 @@ var require_stringifier = __commonJS({
   }
 });
 
-// node_modules/postcss/lib/stringify.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/postcss/lib/stringify.js
 var require_stringify = __commonJS({
-  "node_modules/postcss/lib/stringify.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/postcss/lib/stringify.js"(exports, module2) {
     "use strict";
     var Stringifier = require_stringifier();
     function stringify(node, builder111) {
@@ -4307,18 +4651,18 @@ var require_stringify = __commonJS({
   }
 });
 
-// node_modules/postcss/lib/symbols.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/postcss/lib/symbols.js
 var require_symbols = __commonJS({
-  "node_modules/postcss/lib/symbols.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/postcss/lib/symbols.js"(exports, module2) {
     "use strict";
     module2.exports.isClean = /* @__PURE__ */ Symbol("isClean");
     module2.exports.my = /* @__PURE__ */ Symbol("my");
   }
 });
 
-// node_modules/postcss/lib/node.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/postcss/lib/node.js
 var require_node = __commonJS({
-  "node_modules/postcss/lib/node.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/postcss/lib/node.js"(exports, module2) {
     "use strict";
     var CssSyntaxError = require_css_syntax_error();
     var Stringifier = require_stringifier();
@@ -4731,9 +5075,9 @@ var require_node = __commonJS({
   }
 });
 
-// node_modules/postcss/lib/comment.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/postcss/lib/comment.js
 var require_comment = __commonJS({
-  "node_modules/postcss/lib/comment.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/postcss/lib/comment.js"(exports, module2) {
     "use strict";
     var Node5 = require_node();
     var Comment3 = class extends Node5 {
@@ -4747,9 +5091,9 @@ var require_comment = __commonJS({
   }
 });
 
-// node_modules/postcss/lib/declaration.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/postcss/lib/declaration.js
 var require_declaration = __commonJS({
-  "node_modules/postcss/lib/declaration.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/postcss/lib/declaration.js"(exports, module2) {
     "use strict";
     var Node5 = require_node();
     var Declaration = class extends Node5 {
@@ -4769,9 +5113,9 @@ var require_declaration = __commonJS({
   }
 });
 
-// node_modules/postcss/lib/container.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/postcss/lib/container.js
 var require_container = __commonJS({
-  "node_modules/postcss/lib/container.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/postcss/lib/container.js"(exports, module2) {
     "use strict";
     var Comment3 = require_comment();
     var Declaration = require_declaration();
@@ -5191,9 +5535,9 @@ var require_container = __commonJS({
   }
 });
 
-// node_modules/postcss/lib/at-rule.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/postcss/lib/at-rule.js
 var require_at_rule = __commonJS({
-  "node_modules/postcss/lib/at-rule.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/postcss/lib/at-rule.js"(exports, module2) {
     "use strict";
     var Container = require_container();
     var AtRule = class extends Container {
@@ -5216,9 +5560,9 @@ var require_at_rule = __commonJS({
   }
 });
 
-// node_modules/postcss/lib/document.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/postcss/lib/document.js
 var require_document = __commonJS({
-  "node_modules/postcss/lib/document.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/postcss/lib/document.js"(exports, module2) {
     "use strict";
     var Container = require_container();
     var LazyResult;
@@ -5246,9 +5590,9 @@ var require_document = __commonJS({
   }
 });
 
-// node_modules/nanoid/non-secure/index.cjs
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/nanoid/non-secure/index.cjs
 var require_non_secure = __commonJS({
-  "node_modules/nanoid/non-secure/index.cjs"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/nanoid/non-secure/index.cjs"(exports, module2) {
     var urlAlphabet = "useandom-26T198340PX75pxJACKVERYMINDBUSHWOLF_GQZbfghjklqvwyzrict";
     var customAlphabet = (alphabet, defaultSize = 21) => {
       return (size = defaultSize) => {
@@ -5278,9 +5622,9 @@ var require_path = __commonJS({
   }
 });
 
-// (disabled):node_modules/source-map-js/source-map.js
+// (disabled):../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/source-map-js/source-map.js
 var require_source_map = __commonJS({
-  "(disabled):node_modules/source-map-js/source-map.js"() {
+  "(disabled):../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/source-map-js/source-map.js"() {
   }
 });
 
@@ -5296,9 +5640,9 @@ var require_fs = __commonJS({
   }
 });
 
-// node_modules/postcss/lib/previous-map.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/postcss/lib/previous-map.js
 var require_previous_map = __commonJS({
-  "node_modules/postcss/lib/previous-map.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/postcss/lib/previous-map.js"(exports, module2) {
     "use strict";
     var { existsSync: existsSync2, readFileSync: readFileSync2 } = require_fs();
     var { dirname: dirname2, isAbsolute, join: join3, relative, sep } = require_path();
@@ -5434,9 +5778,9 @@ var require_previous_map = __commonJS({
   }
 });
 
-// node_modules/postcss/lib/input.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/postcss/lib/input.js
 var require_input = __commonJS({
-  "node_modules/postcss/lib/input.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/postcss/lib/input.js"(exports, module2) {
     "use strict";
     var { nanoid } = require_non_secure();
     var { isAbsolute, resolve: resolve2 } = require_path();
@@ -5668,9 +6012,9 @@ var require_input = __commonJS({
   }
 });
 
-// node_modules/postcss/lib/root.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/postcss/lib/root.js
 var require_root = __commonJS({
-  "node_modules/postcss/lib/root.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/postcss/lib/root.js"(exports, module2) {
     "use strict";
     var Container = require_container();
     var LazyResult;
@@ -5730,9 +6074,9 @@ var require_root = __commonJS({
   }
 });
 
-// node_modules/postcss/lib/list.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/postcss/lib/list.js
 var require_list = __commonJS({
-  "node_modules/postcss/lib/list.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/postcss/lib/list.js"(exports, module2) {
     "use strict";
     var list3 = {
       comma(string) {
@@ -5786,9 +6130,9 @@ var require_list = __commonJS({
   }
 });
 
-// node_modules/postcss/lib/rule.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/postcss/lib/rule.js
 var require_rule = __commonJS({
-  "node_modules/postcss/lib/rule.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/postcss/lib/rule.js"(exports, module2) {
     "use strict";
     var Container = require_container();
     var list3 = require_list();
@@ -5813,9 +6157,9 @@ var require_rule = __commonJS({
   }
 });
 
-// node_modules/postcss/lib/fromJSON.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/postcss/lib/fromJSON.js
 var require_fromJSON = __commonJS({
-  "node_modules/postcss/lib/fromJSON.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/postcss/lib/fromJSON.js"(exports, module2) {
     "use strict";
     var AtRule = require_at_rule();
     var Comment3 = require_comment();
@@ -5907,9 +6251,9 @@ var require_fromJSON = __commonJS({
   }
 });
 
-// node_modules/postcss/lib/map-generator.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/postcss/lib/map-generator.js
 var require_map_generator = __commonJS({
-  "node_modules/postcss/lib/map-generator.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/postcss/lib/map-generator.js"(exports, module2) {
     "use strict";
     var { dirname: dirname2, relative, resolve: resolve2, sep } = require_path();
     var { SourceMapConsumer, SourceMapGenerator } = require_source_map();
@@ -6232,9 +6576,9 @@ var require_map_generator = __commonJS({
   }
 });
 
-// node_modules/postcss/lib/tokenize.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/postcss/lib/tokenize.js
 var require_tokenize = __commonJS({
-  "node_modules/postcss/lib/tokenize.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/postcss/lib/tokenize.js"(exports, module2) {
     "use strict";
     var SINGLE_QUOTE = "'".charCodeAt(0);
     var DOUBLE_QUOTE = '"'.charCodeAt(0);
@@ -6451,9 +6795,9 @@ var require_tokenize = __commonJS({
   }
 });
 
-// node_modules/postcss/lib/parser.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/postcss/lib/parser.js
 var require_parser = __commonJS({
-  "node_modules/postcss/lib/parser.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/postcss/lib/parser.js"(exports, module2) {
     "use strict";
     var AtRule = require_at_rule();
     var Comment3 = require_comment();
@@ -6991,9 +7335,9 @@ var require_parser = __commonJS({
   }
 });
 
-// node_modules/postcss/lib/parse.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/postcss/lib/parse.js
 var require_parse = __commonJS({
-  "node_modules/postcss/lib/parse.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/postcss/lib/parse.js"(exports, module2) {
     "use strict";
     var Container = require_container();
     var Input = require_input();
@@ -7025,9 +7369,9 @@ var require_parse = __commonJS({
   }
 });
 
-// node_modules/postcss/lib/warning.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/postcss/lib/warning.js
 var require_warning = __commonJS({
-  "node_modules/postcss/lib/warning.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/postcss/lib/warning.js"(exports, module2) {
     "use strict";
     var Container = require_container();
     var { my } = require_symbols();
@@ -7066,9 +7410,9 @@ var require_warning = __commonJS({
   }
 });
 
-// node_modules/postcss/lib/result.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/postcss/lib/result.js
 var require_result = __commonJS({
-  "node_modules/postcss/lib/result.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/postcss/lib/result.js"(exports, module2) {
     "use strict";
     var Warning = require_warning();
     var Result = class {
@@ -7105,9 +7449,9 @@ var require_result = __commonJS({
   }
 });
 
-// node_modules/postcss/lib/warn-once.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/postcss/lib/warn-once.js
 var require_warn_once = __commonJS({
-  "node_modules/postcss/lib/warn-once.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/postcss/lib/warn-once.js"(exports, module2) {
     "use strict";
     var printed = {};
     module2.exports = function warnOnce(message) {
@@ -7120,9 +7464,9 @@ var require_warn_once = __commonJS({
   }
 });
 
-// node_modules/postcss/lib/lazy-result.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/postcss/lib/lazy-result.js
 var require_lazy_result = __commonJS({
-  "node_modules/postcss/lib/lazy-result.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/postcss/lib/lazy-result.js"(exports, module2) {
     "use strict";
     var Container = require_container();
     var Document2 = require_document();
@@ -7637,9 +7981,9 @@ var require_lazy_result = __commonJS({
   }
 });
 
-// node_modules/postcss/lib/no-work-result.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/postcss/lib/no-work-result.js
 var require_no_work_result = __commonJS({
-  "node_modules/postcss/lib/no-work-result.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/postcss/lib/no-work-result.js"(exports, module2) {
     "use strict";
     var MapGenerator = require_map_generator();
     var parse3 = require_parse();
@@ -7752,9 +8096,9 @@ var require_no_work_result = __commonJS({
   }
 });
 
-// node_modules/postcss/lib/processor.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/postcss/lib/processor.js
 var require_processor = __commonJS({
-  "node_modules/postcss/lib/processor.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/postcss/lib/processor.js"(exports, module2) {
     "use strict";
     var Document2 = require_document();
     var LazyResult = require_lazy_result();
@@ -7810,9 +8154,9 @@ var require_processor = __commonJS({
   }
 });
 
-// node_modules/postcss/lib/postcss.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/postcss/lib/postcss.js
 var require_postcss = __commonJS({
-  "node_modules/postcss/lib/postcss.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/postcss/lib/postcss.js"(exports, module2) {
     "use strict";
     var AtRule = require_at_rule();
     var Comment3 = require_comment();
@@ -7898,9 +8242,9 @@ var require_postcss = __commonJS({
   }
 });
 
-// node_modules/dayjs/dayjs.min.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/dayjs/dayjs.min.js
 var require_dayjs_min = __commonJS({
-  "node_modules/dayjs/dayjs.min.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/dayjs/dayjs.min.js"(exports, module2) {
     !(function(t, e) {
       "object" == typeof exports && "undefined" != typeof module2 ? module2.exports = e() : "function" == typeof define && define.amd ? define(e) : (t = "undefined" != typeof globalThis ? globalThis : t || self).dayjs = e();
     })(exports, (function() {
@@ -8178,9 +8522,9 @@ var require_dayjs_min = __commonJS({
   }
 });
 
-// node_modules/launder/index.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/launder/index.js
 var require_launder = __commonJS({
-  "node_modules/launder/index.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/launder/index.js"(exports, module2) {
     var dayjs = require_dayjs_min();
     function cleanHref(href) {
       href = href.replace(/[\x00-\x20]+/g, "");
@@ -8547,9 +8891,9 @@ var require_launder = __commonJS({
   }
 });
 
-// node_modules/sanitize-html/index.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/sanitize-html/index.js
 var require_sanitize_html = __commonJS({
-  "node_modules/sanitize-html/index.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/sanitize-html/index.js"(exports, module2) {
     var htmlparser = (init_dist6(), __toCommonJS(dist_exports3));
     var escapeStringRegexp = require_escape_string_regexp();
     var { isPlainObject } = require_is_plain_object();
@@ -9592,7 +9936,10 @@ __export(wire_exports, {
   HASHTAG_RE: () => HASHTAG_RE,
   MENTION_RE: () => MENTION_RE,
   OUTBOX_PAGE_SIZE: () => OUTBOX_PAGE_SIZE,
+  POLICY_CTX: () => POLICY_CTX,
   PUBLIC: () => PUBLIC,
+  QUOTE_CTX: () => QUOTE_CTX,
+  QUOTE_TYPES_CTX: () => QUOTE_TYPES_CTX,
   SEC_CTX: () => SEC_CTX,
   acceptActivity: () => acceptActivity,
   actorDoc: () => actorDoc,
@@ -9640,6 +9987,11 @@ __export(wire_exports, {
   profilePageHtml: () => profilePageHtml,
   publicHandle: () => publicHandle,
   questionDoc: () => questionDoc,
+  quoteAnswerActivity: () => quoteAnswerActivity,
+  quoteAuthorizationDoc: () => quoteAuthorizationDoc,
+  quoteAuthorizationId: () => quoteAuthorizationId,
+  quotePolicy: () => quotePolicy,
+  quoteRequestActivity: () => quoteRequestActivity,
   rejectActivity: () => rejectActivity,
   repliesId: () => repliesId,
   sanitizeHtml: () => sanitizeHtml,
@@ -9753,8 +10105,8 @@ function actorDoc({
     ...fields.length ? {
       attachment: fields.map((f) => ({
         type: "PropertyValue",
-        name: String(f.name).replace(/[&<>]/g, (c) => HTML_ESCAPES[c]),
-        value: String(f.value).replace(/[&<>]/g, (c) => HTML_ESCAPES[c])
+        name: String(f.name).replace(/[&<>]/g, (c) => HTML_ESCAPES2[c]),
+        value: String(f.value).replace(/[&<>]/g, (c) => HTML_ESCAPES2[c])
       }))
     } : {},
     // The human page. Remote servers send profile clicks here, so it must be
@@ -9796,108 +10148,6 @@ function actorDoc({
     ...blocked ? { blocked } : {},
     publicKey: { id: urls.actor + "#main-key", owner: urls.actor, publicKeyPem }
   };
-}
-function profilePageHtml({
-  name,
-  address,
-  summary = null,
-  icon = null,
-  image = null,
-  fields = [],
-  joined = null,
-  pinned = [],
-  kind = "person"
-}) {
-  const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ ...HTML_ESCAPES, '"': "&quot;" })[c]);
-  const what = kind === "group" ? "a group" : "an account";
-  const month = (iso) => {
-    const d = new Date(iso);
-    return Number.isNaN(d.getTime()) ? null : d.toLocaleDateString("en", { month: "long", year: "numeric", timeZone: "UTC" });
-  };
-  const day = (iso) => {
-    const d = new Date(iso);
-    return Number.isNaN(d.getTime()) ? "" : d.toISOString().slice(0, 10);
-  };
-  const fieldRows = fields.filter((f) => f?.name && f?.value !== void 0 && f?.value !== null && String(f.value) !== "");
-  const joinedText = joined ? month(joined) : null;
-  const pins = pinned.filter((x) => x && typeof x.content === "string");
-  return `<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${esc(name)} (${esc(address)})</title>
-<style>
-:root { color-scheme: light dark; }
-body { font: 112.5%/1.5 system-ui, sans-serif; max-width: 34rem; margin: 3rem auto; padding: 0 1rem; }
-img.header { width: 100%; max-height: 12rem; object-fit: cover; border-radius: 1rem; }
-img.avatar { width: 6rem; height: 6rem; border-radius: 1rem; object-fit: cover; margin-top: 1rem; }
-h1 { margin: .5rem 0 0; }
-.address { font-size: 1.1rem; user-select: all; }
-dl.fields { display: grid; grid-template-columns: max-content 1fr; gap: .4rem 1rem; margin: 1.5rem 0; }
-dl.fields dt { font-weight: 600; }
-dl.fields dd { margin: 0; overflow-wrap: anywhere; }
-.joined { margin: 1rem 0; }
-section.pinned h2 { font-size: 1.1rem; margin: 2rem 0 .5rem; }
-article.pin { border: 1px solid #8884; border-radius: 1rem; padding: 1rem 1.2rem; margin: 1rem 0; }
-article.pin p:last-child { margin-bottom: 0; }
-article.pin .when { font-size: 1rem; }
-form { margin-top: 2rem; }
-label { display: block; margin-bottom: .3rem; }
-input { font: inherit; padding: .5rem; width: 14rem; max-width: 100%; }
-button { font: inherit; padding: .5rem 1rem; }
-.hint { color: #666; font-size: 1rem; }
-.err { color: #b00020; }
-.err:empty { display: none; }
-@media (prefers-color-scheme: dark) {
-  .hint { color: #aaa; }
-  .err { color: #ff8a80; }
-}
-</style>
-</head>
-<body>
-<main>
-${image ? `<img class="header" src="${esc(image)}" alt="">` : ""}
-${icon ? `<img class="avatar" src="${esc(icon)}" alt="">` : ""}
-<h1>${esc(name)}</h1>
-<p class="address">${esc(address)}</p>
-${summary ? `<div>${summary}</div>` : ""}
-${fieldRows.length ? `<dl class="fields">
-${fieldRows.map((f) => `<dt>${esc(f.name)}</dt><dd>${esc(f.value)}</dd>`).join("\n")}
-</dl>` : ""}
-${joinedText ? `<p class="joined">Joined ${esc(joinedText)}</p>` : ""}
-${pins.length ? `<section class="pinned">
-<h2>Pinned</h2>
-${pins.map((x) => `<article class="pin">
-${x.content}
-<p class="when">${x.url ? `<a href="${esc(x.url)}">${esc(day(x.published))}</a>` : esc(day(x.published))}</p>
-</article>`).join("\n")}
-</section>` : ""}
-<p>This is ${what} on the Fediverse. To follow it, paste the address above
-into the search box of Mastodon or any Fediverse app \u2014 or use the form.</p>
-<form id="follow">
-  <label for="server">your server</label>
-  <input id="server" type="text" placeholder="mastodon.social" autocomplete="off"
-    required aria-describedby="follow-err">
-  <button type="submit">Follow</button>
-  <p class="err" id="follow-err" role="alert"></p>
-</form>
-<p class="hint">The form sends you to your own server's follow screen.</p>
-</main>
-<script>
-document.getElementById('follow').addEventListener('submit', (ev) => {
-  ev.preventDefault();
-  const s = document.getElementById('server').value.trim().replace(/^https?:\\/\\//, '').replace(/\\/.*$/, '');
-  const err = document.getElementById('follow-err');
-  const addr = document.querySelector('.address').textContent.trim();
-  if (!s) { err.textContent = 'Enter your server, e.g. mastodon.social'; return; }
-  err.textContent = '';
-  location.href = 'https://' + s + '/authorize_interaction?uri=' + encodeURIComponent(addr);
-});
-<\/script>
-</body>
-</html>
-`;
 }
 function deleteActorActivity(urls, stamp) {
   return {
@@ -10082,7 +10332,7 @@ function titledContent(note) {
   if (!title || types.includes("Note")) return html;
   const opening = html.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().toLowerCase();
   if (opening.startsWith(title.toLowerCase())) return html;
-  const esc = String(title).replace(/[&<>]/g, (c) => HTML_ESCAPES[c]);
+  const esc = String(title).replace(/[&<>]/g, (c) => HTML_ESCAPES2[c]);
   return `<p><strong>${esc}</strong></p>${html}`;
 }
 function attachmentsOf(note) {
@@ -10108,18 +10358,18 @@ function tagHref(urls, name) {
   return urls.profileHtml + "?tag=" + encodeURIComponent(String(name).toLowerCase());
 }
 function contentHtml(text, mentions = [], hashtags = []) {
-  let html = String(text).replace(/[&<>]/g, (c) => HTML_ESCAPES[c]);
+  let html = String(text).replace(/[&<>]/g, (c) => HTML_ESCAPES2[c]);
   if (hashtags.length) {
     const byName = new Map(hashtags.filter((h) => h?.name && h?.href).map((h) => [h.name.toLowerCase(), h.href]));
     html = html.replace(HASHTAG_RE, (all, lead, name) => {
       const href = byName.get(name.toLowerCase());
       if (!href) return all;
-      return `${lead}<a href="${String(href).replace(/[&<>"]/g, (c) => HTML_ESCAPES[c] || "&quot;")}" class="mention hashtag" rel="tag">#<span>${name}</span></a>`;
+      return `${lead}<a href="${String(href).replace(/[&<>"]/g, (c) => HTML_ESCAPES2[c] || "&quot;")}" class="mention hashtag" rel="tag">#<span>${name}</span></a>`;
     });
   }
   for (const m of mentions) {
     if (!m?.handle || !m?.actor) continue;
-    const href = String(m.page || m.actor).replace(/[&<>"]/g, (c) => HTML_ESCAPES[c] || "&quot;");
+    const href = String(m.page || m.actor).replace(/[&<>"]/g, (c) => HTML_ESCAPES2[c] || "&quot;");
     html = html.split("@" + m.handle).join(
       `<a href="${href}" class="u-url mention">@${m.handle.split("@")[0]}</a>`
     );
@@ -10134,6 +10384,10 @@ function addressing(urls, visibility, who = []) {
     direct: { to: who, cc: [] }
   }[visibility] || { to: [PUBLIC], cc: [urls.followers, ...who] };
 }
+function quotePolicy(visibility) {
+  const open2 = visibility === "public" || visibility === "unlisted";
+  return { canQuote: { automaticApproval: open2 ? [PUBLIC] : [], manualApproval: [] } };
+}
 function noteDoc({
   urls,
   slug,
@@ -10147,7 +10401,8 @@ function noteDoc({
   sensitive = false,
   updated = null,
   container = null,
-  also = []
+  also = [],
+  quote = null
 }) {
   const id = (container || urls.notes) + slug;
   const who = mentions.map((m) => m.actor);
@@ -10155,7 +10410,7 @@ function noteDoc({
   const addressed = addressing(urls, visibility, [...who, ...extra]);
   const hashtags = hashtagsIn(content).map((name) => ({ name, href: tagHref(urls, name) }));
   const note = {
-    "@context": AS_CTX,
+    "@context": [AS_CTX, { ...POLICY_CTX, ...quote?.id ? QUOTE_CTX : {} }],
     id,
     type: "Note",
     attributedTo: urls.actor,
@@ -10163,8 +10418,15 @@ function noteDoc({
     published,
     to: addressed.to,
     cc: addressed.cc,
-    replies: repliesId(id)
+    replies: repliesId(id),
+    interactionPolicy: quotePolicy(visibility)
   };
+  if (quote?.id) {
+    note.quote = quote.id;
+    note.quoteUri = quote.id;
+    note._misskey_quote = quote.id;
+    if (quote.authorization) note.quoteAuthorization = quote.authorization;
+  }
   if (summary) note.summary = summary;
   if (summary || sensitive) note.sensitive = true;
   if (updated) note.updated = updated;
@@ -10206,7 +10468,7 @@ function questionDoc({
   if (endTime) question.endTime = endTime;
   if (closed) question.closed = closed;
   if (votersCount !== null && votersCount !== void 0) {
-    question["@context"] = [AS_CTX, {
+    question["@context"] = [...[].concat(note["@context"]), {
       toot: "http://joinmastodon.org/ns#",
       votersCount: {
         "@id": "toot:votersCount",
@@ -10301,10 +10563,10 @@ function updateActorActivity({ urls, actor, serial, published = (/* @__PURE__ */
     object
   };
 }
-function updateActivity(note, urls) {
+function updateActivity(note, urls, { serial = null } = {}) {
   return {
     "@context": AS_CTX,
-    id: note.id + "#update-" + String(note.updated || "").replace(/[^0-9TZ]/g, ""),
+    id: note.id + "#update-" + (note.updated ? String(note.updated).replace(/[^0-9TZ]/g, "") : "q" + (serial ?? Date.now())),
     type: "Update",
     actor: urls.actor,
     to: note.to,
@@ -10331,6 +10593,49 @@ function undoActivity({ urls, activity, serial }) {
     object: activity
   };
 }
+function quoteRequestActivity({ urls, note, quoted, quotedActor, serial }) {
+  const { "@context": ctx, ...instrument } = note;
+  return {
+    "@context": [AS_CTX, { ...QUOTE_CTX, ...POLICY_CTX, QuoteRequest: QUOTE_TYPES_CTX.QuoteRequest }],
+    id: urls.actor + "#quote-request-" + serial,
+    type: "QuoteRequest",
+    actor: urls.actor,
+    to: [quotedActor],
+    object: quoted,
+    instrument
+  };
+}
+function quoteAuthorizationId(noteId, instrumentId) {
+  return noteId + "-quote-" + node_crypto_default.createHash("sha256").update(String(instrumentId)).digest("hex").slice(0, 16);
+}
+function quoteAuthorizationDoc({ urls, id, instrument, target }) {
+  return {
+    "@context": [AS_CTX, QUOTE_TYPES_CTX],
+    id,
+    type: "QuoteAuthorization",
+    attributedTo: urls.actor,
+    interactingObject: instrument,
+    interactionTarget: target
+  };
+}
+function quoteAnswerActivity({ urls, type, request, result = null, to, serial }) {
+  const idOf2 = (v) => typeof v === "string" ? v : v?.id;
+  return {
+    "@context": [AS_CTX, { QuoteRequest: QUOTE_TYPES_CTX.QuoteRequest }],
+    id: urls.actor + "#" + type.toLowerCase() + "-" + serial,
+    type,
+    actor: urls.actor,
+    to: [to],
+    object: {
+      id: idOf2(request),
+      type: "QuoteRequest",
+      actor: idOf2(request?.actor),
+      object: idOf2(request?.object),
+      instrument: idOf2(request?.instrument)
+    },
+    ...result ? { result } : {}
+  };
+}
 function blockActivity({ urls, targetActor, serial }) {
   return {
     "@context": AS_CTX,
@@ -10350,11 +10655,13 @@ function addRemoveActivity({ urls, type, object, target, serial }) {
     target
   };
 }
-var import_sanitize_html, AS_CTX, SEC_CTX, PUBLIC, DEFAULT_ROOT, assertionKeyId, OUTBOX_PAGE_SIZE, outboxPageId, outboxPageCount, outboxItemId, outboxWireItem, outboxLocalItem, FOLLOWERS_PAGE_SIZE, followersPageId, followersPageCount, ALLOWED_TAGS, ALLOWED_ATTRS, MAX_ATTACHMENTS, MAX_ATTACHMENT_URL, attachmentUrl, HTML_ESCAPES, MENTION_RE, HASHTAG_RE;
+var import_sanitize_html, AS_CTX, SEC_CTX, PUBLIC, DEFAULT_ROOT, assertionKeyId, OUTBOX_PAGE_SIZE, outboxPageId, outboxPageCount, outboxItemId, outboxWireItem, outboxLocalItem, FOLLOWERS_PAGE_SIZE, followersPageId, followersPageCount, ALLOWED_TAGS, ALLOWED_ATTRS, MAX_ATTACHMENTS, MAX_ATTACHMENT_URL, attachmentUrl, HTML_ESCAPES2, MENTION_RE, HASHTAG_RE, QUOTE_CTX, POLICY_CTX, QUOTE_TYPES_CTX;
 var init_wire = __esm({
   "lib/core/wire.mjs"() {
+    init_node_crypto();
     init_urls();
     init_urls();
+    init_profile_page();
     import_sanitize_html = __toESM(require_sanitize_html(), 1);
     AS_CTX = "https://www.w3.org/ns/activitystreams";
     SEC_CTX = "https://w3id.org/security/v1";
@@ -10405,249 +10712,35 @@ var init_wire = __esm({
         return null;
       }
     };
-    HTML_ESCAPES = { "&": "&amp;", "<": "&lt;", ">": "&gt;" };
+    HTML_ESCAPES2 = { "&": "&amp;", "<": "&lt;", ">": "&gt;" };
     MENTION_RE = /@([A-Za-z0-9_.-]+)@([A-Za-z0-9.-]+\.[A-Za-z]{2,}(?::\d+)?)/g;
     HASHTAG_RE = /(^|[^\/\w)])#([\p{L}\p{N}_]*[\p{L}_][\p{L}\p{N}_]*)/gu;
-  }
-});
-
-// web/app/shims/node-crypto.mjs
-var node_crypto_exports = {};
-__export(node_crypto_exports, {
-  createHash: () => createHash,
-  createHmac: () => createHmac,
-  createPrivateKey: () => createPrivateKey,
-  createPublicKey: () => createPublicKey,
-  default: () => node_crypto_default,
-  generateKeyPairSync: () => generateKeyPairSync,
-  randomBytes: () => randomBytes,
-  randomUUID: () => randomUUID,
-  scryptSync: () => scryptSync,
-  timingSafeEqual: () => timingSafeEqual,
-  webcrypto: () => webcrypto
-});
-function sha256(bytes) {
-  const l = bytes.length;
-  const withOne = l + 1;
-  const k = (56 - withOne % 64 + 64) % 64;
-  const total = withOne + k + 8;
-  const m = new Uint8Array(total);
-  m.set(bytes);
-  m[l] = 128;
-  const bits = l * 8;
-  const dv = new DataView(m.buffer);
-  dv.setUint32(total - 4, bits >>> 0);
-  dv.setUint32(total - 8, Math.floor(bits / 4294967296));
-  const H = new Uint32Array([1779033703, 3144134277, 1013904242, 2773480762, 1359893119, 2600822924, 528734635, 1541459225]);
-  const w = new Uint32Array(64);
-  for (let i = 0; i < total; i += 64) {
-    for (let t = 0; t < 16; t++) w[t] = dv.getUint32(i + t * 4);
-    for (let t = 16; t < 64; t++) {
-      const s0 = rotr(w[t - 15], 7) ^ rotr(w[t - 15], 18) ^ w[t - 15] >>> 3;
-      const s1 = rotr(w[t - 2], 17) ^ rotr(w[t - 2], 19) ^ w[t - 2] >>> 10;
-      w[t] = w[t - 16] + s0 + w[t - 7] + s1 >>> 0;
-    }
-    let [a, b, c, d, e, f, g, h] = H;
-    for (let t = 0; t < 64; t++) {
-      const S1 = rotr(e, 6) ^ rotr(e, 11) ^ rotr(e, 25);
-      const ch = e & f ^ ~e & g;
-      const t1 = h + S1 + ch + K[t] + w[t] >>> 0;
-      const S0 = rotr(a, 2) ^ rotr(a, 13) ^ rotr(a, 22);
-      const maj = a & b ^ a & c ^ b & c;
-      const t2 = S0 + maj >>> 0;
-      h = g;
-      g = f;
-      f = e;
-      e = d + t1 >>> 0;
-      d = c;
-      c = b;
-      b = a;
-      a = t1 + t2 >>> 0;
-    }
-    H[0] = H[0] + a >>> 0;
-    H[1] = H[1] + b >>> 0;
-    H[2] = H[2] + c >>> 0;
-    H[3] = H[3] + d >>> 0;
-    H[4] = H[4] + e >>> 0;
-    H[5] = H[5] + f >>> 0;
-    H[6] = H[6] + g >>> 0;
-    H[7] = H[7] + h >>> 0;
-  }
-  const out = new Uint8Array(32);
-  new DataView(out.buffer).setUint32(0, H[0]);
-  new DataView(out.buffer).setUint32(4, H[1]);
-  new DataView(out.buffer).setUint32(8, H[2]);
-  new DataView(out.buffer).setUint32(12, H[3]);
-  new DataView(out.buffer).setUint32(16, H[4]);
-  new DataView(out.buffer).setUint32(20, H[5]);
-  new DataView(out.buffer).setUint32(24, H[6]);
-  new DataView(out.buffer).setUint32(28, H[7]);
-  return out;
-}
-function hmacSha256(key, msg) {
-  if (key.length > 64) key = sha256(key);
-  const pad = new Uint8Array(64);
-  pad.set(key);
-  const ipad = new Uint8Array(64);
-  const opad = new Uint8Array(64);
-  for (let i = 0; i < 64; i++) {
-    ipad[i] = pad[i] ^ 54;
-    opad[i] = pad[i] ^ 92;
-  }
-  const inner = sha256(concat(ipad, msg));
-  return sha256(concat(opad, inner));
-}
-function createHash(alg) {
-  if (alg !== "sha256") throw new Error(`node-crypto shim: only sha256 is implemented (got ${alg})`);
-  let acc = new Uint8Array(0);
-  return { update(d, e) {
-    acc = concat(acc, toBytes(d, e));
-    return this;
-  }, digest(enc4) {
-    return encode(sha256(acc), enc4);
-  } };
-}
-function createHmac(alg, key) {
-  if (alg !== "sha256") throw new Error(`node-crypto shim: only hmac-sha256 is implemented (got ${alg})`);
-  const k = toBytes(key);
-  let acc = new Uint8Array(0);
-  return { update(d, e) {
-    acc = concat(acc, toBytes(d, e));
-    return this;
-  }, digest(enc4) {
-    return encode(hmacSha256(k, acc), enc4);
-  } };
-}
-function randomBytes(n) {
-  const b = new Uint8Array(n);
-  crypto.getRandomValues(b);
-  return globalThis.Buffer ? globalThis.Buffer.from(b) : b;
-}
-function timingSafeEqual(a, b) {
-  if (a.length !== b.length) return false;
-  let out = 0;
-  for (let i = 0; i < a.length; i++) out |= a[i] ^ b[i];
-  return out === 0;
-}
-var K, rotr, concat, toBytes, encode, webcrypto, randomUUID, unavailable, generateKeyPairSync, createPrivateKey, createPublicKey, scryptSync, node_crypto_default;
-var init_node_crypto = __esm({
-  "web/app/shims/node-crypto.mjs"() {
-    K = new Uint32Array([
-      1116352408,
-      1899447441,
-      3049323471,
-      3921009573,
-      961987163,
-      1508970993,
-      2453635748,
-      2870763221,
-      3624381080,
-      310598401,
-      607225278,
-      1426881987,
-      1925078388,
-      2162078206,
-      2614888103,
-      3248222580,
-      3835390401,
-      4022224774,
-      264347078,
-      604807628,
-      770255983,
-      1249150122,
-      1555081692,
-      1996064986,
-      2554220882,
-      2821834349,
-      2952996808,
-      3210313671,
-      3336571891,
-      3584528711,
-      113926993,
-      338241895,
-      666307205,
-      773529912,
-      1294757372,
-      1396182291,
-      1695183700,
-      1986661051,
-      2177026350,
-      2456956037,
-      2730485921,
-      2820302411,
-      3259730800,
-      3345764771,
-      3516065817,
-      3600352804,
-      4094571909,
-      275423344,
-      430227734,
-      506948616,
-      659060556,
-      883997877,
-      958139571,
-      1322822218,
-      1537002063,
-      1747873779,
-      1955562222,
-      2024104815,
-      2227730452,
-      2361852424,
-      2428436474,
-      2756734187,
-      3204031479,
-      3329325298
-    ]);
-    rotr = (x, n) => x >>> n | x << 32 - n;
-    concat = (a, b) => {
-      const o = new Uint8Array(a.length + b.length);
-      o.set(a);
-      o.set(b, a.length);
-      return o;
+    QUOTE_CTX = {
+      quote: { "@id": "https://w3id.org/fep/044f#quote", "@type": "@id" },
+      quoteUri: { "@id": "http://fedibird.com/ns#quoteUri", "@type": "@id" },
+      _misskey_quote: { "@id": "https://misskey-hub.net/ns#_misskey_quote", "@type": "@id" },
+      quoteAuthorization: { "@id": "https://w3id.org/fep/044f#quoteAuthorization", "@type": "@id" }
     };
-    toBytes = (data, enc4) => {
-      if (data == null) return new Uint8Array(0);
-      if (typeof data === "string") {
-        if (enc4 === "hex") return Uint8Array.from(data.match(/.{1,2}/g) || [], (h) => parseInt(h, 16));
-        if (enc4 === "base64") return Uint8Array.from(atob(data), (c) => c.charCodeAt(0));
-        return new TextEncoder().encode(data);
-      }
-      return data instanceof Uint8Array ? data : new Uint8Array(data);
+    POLICY_CTX = {
+      gts: "https://gotosocial.org/ns#",
+      interactionPolicy: { "@id": "gts:interactionPolicy", "@type": "@id" },
+      canQuote: { "@id": "gts:canQuote", "@type": "@id" },
+      automaticApproval: { "@id": "gts:automaticApproval", "@type": "@id" },
+      manualApproval: { "@id": "gts:manualApproval", "@type": "@id" }
     };
-    encode = (bytes, enc4) => {
-      if (!enc4 || enc4 === "buffer") return bytes;
-      if (enc4 === "hex") return [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
-      const b642 = btoa(String.fromCharCode(...bytes));
-      if (enc4 === "base64url") return b642.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-      return b642;
-    };
-    webcrypto = globalThis.crypto;
-    randomUUID = () => globalThis.crypto.randomUUID();
-    unavailable = (name) => () => {
-      throw new Error(`node:crypto ${name} is not available in the browser agent`);
-    };
-    generateKeyPairSync = unavailable("generateKeyPairSync");
-    createPrivateKey = unavailable("createPrivateKey");
-    createPublicKey = unavailable("createPublicKey");
-    scryptSync = unavailable("scryptSync");
-    node_crypto_default = {
-      createHash,
-      createHmac,
-      randomBytes,
-      webcrypto,
-      randomUUID,
-      timingSafeEqual,
-      generateKeyPairSync,
-      createPrivateKey,
-      createPublicKey,
-      scryptSync
+    QUOTE_TYPES_CTX = {
+      QuoteRequest: "https://w3id.org/fep/044f#QuoteRequest",
+      QuoteAuthorization: "https://w3id.org/fep/044f#QuoteAuthorization",
+      gts: "https://gotosocial.org/ns#",
+      interactingObject: { "@id": "gts:interactingObject", "@type": "@id" },
+      interactionTarget: { "@id": "gts:interactionTarget", "@type": "@id" }
     };
   }
 });
 
-// node_modules/@frogcat/ttl2jsonld/ttl2jsonld.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@frogcat/ttl2jsonld/ttl2jsonld.js
 var require_ttl2jsonld = __commonJS({
-  "node_modules/@frogcat/ttl2jsonld/ttl2jsonld.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@frogcat/ttl2jsonld/ttl2jsonld.js"(exports, module2) {
     (function(root, factory3) {
       if (typeof define === "function" && define.amd) {
         define([], factory3);
@@ -15321,9 +15414,9 @@ var require_ttl2jsonld = __commonJS({
   }
 });
 
-// node_modules/solid-namespace/index.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/solid-namespace/index.js
 var require_solid_namespace = __commonJS({
-  "node_modules/solid-namespace/index.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/solid-namespace/index.js"(exports, module2) {
     var aliases = {
       acl: "http://www.w3.org/ns/auth/acl#",
       arg: "http://www.w3.org/ns/pim/arg#",
@@ -15391,9 +15484,9 @@ var require_solid_namespace = __commonJS({
   }
 });
 
-// node_modules/@xmldom/xmldom/lib/conventions.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@xmldom/xmldom/lib/conventions.js
 var require_conventions = __commonJS({
-  "node_modules/@xmldom/xmldom/lib/conventions.js"(exports) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@xmldom/xmldom/lib/conventions.js"(exports) {
     "use strict";
     function find2(list3, predicate, ac) {
       if (ac === void 0) {
@@ -15600,9 +15693,9 @@ var require_conventions = __commonJS({
   }
 });
 
-// node_modules/@xmldom/xmldom/lib/errors.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@xmldom/xmldom/lib/errors.js
 var require_errors = __commonJS({
-  "node_modules/@xmldom/xmldom/lib/errors.js"(exports) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@xmldom/xmldom/lib/errors.js"(exports) {
     "use strict";
     var conventions = require_conventions();
     function extendError(constructor, writableName) {
@@ -15759,9 +15852,9 @@ var require_errors = __commonJS({
   }
 });
 
-// node_modules/@xmldom/xmldom/lib/grammar.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@xmldom/xmldom/lib/grammar.js
 var require_grammar = __commonJS({
-  "node_modules/@xmldom/xmldom/lib/grammar.js"(exports) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@xmldom/xmldom/lib/grammar.js"(exports) {
     "use strict";
     function detectUnicodeSupport(RegExpImpl) {
       try {
@@ -15966,9 +16059,9 @@ var require_grammar = __commonJS({
   }
 });
 
-// node_modules/@xmldom/xmldom/lib/dom.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@xmldom/xmldom/lib/dom.js
 var require_dom = __commonJS({
-  "node_modules/@xmldom/xmldom/lib/dom.js"(exports) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@xmldom/xmldom/lib/dom.js"(exports) {
     "use strict";
     var conventions = require_conventions();
     var find2 = conventions.find;
@@ -18633,9 +18726,9 @@ var require_dom = __commonJS({
   }
 });
 
-// node_modules/@xmldom/xmldom/lib/entities.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@xmldom/xmldom/lib/entities.js
 var require_entities = __commonJS({
-  "node_modules/@xmldom/xmldom/lib/entities.js"(exports) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@xmldom/xmldom/lib/entities.js"(exports) {
     "use strict";
     var freeze = require_conventions().freeze;
     exports.XML_ENTITIES = freeze({
@@ -20776,9 +20869,9 @@ var require_entities = __commonJS({
   }
 });
 
-// node_modules/@xmldom/xmldom/lib/sax.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@xmldom/xmldom/lib/sax.js
 var require_sax = __commonJS({
-  "node_modules/@xmldom/xmldom/lib/sax.js"(exports) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@xmldom/xmldom/lib/sax.js"(exports) {
     "use strict";
     var conventions = require_conventions();
     var g = require_grammar();
@@ -21558,9 +21651,9 @@ var require_sax = __commonJS({
   }
 });
 
-// node_modules/@xmldom/xmldom/lib/dom-parser.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@xmldom/xmldom/lib/dom-parser.js
 var require_dom_parser = __commonJS({
-  "node_modules/@xmldom/xmldom/lib/dom-parser.js"(exports) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@xmldom/xmldom/lib/dom-parser.js"(exports) {
     "use strict";
     var conventions = require_conventions();
     var dom = require_dom();
@@ -21826,9 +21919,9 @@ var require_dom_parser = __commonJS({
   }
 });
 
-// node_modules/@xmldom/xmldom/lib/index.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@xmldom/xmldom/lib/index.js
 var require_lib = __commonJS({
-  "node_modules/@xmldom/xmldom/lib/index.js"(exports) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@xmldom/xmldom/lib/index.js"(exports) {
     "use strict";
     var conventions = require_conventions();
     exports.assign = conventions.assign;
@@ -21870,9 +21963,9 @@ var require_lib = __commonJS({
   }
 });
 
-// node_modules/rdf-canonize/lib/IdentifierIssuer.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdf-canonize/lib/IdentifierIssuer.js
 var require_IdentifierIssuer = __commonJS({
-  "node_modules/rdf-canonize/lib/IdentifierIssuer.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdf-canonize/lib/IdentifierIssuer.js"(exports, module2) {
     "use strict";
     module2.exports = class IdentifierIssuer {
       /**
@@ -21943,9 +22036,9 @@ var require_IdentifierIssuer = __commonJS({
   }
 });
 
-// node_modules/setimmediate/setImmediate.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/setimmediate/setImmediate.js
 var require_setImmediate = __commonJS({
-  "node_modules/setimmediate/setImmediate.js"(exports) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/setimmediate/setImmediate.js"(exports) {
     (function(global2, undefined2) {
       "use strict";
       if (global2.setImmediate) {
@@ -22091,9 +22184,9 @@ var require_setImmediate = __commonJS({
   }
 });
 
-// node_modules/rdf-canonize/lib/platform-browser.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdf-canonize/lib/platform-browser.js
 var require_platform_browser = __commonJS({
-  "node_modules/rdf-canonize/lib/platform-browser.js"(exports) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdf-canonize/lib/platform-browser.js"(exports) {
     "use strict";
     require_setImmediate();
     exports.setImmediate = setImmediate;
@@ -22113,9 +22206,9 @@ var require_platform_browser = __commonJS({
   }
 });
 
-// node_modules/rdf-canonize/lib/MessageDigest-webcrypto.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdf-canonize/lib/MessageDigest-webcrypto.js
 var require_MessageDigest_webcrypto = __commonJS({
-  "node_modules/rdf-canonize/lib/MessageDigest-webcrypto.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdf-canonize/lib/MessageDigest-webcrypto.js"(exports, module2) {
     "use strict";
     var { bufferToHex, crypto: crypto2 } = require_platform_browser();
     var algorithmMap = /* @__PURE__ */ new Map([
@@ -22157,9 +22250,9 @@ var require_MessageDigest_webcrypto = __commonJS({
   }
 });
 
-// node_modules/rdf-canonize/lib/Permuter.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdf-canonize/lib/Permuter.js
 var require_Permuter = __commonJS({
-  "node_modules/rdf-canonize/lib/Permuter.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdf-canonize/lib/Permuter.js"(exports, module2) {
     "use strict";
     module2.exports = class Permuter {
       /**
@@ -22222,9 +22315,9 @@ var require_Permuter = __commonJS({
   }
 });
 
-// node_modules/rdf-canonize/lib/NQuads.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdf-canonize/lib/NQuads.js
 var require_NQuads = __commonJS({
-  "node_modules/rdf-canonize/lib/NQuads.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdf-canonize/lib/NQuads.js"(exports, module2) {
     "use strict";
     var RDF5 = "http://www.w3.org/1999/02/22-rdf-syntax-ns#";
     var RDF_LANGSTRING = RDF5 + "langString";
@@ -22538,9 +22631,9 @@ var require_NQuads = __commonJS({
   }
 });
 
-// node_modules/rdf-canonize/lib/RDFC10.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdf-canonize/lib/RDFC10.js
 var require_RDFC10 = __commonJS({
-  "node_modules/rdf-canonize/lib/RDFC10.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdf-canonize/lib/RDFC10.js"(exports, module2) {
     "use strict";
     var IdentifierIssuer = require_IdentifierIssuer();
     var MessageDigest = require_MessageDigest_webcrypto();
@@ -22859,9 +22952,9 @@ var require_RDFC10 = __commonJS({
   }
 });
 
-// node_modules/rdf-canonize/lib/RDFC10Sync.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdf-canonize/lib/RDFC10Sync.js
 var require_RDFC10Sync = __commonJS({
-  "node_modules/rdf-canonize/lib/RDFC10Sync.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdf-canonize/lib/RDFC10Sync.js"(exports, module2) {
     "use strict";
     var IdentifierIssuer = require_IdentifierIssuer();
     var MessageDigest = require_MessageDigest_webcrypto();
@@ -23168,9 +23261,9 @@ var require_RDFC10Sync = __commonJS({
   }
 });
 
-// node_modules/rdf-canonize/lib/index.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdf-canonize/lib/index.js
 var require_lib2 = __commonJS({
-  "node_modules/rdf-canonize/lib/index.js"(exports) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdf-canonize/lib/index.js"(exports) {
     "use strict";
     var RDFC10 = require_RDFC10();
     var RDFC10Sync = require_RDFC10Sync();
@@ -23241,16 +23334,16 @@ var require_lib2 = __commonJS({
   }
 });
 
-// node_modules/rdf-canonize/index.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdf-canonize/index.js
 var require_rdf_canonize = __commonJS({
-  "node_modules/rdf-canonize/index.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdf-canonize/index.js"(exports, module2) {
     module2.exports = require_lib2();
   }
 });
 
-// node_modules/jsonld/lib/types.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/jsonld/lib/types.js
 var require_types = __commonJS({
-  "node_modules/jsonld/lib/types.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/jsonld/lib/types.js"(exports, module2) {
     "use strict";
     var api = {};
     module2.exports = api;
@@ -23266,9 +23359,9 @@ var require_types = __commonJS({
   }
 });
 
-// node_modules/jsonld/lib/graphTypes.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/jsonld/lib/graphTypes.js
 var require_graphTypes = __commonJS({
-  "node_modules/jsonld/lib/graphTypes.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/jsonld/lib/graphTypes.js"(exports, module2) {
     "use strict";
     var types = require_types();
     var api = {};
@@ -23317,9 +23410,9 @@ var require_graphTypes = __commonJS({
   }
 });
 
-// node_modules/jsonld/lib/JsonLdError.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/jsonld/lib/JsonLdError.js
 var require_JsonLdError = __commonJS({
-  "node_modules/jsonld/lib/JsonLdError.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/jsonld/lib/JsonLdError.js"(exports, module2) {
     "use strict";
     module2.exports = class JsonLdError extends Error {
       /**
@@ -23339,9 +23432,9 @@ var require_JsonLdError = __commonJS({
   }
 });
 
-// node_modules/jsonld/lib/util.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/jsonld/lib/util.js
 var require_util = __commonJS({
-  "node_modules/jsonld/lib/util.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/jsonld/lib/util.js"(exports, module2) {
     "use strict";
     var graphTypes = require_graphTypes();
     var types = require_types();
@@ -23595,9 +23688,9 @@ var require_util = __commonJS({
   }
 });
 
-// node_modules/jsonld/lib/constants.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/jsonld/lib/constants.js
 var require_constants = __commonJS({
-  "node_modules/jsonld/lib/constants.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/jsonld/lib/constants.js"(exports, module2) {
     "use strict";
     var RDF5 = "http://www.w3.org/1999/02/22-rdf-syntax-ns#";
     var XSD2 = "http://www.w3.org/2001/XMLSchema#";
@@ -23625,9 +23718,9 @@ var require_constants = __commonJS({
   }
 });
 
-// node_modules/jsonld/lib/RequestQueue.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/jsonld/lib/RequestQueue.js
 var require_RequestQueue = __commonJS({
-  "node_modules/jsonld/lib/RequestQueue.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/jsonld/lib/RequestQueue.js"(exports, module2) {
     "use strict";
     module2.exports = class RequestQueue {
       /**
@@ -23659,9 +23752,9 @@ var require_RequestQueue = __commonJS({
   }
 });
 
-// node_modules/jsonld/lib/url.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/jsonld/lib/url.js
 var require_url2 = __commonJS({
-  "node_modules/jsonld/lib/url.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/jsonld/lib/url.js"(exports, module2) {
     "use strict";
     var types = require_types();
     var api = {};
@@ -23862,9 +23955,9 @@ var require_url2 = __commonJS({
   }
 });
 
-// node_modules/jsonld/lib/documentLoaders/xhr.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/jsonld/lib/documentLoaders/xhr.js
 var require_xhr = __commonJS({
-  "node_modules/jsonld/lib/documentLoaders/xhr.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/jsonld/lib/documentLoaders/xhr.js"(exports, module2) {
     "use strict";
     var { parseLinkHeader, buildHeaders } = require_util();
     var { LINK_HEADER_CONTEXT } = require_constants();
@@ -23960,9 +24053,9 @@ var require_xhr = __commonJS({
   }
 });
 
-// node_modules/jsonld/lib/platform-browser.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/jsonld/lib/platform-browser.js
 var require_platform_browser2 = __commonJS({
-  "node_modules/jsonld/lib/platform-browser.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/jsonld/lib/platform-browser.js"(exports, module2) {
     "use strict";
     var xhrLoader = require_xhr();
     var api = {};
@@ -23986,9 +24079,9 @@ var require_platform_browser2 = __commonJS({
   }
 });
 
-// node_modules/yallist/iterator.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/yallist/iterator.js
 var require_iterator = __commonJS({
-  "node_modules/yallist/iterator.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/yallist/iterator.js"(exports, module2) {
     "use strict";
     module2.exports = function(Yallist) {
       Yallist.prototype[Symbol.iterator] = function* () {
@@ -24000,9 +24093,9 @@ var require_iterator = __commonJS({
   }
 });
 
-// node_modules/yallist/yallist.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/yallist/yallist.js
 var require_yallist = __commonJS({
-  "node_modules/yallist/yallist.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/yallist/yallist.js"(exports, module2) {
     "use strict";
     module2.exports = Yallist;
     Yallist.Node = Node5;
@@ -24369,9 +24462,9 @@ var require_yallist = __commonJS({
   }
 });
 
-// node_modules/lru-cache/index.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/lru-cache/index.js
 var require_lru_cache = __commonJS({
-  "node_modules/lru-cache/index.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/lru-cache/index.js"(exports, module2) {
     "use strict";
     var Yallist = require_yallist();
     var MAX = /* @__PURE__ */ Symbol("max");
@@ -24638,9 +24731,9 @@ var require_lru_cache = __commonJS({
   }
 });
 
-// node_modules/jsonld/lib/ResolvedContext.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/jsonld/lib/ResolvedContext.js
 var require_ResolvedContext = __commonJS({
-  "node_modules/jsonld/lib/ResolvedContext.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/jsonld/lib/ResolvedContext.js"(exports, module2) {
     "use strict";
     var LRU = require_lru_cache();
     var MAX_ACTIVE_CONTEXTS = 10;
@@ -24664,9 +24757,9 @@ var require_ResolvedContext = __commonJS({
   }
 });
 
-// node_modules/jsonld/lib/ContextResolver.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/jsonld/lib/ContextResolver.js
 var require_ContextResolver = __commonJS({
-  "node_modules/jsonld/lib/ContextResolver.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/jsonld/lib/ContextResolver.js"(exports, module2) {
     "use strict";
     var {
       isArray: _isArray,
@@ -24872,17 +24965,17 @@ var require_ContextResolver = __commonJS({
   }
 });
 
-// node_modules/jsonld/lib/NQuads.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/jsonld/lib/NQuads.js
 var require_NQuads2 = __commonJS({
-  "node_modules/jsonld/lib/NQuads.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/jsonld/lib/NQuads.js"(exports, module2) {
     "use strict";
     module2.exports = require_rdf_canonize().NQuads;
   }
 });
 
-// node_modules/jsonld/lib/events.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/jsonld/lib/events.js
 var require_events = __commonJS({
-  "node_modules/jsonld/lib/events.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/jsonld/lib/events.js"(exports, module2) {
     "use strict";
     var JsonLdError = require_JsonLdError();
     var {
@@ -24997,9 +25090,9 @@ var require_events = __commonJS({
   }
 });
 
-// node_modules/jsonld/lib/context.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/jsonld/lib/context.js
 var require_context = __commonJS({
-  "node_modules/jsonld/lib/context.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/jsonld/lib/context.js"(exports, module2) {
     "use strict";
     var util = require_util();
     var JsonLdError = require_JsonLdError();
@@ -26207,9 +26300,9 @@ var require_context = __commonJS({
   }
 });
 
-// node_modules/jsonld/lib/expand.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/jsonld/lib/expand.js
 var require_expand = __commonJS({
-  "node_modules/jsonld/lib/expand.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/jsonld/lib/expand.js"(exports, module2) {
     "use strict";
     var JsonLdError = require_JsonLdError();
     var {
@@ -27268,9 +27361,9 @@ var require_expand = __commonJS({
   }
 });
 
-// node_modules/jsonld/lib/nodeMap.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/jsonld/lib/nodeMap.js
 var require_nodeMap = __commonJS({
-  "node_modules/jsonld/lib/nodeMap.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/jsonld/lib/nodeMap.js"(exports, module2) {
     "use strict";
     var { isKeyword } = require_context();
     var graphTypes = require_graphTypes();
@@ -27491,9 +27584,9 @@ var require_nodeMap = __commonJS({
   }
 });
 
-// node_modules/jsonld/lib/flatten.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/jsonld/lib/flatten.js
 var require_flatten = __commonJS({
-  "node_modules/jsonld/lib/flatten.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/jsonld/lib/flatten.js"(exports, module2) {
     "use strict";
     var {
       isSubjectReference: _isSubjectReference
@@ -27518,9 +27611,9 @@ var require_flatten = __commonJS({
   }
 });
 
-// node_modules/jsonld/lib/fromRdf.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/jsonld/lib/fromRdf.js
 var require_fromRdf = __commonJS({
-  "node_modules/jsonld/lib/fromRdf.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/jsonld/lib/fromRdf.js"(exports, module2) {
     "use strict";
     var JsonLdError = require_JsonLdError();
     var graphTypes = require_graphTypes();
@@ -27789,9 +27882,9 @@ var require_fromRdf = __commonJS({
   }
 });
 
-// node_modules/canonicalize/lib/canonicalize.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/canonicalize/lib/canonicalize.js
 var require_canonicalize = __commonJS({
-  "node_modules/canonicalize/lib/canonicalize.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/canonicalize/lib/canonicalize.js"(exports, module2) {
     "use strict";
     module2.exports = function serialize3(object) {
       if (typeof object === "number" && isNaN(object)) {
@@ -27826,9 +27919,9 @@ var require_canonicalize = __commonJS({
   }
 });
 
-// node_modules/jsonld/lib/toRdf.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/jsonld/lib/toRdf.js
 var require_toRdf = __commonJS({
-  "node_modules/jsonld/lib/toRdf.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/jsonld/lib/toRdf.js"(exports, module2) {
     "use strict";
     var { createNodeMap } = require_nodeMap();
     var { isKeyword } = require_context();
@@ -28177,9 +28270,9 @@ var require_toRdf = __commonJS({
   }
 });
 
-// node_modules/jsonld/lib/frame.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/jsonld/lib/frame.js
 var require_frame = __commonJS({
-  "node_modules/jsonld/lib/frame.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/jsonld/lib/frame.js"(exports, module2) {
     "use strict";
     var { isKeyword } = require_context();
     var graphTypes = require_graphTypes();
@@ -28706,9 +28799,9 @@ var require_frame = __commonJS({
   }
 });
 
-// node_modules/jsonld/lib/compact.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/jsonld/lib/compact.js
 var require_compact = __commonJS({
-  "node_modules/jsonld/lib/compact.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/jsonld/lib/compact.js"(exports, module2) {
     "use strict";
     var JsonLdError = require_JsonLdError();
     var {
@@ -29606,9 +29699,9 @@ var require_compact = __commonJS({
   }
 });
 
-// node_modules/jsonld/lib/JsonLdProcessor.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/jsonld/lib/JsonLdProcessor.js
 var require_JsonLdProcessor = __commonJS({
-  "node_modules/jsonld/lib/JsonLdProcessor.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/jsonld/lib/JsonLdProcessor.js"(exports, module2) {
     "use strict";
     module2.exports = (jsonld2) => {
       class JsonLdProcessor {
@@ -29655,9 +29748,9 @@ var require_JsonLdProcessor = __commonJS({
   }
 });
 
-// node_modules/jsonld/lib/jsonld.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/jsonld/lib/jsonld.js
 var require_jsonld = __commonJS({
-  "node_modules/jsonld/lib/jsonld.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/jsonld/lib/jsonld.js"(exports, module2) {
     var canonize = require_rdf_canonize();
     var platform = require_platform_browser2();
     var util = require_util();
@@ -30247,9 +30340,9 @@ var require_jsonld = __commonJS({
   }
 });
 
-// node_modules/base64-js/index.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/base64-js/index.js
 var require_base64_js = __commonJS({
-  "node_modules/base64-js/index.js"(exports) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/base64-js/index.js"(exports) {
     "use strict";
     exports.byteLength = byteLength;
     exports.toByteArray = toByteArray;
@@ -30348,9 +30441,9 @@ var require_base64_js = __commonJS({
   }
 });
 
-// node_modules/ieee754/index.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/ieee754/index.js
 var require_ieee754 = __commonJS({
-  "node_modules/ieee754/index.js"(exports) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/ieee754/index.js"(exports) {
     exports.read = function(buffer, offset, isLE, mLen, nBytes) {
       var e, m;
       var eLen = nBytes * 8 - mLen - 1;
@@ -30431,9 +30524,9 @@ var require_ieee754 = __commonJS({
   }
 });
 
-// node_modules/buffer/index.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/buffer/index.js
 var require_buffer = __commonJS({
-  "node_modules/buffer/index.js"(exports) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/buffer/index.js"(exports) {
     "use strict";
     var base64 = require_base64_js();
     var ieee754 = require_ieee754();
@@ -32023,9 +32116,9 @@ var require_buffer = __commonJS({
   }
 });
 
-// node_modules/cross-fetch/dist/browser-ponyfill.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/cross-fetch/dist/browser-ponyfill.js
 var require_browser_ponyfill = __commonJS({
-  "node_modules/cross-fetch/dist/browser-ponyfill.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/cross-fetch/dist/browser-ponyfill.js"(exports, module2) {
     var __global__ = typeof globalThis !== "undefined" && globalThis || typeof self !== "undefined" && self || typeof global !== "undefined" && global;
     var __globalThis__ = (function() {
       function F() {
@@ -32825,9 +32918,9 @@ var init_httpsig = __esm({
   }
 });
 
-// node_modules/ms/index.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/ms/index.js
 var require_ms = __commonJS({
-  "node_modules/ms/index.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/ms/index.js"(exports, module2) {
     var s = 1e3;
     var m = s * 60;
     var h = m * 60;
@@ -32941,9 +33034,9 @@ var require_ms = __commonJS({
   }
 });
 
-// node_modules/debug/src/common.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/debug/src/common.js
 var require_common = __commonJS({
-  "node_modules/debug/src/common.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/debug/src/common.js"(exports, module2) {
     function setup(env) {
       createDebug.debug = createDebug;
       createDebug.default = createDebug;
@@ -33118,9 +33211,9 @@ var require_common = __commonJS({
   }
 });
 
-// node_modules/debug/src/browser.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/debug/src/browser.js
 var require_browser = __commonJS({
-  "node_modules/debug/src/browser.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/debug/src/browser.js"(exports, module2) {
     exports.formatArgs = formatArgs;
     exports.save = save;
     exports.load = load;
@@ -33288,9 +33381,9 @@ var require_browser = __commonJS({
   }
 });
 
-// node_modules/rdf-data-factory/lib/BlankNode.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdf-data-factory/lib/BlankNode.js
 var require_BlankNode = __commonJS({
-  "node_modules/rdf-data-factory/lib/BlankNode.js"(exports) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdf-data-factory/lib/BlankNode.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.BlankNode = void 0;
@@ -33307,9 +33400,9 @@ var require_BlankNode = __commonJS({
   }
 });
 
-// node_modules/rdf-data-factory/lib/DefaultGraph.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdf-data-factory/lib/DefaultGraph.js
 var require_DefaultGraph = __commonJS({
-  "node_modules/rdf-data-factory/lib/DefaultGraph.js"(exports) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdf-data-factory/lib/DefaultGraph.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.DefaultGraph = void 0;
@@ -33327,9 +33420,9 @@ var require_DefaultGraph = __commonJS({
   }
 });
 
-// node_modules/rdf-data-factory/lib/NamedNode.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdf-data-factory/lib/NamedNode.js
 var require_NamedNode = __commonJS({
-  "node_modules/rdf-data-factory/lib/NamedNode.js"(exports) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdf-data-factory/lib/NamedNode.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.NamedNode = void 0;
@@ -33346,9 +33439,9 @@ var require_NamedNode = __commonJS({
   }
 });
 
-// node_modules/rdf-data-factory/lib/Literal.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdf-data-factory/lib/Literal.js
 var require_Literal = __commonJS({
-  "node_modules/rdf-data-factory/lib/Literal.js"(exports) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdf-data-factory/lib/Literal.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.Literal = void 0;
@@ -33388,9 +33481,9 @@ var require_Literal = __commonJS({
   }
 });
 
-// node_modules/rdf-data-factory/lib/Quad.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdf-data-factory/lib/Quad.js
 var require_Quad = __commonJS({
-  "node_modules/rdf-data-factory/lib/Quad.js"(exports) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdf-data-factory/lib/Quad.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.Quad = void 0;
@@ -33411,9 +33504,9 @@ var require_Quad = __commonJS({
   }
 });
 
-// node_modules/rdf-data-factory/lib/Variable.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdf-data-factory/lib/Variable.js
 var require_Variable = __commonJS({
-  "node_modules/rdf-data-factory/lib/Variable.js"(exports) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdf-data-factory/lib/Variable.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.Variable = void 0;
@@ -33430,9 +33523,9 @@ var require_Variable = __commonJS({
   }
 });
 
-// node_modules/rdf-data-factory/lib/DataFactory.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdf-data-factory/lib/DataFactory.js
 var require_DataFactory = __commonJS({
-  "node_modules/rdf-data-factory/lib/DataFactory.js"(exports) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdf-data-factory/lib/DataFactory.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.DataFactory = void 0;
@@ -33555,9 +33648,9 @@ var require_DataFactory = __commonJS({
   }
 });
 
-// node_modules/rdf-data-factory/index.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdf-data-factory/index.js
 var require_rdf_data_factory = __commonJS({
-  "node_modules/rdf-data-factory/index.js"(exports) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdf-data-factory/index.js"(exports) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -33586,9 +33679,9 @@ var require_rdf_data_factory = __commonJS({
   }
 });
 
-// node_modules/rdf-literal/lib/Translator.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdf-literal/lib/Translator.js
 var require_Translator = __commonJS({
-  "node_modules/rdf-literal/lib/Translator.js"(exports) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdf-literal/lib/Translator.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.Translator = void 0;
@@ -33651,9 +33744,9 @@ var require_Translator = __commonJS({
   }
 });
 
-// node_modules/rdf-literal/lib/handler/TypeHandlerBoolean.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdf-literal/lib/handler/TypeHandlerBoolean.js
 var require_TypeHandlerBoolean = __commonJS({
-  "node_modules/rdf-literal/lib/handler/TypeHandlerBoolean.js"(exports) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdf-literal/lib/handler/TypeHandlerBoolean.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.TypeHandlerBoolean = void 0;
@@ -33684,9 +33777,9 @@ var require_TypeHandlerBoolean = __commonJS({
   }
 });
 
-// node_modules/rdf-literal/lib/handler/TypeHandlerDate.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdf-literal/lib/handler/TypeHandlerDate.js
 var require_TypeHandlerDate = __commonJS({
-  "node_modules/rdf-literal/lib/handler/TypeHandlerDate.js"(exports) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdf-literal/lib/handler/TypeHandlerDate.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.TypeHandlerDate = void 0;
@@ -33759,9 +33852,9 @@ var require_TypeHandlerDate = __commonJS({
   }
 });
 
-// node_modules/rdf-literal/lib/handler/TypeHandlerNumberDouble.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdf-literal/lib/handler/TypeHandlerNumberDouble.js
 var require_TypeHandlerNumberDouble = __commonJS({
-  "node_modules/rdf-literal/lib/handler/TypeHandlerNumberDouble.js"(exports) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdf-literal/lib/handler/TypeHandlerNumberDouble.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.TypeHandlerNumberDouble = void 0;
@@ -33799,9 +33892,9 @@ var require_TypeHandlerNumberDouble = __commonJS({
   }
 });
 
-// node_modules/rdf-literal/lib/handler/TypeHandlerNumberInteger.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdf-literal/lib/handler/TypeHandlerNumberInteger.js
 var require_TypeHandlerNumberInteger = __commonJS({
-  "node_modules/rdf-literal/lib/handler/TypeHandlerNumberInteger.js"(exports) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdf-literal/lib/handler/TypeHandlerNumberInteger.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.TypeHandlerNumberInteger = void 0;
@@ -33841,9 +33934,9 @@ var require_TypeHandlerNumberInteger = __commonJS({
   }
 });
 
-// node_modules/rdf-literal/lib/handler/TypeHandlerString.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdf-literal/lib/handler/TypeHandlerString.js
 var require_TypeHandlerString = __commonJS({
-  "node_modules/rdf-literal/lib/handler/TypeHandlerString.js"(exports) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdf-literal/lib/handler/TypeHandlerString.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     exports.TypeHandlerString = void 0;
@@ -33875,9 +33968,9 @@ var require_TypeHandlerString = __commonJS({
   }
 });
 
-// node_modules/rdf-literal/lib/handler/index.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdf-literal/lib/handler/index.js
 var require_handler = __commonJS({
-  "node_modules/rdf-literal/lib/handler/index.js"(exports) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdf-literal/lib/handler/index.js"(exports) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -33904,17 +33997,17 @@ var require_handler = __commonJS({
   }
 });
 
-// node_modules/rdf-literal/lib/ITypeHandler.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdf-literal/lib/ITypeHandler.js
 var require_ITypeHandler = __commonJS({
-  "node_modules/rdf-literal/lib/ITypeHandler.js"(exports) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdf-literal/lib/ITypeHandler.js"(exports) {
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
   }
 });
 
-// node_modules/rdf-literal/index.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdf-literal/index.js
 var require_rdf_literal = __commonJS({
-  "node_modules/rdf-literal/index.js"(exports) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdf-literal/index.js"(exports) {
     "use strict";
     var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
@@ -33979,9 +34072,9 @@ var require_rdf_literal = __commonJS({
   }
 });
 
-// node_modules/json-canon/src/index.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/json-canon/src/index.js
 var require_src = __commonJS({
-  "node_modules/json-canon/src/index.js"(exports, module2) {
+  "../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/json-canon/src/index.js"(exports, module2) {
     module2.exports = serialize3;
     function serialize3(value) {
       const type = typeof value;
@@ -34744,7 +34837,7 @@ var fileURLToPath = (u) => {
 var pathToFileURL = (p) => new URL("file://" + (p.startsWith("/") ? p : "/" + p));
 var node_url_default = { URL: globalThis.URL, URLSearchParams: globalThis.URLSearchParams, fileURLToPath, pathToFileURL };
 
-// node_modules/@babel/runtime/helpers/esm/typeof.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@babel/runtime/helpers/esm/typeof.js
 function _typeof(o) {
   "@babel/helpers - typeof";
   return _typeof = "function" == typeof Symbol && "symbol" == typeof Symbol.iterator ? function(o2) {
@@ -34754,7 +34847,7 @@ function _typeof(o) {
   }, _typeof(o);
 }
 
-// node_modules/@babel/runtime/helpers/esm/toPrimitive.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@babel/runtime/helpers/esm/toPrimitive.js
 function toPrimitive(t, r) {
   if ("object" != _typeof(t) || !t) return t;
   var e = t[Symbol.toPrimitive];
@@ -34766,13 +34859,13 @@ function toPrimitive(t, r) {
   return ("string" === r ? String : Number)(t);
 }
 
-// node_modules/@babel/runtime/helpers/esm/toPropertyKey.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@babel/runtime/helpers/esm/toPropertyKey.js
 function toPropertyKey(t) {
   var i = toPrimitive(t, "string");
   return "symbol" == _typeof(i) ? i : i + "";
 }
 
-// node_modules/@babel/runtime/helpers/esm/defineProperty.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@babel/runtime/helpers/esm/defineProperty.js
 function _defineProperty(e, r, t) {
   return (r = toPropertyKey(r)) in e ? Object.defineProperty(e, r, {
     value: t,
@@ -34782,7 +34875,7 @@ function _defineProperty(e, r, t) {
   }) : e[r] = t, e;
 }
 
-// node_modules/rdflib/esm/class-order.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdflib/esm/class-order.js
 var ClassOrder = {
   "Literal": 1,
   "Collection": 3,
@@ -34793,7 +34886,7 @@ var ClassOrder = {
 };
 var class_order_default = ClassOrder;
 
-// node_modules/rdflib/esm/node-internal.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdflib/esm/node-internal.js
 var Node3 = class {
   constructor(value) {
     _defineProperty(this, "termType", void 0);
@@ -34880,7 +34973,7 @@ var Node3 = class {
 _defineProperty(Node3, "fromValue", void 0);
 _defineProperty(Node3, "toJS", void 0);
 
-// node_modules/rdflib/esm/types.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdflib/esm/types.js
 var NamedNodeTermType = "NamedNode";
 var BlankNodeTermType = "BlankNode";
 var LiteralTermType = "Literal";
@@ -34903,7 +34996,7 @@ var TurtleContentType = "text/turtle";
 var TurtleLegacyContentType = "application/x-turtle";
 var XHTMLContentType = "application/xhtml+xml";
 
-// node_modules/rdflib/esm/blank-node.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdflib/esm/blank-node.js
 var BlankNode = class _BlankNode extends Node3 {
   static getId(id) {
     if (id) {
@@ -34972,7 +35065,7 @@ var BlankNode = class _BlankNode extends Node3 {
 _defineProperty(BlankNode, "nextId", 0);
 _defineProperty(BlankNode, "NTAnonymousNodePrefix", "_:");
 
-// node_modules/rdflib/esm/utils/termValue.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdflib/esm/utils/termValue.js
 function termValue(node) {
   if (typeof node === "string") {
     return node;
@@ -34980,7 +35073,7 @@ function termValue(node) {
   return node.value;
 }
 
-// node_modules/rdflib/esm/utils/terms.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdflib/esm/utils/terms.js
 function isStatement(obj) {
   return typeof obj === "object" && obj !== null && "subject" in obj;
 }
@@ -35018,7 +35111,7 @@ function isGraph(obj) {
   return isTerm(obj) && (obj.termType === NamedNodeTermType || obj.termType === VariableTermType || obj.termType === BlankNodeTermType || obj.termType === DefaultGraphTermType);
 }
 
-// node_modules/rdflib/esm/named-node.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdflib/esm/named-node.js
 var NamedNode = class _NamedNode extends Node3 {
   /**
    * Create a named (IRI) RDF Node
@@ -35108,7 +35201,7 @@ var NamedNode = class _NamedNode extends Node3 {
   }
 };
 
-// node_modules/rdflib/esm/xsd-internal.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdflib/esm/xsd-internal.js
 var xsd_internal_default = {
   boolean: new NamedNode("http://www.w3.org/2001/XMLSchema#boolean"),
   dateTime: new NamedNode("http://www.w3.org/2001/XMLSchema#dateTime"),
@@ -35119,7 +35212,7 @@ var xsd_internal_default = {
   string: new NamedNode("http://www.w3.org/2001/XMLSchema#string")
 };
 
-// node_modules/rdflib/esm/literal.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdflib/esm/literal.js
 var Literal = class _Literal extends Node3 {
   /**
    * Initializes a literal
@@ -35258,7 +35351,7 @@ var Literal = class _Literal extends Node3 {
   }
 };
 
-// node_modules/rdflib/esm/collection.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdflib/esm/collection.js
 function fromValue(value) {
   if (typeof value === "undefined" || value === null) {
     return value;
@@ -35343,11 +35436,11 @@ var Collection = class _Collection extends Node3 {
 };
 _defineProperty(Collection, "termType", CollectionTermType);
 
-// node_modules/rdflib/esm/utils/default-graph-uri.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdflib/esm/utils/default-graph-uri.js
 var defaultGraphURI = "chrome:theSession";
 var defaultGraphNode = new NamedNode(defaultGraphURI);
 
-// node_modules/rdflib/esm/default-graph.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdflib/esm/default-graph.js
 var DefaultGraph = class extends Node3 {
   constructor() {
     super("");
@@ -35366,7 +35459,7 @@ function isDefaultGraph(object) {
   return !!object && object.termType === DefaultGraphTermType;
 }
 
-// node_modules/rdflib/esm/statement.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdflib/esm/statement.js
 var defaultGraph = new DefaultGraph();
 var Statement = class _Statement {
   /**
@@ -35440,7 +35533,7 @@ var Statement = class _Statement {
   }
 };
 
-// node_modules/rdflib/esm/uri.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdflib/esm/uri.js
 var uri_exports = {};
 __export(uri_exports, {
   docpart: () => docpart,
@@ -35609,7 +35702,7 @@ function refTo(base, uri) {
   return s + uri.slice(i);
 }
 
-// node_modules/rdflib/esm/variable.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdflib/esm/variable.js
 var Variable = class _Variable extends Node3 {
   /**
    * Initializes this variable
@@ -35649,7 +35742,7 @@ var Variable = class _Variable extends Node3 {
   }
 };
 
-// node_modules/rdflib/esm/factories/factory-types.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdflib/esm/factories/factory-types.js
 var Feature = /* @__PURE__ */ (function(Feature2) {
   Feature2["collections"] = "COLLECTIONS";
   Feature2["defaultGraphType"] = "DEFAULT_GRAPH_TYPE";
@@ -35661,7 +35754,7 @@ var Feature = /* @__PURE__ */ (function(Feature2) {
   return Feature2;
 })({});
 
-// node_modules/rdflib/esm/factories/canonical-data-factory.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdflib/esm/factories/canonical-data-factory.js
 var defaultGraph2 = new DefaultGraph();
 var CanonicalDataFactory = {
   supports: {
@@ -35819,7 +35912,7 @@ var CanonicalDataFactory = {
 };
 var canonical_data_factory_default = CanonicalDataFactory;
 
-// node_modules/rdflib/esm/log.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdflib/esm/log.js
 var log = {
   debug(x) {
   },
@@ -35836,7 +35929,7 @@ var log = {
 };
 var log_default = log;
 
-// node_modules/rdflib/esm/namespace.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdflib/esm/namespace.js
 function Namespace(nsuri, factory3) {
   const dataFactory = factory3 || {
     namedNode: (value) => new NamedNode(value)
@@ -35846,11 +35939,11 @@ function Namespace(nsuri, factory3) {
   };
 }
 
-// node_modules/rdflib/esm/serializer.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdflib/esm/serializer.js
 var ttl2jsonld = __toESM(require_ttl2jsonld());
 var import_solid_namespace = __toESM(require_solid_namespace());
 
-// node_modules/rdflib/esm/utils-js.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdflib/esm/utils-js.js
 var import_xmldom = __toESM(require_lib());
 function mediaTypeClass(mediaType) {
   mediaType = mediaType.split(";")[0].trim();
@@ -36026,7 +36119,7 @@ function RDFArrayRemove(a, x) {
   throw new Error("RDFArrayRemove: Array did not contain " + x + " " + x.why);
 }
 
-// node_modules/rdflib/esm/xsd.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdflib/esm/xsd.js
 function createXSD(localFactory = canonical_data_factory_default) {
   return {
     boolean: localFactory.namedNode("http://www.w3.org/2001/XMLSchema#boolean"),
@@ -36040,7 +36133,7 @@ function createXSD(localFactory = canonical_data_factory_default) {
 }
 var defaultXSD = createXSD(canonical_data_factory_default);
 
-// node_modules/rdflib/esm/serializer.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdflib/esm/serializer.js
 function createSerializer(store) {
   return new Serializer(store);
 }
@@ -36892,7 +36985,7 @@ function backslashUify(str) {
   return res;
 }
 
-// node_modules/rdflib/esm/serialize.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdflib/esm/serialize.js
 function serialize(target, kb, base, contentType, callback, options) {
   base = base || target?.value;
   const opts = options || {};
@@ -36954,7 +37047,7 @@ function serialize(target, kb, base, contentType, callback, options) {
   }
 }
 
-// node_modules/rdflib/esm/utils.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdflib/esm/utils.js
 var appliedFactoryMethods = ["blankNode", "defaultGraph", "literal", "namedNode", "quad", "variable", "supports"];
 var rdf = {
   first: "http://www.w3.org/1999/02/22-rdf-syntax-ns#first",
@@ -36987,7 +37080,7 @@ function ArrayIndexOf(arr2, item, i = 0) {
   return -1;
 }
 
-// node_modules/rdflib/esm/formula.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdflib/esm/formula.js
 var Formula = class _Formula extends Node3 {
   /**
    * Initializes this formula
@@ -37665,7 +37758,7 @@ var Formula = class _Formula extends Node3 {
   }
 };
 
-// node_modules/rdflib/esm/node.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdflib/esm/node.js
 Node3.fromValue = fromValue;
 var node_default = Node3;
 var ns = {
@@ -37688,7 +37781,7 @@ Node3.toJS = function(term3) {
   return term3.value;
 };
 
-// node_modules/rdflib/esm/query.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdflib/esm/query.js
 var Query = class {
   constructor(name, id) {
     this.pat = new IndexedFormula();
@@ -38073,7 +38166,7 @@ function indexedFormulaQuery(myQuery, callback, fetcher2, onDone) {
   }
 }
 
-// node_modules/rdflib/esm/store.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdflib/esm/store.js
 var owlNamespaceURI = "http://www.w3.org/2002/07/owl#";
 function handleFP(formula2, subj, pred, obj) {
   var o1 = formula2.any(subj, pred, void 0);
@@ -38966,7 +39059,7 @@ var IndexedFormula = class _IndexedFormula extends Formula {
 _defineProperty(IndexedFormula, "handleRDFType", void 0);
 IndexedFormula.handleRDFType = handleRDFType;
 
-// node_modules/rdflib/esm/lists.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdflib/esm/lists.js
 var RDF = Namespace("http://www.w3.org/1999/02/22-rdf-syntax-ns#");
 function substituteInDoc(store, x, y, doc) {
   for (const quad4 of store.statementsMatching(y, null, null, doc)) {
@@ -39028,7 +39121,7 @@ function convertFirstRestNil(store, doc) {
   });
 }
 
-// node_modules/rdflib/esm/n3parser.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdflib/esm/n3parser.js
 function hexify2(str) {
   return encodeURI(str);
 }
@@ -40326,7 +40419,7 @@ function BadSyntax(uri, lines, str, i, why) {
   return e;
 }
 
-// node_modules/rdflib/esm/factories/extended-term-factory.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdflib/esm/factories/extended-term-factory.js
 var ExtendedTermFactory = {
   ...canonical_data_factory_default,
   supports: {
@@ -40363,7 +40456,7 @@ var ExtendedTermFactory = {
 };
 var extended_term_factory_default = ExtendedTermFactory;
 
-// node_modules/rdflib/esm/jsonldparser.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdflib/esm/jsonldparser.js
 function jsonldObjectToTerm(kb, obj) {
   if (typeof obj === "string") {
     return kb.rdfFactory.literal(obj);
@@ -40452,10 +40545,10 @@ function createStatement(kb, id, property, value, base) {
   return kb.rdfFactory.quad(id, predicate, object, kb.rdfFactory.namedNode(base));
 }
 
-// node_modules/n3/src/N3Lexer.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/n3/src/N3Lexer.js
 var import_buffer = __toESM(require_buffer());
 
-// node_modules/n3/src/IRIs.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/n3/src/IRIs.js
 var RDF2 = "http://www.w3.org/1999/02/22-rdf-syntax-ns#";
 var XSD = "http://www.w3.org/2001/XMLSchema#";
 var SWAP = "http://www.w3.org/2000/10/swap/";
@@ -40489,7 +40582,7 @@ var IRIs_default = {
   }
 };
 
-// node_modules/n3/src/N3Lexer.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/n3/src/N3Lexer.js
 var { xsd } = IRIs_default;
 var escapeSequence = /\\u([a-fA-F0-9]{4})|\\U([a-fA-F0-9]{8})|\\([^])/g;
 var escapeReplacements = {
@@ -40939,7 +41032,7 @@ var N3Lexer = class {
   }
 };
 
-// node_modules/n3/src/N3DataFactory.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/n3/src/N3DataFactory.js
 var { rdf: rdf2, xsd: xsd2 } = IRIs_default;
 var DEFAULTGRAPH;
 var _blankNodeCounter = 0;
@@ -41185,7 +41278,7 @@ function fromQuad(inQuad) {
   return quad(fromTerm(inQuad.subject), fromTerm(inQuad.predicate), fromTerm(inQuad.object), fromTerm(inQuad.graph));
 }
 
-// node_modules/n3/src/N3Parser.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/n3/src/N3Parser.js
 var blankNodePrefix = 0;
 var N3Parser = class _N3Parser {
   constructor(options) {
@@ -42273,7 +42366,7 @@ N3Parser.SUPPORTED_VERSIONS = [
 ];
 initDataFactory(N3Parser.prototype, N3DataFactory_default);
 
-// node_modules/rdflib/esm/rdfaparser.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdflib/esm/rdfaparser.js
 if (typeof Node4 === "undefined") {
   Node4 = {
     ELEMENT_NODE: 1,
@@ -43162,7 +43255,7 @@ RDFaProcessor.dateTimeTypes = [{
 }];
 var parseRDFaDOM = RDFaProcessor.parseRDFaDOM;
 
-// node_modules/rdflib/esm/rdfxmlparser.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdflib/esm/rdfxmlparser.js
 var RDFParser = class _RDFParser {
   /*
    * @constructor
@@ -43562,7 +43655,7 @@ _defineProperty(RDFParser, "nodeType", {
   "NOTATION": 12
 });
 
-// node_modules/rdflib/esm/patch-parser.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdflib/esm/patch-parser.js
 function sparqlUpdateParser(str, kb, base) {
   var i, j, k;
   var keywords = ["INSERT", "DELETE", "WHERE"];
@@ -43627,7 +43720,7 @@ function sparqlUpdateParser(str, kb, base) {
   }
 }
 
-// node_modules/rdflib/esm/parse.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdflib/esm/parse.js
 function parse2(str, kb, base, contentType = "text/turtle", callback) {
   contentType = contentType || TurtleContentType;
   contentType = contentType.split(";")[0];
@@ -43722,7 +43815,7 @@ function parse2(str, kb, base, contentType = "text/turtle", callback) {
   }
 }
 
-// node_modules/rdflib/esm/fetcher.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdflib/esm/fetcher.js
 var import_cross_fetch = __toESM(require_browser_ponyfill());
 var Parsable = {
   "text/n3": true,
@@ -45086,7 +45179,7 @@ _defineProperty(Fetcher, "crossSiteProxyTemplate", void 0);
 Fetcher.HANDLERS = defaultHandlers;
 Fetcher.CONTENT_TYPE_BY_EXT = CONTENT_TYPE_BY_EXT;
 
-// node_modules/rdflib/esm/factories/rdflib-data-factory.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdflib/esm/factories/rdflib-data-factory.js
 var RDFlibDataFactory = {
   ...extended_term_factory_default,
   /**
@@ -45127,7 +45220,7 @@ var RDFlibDataFactory = {
 };
 var rdflib_data_factory_default = RDFlibDataFactory;
 
-// node_modules/rdflib/esm/index.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdflib/esm/index.js
 var boundDataFactory = {};
 for (const name in rdflib_data_factory_default) {
   if (typeof rdflib_data_factory_default[name] === "function") boundDataFactory[name] = rdflib_data_factory_default[name].bind(rdflib_data_factory_default);
@@ -58178,7 +58271,7 @@ async function addReply(intake, parentId, replyId) {
   intake.log(`reply recorded on ${parentId}`);
 }
 
-// node_modules/@rdfjs/environment/Environment.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@rdfjs/environment/Environment.js
 var Environment = class _Environment {
   constructor(factories, { bind = false } = {}) {
     this._factories = factories.slice();
@@ -58207,7 +58300,7 @@ var Environment = class _Environment {
 };
 var Environment_default = Environment;
 
-// node_modules/@rdfjs/data-model/lib/BlankNode.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@rdfjs/data-model/lib/BlankNode.js
 var BlankNode3 = class {
   constructor(id) {
     this.value = id;
@@ -58219,7 +58312,7 @@ var BlankNode3 = class {
 BlankNode3.prototype.termType = "BlankNode";
 var BlankNode_default = BlankNode3;
 
-// node_modules/@rdfjs/data-model/lib/DefaultGraph.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@rdfjs/data-model/lib/DefaultGraph.js
 var DefaultGraph3 = class {
   equals(other) {
     return !!other && other.termType === this.termType;
@@ -58229,7 +58322,7 @@ DefaultGraph3.prototype.termType = "DefaultGraph";
 DefaultGraph3.prototype.value = "";
 var DefaultGraph_default = DefaultGraph3;
 
-// node_modules/@rdfjs/data-model/lib/fromTerm.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@rdfjs/data-model/lib/fromTerm.js
 function fromTerm2(factory3, original) {
   if (!original) {
     return null;
@@ -58260,7 +58353,7 @@ function fromTerm2(factory3, original) {
 }
 var fromTerm_default = fromTerm2;
 
-// node_modules/@rdfjs/data-model/lib/Literal.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@rdfjs/data-model/lib/Literal.js
 var Literal3 = class {
   constructor(value, language, datatype, direction = "") {
     this.value = value;
@@ -58275,7 +58368,7 @@ var Literal3 = class {
 Literal3.prototype.termType = "Literal";
 var Literal_default = Literal3;
 
-// node_modules/@rdfjs/data-model/lib/NamedNode.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@rdfjs/data-model/lib/NamedNode.js
 var NamedNode3 = class {
   constructor(iri) {
     this.value = iri;
@@ -58287,7 +58380,7 @@ var NamedNode3 = class {
 NamedNode3.prototype.termType = "NamedNode";
 var NamedNode_default = NamedNode3;
 
-// node_modules/@rdfjs/data-model/lib/Quad.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@rdfjs/data-model/lib/Quad.js
 var Quad2 = class {
   constructor(subject, predicate, object, graph2) {
     this.subject = subject;
@@ -58303,7 +58396,7 @@ Quad2.prototype.termType = "Quad";
 Quad2.prototype.value = "";
 var Quad_default = Quad2;
 
-// node_modules/@rdfjs/data-model/lib/Variable.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@rdfjs/data-model/lib/Variable.js
 var Variable3 = class {
   constructor(name) {
     this.value = name;
@@ -58315,7 +58408,7 @@ var Variable3 = class {
 Variable3.prototype.termType = "Variable";
 var Variable_default = Variable3;
 
-// node_modules/@rdfjs/data-model/Factory.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@rdfjs/data-model/Factory.js
 var dirLangStringDatatype = new NamedNode_default("http://www.w3.org/1999/02/22-rdf-syntax-ns#dirLangString");
 var langStringDatatype = new NamedNode_default("http://www.w3.org/1999/02/22-rdf-syntax-ns#langString");
 var stringDatatype = new NamedNode_default("http://www.w3.org/2001/XMLSchema#string");
@@ -58378,7 +58471,7 @@ DataFactory2.exports = [
 ];
 var Factory_default = DataFactory2;
 
-// node_modules/@rdfjs/dataset/DatasetCore.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@rdfjs/dataset/DatasetCore.js
 function isString(s) {
   return typeof s === "string" || s instanceof String;
 }
@@ -58682,7 +58775,7 @@ var DatasetCore = class {
 };
 var DatasetCore_default = DatasetCore;
 
-// node_modules/@rdfjs/dataset/Factory.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@rdfjs/dataset/Factory.js
 var Factory = class {
   dataset(quads) {
     return new DatasetCore_default(quads);
@@ -58691,11 +58784,11 @@ var Factory = class {
 Factory.exports = ["dataset"];
 var Factory_default2 = Factory;
 
-// node_modules/@rdfjs/data-model/index.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@rdfjs/data-model/index.js
 var factory = new Factory_default();
 var data_model_default = factory;
 
-// node_modules/@rdfjs/namespace/index.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@rdfjs/namespace/index.js
 var handler = {
   apply: (target, thisArg, args) => target(args[0]),
   get: (target, property) => target(property)
@@ -58706,7 +58799,7 @@ function namespace(baseIRI, { factory: factory3 = data_model_default } = {}) {
 }
 var namespace_default = namespace;
 
-// node_modules/@rdfjs/namespace/Factory.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@rdfjs/namespace/Factory.js
 var Factory2 = class {
   namespace(baseIRI) {
     return namespace_default(baseIRI, { factory: this });
@@ -58715,31 +58808,31 @@ var Factory2 = class {
 Factory2.exports = ["namespace"];
 var Factory_default3 = Factory2;
 
-// node_modules/@rdfjs/to-ntriples/lib/blankNode.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@rdfjs/to-ntriples/lib/blankNode.js
 function blankNode3(blankNode5) {
   return "_:" + blankNode5.value;
 }
 var blankNode_default = blankNode3;
 
-// node_modules/@rdfjs/to-ntriples/lib/dataset.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@rdfjs/to-ntriples/lib/dataset.js
 function dataset(dataset2, toNT2) {
   return [...dataset2].map((quad4) => toNT2(quad4)).join("\n") + "\n";
 }
 var dataset_default = dataset;
 
-// node_modules/@rdfjs/to-ntriples/lib/defaultGraph.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@rdfjs/to-ntriples/lib/defaultGraph.js
 function defaultGraph5() {
   return "";
 }
 var defaultGraph_default = defaultGraph5;
 
-// node_modules/@rdfjs/to-ntriples/lib/namedNode.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@rdfjs/to-ntriples/lib/namedNode.js
 function namedNode3(namedNode5) {
   return "<" + namedNode5.value + ">";
 }
 var namedNode_default = namedNode3;
 
-// node_modules/@rdfjs/to-ntriples/lib/literal.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@rdfjs/to-ntriples/lib/literal.js
 var echarRegEx = /["\\\\\n\r]/;
 var echarRegExAll = /["\\\\\n\r]/g;
 var echarReplacement = {
@@ -58769,7 +58862,7 @@ function literal3(literal5) {
 }
 var literal_default = literal3;
 
-// node_modules/@rdfjs/to-ntriples/lib/quad.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@rdfjs/to-ntriples/lib/quad.js
 function quad3(quad4, toNT2) {
   const subjectString = toNT2(quad4.subject);
   const predicateString = toNT2(quad4.predicate);
@@ -58779,13 +58872,13 @@ function quad3(quad4, toNT2) {
 }
 var quad_default = quad3;
 
-// node_modules/@rdfjs/to-ntriples/lib/variable.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@rdfjs/to-ntriples/lib/variable.js
 function variable3(variable4) {
   return "?" + variable4.value;
 }
 var variable_default = variable3;
 
-// node_modules/@rdfjs/to-ntriples/index.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@rdfjs/to-ntriples/index.js
 function toNT(term3) {
   if (!term3) {
     return null;
@@ -58815,7 +58908,7 @@ function toNT(term3) {
 }
 var to_ntriples_default = toNT;
 
-// node_modules/@rdfjs/term-set/TermSet.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@rdfjs/term-set/TermSet.js
 function quietToNT(term3) {
   try {
     return to_ntriples_default(term3);
@@ -58875,7 +58968,7 @@ var TermSet = class {
 };
 var TermSet_default = TermSet;
 
-// node_modules/@rdfjs/term-set/Factory.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@rdfjs/term-set/Factory.js
 var Factory3 = class {
   termSet(terms) {
     return new TermSet_default(terms);
@@ -58884,7 +58977,7 @@ var Factory3 = class {
 Factory3.exports = ["termSet"];
 var Factory_default4 = Factory3;
 
-// node_modules/@rdfjs/term-map/TermMap.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@rdfjs/term-map/TermMap.js
 var TermMap = class {
   constructor(entries) {
     this.index = /* @__PURE__ */ new Map();
@@ -58941,7 +59034,7 @@ var TermMap = class {
 };
 var TermMap_default = TermMap;
 
-// node_modules/@rdfjs/term-map/Factory.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@rdfjs/term-map/Factory.js
 var Factory4 = class {
   termMap(entries) {
     return new TermMap_default(entries);
@@ -58950,7 +59043,7 @@ var Factory4 = class {
 Factory4.exports = ["termMap"];
 var Factory_default5 = Factory4;
 
-// node_modules/clownface/lib/namespace.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/clownface/lib/namespace.js
 var namespace_default2 = (factory3) => {
   const xsd4 = factory3.namespace("http://www.w3.org/2001/XMLSchema#");
   const rdf4 = factory3.namespace("http://www.w3.org/1999/02/22-rdf-syntax-ns#");
@@ -58963,7 +59056,7 @@ var namespace_default2 = (factory3) => {
   };
 };
 
-// node_modules/clownface/lib/toArray.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/clownface/lib/toArray.js
 function toArray(value, defaultValue) {
   if (typeof value === "undefined" || value === null) {
     return defaultValue;
@@ -58977,13 +59070,13 @@ function toArray(value, defaultValue) {
   return [value];
 }
 
-// node_modules/clownface/lib/environment.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/clownface/lib/environment.js
 var environment_default = new Environment_default([
   Factory_default3,
   Factory_default
 ]);
 
-// node_modules/clownface/lib/fromPrimitive.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/clownface/lib/fromPrimitive.js
 var { xsd: xsd3 } = namespace_default2(environment_default);
 function booleanToLiteral(value, factory3 = environment_default) {
   if (typeof value !== "boolean") {
@@ -59010,7 +59103,7 @@ function toLiteral(value, factory3 = environment_default) {
   return booleanToLiteral(value, factory3) || numberToLiteral(value, factory3) || stringToLiteral(value, factory3);
 }
 
-// node_modules/clownface/lib/term.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/clownface/lib/term.js
 function blankNode4(value, factory3) {
   if (value && typeof value !== "string") {
     throw new Error("Blank node identifier must be a string");
@@ -59059,7 +59152,7 @@ function term2(value, type = "Literal", languageOrDatatype, factory3) {
   throw new Error("unknown type");
 }
 
-// node_modules/clownface/lib/toTermArray.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/clownface/lib/toTermArray.js
 function toTermArray(items, type, languageOrDatatype, factory3) {
   if ((typeof items === "undefined" || items === null) && !type) {
     return items;
@@ -59073,7 +59166,7 @@ function toTermArray(items, type, languageOrDatatype, factory3) {
   }, []);
 }
 
-// node_modules/clownface/lib/languageTag.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/clownface/lib/languageTag.js
 var ns3 = namespace_default2(environment_default);
 function mapLiteralsByLanguage(map, current) {
   const notLiteral = current.termType !== "Literal";
@@ -59109,7 +59202,7 @@ function filterTaggedLiterals(terms, { language }) {
   return languages.map(getLiteralsForLanguage).find(Boolean) || [];
 }
 
-// node_modules/clownface/lib/Context.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/clownface/lib/Context.js
 var Context = class _Context {
   constructor({ dataset: dataset2, graph: graph2, value, factory: factory3, namespace: namespace2 }) {
     this.dataset = dataset2;
@@ -59232,7 +59325,7 @@ var Context = class _Context {
   }
 };
 
-// node_modules/clownface/lib/Clownface.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/clownface/lib/Clownface.js
 var Clownface = class _Clownface {
   constructor({ dataset: dataset2, graph: graph2, term: term3, value, factory: factory3, _context }) {
     this.factory = factory3;
@@ -59608,12 +59701,12 @@ var Clownface = class _Clownface {
   }
 };
 
-// node_modules/clownface/index.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/clownface/index.js
 function factory2({ dataset: dataset2, graph: graph2, term: term3, value, factory: factory3 = environment_default, _context }) {
   return new Clownface({ dataset: dataset2, graph: graph2, term: term3, value, factory: factory3, _context });
 }
 
-// node_modules/clownface/Factory.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/clownface/Factory.js
 var ClownfaceFactory = class {
   clownface({ ...args } = {}) {
     if (!args.dataset && typeof this.dataset === "function") {
@@ -59625,7 +59718,7 @@ var ClownfaceFactory = class {
 ClownfaceFactory.exports = ["clownface"];
 var Factory_default6 = ClownfaceFactory;
 
-// node_modules/rdf-validate-shacl/src/defaultEnv.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdf-validate-shacl/src/defaultEnv.js
 var defaultEnv_default = new Environment_default([
   Factory_default,
   Factory_default2,
@@ -59634,7 +59727,7 @@ var defaultEnv_default = new Environment_default([
   Factory_default5
 ]);
 
-// node_modules/rdf-validate-shacl/src/namespaces.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdf-validate-shacl/src/namespaces.js
 function prepareNamespaces(factory3) {
   return {
     sh: namespace_default("http://www.w3.org/ns/shacl#", { factory: factory3 }),
@@ -59646,7 +59739,7 @@ function prepareNamespaces(factory3) {
 }
 var namespaces_default = prepareNamespaces();
 
-// node_modules/@vocabulary/sh/index.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@vocabulary/sh/index.js
 var sh_default = ({ factory: factory3 }) => {
   const f = factory3;
   const ns1 = "http://www.w3.org/ns/shacl#";
@@ -61151,7 +61244,7 @@ var sh_default = ({ factory: factory3 }) => {
   ];
 };
 
-// node_modules/rdf-validate-shacl/src/node-set.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdf-validate-shacl/src/node-set.js
 var NodeSet = class extends TermSet_default {
   addAll(nodes) {
     for (const node of nodes) {
@@ -61161,7 +61254,7 @@ var NodeSet = class extends TermSet_default {
 };
 var node_set_default = NodeSet;
 
-// node_modules/rdf-validate-shacl/src/property-path.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdf-validate-shacl/src/property-path.js
 function extractPropertyPath(pathNode, ns4, allowNamedNodeInList) {
   if (pathNode.term.termType === "NamedNode" && !allowNamedNodeInList) {
     return pathNode.term;
@@ -61268,7 +61361,7 @@ function flatMap(arr2, func) {
   return [...arr2].reduce((acc, x) => acc.concat(func(x)), []);
 }
 
-// node_modules/rdf-validate-shacl/src/dataset-utils.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdf-validate-shacl/src/dataset-utils.js
 function* extractStructure(dataset2, startNode, visited = new TermSet_default()) {
   if (startNode.termType !== "BlankNode" || visited.has(startNode)) {
     return;
@@ -61328,7 +61421,7 @@ function rdfListToArray(listNode) {
   return [...listNode.list?.() || []].map(({ term: term3 }) => term3);
 }
 
-// node_modules/rdf-validate-shacl/src/shapes-graph.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdf-validate-shacl/src/shapes-graph.js
 var ShapesGraph = class {
   _components;
   _parametersMap;
@@ -61582,10 +61675,10 @@ var Shape = class _Shape {
 };
 var shapes_graph_default = ShapesGraph;
 
-// node_modules/rdf-validate-shacl/src/validation-engine.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdf-validate-shacl/src/validation-engine.js
 var import_debug = __toESM(require_browser(), 1);
 
-// node_modules/rdf-validate-shacl/src/validation-report.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdf-validate-shacl/src/validation-report.js
 var ValidationReport = class {
   constructor(pointer, options = {}) {
     this.factory = options.factory || defaultEnv_default;
@@ -61637,7 +61730,7 @@ var ValidationResult = class _ValidationResult {
 };
 var validation_report_default = ValidationReport;
 
-// node_modules/rdf-validate-shacl/src/validation-engine.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdf-validate-shacl/src/validation-engine.js
 var error = (0, import_debug.default)("validation-engine::error");
 var defaultMaxNodeChecks = 50;
 var ValidationEngine = class _ValidationEngine {
@@ -61946,340 +62039,340 @@ function copyResult(resultPointer, targetPointer, predicate) {
 }
 var validation_engine_default = ValidationEngine;
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/acl.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/acl.js
 var builder = namespace_default("http://www.w3.org/ns/auth/acl#");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/as.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/as.js
 var builder2 = namespace_default("https://www.w3.org/ns/activitystreams#");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/bibo.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/bibo.js
 var builder3 = namespace_default("http://purl.org/ontology/bibo/");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/cc.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/cc.js
 var builder4 = namespace_default("http://creativecommons.org/ns#");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/cert.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/cert.js
 var builder5 = namespace_default("http://www.w3.org/ns/auth/cert#");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/cnt.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/cnt.js
 var builder6 = namespace_default("http://www.w3.org/2011/content#");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/constant.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/constant.js
 var builder7 = namespace_default("http://qudt.org/vocab/constant/");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/crm.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/crm.js
 var builder8 = namespace_default("http://www.cidoc-crm.org/cidoc-crm/");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/csvw.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/csvw.js
 var builder9 = namespace_default("http://www.w3.org/ns/csvw#");
 var strict = builder9;
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/ctag.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/ctag.js
 var builder10 = namespace_default("http://commontag.org/ns#");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/cur.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/cur.js
 var builder11 = namespace_default("http://qudt.org/vocab/currency/");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/dash-sparql.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/dash-sparql.js
 var builder12 = namespace_default("http://datashapes.org/sparql#");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/dash.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/dash.js
 var builder13 = namespace_default("http://datashapes.org/dash#");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/dbo.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/dbo.js
 var builder14 = namespace_default("http://dbpedia.org/ontology/");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/dc11.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/dc11.js
 var builder15 = namespace_default("http://purl.org/dc/elements/1.1/");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/dcam.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/dcam.js
 var builder16 = namespace_default("http://purl.org/dc/dcam/");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/dcat.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/dcat.js
 var builder17 = namespace_default("http://www.w3.org/ns/dcat#");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/dcmitype.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/dcmitype.js
 var builder18 = namespace_default("http://purl.org/dc/dcmitype/");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/dcterms.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/dcterms.js
 var builder19 = namespace_default("http://purl.org/dc/terms/");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/dig.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/dig.js
 var builder20 = namespace_default("http://www.ics.forth.gr/isl/CRMdig/");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/discipline.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/discipline.js
 var builder21 = namespace_default("http://qudt.org/vocab/discipline/");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/doap.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/doap.js
 var builder22 = namespace_default("http://usefulinc.com/ns/doap#");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/dprod.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/dprod.js
 var builder23 = namespace_default("https://ekgf.github.io/dprod/");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/dpv.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/dpv.js
 var builder24 = namespace_default("http://www.w3.org/ns/dpv#");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/dqv.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/dqv.js
 var builder25 = namespace_default("http://www.w3.org/ns/dqv#");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/dtype.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/dtype.js
 var builder26 = namespace_default("http://www.linkedmodel.org/schema/dtype#");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/duv.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/duv.js
 var builder27 = namespace_default("http://www.w3.org/ns/duv#");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/earl.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/earl.js
 var builder28 = namespace_default("http://www.w3.org/ns/earl#");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/ebucore.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/ebucore.js
 var builder29 = namespace_default("http://www.ebu.ch/metadata/ontologies/ebucore/ebucore#");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/exif.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/exif.js
 var builder30 = namespace_default("http://www.w3.org/2003/12/exif/ns#");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/foaf.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/foaf.js
 var builder31 = namespace_default("http://xmlns.com/foaf/0.1/");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/frbr.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/frbr.js
 var builder32 = namespace_default("http://purl.org/vocab/frbr/core#");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/geo.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/geo.js
 var builder33 = namespace_default("http://www.opengis.net/ont/geosparql#");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/geof.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/geof.js
 var builder34 = namespace_default("http://www.opengis.net/def/function/geosparql/");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/geor.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/geor.js
 var builder35 = namespace_default("http://www.opengis.net/def/rule/geosparql/");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/gml.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/gml.js
 var builder36 = namespace_default("http://www.opengis.net/ont/gml#");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/gn.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/gn.js
 var builder37 = namespace_default("http://www.geonames.org/ontology#");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/gr.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/gr.js
 var builder38 = namespace_default("http://purl.org/goodrelations/v1#");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/grddl.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/grddl.js
 var builder39 = namespace_default("http://www.w3.org/2003/g/data-view#");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/gs1.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/gs1.js
 var builder40 = namespace_default("https://gs1.org/voc/");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/gtfs.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/gtfs.js
 var builder41 = namespace_default("http://vocab.gtfs.org/terms#");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/http.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/http.js
 var builder42 = namespace_default("http://www.w3.org/2011/http#");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/hydra.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/hydra.js
 var builder43 = namespace_default("http://www.w3.org/ns/hydra/core#");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/ical.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/ical.js
 var builder44 = namespace_default("http://www.w3.org/2002/12/cal/icaltzd#");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/la.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/la.js
 var builder45 = namespace_default("https://linked.art/ns/terms/");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/ldp.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/ldp.js
 var builder46 = namespace_default("http://www.w3.org/ns/ldp#");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/list.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/list.js
 var builder47 = namespace_default("http://www.w3.org/2000/10/swap/list#");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/locn.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/locn.js
 var builder48 = namespace_default("http://www.w3.org/ns/locn#");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/log.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/log.js
 var builder49 = namespace_default("http://www.w3.org/2000/10/swap/log#");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/lvont.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/lvont.js
 var builder50 = namespace_default("http://lexvo.org/ontology#");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/m4i.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/m4i.js
 var builder51 = namespace_default("http://w3id.org/nfdi4ing/metadata4ing#");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/ma.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/ma.js
 var builder52 = namespace_default("http://www.w3.org/ns/ma-ont#");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/mads.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/mads.js
 var builder53 = namespace_default("http://www.loc.gov/mads/rdf/v1#");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/math.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/math.js
 var builder54 = namespace_default("http://www.w3.org/2000/10/swap/math#");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/oa.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/oa.js
 var builder55 = namespace_default("http://www.w3.org/ns/oa#");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/og.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/og.js
 var builder56 = namespace_default("http://ogp.me/ns#");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/oidc.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/oidc.js
 var builder57 = namespace_default("http://www.w3.org/ns/solid/oidc#");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/org.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/org.js
 var builder58 = namespace_default("http://www.w3.org/ns/org#");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/owl.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/owl.js
 var builder59 = namespace_default("http://www.w3.org/2002/07/owl#");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/pim.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/pim.js
 var builder60 = namespace_default("http://www.w3.org/ns/pim/space#");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/prefix.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/prefix.js
 var builder61 = namespace_default("http://qudt.org/vocab/prefix/");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/prov.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/prov.js
 var builder62 = namespace_default("http://www.w3.org/ns/prov#");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/qb.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/qb.js
 var builder63 = namespace_default("http://purl.org/linked-data/cube#");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/qkdv.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/qkdv.js
 var builder64 = namespace_default("http://qudt.org/vocab/dimensionvector/");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/quantitykind.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/quantitykind.js
 var builder65 = namespace_default("http://qudt.org/vocab/quantitykind/");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/qudt.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/qudt.js
 var builder66 = namespace_default("http://qudt.org/schema/qudt/");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/rdau.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/rdau.js
 var builder67 = namespace_default("http://rdaregistry.info/Elements/u/");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/rdf.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/rdf.js
 var builder68 = namespace_default("http://www.w3.org/1999/02/22-rdf-syntax-ns#");
 var strict2 = builder68;
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/rdfa.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/rdfa.js
 var builder69 = namespace_default("http://www.w3.org/ns/rdfa#");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/rdfs.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/rdfs.js
 var builder70 = namespace_default("http://www.w3.org/2000/01/rdf-schema#");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/rev.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/rev.js
 var builder71 = namespace_default("http://purl.org/stuff/rev#");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/rico.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/rico.js
 var builder72 = namespace_default("https://www.ica.org/standards/RiC/ontology#");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/rr.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/rr.js
 var builder73 = namespace_default("http://www.w3.org/ns/r2rml#");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/rss.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/rss.js
 var builder74 = namespace_default("http://purl.org/rss/1.0/");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/schema.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/schema.js
 var builder75 = namespace_default("http://schema.org/");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/sd.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/sd.js
 var builder76 = namespace_default("http://www.w3.org/ns/sparql-service-description#");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/sdmx.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/sdmx.js
 var builder77 = namespace_default("http://purl.org/linked-data/sdmx#");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/sem.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/sem.js
 var builder78 = namespace_default("http://semanticweb.cs.vu.nl/2009/11/sem/");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/set.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/set.js
 var builder79 = namespace_default("http://www.w3.org/2000/10/swap/set#");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/sf.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/sf.js
 var builder80 = namespace_default("http://www.opengis.net/ont/sf#");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/sh.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/sh.js
 var builder81 = namespace_default("http://www.w3.org/ns/shacl#");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/shex.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/shex.js
 var builder82 = namespace_default("http://www.w3.org/ns/shex#");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/shsh.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/shsh.js
 var builder83 = namespace_default("http://www.w3.org/ns/shacl-shacl#");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/sioc.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/sioc.js
 var builder84 = namespace_default("http://rdfs.org/sioc/ns#");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/skos.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/skos.js
 var builder85 = namespace_default("http://www.w3.org/2004/02/skos/core#");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/skosxl.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/skosxl.js
 var builder86 = namespace_default("http://www.w3.org/2008/05/skos-xl#");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/solid.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/solid.js
 var builder87 = namespace_default("http://www.w3.org/ns/solid/terms#");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/sosa.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/sosa.js
 var builder88 = namespace_default("http://www.w3.org/ns/sosa/");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/sou.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/sou.js
 var builder89 = namespace_default("http://qudt.org/vocab/sou/");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/ssn.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/ssn.js
 var builder90 = namespace_default("http://www.w3.org/ns/ssn/");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/stat.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/stat.js
 var builder91 = namespace_default("http://www.w3.org/ns/posix/stat#");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/string.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/string.js
 var builder92 = namespace_default("http://www.w3.org/2000/10/swap/string#");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/test.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/test.js
 var builder93 = namespace_default("http://www.w3.org/2006/03/test-description#");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/time.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/time.js
 var builder94 = namespace_default("http://www.w3.org/2006/time#");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/unit.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/unit.js
 var builder95 = namespace_default("http://qudt.org/vocab/unit/");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/vaem.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/vaem.js
 var builder96 = namespace_default("http://www.linkedmodel.org/schema/vaem#");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/vann.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/vann.js
 var builder97 = namespace_default("http://purl.org/vocab/vann/");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/vcard.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/vcard.js
 var builder98 = namespace_default("http://www.w3.org/2006/vcard/ns#");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/void.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/void.js
 var builder99 = namespace_default("http://rdfs.org/ns/void#");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/vs.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/vs.js
 var builder100 = namespace_default("http://www.w3.org/2003/06/sw-vocab-status/ns#");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/vso.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/vso.js
 var builder101 = namespace_default("http://purl.org/vso/ns#");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/wdrs.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/wdrs.js
 var builder102 = namespace_default("http://www.w3.org/2007/05/powder-s#");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/wgs.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/wgs.js
 var builder103 = namespace_default("http://www.w3.org/2003/01/geo/wgs84_pos#");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/xhv.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/xhv.js
 var builder104 = namespace_default("http://www.w3.org/1999/xhtml/vocab#");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/xkos.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/xkos.js
 var builder105 = namespace_default("http://rdf-vocabulary.ddialliance.org/xkos#");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/xsd.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/xsd.js
 var builder106 = namespace_default("http://www.w3.org/2001/XMLSchema#");
 var strict3 = builder106;
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/rif.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/rif.js
 var builder107 = namespace_default("http://www.w3.org/2007/rif#");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/v.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/v.js
 var builder108 = namespace_default("http://rdf.data-vocabulary.org/#");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/wdr.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/wdr.js
 var builder109 = namespace_default("http://www.w3.org/2007/05/powder#");
 
-// node_modules/@tpluscode/rdf-ns-builders/vocabularies/xml.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/@tpluscode/rdf-ns-builders/vocabularies/xml.js
 var builder110 = namespace_default("http://www.w3.org/XML/1998/namespace/");
 
-// node_modules/rdf-validate-datatype/src/validators.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdf-validate-datatype/src/validators.js
 var Registry = class {
   validators;
   constructor() {
@@ -62418,7 +62511,7 @@ validators.register(strict3.NMTOKENS, () => true);
 validators.register(strict2.XMLLiteral, () => true);
 validators.register(strict2.HTML, () => true);
 
-// node_modules/rdf-validate-datatype/src/validate-term.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdf-validate-datatype/src/validate-term.js
 function validateTerm(term3) {
   if (term3.termType !== "Literal") {
     throw new Error("Cannot validate non-literal terms");
@@ -62430,7 +62523,7 @@ function validateTerm(term3) {
   return true;
 }
 
-// node_modules/rdf-validate-shacl/src/validators.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdf-validate-shacl/src/validators.js
 var import_rdf_literal = __toESM(require_rdf_literal(), 1);
 var validateAnd = {
   validate(context, focusNode, valueNode, constraint) {
@@ -62874,7 +62967,7 @@ var validators_default = {
   validateXone
 };
 
-// node_modules/rdf-validate-shacl/src/validators-registry.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdf-validate-shacl/src/validators-registry.js
 var validators_registry_default = [
   [namespaces_default.sh.AndConstraintComponent, validators_default.validateAnd],
   [namespaces_default.sh.ClassConstraintComponent, validators_default.validateClass],
@@ -62906,7 +62999,7 @@ var validators_registry_default = [
   [namespaces_default.sh.XoneConstraintComponent, validators_default.validateXone]
 ];
 
-// node_modules/rdf-validate-shacl/index.js
+// ../../../../../../home/jeff/Dropbox/Web/solid/FediPod/node_modules/rdf-validate-shacl/index.js
 var SHACLValidator = class {
   importsLoaded = false;
   /**
