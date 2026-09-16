@@ -185,6 +185,14 @@ try {
   const free = await (await get('/api/handle?handle=wren')).json();
   check(free.available === true, 'a free one is offered');
   const bad = await (await get('/api/handle?handle=Wren!')).json();
+
+  // What a reader's server speaks, asked here because their browser may not.
+  const own = await (await get('/api/server?host=' + new URL(ORIGIN).host)).json();
+  check(own.kind === 'fedipod', 'an address at this front is a FediPod account, not a foreign server');
+  const nonsense = await (await get('/api/server?host=not a host')).json();
+  check(nonsense.kind === 'invalid', 'a host that is not one is said to be invalid, nothing is fetched');
+  const serverCors = await get('/api/server?host=' + new URL(ORIGIN).host);
+  check(serverCors.headers.get('access-control-allow-origin') === '*', 'the forum page reads it from its own host');
   check(bad.available === false && /letters/.test(bad.reason || ''), 'and an impossible one says why');
 
   // ---- attaching a pod ------------------------------------------------------

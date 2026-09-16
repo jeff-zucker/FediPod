@@ -97,6 +97,7 @@ copyAdmin(path.join(root, 'web/admin'), path.join(site, 'admin'));
 fs.writeFileSync(path.join(site, '_redirects'), [
   '# gateway + front API → the function',
   '/api/handle             /.netlify/functions/front  200',
+  '/api/server             /.netlify/functions/front  200',
   '/api/attach             /.netlify/functions/front  200',
   '/api/relay              /.netlify/functions/front  200',
   '/api/roster             /.netlify/functions/front  200',

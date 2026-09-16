@@ -127,10 +127,12 @@ test('replying from a Mastodon account: register, approve, exchange, resolve, po
   assert.equal(hostOfHandle('aisha@Lemmy.Example'), 'lemmy.example');
   assert.equal(hostOfHandle('https://mastodon.example/@aisha'), 'mastodon.example');
   assert.equal(hostOfHandle('aisha'), null);
-  const kinds = async (paths) => serverKind('x.example', async (u) => new Response(paths.includes(new URL(u).pathname) ? '{}' : '', { status: paths.includes(new URL(u).pathname) ? 200 : 404 }));
-  assert.equal(await kinds(['/api/v1/instance']), 'mastodon-api');
-  assert.equal(await kinds(['/api/v3/site']), 'lemmy');
-  assert.equal(await kinds([]), 'unknown');
+  // The kind comes from the Gateway, which can reach a server the page cannot.
+  const asked = [];
+  const gw = async (u) => { asked.push(u); return new Response(JSON.stringify({ host: 'x.example', kind: 'lemmy' }), { status: 200 }); };
+  assert.deepEqual(await serverKind('x.example', 'https://fedipod.net', gw), { host: 'x.example', kind: 'lemmy' });
+  assert.equal(asked[0], 'https://fedipod.net/api/server?host=x.example');
+  assert.deepEqual(await serverKind('x.example', 'https://fedipod.net', async () => { throw new Error('offline'); }), { kind: 'unknown', host: 'x.example' });
   const url = await login.begin('mastodon.example');
   const u = new URL(url);
   assert.equal(u.origin + u.pathname, 'https://mastodon.example/oauth/authorize');

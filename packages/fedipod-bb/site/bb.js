@@ -159,17 +159,29 @@ function replyBox(ctx) {
 async function signIn(handleInput) {
   const host = hostOfHandle(handleInput);
   if (!host) throw new Error('a handle looks like @you@your.server');
-  const cat = replyCtx?.cat;
-  const kind = await serverKind(host);
+  const at = replyCtx?.cat ? handleOf(replyCtx.cat) : 'the category';
+  $('fedi-note').textContent = `Asking ${host}…`;
+  const { kind } = await serverKind(host, front);
   if (kind === 'mastodon-api') {
     sessionStorage.setItem('bb:return', location.hash);
     location.href = await login.begin(host);
     return;
   }
-  const at = cat ? handleOf(cat) : 'the category';
-  $('fedi-note').textContent = kind === 'lemmy'
-    ? `From Lemmy, subscribe to !${at.replace(/^@/u, '')} and post in it there; it arrives here.`
-    : `Post from your account at ${host} mentioning ${at}; it arrives here.`;
+  const note = $('fedi-note');
+  note.textContent = '';
+  if (kind === 'fedipod') {
+    note.append(`Your FediPod account posts from your own client. Open it, write, and name ${at}. `);
+    const a = document.createElement('a');
+    a.href = front + '/app/';
+    a.textContent = 'Open FediPod';
+    note.append(a);
+    return;
+  }
+  note.textContent = kind === 'lemmy'
+    ? `From ${host}, subscribe to !${at.replace(/^@/u, '')} and post there; it arrives here.`
+    : kind === 'invalid'
+      ? 'A handle looks like @you@your.server.'
+      : `${host} does not offer a sign-in this page can use. Post from your account there, naming ${at}, and it arrives here.`;
 }
 
 $('fedi-login').addEventListener('click', async () => {

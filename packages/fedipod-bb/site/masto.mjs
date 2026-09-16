@@ -21,16 +21,17 @@ export const hostOfHandle = (s) => {
   return cleanHost(m ? m[1] : t);
 };
 
-// What a server speaks, asked of the server itself: the Mastodon API (Mastodon,
-// Pleroma, Akkoma, GoToSocial, Friendica, a FediPod DeviceAgent or Server),
-// Lemmy's, or nothing this page can sign in to.
-export async function serverKind(host, f = globalThis.fetch.bind(globalThis)) {
-  const ok = async (path) => {
-    try { const r = await f(`https://${host}${path}`, { headers: { accept: 'application/json' } }); return r.ok; } catch { return false; }
-  };
-  if (await ok('/api/v1/instance')) return 'mastodon-api';
-  if (await ok('/api/v3/site')) return 'lemmy';
-  return 'unknown';
+// What a reader's server speaks — asked of the Gateway, not of the server:
+// a page may not probe a stranger's server from the browser. 'mastodon-api'
+// (Mastodon, Pleroma, Akkoma, GoToSocial, a FediPod agent) signs in here;
+// 'lemmy' takes part by its community address; 'fedipod' is an account at
+// this Gateway, whose client is the FediPod app.
+export async function serverKind(host, front, f = globalThis.fetch.bind(globalThis)) {
+  try {
+    const r = await f(`${front}/api/server?host=${encodeURIComponent(host)}`, { headers: { accept: 'application/json' } });
+    if (!r.ok) return { kind: 'unknown', host };
+    return await r.json();
+  } catch { return { kind: 'unknown', host }; }
 }
 
 export class MastoLogin {
