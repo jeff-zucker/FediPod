@@ -5,22 +5,22 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>FediPod-BB</title>
 <style>
-  :root { color-scheme: light dark; --line:#d9d4c7; --dim:#5a584f; --accent:#6a8a5a; --paper:rgba(120,120,120,.08); }
-  @media (prefers-color-scheme: dark) { :root { --dim:#c2c0b4; --line:#3a3a36; } }
-  body { font: 18px/1.55 system-ui, sans-serif; max-width: 46rem; margin: 1.5rem auto; padding: 0 1rem; }
+  :root { color-scheme: light dark; --line:#c9c4b7; --dim:#3f3e38; --accent:#4f6b41; --paper:rgba(120,120,120,.08); }
+  @media (prefers-color-scheme: dark) { :root { --dim:#dcdad0; --line:#4a4a45; --accent:#5f8050; } }
+  body { font: 18px/1.55 Arial, Helvetica, sans-serif; max-width: 46rem; margin: 1.5rem auto; padding: 0 1rem; }
   header.top { display: flex; gap: 1rem; align-items: baseline; flex-wrap: wrap; border-bottom: 1px solid var(--line); padding-bottom: .6rem; margin-bottom: 1rem; }
   header.top h1 { font-size: 1.35rem; margin: 0; }
   header.top a { color: inherit; text-decoration: none; }
-  nav.crumbs { color: var(--dim); font-size: .95rem; margin: 0 0 1rem; }
+  nav.crumbs { color: var(--dim); font-size: 17px; margin: 0 0 1rem; }
   nav.crumbs a { color: inherit; }
   .dim { color: var(--dim); }
-  .hint { color: var(--dim); font-size: .95rem; }
+  .hint { color: var(--dim); font-size: 17px; }
   ul.list { list-style: none; padding: 0; margin: 0; }
   ul.list li { padding: .7rem 0; border-bottom: 1px solid var(--line); }
   ul.list li a.title { font-weight: 600; text-decoration: none; color: inherit; }
-  ul.list li .meta { color: var(--dim); font-size: .9rem; }
+  ul.list li .meta { color: var(--dim); font-size: 16px; }
   article.post { padding: .9rem 0; border-bottom: 1px solid var(--line); }
-  article.post .who { color: var(--dim); font-size: .9rem; display: flex; gap: .6rem; flex-wrap: wrap; }
+  article.post .who { color: var(--dim); font-size: 16px; display: flex; gap: .6rem; flex-wrap: wrap; }
   article.post .who b { color: inherit; }
   article.post .body { margin-top: .3rem; overflow-wrap: anywhere; }
   article.post.waiting { background: var(--paper); border-radius: 10px; padding: .9rem 1rem; }
@@ -31,6 +31,8 @@
   input[type=text] { font: inherit; padding: .45rem .6rem; border: 1px solid var(--line); border-radius: 8px; width: 16rem; max-width: 100%; }
   button { font: inherit; padding: .5rem 1rem; border-radius: 9px; border: 1px solid var(--line); background: transparent; color: inherit; cursor: pointer; }
   button.primary { background: var(--accent); color: #fff; border-color: transparent; }
+  a.big { display: inline-block; font-size: 1.15rem; font-weight: 600; padding: .7rem 1.3rem; border-radius: 10px; background: var(--accent); color: #fff; text-decoration: none; }
+  #reply-signed-out .row label { min-width: 6rem; }
   button[disabled] { opacity: .5; cursor: not-allowed; }
   .row { display: flex; gap: .6rem; align-items: center; flex-wrap: wrap; margin: .5rem 0; }
   .err { color: #b00020; }
@@ -53,22 +55,23 @@
 <section class="reply" id="reply" hidden>
   <h2 id="reply-title">Reply</h2>
   <div id="reply-signed-out">
-    <p class="hint">Replies are posts from your own account. Sign in once with a Mastodon account, or post from
-      your FediPod account by mentioning <code id="reply-handle"></code>.</p>
+    <p class="hint">Posts here come from your own Fediverse account, wherever it lives. Sign in once with its handle.</p>
     <div class="row">
-      <label for="masto-host">Your Mastodon server</label>
-      <input type="text" id="masto-host" placeholder="mastodon.social" autocomplete="off">
-      <button id="masto-login">Sign in with Mastodon</button>
+      <label for="fedi-handle">Your handle</label>
+      <input type="text" id="fedi-handle" placeholder="@you@your.server" autocomplete="off">
+      <button id="fedi-login">Sign in</button>
     </div>
-    <div class="row">
-      <a id="fedipod-open" href="/app/">Open FediPod</a>
-      <span class="dim">·</span>
-      <a id="fedipod-signup" href="/new-account">Get a FediPod account</a>
-    </div>
+    <p class="hint" id="fedi-note"></p>
+    <p class="hint">No account yet? A FediPod account lives on a Solid pod and speaks to the whole Fediverse; it takes a minute.</p>
+    <p class="row"><a id="fedipod-signup" class="big" href="/new-account">Get a FediPod account</a></p>
   </div>
   <div id="reply-signed-in" hidden>
-    <p class="hint">Posting as <b id="reply-as"></b>. Your reply goes out from your server; it shows here once the forum has placed it.
+    <p class="hint">Posting as <b id="reply-as"></b>. It goes out from your own server and shows here once the forum has placed it.
       <button id="masto-logout" class="link">Sign out</button></p>
+    <div class="row" id="topic-title-row" hidden>
+      <label for="topic-title">Title</label>
+      <input type="text" id="topic-title" placeholder="What the topic is about" autocomplete="off">
+    </div>
     <textarea id="reply-text" placeholder="Write your reply"></textarea>
     <div class="row">
       <button id="reply-send" class="primary">Post reply</button>

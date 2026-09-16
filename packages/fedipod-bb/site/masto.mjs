@@ -13,6 +13,26 @@ export const cleanHost = (s) => {
   return /^[a-z0-9.-]+\.[a-z0-9-]+(:\d+)?$/u.test(h) ? h : null;
 };
 
+// The server in a Fediverse handle: @you@host, you@host, or the address of a
+// profile page there.
+export const hostOfHandle = (s) => {
+  const t = String(s || '').trim();
+  const m = /^@?[^@\s/]+@([^@\s/]+)$/u.exec(t);
+  return cleanHost(m ? m[1] : t);
+};
+
+// What a server speaks, asked of the server itself: the Mastodon API (Mastodon,
+// Pleroma, Akkoma, GoToSocial, Friendica, a FediPod DeviceAgent or Server),
+// Lemmy's, or nothing this page can sign in to.
+export async function serverKind(host, f = globalThis.fetch.bind(globalThis)) {
+  const ok = async (path) => {
+    try { const r = await f(`https://${host}${path}`, { headers: { accept: 'application/json' } }); return r.ok; } catch { return false; }
+  };
+  if (await ok('/api/v1/instance')) return 'mastodon-api';
+  if (await ok('/api/v3/site')) return 'lemmy';
+  return 'unknown';
+}
+
 export class MastoLogin {
   // `storage` is localStorage-shaped; `fetch` is the page's.
   constructor({ fetch: f = globalThis.fetch.bind(globalThis), storage, redirectUri }) {

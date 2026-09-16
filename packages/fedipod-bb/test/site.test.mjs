@@ -10,7 +10,7 @@ import * as topics from '../src/topics.mjs';
 import * as publish from '../src/publish.mjs';
 import { PodStore } from '../../../lib/core/store.mjs';
 import { reader, forumBase, placeOf, cacheKey, authorLabel } from '../site/read.mjs';
-import { MastoLogin, cleanHost } from '../site/masto.mjs';
+import { MastoLogin, cleanHost, hostOfHandle, serverKind } from '../site/masto.mjs';
 
 const POD = 'https://forum.example/';
 const MEI = 'https://mei.pod.example/fedipod/ap/actor';
@@ -123,6 +123,14 @@ test('replying from a Mastodon account: register, approve, exchange, resolve, po
   const login = new MastoLogin({ fetch: async (u, i) => answer(u, i), storage: ls, redirectUri: 'https://fedipod.net/bb/?forum=forum' });
   assert.equal(cleanHost('https://Mastodon.Example/'), 'mastodon.example');
   assert.equal(cleanHost('not a host'), null);
+  assert.equal(hostOfHandle('@aisha@mastodon.example'), 'mastodon.example');
+  assert.equal(hostOfHandle('aisha@Lemmy.Example'), 'lemmy.example');
+  assert.equal(hostOfHandle('https://mastodon.example/@aisha'), 'mastodon.example');
+  assert.equal(hostOfHandle('aisha'), null);
+  const kinds = async (paths) => serverKind('x.example', async (u) => new Response(paths.includes(new URL(u).pathname) ? '{}' : '', { status: paths.includes(new URL(u).pathname) ? 200 : 404 }));
+  assert.equal(await kinds(['/api/v1/instance']), 'mastodon-api');
+  assert.equal(await kinds(['/api/v3/site']), 'lemmy');
+  assert.equal(await kinds([]), 'unknown');
   const url = await login.begin('mastodon.example');
   const u = new URL(url);
   assert.equal(u.origin + u.pathname, 'https://mastodon.example/oauth/authorize');

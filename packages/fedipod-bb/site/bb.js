@@ -11,7 +11,7 @@
 //   #/  #/c/<slug>  #/t/<slug>/<tid>
 
 import { reader, placeOf, authorLabel } from './read.mjs';
-import { MastoLogin } from './masto.mjs';
+import { MastoLogin, hostOfHandle, serverKind } from './masto.mjs';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -144,24 +144,50 @@ function replyBox(ctx) {
   const acct = login.account();
   $('reply-signed-out').hidden = !!acct;
   $('reply-signed-in').hidden = !acct;
+  $('fedi-note').textContent = '';
+  $('topic-title-row').hidden = !!ctx.topicId;
+  $('reply-text').placeholder = ctx.topicId ? 'Write your reply' : 'Your opening post';
   if (acct) {
     $('reply-as').textContent = acct.handle;
     $('reply-note').textContent = `Your server will address it to your followers too. It names ${handleOf(ctx.cat)} so the forum receives it.`;
   }
 }
 
-$('masto-login').addEventListener('click', async () => {
-  $('reply-err').textContent = '';
-  try {
+// From a handle to a way in. A server that speaks the Mastodon API signs the
+// reader in here; a Lemmy server takes part by its own community address; any
+// other account posts from where it is, naming the category.
+async function signIn(handleInput) {
+  const host = hostOfHandle(handleInput);
+  if (!host) throw new Error('a handle looks like @you@your.server');
+  const cat = replyCtx?.cat;
+  const kind = await serverKind(host);
+  if (kind === 'mastodon-api') {
     sessionStorage.setItem('bb:return', location.hash);
-    location.href = await login.begin($('masto-host').value);
-  } catch (e) { $('reply-err').textContent = e.message; }
+    location.href = await login.begin(host);
+    return;
+  }
+  const at = cat ? handleOf(cat) : 'the category';
+  $('fedi-note').textContent = kind === 'lemmy'
+    ? `From Lemmy, subscribe to !${at.replace(/^@/u, '')} and post in it there; it arrives here.`
+    : `Post from your account at ${host} mentioning ${at}; it arrives here.`;
+}
+
+$('fedi-login').addEventListener('click', async () => {
+  $('reply-err').textContent = '';
+  $('fedi-login').disabled = true;
+  try { await signIn($('fedi-handle').value); } catch (e) { $('reply-err').textContent = e.message; }
+  $('fedi-login').disabled = false;
 });
+$('fedi-handle').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('fedi-login').click(); });
 $('masto-logout').addEventListener('click', () => { login.signOut(); if (replyCtx) replyBox(replyCtx); });
 $('reply-send').addEventListener('click', async () => {
   if (!replyCtx) return;
-  const text = $('reply-text').value.trim();
-  if (!text) return;
+  const body = $('reply-text').value.trim();
+  if (!body) return;
+  // A new topic's title is its first line: the host takes a post's first
+  // words as the title, and a titled line reads as one everywhere.
+  const title = replyCtx.topicId ? '' : $('topic-title').value.trim();
+  const text = title ? `${title}\n\n${body}` : body;
   $('reply-err').textContent = '';
   $('reply-send').disabled = true;
   try {
@@ -169,6 +195,7 @@ $('reply-send').addEventListener('click', async () => {
     const acct = login.account();
     if (replyCtx.topicId) remember(replyCtx.topicId, { id: made.uri || made.url, author: acct.url || acct.handle, text, at: new Date().toISOString() });
     $('reply-text').value = '';
+    $('topic-title').value = '';
     await route();
   } catch (e) { $('reply-err').textContent = e.message; }
   $('reply-send').disabled = false;
@@ -189,8 +216,7 @@ $('reply-send').addEventListener('click', async () => {
       history.replaceState(null, '', `${location.pathname}${q ? '?' + q : ''}${back}`);
     } catch (e) { $('reply-err').textContent = e.message; }
   }
-  // The ways into FediPod live at the Gateway, which is this page's own site or the one it is a face of.
-  $('fedipod-open').href = front + '/app/';
+  // Sign-up lives at the Gateway, which is this page's own site or the one it is a face of.
   $('fedipod-signup').href = front + '/new-account';
   window.addEventListener('hashchange', () => route());
   await load();
