@@ -153,6 +153,7 @@ function card(p, { author = null, cat = null, extra = '', waiting = false, ancho
     ${p.gone || waiting || !p.id ? '' : `<div class="acts" data-post="${esc(p.id)}">
       <button data-act="reply" aria-label="Reply to ${whose}">Reply</button>
       <button data-act="share" aria-label="Copy a link to the post by ${whose}">Share</button>
+      ${account() ? `<button data-act="${own().isSaved(p.id) ? 'unsave' : 'save'}" aria-label="${own().isSaved(p.id) ? 'Remove this post from your saved list' : 'Save this post to your own list'}">${own().isSaved(p.id) ? 'Saved' : 'Save'}</button>` : ''}
       ${mine(p) || !account() ? '' : `<button data-act="report" aria-label="Report the post by ${whose}">Report</button>`}
       ${mine(p) ? '<button data-act="edit" aria-label="Edit your own post">Edit</button><button data-act="delete" aria-label="Delete your own post">Delete</button>' : ''}
       ${!mine(p) && iModerate() ? `<button data-act="remove" aria-label="Remove the post by ${whose}">Remove</button>` : ''}
@@ -219,6 +220,8 @@ async function showForum() {
   // first one when the whole forum is.
   const into = cats().find(c => c.slug === feedFilter) || cats()[0] || null;
   const head = `<p class="hint chips">Categories: ${chip('all', 'All')}${cats().map(c => chip(c.slug || '', c.name)).join('')}
+    ${account() ? '<a class="chip" href="#/replies">Replies to you</a><a class="chip" href="#/saved">Saved</a>' : ''}
+    ${here && account() && podAcct ? `<button class="new" data-act="${own().isJoined(here.id) ? 'leave' : 'join'}" data-cat="${esc(here.id)}">${own().isJoined(here.id) ? 'Leave' : 'Join'}</button>` : ''}
     ${into ? `<button class="new" data-act="newtopic" data-slug="${esc(into.slug || '')}">New topic</button>` : ''}</p>`;
   $('main').innerHTML = head + '<p class="dim">Loading…</p>';
   say('Loading the latest posts');
@@ -395,6 +398,8 @@ $('main').addEventListener('click', (e) => {
   if (act === 'remove') return modRemove(id);
   const topic = b.dataset.topic || b.closest('[data-topic]')?.dataset.topic;
   if (act === 'more') { shown += 30; return showForum(); }
+  if (act === 'join' || act === 'leave') return joinOrLeave(b.dataset.cat, act === 'join');
+  if (act === 'save' || act === 'unsave') return saveOrNot(id, act === 'save');
   if (act === 'newpost') return openReply({ inReplyToUrl: replyCtx?.inReplyToUrl || null });
   if (act === 'newtopic') {
     const cat = catBySlug(b.dataset.slug);
@@ -509,6 +514,34 @@ async function modRename(topicId) {
 // Pinned topics are the category's featured collection.
 // Closed to further replies. `closed` is AS2's own word for a collection
 // that takes no more, so a reader on any server can see it too.
+// Joining is a Follow to the category and leaving undoes it. A category
+// carries its members' posts and nobody else's, so this is what makes
+// posting from here work at all.
+async function joinOrLeave(categoryId, on) {
+  const cat = cats().find(c => c.id === categoryId);
+  if (!cat || !podAcct) { alert('joining from here needs your pod account'); return; }
+  try {
+    const inbox = await pod.podInboxOf(cat.id, { front, handle: cat.slug || null });
+    const ok = on
+      ? await pod.join({ actor: podAcct.actor, category: cat.id, inbox })
+      : await pod.leave({ actor: podAcct.actor, category: cat.id, inbox });
+    if (!ok) throw new Error('the forum did not take it');
+    if (on) own().join(cat.id); else own().leave(cat.id);
+    await showForum();
+  } catch (e) { alert(e.message); }
+}
+
+// A saved post is this reader's own note to come back to, in this browser.
+function saveOrNot(postId, on) {
+  const m = own();
+  if (on) {
+    const card = document.querySelector(`[data-post="${CSS.escape(postId)}"]`)?.closest('article');
+    m.save({ id: postId, at: new Date().toISOString(), topic: replyCtx?.topicId || null,
+      cat: replyCtx?.cat?.slug || null, text: (card?.querySelector('.body')?.textContent || '').trim().slice(0, 140) });
+  } else m.unsave(postId);
+  route();
+}
+
 async function modLock(topicId, on) {
   try {
     await asksTo({ type: 'Update', object: { id: topicId, closed: on ? new Date().toISOString() : false } });

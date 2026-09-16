@@ -173,6 +173,7 @@ export function reader({ fetch: f = globalThis.fetch.bind(globalThis) } = {}) {
           content: typeof copy.content === 'string' ? copy.content : '',
           published: copy.published || null,
           topic: idOf(copy.context) || null,
+          inReplyTo: idOf(copy.inReplyTo) || null,
           // Answers to THIS post, as the forum counted them.
           replies: Number(copy.replies?.totalItems) || 0,
           category: idOf([].concat(copy.audience || [])[0]) || null,
