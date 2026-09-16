@@ -11,6 +11,7 @@ import * as publish from '../src/publish.mjs';
 import { PodStore } from '../../../lib/core/store.mjs';
 import { reader, forumBase, placeOf, cacheKey, authorLabel } from '../site/read.mjs';
 import { MastoLogin, cleanHost, hostOfHandle, serverKind } from '../site/masto.mjs';
+import { readState } from '../site/seen.mjs';
 
 const POD = 'https://forum.example/';
 const MEI = 'https://mei.pod.example/fedipod/ap/actor';
@@ -176,8 +177,8 @@ test('the latest feed: the forum\'s newest posts, each named by its topic', asyn
   const B = 'https://mei.pod.example/fedipod/ap/notes/b';
   const tid = topics.open(gStore, { title: 'Tomato blight', post: { id: A, author: MEI, published: '2026-09-15T10:00:00Z' } });
   topics.append(gStore, tid, { id: B, author: MEI, published: '2026-09-15T11:00:00Z' });
-  await publish.cachePost(ctx, { id: A, type: 'Note', attributedTo: MEI, content: '<p>One.</p>', published: '2026-09-15T10:00:00Z', context: g.topic(tid), audience: g.actor });
-  await publish.cachePost(ctx, { id: B, type: 'Note', attributedTo: MEI, content: '<p>Two.</p>', published: '2026-09-15T11:00:00Z', context: g.topic(tid), audience: g.actor });
+  await publish.cachePost(ctx, { id: A, type: 'Note', attributedTo: MEI, content: '<p>One.</p>', published: '2026-09-15T10:00:00Z', context: g.topic(tid), audience: g.actor }, { replies: 1 });
+  await publish.cachePost(ctx, { id: B, type: 'Note', attributedTo: MEI, content: '<p>Two.</p>', published: '2026-09-15T11:00:00Z', context: g.topic(tid), audience: g.actor }, { replies: 0 });
   await publish.publishTopic(ctx, tid);
   // The index the host keeps: newest first, naming the copies it holds.
   siteStore.write('latest.json', [
@@ -191,9 +192,59 @@ test('the latest feed: the forum\'s newest posts, each named by its topic', asyn
   assert.deepEqual(feed.map(p => p.id), [B, A], 'newest first');
   assert.equal(feed[0].content, '<p>Two.</p>');
   assert.equal(feed[0].topicName, 'Tomato blight', 'a post is named by its topic, having no title of its own');
+  assert.equal(feed[0].replies, 0, 'a reply nobody answered has none of its own');
+  assert.equal(feed[1].replies, 1, 'and the post it answers has one');
+  assert.equal(feed[0].topicReplies, 1, 'the topic has had one reply, which is what the index shows');
   assert.equal(feed[0].category, g.actor);
   assert.equal(feed[0].topic, g.topic(tid));
   await publish.tombstoneCached(ctx, B, { formerType: 'Note' });
   const after = await read.latest(POD + 'fedipod-bb/');
   assert.deepEqual(after.map(p => p.id), [A], 'a removed post leaves the feed');
+});
+
+// A reader's own marks: the forum keeps none of this, and none of it leaves
+// the browser it was made in.
+test('read state: the first visit reads everything, and a topic is read up to its newest post', () => {
+  const mem = new Map();
+  const storage = { getItem: (k) => (mem.has(k) ? mem.get(k) : null), setItem: (k, v) => mem.set(k, v) };
+  const FORUM = 'https://forum.example/fedipod-bb/';
+  const TOPIC = FORUM + 'c/gardening/ap/topic/2026-09-mulch';
+
+  // Arriving at a forum for the first time is not a hundred unread topics.
+  const first = readState({ storage, forum: FORUM, now: () => '2026-09-16T12:00:00Z' });
+  assert.equal(first.isNew(TOPIC, '2026-09-15T09:00:00Z'), false);
+  assert.equal(first.isNew(TOPIC, '2026-09-16T11:59:00Z'), false);
+  // Anything after that first sight is new, in a topic never opened.
+  assert.equal(first.isNew(TOPIC, '2026-09-16T13:00:00Z'), true);
+
+  // The mark is this reader's and it belongs to this forum.
+  assert.ok(mem.has('bb:seen:' + FORUM));
+
+  // Opening the topic reads it up to the newest post that was in it.
+  const posts = [{ published: '2026-09-16T13:00:00Z' }, { published: '2026-09-16T14:30:00Z' }, { published: null }];
+  const seen = readState({ storage, forum: FORUM, now: () => '2026-09-16T15:00:00Z' });
+  assert.equal(seen.newest(posts), '2026-09-16T14:30:00.000Z');
+  seen.markRead(TOPIC, seen.newest(posts));
+
+  // A later visit: what was read is not new, what arrived after it is.
+  const later = readState({ storage, forum: FORUM, now: () => '2026-09-17T09:00:00Z' });
+  assert.equal(later.isNew(TOPIC, '2026-09-16T14:30:00Z'), false);
+  assert.equal(later.isNew(TOPIC, '2026-09-16T16:00:00Z'), true);
+  // Another topic is judged against the first sight of the forum, not this mark.
+  assert.equal(later.isNew(FORUM + 'c/gardening/ap/topic/2026-09-other', '2026-09-16T13:00:00Z'), true);
+
+  // A mark never moves backwards: an older page does not unread a newer one.
+  later.markRead(TOPIC, '2026-09-16T09:00:00Z');
+  assert.equal(later.isNew(TOPIC, '2026-09-16T14:00:00Z'), false);
+
+  // Nothing to date, nothing new.
+  assert.equal(later.isNew(TOPIC, null), false);
+  assert.equal(later.newest([]), null);
+});
+
+test('read state: a browser that refuses storage still reads the forum', () => {
+  const blocked = { getItem: () => { throw new Error('blocked'); }, setItem: () => { throw new Error('blocked'); } };
+  const seen = readState({ storage: blocked, forum: 'https://forum.example/fedipod-bb/', now: () => '2026-09-16T12:00:00Z' });
+  assert.equal(seen.isNew('t', '2026-09-16T13:00:00Z'), true);
+  assert.doesNotThrow(() => seen.markRead('t', '2026-09-16T13:00:00Z'));
 });

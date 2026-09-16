@@ -50,14 +50,15 @@ export function authorLabel(actorId) {
 }
 
 export function reader({ fetch: f = globalThis.fetch.bind(globalThis) } = {}) {
-  // A topic's name, read once however many of its posts a feed carries.
-  const nameOfTopic = async (topicId, seen) => {
-    if (!topicId) return null;
+  // A topic's name and how many posts are in it, read once however many of
+  // its posts a feed carries.
+  const topicInfo = async (topicId, seen) => {
+    if (!topicId) return { name: null, total: 0 };
     if (seen.has(topicId)) return seen.get(topicId);
     const head = await get(topicId);
-    const name = head?.name || null;
-    seen.set(topicId, name);
-    return name;
+    const info = { name: head?.name || null, total: Number(head?.totalItems) || 0 };
+    seen.set(topicId, info);
+    return info;
   };
   const get = async (url) => {
     const r = await f(url, { headers: { accept: ACCEPT } });
@@ -98,9 +99,19 @@ export function reader({ fetch: f = globalThis.fetch.bind(globalThis) } = {}) {
           members: Number(followers?.totalItems) || 0,
         });
       }
+      // Who runs it (FEP-baf5), each with the page a person is sent to.
+      const admins = [];
+      for (const id of ((await get(base + 'ap/administrators'))?.orderedItems || []).map(idOf).filter(Boolean)) {
+        const a = await get(id);
+        admins.push({
+          id,
+          handle: a?.preferredUsername && a?.id ? `@${a.preferredUsername}@${new URL(a.id).host}` : authorLabel(id),
+          url: (typeof a?.url === 'string' && a.url) || id,
+        });
+      }
       const heartbeat = await get(base + 'ap/heartbeat');
       return { id: actor.id, name: actor.name || actor.preferredUsername, summary: actor.summary || null,
-        handle: actor.preferredUsername || null, categories, lastHosted: heartbeat?.at || null };
+        handle: actor.preferredUsername || null, categories, admins, lastHosted: heartbeat?.at || null };
     },
 
     // A category's topics, newest first, with each topic's head.
@@ -160,12 +171,27 @@ export function reader({ fetch: f = globalThis.fetch.bind(globalThis) } = {}) {
           content: typeof copy.content === 'string' ? copy.content : '',
           published: copy.published || null,
           topic: idOf(copy.context) || null,
-          topicName: await nameOfTopic(idOf(copy.context), named),
+          // Answers to THIS post, as the forum counted them.
+          replies: Number(copy.replies?.totalItems) || 0,
           category: idOf([].concat(copy.audience || [])[0]) || null,
           page: [].concat(copy.url || []).map(u => (typeof u === 'string' ? u : null)).find(Boolean) || null,
         });
+        const info = await topicInfo(out[out.length - 1].topic, named);
+        out[out.length - 1].topicName = info.name;
+        // Replies: everything in the topic but the post that opened it.
+        out[out.length - 1].topicTotal = info.total;
+        // What the index shows: how many replies the TOPIC has had. The
+        // post's own answers are on `replies`, for whatever wants them.
+        out[out.length - 1].topicReplies = Math.max(0, info.total - 1);
       }
       return out;
+    },
+
+    // The topics a category has pinned (its featured collection): what a
+    // reader should see first, whatever else has been said since.
+    async featured(cbase) {
+      const c = await get(cbase + 'ap/featured');
+      return (c?.orderedItems || []).map(idOf).filter(Boolean);
     },
 
     // Who moderates a category. The category says so itself (FEP-1b12), which
@@ -188,6 +214,9 @@ export function reader({ fetch: f = globalThis.fetch.bind(globalThis) } = {}) {
         id: copy.id || postId, type: copy.type || 'Note', gone: copy.type === 'Tombstone', page,
         author: idOf([].concat(copy.attributedTo || [])[0]) || null,
         name: copy.name || null, content: typeof copy.content === 'string' ? copy.content : '',
+        // What its author typed, when they said so: an edit reopens this
+        // rather than guessing it back out of the HTML.
+        source: copy.source?.mediaType === 'text/markdown' && typeof copy.source?.content === 'string' ? copy.source.content : null,
         published: copy.published || null, updated: copy.updated || null, inReplyTo: idOf(copy.inReplyTo) || null,
       };
     },

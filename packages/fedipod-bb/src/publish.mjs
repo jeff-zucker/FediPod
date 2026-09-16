@@ -115,10 +115,14 @@ async function flat({ remote, store }, key, url, doc, force) {
 // Content is sanitised again on the way in; nothing else is changed, so the
 // copy says what the author said, under the author's own id. Returns the
 // copy's url.
-export async function cachePost({ remote, urls }, note, { topic = null } = {}) {
+export async function cachePost({ remote, urls }, note, { topic = null, replies = null } = {}) {
   const copy = { ...note };
   if (topic) copy.context = topic;
   if (!copy.audience) copy.audience = urls.actor;
+  // How many answered THIS post, as the forum counts them (FEP-7458 shape).
+  // The author's own replies collection is theirs and says something else:
+  // this is what the forum holds, in the topic it placed the post in.
+  if (Number.isFinite(replies)) copy.replies = { type: 'Collection', totalItems: replies };
   if (typeof copy.content === 'string') copy.content = sanitizeHtml(copy.content);
   if (!copy['@context']) copy['@context'] = 'https://www.w3.org/ns/activitystreams';
   const url = urls.cached(note.id);

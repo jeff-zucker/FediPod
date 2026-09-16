@@ -7,6 +7,7 @@
 // the truth of who wrote it lives (FEP-fe34).
 
 import { beginLogin, completeLogin, getSession, signOut as endSession } from './oidc-session.mjs';
+import { toHtml } from './markdown.mjs';
 
 const PUBLIC = 'https://www.w3.org/ns/activitystreams#Public';
 const AS = 'https://www.w3.org/ns/activitystreams';
@@ -80,6 +81,7 @@ export async function post({ actor, podHome, category, categoryHandle, inbox, to
     // The category is named in audience, in to, and as a Mention tag — the
     // three places a receiving server reads. Not in the words.
     content: body,
+    source: sourceOf(text),
     published: now,
     ...(inReplyTo ? { inReplyTo } : {}),
     ...(context ? { context, audience: category } : { audience: category }),
@@ -120,6 +122,7 @@ export async function edit({ actor, podHome, id, title = '', text, category, inb
     ...(was || { '@context': AS, id, type: 'Note', attributedTo: actor, to: [PUBLIC, category] }),
     type: title ? 'Article' : 'Note',
     content: htmlOf(text),
+    source: sourceOf(text),
     updated: now,
   };
   // A title taken away is taken away, not left behind from the old copy.
@@ -181,7 +184,8 @@ export async function join({ actor, category, inbox }) {
   return r.ok;
 }
 
-const htmlOf = (text) => String(text).split(/\n{2,}/u).map(p => `<p>${escape_(p).replace(/\n/gu, '<br>')}</p>`).join('');
+const htmlOf = (text) => toHtml(text);
+const sourceOf = (text) => ({ content: String(text), mediaType: 'text/markdown' });
 
 function escape_(s) {
   return String(s).replace(/[&<>"]/gu, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));

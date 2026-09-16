@@ -59,8 +59,17 @@ if (cmd === 'init') {
       up = await agent.connect();
       if (!up) { console.error('nothing to host — run init first'); process.exit(1); }
     } catch (e) {
+      // The attempt that just died may have taken the lease on its way in.
+      // Give it back, or the next attempt finds the forum held by a process
+      // that is this one, and waits five minutes to be told it may act.
+      // The release is a pod write too, and a pod that refused the start is
+      // usually still refusing: try it until it takes, or the forum locks
+      // itself out for the lease's whole life.
+      for (let i = 0; i < 4; i++) {
+        try { await agent.lease?.release(); break; } catch { await new Promise(r => setTimeout(r, 8000)); }
+      }
       // The pod under load, a network blip, a slow start: all of them are
-      // waits, not failures. The lease expires on its own if we never get up.
+      // waits, not failures.
       const wait = Math.min(15 * attempt, 120);
       log(`start failed (${e.message}) — trying again in ${wait}s`);
       await new Promise(r => setTimeout(r, wait * 1000));

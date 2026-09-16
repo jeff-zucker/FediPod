@@ -75,7 +75,44 @@ from its pod directly. Where the site has `bb.<domain>` as a domain alias,
 the same page answers there for every path, with the forum named by the
 first path segment: `https://bb.fedipod.net/<handle>/`. It still reads
 through `<domain>`, where the handles live (the hosts are `BB_HOSTS` in the
-staging script). Anyone reads. To reply, a reader signs in once with a
+staging script). Anyone reads.
+<!-- CLAUDE 2026-09-16 - read state; delete these markers when done -->
+A topic whose newest post arrived since the reader last opened it is marked
+`New` on the index. The mark is the reader's own: one entry per topic in their
+browser's storage, written nowhere else and sent nowhere - a public forum has
+no place to keep who read what, and no business keeping it. Arriving at a
+forum for the first time reads everything before that moment, so a new reader
+does not meet a page of `New`.
+
+The page is built to WCAG 2.2 AA: a skip link, named landmarks, a label on
+every control, an `aria-label` on each post's buttons naming whose post they
+act on, `aria-current` on the category in view, `scope` on the index's
+headers, a polite live region for what the page has just done, and a reply
+box that takes the keyboard when it opens and returns it when it closes.
+<!-- /CLAUDE -->
+<!-- CLAUDE 2026-09-16 - the index, writing and moderating; delete these markers when done -->
+The front page is an index of the forum's newest posts, across every
+category: topic, category, author, date and the topic's reply count, one
+line each. The forum publishes that index itself (`ap/latest`, the copies it
+already holds, newest first, capped at fifty), so the page makes one request
+for the list rather than walking every category. The category chips filter
+it; a topic's name opens the thread at that post. Pinned topics sort first -
+a category's `featured` collection for a pin within it, the forum actor's own
+for one that holds everywhere.
+
+A thread is a tree: a reply sits under the post it answers, six deep. Posts
+are written in Markdown (`site/markdown.mjs`, no dependency, escaped before
+it is marked up) and carry their source alongside, so an edit reopens what
+was typed. A topic is named by the activity that opens it; a post has no
+title.
+
+Each post offers Reply, Share and Report, and its author Edit and Delete; a
+report is queued for the moderators. Under a topic's title a moderator gets
+rename, pin, pin site-wide and delete. Every moderator request is published
+at the moderator's own pod and fetched back from there before the forum acts
+on it (FEP-fe34), which is what makes a button on a public page safe.
+<!-- /CLAUDE -->
+To reply, a reader signs in once with a
 Mastodon account: the page registers itself on their server, sends them to
 approve it, and keeps the token in their browser; a reply is posted from
 their account with the category mentioned, and answers the thread's last

@@ -13,8 +13,13 @@
 import { reader, placeOf, authorLabel, cacheKey, categoryBase } from './read.mjs';
 import { MastoLogin, hostOfHandle, serverKind } from './masto.mjs';
 import * as pod from './pod.mjs';
+import { readState } from './seen.mjs';
+import { toHtml } from './markdown.mjs';
 
 const $ = (id) => document.getElementById(id);
+// Said to a screen reader when the page changes under it and no focus moves:
+// what is loading, how much arrived, that a link was copied.
+const say = (msg) => { const el = $('say'); if (el) el.textContent = msg; };
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const when = (iso) => { const d = new Date(iso); return Number.isNaN(d.getTime()) ? '' : d.toISOString().slice(0, 10); };
 const ago = (iso) => {
@@ -34,6 +39,9 @@ const { front, base } = place;
 const frontHost = new URL(front).host;
 const read = reader();
 const login = new MastoLogin({ storage: localStorage, redirectUri: location.origin + location.pathname + location.search });
+// What this reader has already read. Theirs, in their own browser: a public
+// forum has nowhere to keep it and no business keeping it.
+const seen = base ? readState({ storage: localStorage, forum: base }) : null;
 
 let forum = null;
 let podAcct = null;          // { handle, actor, webId } when signed in with a pod
@@ -96,33 +104,69 @@ const mine = (p) => {
   return !!me && !!p?.author && (p.author === me || p.author === podAcct?.webId);
 };
 
+// A thread in the shape it was written: each reply under the post it answers,
+// and anything whose parent is not here at the top level. Depth is capped so
+// a long argument does not walk off the side of the page.
+const MAX_DEPTH = 6;
+async function threaded(posts, authors, cat) {
+  const byId = new Map(posts.map(p => [p.id, p]));
+  const kids = new Map();
+  const roots = [];
+  for (const p of posts) {
+    const parent = p.inReplyTo && byId.has(p.inReplyTo) && p.inReplyTo !== p.id ? p.inReplyTo : null;
+    if (!parent) { roots.push(p); continue; }
+    if (!kids.has(parent)) kids.set(parent, []);
+    kids.get(parent).push(p);
+  }
+  const out = [];
+  const walk = async (p, depth) => {
+    const html = card(p, { author: p.author ? authors.get(p.author) : null, cat, anchor: await cacheKey(p.id) });
+    out.push(depth ? `<div class="nest" style="--depth:${Math.min(depth, MAX_DEPTH)}">${html}</div>` : html);
+    for (const k of kids.get(p.id) || []) await walk(k, depth + 1);
+  };
+  for (const r of roots) await walk(r, 0);
+  return out;
+}
+
 function topicActs(topicId) {
   if (!iModerate()) return '';
-  return `<div class="acts mod" data-topic="${esc(topicId)}">
+  return `<div class="acts mod" role="group" aria-label="Moderator actions for this topic" data-topic="${esc(topicId)}">
+    <button data-act="rename">Rename topic</button>
     <button data-act="pin">Pin topic</button><button data-act="unpin">Unpin topic</button>
+    <button data-act="sitepin">Pin site-wide</button><button data-act="siteunpin">Unpin site-wide</button>
     <button data-act="droptopic">Delete topic</button>
   </div>`;
 }
 
 function card(p, { author = null, cat = null, extra = '', waiting = false, anchor = null } = {}) {
   const at = p.published ? when(p.published) : '';
-  return `<article class="post${p.gone ? ' gone' : ''}${extra}"${anchor ? ` id="p-${esc(anchor)}"` : ''}>
+  // What a screen reader hears before the words, and what each of this post's
+  // own buttons is called — a thread of them is not twenty identical "Reply"s.
+  const whose = esc(author ? (author.name || author.handle) : (p.author ? authorLabel(p.author) : 'someone'));
+  const named = `${waiting ? 'Waiting: p' : 'P'}ost by ${whose}${at ? `, ${esc(at)}` : ''}`;
+  return `<article class="post${p.gone ? ' gone' : ''}${extra}" aria-label="${named}"${anchor ? ` id="p-${esc(anchor)}"` : ''}>
     <div class="who"><b>${waiting ? '<span class="dim">waiting for the forum · </span>' : ''}${byline(p, author)}</b>
       <span class="when">${esc(at)}${elsewhere(p)}</span></div>
     <div class="body">${p.gone ? 'This post was removed.' : (body(p, cat) || '<span class="dim">(not readable here)</span>')}</div>
     ${p.gone || waiting || !p.id ? '' : `<div class="acts" data-post="${esc(p.id)}">
-      <button data-act="reply">Reply</button>
-      <button data-act="share">Share</button>
-      ${mine(p) || !account() ? '' : '<button data-act="report">Report</button>'}
-      ${mine(p) ? '<button data-act="edit">Edit</button><button data-act="delete">Delete</button>' : ''}
-      ${!mine(p) && iModerate() ? '<button data-act="remove">Remove</button>' : ''}
+      <button data-act="reply" aria-label="Reply to ${whose}">Reply</button>
+      <button data-act="share" aria-label="Copy a link to the post by ${whose}">Share</button>
+      ${mine(p) || !account() ? '' : `<button data-act="report" aria-label="Report the post by ${whose}">Report</button>`}
+      ${mine(p) ? '<button data-act="edit" aria-label="Edit your own post">Edit</button><button data-act="delete" aria-label="Delete your own post">Delete</button>' : ''}
+      ${!mine(p) && iModerate() ? `<button data-act="remove" aria-label="Remove the post by ${whose}">Remove</button>` : ''}
     </div>`}
   </article>`;
 }
 
 const waitingKey = (topicId) => 'bb:waiting:' + topicId;
-const waiting = (topicId) => { try { return JSON.parse(localStorage.getItem(waitingKey(topicId)) || '[]'); } catch { return []; } };
-const remember = (topicId, entry) => { try { localStorage.setItem(waitingKey(topicId), JSON.stringify([...waiting(topicId), entry].slice(-20))); } catch { /* full or blocked */ } };
+const waiting = (topicId) => { try { return (JSON.parse(localStorage.getItem(waitingKey(topicId)) || '[]') || []).filter(w => w?.id); } catch { return []; } };
+// A copy is kept only for a post that is waiting to be PLACED, and only when
+// it carries the id the topic will name it by: an entry nothing can match is
+// an entry nothing can ever clear.
+const remember = (topicId, entry) => {
+  if (!entry?.id) return;
+  try { localStorage.setItem(waitingKey(topicId), JSON.stringify([...waiting(topicId), entry].slice(-20))); } catch { /* full or blocked */ }
+};
 
 async function load() {
   if (!base) {
@@ -136,7 +180,8 @@ async function load() {
   }
   document.title = forum.name || 'FediPod-BB';
   $('forum-link').textContent = forum.name || 'Forum';
-  $('forum-status').textContent = forum.lastHosted ? `hosted ${ago(forum.lastHosted)}` : 'not hosted yet';
+  const by = (forum.admins || []).map(a => `<a href="${esc(a.url)}">${esc(a.handle)}</a>`).join(', ');
+  $('forum-status').innerHTML = by ? `hosted by ${by}` : '';
   route();
 }
 
@@ -145,87 +190,92 @@ function crumbs(parts) {
   $('crumbs').innerHTML = parts.map(([label, href], i) => (href && i < parts.length - 1 ? `<a href="${esc(href)}">${esc(label)}</a>` : esc(label))).join(' › ');
 }
 
-// Who this browser is using, and whether they moderate what is on screen. A
-// reader missing the buttons they expect can see why without opening
-// anything.
-function sayWho() {
-  const acct = account();
-  if (!acct) { $('who-am-i').textContent = 'not signed in'; return; }
-  $('who-am-i').textContent = iModerate()
-    ? `moderator(s): ${moderators.map(authorLabel).join(', ')}`
-    : acct.handle;
-}
-
 async function route() {
   const hash = location.hash.replace(/^#\/?/u, '');
   const [kind, a, b, c] = hash.split('/');
   $('reply-row').hidden = true;
   $('reply-dlg').close();
-  sayWho();
-  if (kind === 'c' && a) return showCategory(a);
+  if (kind === 'c' && a) { feedFilter = a; return showForum(); }
   if (kind === 't' && a && b) return showTopic(a, b, c || null);
   return showForum();
 }
 
+// The front page is an index of what has been said, newest first, across the
+// forum: which category, which topic, who, and when. The words themselves are
+// in the topic, one click away.
+let feedFilter = 'all';        // 'all', or a category's slug
+
 async function showForum() {
-  crumbs([['Home', '#/']]);
-  const bar = cats().map(c => `<a href="#/c/${esc(c.slug || '')}">${esc(c.name)}</a>`).join(' · ');
-  const head = `${forum.summary ? `<div>${forum.summary}</div>` : ''}
-    ${bar ? `<p class="hint">${bar}</p>` : '<p class="empty">No categories yet.</p>'}`;
-  $('main').innerHTML = head + '<p class="dim">Loading the latest…</p>';
+  const here = cats().find(c => c.slug === feedFilter) || null;
+  crumbs(here ? [['Home', '#/'], [here.name, `#/c/${here.slug}`]] : [['Home', '#/']]);
+  moderators = here ? await read.moderators(here.base) : [];
+  const chip = (slug, label) => `<a class="chip${feedFilter === slug ? ' on' : ''}"${feedFilter === slug ? ' aria-current="page"' : ''} href="${slug === 'all' ? '#/' : `#/c/${esc(slug)}`}">${esc(label)}</a>`;
+  // Starting a topic from the front page: in the category being shown, or the
+  // first one when the whole forum is.
+  const into = cats().find(c => c.slug === feedFilter) || cats()[0] || null;
+  const head = `<p class="hint chips">Categories: ${chip('all', 'All')}${cats().map(c => chip(c.slug || '', c.name)).join('')}
+    ${into ? `<button class="new" data-act="newtopic" data-slug="${esc(into.slug || '')}">New topic</button>` : ''}</p>`;
+  $('main').innerHTML = head + '<p class="dim">Loading…</p>';
+  say('Loading the latest posts');
   const latest = await read.latest(base);
-  if (!latest.length) {
-    $('main').innerHTML = head + '<p class="empty">Nothing posted yet.</p>';
+  const mine = latest.filter(p => feedFilter === 'all'
+    || (cats().find(c => c.id === p.category)?.slug === feedFilter));
+  // Pinned topics first. A pin belongs to a category; the forum has a
+  // featured collection of its own for a pin that holds everywhere.
+  const pins = { cat: new Set(), site: new Set(await read.featured(base)) };
+  for (const c of cats()) {
+    if (feedFilter !== 'all' && c.slug !== feedFilter) continue;
+    for (const id of await read.featured(c.base)) pins.cat.add(id);
+  }
+  const rank = (p) => (pins.site.has(p.topic) ? 2 : pins.cat.has(p.topic) ? 1 : 0);
+  mine.sort((a, b) => rank(b) - rank(a));
+  if (!mine.length) {
+    // The one thing to do on an empty page is the one thing offered.
+    $('main').innerHTML = head + '<p class="empty">Nothing posted here yet. Use the button at the upper right to create a topic.</p>';
+    say('Nothing posted here yet');
     return;
   }
   const rows = [];
-  for (const p of latest) {
+  let fresh = 0;
+  for (const p of mine) {
     const cat = cats().find(c => c.id === p.category) || null;
     const who = cat && p.author ? await read.author(cat.base, p.author) : null;
     const tid = p.topic ? p.topic.split('/').pop() : null;
     const href = cat && tid ? `#/t/${esc(cat.slug)}/${esc(tid)}/${esc(await cacheKey(p.id))}` : null;
-    rows.push(`<li>
-      <div class="meta">${cat ? `<a href="#/c/${esc(cat.slug)}">${esc(cat.name)}</a> · ` : ''}${who ? esc(who.handle) : esc(p.author ? authorLabel(p.author) : '')} · ${esc(when(p.published))}</div>
-      ${href ? `<a class="title" href="${href}">${esc(p.topicName || 'Topic')}</a>` : `<span class="title">${esc(p.topicName || 'Topic')}</span>`}
-      <article class="post"><div class="body">${p.content || ''}</div></article>
-    </li>`);
+    const name = esc(p.topicName || 'Topic');
+    // New to THIS reader: posted since they last had the topic open.
+    const isNew = !!seen?.isNew(p.topic, p.published);
+    if (isNew) fresh += 1;
+    rows.push(`<tr>
+      <td>${pins.site.has(p.topic) ? '<span class="pin" title="Pinned across the forum" role="img" aria-label="pinned across the forum">\u2B50</span> ' : pins.cat.has(p.topic) ? '<span class="pin" title="Pinned in this category" role="img" aria-label="pinned in this category">\uD83D\uDCCC</span> ' : ''}${href ? `<a href="${href}">${name}</a>` : name}${isNew
+        ? ' <span class="badge">New<span class="vh"> since you last opened this topic</span></span>' : ''}</td>
+      <td>${cat ? esc(cat.name) : ''}</td>
+      <td>${who ? esc(who.handle) : esc(p.author ? authorLabel(p.author) : '')}</td>
+      <td>${esc(when(p.published))}</td>
+      <td>${Number.isFinite(p.topicReplies) ? p.topicReplies : ''}</td>
+    </tr>`);
   }
-  $('main').innerHTML = head + `<ul class="list">${rows.join('')}</ul>`;
+  // A table, so a reader can run their eye down any one of the four things
+  // an entry says.
+  $('main').innerHTML = head + `<div class="scroll" role="region" aria-label="Latest posts" tabindex="0"><table class="index">
+    <thead><tr><th scope="col">Topic</th><th scope="col">Category</th><th scope="col">Author</th><th scope="col">Date</th><th scope="col">Replies</th></tr></thead>
+    <tbody>${rows.join('')}</tbody></table></div>`;
+  say(`${rows.length} post${rows.length === 1 ? '' : 's'}${fresh ? `, ${fresh} new` : ''}`);
+  // The box takes the keyboard only when there is something in it to scroll:
+  // a tab stop that does nothing is one more press between a reader and the page.
+  const box = $('main').querySelector('.scroll');
+  if (box) { if (box.scrollHeight > box.clientHeight) box.tabIndex = 0; else box.removeAttribute('tabindex'); }
 }
 
-async function showCategory(slug) {
-  const cat = catBySlug(slug);
-  if (!cat) { $('main').innerHTML = '<p class="err">No such category.</p>'; return; }
-  crumbs([['Home', '#/'], [cat.name, `#/c/${slug}`]]);
-  $('main').innerHTML = '<p class="dim">Loading topics…</p>';
-  moderators = await read.moderators(cat.base);
-  sayWho();
-  const { topics } = await read.topics(cat.base);
-  // Each topic shows its opening post: a reader sees what was written
-  // without opening anything, and the title opens the rest.
-  const items = [];
-  for (const t of topics.slice(0, 20)) {
-    const tid = t.id.split('/').pop();
-    const full = await read.topic(t.id);
-    const first = full?.posts?.[0] ? await read.post(cat.base, full.posts[0]) : null;
-    const who = first?.author ? await read.author(cat.base, first.author) : null;
-    items.push(`<li><div class="title">${esc(t.name)}</div>
-      <div class="meta"><a href="#/t/${esc(slug)}/${esc(tid)}">${t.count} post${t.count === 1 ? '' : 's'}</a> · last ${esc(when(t.updated))}</div>
-      ${topicActs(t.id)}
-      ${first ? card(first, { author: who, cat }) : ''}</li>`);
-  }
-  $('main').innerHTML = `${items.length ? `<ul class="list">${items.join('')}</ul>` : '<p class="empty">No topics yet. The first post mentioning this category opens one.</p>'}`;
-  replyBox({ cat, title: 'Start a topic', inReplyToUrl: null, topicId: null });
-}
 
 async function showTopic(slug, tid, atPost = null) {
   const cat = catBySlug(slug);
   if (!cat) { $('main').innerHTML = '<p class="err">No such category.</p>'; return; }
   const topicId = cat.base + 'ap/topic/' + tid;
   moderators = await read.moderators(cat.base);
-  sayWho();
   crumbs([['Home', '#/'], [cat.name, `#/c/${slug}`], ['topic', null]]);
   $('main').innerHTML = '<p class="dim">Loading…</p>';
+  say('Loading the topic');
   const t = await read.topic(topicId);
   if (!t) { $('main').innerHTML = '<p class="err">No such topic.</p>'; return; }
   crumbs([['Home', '#/'], [cat.name, `#/c/${slug}`], [t.name, null]]);
@@ -236,20 +286,27 @@ async function showTopic(slug, tid, atPost = null) {
     if (!p.author || authors.has(p.author)) continue;
     authors.set(p.author, await read.author(cat.base, p.author));
   }
+  // Opening a topic reads it, up to the newest post that was in it.
+  seen?.markRead(topicId, seen.newest(posts));
   const placed = new Set(t.posts);
   const pending = waiting(topicId).filter(w => !placed.has(w.id));
-  $('main').innerHTML = `<h1>${esc(t.name)}</h1>
+  $('main').innerHTML = `<div class="topline"><h1>${esc(t.name)}</h1>
+      <button class="primary" data-act="newpost" data-topic="${esc(topicId)}">New post</button></div>
     ${topicActs(topicId)}
 
-    ${(await Promise.all(posts.map(async p => card(p, { author: p.author ? authors.get(p.author) : null, cat, anchor: await cacheKey(p.id) })))).join('')}
-    ${pending.map(w => card({ author: w.author, published: w.at, content: esc(w.text).replace(/\n/g, '<br>') },
+    ${(await threaded(posts, authors, cat)).join('')}
+    ${pending.map(w => card({ author: w.author, published: w.at, content: toHtml(w.text) },
       { cat, extra: ' waiting', waiting: true })).join('')}`;
   replyBox({ cat, title: 'Reply', inReplyToUrl: t.posts[t.posts.length - 1] || null, topicId });
+  $('reply-row').hidden = true;      // the thread's own button opens it
   // Arriving from the front page: the post that was linked to, in view and
   // marked, rather than the top of a thread it sits somewhere inside.
+  say(`${t.name}, ${posts.length} post${posts.length === 1 ? '' : 's'}`);
   if (atPost) {
     const el = document.getElementById('p-' + atPost);
-    if (el) { el.scrollIntoView({ block: 'center' }); el.classList.add('picked'); }
+    // Taken to, not just scrolled to: a keyboard and a screen reader both land
+    // on the post that was linked, rather than at the top of the thread.
+    if (el) { el.scrollIntoView({ block: 'center' }); el.classList.add('picked'); el.tabIndex = -1; el.focus(); }
   }
 }
 
@@ -269,6 +326,7 @@ function replyBox(ctx) {
   $('reply-send').textContent = 'Post reply';
   $('topic-title-row').hidden = !!ctx.topicId;
   $('reply-text').placeholder = ctx.topicId ? 'Write your reply' : 'Your opening post';
+  $('reply-text-label').textContent = ctx.topicId ? 'Your reply' : 'Your opening post';
   if (acct) $('reply-as').textContent = acct.handle;
 }
 
@@ -306,9 +364,12 @@ async function signIn(handleInput) {
 
 $('reply-open').addEventListener('click', () => { openReply({ inReplyToUrl: replyCtx?.inReplyToUrl || null }); });
 $('main').addEventListener('click', (e) => {
-  const b = e.target.closest('.acts button');
+
+  // Every button in the page that names an action, wherever it sits: a
+  // post's row, a topic's row, or the categories line.
+  const b = e.target.closest('button[data-act]');
   if (!b) return;
-  const id = b.closest('.acts')?.dataset.post;
+  const id = b.closest('[data-post]')?.dataset.post;
   const act = b.dataset.act;
   if (act === 'reply') return openReply({ inReplyToUrl: id });
   if (act === 'edit') return openEdit(id);
@@ -316,10 +377,30 @@ $('main').addEventListener('click', (e) => {
   if (act === 'share') return share(id, b);
   if (act === 'report') return report(id);
   if (act === 'remove') return modRemove(id);
-  const topic = b.closest('.acts')?.dataset.topic;
+  const topic = b.dataset.topic || b.closest('[data-topic]')?.dataset.topic;
+  if (act === 'newpost') return openReply({ inReplyToUrl: replyCtx?.inReplyToUrl || null });
+  if (act === 'newtopic') {
+    const cat = catBySlug(b.dataset.slug);
+    if (!cat) return;
+    replyBox({ cat, title: 'Start a topic', inReplyToUrl: null, topicId: null });
+    $('reply-row').hidden = true;
+    return openReply({ inReplyToUrl: null });
+  }
+  if (act === 'rename') return modRename(topic);
   if (act === 'pin' || act === 'unpin') return modPin(topic, act === 'pin');
+  if (act === 'sitepin' || act === 'siteunpin') return modPin(topic, act === 'sitepin', true);
   if (act === 'droptopic') return modDropTopic(topic);
 });
+
+// The dialog takes the focus when it opens and hands it back to whatever
+// opened it when it closes, so a keyboard is never left where the page was.
+let reopener = null;
+function showDialog() {
+  reopener = document.activeElement;
+  $('reply-dlg').showModal();
+  (account() ? $('reply-text') : $('fedi-handle'))?.focus();
+}
+$('reply-dlg').addEventListener('close', () => { reopener?.focus?.(); reopener = null; });
 
 // The dialog, armed for what it is about to do.
 function openReply({ inReplyToUrl = null } = {}) {
@@ -328,7 +409,7 @@ function openReply({ inReplyToUrl = null } = {}) {
   $('reply-title').textContent = replyCtx?.title || 'Reply';
   $('reply-send').textContent = 'Post reply';
   $('reply-err').textContent = '';
-  $('reply-dlg').showModal();
+  showDialog();
 }
 
 let editing = null;
@@ -337,14 +418,21 @@ async function openEdit(id) {
   if (!p) { $('reply-err').textContent = 'that post is not readable here'; return; }
   editing = { id, page: p.page || null };
   $('reply-title').textContent = 'Edit your post';
+  $('reply-text-label').textContent = 'Your post';
   $('reply-send').textContent = 'Save';
   $('reply-err').textContent = '';
   $('topic-title-row').hidden = true;
   // Back to the words, from the HTML the post is kept as.
-  const d = document.createElement('div');
-  d.innerHTML = body(p, replyCtx.cat);
-  $('reply-text').value = [...d.querySelectorAll('p')].map(x => x.textContent.trim()).join('\n\n') || d.textContent.trim();
-  $('reply-dlg').showModal();
+  if (p.source) {
+    $('reply-text').value = p.source;
+  } else {
+    // Written before the forum kept the source, or written elsewhere: the
+    // words are recovered from the HTML, losing whatever marked them up.
+    const d = document.createElement('div');
+    d.innerHTML = body(p, replyCtx.cat);
+    $('reply-text').value = [...d.querySelectorAll('p')].map(x => x.textContent.trim()).join('\n\n') || d.textContent.trim();
+  }
+  showDialog();
 }
 
 // The address of this post on this site, for pasting anywhere. The thread is
@@ -352,7 +440,7 @@ async function openEdit(id) {
 async function share(id, btn) {
   const hash = location.hash.startsWith('#/t/') ? location.hash : `#/t/${replyCtx.cat.slug}/${(await topicOf(id)) || ''}`;
   const link = `${location.origin}${location.pathname}${hash}`;
-  try { await navigator.clipboard.writeText(link); btn.textContent = 'Copied'; }
+  try { await navigator.clipboard.writeText(link); btn.textContent = 'Copied'; say('Link copied'); }
   catch { window.prompt('Copy this address', link); return; }
   setTimeout(() => { btn.textContent = 'Share'; }, 1500);
 }
@@ -392,11 +480,20 @@ async function modRemove(id) {
   try { await asksTo({ type: 'Delete', object: id, origin: topicId }); } catch (e) { alert(e.message); }
 }
 
+// A topic's name belongs to the topic, and only the forum writes it.
+async function modRename(topicId) {
+  const now = document.querySelector('.topline h1')?.textContent || '';
+  const name = window.prompt('Name for this topic', now);
+  if (name === null || !name.trim()) return;
+  try { await asksTo({ type: 'Update', object: { id: topicId, name: name.trim() } }); } catch (e) { alert(e.message); }
+}
+
 // Pinned topics are the category's featured collection.
-async function modPin(topicId, on) {
-  try {
-    await asksTo({ type: on ? 'Add' : 'Remove', object: topicId, target: replyCtx.cat.base + 'ap/featured' });
-  } catch (e) { alert(e.message); }
+async function modPin(topicId, on, wholeSite = false) {
+  // Which featured collection it goes into says how far the pin reaches: the
+  // category's, or the forum's own.
+  const target = wholeSite ? base + 'ap/featured' : replyCtx.cat.base + 'ap/featured';
+  try { await asksTo({ type: on ? 'Add' : 'Remove', object: topicId, target }); } catch (e) { alert(e.message); }
 }
 
 // A topic removed from the category is a topic gone (FEP-f15d).
@@ -475,7 +572,7 @@ $('reply-send').addEventListener('click', async () => {
         ? await postFromPod({ topic, body })
         : await login.post({ text, mention: handleOf(replyCtx.cat), inReplyToUrl: replyCtx.inReplyToUrl });
     const acct = account();
-    if (replyCtx.topicId) remember(replyCtx.topicId, { id: made.uri || made.url, author: acct.url || acct.handle, text, at: new Date().toISOString() });
+    if (!editing && replyCtx.topicId) remember(replyCtx.topicId, { id: made.uri || made.url, author: acct.url || acct.handle, text, at: new Date().toISOString() });
     $('reply-text').value = '';
     $('topic-title').value = '';
     $('reply-dlg').close();

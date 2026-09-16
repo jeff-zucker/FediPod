@@ -10,6 +10,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { ForumAgent } from '../src/forum-agent.mjs';
 import * as topics from '../src/topics.mjs';
+import { forumUrls } from '../src/urls.mjs';
 
 const POD = 'https://forum.example/';
 const PUBLIC = 'https://www.w3.org/ns/activitystreams#Public';
@@ -296,6 +297,27 @@ test('a fronted forum: one Gateway row per category, one inbox behind them, fron
   assert.ok(g.store.getContacts().followers.some(f => f.actor === MEI), 'a Follow of the front id reaches the category');
   assert.equal(pod.inbox.length, 0);
   await two.stop();
+});
+
+test('a topic is named by the person opening it, not by the words of their post', async () => {
+  // The activity that opens a topic carries its name; the post carries none.
+  const { PodStore } = await import('../../../lib/core/store.mjs');
+  const st = new PodStore({ log: () => {} });
+  st.attach({ base: 'mem://', list: async () => ({ names: [], etag: null }), read: async () => ({ ok: false }),
+    remove: async () => true, write: async () => ({ ok: true }) });
+  const urls = forumUrls('https://forum.example/').category('gardening');
+  const note = { id: 'https://mei.pod.example/fedipod/ap/notes/x', attributedTo: 'https://mei.pod.example/fedipod/ap/actor',
+    content: '<p>Three beds of tomatoes went over in a week and I am out of ideas.</p>', published: '2026-09-16T10:00:00Z' };
+  const tid = await topics.assign({ store: st, urls, fetchAP: async () => null }, note,
+    { type: 'Create', name: 'Blight in the beds', object: note });
+  assert.equal(topics.list(st)[0].title, 'Blight in the beds');
+  assert.match(tid, /blight-in-the-beds/u, 'and the topic is filed under that name');
+  const st2 = new PodStore({ log: () => {} });
+  st2.attach({ base: 'mem://', list: async () => ({ names: [], etag: null }), read: async () => ({ ok: false }),
+    remove: async () => true, write: async () => ({ ok: true }) });
+  // A server with no notion of topics sends no name: the words stand in.
+  await topics.assign({ store: st2, urls, fetchAP: async () => null }, note, { type: 'Create', object: note });
+  assert.match(topics.list(st2)[0].title, /^Three beds of tomatoes/u);
 });
 
 test('a topic survives a restart: its record is where the state can read it', async () => {

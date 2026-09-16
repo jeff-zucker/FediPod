@@ -146,7 +146,12 @@ export class ForumAgent {
     // A renamed forum has to be published again: the profile is written only
     // when its digest changed or something asks, and a name lives in the
     // actor document, not in the config alone.
-    const renamed = !!existing.handle && (name || handle) !== existing.name;
+    // A changed name — the forum's or any category's — lives in a published
+    // actor, and the profile is only rewritten when its digest changed or
+    // something asks. So it asks.
+    const was = JSON.stringify((existing.categories || []).map(c => [c.slug, c.name]));
+    const renamed = !!existing.handle
+      && ((name || handle) !== existing.name || was !== JSON.stringify(cats.map(c => [c.slug, c.name])));
     store.setConfig({
       ...existing, kind: 'application', handle, name: name || existing.name || handle,
       ...(renamed ? { republish: true } : {}),
@@ -323,12 +328,12 @@ export class ForumAgent {
 
   // After a category carried a post: place it in its topic, keep a copy for
   // readers, and publish what changed.
-  async onCarried(cat, { noteId, activity }) {
+  async onCarried(cat, { noteId, sent }) {
     let note = cat.intake.recentNotes.get(noteId) || null;
     cat.intake.recentNotes.delete(noteId);
     if (!note) note = await cat.intake.fetchAP(noteId);
     if (!note) { this.log(`carried ${noteId} but could not read it for the topic`); return; }
-    const tid = await topics.assign({ store: cat.store, urls: cat.urls, fetchAP: (u) => cat.intake.fetchAP(u) }, note, activity);
+    const tid = await topics.assign({ store: cat.store, urls: cat.urls, fetchAP: (u) => cat.intake.fetchAP(u) }, note, sent);
     // A locked topic takes no more: the post leaves it again and the carry is
     // unsaid, so members' servers do not keep what the forum does not.
     if (moderation.isLocked(cat, tid) && !topics.list(cat.store).find(t => t.tid === tid && t.op === noteId)) {
@@ -337,8 +342,10 @@ export class ForumAgent {
       this.log(`${cat.slug}: ${noteId} not placed — topic ${tid} is locked`);
       return;
     }
-    await publish.cachePost(cat, note, { topic: cat.urls.topic(tid) });
+    await publish.cachePost(cat, note, { topic: cat.urls.topic(tid), replies: 0 });
     this.noteLatest(cat, note);
+    const answered = idOf(note.inReplyTo);
+    if (answered) await this.countReplies(cat, tid, answered).catch(e => this.log(`replies of ${answered}: ${e.message}`));
     // The author's card, from the actor the intake already holds; fetched
     // once when it does not, so the website can name them.
     const author = idOf([].concat(note.attributedTo || [])[0]);
@@ -417,6 +424,8 @@ export class ForumAgent {
   // already been taken back by the group itself.
   async onCarriedGone(cat, { noteId }) {
     const tid = topics.topicOf(cat.store, noteId);
+    // Whatever it answered has one fewer answer now.
+    const answered = tid ? idOf(topics.get(cat.store, tid)?.posts?.find(p => p.id === noteId)?.inReplyTo) : null;
     this.dropLatest(cat, noteId);
     await publish.tombstoneCached(cat, noteId);
     await publish.publishLatest(this.siteAgent, { force: true });
@@ -429,6 +438,7 @@ export class ForumAgent {
     }
     await publish.publishTopic(cat, tid, { force: true });
     await publish.publishTopicIndex(cat, { force: true });
+    if (answered) await this.countReplies(cat, tid, answered).catch(e => this.log(`replies of ${answered}: ${e.message}`));
   }
 
   // Queued asks from listed moderators that can be verified at their own
@@ -445,11 +455,43 @@ export class ForumAgent {
         if (!doc || doc.type !== entry.type) continue;
         if (idOf(doc.actor) !== entry.moderator) continue;
         try {
+          // Apply the copy fetched at its origin, not the one delivered: the
+          // queue keeps a trimmed activity — enough to say what was asked for,
+          // not enough to carry a new name — and the origin's copy is the one
+          // its author actually published.
+          const q2 = cat.store.read('modqueue.json', []);
+          const i = q2.findIndex(x => x.id === entry.id);
+          if (i >= 0) { q2[i] = { ...q2[i], activity: doc, verified: true }; cat.store.write('modqueue.json', q2); }
           await this.applyModeration(cat.slug, entry.id);
           this.log(`applied ${entry.type} from ${entry.moderator}`);
         } catch (e) { this.log(`ask ${entry.id}: ${e.message}`); }
       }
     }
+  }
+
+  // A pin that holds across the whole forum, not just one category: the site
+  // actor has a featured collection of its own, and this is it.
+  async sitePin(topicId, on) {
+    const { orderedCollection } = await import('../../../lib/core/wire.mjs');
+    const collection = await import('../../../lib/pod/collection.mjs');
+    const held = this.store.read('sitepins.json', []).filter(id => id !== topicId);
+    const ids = on ? [topicId, ...held] : held;
+    this.store.write('sitepins.json', ids);
+    await collection.writeFlat(this.remote, this.site.featured,
+      orderedCollection(this.site.featured, ids), { publicRead: true });
+    return { pinned: ids };
+  }
+
+  // Answers to one post, counted in the topic that holds it, and written
+  // into the copy the website reads.
+  async countReplies(cat, tid, postId) {
+    const doc = topics.get(cat.store, tid);
+    if (!doc) return;
+    const n = (doc.posts || []).filter(p => p.inReplyTo === postId).length;
+    const copy = await this.remote.getJson(cat.urls.cached(postId)).catch(() => null);
+    if (!copy || copy.type === 'Tombstone') return;
+    if (Number(copy.replies?.totalItems) === n) return;
+    await publish.cachePost(cat, copy, { replies: n });
   }
 
   // The forum's own index of its newest posts, across every category.
@@ -472,9 +514,11 @@ export class ForumAgent {
       for (const p of doc?.posts || []) {
         const url = cat.urls.cached(p.id);
         const copy = await this.remote.getJson(url).catch(() => null);
-        if (!copy || copy.type === 'Tombstone' || copy.context) continue;
-        await publish.cachePost(cat, copy, { topic: cat.urls.topic(entry.tid) });
-        this.log(`${p.id} now says which topic it is in`);
+        if (!copy || copy.type === 'Tombstone') continue;
+        const answers = (doc?.posts || []).filter(x => x.inReplyTo === p.id).length;
+        if (copy.context && Number(copy.replies?.totalItems) === answers) continue;
+        await publish.cachePost(cat, copy, { topic: cat.urls.topic(entry.tid), replies: answers });
+        this.log(`${p.id}: its topic and its answers recorded`);
       }
     }
   }
@@ -515,9 +559,20 @@ export class ForumAgent {
     // the forum kept the name and ids it was told to replace.
     const asked = !!this.config.republish;
     if (asked) force = true;
-    await provisionForum(this.remote, this.site);
+    // Containers and their access rules are written once, not on every start:
+    // a forum that re-wrote them each time it came up spent dozens of pod
+    // writes saying what the pod already said, and a busy pod answered 429.
+    const made = this.store.read('provisioned.json', {});
+    if (force || !made.forum) {
+      await provisionForum(this.remote, this.site);
+      this.store.write('provisioned.json', { ...made, forum: new Date().toISOString() });
+    }
     for (const cat of this.categories) {
-      await provisionCategory(this.remote, cat.urls);
+      const done = this.store.read('provisioned.json', {});
+      if (force || !done[cat.slug]) {
+        await provisionCategory(this.remote, cat.urls);
+        this.store.write('provisioned.json', { ...done, [cat.slug]: new Date().toISOString() });
+      }
       await this.carryOldTopics(cat);
       await this.stampOldCopies(cat).catch(e => this.log(`stamping ${cat.slug}: ${e.message}`));
       const seen = cat.store.read('published.json', {});
@@ -583,7 +638,19 @@ export class ForumAgent {
       this.log('lease freed — this device now hosts the forum');
       await this.store.load({ force: true }).catch(() => {});
       for (const cat of this.categories) await cat.store.load({ force: true }).catch(() => {});
-      await this.startActive();
+      try {
+        await this.startActive();
+      } catch (e) {
+        // A promotion that dies part-way left the forum neither hosting nor
+        // watching: the timer was cleared on the way in and the lease was
+        // held by a device doing nothing. Give both back.
+        this.log(`could not start hosting (${e.message}) — watching again`);
+        for (let i = 0; i < 4; i++) {
+          try { await this.lease.release(); break; } catch { await new Promise(r => setTimeout(r, 8000)); }
+        }
+        this.startViewer();
+        return false;
+      }
       return true;
     }
     await this.store.load().catch(() => {});

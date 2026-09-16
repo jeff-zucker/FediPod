@@ -136,6 +136,18 @@ export async function pinTopic(cat, tid, pinned) {
   return { pinned: ids };
 }
 
+// A topic's name, changed: the record and the published head follow, and
+// nothing about the posts inside it moves.
+export async function renameTopic(cat, tid, name) {
+  if (!topics.get(cat.store, tid)) throw new Error(`no such topic: ${tid}`);
+  const title = String(name).trim().slice(0, 200);
+  if (!title) throw new Error('a topic needs a name');
+  topics.setTitle(cat.store, tid, title);
+  await publish.publishTopic(cat, tid, { force: true });
+  await publish.publishTopicIndex(cat, { force: true });
+  return { tid, name: title };
+}
+
 // Locked: the record says so, and the host places nothing more in it.
 export function lockTopic(cat, tid, locked) {
   if (!topics.get(cat.store, tid)) throw new Error(`no such topic: ${tid}`);
@@ -153,6 +165,9 @@ export function isForumAsk(cat, activity) {
   const t = activity?.type;
   if (t === 'Flag') return true;
   if (t === 'Add' || t === 'Remove' || t === 'Move') return !!tidOf(cat, idOf(activity.object));
+  // A topic renamed: the name is the topic's own, and only the forum can
+  // write it, so a moderator asks for it like any other change.
+  if (t === 'Update') return !!tidOf(cat, idOf(activity.object));
   if (t === 'Delete') return !!tidOf(cat, idOf(activity.origin));
   return false;
 }
@@ -161,9 +176,19 @@ export function isForumAsk(cat, activity) {
 export async function applyForumModeration(forum, cat, entry) {
   const object = idOf(entry.activity?.object);
   switch (entry.type) {
+    case 'Update': {
+      const tid = tidOf(cat, object);
+      const name = typeof entry.activity?.object === 'object' ? entry.activity.object.name : null;
+      if (!tid || !name) break;
+      return renameTopic(cat, tid, name);
+    }
     case 'Add': {
       const tid = tidOf(cat, object);
-      if (!tid || idOf(entry.activity?.target) !== cat.urls.featured) break;
+      if (!tid) break;
+      const target = idOf(entry.activity?.target);
+      // The forum's own featured collection: pinned for the whole site.
+      if (forum.site?.featured && target === forum.site.featured) return forum.sitePin(object, true);
+      if (target !== cat.urls.featured) break;
       return pinTopic(cat, tid, true);
     }
     case 'Remove': {
@@ -171,7 +196,9 @@ export async function applyForumModeration(forum, cat, entry) {
       if (!tid) break;
       // From the featured collection: unpinned. From the category itself:
       // gone (FEP-f15d).
-      if (idOf(entry.activity?.target) === cat.urls.featured) return pinTopic(cat, tid, false);
+      const target = idOf(entry.activity?.target);
+      if (forum.site?.featured && target === forum.site.featured) return forum.sitePin(object, false);
+      if (target === cat.urls.featured) return pinTopic(cat, tid, false);
       return deleteTopic(cat, tid);
     }
     case 'Move': {

@@ -22,6 +22,42 @@ queue, never run on arrival. It is the package `packages/fedipod-bb`, with
 has that alias. A Gateway directory row can name the inbox deliveries are
 written into, which is what lets every category of a forum share one.
 
+The front page is what has just been said: every post newest first across
+every category, one line each, with the topic it is in, who wrote it, when,
+and how many replies the topic has had. Picking a category filters it, and
+a topic's name opens the thread at that post. Pinned topics come first,
+marked with a star when a moderator pinned them across the forum and a pin
+when it was within one category.
+
+A thread reads as a thread: each reply sits under the post it answers.
+Posts are written in Markdown — bold, italic, links, lists, quotes, code —
+and what you typed is kept beside what it became, so editing reopens your
+words rather than a guess at them. A topic has a name, given when it is
+opened; posts have no titles of their own.
+
+On each post: Reply, Share, Report, and on your own Edit and Delete. A
+report from any reader is queued for the forum's moderators. A moderator
+sees, under a topic's title: rename, pin here, pin across the forum, and
+delete. A moderator's request is published at their own pod first, and the
+forum acts on it only after fetching it back there — a delivery into a
+public inbox proves nothing about who sent it.
+
+The page is built to be read by whoever is reading it. Every control names
+what it acts on, so a screen reader hears "Reply to Mei" rather than a
+thread of identical Reply buttons; there is a skip link, the landmarks and
+the table headers are named, and the category you are in is marked as the
+current one rather than only coloured. What the page has just done — what
+is loading, how many posts arrived, that a link was copied — is said as
+well as shown, and the reply box takes the keyboard when it opens and hands
+it back when it closes.
+
+A topic whose newest post arrived since you last opened it is marked `New`
+on the index. That mark is yours: one entry per topic in your own browser,
+written nowhere else and sent nowhere. A forum you are opening for the
+first time is not a page of them — everything before that moment is read.
+A reply you have just sent shows as your own copy, marked as waiting and
+written the way it will read once the forum has placed it.
+
 ## 2026-09-16 (quote posts and emoji reactions — version 1.14.0, fedipod-server 0.24.0)
 
 A post can quote another post. In the client, choose Quote on a post whose
