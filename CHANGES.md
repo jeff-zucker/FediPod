@@ -1,5 +1,16 @@
 # Changes
 
+## 2026-09-15 (the screens that used to be empty — version 1.12.0, fedipod-server 0.22.0)
+
+In any Mastodon client, the directory, suggestions and trends screens
+answer instead of failing; a profile's "add to list" knows which lists the
+account is on; the muted accounts, blocked accounts and blocked domains
+pages list them, and a domain can be blocked and unblocked from there; the
+direct-messages timeline answers; tapping a notification opens it, and
+notifications can be dismissed one at a time or cleared; and a profile's
+post list honours its filters: without replies, without boosts, media only,
+or one hashtag.
+
 ## 2026-09-15 (the profile page says more — version 1.11.0, fedipod-server 0.21.0)
 
 Your profile page, the one anyone can open, now shows your header image,
