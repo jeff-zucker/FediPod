@@ -1,5 +1,27 @@
 # Changes
 
+## 2026-09-16 (FediPod-BB, a forum on a pod — version 1.15.0, fedipod-server 0.25.0)
+
+A discussion forum whose record lives on a Solid pod, as ActivityPub
+documents in the shapes Lemmy, NodeBB and Discourse use. Each category is a
+FediPod group, so people on Mastodon or Lemmy follow a category and take
+part from where they are; the topics, their pages and a readable copy of
+every post are documents on the forum's pod. The host is the DeviceAgent,
+run by the moderators from their own machines: several may run it, one acts
+and the rest watch and take over when it stops, and the forum knows nothing
+that is not on the pod. The website reads the pod from the visitor's
+browser: categories, topics newest first, threads in order. Anyone reads;
+to reply, a reader signs in once with a Mastodon account and the reply goes
+out from that account, showing in the thread once the forum has placed it.
+A moderator removes a post, deletes, moves, pins or locks a topic, and
+members' servers are told in the shapes the FEPs give for it; a moderator's
+own Remove, Move, Delete or Flag arriving from elsewhere is held in the
+queue, never run on arrival. It is the package `packages/fedipod-bb`, with
+`fedipod-bb init | start | status | attach`, and the page is served at
+`/bb/` on the site, or at `https://bb.<domain>/<forum>/` where the site
+has that alias. A Gateway directory row can name the inbox deliveries are
+written into, which is what lets every category of a forum share one.
+
 ## 2026-09-16 (quote posts and emoji reactions — version 1.14.0, fedipod-server 0.24.0)
 
 A post can quote another post. In the client, choose Quote on a post whose

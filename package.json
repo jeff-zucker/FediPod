@@ -1,6 +1,6 @@
 {
   "name": "fedipod",
-  "version": "1.14.0",
+  "version": "1.15.0",
   "description": "Standalone single-actor ActivityPub agent whose wire face, RDF truth and state all live on a Solid pod (CSS). Bundles a Phanpy UI and a Mastodon client-API facade.",
   "type": "module",
   "license": "MIT",
@@ -37,7 +37,7 @@
     "install-service": "node bin/fedipod.mjs install-service",
     "uninstall-service": "node bin/fedipod.mjs uninstall-service",
     "prepublishOnly": "npm test",
-    "test": "node claude/smoke-tests/agent-smoke.mjs && node claude/smoke-tests/front-hard-test.mjs && node scripts/check-pod-calls.mjs && node scripts/verify-ui.mjs && node scripts/check-sizes.mjs",
+    "test": "node claude/smoke-tests/agent-smoke.mjs && node claude/smoke-tests/front-hard-test.mjs && node scripts/check-pod-calls.mjs && node scripts/verify-ui.mjs && node --test packages/fedipod-bb/test/*.test.mjs && node scripts/check-sizes.mjs",
     "verify-ui": "node scripts/verify-ui.mjs",
     "build:sw": "node scripts/build-app.mjs --entry web/app/sw-src.mjs --out web/app/dist/sw.js",
     "build:boot": "node scripts/build-app.mjs --entry web/app/boot.mjs --out web/app/dist/boot.js",
