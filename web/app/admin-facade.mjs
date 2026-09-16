@@ -31,7 +31,7 @@ export const ADMIN_PATHS = new Set([
   '/status', '/config', '/gateway', '/alias', '/rotate-key', '/import',
   '/deadletter', '/blocks', '/profiles', '/modqueue', '/log', '/fediacct', '/describe',
   '/atproto', '/atproto/connect', '/atproto/disconnect',
-  '/rebuild', '/move', '/retire', '/inbox/prune', '/park', '/revive',
+  '/rebuild', '/move', '/retire', '/inbox/prune', '/park', '/revive', '/takeover',
   '/fediacct/connect', '/fediacct/disconnect', '/fediacct/callback',
 ]);
 
@@ -239,6 +239,15 @@ export class AdminFacade {
         await a.store.flush();
         await a.publisher.publishProfile();
         return json(200, { ok: true, summary: cfg.summary || null, icon: cfg.icon || null });
+      }
+
+      // Taking the account back. A viewer publishes nothing and drains
+      // nothing, so an account whose lease is held by something that is not
+      // running any more stays silent with no way to say so. The owner acting
+      // HERE outranks whatever holds it.
+      case '/takeover': {
+        if (!await a.requestTakeover?.()) return json(503, { error: 'the lease could not be taken — the pod refused the write' });
+        return json(200, { ok: true, mode: a.status().mode });
       }
 
       // Going quiet, and coming back. The record page's active/parked select.

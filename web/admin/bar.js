@@ -24,6 +24,10 @@
     if (el && s?.handle && s?.actor) {
       try { el.textContent = `@${s.handle}@${new URL(s.actor).host}`; } catch { /* odd actor url */ }
     }
+    // A viewer does nothing: it publishes no profile, carries nothing and
+    // leaves the account looking broken from outside. Say so where the
+    // account is, and let the owner take it back from here.
+    if (s?.mode === 'viewer') viewerBanner();
   }).catch(() => { /* not up yet; the bar still works */ });
 
   // The actors dropdown, on a page whose bar carries one. The record page
@@ -59,3 +63,37 @@
     }).catch(() => { pick.hidden = true; });
   }
 })();
+
+// "Another device is active": what it means for this account, and the way out.
+// The lease is a document on the pod with a five-minute life; a browser that
+// was closed leaves one behind that nothing renews, and every reload asks
+// under a new name, so waiting can look like waiting forever.
+function viewerBanner() {
+  if (document.getElementById('viewer-banner')) return;
+  const base = location.pathname.replace(/\/admin\/.*$/u, '');
+  const bar = document.createElement('div');
+  bar.id = 'viewer-banner';
+  bar.setAttribute('role', 'status');
+  bar.style.cssText = 'padding:.7rem 1rem;background:var(--field-bg,#ececec);color:var(--fg,#1a1a1a);'
+    + 'border-bottom:1px solid var(--line,#b0b0b0);display:flex;gap:1rem;align-items:center;flex-wrap:wrap;font:inherit';
+  const said = document.createElement('span');
+  said.textContent = 'Another device holds this account, so nothing is being published or delivered from here.';
+  const go = document.createElement('button');
+  go.type = 'button';
+  go.textContent = 'Take it over';
+  go.style.cssText = 'font:inherit;font-weight:600;padding:.4rem 1rem;border-radius:.4rem;border:1px solid var(--btn,#3a5f43);'
+    + 'background:var(--btn,#3a5f43);color:var(--btn-text,#fff);cursor:pointer';
+  go.addEventListener('click', async () => {
+    go.disabled = true;
+    said.textContent = 'Taking it over…';
+    try {
+      const r = await fetch(base + '/takeover', { method: 'POST', headers: { 'x-fedipod-page': '1' } });
+      const j = await r.json().catch(() => null);
+      if (r.ok && j?.mode === 'active') { location.reload(); return; }
+      said.textContent = j?.error || 'The lease could not be taken.';
+    } catch (e) { said.textContent = e.message; }
+    go.disabled = false;
+  });
+  bar.append(said, go);
+  document.body.prepend(bar);
+}
