@@ -4,9 +4,12 @@
    its :root. Declared under every name the pages already use — plus aliases
    (--ink=--fg, --muted=--sub, --link=--accent, --field-edge=--field-border,
    --danger=--err, --ring=--focus) — so a page only has to drop its own :root
-   colours and inherit these. */
+   colours and inherit these. The base size and the font family live here too:
+   20px base, Arial, and nothing on any page below 16px. */
 :root {
   color-scheme: light dark;
+  font-size: 125%;                      /* 20px base (125% of 16) */
+  --font: Arial, Helvetica, sans-serif;  /* one family across the site */
 
   /* ground + text */
   --bg: #ffffff; --fg: #1a1a1a; --ink: #1a1a1a;

@@ -18,7 +18,7 @@
     d.id = 'fedipod-update';
     d.setAttribute('role', 'status');
     d.style.cssText = 'position:fixed;left:0;right:0;bottom:0;z-index:2147483647;padding:1rem 1.25rem;'
-      + 'font:1rem/1.5 system-ui,sans-serif;background:#1d1d1d;color:#fff;display:flex;gap:1rem;align-items:center;justify-content:center;flex-wrap:wrap';
+      + 'font:1rem/1.5 Arial, Helvetica, sans-serif;background:#1d1d1d;color:#fff;display:flex;gap:1rem;align-items:center;justify-content:center;flex-wrap:wrap';
     const t = document.createElement('span');
     t.textContent = 'A new version of FediPod is ready. Reload when you have finished writing.';
     const b = document.createElement('button');

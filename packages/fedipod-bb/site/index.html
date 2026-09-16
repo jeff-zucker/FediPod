@@ -4,43 +4,51 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>FediPod-BB</title>
+<link rel="stylesheet" href="/bb/tokens.css">
 <style>
-  :root { color-scheme: light dark; --line:#c9c4b7; --dim:#3f3e38; --accent:#4f6b41; --paper:rgba(120,120,120,.08); }
-  @media (prefers-color-scheme: dark) { :root { --dim:#dcdad0; --line:#4a4a45; --accent:#5f8050; } }
-  body { font: 18px/1.55 Arial, Helvetica, sans-serif; max-width: 46rem; margin: 1.5rem auto; padding: 0 1rem; }
+  /* The site's shared tokens are in tokens.css (web/admin/tokens.css): the
+     palette, the 20px base and the family. Only this page's layout is here. */
+  body { font: 1rem/1.55 var(--font); background: var(--bg); color: var(--fg); max-width: 40rem; margin: 1.5rem auto; padding: 0 1rem 3rem; }
+  a { color: var(--accent); }
+  h1, h2 { color: var(--heading); }
   header.top { display: flex; gap: 1rem; align-items: baseline; flex-wrap: wrap; border-bottom: 1px solid var(--line); padding-bottom: .6rem; margin-bottom: 1rem; }
-  header.top h1 { font-size: 1.35rem; margin: 0; }
-  header.top a { color: inherit; text-decoration: none; }
-  nav.crumbs { color: var(--dim); font-size: 17px; margin: 0 0 1rem; }
-  nav.crumbs a { color: inherit; }
-  .dim { color: var(--dim); }
-  .hint { color: var(--dim); font-size: 17px; }
+  header.top h1 { font-size: 1.4rem; margin: 0; }
+  header.top a { color: var(--heading); text-decoration: none; }
+  nav.crumbs { color: var(--sub); margin: 0 0 1rem; }
+  nav.crumbs a { color: var(--accent); }
+  .dim { color: var(--sub); }
+  .hint { color: var(--sub); }
   ul.list { list-style: none; padding: 0; margin: 0; }
-  ul.list li { padding: .7rem 0; border-bottom: 1px solid var(--line); }
-  ul.list li a.title { font-weight: 600; text-decoration: none; color: inherit; }
-  ul.list li .meta { color: var(--dim); font-size: 16px; }
-  article.post { padding: .9rem 0; border-bottom: 1px solid var(--line); }
-  article.post .who { color: var(--dim); font-size: 16px; display: flex; gap: .6rem; flex-wrap: wrap; }
-  article.post .who b { color: inherit; }
-  article.post .body { margin-top: .3rem; overflow-wrap: anywhere; }
-  article.post.waiting { background: var(--paper); border-radius: 10px; padding: .9rem 1rem; }
-  article.post.gone .body { color: var(--dim); font-style: italic; }
-  section.reply { margin-top: 1.5rem; padding: 1rem 1.1rem; background: var(--paper); border-radius: 12px; }
-  section.reply h2 { font-size: 1.1rem; margin: 0 0 .5rem; }
-  textarea { width: 100%; min-height: 6rem; font: inherit; padding: .5rem .6rem; box-sizing: border-box; border: 1px solid var(--line); border-radius: 8px; }
-  input[type=text] { font: inherit; padding: .45rem .6rem; border: 1px solid var(--line); border-radius: 8px; width: 16rem; max-width: 100%; }
-  button { font: inherit; padding: .5rem 1rem; border-radius: 9px; border: 1px solid var(--line); background: transparent; color: inherit; cursor: pointer; }
-  button.primary { background: var(--accent); color: #fff; border-color: transparent; }
-  a.big { display: inline-block; font-size: 1.15rem; font-weight: 600; padding: .7rem 1.3rem; border-radius: 10px; background: var(--accent); color: #fff; text-decoration: none; }
-  #reply-signed-out .row label { min-width: 6rem; }
+  ul.list li { padding: .8rem 0; border-bottom: 1px solid var(--line); }
+  ul.list li a.title { font-weight: 600; text-decoration: none; color: var(--accent); }
+  ul.list li .meta { color: var(--sub); }
+  article.post { padding: 1rem 0; border-bottom: 1px solid var(--line); }
+  article.post .who { color: var(--sub); display: flex; gap: .6rem; flex-wrap: wrap; }
+  article.post .who b { color: var(--fg); }
+  article.post .body { margin-top: .4rem; overflow-wrap: anywhere; }
+  article.post.waiting { background: var(--surface); border: 1px solid var(--line); border-radius: .4rem; padding: 1rem; }
+  article.post.gone .body { color: var(--sub); font-style: italic; }
+  section.reply { margin-top: 1.5rem; padding: 1rem 1.1rem; background: var(--surface); border: 1px solid var(--line); border-radius: .4rem; }
+  section.reply h2 { font-size: 1.2rem; margin: 0 0 .5rem; }
+  textarea, input[type=text] { font: inherit; padding: .55rem .6rem; box-sizing: border-box; border: 1px solid var(--field-border); border-radius: .3rem; background: var(--field-bg); color: var(--field-text); }
+  textarea { width: 100%; min-height: 6rem; }
+  input[type=text] { width: 18rem; max-width: 100%; }
+  ::placeholder { color: var(--sub); opacity: 1; }
+  textarea:focus, input:focus, button:focus { outline: 2px solid var(--focus); outline-offset: 2px; }
+  button { font: inherit; font-weight: 600; padding: .6rem 1.3rem; border-radius: .4rem; border: 1px solid var(--btn); background: var(--btn); color: var(--btn-text); cursor: pointer; }
+  button:hover { background: var(--btn-hover); border-color: var(--btn-hover); }
+  button.primary { font-weight: 700; }
+  button.link { background: none; border: none; color: var(--accent); font-weight: normal; padding: 0 .2rem; text-decoration: underline; }
   button[disabled] { opacity: .5; cursor: not-allowed; }
-  .row { display: flex; gap: .6rem; align-items: center; flex-wrap: wrap; margin: .5rem 0; }
-  .err { color: #b00020; }
-  @media (prefers-color-scheme: dark) { .err { color: #ff8a80; } }
+  a.big { display: inline-block; font-weight: 700; padding: .7rem 1.3rem; border-radius: .4rem; background: var(--btn); color: var(--btn-text); text-decoration: none; }
+  a.big:hover { background: var(--btn-hover); }
+  #reply-signed-out .row label { min-width: 6rem; }
+  .row { display: flex; gap: .6rem; align-items: center; flex-wrap: wrap; margin: .6rem 0; }
+  .err { color: var(--err); }
   .err:empty { display: none; }
   [hidden] { display: none !important; }
-  code { background: var(--paper); padding: .05em .35em; border-radius: 4px; }
-  p.empty { color: var(--dim); }
+  code { background: var(--field-bg); color: var(--field-text); padding: .05em .35em; border-radius: .2rem; }
+  p.empty { color: var(--sub); }
 </style>
 </head>
 <body>

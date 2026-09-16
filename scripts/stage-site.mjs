@@ -157,6 +157,7 @@ fs.writeFileSync(path.join(site, '_redirects'), [
 // its own, so it is served under the same `script-src 'self'` as the app.
 fs.mkdirSync(path.join(site, 'bb'), { recursive: true });
 for (const f of ['index.html', 'bb.js', 'read.mjs', 'masto.mjs']) cp(`packages/fedipod-bb/site/${f}`, `bb/${f}`);
+cp('web/admin/tokens.css', 'bb/tokens.css');   // the site's shared palette, size and family
 injectUpdate(path.join(site, 'bb/index.html'));
 injectUpdate(path.join(site, 'index.html'));
 fs.writeFileSync(path.join(site, '_headers'), [
