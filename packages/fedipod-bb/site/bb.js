@@ -199,7 +199,7 @@ $('masto-logout').addEventListener('click', async () => {
 // category is named on its own pod, which is where a delivery is taken.
 async function postFromPod({ title, body }) {
   const cat = replyCtx.cat;
-  const inbox = await pod.podInboxOf(cat.id);
+  const inbox = await pod.podInboxOf(cat.id, { front, handle: cat.slug || null });
   if (!inbox) throw new Error('the forum did not say where to send it');
   await pod.join({ actor: podAcct.actor, category: cat.id, inbox });
   return pod.post({

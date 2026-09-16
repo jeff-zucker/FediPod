@@ -29,7 +29,15 @@ export const placeOf = (actor, podHome) => ({
 // What the forum answers as, on its own pod: the page reads a category
 // through the Gateway, whose ids are the front's, but a post is delivered to
 // the pod itself.
-export async function podInboxOf(categoryActorId, { fetch: f = globalThis.fetch.bind(globalThis) } = {}) {
+export async function podInboxOf(categoryActorId, { front = null, handle = null, fetch: f = globalThis.fetch.bind(globalThis) } = {}) {
+  // Through a Gateway the category's actor names the Gateway's own door, which
+  // takes signed mail between servers. A post made here is the reader's own,
+  // so it goes to the pod inbox the Gateway names when asked.
+  if (front && handle && categoryActorId.startsWith(front)) {
+    const said = await f(`${front}/api/server?host=${encodeURIComponent(new URL(front).host)}&handle=${encodeURIComponent(handle)}`,
+      { headers: { accept: 'application/json' } }).then(r => (r.ok ? r.json() : null)).catch(() => null);
+    if (said?.inbox) return said.inbox;
+  }
   const doc = await f(categoryActorId, { headers: { accept: 'application/activity+json' } }).then(r => (r.ok ? r.json() : null)).catch(() => null);
   const inbox = doc?.endpoints?.sharedInbox || doc?.inbox;
   return typeof inbox === 'string' ? inbox : null;
