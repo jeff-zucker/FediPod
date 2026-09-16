@@ -297,3 +297,29 @@ test('a fronted forum: one Gateway row per category, one inbox behind them, fron
   assert.equal(pod.inbox.length, 0);
   await two.stop();
 });
+
+test('a topic survives a restart: its record is where the state can read it', async () => {
+  // The state is loaded by listing ONE container and reading the .json files
+  // in it. A topic filed in a folder below it was written and never read back,
+  // so a forum that restarted lost every topic it had.
+  const { PodStore } = await import('../../../lib/core/store.mjs');
+  const st = new PodStore({ log: () => {} });
+  const written = new Map();
+  st.attach({ base: 'mem://', kind: 'pod',
+    list: async () => ({ names: [...written.keys()].filter(n => n.endsWith('.json')), etag: null }),
+    read: async (n) => (written.has(n) ? { ok: true, body: written.get(n) } : { ok: false }),
+    write: async (n, body) => { written.set(n, body); return { ok: true }; },
+    remove: async (n) => { written.delete(n); return true; } });
+  const tid = topics.open(st, { title: 'Kept', post: { id: 'https://a.example/1', author: 'https://a.example/actor', published: '2026-09-16T00:00:00Z' } });
+  await st.flush();
+  assert.ok([...written.keys()].some(n => n === topics.topicDoc(tid)), 'the record is a document of the state container');
+  assert.ok([...written.keys()].every(n => !n.includes('/')), 'nothing is filed in a folder below it');
+  const again = new PodStore({ log: () => {} });
+  again.attach({ base: 'mem://', kind: 'pod',
+    list: async () => ({ names: [...written.keys()].filter(n => n.endsWith('.json')), etag: null }),
+    read: async (n) => (written.has(n) ? { ok: true, body: written.get(n) } : { ok: false }),
+    write: async () => ({ ok: true }), remove: async () => true });
+  await again.load();
+  assert.equal(topics.list(again).length, 1);
+  assert.equal(topics.get(again, tid)?.posts.length, 1, 'the posts come back with it');
+});

@@ -383,6 +383,19 @@ export class ForumAgent {
   }
 
   // A queued moderator's ask, applied by the operator.
+  // Topics written into a sub-folder before they were flat: read each one at
+  // its old address and put it where the state can see it.
+  async carryOldTopics(cat) {
+    for (const t of topics.list(cat.store)) {
+      if (topics.get(cat.store, t.tid)) continue;
+      const old = await this.remote.getJson(cat.urls.state + topics.topicDocOld(t.tid)).catch(() => null);
+      if (!old) continue;
+      cat.store.write(topics.topicDoc(t.tid), old);
+      this.log(`topic ${t.tid} carried into the state`);
+    }
+    await cat.store.flush().catch(() => {});
+  }
+
   async applyModeration(slug, entryId) {
     const cat = this.categories.find(c => c.slug === slug);
     if (!cat) throw new Error(`no such category: ${slug}`);
@@ -404,6 +417,7 @@ export class ForumAgent {
     await provisionForum(this.remote, this.site);
     for (const cat of this.categories) {
       await provisionCategory(this.remote, cat.urls);
+      await this.carryOldTopics(cat);
       const seen = cat.store.read('published.json', {});
       if (force || !seen.actorDigest) {
         await cat.publisher.publishProfile({ force });
@@ -411,7 +425,12 @@ export class ForumAgent {
         // publisher made it; nothing drains it, so nobody may append to it.
         await podInbox.setPosture(this.remote, cat.urls, 'closed');
         await publish.publishTopicIndex(cat, { force: true });
-        for (const t of topics.list(cat.store)) await publish.publishTopic(cat, t.tid, { force: true });
+        for (const t of topics.list(cat.store)) {
+          // A topic the state cannot produce must not stop the forum coming
+          // up: say so and publish the rest.
+          if (!topics.get(cat.store, t.tid)) { this.log(`topic ${t.tid} has no record — skipped`); continue; }
+          await publish.publishTopic(cat, t.tid, { force: true });
+        }
       }
     }
     const seen = this.store.read('published.json', {});

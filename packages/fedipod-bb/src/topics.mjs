@@ -10,7 +10,11 @@
 import { isTid } from './urls.mjs';
 
 export const TOPICS = 'topics.json';
-export const topicDoc = (tid) => `topics/${tid}.json`;
+// Flat, not `topics/<tid>.json`: state is loaded by listing ONE container and
+// reading the .json in it, so a document in a folder below it is written, never
+// read back, and the forum loses every topic when it restarts.
+export const topicDoc = (tid) => `topic-${tid}.json`;
+export const topicDocOld = (tid) => `topics/${tid}.json`;
 
 // A title becomes the tail of a topic id: lower case, letters digits and
 // hyphens, at most eighty characters, never empty.
