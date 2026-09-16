@@ -143,8 +143,13 @@ export class ForumAgent {
     const existing = store.getConfig() || {};
     const cats = categories.map(c => (typeof c === 'string' ? { slug: c, name: c } : c));
     for (const c of cats) if (!isSlug(c.slug)) throw new Error(`not a category slug: ${c.slug}`);
+    // A renamed forum has to be published again: the profile is written only
+    // when its digest changed or something asks, and a name lives in the
+    // actor document, not in the config alone.
+    const renamed = !!existing.handle && (name || handle) !== existing.name;
     store.setConfig({
       ...existing, kind: 'application', handle, name: name || existing.name || handle,
+      ...(renamed ? { republish: true } : {}),
       remotePod: cred.remotePod, root: cred.root || ROOT,
       categories: cats, moderators, approveJoins, review, replyPolicy,
     });

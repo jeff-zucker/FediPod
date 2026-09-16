@@ -72,7 +72,8 @@ function crumbs(parts) {
 async function route() {
   const hash = location.hash.replace(/^#\/?/u, '');
   const [kind, a, b] = hash.split('/');
-  $('reply').hidden = true;
+  $('reply-row').hidden = true;
+  $('reply-dlg').close();
   if (kind === 'c' && a) return showCategory(a);
   if (kind === 't' && a && b) return showTopic(a, b);
   return showForum();
@@ -93,11 +94,18 @@ async function showCategory(slug) {
   crumbs([[forum.name, '#/'], [cat.name, `#/c/${slug}`]]);
   $('main').innerHTML = '<p class="dim">Loading topics…</p>';
   const { topics } = await read.topics(cat.base);
-  const items = topics.map(t => {
+  // Each topic shows its opening post: a reader sees what was written
+  // without opening anything, and the title opens the rest.
+  const items = [];
+  for (const t of topics.slice(0, 20)) {
     const tid = t.id.split('/').pop();
-    return `<li><a class="title" href="#/t/${esc(slug)}/${esc(tid)}">${esc(t.name)}</a>
-      <div class="meta">${t.count} post${t.count === 1 ? '' : 's'} · last ${esc(when(t.updated))}</div></li>`;
-  });
+    const full = await read.topic(t.id);
+    const first = full?.posts?.[0] ? await read.post(cat.base, full.posts[0]) : null;
+    const who = first?.author ? await read.author(cat.base, first.author) : null;
+    items.push(`<li><a class="title" href="#/t/${esc(slug)}/${esc(tid)}">${esc(t.name)}</a>
+      <div class="meta">${who ? esc(who.handle) + ' · ' : ''}${t.count} post${t.count === 1 ? '' : 's'} · last ${esc(when(t.updated))}</div>
+      ${first && !first.gone ? `<article class="post"><div class="body">${first.content || ''}</div></article>` : ''}</li>`);
+  }
   $('main').innerHTML = `${items.length ? `<ul class="list">${items.join('')}</ul>` : '<p class="empty">No topics yet. The first post mentioning this category opens one.</p>'}`;
   replyBox({ cat, title: 'Start a topic', inReplyToUrl: null, topicId: null });
 }
@@ -138,8 +146,8 @@ async function showTopic(slug, tid) {
 let replyCtx = null;
 function replyBox(ctx) {
   replyCtx = ctx;
-  const box = $('reply');
-  box.hidden = false;
+  $('reply-row').hidden = false;
+  $('reply-open').textContent = ctx.title;
   $('reply-title').textContent = ctx.title;
   $('reply-err').textContent = '';
   const acct = account();
@@ -183,6 +191,8 @@ async function signIn(handleInput) {
       : `${host} does not offer a sign-in this page can use. Post from your account there, naming ${at}, and it arrives here.`;
 }
 
+$('reply-open').addEventListener('click', () => { $('reply-err').textContent = ''; $('reply-dlg').showModal(); });
+$('reply-close').addEventListener('click', () => $('reply-dlg').close());
 $('fedi-login').addEventListener('click', async () => {
   $('reply-err').textContent = '';
   $('fedi-login').disabled = true;
@@ -226,6 +236,7 @@ $('reply-send').addEventListener('click', async () => {
     if (replyCtx.topicId) remember(replyCtx.topicId, { id: made.uri || made.url, author: acct.url || acct.handle, text, at: new Date().toISOString() });
     $('reply-text').value = '';
     $('topic-title').value = '';
+    $('reply-dlg').close();
     await route();
   } catch (e) { $('reply-err').textContent = e.message; }
   $('reply-send').disabled = false;
