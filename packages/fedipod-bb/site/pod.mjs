@@ -83,7 +83,10 @@ export async function post({ actor, podHome, category, categoryHandle, inbox, ti
     cc: [],
     tag: [{ type: 'Mention', href: category, ...(categoryHandle ? { name: categoryHandle } : {}) }],
   };
-  const put = await s.fetch(place.at(name), { method: 'PUT', headers: { 'content-type': 'application/ld+json' }, body: JSON.stringify(note) });
+  // The type it is STORED as decides what a reader may ask for: a pod will
+  // not convert one JSON flavour into another, and answers 501 to a server
+  // asking for ActivityPub over a document filed as plain JSON-LD.
+  const put = await s.fetch(place.at(name), { method: 'PUT', headers: { 'content-type': 'application/activity+json' }, body: JSON.stringify(note) });
   if (!put.ok) throw new Error(`your pod refused the post (HTTP ${put.status})`);
   const create = {
     '@context': AS,

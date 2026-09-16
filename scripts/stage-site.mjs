@@ -116,6 +116,9 @@ fs.writeFileSync(path.join(site, '_redirects'), [
   '# The page names its forum by the first path segment and reads through <domain>.',
   ...BB_HOSTS.flatMap(h => [
     `http://${h}/*          https://${h}/:splat  301!`,
+    // One forum on this site, so its root is that forum. Temporary on
+    // purpose: a second forum here makes the root a list instead.
+    `https://${h}/           /forum/         302!`,
     `https://${h}/bb/*      /bb/:splat      200!`,
     `https://${h}/update.js /update.js      200!`,
     `https://${h}/api/*     /.netlify/functions/front  200!`,

@@ -191,7 +191,7 @@ $('fedi-login').addEventListener('click', async () => {
 });
 $('fedi-handle').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('fedi-login').click(); });
 $('masto-logout').addEventListener('click', async () => {
-  if (podAcct) { await pod.signOut(); podAcct = null; sessionStorage.removeItem('bb:pod'); } else login.signOut();
+  if (podAcct) { await pod.signOut(); podAcct = null; localStorage.removeItem('bb:acct'); sessionStorage.removeItem('bb:pod'); } else login.signOut();
   if (replyCtx) replyBox(replyCtx);
 });
 
@@ -236,6 +236,16 @@ $('reply-send').addEventListener('click', async () => {
 (async () => {
   // Back from a pod's sign-in: the session is this browser's, and the handle
   // it belongs to was put aside before leaving.
+  // A reader who signed in stays signed in: the pod session lives in this
+  // browser, and the handle it belongs to is kept beside it.
+  const kept = localStorage.getItem('bb:acct');
+  if (kept && !sessionStorage.getItem('bb:pod')) {
+    try {
+      const s = await pod.session();
+      if (s) podAcct = { ...JSON.parse(kept), webId: s.webId };
+      else localStorage.removeItem('bb:acct');
+    } catch { localStorage.removeItem('bb:acct'); }
+  }
   const waiting = sessionStorage.getItem('bb:pod');
   if (waiting) {
     try {
@@ -243,6 +253,7 @@ $('reply-send').addEventListener('click', async () => {
       const s = params.get('code') ? await pod.complete(location.href) : await pod.session();
       if (s) {
         podAcct = { ...who, webId: s.webId };
+        try { localStorage.setItem('bb:acct', JSON.stringify(who)); } catch { /* blocked storage */ }
         sessionStorage.removeItem('bb:pod');
         params.delete('code'); params.delete('state'); params.delete('iss');
         const q = String(params);
