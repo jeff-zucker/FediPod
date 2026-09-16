@@ -325,6 +325,29 @@ test('a topic is named by the person opening it, not by the words of their post'
   assert.match(topics.list(st2)[0].title, /^Three beds of tomatoes/u);
 });
 
+test('a reply from elsewhere finds its topic through what its parent says', async () => {
+  // The reply names a parent and nothing else; the parent, fetched at its
+  // origin, names the topic. That is the only thread a server which knows
+  // nothing of this forum can leave behind.
+  const { PodStore } = await import('../../../lib/core/store.mjs');
+  const st = new PodStore({ log: () => {} });
+  st.attach({ base: 'mem://', list: async () => ({ names: [], etag: null }), read: async () => ({ ok: false }),
+    remove: async () => true, write: async () => ({ ok: true }) });
+  const urls = forumUrls('https://forum.example/').category('gardening');
+  const first = { id: 'https://mei.pod.example/fedipod/ap/notes/op', attributedTo: 'https://mei.pod.example/fedipod/ap/actor',
+    content: '<p>Blight.</p>', published: '2026-09-16T10:00:00Z' };
+  const tid = await topics.assign({ store: st, urls, fetchAP: async () => null }, first, { type: 'Create', name: 'Blight' });
+  // Somebody answers a post of OURS that this forum does not hold, and that
+  // post says which topic it is in.
+  const theirs = 'https://mastodon.example/users/aisha/statuses/9001';
+  const middle = { id: 'https://elsewhere.example/notes/x', context: urls.topic(tid), inReplyTo: first.id };
+  const reply = { id: theirs, attributedTo: 'https://mastodon.example/users/aisha',
+    content: '<p>Same here.</p>', published: '2026-09-16T11:00:00Z', inReplyTo: middle.id };
+  const landed = await topics.assign({ store: st, urls, fetchAP: async (u) => (u === middle.id ? middle : null) }, reply);
+  assert.equal(landed, tid, 'it lands in the topic its parent belongs to');
+  assert.equal(topics.get(st, tid).posts.length, 2);
+});
+
 test('a topic survives a restart: its record is where the state can read it', async () => {
   // The state is loaded by listing ONE container and reading the .json files
   // in it. A topic filed in a folder below it was written and never read back,

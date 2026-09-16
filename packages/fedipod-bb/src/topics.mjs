@@ -135,6 +135,17 @@ export async function assign({ store, urls, fetchAP }, note, activity = null) {
     const tid = topicOf(store, parent);
     if (tid) { append(store, tid, post); return tid; }
     const doc = await fetchAP(parent).catch(() => null);
+    // A post whose own conversation is one of ours: the walk can stop, even
+    // though the post in hand said nothing about it. This is what lets a
+    // reply written on a server that knows about conversations but not about
+    // us — and any post quoting another's `context` — land where it belongs
+    // (FEP-7888, and the reading half of FEP-f228).
+    const theirs = idOf(doc?.context);
+    if (theirs && theirs.startsWith(urls.topicContainer)) {
+      const tail = theirs.slice(urls.topicContainer.length);
+      const named = get(store, tail) ? tail : tail.replace(/-\d+$/u, '');
+      if (get(store, named)) { append(store, named, post); return named; }
+    }
     parent = idOf(doc?.inReplyTo) || null;
   }
   // The name of a new topic, in order: what the opening activity called it —
