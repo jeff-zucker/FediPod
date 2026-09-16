@@ -248,6 +248,8 @@ export class ForumAgent {
     });
     cat.intake.recentNotes = new Map();
     cat.intake.onCarried = (ev) => this.onCarried(cat, ev);
+    cat.intake.onCarriedEdit = (ev) => this.onCarriedEdit(cat, ev);
+    cat.intake.onCarriedGone = (ev) => this.onCarriedGone(cat, ev);
     cat.intake.isModerationAskExtra = (a) => moderation.isForumAsk(cat, a);
     cat.configured = () => true;
     cat.log = this.log;
@@ -320,12 +322,12 @@ export class ForumAgent {
 
   // After a category carried a post: place it in its topic, keep a copy for
   // readers, and publish what changed.
-  async onCarried(cat, { noteId }) {
+  async onCarried(cat, { noteId, activity }) {
     let note = cat.intake.recentNotes.get(noteId) || null;
     cat.intake.recentNotes.delete(noteId);
     if (!note) note = await cat.intake.fetchAP(noteId);
     if (!note) { this.log(`carried ${noteId} but could not read it for the topic`); return; }
-    const tid = await topics.assign({ store: cat.store, urls: cat.urls, fetchAP: (u) => cat.intake.fetchAP(u) }, note);
+    const tid = await topics.assign({ store: cat.store, urls: cat.urls, fetchAP: (u) => cat.intake.fetchAP(u) }, note, activity);
     // A locked topic takes no more: the post leaves it again and the carry is
     // unsaid, so members' servers do not keep what the forum does not.
     if (moderation.isLocked(cat, tid) && !topics.list(cat.store).find(t => t.tid === tid && t.op === noteId)) {
@@ -394,6 +396,33 @@ export class ForumAgent {
       this.log(`topic ${t.tid} carried into the state`);
     }
     await cat.store.flush().catch(() => {});
+  }
+
+  // An author edited a post of theirs that we hold: the copy the website
+  // reads is rewritten from the note as verified at its origin, and a changed
+  // title is the topic's title when that post opened it.
+  async onCarriedEdit(cat, { noteId, note }) {
+    await publish.cachePost(cat, note);
+    const tid = topics.topicOf(cat.store, noteId);
+    if (!tid) return;
+    await publish.publishTopic(cat, tid, { force: true });
+  }
+
+  // An author deleted one: it leaves the topic, its copy becomes a tombstone
+  // (FEP-4f05), and a topic with nothing left in it goes too. The carry has
+  // already been taken back by the group itself.
+  async onCarriedGone(cat, { noteId }) {
+    const tid = topics.topicOf(cat.store, noteId);
+    await publish.tombstoneCached(cat, noteId);
+    if (!tid) return;
+    topics.remove(cat.store, tid, noteId);
+    const left = topics.get(cat.store, tid);
+    if (!left?.posts?.length) {
+      await moderation.deleteTopic(cat, tid).catch(e => this.log(`empty topic ${tid}: ${e.message}`));
+      return;
+    }
+    await publish.publishTopic(cat, tid, { force: true });
+    await publish.publishTopicIndex(cat, { force: true });
   }
 
   async applyModeration(slug, entryId) {

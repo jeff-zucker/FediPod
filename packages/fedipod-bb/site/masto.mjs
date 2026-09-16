@@ -123,6 +123,27 @@ export class MastoLogin {
 
   // Post from the reader's account: the category is named so it receives
   // the post; a reply names the post it answers by its id on that server.
+  async edit({ url, text }) {
+    const a = this.account();
+    if (!a) throw new Error('not signed in');
+    const id = await this.statusIdFor(url);
+    if (!id) throw new Error(`${a.host} could not find that post`);
+    return this._json(await this.fetch(`https://${a.host}/api/v1/statuses/${id}`, {
+      method: 'PUT', headers: { 'content-type': 'application/json', authorization: `Bearer ${a.token}` },
+      body: JSON.stringify({ status: text }),
+    }));
+  }
+
+  async remove({ url }) {
+    const a = this.account();
+    if (!a) throw new Error('not signed in');
+    const id = await this.statusIdFor(url);
+    if (!id) throw new Error(`${a.host} could not find that post`);
+    return this._json(await this.fetch(`https://${a.host}/api/v1/statuses/${id}`, {
+      method: 'DELETE', headers: { authorization: `Bearer ${a.token}` },
+    }));
+  }
+
   async post({ text, mention, inReplyToUrl = null }) {
     const a = this.account();
     if (!a) throw new Error('not signed in');

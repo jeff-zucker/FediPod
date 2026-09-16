@@ -87,6 +87,14 @@ export function remove(store, tid, postId) {
   return true;
 }
 
+export function setTitle(store, tid, title) {
+  const doc = get(store, tid);
+  if (!doc) return null;
+  store.write(topicDoc(tid), { ...doc, title });
+  store.write(TOPICS, list(store).map(t => (t.tid === tid ? { ...t, title } : t)));
+  return title;
+}
+
 export function setFlags(store, tid, { pinned, locked } = {}) {
   store.write(TOPICS, list(store).map(t => (t.tid === tid
     ? { ...t, ...(pinned !== undefined ? { pinned: !!pinned } : {}), ...(locked !== undefined ? { locked: !!locked } : {}) } : t)));
@@ -108,7 +116,7 @@ export function titleOf(note) {
 // topic its `context` names; the topic its reply chain leads to, walking up
 // through parents fetched at their origins; else a new topic with this post
 // as its opening. Returns the topic id.
-export async function assign({ store, urls, fetchAP }, note) {
+export async function assign({ store, urls, fetchAP }, note, activity = null) {
   const post = {
     id: note.id,
     author: idOf([].concat(note.attributedTo || [])[0]) || null,
@@ -129,7 +137,12 @@ export async function assign({ store, urls, fetchAP }, note) {
     const doc = await fetchAP(parent).catch(() => null);
     parent = idOf(doc?.inReplyTo) || null;
   }
-  return open(store, { title: titleOf(note), post });
+  // The name of a new topic, in order: what the opening activity called it —
+  // a client here asks for a topic BY NAME, which is a different thing from
+  // the post's own title — then the post's title, then its first words, for
+  // everything arriving from servers that have no notion of a topic.
+  const asked = typeof activity?.name === 'string' ? activity.name.trim().slice(0, 200) : '';
+  return open(store, { title: asked || titleOf(note), post });
 }
 
 // A topic gone from the record: its list entry and its document.

@@ -84,6 +84,13 @@ function elsewhere(p) {
   return ` <a href="${esc(p.page)}" class="dim" rel="noopener">on ${esc(host)}</a>`;
 }
 
+// Whose post this is, as this browser can tell: a pod account is its actor,
+// a Mastodon account is the profile its server gave us.
+const mine = (p) => {
+  const me = podAcct?.actor || login.account()?.url;
+  return !!me && !!p?.author && (p.author === me || p.author === podAcct?.webId);
+};
+
 function card(p, { author = null, cat = null, extra = '', waiting = false } = {}) {
   const at = p.published ? when(p.published) : '';
   return `<article class="post${p.gone ? ' gone' : ''}${extra}">
@@ -91,6 +98,10 @@ function card(p, { author = null, cat = null, extra = '', waiting = false } = {}
       <span class="when">${esc(at)}${elsewhere(p)}</span></div>
     ${p.name ? `<h2>${esc(p.name)}</h2>` : ''}
     <div class="body">${p.gone ? 'This post was removed.' : (body(p, cat) || '<span class="dim">(not readable here)</span>')}</div>
+    ${p.gone || waiting || !p.id ? '' : `<div class="acts" data-post="${esc(p.id)}">
+      <button data-act="reply">Reply</button>
+      ${mine(p) ? '<button data-act="edit">Edit</button><button data-act="delete">Delete</button>' : ''}
+    </div>`}
   </article>`;
 }
 
@@ -197,6 +208,8 @@ function replyBox(ctx) {
   $('reply-signed-out').hidden = !!acct;
   $('reply-signed-in').hidden = !acct;
   $('fedi-note').textContent = '';
+  editing = null;
+  $('reply-send').textContent = 'Post reply';
   $('topic-title-row').hidden = !!ctx.topicId;
   $('reply-text').placeholder = ctx.topicId ? 'Write your reply' : 'Your opening post';
   if (acct) $('reply-as').textContent = acct.handle;
@@ -234,8 +247,58 @@ async function signIn(handleInput) {
       : `${host} does not offer a sign-in this page can use. Post from your account there, naming ${at}, and it arrives here.`;
 }
 
-$('reply-open').addEventListener('click', () => { $('reply-err').textContent = ''; $('reply-dlg').showModal(); });
-$('reply-close').addEventListener('click', () => $('reply-dlg').close());
+$('reply-open').addEventListener('click', () => { openReply({ inReplyToUrl: replyCtx?.inReplyToUrl || null }); });
+$('main').addEventListener('click', (e) => {
+  const b = e.target.closest('.acts button');
+  if (!b) return;
+  const id = b.closest('.acts')?.dataset.post;
+  const act = b.dataset.act;
+  if (act === 'reply') return openReply({ inReplyToUrl: id });
+  if (act === 'edit') return openEdit(id);
+  if (act === 'delete') return removePost(id);
+});
+
+// The dialog, armed for what it is about to do.
+function openReply({ inReplyToUrl = null } = {}) {
+  editing = null;
+  if (replyCtx) replyCtx.inReplyToUrl = inReplyToUrl;
+  $('reply-title').textContent = replyCtx?.title || 'Reply';
+  $('reply-send').textContent = 'Post reply';
+  $('reply-err').textContent = '';
+  $('reply-dlg').showModal();
+}
+
+let editing = null;
+async function openEdit(id) {
+  const p = await read.post(replyCtx.cat.base, id);
+  if (!p) { $('reply-err').textContent = 'that post is not readable here'; return; }
+  editing = { id, page: p.page || null };
+  $('reply-title').textContent = 'Edit your post';
+  $('reply-send').textContent = 'Save';
+  $('reply-err').textContent = '';
+  $('topic-title-row').hidden = true;
+  // Back to the words, from the HTML the post is kept as.
+  const d = document.createElement('div');
+  d.innerHTML = body(p, replyCtx.cat);
+  $('reply-text').value = [...d.querySelectorAll('p')].map(x => x.textContent.trim()).join('\n\n') || d.textContent.trim();
+  $('reply-dlg').showModal();
+}
+
+async function removePost(id) {
+  if (!confirm('Delete this post? Everywhere it has reached is told to remove it.')) return;
+  try {
+    const cat = replyCtx.cat;
+    if (podAcct) {
+      const inbox = await pod.podInboxOf(cat.id, { front, handle: cat.slug || null });
+      await pod.remove({ actor: podAcct.actor, podHome: podAcct.podHome, id, category: cat.id, inbox });
+    } else {
+      const p = await read.post(cat.base, id);
+      await login.remove({ url: p?.page || id });
+    }
+    await route();
+  } catch (e) { alert(e.message); }
+}
+$('reply-cancel').addEventListener('click', () => $('reply-dlg').close());
 $('fedi-login').addEventListener('click', async () => {
   $('reply-err').textContent = '';
   $('fedi-login').disabled = true;
@@ -248,16 +311,25 @@ $('masto-logout').addEventListener('click', async () => {
   if (replyCtx) replyBox(replyCtx);
 });
 
+async function saveEdit({ body }) {
+  const cat = replyCtx.cat;
+  if (podAcct) {
+    const inbox = await pod.podInboxOf(cat.id, { front, handle: cat.slug || null });
+    return pod.edit({ actor: podAcct.actor, podHome: podAcct.podHome, id: editing.id, text: body, category: cat.id, inbox });
+  }
+  return login.edit({ url: editing.page || editing.id, text: body });
+}
+
 // A post written into the reader's own pod and announced to the forum. The
 // category is named on its own pod, which is where a delivery is taken.
-async function postFromPod({ title, body }) {
+async function postFromPod({ topic, body }) {
   const cat = replyCtx.cat;
   const inbox = await pod.podInboxOf(cat.id, { front, handle: cat.slug || null });
   if (!inbox) throw new Error('the forum did not say where to send it');
   await pod.join({ actor: podAcct.actor, category: cat.id, inbox });
   return pod.post({
     actor: podAcct.actor, podHome: podAcct.podHome, category: cat.id, categoryHandle: handleOf(cat), inbox,
-    title, text: body, inReplyTo: replyCtx.inReplyToUrl,
+    topic, text: body, inReplyTo: replyCtx.inReplyToUrl,
     context: replyCtx.topicId ? replyCtx.topicId : null,
   });
 }
@@ -265,16 +337,20 @@ $('reply-send').addEventListener('click', async () => {
   if (!replyCtx) return;
   const body = $('reply-text').value.trim();
   if (!body) return;
-  // A new topic's title is its first line: the host takes a post's first
-  // words as the title, and a titled line reads as one everywhere.
-  const title = replyCtx.topicId ? '' : $('topic-title').value.trim();
-  const text = title ? `${title}\n\n${body}` : body;
+  // A Mastodon post has no topic name to give: its first line stands in for
+  // one, which is all that server can say. A pod post names the topic on the
+  // activity that opens it, and its words are only its words.
+  // The topic's name, asked for only when a topic is being opened.
+  const topic = !editing && !replyCtx.topicId ? $('topic-title').value.trim() : '';
+  const text = topic ? `${topic}\n\n${body}` : body;
   $('reply-err').textContent = '';
   $('reply-send').disabled = true;
   try {
-    const made = podAcct
-      ? await postFromPod({ title, body })
-      : await login.post({ text, mention: handleOf(replyCtx.cat), inReplyToUrl: replyCtx.inReplyToUrl });
+    const made = editing
+      ? await saveEdit({ body })
+      : podAcct
+        ? await postFromPod({ topic, body })
+        : await login.post({ text, mention: handleOf(replyCtx.cat), inReplyToUrl: replyCtx.inReplyToUrl });
     const acct = account();
     if (replyCtx.topicId) remember(replyCtx.topicId, { id: made.uri || made.url, author: acct.url || acct.handle, text, at: new Date().toISOString() });
     $('reply-text').value = '';

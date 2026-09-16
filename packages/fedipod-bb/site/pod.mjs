@@ -58,22 +58,22 @@ export async function complete(currentUrl) {
 }
 
 // The post itself: a document in their pod, then a Create appended to the
-// forum's inbox. A title makes it an Article, which is what a board shows as
-// a topic (FEP-b2b8).
-export async function post({ actor, podHome, category, categoryHandle, inbox, title, text, inReplyTo = null, context = null }) {
+// forum's inbox. A post has no title of its own; when it opens a topic, the
+// activity that opens it carries the TOPIC's name, which is a different
+// thing and belongs to the topic.
+export async function post({ actor, podHome, category, categoryHandle, inbox, topic = '', text, inReplyTo = null, context = null }) {
   const s = await getSession();
   if (!s) throw new Error('sign in to your pod first');
   const place = placeOf(actor, podHome);
-  const name = `${stamp()}-${slug(title) || 'post'}-${crypto.randomUUID().slice(0, 8)}`;
+  const name = `${stamp()}-${slug(topic) || 'post'}-${crypto.randomUUID().slice(0, 8)}`;
   const id = place.id(name);
   const now = new Date().toISOString();
-  const body = String(text).split(/\n{2,}/u).map(p => `<p>${escape_(p).replace(/\n/gu, '<br>')}</p>`).join('');
+  const body = htmlOf(text);
   const note = {
     '@context': AS,
     id,
-    type: title ? 'Article' : 'Note',
+    type: 'Note',
     attributedTo: actor,
-    ...(title ? { name: String(title).slice(0, 200) } : {}),
     // The category is named in audience, in to, and as a Mention tag — the
     // three places a receiving server reads. Not in the words.
     content: body,
@@ -95,6 +95,7 @@ export async function post({ actor, podHome, category, categoryHandle, inbox, ti
     type: 'Create',
     actor,
     published: now,
+    ...(topic ? { name: String(topic).slice(0, 200) } : {}),
     object: note,
     to: [PUBLIC, category],
     cc: [],
@@ -106,11 +107,48 @@ export async function post({ actor, podHome, category, categoryHandle, inbox, ti
 
 // Joining: a category carries a member's posts, so the first post from a new
 // reader is preceded by a Follow the category answers itself.
+export async function edit({ actor, podHome, id, text, category, inbox }) {
+  const s = await getSession();
+  if (!s) throw new Error('sign in to your pod first');
+  const now = new Date().toISOString();
+  const at = placeOf(actor, podHome).at(id.split('/').pop());
+  const was = await fetch(id, { headers: { accept: 'application/activity+json' } }).then(r => (r.ok ? r.json() : null)).catch(() => null);
+  const note = {
+    ...(was || { '@context': AS, id, type: 'Note', attributedTo: actor, to: [PUBLIC, category] }),
+    content: htmlOf(text),
+    updated: now,
+  };
+  const put = await s.fetch(at, { method: 'PUT', headers: { 'content-type': 'application/activity+json' }, body: JSON.stringify(note) });
+  if (!put.ok) throw new Error(`your pod refused the change (HTTP ${put.status})`);
+  const update = { '@context': AS, id: `${id}#update-${Date.now()}`, type: 'Update', actor, published: now,
+    object: note, to: [PUBLIC, category], cc: [] };
+  const sent = await fetch(inbox, { method: 'POST', headers: { 'content-type': 'application/ld+json' }, body: JSON.stringify(update) });
+  if (!sent.ok) throw new Error(`the forum did not take the change (HTTP ${sent.status})`);
+  return { id };
+}
+
+export async function remove({ actor, podHome, id, category, inbox }) {
+  const s = await getSession();
+  if (!s) throw new Error('sign in to your pod first');
+  const now = new Date().toISOString();
+  const at = placeOf(actor, podHome).at(id.split('/').pop());
+  const stone = { '@context': AS, id, type: 'Tombstone', formerType: 'Note', deleted: now };
+  const put = await s.fetch(at, { method: 'PUT', headers: { 'content-type': 'application/activity+json' }, body: JSON.stringify(stone) });
+  if (!put.ok) throw new Error(`your pod refused the deletion (HTTP ${put.status})`);
+  const del = { '@context': AS, id: `${id}#delete-${Date.now()}`, type: 'Delete', actor, published: now,
+    object: id, to: [PUBLIC, category], cc: [] };
+  const sent = await fetch(inbox, { method: 'POST', headers: { 'content-type': 'application/ld+json' }, body: JSON.stringify(del) });
+  if (!sent.ok) throw new Error(`the forum was not told (HTTP ${sent.status})`);
+  return { id };
+}
+
 export async function join({ actor, category, inbox }) {
   const follow = { '@context': AS, id: `${actor}#follow-${Date.now()}`, type: 'Follow', actor, object: category, to: [category] };
   const r = await fetch(inbox, { method: 'POST', headers: { 'content-type': 'application/ld+json' }, body: JSON.stringify(follow) });
   return r.ok;
 }
+
+const htmlOf = (text) => String(text).split(/\n{2,}/u).map(p => `<p>${escape_(p).replace(/\n/gu, '<br>')}</p>`).join('');
 
 function escape_(s) {
   return String(s).replace(/[&<>"]/gu, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));

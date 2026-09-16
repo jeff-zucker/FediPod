@@ -27,6 +27,10 @@
   article.post { padding: 1rem 1.1rem; margin: .8rem 0; border: 1px solid var(--line); border-radius: .4rem; background: var(--bg); }
   article.post .who { color: var(--sub); display: flex; gap: .6rem; flex-wrap: wrap; justify-content: space-between; align-items: baseline; }
   article.post .who .when { margin-left: auto; display: flex; gap: .6rem; }
+  article.post .acts { display: flex; gap: .5rem; margin-top: .7rem; justify-content: flex-end; }
+  article.post .acts button { font-size: 16px; font-weight: 600; padding: .3rem .8rem; border-radius: .3rem;
+    background: transparent; color: var(--accent); border: 1px solid var(--line); }
+  article.post .acts button:hover { background: var(--field-bg); }
   article.post .who b { color: var(--fg); }
   article.post .body { margin-top: .4rem; overflow-wrap: anywhere; }
   article.post.waiting { background: var(--surface); border: 1px solid var(--line); border-radius: .4rem; padding: 1rem; }
@@ -48,6 +52,8 @@
   button:hover { background: var(--btn-hover); border-color: var(--btn-hover); }
   button.primary { font-weight: 700; }
   button.link { background: none; border: none; color: var(--accent); font-weight: normal; padding: 0 .2rem; text-decoration: underline; }
+  button.plain { background: transparent; color: var(--accent); border-color: var(--line); }
+  button.plain:hover { background: var(--field-bg); }
   button[disabled] { opacity: .5; cursor: not-allowed; }
   a.big { display: inline-block; font-weight: 700; padding: .7rem 1.3rem; border-radius: .4rem; background: var(--btn); color: var(--btn-text); text-decoration: none; }
   a.big:hover { background: var(--btn-hover); }
@@ -85,16 +91,16 @@
   <div id="reply-signed-in" hidden>
     <p class="hint">Posting as <b id="reply-as"></b> <button id="masto-logout" class="link">Sign out</button></p>
     <div class="row" id="topic-title-row" hidden>
-      <label for="topic-title">Title</label>
-      <input type="text" id="topic-title" placeholder="What the topic is about" autocomplete="off">
+      <label for="topic-title">Topic name</label>
+      <input type="text" id="topic-title" placeholder="What this topic is about" autocomplete="off">
     </div>
     <textarea id="reply-text" placeholder="Write your reply"></textarea>
     <div class="row">
+      <button id="reply-cancel" class="plain">Cancel</button>
       <button id="reply-send" class="primary">Post reply</button>
     </div>
   </div>
   <p class="err" id="reply-err" role="alert"></p>
-  <p class="row"><button id="reply-close" class="link">Close</button></p>
 </section>
 </dialog>
 <script type="module" src="/bb/bb.js"></script>
