@@ -136,8 +136,13 @@ export function reader({ fetch: f = globalThis.fetch.bind(globalThis) } = {}) {
     async post(cbase, postId) {
       const copy = await get(cbase + 'ap/cache/' + await cacheKey(postId));
       if (!copy) return null;
+      // `url` is where a PERSON reads this post; `id` is where a server
+      // fetches it. They are the same on some servers and never on a pod.
+      const page = [].concat(copy.url || [])
+        .map(u => (typeof u === 'string' ? u : (u?.mediaType === 'text/html' ? u.href : null)))
+        .find(u => typeof u === 'string' && /^https?:/u.test(u)) || null;
       return {
-        id: copy.id || postId, type: copy.type || 'Note', gone: copy.type === 'Tombstone',
+        id: copy.id || postId, type: copy.type || 'Note', gone: copy.type === 'Tombstone', page,
         author: idOf([].concat(copy.attributedTo || [])[0]) || null,
         name: copy.name || null, content: typeof copy.content === 'string' ? copy.content : '',
         published: copy.published || null, updated: copy.updated || null, inReplyTo: idOf(copy.inReplyTo) || null,

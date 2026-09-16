@@ -89,7 +89,17 @@ test('the website reads a forum the host wrote: categories, topics, posts and th
   assert.equal(who.handle, '@mei@mei.pod.example', 'the author card names the handle the id does not carry');
   assert.equal(who.icon, 'https://mei.pod.example/face.png');
   assert.equal(await read.author(forum.categories[0].base, 'https://nobody.example/u/x'), null);
-  await publish.tombstoneCached(ctx, R1, { formerType: 'Note' });
+  // A post from a server that publishes a page for it says where; a post on a
+  // pod answers its own address with JSON and offers none.
+  assert.equal(p1.page, null, 'a pod post has no page for a person to read');
+  const M1 = 'https://mastodon.example/users/aisha/statuses/9001';
+  await publish.cachePost(ctx, { id: M1, type: 'Note', attributedTo: 'https://mastodon.example/users/aisha',
+    content: '<p>Hello.</p>', url: 'https://mastodon.example/@aisha/9001', published: '2026-09-16T12:00:00Z' });
+  assert.equal((await read.post(forum.categories[0].base, M1)).page, 'https://mastodon.example/@aisha/9001');
+  await publish.cachePost(ctx, { id: M1 + '-b', type: 'Note', attributedTo: 'https://mastodon.example/users/aisha',
+    content: '<p>Two.</p>', url: [{ type: 'Link', mediaType: 'text/html', href: 'https://mastodon.example/@aisha/9002' }] });
+  assert.equal((await read.post(forum.categories[0].base, M1 + '-b')).page, 'https://mastodon.example/@aisha/9002', 'a typed link says which one a person reads');
+    await publish.tombstoneCached(ctx, R1, { formerType: 'Note' });
   assert.equal((await read.post(forum.categories[0].base, R1)).gone, true, 'a removed post reads as gone');
   assert.equal(await read.post(forum.categories[0].base, 'https://nowhere.example/x'), null);
   assert.equal(forumBase({ origin: 'https://fedipod.net', handle: 'forum' }), 'https://fedipod.net/u/forum/');

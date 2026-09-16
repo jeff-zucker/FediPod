@@ -74,11 +74,21 @@ function byline(p, author) {
   return `<a href="${esc(author.url)}">${inner}</a>`;
 }
 
+// Where this post can be READ away from here. A pod answers its post's own
+// address with JSON, so that address is no use to a person and is not shown;
+// a server that publishes a page for it says so, and the link names its host.
+function elsewhere(p) {
+  if (!p?.page) return '';
+  let host = '';
+  try { host = new URL(p.page).host; } catch { return ''; }
+  return ` <a href="${esc(p.page)}" class="dim" rel="noopener">on ${esc(host)}</a>`;
+}
+
 function card(p, { author = null, cat = null, extra = '', waiting = false } = {}) {
   const at = p.published ? when(p.published) : '';
   return `<article class="post${p.gone ? ' gone' : ''}${extra}">
     <div class="who"><b>${waiting ? '<span class="dim">waiting for the forum · </span>' : ''}${byline(p, author)}</b>
-      <span class="when">${esc(at)}${p.id ? ` <a href="${esc(p.id)}" class="dim">original</a>` : ''}</span></div>
+      <span class="when">${esc(at)}${elsewhere(p)}</span></div>
     ${p.name ? `<h2>${esc(p.name)}</h2>` : ''}
     <div class="body">${p.gone ? 'This post was removed.' : (body(p, cat) || '<span class="dim">(not readable here)</span>')}</div>
   </article>`;
