@@ -61,19 +61,22 @@ export async function complete(currentUrl) {
 // forum's inbox. A post has no title of its own; when it opens a topic, the
 // activity that opens it carries the TOPIC's name, which is a different
 // thing and belongs to the topic.
-export async function post({ actor, podHome, category, categoryHandle, inbox, topic = '', text, inReplyTo = null, context = null }) {
+export async function post({ actor, podHome, category, categoryHandle, inbox, topic = '', title = '', text, inReplyTo = null, context = null }) {
   const s = await getSession();
   if (!s) throw new Error('sign in to your pod first');
   const place = placeOf(actor, podHome);
-  const name = `${stamp()}-${slug(topic) || 'post'}-${crypto.randomUUID().slice(0, 8)}`;
+  const name = `${stamp()}-${slug(title) || slug(topic) || 'post'}-${crypto.randomUUID().slice(0, 8)}`;
   const id = place.id(name);
   const now = new Date().toISOString();
   const body = htmlOf(text);
   const note = {
     '@context': AS,
     id,
-    type: 'Note',
+    // A post with a title of its own is an Article (FEP-b2b8); the title is
+    // the POST's, and says nothing about what its topic is called.
+    type: title ? 'Article' : 'Note',
     attributedTo: actor,
+    ...(title ? { name: String(title).slice(0, 200) } : {}),
     // The category is named in audience, in to, and as a Mention tag — the
     // three places a receiving server reads. Not in the words.
     content: body,
@@ -107,7 +110,7 @@ export async function post({ actor, podHome, category, categoryHandle, inbox, to
 
 // Joining: a category carries a member's posts, so the first post from a new
 // reader is preceded by a Follow the category answers itself.
-export async function edit({ actor, podHome, id, text, category, inbox }) {
+export async function edit({ actor, podHome, id, title = '', text, category, inbox }) {
   const s = await getSession();
   if (!s) throw new Error('sign in to your pod first');
   const now = new Date().toISOString();
@@ -115,9 +118,12 @@ export async function edit({ actor, podHome, id, text, category, inbox }) {
   const was = await fetch(id, { headers: { accept: 'application/activity+json' } }).then(r => (r.ok ? r.json() : null)).catch(() => null);
   const note = {
     ...(was || { '@context': AS, id, type: 'Note', attributedTo: actor, to: [PUBLIC, category] }),
+    type: title ? 'Article' : 'Note',
     content: htmlOf(text),
     updated: now,
   };
+  // A title taken away is taken away, not left behind from the old copy.
+  if (title) note.name = String(title).slice(0, 200); else delete note.name;
   const put = await s.fetch(at, { method: 'PUT', headers: { 'content-type': 'application/activity+json' }, body: JSON.stringify(note) });
   if (!put.ok) throw new Error(`your pod refused the change (HTTP ${put.status})`);
   const update = { '@context': AS, id: `${id}#update-${Date.now()}`, type: 'Update', actor, published: now,

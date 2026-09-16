@@ -32,6 +32,9 @@
   --err: #b00020; --danger: #b00020; --warn: #8a4b00; --ok: #1f7a3d;
   --focus: #12467e; --ring: #12467e;
 
+  /* the edge of a dialog: bright against the page behind it */
+  --dialog-edge: #b8b8b8;
+
   --chevron: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6'><path d='M1 1l4 4 4-4' fill='none' stroke='%23124f8a' stroke-width='1.6' stroke-linecap='round'/></svg>");
 }
 
@@ -53,6 +56,7 @@
 
     --err: #ff9b9b; --danger: #ff9b9b; --warn: #ffb366; --ok: #7fd39a;
     --focus: #8fc2f2; --ring: #8fc2f2;
+    --dialog-edge: #f3f3f3;
 
     --chevron: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6'><path d='M1 1l4 4 4-4' fill='none' stroke='%23bcd8f0' stroke-width='1.6' stroke-linecap='round'/></svg>");
   }

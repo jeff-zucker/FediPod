@@ -210,6 +210,7 @@ function replyBox(ctx) {
   $('fedi-note').textContent = '';
   editing = null;
   $('reply-send').textContent = 'Post reply';
+  $('post-title').value = '';
   $('topic-title-row').hidden = !!ctx.topicId;
   $('reply-text').placeholder = ctx.topicId ? 'Write your reply' : 'Your opening post';
   if (acct) $('reply-as').textContent = acct.handle;
@@ -277,6 +278,7 @@ async function openEdit(id) {
   $('reply-send').textContent = 'Save';
   $('reply-err').textContent = '';
   $('topic-title-row').hidden = true;
+  $('post-title').value = p.name || '';
   // Back to the words, from the HTML the post is kept as.
   const d = document.createElement('div');
   d.innerHTML = body(p, replyCtx.cat);
@@ -311,25 +313,25 @@ $('masto-logout').addEventListener('click', async () => {
   if (replyCtx) replyBox(replyCtx);
 });
 
-async function saveEdit({ body }) {
+async function saveEdit({ title, body }) {
   const cat = replyCtx.cat;
   if (podAcct) {
     const inbox = await pod.podInboxOf(cat.id, { front, handle: cat.slug || null });
-    return pod.edit({ actor: podAcct.actor, podHome: podAcct.podHome, id: editing.id, text: body, category: cat.id, inbox });
+    return pod.edit({ actor: podAcct.actor, podHome: podAcct.podHome, id: editing.id, title, text: body, category: cat.id, inbox });
   }
   return login.edit({ url: editing.page || editing.id, text: body });
 }
 
 // A post written into the reader's own pod and announced to the forum. The
 // category is named on its own pod, which is where a delivery is taken.
-async function postFromPod({ topic, body }) {
+async function postFromPod({ topic, title, body }) {
   const cat = replyCtx.cat;
   const inbox = await pod.podInboxOf(cat.id, { front, handle: cat.slug || null });
   if (!inbox) throw new Error('the forum did not say where to send it');
   await pod.join({ actor: podAcct.actor, category: cat.id, inbox });
   return pod.post({
     actor: podAcct.actor, podHome: podAcct.podHome, category: cat.id, categoryHandle: handleOf(cat), inbox,
-    topic, text: body, inReplyTo: replyCtx.inReplyToUrl,
+    topic, title, text: body, inReplyTo: replyCtx.inReplyToUrl,
     context: replyCtx.topicId ? replyCtx.topicId : null,
   });
 }
@@ -340,21 +342,24 @@ $('reply-send').addEventListener('click', async () => {
   // A Mastodon post has no topic name to give: its first line stands in for
   // one, which is all that server can say. A pod post names the topic on the
   // activity that opens it, and its words are only its words.
-  // The topic's name, asked for only when a topic is being opened.
+  // The topic's name, asked for only when a topic is being opened; the
+  // post's own title, which any post may have and any edit may change.
   const topic = !editing && !replyCtx.topicId ? $('topic-title').value.trim() : '';
+  const title = $('post-title').value.trim();
   const text = topic ? `${topic}\n\n${body}` : body;
   $('reply-err').textContent = '';
   $('reply-send').disabled = true;
   try {
     const made = editing
-      ? await saveEdit({ body })
+      ? await saveEdit({ title, body })
       : podAcct
-        ? await postFromPod({ topic, body })
+        ? await postFromPod({ topic, title, body })
         : await login.post({ text, mention: handleOf(replyCtx.cat), inReplyToUrl: replyCtx.inReplyToUrl });
     const acct = account();
     if (replyCtx.topicId) remember(replyCtx.topicId, { id: made.uri || made.url, author: acct.url || acct.handle, text, at: new Date().toISOString() });
     $('reply-text').value = '';
     $('topic-title').value = '';
+    $('post-title').value = '';
     $('reply-dlg').close();
     await route();
   } catch (e) { $('reply-err').textContent = e.message; }

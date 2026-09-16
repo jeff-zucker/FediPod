@@ -35,8 +35,8 @@
   article.post .body { margin-top: .4rem; overflow-wrap: anywhere; }
   article.post.waiting { background: var(--surface); border: 1px solid var(--line); border-radius: .4rem; padding: 1rem; }
   article.post.gone .body { color: var(--sub); font-style: italic; }
-  dialog { border: 1px solid var(--line); border-radius: .5rem; padding: 0; background: var(--bg); color: var(--fg);
-    width: min(38rem, calc(100vw - 2rem)); }
+  dialog { border: 2px solid var(--dialog-edge); border-radius: .5rem; padding: 0; background: var(--bg); color: var(--fg);
+    width: min(38rem, calc(100vw - 2rem)); box-shadow: 0 .6rem 2rem rgba(0, 0, 0, .35); }
   dialog::backdrop { background: rgba(0, 0, 0, .45); }
   section.reply { padding: 1.1rem 1.2rem; background: var(--surface); }
   section.reply h2 { margin-top: 0; }
@@ -93,6 +93,10 @@
     <div class="row" id="topic-title-row" hidden>
       <label for="topic-title">Topic name</label>
       <input type="text" id="topic-title" placeholder="What this topic is about" autocomplete="off">
+    </div>
+    <div class="row" id="post-title-row">
+      <label for="post-title">Title</label>
+      <input type="text" id="post-title" placeholder="This post's own title (optional)" autocomplete="off">
     </div>
     <textarea id="reply-text" placeholder="Write your reply"></textarea>
     <div class="row">
