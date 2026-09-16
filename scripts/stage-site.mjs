@@ -114,9 +114,7 @@ fs.writeFileSync(path.join(site, '_redirects'), [
   '# The page names its forum by the first path segment and reads through <domain>.',
   ...BB_HOSTS.flatMap(h => [
     `http://${h}/*          https://${h}/:splat  301!`,
-    `https://${h}/bb.js     /bb/bb.js       200!`,
-    `https://${h}/read.mjs  /bb/read.mjs    200!`,
-    `https://${h}/masto.mjs /bb/masto.mjs   200!`,
+    `https://${h}/bb/*      /bb/:splat      200!`,
     `https://${h}/update.js /update.js      200!`,
     `https://${h}/api/*     /.netlify/functions/front  200!`,
     `https://${h}/*         /bb/index.html  200!`,
