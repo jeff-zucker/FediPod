@@ -32,7 +32,13 @@
     background: transparent; color: var(--accent); border: 1px solid var(--line); }
   article.post .acts button:hover { background: var(--field-bg); }
   article.post .who b { color: var(--fg); }
+  /* A post's title and its words are one thing: half a line between them,
+     and the browser's own heading margins do not get a say. */
+  article.post h2 { font-size: 1.25rem; margin: 1rem 0 0; }
+  article.post h2 + .body { margin-top: .3rem; }
   article.post .body { margin-top: .4rem; overflow-wrap: anywhere; }
+  article.post .body > :first-child { margin-top: 0; }
+  article.post .body > :last-child { margin-bottom: 0; }
   article.post.waiting { background: var(--surface); border: 1px solid var(--line); border-radius: .4rem; padding: 1rem; }
   article.post.gone .body { color: var(--sub); font-style: italic; }
   dialog { border: 2px solid var(--dialog-edge); border-radius: .5rem; padding: 0; background: var(--bg); color: var(--fg);

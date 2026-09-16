@@ -17,7 +17,7 @@
   --raised: #ffffff;           /* cards, the rail, the bar band, dialogs */
 
   /* structure + action */
-  --heading: #123f74; --accent: #12467e; --link: #12467e;
+  --heading: #2c4a35; --accent: #12467e; --link: #12467e;
   --sub: #565656; --muted: #565656; --line: #b0b0b0;
 
   /* fields */
@@ -43,7 +43,7 @@
     --bg: #191919; --fg: #f3f3f3; --ink: #f3f3f3;
     --surface: #18191a; --raised: #242526;
 
-    --heading: #8fc2f2; --accent: #8fc2f2; --link: #8fc2f2;
+    --heading: #a7d4b5; --accent: #8fc2f2; --link: #8fc2f2;
     --sub: #d2d2d2; --muted: #d2d2d2; --line: #6d6d6d;
 
     --field-bg: #474747; --field-bg-hover: #515151; --field-hover: #515151;
