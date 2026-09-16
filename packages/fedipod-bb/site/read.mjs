@@ -3,7 +3,9 @@
 // readable copy of each post. Plain fetches of public documents; nothing here
 // needs an account. Runs in a browser and in Node alike.
 
-const ACCEPT = 'application/activity+json, application/ld+json; profile="https://www.w3.org/ns/activitystreams", application/json;q=0.9';
+// No quoted profile parameter: a quote in a request header turns a browser's
+// read into a preflighted one, and a plain Accept is enough for every server.
+const ACCEPT = 'application/activity+json, application/ld+json, application/json;q=0.9';
 const MAX_PAGES = 50;
 
 export const categoryBase = (actorId) => String(actorId).replace(/ap\/actor$/u, '');

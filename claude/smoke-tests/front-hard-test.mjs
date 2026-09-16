@@ -484,6 +484,11 @@ try {
     check(face.id === `${ORIGIN}/u/gardening/ap/actor` && face.type === 'Group'
       && face.inbox === `${ORIGIN}/u/gardening/ap/inbox/` && face.attributedTo === `${ORIGIN}/u/gardening/ap/moderators`,
       'the category actor is served under its front id, with its door and roster on the front');
+    const faceRes = await get('/u/gardening/ap/actor');
+    const pre = await get('/u/gardening/ap/actor', { method: 'OPTIONS', headers: { origin: 'https://bb.example', 'access-control-request-method': 'GET' } });
+    check(faceRes.headers.get('access-control-allow-origin') === '*' && pre.status === 204
+      && pre.headers.get('access-control-allow-origin') === '*',
+      'a fronted document is read from any origin, and a preflight is answered (the forum page at its own host)');
     const before = inboxWrites.filter(w => w.url.includes('/fedipod-bb/ap/inbox/') && !w.url.endsWith('.receipt.json')).length;
     const r = await fetch(`${ORIGIN}/u/gardening/ap/inbox/`, {
       method: 'POST', headers: { 'content-type': 'application/activity+json' },
