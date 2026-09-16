@@ -56,6 +56,15 @@ conversations view for direct messages, bookmarks, lists, keyword filters,
 pinned posts that other servers can see, blocking and muting, and the custom
 emojis other servers send.
 
+<!-- CLAUDE 2026-09-15 — quote posts and emoji reactions; delete these markers when done -->
+A post can quote another post. Quote is offered on posts whose author allows
+it; the quoted author's server is asked, and the quote shows as pending until
+they answer. Anyone may quote your public posts, nobody your followers-only
+or direct ones, and you are notified when someone does. Emoji reactions from
+Misskey, Sharkey, Pleroma and Akkoma arrive as notifications showing the
+emoji.
+<!-- /CLAUDE -->
+
 **Bluesky.** Connect a Bluesky account, or any other ATProto account, from the
 manage page. Your public posts are mirrored to it, Bluesky replies and
 activity flow into your timeline, and you can like, repost and reply to

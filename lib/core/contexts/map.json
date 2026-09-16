@@ -13,5 +13,7 @@
   "https://join-lemmy.org/context.json": "join-lemmy.json",
   "http://joinmastodon.org/ns": "joinmastodon.json",
   "https://purl.archive.org/miscellany": "miscellany.json",
-  "http://www.w3.org/ns/anno.jsonld": "anno.json"
+  "http://www.w3.org/ns/anno.jsonld": "anno.json",
+  "http://litepub.social/ns": "litepub-0.1.json",
+  "https://w3id.org/fep/044f": "quotes.json"
 }

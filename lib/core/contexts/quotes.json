@@ -1,0 +1,18 @@
+{
+  "@context": {
+    "quote": {
+      "@id": "https://w3id.org/fep/044f#quote",
+      "@type": "@id"
+    },
+    "quoteAuthorization": {
+      "@id": "https://w3id.org/fep/044f#quoteAuthorization",
+      "@type": "@id"
+    },
+    "QuoteRequest": "https://w3id.org/fep/044f#QuoteRequest",
+    "QuoteAuthorization": "https://w3id.org/fep/044f#QuoteAuthorization",
+    "_misskey_quote": {
+      "@id": "https://misskey-hub.net/ns#_misskey_quote",
+      "@type": "@id"
+    }
+  }
+}

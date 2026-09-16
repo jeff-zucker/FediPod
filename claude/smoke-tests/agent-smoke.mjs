@@ -12699,6 +12699,250 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
   ]) check(!!as2.CONTEXTS[url], `the ${url} context is held here`);
 }
 
+// --- 30. emoji reactions and quote posts (FEP-044f) ---
+{
+  const { PodStore: PS30 } = await import(path.join(root, 'lib/core/store.mjs'));
+  const { Intake: IK30 } = await import(path.join(root, 'lib/core/intake/index.mjs'));
+  const { Publisher: PB30 } = await import(path.join(root, 'lib/core/publisher/index.mjs'));
+  const { MastoApi: MA30 } = await import(path.join(root, 'lib/client/masto/index.mjs'));
+  const wire30 = await import(path.join(root, 'lib/core/wire.mjs'));
+  const wq30 = await import(path.join(root, 'lib/core/wire-quotes.mjs'));
+  const as2_30 = await import(path.join(root, 'lib/core/as2.mjs'));
+  const { readFileSync: rf30 } = await import('node:fs');
+  const { Readable: RD30 } = await import('node:stream');
+
+  // The two contexts these features read through.
+  check(!!as2_30.CONTEXTS['http://litepub.social/ns'] && !!as2_30.CONTEXTS['https://w3id.org/fep/044f'],
+    'the litepub schema and the quote terms are held');
+  // Akkoma names its own copy of the litepub schema; the EmojiReact still types.
+  {
+    const raw = { '@context': ['https://www.w3.org/ns/activitystreams', 'https://outerheaven.example/schemas/litepub-0.1.jsonld'],
+      id: 'https://outerheaven.example/activities/1', type: 'EmojiReact', actor: 'https://outerheaven.example/users/mei',
+      object: 'https://me.example/fedipod/ap/notes/n1', content: ':blobcat:',
+      tag: [{ type: 'Emoji', name: ':blobcat:', icon: { type: 'Image', url: 'https://outerheaven.example/emoji/blobcat.png' } }] };
+    const read = await as2_30.readLenient(raw);
+    check(read.degraded === null && read.view.type === 'EmojiReact' && read.view.content === ':blobcat:',
+      `a per-instance litepub schema URL reads as the held copy (${read.degraded}, ${read.view?.type})`);
+    const masto = { '@context': ['https://www.w3.org/ns/activitystreams', {
+      quote: { '@id': 'https://w3id.org/fep/044f#quote', '@type': '@id' },
+      quoteAuthorization: { '@id': 'https://w3id.org/fep/044f#quoteAuthorization', '@type': '@id' },
+      gts: 'https://gotosocial.org/ns#', interactionPolicy: { '@id': 'gts:interactionPolicy', '@type': '@id' },
+      canQuote: { '@id': 'gts:canQuote', '@type': '@id' }, automaticApproval: { '@id': 'gts:automaticApproval', '@type': '@id' } }],
+      id: 'https://m.example/n/2', type: 'Note', attributedTo: 'https://m.example/u/a', content: '<p>hi</p>',
+      quote: 'https://me.example/fedipod/ap/notes/n1', quoteAuthorization: 'https://me.example/fedipod/ap/notes/n1-quote-x',
+      interactionPolicy: { canQuote: { automaticApproval: ['https://www.w3.org/ns/activitystreams#Public'] } } };
+    const v = (await as2_30.readLenient(masto)).view;
+    check(v.quote === 'https://me.example/fedipod/ap/notes/n1' && v.quoteAuthorization === 'https://me.example/fedipod/ap/notes/n1-quote-x'
+      && v.interactionPolicy?.canQuote?.automaticApproval === 'https://www.w3.org/ns/activitystreams#Public',
+      'a Mastodon post declaring the quote terms inline reads by name');
+  }
+
+  const urls30 = wire30.apUrls('https://me.example/');
+  const ME30 = urls30.actor;
+  const MINE = urls30.notes + 'n1';
+  const PRIV = urls30.privateNotes + 'p1';
+  const MEI = 'https://mk.example/users/mei';
+  const AISHA = 'https://a.example/users/aisha';
+  const Q1 = 'https://mk.example/notes/q1';          // Mei's post, quoting MINE
+  const N2 = 'https://a.example/notes/n2';           // Aisha's post, quoting Mei's Q9
+  const Q9 = 'https://mk.example/notes/q9';
+  const AUTH9 = 'https://mk.example/authorizations/q9-n2';
+  const N3 = 'https://a.example/notes/n3';           // Aisha's post, quoting Q9 without authorization yet
+  const PUBLIC30 = 'https://www.w3.org/ns/activitystreams#Public';
+
+  const docs = new Map();                            // what the pod holds
+  const remoteDocs = {                               // what other servers serve
+    [MEI]: { id: MEI, type: 'Person', preferredUsername: 'mei', inbox: MEI + '/inbox' },
+    [AISHA]: { id: AISHA, type: 'Person', preferredUsername: 'aisha', inbox: AISHA + '/inbox', endpoints: { sharedInbox: 'https://a.example/inbox' } },
+    [Q1]: { id: Q1, type: 'Note', attributedTo: MEI, content: '<p>look at this</p>', published: '2026-09-15T10:00:00Z', quote: MINE, to: [PUBLIC30] },
+    [Q9]: { id: Q9, type: 'Note', attributedTo: MEI, content: '<p>the quoted one</p>', published: '2026-09-15T09:00:00Z', to: [PUBLIC30] },
+    [N2]: { id: N2, type: 'Note', attributedTo: AISHA, content: '<p>quoting mei</p>', published: '2026-09-15T11:00:00Z', quote: Q9, quoteAuthorization: AUTH9, to: [PUBLIC30],
+      interactionPolicy: { canQuote: { automaticApproval: PUBLIC30, manualApproval: [] } } },
+    [AUTH9]: { id: AUTH9, type: 'QuoteAuthorization', attributedTo: MEI, interactingObject: N2, interactionTarget: Q9 },
+    [N3]: { id: N3, type: 'Note', attributedTo: AISHA, content: '<p>asking first</p>', published: '2026-09-15T11:30:00Z', quote: Q9, to: [PUBLIC30] },
+  };
+  const st = new PS30({ log: () => {} });
+  st.attach({ base: 'mem://', list: async () => ({ names: [], etag: null }), read: async () => ({ ok: false }),
+    remove: async () => true, write: async () => ({ ok: true }) });
+  const delivered30 = [];
+  const deliverer = {
+    deliver: async (inbox, a) => delivered30.push({ inbox, a }),
+    deliverToAll: async (inboxes, a) => delivered30.push({ inboxes, a }),
+  };
+  const remote = {
+    putJson: async (u, o) => { docs.set(u, o); return { ok: true }; },
+    getJson: async (u) => docs.get(u) ?? null,
+    put: async () => ({ ok: true }), setAcl: async () => {}, delete: async () => true, probe: async () => ({ status: 401 }),
+  };
+  const fetchAP30 = async (u) => docs.get(u) ?? remoteDocs[u] ?? null;
+  const pub = new PB30({ config: { remotePod: 'https://me.example/', handle: 'me' }, remote, store: st, deliverer,
+    publicKeyPem: 'x', log: () => {}, resolveActor: fetchAP30 });
+  pub.recordOutbox = async () => {};
+  pub.unrecordOutbox = async () => {};
+  const ik = new IK30({ config: {}, urls: urls30, remote, store: st, deliverer, publisher: pub, log: () => {} });
+  ik.fetchAP = fetchAP30;
+  st.setContacts({ followers: [{ actor: MEI, inbox: MEI + '/inbox' }], following: [{ actor: AISHA, inbox: AISHA + '/inbox', accepted: true }] });
+  st.addStatus({ noteId: MINE, actor: ME30, content: '<p>mine</p>', published: '2026-09-15T08:00:00Z', kind: 'post', slug: 'n1', text: 'mine', visibility: 'public' });
+  st.addStatus({ noteId: PRIV, actor: ME30, content: '<p>private</p>', published: '2026-09-15T08:30:00Z', kind: 'post', slug: 'p1', text: 'private', visibility: 'private' });
+
+  // --- reactions ---
+  await ik.handle({ type: 'EmojiReact', actor: MEI, object: MINE, content: ':blobcat:',
+    tag: [{ type: 'Emoji', name: ':blobcat:', icon: { type: 'Image', url: 'https://mk.example/emoji/blobcat.png' } }] });
+  let reactions = st.getNotifications().filter(n => n.type === 'reaction');
+  check(reactions.length === 1 && reactions[0].emoji === ':blobcat:' && reactions[0].url === 'https://mk.example/emoji/blobcat.png' && reactions[0].actor === MEI,
+    'an EmojiReact on our post is a reaction notification with the emoji and its image');
+  check((st.getStatuses().find(s => s.noteId === MINE).emojis || []).some(e => e.shortcode === 'blobcat'),
+    'and the custom emoji joins the post\'s own emoji list, where a client draws it from');
+  await ik.handle({ type: 'Like', actor: MEI, object: MINE, content: '👍' });
+  reactions = st.getNotifications().filter(n => n.type === 'reaction');
+  check(reactions.length === 2 && reactions.some(n => n.emoji === '👍'), 'a Misskey Like carrying an emoji is a reaction too');
+  await ik.handle({ type: 'Like', actor: AISHA, object: MINE });
+  check(st.getNotifications().filter(n => n.type === 'favourite').length === 1, 'a plain Like is still a favourite');
+  await ik.handle({ type: 'Undo', actor: MEI, object: { type: 'EmojiReact', actor: MEI, object: MINE, content: ':blobcat:' } });
+  reactions = st.getNotifications().filter(n => n.type === 'reaction');
+  check(reactions.length === 1 && reactions[0].emoji === '👍', 'Undo{EmojiReact} takes back that one emoji and no other');
+  await ik.handle({ type: 'EmojiReact', actor: MEI, object: Q9, content: '🎉' });
+  check(st.getNotifications().filter(n => n.type === 'reaction').length === 1, 'an EmojiReact on somebody else\'s post is not ours to notice');
+
+  // --- being quoted: a QuoteRequest on a public post ---
+  const req1 = { id: 'https://mk.example/activities/qr1', type: 'QuoteRequest', actor: MEI, object: MINE, instrument: Q1, to: [ME30] };
+  let r = await ik.handle(req1);
+  const authId = wq30.quoteAuthorizationId(MINE, Q1);
+  const authDoc = docs.get(authId);
+  check(r === undefined && authDoc?.type === 'QuoteAuthorization' && authDoc.interactingObject === Q1 && authDoc.interactionTarget === MINE && authDoc.attributedTo === ME30,
+    `a QuoteRequest on a public post writes a QuoteAuthorization beside it (${r})`);
+  const accept1 = delivered30.find(d => d.a?.type === 'Accept' && d.a.object?.type === 'QuoteRequest');
+  check(accept1?.inbox === MEI + '/inbox' && accept1.a.result === authId && accept1.a.object.id === req1.id && accept1.a.object.instrument === Q1,
+    'and answers with an Accept to the asker carrying the authorization as its result');
+  const mineRow = st.getStatuses().find(s => s.noteId === MINE);
+  check((mineRow.quotedBy || []).some(q => q.note === Q1 && q.authorization === authId), 'the grant is remembered on our post');
+  const q1Row = st.getStatuses().find(s => s.noteId === Q1);
+  check(q1Row?.kind === 'mention' && q1Row.quote === MINE && q1Row.quoteState === 'accepted', `the quoting post is kept, allowed (${q1Row?.kind}, ${q1Row?.quoteState})`);
+  check(st.getNotifications().filter(n => n.type === 'quote' && n.noteId === Q1).length === 1
+    && !st.getNotifications().some(n => n.type === 'mention' && n.noteId === Q1),
+    'one quote notification, and no mention for the same post');
+  await ik.handle(req1);
+  check(st.getNotifications().filter(n => n.type === 'quote' && n.noteId === Q1).length === 1
+    && delivered30.filter(d => d.a?.type === 'Accept' && d.a.result === authId).length === 2,
+    'a re-delivered QuoteRequest gets the same answer again and raises nothing new');
+  // A private post: nobody may quote it.
+  remoteDocs['https://mk.example/notes/q2'] = { id: 'https://mk.example/notes/q2', type: 'Note', attributedTo: MEI, content: 'x', quote: PRIV };
+  r = await ik.handle({ id: 'https://mk.example/activities/qr2', type: 'QuoteRequest', actor: MEI, object: PRIV, instrument: 'https://mk.example/notes/q2' });
+  check(r === undefined && delivered30.some(d => d.a?.type === 'Reject' && d.a.object?.object === PRIV) && !docs.has(wq30.quoteAuthorizationId(PRIV, 'https://mk.example/notes/q2')),
+    'a QuoteRequest on a followers-only post is refused with a Reject and no authorization');
+  // A request whose instrument does not actually quote us is a dead letter.
+  r = await ik.handle({ id: 'https://mk.example/activities/qr3', type: 'QuoteRequest', actor: MEI, object: MINE, instrument: Q9 });
+  check(typeof r === 'string' && /does not quote/u.test(r), `an instrument that does not quote our post is refused (${r})`);
+  r = await ik.handle({ id: 'https://x.example/qr4', type: 'QuoteRequest', actor: 'https://x.example/u/z', object: MINE, instrument: Q1 });
+  check(typeof r === 'string' && /identity mismatch/u.test(r), 'an instrument at somebody else\'s origin is refused');
+
+  // --- receiving a quote from someone we follow ---
+  r = await ik.handle({ type: 'Create', actor: AISHA, object: N2, to: [PUBLIC30], cc: [AISHA + '/followers'] });
+  const n2Row = st.getStatuses().find(s => s.noteId === N2);
+  const q9Row = st.getStatuses().find(s => s.noteId === Q9);
+  check(r === undefined && n2Row?.kind === 'timeline' && n2Row.quote === Q9 && n2Row.quoteState === 'accepted',
+    `a post quoting with an authorization that checks out at the quoted origin is accepted (${r}, ${n2Row?.quoteState})`);
+  check(q9Row?.kind === 'remote' && q9Row.actor === MEI, 'the quoted post is fetched and kept out of the timelines');
+  check(JSON.stringify(n2Row.quotePolicy) === JSON.stringify({ automatic: ['public'], manual: [] }), `the author's quote policy is read (${JSON.stringify(n2Row.quotePolicy)})`);
+  r = await ik.handle({ type: 'Create', actor: AISHA, object: N3, to: [PUBLIC30] });
+  check(st.getStatuses().find(s => s.noteId === N3)?.quoteState === 'pending', 'a quote with no authorization yet is pending');
+  remoteDocs[N3] = { ...remoteDocs[N3], quoteAuthorization: 'https://mk.example/authorizations/q9-n3' };
+  remoteDocs['https://mk.example/authorizations/q9-n3'] = { id: 'https://mk.example/authorizations/q9-n3', type: 'QuoteAuthorization', attributedTo: MEI, interactingObject: N3, interactionTarget: Q9 };
+  await ik.handle({ type: 'Update', actor: AISHA, object: N3 });
+  check(st.getStatuses().find(s => s.noteId === N3)?.quoteState === 'accepted', 'and the Update that brings the authorization makes it accepted');
+  remoteDocs['https://a.example/notes/n4'] = { id: 'https://a.example/notes/n4', type: 'Note', attributedTo: AISHA, content: 'forged', published: '2026-09-15T12:00:00Z', quote: Q9, quoteAuthorization: 'https://a.example/fake-auth', to: [PUBLIC30] };
+  remoteDocs['https://a.example/fake-auth'] = { id: 'https://a.example/fake-auth', type: 'QuoteAuthorization', attributedTo: AISHA, interactingObject: 'https://a.example/notes/n4', interactionTarget: Q9 };
+  await ik.handle({ type: 'Create', actor: AISHA, object: 'https://a.example/notes/n4', to: [PUBLIC30] });
+  check(st.getStatuses().find(s => s.noteId === 'https://a.example/notes/n4')?.quoteState === 'pending',
+    'an authorization served from anywhere but the quoted post\'s origin proves nothing');
+
+  // --- the client's view ---
+  const api = new MA30({ agent: { store: st, configured: () => true, publisher: pub, deliverer, remote, intake: ik }, log: () => {} });
+  const bearer30 = api.mintToken();
+  const call30 = async (pathAndQuery, { method = 'GET', body = null } = {}) => {
+    const req = RD30.from(body === null ? [] : [Buffer.from(body)]);
+    req.method = method;
+    req.headers = { authorization: `Bearer ${bearer30}`, 'content-type': 'application/json', host: 'client.example:8030' };
+    const res = { status: 0, body: '', headers: {}, writeHead(s, h) { this.status = s; this.headers = h || {}; }, end(b) { this.body = String(b || ''); } };
+    const u = new URL('http://x' + pathAndQuery);
+    await api.handle(req, res, u.pathname, u);
+    let parsed = null; try { parsed = JSON.parse(res.body); } catch { /* not json */ }
+    return { status: res.status, json: parsed, headers: res.headers };
+  };
+  const inst = await call30('/api/v1/instance');
+  check(inst.json?.api_versions?.mastodon === 7, 'the instance document claims API version 7, which is where a client looks for quote posts');
+  const n2Json = (await call30(`/api/v1/statuses/${st.idFor(N2)}`)).json;
+  check(n2Json?.quote?.state === 'accepted' && n2Json.quote.quoted_status?.uri === Q9 && n2Json.quote.quoted_status.quote === null,
+    'a status carries its quote with the quoted post inside, one level deep');
+  check(n2Json.quote_approval?.current_user === 'automatic' && n2Json.quote_approval.automatic[0] === 'public',
+    'and says the author lets anyone quote it');
+  check(n2Json.quote.quoted_status.quote_approval?.current_user === 'unknown', 'a post that says nothing about quoting is unknown, which hides the quote button');
+  const mineJson = (await call30(`/api/v1/statuses/${st.idFor(MINE)}`)).json;
+  check(mineJson.quote_approval?.current_user === 'automatic' && mineJson.quote === null, 'our own public post may be quoted by anyone');
+  const notifs = (await call30('/api/v1/notifications')).json;
+  const rx = notifs.find(n => n.type === 'emoji_reaction');
+  check(rx?.emoji === '👍' && rx.status?.uri === MINE, 'a reaction is served as an emoji_reaction notification with its emoji');
+  check(notifs.some(n => n.type === 'quote' && n.status?.uri === Q1), 'a quote is served as a quote notification carrying the quoting post');
+  const grouped = (await call30('/api/v2/notifications?limit=10')).json;
+  const g = grouped?.notification_groups?.find(x => x.type === 'emoji_reaction');
+  check(Array.isArray(grouped?.accounts) && Array.isArray(grouped?.statuses) && g?.emoji === '👍'
+    && grouped.accounts.some(a => a.id === g.sample_account_ids[0]) && grouped.statuses.some(s => s.id === g.status_id),
+    'grouped notifications name the accounts and statuses they refer to');
+  const one = await call30(`/api/v2/notifications/${g.group_key}/accounts`);
+  check(one.status === 200 && one.json[0]?.url === MEI, 'a group\'s accounts are listed');
+
+  // --- authoring a quote ---
+  const before = delivered30.length;
+  const posted = await call30('/api/v1/statuses', { method: 'POST', body: JSON.stringify({ status: 'see this', quoted_status_id: st.idFor(N2) }) });
+  const ourNote = docs.get(posted.json?.uri);
+  check(posted.status === 200 && ourNote?.quote === N2 && ourNote.quoteUri === N2 && ourNote._misskey_quote === N2 && !ourNote.quoteAuthorization,
+    `a quote post names the quoted post three ways and carries no authorization yet (${posted.status} ${posted.json?.error || ''})`);
+  check(JSON.stringify(ourNote.interactionPolicy) === JSON.stringify({ canQuote: { automaticApproval: [PUBLIC30], manualApproval: [] } })
+    && [].concat(ourNote['@context']).some(c => c?.quote && c.interactionPolicy),
+    'and says anyone may quote it, with every term declared');
+  const qreq = delivered30.slice(before).find(d => d.a?.type === 'QuoteRequest');
+  check(qreq?.inbox === 'https://a.example/inbox' && qreq.a.object === N2 && qreq.a.instrument?.id === ourNote.id && qreq.a.to[0] === AISHA,
+    'a QuoteRequest goes to the quoted author with the post as its instrument');
+  check(delivered30.slice(before).some(d => d.a?.type === 'Create' && d.inboxes?.includes('https://a.example/inbox')),
+    'the Create reaches the quoted author too');
+  check(posted.json.quote?.state === 'pending' && posted.json.quote.quoted_status?.uri === N2, 'the client sees the quote pending, with the quoted post');
+  const ourRow = st.getStatuses().find(s => s.noteId === ourNote.id);
+  // Aisha says yes.
+  const AUTH_OURS = 'https://a.example/authorizations/ours';
+  remoteDocs[AUTH_OURS] = { id: AUTH_OURS, type: 'QuoteAuthorization', attributedTo: AISHA, interactingObject: ourNote.id, interactionTarget: N2 };
+  r = await ik.handle({ type: 'Accept', actor: MEI, object: ourRow.quoteRequest.id, result: AUTH_OURS });
+  check(st.getStatuses().find(s => s.noteId === ourNote.id).quoteState === 'pending', 'an Accept from anyone but the quoted author changes nothing');
+  r = await ik.handle({ type: 'Accept', actor: AISHA, object: ourRow.quoteRequest.id, result: AUTH_OURS });
+  const after = st.getStatuses().find(s => s.noteId === ourNote.id);
+  check(r === undefined && after.quoteState === 'accepted' && after.quoteAuthorization === AUTH_OURS && docs.get(ourNote.id).quoteAuthorization === AUTH_OURS,
+    `the quoted author's Accept puts their authorization on the note (${r})`);
+  const upd = delivered30.filter(d => d.a?.type === 'Update' && d.a.object?.id === ourNote.id).pop();
+  check(upd && upd.a.object.quoteAuthorization === AUTH_OURS && !upd.a.object.updated && upd.inboxes.includes('https://a.example/inbox'),
+    'and an Update carries it to followers and the quoted author, without marking the post edited');
+  check((await call30(`/api/v1/statuses/${st.idFor(ourNote.id)}`)).json.quote.state === 'accepted', 'the client sees it accepted');
+  // A second quote, refused.
+  const posted2 = await call30('/api/v1/statuses', { method: 'POST', body: JSON.stringify({ status: 'and this', quoted_status_id: st.idFor(N2) }) });
+  const row2 = st.getStatuses().find(s => s.noteId === posted2.json.uri);
+  await ik.handle({ type: 'Reject', actor: AISHA, object: row2.quoteRequest.id });
+  const row2After = st.getStatuses().find(s => s.noteId === posted2.json.uri);
+  check(row2After.quoteState === 'rejected' && !docs.get(row2.noteId).quote && (await call30(`/api/v1/statuses/${st.idFor(row2.noteId)}`)).json.quote.state === 'rejected',
+    'a Reject takes the quote off the note and the client sees it refused');
+  // What cannot be asked for.
+  const denied = await call30('/api/v1/statuses', { method: 'POST', body: JSON.stringify({ status: 'x', quoted_status_id: st.idFor(Q9) }) });
+  check(denied.status === 422 && /has not said/u.test(denied.json?.error || ''), `quoting a post whose author said nothing is refused with the reason (${denied.status})`);
+  const priv = await call30('/api/v1/statuses', { method: 'POST', body: JSON.stringify({ status: 'x', visibility: 'private', quoted_status_id: st.idFor(N2) }) });
+  check(priv.status === 422, 'a followers-only quote post is refused');
+  // Our own post: allowed on the spot.
+  const self = await call30('/api/v1/statuses', { method: 'POST', body: JSON.stringify({ status: 'me again', quoted_status_id: st.idFor(MINE) }) });
+  const selfNote = docs.get(self.json?.uri);
+  check(self.status === 200 && self.json.quote.state === 'accepted' && selfNote.quoteAuthorization === wq30.quoteAuthorizationId(MINE, selfNote.id) && docs.has(selfNote.quoteAuthorization),
+    'quoting our own post is allowed at once, with the authorization written');
+  check(!delivered30.some(d => d.a?.type === 'QuoteRequest' && d.a.object === MINE), 'and nobody is asked');
+  // An edit keeps the quote.
+  const edited = await call30(`/api/v1/statuses/${st.idFor(ourNote.id)}`, { method: 'PUT', body: JSON.stringify({ status: 'see this, edited' }) });
+  check(edited.status === 200 && docs.get(ourNote.id).quote === N2 && docs.get(ourNote.id).quoteAuthorization === AUTH_OURS, `an edit keeps the quote and its authorization (${edited.status})`);
+}
+
 child.kill('SIGTERM');
 fs.rmSync(HOME, { recursive: true, force: true });
 console.log(failures ? `\n${failures} FAILURE(S)` : '\nall green');

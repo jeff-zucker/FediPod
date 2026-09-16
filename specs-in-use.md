@@ -87,11 +87,39 @@ Mastodon-format CSV exports
   travels inside its moderation Announce). A Block that arrives verified
   drops the sender's follow of you and yours of them.
 
+<!-- CLAUDE 2026-09-15 — quote posts and emoji reactions; delete these markers when done -->
+- **FEP-044f (quote posts)** — both directions. A note that quotes carries
+  `quote`, with Fedibird's `quoteUri` and Misskey's `_misskey_quote` beside it,
+  and a `QuoteRequest` goes to the quoted author; their `Accept` names a
+  `QuoteAuthorization`, which is fetched at their origin and compared before
+  the note is restated with `quoteAuthorization`. Inbound: a `QuoteRequest` on a
+  public or unlisted post is answered with a `QuoteAuthorization` written beside
+  the post and an `Accept` carrying it; on a followers-only or direct post, a
+  `Reject`. Every note carries an `interactionPolicy` (GoToSocial's terms, as
+  Mastodon writes them) with `canQuote`. A received quote is read from any of
+  the four spellings in use, FEP-e232's tag link included, and its
+  authorization is checked at the quoted origin rather than believed
+  (`lib/core/wire.mjs`, `lib/core/wire-quotes.mjs`, `lib/core/intake/activities.mjs`).
+- **Emoji reactions** — inbound only: `EmojiReact` (litepub) and a `Like`
+  carrying the emoji as `content`, from Misskey, Sharkey, Pleroma and Akkoma;
+  custom emoji images ride the `Emoji` tag. `Undo` withdraws one. Read through
+  the litepub schema those servers name per instance, held here
+  (`lib/core/contexts/litepub-0.1.json`). Nothing outbound: the client has no
+  reaction control.
+<!-- /CLAUDE -->
+
 ## Client side (talking to the user's app)
 
 - **Mastodon REST API** — the facade clients log into and post through
   (`lib/client/masto/`), including OAuth for client sign-in. All four builds
   except the Gateway.
+<!-- CLAUDE 2026-09-15 — what the API version claim covers; delete these markers when done -->
+  The instance document claims `api_versions.mastodon: 7`: grouped
+  notifications (`/api/v2/notifications`, one group per notification), the
+  filter blur action, and quote posts (`quoted_status_id` on compose, `quote`
+  and `quote_approval` on a status, `quote` and `emoji_reaction` notification
+  types). Nothing past 7 is claimed.
+<!-- /CLAUDE -->
 - **Mastodon streaming API** — live timeline updates
   (`lib/client/streaming.mjs`), on the DeviceAgent and the Server. The
   BrowserAgent has no socket to hold and says so in its instance document, so

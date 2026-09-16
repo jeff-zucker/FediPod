@@ -25,7 +25,13 @@ for (const m of module_.matchAll(/"([^"]+)":\s*(\w+),/gu)) {
 }
 
 // Held beside fedify's set, not from it: fetched once by hand and kept.
-const EXTRA = { 'http://www.w3.org/ns/anno.jsonld': 'anno.json' };
+const EXTRA = {
+  'http://www.w3.org/ns/anno.jsonld': 'anno.json',
+  // The litepub schema Pleroma and Akkoma serve per instance, and the quote
+  // terms Mastodon declares inline; see lib/core/contexts/index.mjs.
+  'http://litepub.social/ns': 'litepub-0.1.json',
+  'https://w3id.org/fep/044f': 'quotes.json',
+};
 
 for (const file of Object.values(map)) fs.copyFileSync(path.join(src, file), path.join(dest, file));
 Object.assign(map, EXTRA);
