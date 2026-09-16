@@ -149,9 +149,12 @@ export async function renameTopic(cat, tid, name) {
 }
 
 // Locked: the record says so, and the host places nothing more in it.
-export function lockTopic(cat, tid, locked) {
+export async function lockTopic(cat, tid, locked) {
   if (!topics.get(cat.store, tid)) throw new Error(`no such topic: ${tid}`);
   topics.setFlags(cat.store, tid, { locked });
+  // The topic says so itself, so a reader and any other server can see it:
+  // `closed` is what AS2 gives for a collection that takes no more.
+  await publish.publishTopic(cat, tid, { force: true });
   return { locked: !!locked };
 }
 
@@ -165,8 +168,9 @@ export function isForumAsk(cat, activity) {
   const t = activity?.type;
   if (t === 'Flag') return true;
   if (t === 'Add' || t === 'Remove' || t === 'Move') return !!tidOf(cat, idOf(activity.object));
-  // A topic renamed: the name is the topic's own, and only the forum can
-  // write it, so a moderator asks for it like any other change.
+  // A topic renamed, or closed to further replies: the name and the closing
+  // are the topic's own, and only the forum can write them, so a moderator
+  // asks for both the way they ask for anything else.
   if (t === 'Update') return !!tidOf(cat, idOf(activity.object));
   if (t === 'Delete') return !!tidOf(cat, idOf(activity.origin));
   return false;
@@ -178,9 +182,12 @@ export async function applyForumModeration(forum, cat, entry) {
   switch (entry.type) {
     case 'Update': {
       const tid = tidOf(cat, object);
-      const name = typeof entry.activity?.object === 'object' ? entry.activity.object.name : null;
-      if (!tid || !name) break;
-      return renameTopic(cat, tid, name);
+      const asked = typeof entry.activity?.object === 'object' ? entry.activity.object : null;
+      if (!tid || !asked) break;
+      // `closed` present and truthy: no more replies are placed in it.
+      if ('closed' in asked) return lockTopic(cat, tid, !!asked.closed);
+      if (asked.name) return renameTopic(cat, tid, asked.name);
+      break;
     }
     case 'Add': {
       const tid = tidOf(cat, object);

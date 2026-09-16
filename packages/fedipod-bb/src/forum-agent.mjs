@@ -254,6 +254,9 @@ export class ForumAgent {
     cat.intake.recentNotes = new Map();
     cat.intake.onCarried = (ev) => this.onCarried(cat, ev);
     cat.intake.onReport = (activity, actor, opts) => cat.intake.queueModeration(activity, actor, opts);
+    // What happens to a post from somebody who has not joined: dropped, or
+    // held where a moderator will see it (the category's `replyPolicy`).
+    cat.intake.onStranger = (ev) => this.onStranger(cat, ev);
     cat.intake.onCarriedEdit = (ev) => this.onCarriedEdit(cat, ev);
     cat.intake.onCarriedGone = (ev) => this.onCarriedGone(cat, ev);
     cat.intake.isModerationAskExtra = (a) => moderation.isForumAsk(cat, a);
@@ -480,6 +483,20 @@ export class ForumAgent {
     await collection.writeFlat(this.remote, this.site.featured,
       orderedCollection(this.site.featured, ids), { publicRead: true });
     return { pinned: ids };
+  }
+
+  // A post from someone who is not a member. 'members' drops it, which is
+  // what a group does; 'review' holds it for a moderator, which is what a
+  // forum usually wants; 'open' is not offered — a forum that carries
+  // anything addressed to it is a forum for spam.
+  async onStranger(cat, { noteId, actor, activity }) {
+    const how = this.config.replyPolicy || 'review';
+    if (how !== 'review') return false;
+    cat.intake.queueModeration(
+      { type: 'Create', actor, object: noteId, ...(activity?.id ? { id: activity.id } : {}) },
+      actor, { trusted: false },
+    );
+    return true;
   }
 
   // Answers to one post, counted in the topic that holds it, and written

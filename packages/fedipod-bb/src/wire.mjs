@@ -13,7 +13,7 @@ export const TOPICS_PAGE_SIZE = 20;
 // category (`attributedTo`), the audience is the category, and the pages
 // hold the posts in the order they were said. Oldest first: a thread is
 // read forwards, so `first` is page 1.
-export function topicHead({ id, name, category, total, pageCount, published, updated = null }) {
+export function topicHead({ id, name, category, total, pageCount, published, updated = null, closed = null }) {
   const pages = Math.max(1, pageCount);
   return {
     '@context': AS_CTX,
@@ -26,6 +26,8 @@ export function topicHead({ id, name, category, total, pageCount, published, upd
     last: `${id}-${pages}`,
     published,
     ...(updated ? { updated } : {}),
+    // Closed: this topic takes no more replies (AS2 `closed`).
+    ...(closed ? { closed } : {}),
   };
 }
 

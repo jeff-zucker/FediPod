@@ -136,6 +136,7 @@ export function reader({ fetch: f = globalThis.fetch.bind(globalThis) } = {}) {
       const ps = await pages(head);
       const posts = ps.flatMap(p => (p.orderedItems || []).map(idOf)).filter(Boolean);
       return { id: head.id, name: head.name || '', category: idOf(head.attributedTo) || null,
+        closed: head.closed || null,
         total: Number(head.totalItems) || posts.length, published: head.published || null, updated: head.updated || null, posts };
     },
 
@@ -155,9 +156,10 @@ export function reader({ fetch: f = globalThis.fetch.bind(globalThis) } = {}) {
     // The forum's newest posts, across every category: the index names the
     // forum's own copies, so one fetch of each tells who wrote it, when, and
     // which topic and category it belongs to.
-    async latest(base, { limit = 30 } = {}) {
+    async latest(base, { limit = 30, from = 0 } = {}) {
       const head = await get(base + 'ap/latest');
-      const ids = (head?.orderedItems || []).map(idOf).filter(Boolean).slice(0, limit);
+      const all = (head?.orderedItems || []).map(idOf).filter(Boolean);
+      const ids = all.slice(from, from + limit);
       const out = [];
       const named = new Map();
       for (const url of ids) {
@@ -184,6 +186,8 @@ export function reader({ fetch: f = globalThis.fetch.bind(globalThis) } = {}) {
         // post's own answers are on `replies`, for whatever wants them.
         out[out.length - 1].topicReplies = Math.max(0, info.total - 1);
       }
+      // What is left behind this page, so a reader can ask for it.
+      out.more = Math.max(0, all.length - (from + ids.length));
       return out;
     },
 

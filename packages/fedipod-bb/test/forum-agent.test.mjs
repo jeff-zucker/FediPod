@@ -199,14 +199,19 @@ test('a forum hosts its categories as groups and drains one inbox to all of them
   pod.deliver('m1', { type: 'Remove', actor: PRIYA, object: g.urls.topic(tid), target: g.urls.actor });
   await agent.intake.drain();
   const q = g.store.read('modqueue.json', []);
-  assert.equal(q.length, 1, 'a moderator\'s Remove is queued');
-  assert.equal(q[0].type, 'Remove');
+  const ask = q.find(e => e.type === 'Remove');
+  assert.ok(ask, 'a moderator\'s Remove is queued');
   assert.equal(topics.list(g.store).length, 1, 'and nothing happened yet');
-  const applied = await agent.applyModeration('gardening', q[0].id);
+  // A post from someone who has not joined is held for a moderator too,
+  // rather than dropped, which is what replyPolicy 'review' asks for.
+  assert.ok(q.some(e => e.type === 'Create'), 'and a stranger\'s post is held, not dropped');
+  const applied = await agent.applyModeration('gardening', ask.id);
   assert.equal(applied.removed, 3);
   assert.equal(topics.list(g.store).length, 0, 'applied, the topic is gone');
   assert.ok(delivered.some(d => d.who === 'gardening' && d.a.type === 'Announce' && d.a.object?.type === 'Remove'), 'and members were told');
-  assert.equal(g.store.read('modqueue.json', []).length, 0);
+  // The held stranger's post is still there: applying one ask does not
+  // clear the rest of the queue.
+  assert.equal(g.store.read('modqueue.json', []).filter(e => e.type === 'Remove').length, 0);
   // A locked topic takes no reply: the post is not placed and its carry is unsaid.
   const L1 = 'https://mei.pod.example/fedipod/ap/notes/locked-op';
   remoteDocs[L1] = note(L1, { type: 'Article', name: 'Locked thread', audience: g.urls.actor, published: '2026-09-15T13:00:00Z' });

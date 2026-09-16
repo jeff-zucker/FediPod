@@ -184,6 +184,17 @@ export async function join({ actor, category, inbox }) {
   return r.ok;
 }
 
+// Leaving: the category is told, and its own Accept/Reject bookkeeping does
+// the rest. A member who leaves is no longer carried.
+export async function leave({ actor, category, inbox }) {
+  const undo = {
+    '@context': AS, id: `${actor}#unfollow-${Date.now()}`, type: 'Undo', actor, to: [category],
+    object: { type: 'Follow', actor, object: category },
+  };
+  const r = await fetch(inbox, { method: 'POST', headers: { 'content-type': 'application/ld+json' }, body: JSON.stringify(undo) });
+  return r.ok;
+}
+
 const htmlOf = (text) => toHtml(text);
 const sourceOf = (text) => ({ content: String(text), mediaType: 'text/markdown' });
 

@@ -13,6 +13,7 @@
 import { reader, placeOf, authorLabel, cacheKey, categoryBase } from './read.mjs';
 import { MastoLogin, hostOfHandle, serverKind } from './masto.mjs';
 import * as pod from './pod.mjs';
+import { mine as keptByReader } from './mine.mjs';
 import { readState } from './seen.mjs';
 import { toHtml } from './markdown.mjs';
 
@@ -132,6 +133,7 @@ function topicActs(topicId) {
   if (!iModerate()) return '';
   return `<div class="acts mod" role="group" aria-label="Moderator actions for this topic" data-topic="${esc(topicId)}">
     <button data-act="rename">Rename topic</button>
+    <button data-act="lock">Close topic</button><button data-act="unlock">Reopen topic</button>
     <button data-act="pin">Pin topic</button><button data-act="unpin">Unpin topic</button>
     <button data-act="sitepin">Pin site-wide</button><button data-act="siteunpin">Unpin site-wide</button>
     <button data-act="droptopic">Delete topic</button>
@@ -195,7 +197,7 @@ async function route() {
   const [kind, a, b, c] = hash.split('/');
   $('reply-row').hidden = true;
   $('reply-dlg').close();
-  if (kind === 'c' && a) { feedFilter = a; return showForum(); }
+  if (kind === 'c' && a) { if (feedFilter !== a) shown = 30; feedFilter = a; return showForum(); }
   if (kind === 't' && a && b) return showTopic(a, b, c || null);
   return showForum();
 }
@@ -204,6 +206,9 @@ async function route() {
 // forum: which category, which topic, who, and when. The words themselves are
 // in the topic, one click away.
 let feedFilter = 'all';        // 'all', or a category's slug
+let shown = 30;                // how many of the index's rows are on the page
+// What this reader keeps for themselves, under the account they signed in as.
+const own = () => keptByReader({ storage: localStorage, who: account()?.handle || null });
 
 async function showForum() {
   const here = cats().find(c => c.slug === feedFilter) || null;
@@ -257,9 +262,11 @@ async function showForum() {
   }
   // A table, so a reader can run their eye down any one of the four things
   // an entry says.
+  const more = latest.more || 0;
   $('main').innerHTML = head + `<div class="scroll" role="region" aria-label="Latest posts" tabindex="0"><table class="index">
     <thead><tr><th scope="col">Topic</th><th scope="col">Category</th><th scope="col">Author</th><th scope="col">Date</th><th scope="col">Replies</th></tr></thead>
-    <tbody>${rows.join('')}</tbody></table></div>`;
+    <tbody>${rows.join('')}</tbody></table>
+    ${more ? `<p class="row"><button data-act="more">Show ${Math.min(more, 30)} more of ${more}</button></p>` : ''}</div>`;
   say(`${rows.length} post${rows.length === 1 ? '' : 's'}${fresh ? `, ${fresh} new` : ''}`);
   // The box takes the keyboard only when there is something in it to scroll:
   // a tab stop that does nothing is one more press between a reader and the page.
@@ -299,6 +306,15 @@ async function showTopic(slug, tid, atPost = null) {
       { cat, extra: ' waiting', waiting: true })).join('')}`;
   replyBox({ cat, title: 'Reply', inReplyToUrl: t.posts[t.posts.length - 1] || null, topicId });
   $('reply-row').hidden = true;      // the thread's own button opens it
+  // A closed topic takes nothing more: the forum would refuse it anyway, so
+  // the page does not offer it.
+  if (t.closed) {
+    for (const b of document.querySelectorAll('[data-act="newpost"], [data-act="reply"]')) b.remove();
+    const said = document.createElement('p');
+    said.className = 'hint';
+    said.textContent = 'This topic is closed. No more replies are being taken.';
+    document.querySelector('.topline')?.after(said);
+  }
   // Arriving from the front page: the post that was linked to, in view and
   // marked, rather than the top of a thread it sits somewhere inside.
   say(`${t.name}, ${posts.length} post${posts.length === 1 ? '' : 's'}`);
@@ -378,6 +394,7 @@ $('main').addEventListener('click', (e) => {
   if (act === 'report') return report(id);
   if (act === 'remove') return modRemove(id);
   const topic = b.dataset.topic || b.closest('[data-topic]')?.dataset.topic;
+  if (act === 'more') { shown += 30; return showForum(); }
   if (act === 'newpost') return openReply({ inReplyToUrl: replyCtx?.inReplyToUrl || null });
   if (act === 'newtopic') {
     const cat = catBySlug(b.dataset.slug);
@@ -389,6 +406,7 @@ $('main').addEventListener('click', (e) => {
   if (act === 'rename') return modRename(topic);
   if (act === 'pin' || act === 'unpin') return modPin(topic, act === 'pin');
   if (act === 'sitepin' || act === 'siteunpin') return modPin(topic, act === 'sitepin', true);
+  if (act === 'lock' || act === 'unlock') return modLock(topic, act === 'lock');
   if (act === 'droptopic') return modDropTopic(topic);
 });
 
@@ -489,6 +507,14 @@ async function modRename(topicId) {
 }
 
 // Pinned topics are the category's featured collection.
+// Closed to further replies. `closed` is AS2's own word for a collection
+// that takes no more, so a reader on any server can see it too.
+async function modLock(topicId, on) {
+  try {
+    await asksTo({ type: 'Update', object: { id: topicId, closed: on ? new Date().toISOString() : false } });
+  } catch (e) { alert(e.message); }
+}
+
 async function modPin(topicId, on, wholeSite = false) {
   // Which featured collection it goes into says how far the pin reaches: the
   // category's, or the forum's own.

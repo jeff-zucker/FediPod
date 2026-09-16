@@ -40,6 +40,7 @@ export async function publishTopic({ remote, store, urls }, tid, { force = false
   const entry = topics.list(store).find(t => t.tid === tid);
   const head = fwire.topicHead({
     id, name: doc.title, category: urls.actor, total: doc.posts.length, pageCount: pages.length,
+    closed: store.read('topics.json', []).find(t => t.tid === tid)?.locked ? (doc.closedAt || new Date().toISOString()) : null,
     published: entry?.created || doc.posts[0]?.published || null,
     updated: doc.posts.length > 1 ? (entry?.last || null) : null,
   });
@@ -91,7 +92,10 @@ export async function publishCategories({ remote, store, urls }, actorIds, { for
 }
 
 // How many of the newest posts the forum keeps an index of.
-export const LATEST_MAX = 50;
+// How many of the newest posts the forum keeps an index of. A page shows
+// thirty at a time and asks for more; this is the whole of what it can ask
+// for, and the topics themselves hold everything older.
+export const LATEST_MAX = 500;
 
 export async function publishLatest({ remote, store, urls }, { force = false } = {}) {
   const items = store.read('latest.json', []).slice(0, LATEST_MAX).map(e => e.copy);
