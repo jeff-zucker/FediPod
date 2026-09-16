@@ -45,6 +45,25 @@ const handleOf = (cat) => {
   if (place.handle && cat.slug) return `@${cat.slug}@${frontHost}`;
   return cat.id;
 };
+// A post names the category it is for, and every reader of this page is
+// already in it: the address is how it got here, not something to read.
+function body(p, cat) {
+  const html = p?.content || '';
+  if (!cat) return html;
+  const d = document.createElement('div');
+  d.innerHTML = html;
+  for (const a of [...d.querySelectorAll('a')]) {
+    const names = a.getAttribute('href') === cat.id
+      || a.textContent.trim().replace(/^@/u, '') === String(cat.slug || '')
+      || a.textContent.trim() === handleOf(cat);
+    if (!names) continue;
+    const p0 = a.closest('p') || a.parentElement;
+    a.remove();
+    if (p0 && !p0.textContent.trim() && !p0.querySelector('img,a')) p0.remove();
+  }
+  return d.innerHTML;
+}
+
 const waitingKey = (topicId) => 'bb:waiting:' + topicId;
 const waiting = (topicId) => { try { return JSON.parse(localStorage.getItem(waitingKey(topicId)) || '[]'); } catch { return []; } };
 const remember = (topicId, entry) => { try { localStorage.setItem(waitingKey(topicId), JSON.stringify([...waiting(topicId), entry].slice(-20))); } catch { /* full or blocked */ } };
@@ -105,7 +124,7 @@ async function showCategory(slug) {
     const who = first?.author ? await read.author(cat.base, first.author) : null;
     items.push(`<li><div class="title">${esc(t.name)}</div>
       <div class="meta">${who ? esc(who.handle) + ' · ' : ''}<a href="#/t/${esc(slug)}/${esc(tid)}">${t.count} post${t.count === 1 ? '' : 's'}</a> · last ${esc(when(t.updated))}</div>
-      ${first && !first.gone ? `<article class="post"><div class="body">${first.content || ''}</div></article>` : ''}</li>`);
+      ${first && !first.gone ? `<article class="post"><div class="body">${body(first, cat)}</div></article>` : ''}</li>`);
   }
   $('main').innerHTML = `${items.length ? `<ul class="list">${items.join('')}</ul>` : '<p class="empty">No topics yet. The first post mentioning this category opens one.</p>'}`;
   replyBox({ cat, title: 'Start a topic', inReplyToUrl: null, topicId: null });
@@ -131,10 +150,10 @@ async function showTopic(slug, tid) {
   const placed = new Set(t.posts);
   const pending = waiting(topicId).filter(w => !placed.has(w.id));
   const article = (p, extra = '') => `<article class="post${p.gone ? ' gone' : ''}${extra}">
-    <div class="who"><b>${who(p)}</b><span>${esc(when(p.published))}</span>
-      ${p.id ? `<a href="${esc(p.id)}" class="dim">original</a>` : ''}</div>
+    <div class="who"><b>${who(p)}</b><span class="when">${esc(when(p.published))}
+      ${p.id ? `<a href="${esc(p.id)}" class="dim">original</a>` : ''}</span></div>
     ${p.name ? `<h2>${esc(p.name)}</h2>` : ''}
-    <div class="body">${p.gone ? 'This post was removed.' : (p.content || '<span class="dim">(not readable here)</span>')}</div>
+    <div class="body">${p.gone ? 'This post was removed.' : (body(p, cat) || '<span class="dim">(not readable here)</span>')}</div>
   </article>`;
   $('main').innerHTML = `<h1>${esc(t.name)}</h1>
     ${posts.map(p => article(p)).join('')}

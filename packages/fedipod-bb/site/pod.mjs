@@ -67,7 +67,6 @@ export async function post({ actor, podHome, category, categoryHandle, inbox, ti
   const name = `${stamp()}-${slug(title) || 'post'}-${crypto.randomUUID().slice(0, 8)}`;
   const id = place.id(name);
   const now = new Date().toISOString();
-  const mention = categoryHandle ? `<a href="${category}">${categoryHandle}</a> ` : '';
   const body = String(text).split(/\n{2,}/u).map(p => `<p>${escape_(p).replace(/\n/gu, '<br>')}</p>`).join('');
   const note = {
     '@context': AS,
@@ -75,7 +74,9 @@ export async function post({ actor, podHome, category, categoryHandle, inbox, ti
     type: title ? 'Article' : 'Note',
     attributedTo: actor,
     ...(title ? { name: String(title).slice(0, 200) } : {}),
-    content: `<p>${mention}</p>${body}`.replace('<p></p>', ''),
+    // The category is named in audience, in to, and as a Mention tag — the
+    // three places a receiving server reads. Not in the words.
+    content: body,
     published: now,
     ...(inReplyTo ? { inReplyTo } : {}),
     ...(context ? { context, audience: category } : { audience: category }),
