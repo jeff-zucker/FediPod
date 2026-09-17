@@ -207,6 +207,18 @@ export function reader({ fetch: f = globalThis.fetch.bind(globalThis), session =
       return (c?.orderedItems || []).map(idOf).filter(Boolean);
     },
 
+    // Whether this reader may read a category's posts at all: a members-only
+    // one refuses the world, and its topics then look like none.
+    async canRead(cbase) {
+      const r = await f(cbase + 'ap/topics', { headers: { accept: ACCEPT } }).catch(() => null);
+      if (r && (r.status === 401 || r.status === 403)) {
+        if (!session?.fetch) return false;
+        const mine = await session.fetch(cbase + 'ap/topics', { headers: { accept: ACCEPT } }).catch(() => null);
+        return !!mine?.ok;
+      }
+      return !!r?.ok;
+    },
+
     // Who moderates a category. The category says so itself (FEP-1b12), which
     // is what lets a page show a moderator their own buttons.
     async moderators(cbase) {

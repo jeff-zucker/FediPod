@@ -51,6 +51,10 @@
   table.index thead th { position: sticky; top: 0; background: var(--bg); z-index: 1; }
   table.index { border-collapse: collapse; width: 100%; font-size: 1rem; table-layout: auto; }
   /* A rem of air at both ends of every row, so no word sits on an edge. */
+  /* A heading that sorts is a button, and looks like the heading it is. */
+  table.index th button.sort { font: inherit; font-size: inherit; font-weight: 600; color: var(--sub);
+    background: none; border: none; padding: 0; cursor: pointer; }
+  table.index th button.sort:hover { color: var(--accent); text-decoration: underline; }
   table.index th { text-align: left; font-weight: 600; color: var(--sub); padding: .4rem .7rem;
     border-bottom: 1px solid var(--line); white-space: nowrap; }
   table.index td { padding: .55rem .7rem; border-bottom: 1px solid var(--line); vertical-align: top; }

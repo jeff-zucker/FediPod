@@ -80,6 +80,10 @@ export function categoryUrls(remotePod, root, { publicBase = null, forumInbox = 
   // Readable copies of members' posts, for the website.
   urls.cache = face + 'ap/cache/';
   urls.cached = (postId) => urls.cache + cacheKey(postId);
+  // Who may read a members-only category: the collection an Add or a Remove
+  // names when someone is let in or out. Nothing is published there; it is a
+  // name to address, and the pod's own access rule is what enforces it.
+  urls.members = face + 'ap/members';
   urls.categoryHtml = face + 'ap/index.html';
   urls.topicHtml = (tid) => face + 'ap/t/' + tid + '.html';
   return urls;

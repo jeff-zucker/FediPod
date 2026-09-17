@@ -26,6 +26,7 @@ import * as topics from './topics.mjs';
 import * as publish from './publish.mjs';
 import * as moderation from './moderation.mjs';
 import { provisionForum, provisionCategory } from './provision.mjs';
+import * as settings from './settings.mjs';
 
 const idOf = (v) => (typeof v === 'string' ? v : v?.id);
 
@@ -63,6 +64,12 @@ export class ForumIntake extends Intake {
       for (const cat of cats) results.push(await cat.intake.handle(activity, receipt));
       // Accepted by any category is accepted; refused by all is the first reason.
       return results.every(r => r) ? results[0] : undefined;
+    }
+    if (settings.isSettingsAsk(this.forum, activity)) {
+      const who = idOf(activity?.actor);
+      if (!(this.forum.config.moderators || []).includes(who)) return 'only a moderator may change this forum';
+      this.queueModeration(activity, who, { trusted: false });
+      return undefined;
     }
     if (this.forum.namesSite(activity)) return super.handle(activity, receipt);
     return 'names no category of this forum';
@@ -166,11 +173,17 @@ export class ForumAgent {
     // actor, and the profile is only rewritten when its digest changed or
     // something asks. So it asks.
     const was = JSON.stringify((existing.categories || []).map(c => [c.slug, c.name]));
+    // Who may read what is written into the pod's own access rules, which are
+    // only written when something asks for a republish — so a change to them
+    // asks for one.
+    const access = JSON.stringify([existing.membersOnly || [], existing.memberWebIds || {}, existing.moderatorWebIds || []]);
+    const accessChanged = !!existing.handle && access !== JSON.stringify([membersOnly, memberWebIds, moderatorWebIds]);
     const renamed = !!existing.handle
       && ((name || handle) !== existing.name || was !== JSON.stringify(cats.map(c => [c.slug, c.name])));
     store.setConfig({
       ...existing, kind: 'application', handle, name: name || existing.name || handle,
-      ...(renamed ? { republish: true } : {}),
+      ...(renamed || accessChanged ? { republish: true } : {}),
+      ...(accessChanged ? { reprovision: true } : {}),
       remotePod: cred.remotePod, root: cred.root || ROOT,
       categories: cats, moderators, moderatorWebIds, membersOnly, memberWebIds,
       approveJoins, review, replyPolicy,
@@ -464,6 +477,7 @@ export class ForumAgent {
   // Queued asks from listed moderators that can be verified at their own
   // origin are applied; everything else waits for a person.
   async applyVerifiedAsks() {
+    await this.applySettingsAsks().catch(e => this.log(`settings: ${e.message}`));
     for (const cat of this.categories) {
       const q = cat.store.read('modqueue.json', []);
       for (const entry of [...q]) {
@@ -524,6 +538,42 @@ export class ForumAgent {
       actor, { trusted: false },
     );
     return true;
+  }
+
+  // Requests about the forum itself: a category created, a name changed, who
+  // moderates, who may read. Checked at the asker's own pod exactly as a
+  // moderator's other asks are, then applied.
+  async applySettingsAsks() {
+    const q = this.store.read('modqueue.json', []);
+    for (const entry of [...q]) {
+      if (!(this.config.moderators || []).includes(entry.moderator)) continue;
+      const id = entry.activity?.id;
+      if (typeof id !== 'string' || !this.intake.sameIdentity(id, entry.moderator)) continue;
+      const doc = await this.intake.fetchAP(id).catch(() => null);
+      if (!doc || doc.type !== entry.type || idOf(doc.actor) !== entry.moderator) continue;
+      try {
+        const done = await settings.applySettings(this, doc);
+        this.store.write('modqueue.json', this.store.read('modqueue.json', []).filter(e => e.id !== entry.id));
+        await this.store.flush().catch(() => {});
+        await this.noteModLog({ ...entry, activity: doc }, done);
+        this.log(`applied ${entry.type} from ${entry.moderator}: ${JSON.stringify(done)}`);
+        // A forum that has just changed shape publishes itself again.
+        if (Object.keys(done).length) await this.reshape();
+      } catch (e) { this.log(`settings ask ${entry.id}: ${e.message}`); }
+    }
+  }
+
+  // What a change of shape needs: any category named in the config that is
+  // not being hosted yet is built, and everything is published again.
+  async reshape() {
+    for (const c of this.config.categories || []) {
+      if (this.categories.some(x => x.slug === c.slug)) continue;
+      const cat = await this.buildCategory(c);
+      this.categories.push(cat);
+      this.log(`category added: ${c.slug}`);
+    }
+    if (this.site.toPod && this.remote.setUrlMap) this.remote.setUrlMap((u) => this.toPod(u));
+    await this.publishAll().catch(e => this.log(`after a change of shape: ${e.message}`));
   }
 
   // The moderators' queue, written where only they can read it: what each
@@ -664,17 +714,22 @@ export class ForumAgent {
     // the forum kept the name and ids it was told to replace.
     const asked = !!this.config.republish;
     if (asked) force = true;
+    // Containers and their rules are rewritten only when who may read what
+    // has changed. A republish otherwise leaves them alone: rewriting dozens
+    // of rules on every attempt is what a rate-limited pod refuses, and a
+    // refusal used to mean the request was never cleared and never finished.
+    const redo = !!this.config.reprovision;
     // Containers and their access rules are written once, not on every start:
     // a forum that re-wrote them each time it came up spent dozens of pod
     // writes saying what the pod already said, and a busy pod answered 429.
     const made = this.store.read('provisioned.json', {});
-    if (force || !made.forum) {
+    if (redo || !made.forum) {
       await provisionForum(this.remote, this.site, { moderatorWebIds: this.config.moderatorWebIds || [] });
       this.store.write('provisioned.json', { ...made, forum: new Date().toISOString() });
     }
     for (const cat of this.categories) {
       const done = this.store.read('provisioned.json', {});
-      if (force || !done[cat.slug]) {
+      if (redo || !done[cat.slug]) {
         await provisionCategory(this.remote, cat.urls, { memberWebIds: this.membersOf(cat) });
         this.store.write('provisioned.json', { ...done, [cat.slug]: new Date().toISOString() });
       }
@@ -705,7 +760,7 @@ export class ForumAgent {
     await publish.publishLatest(this.siteAgent, { force: true });
     await publish.publishAdministrators(this.siteAgent, this.config.moderators || [], { force });
     if (asked) {
-      this.store.setConfig({ ...this.store.getConfig(), republish: false });
+      this.store.setConfig({ ...this.store.getConfig(), republish: false, reprovision: false });
       this.config = this.store.getConfig();
       await this.store.flush().catch(() => {});
     }

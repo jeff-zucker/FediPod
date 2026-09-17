@@ -158,7 +158,7 @@ function card(p, { author = null, cat = null, extra = '', waiting = false, ancho
       <button data-act="reply" aria-label="Reply to ${whose}">Reply</button>
       ${account() ? `<button data-act="${own().isLiked(p.id) ? 'unlike' : 'like'}" aria-label="${own().isLiked(p.id) ? 'Take back your vote' : 'Vote for this post'}">▲ ${p.likes || 0}</button>` : `<span class="votes" aria-label="${p.likes || 0} votes">▲ ${p.likes || 0}</span>`}
       <button data-act="share" aria-label="Copy a link to the post by ${whose}">Share</button>
-      ${account() ? `<button data-act="${own().isSaved(p.id) ? 'unsave' : 'save'}" aria-label="${own().isSaved(p.id) ? 'Remove this post from your saved list' : 'Save this post to your own list'}">${own().isSaved(p.id) ? 'Saved' : 'Save'}</button>` : ''}
+      ${account() ? `<button data-act="${own().isSaved(p.id) ? 'unsave' : 'save'}" aria-label="${own().isSaved(p.id) ? 'Remove this post from your bookmarks' : 'Bookmark this post'}">${own().isSaved(p.id) ? 'Bookmarked' : 'Bookmark'}</button>` : ''}
       ${mine(p) || !account() ? '' : `<button data-act="report" aria-label="Report the post by ${whose}">Report</button>`}
       ${mine(p) ? '<button data-act="edit" aria-label="Edit your own post">Edit</button><button data-act="delete" aria-label="Delete your own post">Delete</button>' : ''}
       ${!mine(p) && iModerate() ? `<button data-act="remove" aria-label="Remove the post by ${whose}">Remove</button>` : ''}
@@ -204,8 +204,9 @@ async function route() {
   $('reply-row').hidden = true;
   $('reply-dlg').close();
   if (kind === 'replies') return showReplies();
-  if (kind === 'saved') return showSaved();
+  if (kind === 'bookmarks' || kind === 'saved') return showSaved();
   if (kind === 'queue') return showQueue();
+  if (kind === 'settings') return showSettings();
   if (kind === 'who' && a) return showWho(decodeURIComponent(a));
   if (kind === 'c' && a) { if (feedFilter !== a) shown = 30; feedFilter = a; return showForum(); }
   if (kind === 't' && a && b) return showTopic(a, b, c || null);
@@ -217,7 +218,8 @@ async function route() {
 // in the topic, one click away.
 let feedFilter = 'all';        // 'all', or a category's slug
 let shown = 30;                // how many of the index's rows are on the page
-let order = 'new';             // 'new' by the clock, 'top' by votes
+let order = 'date';            // which column the index is ordered by
+let down = true;               // and which way
 let finding = '';              // what the reader is looking for, if anything
 // What this reader keeps for themselves, under the account they signed in as.
 const own = () => keptByReader({ storage: localStorage, who: account()?.handle || null });
@@ -248,15 +250,15 @@ async function showReplies() {
 
 // Posts this reader kept. The list is theirs and lives in this browser.
 function showSaved() {
-  crumbs([['Home', '#/'], ['Saved', null]]);
+  crumbs([['Home', '#/'], ['Bookmarked', null]]);
   const rows = own().saved();
-  if (!rows.length) { $('main').innerHTML = '<p class="empty">Nothing saved yet. Use Save on a post.</p>'; return; }
+  if (!rows.length) { $('main').innerHTML = '<p class="empty">Nothing bookmarked yet. Use Bookmark on a post.</p>'; return; }
   $('main').innerHTML = `<ul class="list">${rows.map(r => {
     const cat = cats().find(c => c.slug === r.cat) || null;
     const tid = r.topic ? r.topic.split('/').pop() : null;
     const href = cat && tid ? `#/t/${esc(cat.slug)}/${esc(tid)}` : '#/';
     return `<li><a class="title" href="${href}">${esc(r.text || r.id)}</a>
-      <div class="meta">saved ${esc(when(r.at))}${cat ? ' · ' + esc(cat.name) : ''}</div></li>`;
+      <div class="meta">bookmarked ${esc(when(r.at))}${cat ? ' · ' + esc(cat.name) : ''}</div></li>`;
   }).join('')}</ul>`;
 }
 
@@ -310,6 +312,64 @@ async function showWho(handleOrId) {
   $('main').innerHTML = head + `<ul class="list">${items.join('')}</ul>`;
 }
 
+// What a moderator may change about the forum itself. Every change is a
+// request published at the moderator's own pod and checked there, so this
+// page needs no rights on the forum's pod at all.
+async function showSettings() {
+  crumbs([['Home', '#/'], ['Settings', null]]);
+  if (!iModerate()) { $('main').innerHTML = '<p class="empty">Only this forum\'s moderators may change it.</p>'; return; }
+  if (!podAcct) { $('main').innerHTML = '<p class="empty">Changing the forum is done with your pod account.</p>'; return; }
+  const closed = new Set();
+  for (const c of cats()) { if (!(await read.canRead(c.base))) closed.add(c.id); }
+  $('main').innerHTML = `
+    <div class="topline"><h1>Settings</h1></div>
+    <section class="reply">
+      <h2>The forum</h2>
+      <div class="row">
+        <label for="set-forum-name">Name</label>
+        <input type="text" id="set-forum-name" value="${esc(forum.name || '')}">
+        <button data-act="set-forum-name">Rename</button>
+      </div>
+    </section>
+    <section class="reply">
+      <h2>Categories</h2>
+      <ul class="list">${cats().map(c => `<li>
+        <div class="row">
+          <input type="text" class="cat-name" data-cat="${esc(c.id)}" value="${esc(c.name)}">
+          <button data-act="set-cat-name" data-cat="${esc(c.id)}">Rename</button>
+          <span class="dim">${esc(handleOf(c))}${closed.has(c.id) ? ' · members only' : ''}</span>
+        </div>
+        <div class="row">
+          <input type="text" class="cat-member" data-cat="${esc(c.id)}" placeholder="https://someone.example/profile/card#me">
+          <button data-act="add-member" data-cat="${esc(c.id)}">Let them in</button>
+          <button data-act="drop-member" data-cat="${esc(c.id)}">Take them out</button>
+        </div>
+      </li>`).join('')}</ul>
+      <div class="row">
+        <label for="set-new-slug">New category</label>
+        <input type="text" id="set-new-slug" placeholder="slug" size="12">
+        <input type="text" id="set-new-name" placeholder="Its name">
+        <button data-act="add-cat">Create</button>
+      </div>
+      <p class="hint">A slug is permanent: it is the category's address on the pod and its handle on the Fediverse.</p>
+    </section>
+    <section class="reply">
+      <h2>Moderators</h2>
+      <p class="hint">${moderators.map(m => esc(authorLabel(m))).join(', ') || 'nobody yet'}</p>
+      <div class="row">
+        <label for="set-mod">Their Fediverse actor</label>
+        <input type="text" id="set-mod" placeholder="https://their.server/users/them">
+        <button data-act="add-mod">Add</button><button data-act="drop-mod">Remove</button>
+      </div>
+      <div class="row">
+        <label for="set-mod-webid">And their WebID, to read the queue</label>
+        <input type="text" id="set-mod-webid" placeholder="https://their.pod/profile/card#me">
+        <button data-act="add-mod-webid">Add</button>
+      </div>
+    </section>
+    <p class="hint">Each change is sent to the forum and takes effect once it has checked who asked, usually within a minute.</p>`;
+}
+
 async function showForum() {
   const here = cats().find(c => c.slug === feedFilter) || null;
   crumbs(here ? [['Home', '#/'], [here.name, `#/c/${here.slug}`]] : [['Home', '#/']]);
@@ -319,18 +379,16 @@ async function showForum() {
   // first one when the whole forum is.
   const into = cats().find(c => c.slug === feedFilter) || cats()[0] || null;
   const head = `<p class="hint chips">Categories: ${chip('all', 'All')}${cats().map(c => chip(c.slug || '', c.name)).join('')}
-    ${account() ? '<a class="chip" href="#/replies">Replies to you</a><a class="chip" href="#/saved">Saved</a>' : ''}
-    ${iModerate() ? '<a class="chip" href="#/queue">Queue</a>' : ''}
-    <button class="chip${order === 'new' ? ' on' : ''}" data-act="order" data-order="new">Newest</button>
-    <button class="chip${order === 'top' ? ' on' : ''}" data-act="order" data-order="top">Top</button>
+    ${account() ? '<a class="chip" href="#/replies">Replies to you</a><a class="chip" href="#/bookmarks">Bookmarked</a>' : ''}
+    ${iModerate() ? '<a class="chip" href="#/queue">Queue</a><a class="chip" href="#/settings">Settings</a>' : ''}
     <label class="vh" for="find">Search this forum</label>
     <input type="text" id="find" placeholder="Search" value="${esc(finding)}" autocomplete="off">
-    ${account() ? '<a class="chip" href="#/replies">Replies to you</a><a class="chip" href="#/saved">Saved</a>' : ''}
     ${here && account() && podAcct ? `<button class="new" data-act="${own().isJoined(here.id) ? 'leave' : 'join'}" data-cat="${esc(here.id)}">${own().isJoined(here.id) ? 'Leave' : 'Join'}</button>` : ''}
     ${into ? `<button class="new" data-act="newtopic" data-slug="${esc(into.slug || '')}">New topic</button>` : ''}</p>`;
   $('main').innerHTML = head + '<p class="dim">Loading…</p>';
   say('Loading the latest posts');
-  const latest = await read.latest(base);
+  // Enough posts to fill a page of TOPICS: several posts can belong to one.
+  const latest = await read.latest(base, { limit: Math.min(300, shown * 5) });
   const looking = finding.trim().toLowerCase();
   const mine = latest.filter(p => (feedFilter === 'all'
     || (cats().find(c => c.id === p.category)?.slug === feedFilter))
@@ -344,11 +402,30 @@ async function showForum() {
     if (feedFilter !== 'all' && c.slug !== feedFilter) continue;
     for (const id of await read.featured(c.base)) pins.cat.add(id);
   }
+  // One row per topic: the newest post in it stands for it, which is what a
+  // reader wants to open — the thing they have not read.
+  const byTopic = new Map();
+  for (const p of mine) {
+    if (!p.topic) continue;
+    const held = byTopic.get(p.topic);
+    if (!held || String(p.published || '') > String(held.published || '')) byTopic.set(p.topic, p);
+  }
   const rank = (p) => (pins.site.has(p.topic) ? 2 : pins.cat.has(p.topic) ? 1 : 0);
-  // Pinned first whatever the order; then the clock, or the votes.
-  mine.sort((a, b) => rank(b) - rank(a)
-    || (order === 'top' ? (b.likes || 0) - (a.likes || 0) : String(b.published).localeCompare(String(a.published))));
-  if (!mine.length) {
+  // Pinned first whatever the order; then the column the reader chose.
+  const by = (p) => (order === 'replies' ? (p.topicReplies || 0) : String(p.published || ''));
+  const topics = [...byTopic.values()].sort((a, b) => rank(b) - rank(a)
+    || (down ? (by(a) > by(b) ? -1 : by(a) < by(b) ? 1 : 0) : (by(a) > by(b) ? 1 : by(a) < by(b) ? -1 : 0)));
+  const page = topics.slice(0, shown);
+  if (!topics.length) {
+    // A members-only category that will not answer this reader looks exactly
+    // like an empty one. Ask it a question only a member can have answered.
+    if (here && !(await read.topics(here.base)).total && !(await read.canRead(here.base))) {
+      $('main').innerHTML = head + `<p class="empty">${account()
+        ? 'This category is for its members. Ask a moderator to add you.'
+        : 'This category is for its members. Sign in with the pod account that was added to it.'}</p>`;
+      say('This category is for its members');
+      return;
+    }
     // The one thing to do on an empty page is the one thing offered.
     $('main').innerHTML = head + '<p class="empty">Nothing posted here yet. Use the button at the upper right to create a topic.</p>';
     say('Nothing posted here yet');
@@ -356,7 +433,7 @@ async function showForum() {
   }
   const rows = [];
   let fresh = 0;
-  for (const p of mine) {
+  for (const p of page) {
     const cat = cats().find(c => c.id === p.category) || null;
     const who = cat && p.author ? await read.author(cat.base, p.author) : null;
     const tid = p.topic ? p.topic.split('/').pop() : null;
@@ -376,12 +453,16 @@ async function showForum() {
   }
   // A table, so a reader can run their eye down any one of the four things
   // an entry says.
-  const more = latest.more || 0;
-  $('main').innerHTML = head + `<div class="scroll" role="region" aria-label="Latest posts" tabindex="0"><table class="index">
-    <thead><tr><th scope="col">Topic</th><th scope="col">Category</th><th scope="col">Author</th><th scope="col">Date</th><th scope="col">Replies</th></tr></thead>
+  const more = Math.max(0, topics.length - page.length) + (latest.more || 0);
+  $('main').innerHTML = head + `<div class="scroll" role="region" aria-label="Topics, most recently posted in first" tabindex="0"><table class="index">
+    <thead><tr><th scope="col">Topic</th><th scope="col">Category</th><th scope="col">Latest by</th>
+      <th scope="col" aria-sort="${order === 'date' ? (down ? 'descending' : 'ascending') : 'none'}">
+        <button class="sort" data-act="order" data-order="date">Date ${order === 'date' ? (down ? '▼' : '▲') : '<span class="dim">▽</span>'}</button></th>
+      <th scope="col" aria-sort="${order === 'replies' ? (down ? 'descending' : 'ascending') : 'none'}">
+        <button class="sort" data-act="order" data-order="replies">Replies ${order === 'replies' ? (down ? '▼' : '▲') : '<span class="dim">▽</span>'}</button></th></tr></thead>
     <tbody>${rows.join('')}</tbody></table>
     ${more ? `<p class="row"><button data-act="more">Show ${Math.min(more, 30)} more of ${more}</button></p>` : ''}</div>`;
-  say(`${rows.length} post${rows.length === 1 ? '' : 's'}${fresh ? `, ${fresh} new` : ''}`);
+  say(`${rows.length} topic${rows.length === 1 ? '' : 's'}${fresh ? `, ${fresh} with something new` : ''}`);
   // The box takes the keyboard only when there is something in it to scroll:
   // a tab stop that does nothing is one more press between a reader and the page.
   const box = $('main').querySelector('.scroll');
@@ -509,12 +590,18 @@ $('main').addEventListener('click', (e) => {
   if (act === 'remove') return modRemove(id);
   const topic = b.dataset.topic || b.closest('[data-topic]')?.dataset.topic;
   if (act === 'more') { shown += 30; return showForum(); }
-  if (act === 'order') { order = b.dataset.order === 'top' ? 'top' : 'new'; shown = 30; return showForum(); }
+  if (act === 'order') {
+    const col = b.dataset.order;
+    if (order === col) down = !down; else { order = col; down = true; }
+    shown = 30;
+    return showForum();
+  }
   if (act === 'join' || act === 'leave') return joinOrLeave(b.dataset.cat, act === 'join');
   if (act === 'save' || act === 'unsave') return saveOrNot(id, act === 'save');
   if (act === 'like' || act === 'unlike') return voteOn(id, act === 'like');
   if (act === 'approve' || act === 'refuse') return modHeld(id, b.closest('[data-cat]')?.dataset.cat, act === 'approve');
   if (act === 'ban') return modBan(b.dataset.who, b.closest('[data-cat]')?.dataset.cat);
+  if (act.startsWith('set-') || act.startsWith('add-') || act.startsWith('drop-')) return onSettings(b);
   if (act === 'newpost') return openReply({ inReplyToUrl: replyCtx?.inReplyToUrl || null });
   if (act === 'newtopic') {
     const cat = catBySlug(b.dataset.slug);
@@ -660,7 +747,7 @@ async function voteOn(postId, up) {
   } catch (e) { alert(e.message); }
 }
 
-// A saved post is this reader's own note to come back to, in this browser.
+// A bookmark is this reader's own note to come back to, in this browser.
 function saveOrNot(postId, on) {
   const m = own();
   if (on) {
@@ -692,6 +779,46 @@ async function modBan(who, slug) {
     await asksTo({ type: 'Block', object: who }, cat);
     say('Asked. It takes effect once the forum has checked who asked.');
   } catch (e) { alert(e.message); }
+}
+
+// Every settings change is an ordinary activity naming what it changes: a
+// Create of a Group for a new category, an Update for a name, an Add or a
+// Remove for who moderates and who may read.
+async function settingsAsk(activity) {
+  try {
+    const inbox = await pod.podInboxOf(cats()[0]?.id || forum.id, { front, handle: cats()[0]?.slug || forum.handle });
+    await pod.moderate({ actor: podAcct.actor, podHome: podAcct.podHome, inbox, activity });
+    say('Sent. It takes effect once the forum has checked who asked.');
+  } catch (e) { alert(e.message); }
+}
+
+async function onSettings(b) {
+  const act = b.dataset.act;
+  const catId = b.dataset.cat;
+  const val = (sel) => document.querySelector(sel)?.value.trim() || '';
+  if (act === 'set-forum-name') {
+    const name = val('#set-forum-name');
+    if (name) await settingsAsk({ type: 'Update', object: { id: forum.id, name } });
+  } else if (act === 'set-cat-name') {
+    const name = document.querySelector(`.cat-name[data-cat="${CSS.escape(catId)}"]`)?.value.trim();
+    if (name) await settingsAsk({ type: 'Update', object: { id: catId, name } });
+  } else if (act === 'add-cat') {
+    const slug = val('#set-new-slug').toLowerCase();
+    const name = val('#set-new-name') || slug;
+    if (!/^[a-z0-9][a-z0-9-]{0,62}$/u.test(slug)) { alert('a slug is lower-case letters, digits and hyphens'); return; }
+    await settingsAsk({ type: 'Create', target: forum.id, object: { type: 'Group', preferredUsername: slug, name } });
+  } else if (act === 'add-member' || act === 'drop-member') {
+    const webid = document.querySelector(`.cat-member[data-cat="${CSS.escape(catId)}"]`)?.value.trim();
+    const cat = cats().find(c => c.id === catId);
+    if (webid && cat) await settingsAsk({ type: act === 'add-member' ? 'Add' : 'Remove', object: webid, target: cat.base + 'ap/members' });
+  } else if (act === 'add-mod' || act === 'drop-mod') {
+    const who = val('#set-mod');
+    const cat = cats()[0];
+    if (who && cat) await settingsAsk({ type: act === 'add-mod' ? 'Add' : 'Remove', object: who, target: cat.base + 'ap/moderators' });
+  } else if (act === 'add-mod-webid') {
+    const webid = val('#set-mod-webid');
+    if (webid) await settingsAsk({ type: 'Add', object: webid, target: `${base}mod/` });
+  }
 }
 
 async function modLock(topicId, on) {
