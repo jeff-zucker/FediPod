@@ -851,12 +851,19 @@ async function voteOn(postId, way, was) {
   if (!podAcct) { alert('voting needs your pod account'); return; }
   const cat = replyCtx?.cat || cats().find(c => c.slug === feedFilter) || cats()[0];
   if (!cat) return;
+  let step = 'finding where the forum takes mail';
   try {
     const inbox = await pod.podInboxOf(cat.id, { front, handle: cat.slug || null });
+    if (!inbox) throw new Error('the forum did not say where to send it');
+    step = `sending the vote to ${new URL(inbox).host}`;
     await pod.vote({ actor: podAcct.actor, post: postId, category: cat.id, inbox, way, was });
     own().vote(postId, way);
     say(way === 'none' ? 'Vote taken back.' : 'Voted. The count follows once the forum has taken it.');
-  } catch (e) { alert(e.message); }
+  } catch (e) {
+    // Which step failed, not only that one did: "failed to fetch" on its own
+    // says nothing about which address would not answer.
+    alert(`${e.message} — while ${step}`);
+  }
 }
 
 // Asking to be let into a private category: the same Follow that joining

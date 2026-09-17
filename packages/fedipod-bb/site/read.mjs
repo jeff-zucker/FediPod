@@ -61,7 +61,12 @@ export function reader({ fetch: f = globalThis.fetch.bind(globalThis), session =
     return info;
   };
   const get = async (url) => {
-    const r = await f(url, { headers: { accept: ACCEPT } });
+    // A request that fails at the network level — a dropped connection, a
+    // document that is simply not there — reads the same as one that is not
+    // readable: nothing. Letting it throw meant one missing side document
+    // took the whole page down with it.
+    let r = null;
+    try { r = await f(url, { headers: { accept: ACCEPT } }); } catch { return null; }
     // A members-only category answers 401 or 403 to the world. A reader who
     // is signed in asks again as themselves, and the pod decides.
     if (r && (r.status === 401 || r.status === 403) && session?.fetch) {
