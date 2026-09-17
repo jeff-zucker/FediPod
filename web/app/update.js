@@ -8,7 +8,11 @@
 // composer is not reloaded from under it: it shows a line with a button.
 (() => {
   const mine = document.querySelector('meta[name="fedipod-version"]')?.content;
-  if (!mine || !('serviceWorker' in navigator)) return;
+  // The build this page was staged from. A version changes when a release is
+  // cut; a build changes every time the site is deployed, which is what a
+  // reader with the page open actually needs to hear about.
+  const myBuild = document.querySelector('meta[name="fedipod-build"]')?.content || null;
+  if (!mine) return;
   const loadedAt = Date.now();
   let acted = false;
   const drafting = () => [...document.querySelectorAll('textarea')].some((t) => t.value.trim());
@@ -36,9 +40,18 @@
   };
   // A worker taking over a page that has been open a while is a new build;
   // in a page's first seconds it is the boot, not an update.
-  navigator.serviceWorker.addEventListener('controllerchange', () => { if (Date.now() - loadedAt > 5000) go(); });
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.addEventListener('controllerchange', () => { if (Date.now() - loadedAt > 5000) go(); });
+  }
   const check = async () => {
     try {
+      // The build first: it moves with every deploy. The version is the
+      // fallback for a page staged before builds were stamped.
+      if (myBuild) {
+        const b = await fetch('/build.json', { cache: 'no-store', headers: { accept: 'application/json' } })
+          .then(x => (x.ok ? x.json() : null)).catch(() => null);
+        if (b?.build && b.build !== myBuild) { go(); return; }
+      }
       const r = await fetch('/api/handle?handle=__probe__', { cache: 'no-store', headers: { accept: 'application/json' } });
       const v = (await r.json())?.version;
       if (!v || v === mine) return;
@@ -47,6 +60,7 @@
       setTimeout(go, 4000);   // a pages-only change: no new worker will take over
     } catch { /* offline, or the site did not answer: try again later */ }
   };
-  setTimeout(check, 20000);
-  setInterval(check, 5 * 60 * 1000);
+  // Often enough that a reader watching a page being worked on sees it.
+  setTimeout(check, 5000);
+  setInterval(check, 60 * 1000);
 })();

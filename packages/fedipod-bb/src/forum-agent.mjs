@@ -254,7 +254,17 @@ export class ForumAgent {
       remotePod: this.site.base, root: this.site.root + 'c/' + slug + '/',
       forum: this.site.actor, inboxUrl: this.site.inbox,
       moderators: this.config.moderators || [],
-      approveJoins: !!this.config.approveJoins, review: !!this.config.review,
+      // A private category NEVER carries to someone it cannot let read: every
+      // join waits for a moderator, and admitting one requires a WebID the
+      // pod can grant. Without this a follower on a server with no WebID —
+      // Mastodon, Lemmy — would be sent the posts of a category whose pages
+      // they are refused, which is not private at all.
+      approveJoins: !!this.config.approveJoins || (this.config.membersOnly || []).includes(slug),
+      // Private: the posts are written for the people named and nobody else,
+      // so the category carries what is addressed to IT rather than to the
+      // world. An ordinary group refuses that, and is right to.
+      private: (this.config.membersOnly || []).includes(slug),
+      review: !!this.config.review,
       // Fronted: the category's door at the Gateway, and its front id. The
       // secret is the row's own, handed over once at attach.
       ...(gw?.front ? { gateway: {
@@ -282,6 +292,16 @@ export class ForumAgent {
       log: this.log, lease: this.lease, push: false,
     });
     cat.intake.recentNotes = new Map();
+    // A private category's posts sit behind their authors' own access rules,
+    // and a Solid pod has never heard of an HTTP signature. So when the
+    // ordinary fetch is refused, ask again as the forum's own WebID — the one
+    // every member's rule names, and the reason the forum is on that list.
+    const signedFetchAP = cat.intake.fetchAP.bind(cat.intake);
+    cat.intake.fetchAP = async (url) => {
+      const doc = await signedFetchAP(url);
+      if (doc || !(this.config.membersOnly || []).includes(slug)) return doc;
+      return this.podFetchAP(url);
+    };
     cat.intake.onCarried = (ev) => this.onCarried(cat, ev);
     cat.intake.onReport = (activity, actor, opts) => cat.intake.queueModeration(activity, actor, opts);
     // What happens to a post from somebody who has not joined: dropped, or
@@ -536,14 +556,76 @@ export class ForumAgent {
     }
   }
 
-  // Who may read a members-only category: the WebIDs the forum was given for
-  // it. Null means the category is open, which is the usual case.
+  // Who may read a private category: the WebIDs the forum was given for it,
+  // and its moderators'. Null means the category is OPEN, which is the usual
+  // case and the only thing that makes its pages public. A private category
+  // with nobody named yet returns an empty list, not null: the pod keeps
+  // everyone out rather than letting everyone in.
   membersOf(cat) {
     const closed = (this.config.membersOnly || []).includes(cat.slug);
     if (!closed) return null;
     const named = this.config.memberWebIds || {};
-    const list = [...new Set([...(named[cat.slug] || []), ...(this.config.moderatorWebIds || [])])];
-    return list.length ? list : null;
+    return [...new Set([...(named[cat.slug] || []), ...(this.config.moderatorWebIds || [])])];
+  }
+
+  // Who a private category's posts are written for: its members, its
+  // moderators, and the forum itself. The forum is on the list because it
+  // fetches every post back from its author's pod to check who wrote it
+  // (FEP-fe34), and a rule that left it out would refuse the forum the post it
+  // was just handed. Null for an open category.
+  readersOf(cat) {
+    const members = this.membersOf(cat);
+    if (!members) return null;
+    const mine = this.remote?.webId;
+    return [...new Set([...members, ...(mine ? [mine] : [])])];
+  }
+
+  // One document read as the forum itself rather than as a federating server.
+  // Straight to the session: a foreign pod's answer is not this pod's business
+  // and must not be gated behind its cooldown or run through its url map.
+  async podFetchAP(url) {
+    const send = this.remote?.session?.fetch
+      ? (u, i) => this.remote.session.fetch(u, i)
+      : (u, i) => this.remote.fetch(u, i);
+    try {
+      const r = await send(url, { headers: { accept: 'application/activity+json, application/ld+json, application/json;q=0.9' } });
+      if (!r?.ok) return null;
+      const doc = await r.json().catch(() => null);
+      return doc && typeof doc === 'object' ? doc : null;
+    } catch (e) {
+      this.log(`reading ${url} as the forum: ${e.message}`);
+      return null;
+    }
+  }
+
+  // A private category carries only to people its members' pods can let read,
+  // and that means a WebID. Anyone else following it — every follower it
+  // gathered while it was open, on Mastodon or anywhere else without one — is
+  // let go and told, rather than being sent posts they are refused.
+  async dropUnreadableFollowers(cat) {
+    if (!(this.config.membersOnly || []).includes(cat.slug)) return 0;
+    const contacts = cat.store.getContacts();
+    const dropped = [];
+    for (const f of [...contacts.followers]) {
+      const webid = await this.webIdOf(f.actor).catch(() => null);
+      if (webid) continue;
+      dropped.push(f);
+      contacts.followers = contacts.followers.filter(x => x.actor !== f.actor);
+    }
+    if (!dropped.length) return 0;
+    cat.store.setContacts(contacts);
+    await cat.publisher.publishCollections({ followers: true }).catch(() => {});
+    const wire = await import('../../../lib/core/wire.mjs');
+    for (const f of dropped) {
+      const inbox = f.sharedInbox || f.inbox;
+      if (!inbox) continue;
+      await cat.deliverer.deliver(inbox, wire.rejectActivity({
+        urls: cat.urls, serial: Date.now(),
+        followActivity: { id: f.followId || undefined, type: 'Follow', actor: f.actor, object: cat.urls.actor },
+      })).catch(e => this.log(`telling ${f.actor} the category is private: ${e.message}`));
+    }
+    this.log(`${cat.slug} is private: ${dropped.length} follower(s) with no WebID let go`);
+    return dropped.length;
   }
 
   // A pin that holds across the whole forum, not just one category: the site
@@ -614,6 +696,25 @@ export class ForumAgent {
     await this.publishAll().catch(e => this.log(`after a change of shape: ${e.message}`));
   }
 
+  // The WebID behind a Fediverse actor, when its pod says so. A FediPod
+  // account's WebID lists the actor as an account of the person; that link,
+  // read at the pod, is what makes it safe to grant them anything.
+  async webIdOf(actor) {
+    const doc = await this.intake.fetchAP(actor).catch(() => null);
+    const said = [doc?.webId, ...[].concat(doc?.alsoKnownAs || [])].find(v => typeof v === 'string' && v.includes('#'));
+    if (said) return said;
+    // Otherwise the pod the actor is published on, whose card is where a
+    // FediPod account records itself.
+    const home = new URL(actor).origin;
+    for (const card of [`${home}/profile/card`, `${home}/profile/card#me`]) {
+      const r = await fetch(card.replace(/#me$/u, ''), { headers: { accept: 'text/turtle' } }).catch(() => null);
+      if (!r?.ok) continue;
+      const text = await r.text().catch(() => '');
+      if (text.includes(actor)) return `${home}/profile/card#me`;
+    }
+    return null;
+  }
+
   // The moderators' queue, written where only they can read it: what each
   // category is holding, and who asked for what.
   // What was done, and by whom: a record for the moderators, beside their
@@ -638,9 +739,15 @@ export class ForumAgent {
     const rows = [];
     for (const cat of this.categories) {
       for (const e of cat.store.read('modqueue.json', [])) {
+        const object = typeof e.activity?.object === 'string' ? e.activity.object : e.activity?.object?.id || null;
+        // Who wrote the thing being complained about, so a moderator acting
+        // on a report acts on its author and not on whoever reported it.
+        const about = object ? (cat.store.getStatuses().find(st => st.noteId === object)?.actor || null) : null;
         rows.push({ category: cat.slug, id: e.id, type: e.type, by: e.moderator, at: e.at,
-          object: typeof e.activity?.object === 'string' ? e.activity.object : e.activity?.object?.id || null,
-          why: e.activity?.content || null, verified: !!e.verified });
+          object, about, why: e.activity?.content || null, verified: !!e.verified });
+      }
+      for (const r of cat.store.getRequests?.() || []) {
+        rows.push({ category: cat.slug, id: 'join:' + r.actor, type: 'Join request', by: r.actor, at: r.at || null, object: r.actor });
       }
       for (const p of cat.store.getPending?.() || []) {
         rows.push({ category: cat.slug, id: 'pending:' + p.noteId, type: 'Held', by: p.actor || null, at: p.at || null, object: p.noteId });
@@ -771,6 +878,14 @@ export class ForumAgent {
         await provisionCategory(this.remote, cat.urls, { memberWebIds: this.membersOf(cat) });
         this.store.write('provisioned.json', { ...done, [cat.slug]: new Date().toISOString() });
       }
+      // Who the category's posts are written for, and letting go of anyone it
+      // cannot let read. Both are cheap when nothing changed: the list is
+      // written only when its digest moved, and the sweep only for a private
+      // category.
+      await publish.publishMembers(cat, this.readersOf(cat), { force: redo })
+        .catch(e => this.log(`the reader list for ${cat.slug}: ${e.message}`));
+      await this.dropUnreadableFollowers(cat)
+        .catch(e => this.log(`letting go of ${cat.slug}'s strangers: ${e.message}`));
       await this.carryOldTopics(cat);
       await this.stampOldCopies(cat).catch(e => this.log(`stamping ${cat.slug}: ${e.message}`));
       const seen = cat.store.read('published.json', {});

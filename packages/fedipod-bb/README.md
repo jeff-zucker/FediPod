@@ -126,13 +126,43 @@ moderator lets a held post through (`Accept`), turns it away (`Reject`) or
 bans its author (`Block`) - each published at their own pod and checked
 there, like every other ask.
 
-A category may be members-only: `--members-only <slug>` with
-`--member <slug>:<webid>`. Its trees are then readable by those WebIDs
-rather than by the world, and the page reads them with the member's pod
-session. The actor itself stays public, since a server that cannot read it
-cannot deliver to the category at all. Only a WebID can be named this way -
-serving a member who has only a Fediverse account is the Server build's job,
-which is not built.
+<!-- /CLAUDE -->
+<!-- CLAUDE 2026-09-16 - the settings page and private categories; delete these markers when done -->
+A moderator gets a Settings page: rename the forum, rename a category,
+manage moderators and members, and make a new category. Each row carries
+Open and Private. Every change is an ordinary activity - a `Create` of a
+`Group`, an `Update`, an `Add` or a `Remove` - published at the moderator's
+own pod and fetched back before it is applied.
+
+**Open or private belongs to the category, and only the forum changes it.**
+Joining does not, being admitted does not, and being removed does not. On
+the wire it is `manuallyApprovesFollowers` on the Group.
+
+A private category means all of this, and no more:
+
+- Its trees are readable by named WebIDs only. The actor stays public, since
+  a server that cannot read the actor cannot deliver to the category.
+- It publishes `c/<slug>/ap/members`, the WebIDs that may read it, readable
+  only by those same WebIDs. The forum's own WebID is one of them, because
+  the forum fetches every post back from its author's pod.
+- Every join waits for a moderator, and admitting somebody requires a WebID.
+  A follower without one is let go with a `Reject`: carrying posts to
+  somebody refused the pages would not be private at all.
+- A member's post is addressed to the category's followers collection rather
+  than to the public, and is written into a container of its own on the
+  member's pod whose access rule names the same reader list. One container
+  per category, rewritten on each post, so one rule covers that member's
+  whole history there.
+
+What it does NOT mean, and the page says so in the box before anyone writes:
+an ejected reader keeps a given author's older posts until that author next
+writes; somebody admitted today reads the whole history; posts written while
+the category was open stay public; pod operators hold the plaintext; and any
+admitted member can copy anything.
+
+The command-line equivalents are `--members-only <slug>` and
+`--member <slug>:<webid>`. A draft FEP for the layout and this model is in
+[fep-draft.md](fep-draft.md).
 <!-- /CLAUDE -->
 To reply, a reader signs in once with a
 Mastodon account: the page registers itself on their server, sends them to

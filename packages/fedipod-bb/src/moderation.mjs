@@ -16,6 +16,7 @@ import * as collection from '../../../lib/pod/collection.mjs';
 import * as podNotes from '../../../lib/pod/notes.mjs';
 import * as topics from './topics.mjs';
 import * as publish from './publish.mjs';
+import { applySettings } from './settings.mjs';
 
 const idOf = (v) => (typeof v === 'string' ? v : v?.id);
 
@@ -170,6 +171,9 @@ export function isForumAsk(cat, activity) {
   // A held post let through, or turned away: both name a post the forum is
   // holding rather than one it has carried.
   if (t === 'Accept' || t === 'Reject') return !!idOf(activity.object);
+  // Somebody let into the category: named by their actor, which is what a
+  // moderator has in front of them.
+  if (t === 'Join') return !!idOf(activity.object);
   if (t === 'Add' || t === 'Remove' || t === 'Move') return !!tidOf(cat, idOf(activity.object));
   // A topic renamed, or closed to further replies: the name and the closing
   // are the topic's own, and only the forum can write them, so a moderator
@@ -191,6 +195,23 @@ export async function applyForumModeration(forum, cat, entry) {
       if ('closed' in asked) return lockTopic(cat, tid, !!asked.closed);
       if (asked.name) return renameTopic(cat, tid, asked.name);
       break;
+    }
+    // Somebody admitted to a category: their follow is accepted, and for a
+    // private one their pod is granted the reading their membership means.
+    case 'Join': {
+      if (!object) break;
+      // In a private category, membership means reading, and reading is
+      // granted to a WebID. Somebody whose server has none cannot be admitted
+      // at all — admitting them would carry them posts they may not read.
+      const closed = (forum.config?.membersOnly || []).includes(cat.slug);
+      if (closed) {
+        const webid = await forum.webIdOf(object).catch(() => null);
+        if (!webid) throw new Error(`${object} has no WebID this forum can grant reading to`);
+        await applySettings(forum, { type: 'Add', object: webid, target: cat.urls.members });
+      }
+      const { admitRequest } = await import('../../../lib/core/social.mjs');
+      await admitRequest(cat, object);
+      return { admitted: object };
     }
     // A held post let through: the category carries it after all.
     case 'Accept': {

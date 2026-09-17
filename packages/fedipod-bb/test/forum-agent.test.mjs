@@ -11,6 +11,7 @@ import path from 'node:path';
 import { ForumAgent } from '../src/forum-agent.mjs';
 import * as topics from '../src/topics.mjs';
 import { forumUrls } from '../src/urls.mjs';
+import * as publish from '../src/publish.mjs';
 
 const POD = 'https://forum.example/';
 const PUBLIC = 'https://www.w3.org/ns/activitystreams#Public';
@@ -372,4 +373,60 @@ test('a topic survives a restart: its record is where the state can read it', as
   await again.load();
   assert.equal(topics.list(again).length, 1);
   assert.equal(topics.get(again, tid)?.posts.length, 1, 'the posts come back with it');
+});
+
+test('a private category: posts written for its members, carried only to people it can let read', async () => {
+  const pod = fakePod();
+  const dir = home();
+  const { agent } = await boot(pod, dir);
+  const MEI_WEBID = 'https://mei.pod.example/profile/card#me';
+  const PRIYA_WEBID = 'https://priya.pod.example/profile/card#me';
+  await agent.init({ handle: 'forum', name: 'The Forum', categories: [{ slug: 'gardening', name: 'Gardening' }],
+    membersOnly: ['gardening'], memberWebIds: { gardening: [MEI_WEBID] }, moderatorWebIds: [PRIYA_WEBID] });
+  assert.ok(await agent.connect());
+  const g = agent.categories[0];
+  const delivered = [];
+  wire(agent, delivered);
+  // Only a WebID can be let in, and only the pod can say who has one.
+  agent.webIdOf = async (who) => (who === MEI ? MEI_WEBID : null);
+
+  // The reader list the members' own pods copy into their access rules: the
+  // members, the moderators, and the forum, which reads every post back.
+  const readers = pod.docs.get(g.urls.members)?.orderedItems || [];
+  assert.deepEqual([...readers].sort(), [MEI_WEBID, PRIYA_WEBID, pod.webId].sort());
+  assert.ok(pod.acls.some(([u, modes, opts]) => u === g.urls.members && !modes.length
+    && (opts?.readAgents || []).includes(MEI_WEBID)), 'the list is readable only by the people on it');
+  assert.ok(pod.acls.some(([u, modes, opts]) => u === g.urls.topicContainer && !modes.length
+    && (opts?.readAgents || []).includes(MEI_WEBID)), 'and so are the topics');
+
+  // Two followers: Mei, who has a WebID, and Kwame on a server with none.
+  const contacts = g.store.getContacts();
+  contacts.followers = [
+    { actor: MEI, inbox: 'https://mei.pod.example/fedipod/ap/inbox/' },
+    { actor: KWAME, inbox: KWAME + '/inbox' },
+  ];
+  g.store.setContacts(contacts);
+  assert.equal(await agent.dropUnreadableFollowers(g), 1, 'the follower with no WebID is let go');
+  assert.deepEqual(g.store.getContacts().followers.map(f => f.actor), [MEI]);
+  assert.ok(delivered.some(d => d.a.type === 'Reject' && d.inbox === KWAME + '/inbox'), 'and is told so');
+
+  // Mei posts for the members: addressed to the category's own membership,
+  // not to the world. An ordinary group would refuse to carry that.
+  const P = 'https://mei.pod.example/fedipod/ap/private/forum-example-gardening/seeds';
+  remoteDocs[P] = note(P, { type: 'Article', name: 'Where the seed swap is', content: '<p>Behind the hall.</p>',
+    audience: g.urls.actor, to: [g.urls.followers] });
+  pod.deliver('p1', { '@context': 'https://www.w3.org/ns/activitystreams', id: P + '-create', type: 'Create',
+    actor: MEI, object: remoteDocs[P], to: [g.urls.followers], cc: [] });
+  await agent.intake.drain();
+  const carried = delivered.find(d => d.who === 'gardening' && d.a.type === 'Announce');
+  assert.ok(carried, 'a private category carries a post addressed to its members');
+  assert.equal(topics.list(g.store).length, 1, 'and the post opens its topic like any other');
+  assert.equal(pod.docs.get(g.urls.cached(P))?.content, '<p>Behind the hall.</p>');
+
+  // Turned open again: the list comes down, so no member's browser copies a
+  // rule the category no longer asks for.
+  agent.config = { ...agent.config, membersOnly: [] };
+  agent.store.setConfig(agent.config);
+  await publish.publishMembers(g, agent.readersOf(g));
+  assert.equal(pod.docs.has(g.urls.members), false, 'an open category publishes no reader list');
 });

@@ -26,8 +26,11 @@ cp('web/app/update.js', 'update.js');
 const VERSION = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')).version;
 // Hosts that are the forum page and nothing else: domain aliases of this site.
 const BB_HOSTS = (process.env.BB_HOSTS || 'bb.fedipod.net').split(',').map(s => s.trim()).filter(Boolean);
+// What this staging produced: a stamp that changes with every deploy, so a
+// page already open can tell that it is out of date.
+const BUILD = createHash('sha256').update(String(Date.now()) + VERSION).digest('hex').slice(0, 12);
 const withUpdate = (html) => html.replace('</head>',
-  `<meta name="fedipod-version" content="${VERSION}">\n<script src="/update.js" defer></script>\n</head>`);
+  `<meta name="fedipod-version" content="${VERSION}">\n<meta name="fedipod-build" content="${BUILD}">\n<script src="/update.js" defer></script>\n</head>`);
 const injectUpdate = (file) => fs.writeFileSync(file, withUpdate(fs.readFileSync(file, 'utf8')));
 const copyDir = (from, to) => { fs.mkdirSync(to, { recursive: true });
   for (const e of fs.readdirSync(from, { withFileTypes: true })) {
@@ -120,6 +123,7 @@ fs.writeFileSync(path.join(site, '_redirects'), [
     `https://${h}/           /forum/         301!`,
     `https://${h}/bb/*      /bb/:splat      200!`,
     `https://${h}/update.js /update.js      200!`,
+    `https://${h}/build.json /build.json     200!`,
     `https://${h}/api/*     /.netlify/functions/front  200!`,
     `https://${h}/*         /bb/index.html  200!`,
   ]),
@@ -160,7 +164,7 @@ fs.writeFileSync(path.join(site, '_redirects'), [
 // own /u/<handle>/ or a pod named outright. Its script is a module file of
 // its own, so it is served under the same `script-src 'self'` as the app.
 fs.mkdirSync(path.join(site, 'bb'), { recursive: true });
-for (const f of ['index.html', 'bb.js', 'read.mjs', 'masto.mjs', 'pod.mjs', 'markdown.mjs', 'seen.mjs', 'mine.mjs']) cp(`packages/fedipod-bb/site/${f}`, `bb/${f}`);
+for (const f of ['index.html', 'bb.js', 'read.mjs', 'masto.mjs', 'pod.mjs', 'markdown.mjs', 'seen.mjs', 'mine.mjs', 'private.mjs']) cp(`packages/fedipod-bb/site/${f}`, `bb/${f}`);
 cp('web/admin/tokens.css', 'bb/tokens.css');   // the site's shared palette, size and family
 cp('web/app/oidc-session.mjs', 'bb/oidc-session.mjs');   // signing in to a pod, the browser build's own
 // Each file the forum page loads is named with a hash of its content. A
@@ -173,6 +177,7 @@ cp('web/app/oidc-session.mjs', 'bb/oidc-session.mjs');   // signing in to a pod,
     for (const [a, b] of pairs) t = t.split(a).join(b); fs.writeFileSync(bb(n), t); };
   sub('pod.mjs', [["'./oidc-session.mjs'", `'./oidc-session.mjs?v=${stamp('oidc-session.mjs')}'`],
     ["'./markdown.mjs'", `'./markdown.mjs?v=${stamp('markdown.mjs')}'`],
+    ["'./private.mjs'", `'./private.mjs?v=${stamp('private.mjs')}'`],
     ["'./mine.mjs'", `'./mine.mjs?v=${stamp('mine.mjs')}'`]]);
   sub('bb.js', [["'./read.mjs'", `'./read.mjs?v=${stamp('read.mjs')}'`], ["'./masto.mjs'", `'./masto.mjs?v=${stamp('masto.mjs')}'`],
     ["'./pod.mjs'", `'./pod.mjs?v=${stamp('pod.mjs')}'`], ["'./seen.mjs'", `'./seen.mjs?v=${stamp('seen.mjs')}'`],
@@ -211,5 +216,6 @@ fs.writeFileSync(path.join(site, '_headers'), [
   '  X-Content-Type-Options: nosniff',
   '  Referrer-Policy: same-origin',
   '', ].join('\n'));
+fs.writeFileSync(path.join(site, 'build.json'), JSON.stringify({ build: BUILD, version: VERSION, at: new Date().toISOString() }) + '\n');
 let n = 0; (function count(d) { for (const e of fs.readdirSync(d, { withFileTypes: true })) e.isDirectory() ? count(path.join(d, e.name)) : n++; })(site);
 console.log(`staged web/app/site — ${n} files`);

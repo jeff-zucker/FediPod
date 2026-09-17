@@ -73,6 +73,16 @@
   table.index td:last-child, table.index th:last-child { text-align: right; }
   ul.list { list-style: none; padding: 0; margin: 0; }
   ul.list li { padding: .8rem 0; border-bottom: 1px solid var(--line); }
+  /* A list of things to change is not a list of things to read: no rules
+     between the rows, and each row stays one row. */
+  ul.list.bare li { border-bottom: none; padding: .35rem 0; }
+  /* A settings row stays one row: the field gives up width, the buttons and
+     the handle keep theirs. */
+  ul.list.bare .row, section.reply .row.oneline { margin: .2rem 0; flex-wrap: nowrap; align-items: center; }
+  ul.list.bare .row input[type=text], section.reply .row.oneline input[type=text] {
+    width: auto; flex: 1 1 8rem; min-width: 5rem; }
+  ul.list.bare .row .dim, section.reply .row.oneline .dim { white-space: nowrap; }
+  ul.list.bare .row button, section.reply .row.oneline button { flex: 0 0 auto; }
   ul.list li .title { font-weight: 700; font-size: 1.15rem; color: var(--heading); }
 
   ul.list li .meta { color: var(--sub); }
@@ -111,6 +121,11 @@
   article.post .body code { background: var(--field-bg); padding: .05em .35em; border-radius: .2rem; }
   article.post .body blockquote { margin: .5rem 0; padding-left: .8rem; border-left: 3px solid var(--line); color: var(--sub); }
   ul.list li span.title { font-weight: 700; font-size: 1.15rem; color: var(--heading); }
+  /* A box in front of the page can be moved: its heading is the handle, so
+     a reader who needs to see what is behind it drags it aside. */
+  dialog h2 { cursor: grab; touch-action: none; }
+  dialog h2:active { cursor: grabbing; }
+  dialog.moved { margin: 0; position: fixed; }
   dialog { border: 2px solid var(--dialog-edge); border-radius: .5rem; padding: 0; background: var(--bg); color: var(--fg);
     width: min(38rem, calc(100vw - 2rem)); box-shadow: 0 .6rem 2rem rgba(0, 0, 0, .35); }
   dialog::backdrop { background: rgba(0, 0, 0, .45); }
@@ -170,6 +185,14 @@
   <p class="dim">Loading…</p>
 </main>
 <p class="row" id="reply-row" hidden><button id="reply-open" class="primary">Reply</button></p>
+<dialog id="panel" aria-labelledby="panel-title">
+<section class="reply">
+  <h2 id="panel-title">Settings</h2>
+  <div id="panel-body"></div>
+  <p class="err" id="panel-err" role="alert"></p>
+  <p class="row"><button id="panel-close" class="plain">Close</button></p>
+</section>
+</dialog>
 <dialog id="reply-dlg" aria-labelledby="reply-title">
 <section class="reply" id="reply">
   <h2 id="reply-title">Reply</h2>
@@ -200,6 +223,7 @@
       <button id="reply-send" class="primary">Post reply</button>
     </div>
   </div>
+  <p class="hint" id="reply-private" hidden></p>
   <p class="err" id="reply-err" role="alert"></p>
 </section>
 </dialog>

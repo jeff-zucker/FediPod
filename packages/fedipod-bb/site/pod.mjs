@@ -8,6 +8,7 @@
 
 import { beginLogin, completeLogin, getSession, signOut as endSession } from './oidc-session.mjs';
 import { toHtml } from './markdown.mjs';
+import * as priv from './private.mjs';
 
 const PUBLIC = 'https://www.w3.org/ns/activitystreams#Public';
 const AS = 'https://www.w3.org/ns/activitystreams';
@@ -42,6 +43,36 @@ export const placeOf = (actor, podHome) => ({
   at: (name) => (podHome ? podHome.replace(/\/?$/u, '/') + 'ap/notes/' + name
     : actor.replace(/ap\/actor$/u, 'ap/notes/') + name),
 });
+
+// The face an account publishes under, and the pod it is actually written on.
+// A post in a private category does not live in `ap/notes/`, so the address it
+// is written at is worked out from the whole id rather than from its last
+// segment: the two differ by the container, not only by the name.
+const faceOf = (actor) => actor.replace(/ap\/actor$/u, '');
+const homeOf = (actor, podHome) => (podHome ? podHome.replace(/\/?$/u, '/') : faceOf(actor));
+export const podUrlOf = (actor, podHome, id) => {
+  const face = faceOf(actor);
+  return String(id).startsWith(face) ? homeOf(actor, podHome) + String(id).slice(face.length) : String(id);
+};
+
+// Where a post goes and who it is addressed to. An open category: the public
+// notes container, addressed to the world and to the category. A private one:
+// a container of its own on the author's pod, readable by the people the
+// category names, addressed to the category's members and to nobody else —
+// not to the public, and not to the author's own followers.
+//
+// Every failure here throws, so a post never lands in the open because the
+// private half did not work.
+async function placeAndAudience(s, { actor, podHome, category, categoryBase, isPrivate }) {
+  if (!isPrivate) return { where: 'ap/notes/', to: [PUBLIC, category] };
+  if (!categoryBase) throw new Error('this category was not read from the forum, so nothing was posted');
+  const readers = await priv.readersOf(categoryBase, s);
+  if (!readers) throw new Error('the forum does not say who may read this category — nothing was posted');
+  if (!readers.length) throw new Error('you are not a member of this category');
+  const where = priv.placeFor(category);
+  await priv.prepare(s, homeOf(actor, podHome) + where, s.webId, readers);
+  return { where, to: [categoryBase + 'ap/followers'] };
+}
 
 // What the forum answers as, on its own pod: the page reads a category
 // through the Gateway, whose ids are the front's, but a post is delivered to
@@ -78,12 +109,13 @@ export async function complete(currentUrl) {
 // forum's inbox. A post has no title of its own; when it opens a topic, the
 // activity that opens it carries the TOPIC's name, which is a different
 // thing and belongs to the topic.
-export async function post({ actor, podHome, category, categoryHandle, inbox, topic = '', title = '', text, inReplyTo = null, context = null }) {
+export async function post({ actor, podHome, category, categoryBase = null, categoryHandle, isPrivate = false,
+  inbox, topic = '', title = '', text, inReplyTo = null, context = null }) {
   const s = await getSession();
   if (!s) throw new Error('sign in to your pod first');
-  const place = placeOf(actor, podHome);
+  const { where, to } = await placeAndAudience(s, { actor, podHome, category, categoryBase, isPrivate });
   const name = `${stamp()}-${slug(title) || slug(topic) || 'post'}-${crypto.randomUUID().slice(0, 8)}`;
-  const id = place.id(name);
+  const id = faceOf(actor) + where + name;
   const now = new Date().toISOString();
   const body = htmlOf(text);
   const note = {
@@ -101,14 +133,14 @@ export async function post({ actor, podHome, category, categoryHandle, inbox, to
     published: now,
     ...(inReplyTo ? { inReplyTo } : {}),
     ...(context ? { context, audience: category } : { audience: category }),
-    to: [PUBLIC, category],
+    to,
     cc: [],
     tag: [{ type: 'Mention', href: category, ...(categoryHandle ? { name: categoryHandle } : {}) }],
   };
   // The type it is STORED as decides what a reader may ask for: a pod will
   // not convert one JSON flavour into another, and answers 501 to a server
   // asking for ActivityPub over a document filed as plain JSON-LD.
-  const put = await s.fetch(place.at(name), { method: 'PUT', headers: { 'content-type': 'application/activity+json' }, body: JSON.stringify(note) });
+  const put = await s.fetch(homeOf(actor, podHome) + where + name, { method: 'PUT', headers: { 'content-type': 'application/activity+json' }, body: JSON.stringify(note) });
   if (!put.ok) throw new Error(`your pod refused the post (HTTP ${put.status})`);
   const create = {
     '@context': AS,
@@ -118,7 +150,7 @@ export async function post({ actor, podHome, category, categoryHandle, inbox, to
     published: now,
     ...(topic ? { name: String(topic).slice(0, 200) } : {}),
     object: note,
-    to: [PUBLIC, category],
+    to,
     cc: [],
   };
   const sent = await fetch(inbox, { method: 'POST', headers: { 'content-type': 'application/ld+json' }, body: JSON.stringify(create) });
@@ -128,14 +160,19 @@ export async function post({ actor, podHome, category, categoryHandle, inbox, to
 
 // Joining: a category carries a member's posts, so the first post from a new
 // reader is preceded by a Follow the category answers itself.
-export async function edit({ actor, podHome, id, title = '', text, category, inbox }) {
+export async function edit({ actor, podHome, id, title = '', text, category, categoryBase = null, isPrivate = false, inbox }) {
   const s = await getSession();
   if (!s) throw new Error('sign in to your pod first');
   const now = new Date().toISOString();
-  const at = placeOf(actor, podHome).at(id.split('/').pop());
-  const was = await fetch(id, { headers: { accept: 'application/activity+json' } }).then(r => (r.ok ? r.json() : null)).catch(() => null);
+  const at = podUrlOf(actor, podHome, id);
+  // Read as the author: a post in a private category answers nobody else.
+  const was = await s.fetch(id, { headers: { accept: 'application/activity+json' } }).then(r => (r.ok ? r.json() : null)).catch(() => null);
+  // A change keeps the audience the post already had. Rewriting it from the
+  // category alone would turn a private post public on its way through an
+  // edit, which is the kind of quiet widening nothing here may do.
+  const to = was?.to || (isPrivate && categoryBase ? [categoryBase + 'ap/followers'] : [PUBLIC, category]);
   const note = {
-    ...(was || { '@context': AS, id, type: 'Note', attributedTo: actor, to: [PUBLIC, category] }),
+    ...(was || { '@context': AS, id, type: 'Note', attributedTo: actor, to }),
     type: title ? 'Article' : 'Note',
     content: htmlOf(text),
     source: sourceOf(text),
@@ -145,23 +182,25 @@ export async function edit({ actor, podHome, id, title = '', text, category, inb
   if (title) note.name = String(title).slice(0, 200); else delete note.name;
   const put = await s.fetch(at, { method: 'PUT', headers: { 'content-type': 'application/activity+json' }, body: JSON.stringify(note) });
   if (!put.ok) throw new Error(`your pod refused the change (HTTP ${put.status})`);
+  note.to = to;
   const update = { '@context': AS, id: `${id}#update-${Date.now()}`, type: 'Update', actor, published: now,
-    object: note, to: [PUBLIC, category], cc: [] };
+    object: note, to, cc: [] };
   const sent = await fetch(inbox, { method: 'POST', headers: { 'content-type': 'application/ld+json' }, body: JSON.stringify(update) });
   if (!sent.ok) throw new Error(`the forum did not take the change (HTTP ${sent.status})`);
   return { id };
 }
 
-export async function remove({ actor, podHome, id, category, inbox }) {
+export async function remove({ actor, podHome, id, category, categoryBase = null, isPrivate = false, inbox }) {
   const s = await getSession();
   if (!s) throw new Error('sign in to your pod first');
   const now = new Date().toISOString();
-  const at = placeOf(actor, podHome).at(id.split('/').pop());
+  const at = podUrlOf(actor, podHome, id);
+  const to = isPrivate && categoryBase ? [categoryBase + 'ap/followers'] : [PUBLIC, category];
   const stone = { '@context': AS, id, type: 'Tombstone', formerType: 'Note', deleted: now };
   const put = await s.fetch(at, { method: 'PUT', headers: { 'content-type': 'application/activity+json' }, body: JSON.stringify(stone) });
   if (!put.ok) throw new Error(`your pod refused the deletion (HTTP ${put.status})`);
   const del = { '@context': AS, id: `${id}#delete-${Date.now()}`, type: 'Delete', actor, published: now,
-    object: id, to: [PUBLIC, category], cc: [] };
+    object: id, to, cc: [] };
   const sent = await fetch(inbox, { method: 'POST', headers: { 'content-type': 'application/ld+json' }, body: JSON.stringify(del) });
   if (!sent.ok) throw new Error(`the forum was not told (HTTP ${sent.status})`);
   return { id };

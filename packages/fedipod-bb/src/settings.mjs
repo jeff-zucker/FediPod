@@ -46,19 +46,63 @@ export async function applySettings(forum, activity) {
     if (!SLUG.test(slug)) throw new Error(`not a category slug: ${slug}`);
     const cats = cfg().categories || [];
     if (cats.some(c => c.slug === slug)) return { unchanged: slug };
-    save({ categories: [...cats, { slug, name: String(object.name || slug).slice(0, 200) }], republish: true });
-    return { category: slug };
+    // Private: joining is approved by a moderator (AS2's own
+    // manuallyApprovesFollowers) and only those admitted may read it. It
+    // starts readable by the moderators, since a category nobody can read is
+    // a category nobody can moderate.
+    const priv = object.manuallyApprovesFollowers === true;
+    const next = {
+      categories: [...cats, { slug, name: String(object.name || slug).slice(0, 200), private: priv }],
+      republish: true,
+    };
+    if (priv) {
+      next.membersOnly = [...new Set([...(cfg().membersOnly || []), slug])];
+      next.memberWebIds = { ...(cfg().memberWebIds || {}), [slug]: [...(cfg().moderatorWebIds || [])] };
+      next.reprovision = true;
+    }
+    save(next);
+    return { category: slug, private: priv };
   }
 
   if (t === 'Update' && object && typeof object === 'object') {
     const id = idOf(object);
     const name = typeof object.name === 'string' ? object.name.trim().slice(0, 200) : '';
-    if (!name) return {};
-    if (id === site.actor) { save({ name, republish: true }); return { forum: name }; }
+    if (id === site.actor) {
+      if (!name) return {};
+      save({ name, republish: true });
+      return { forum: name };
+    }
     const cat = forum.categories.find(c => c.urls.actor === id);
     if (!cat) return {};
-    save({ categories: (cfg().categories || []).map(c => (c.slug === cat.slug ? { ...c, name } : c)), republish: true });
-    return { category: cat.slug, name };
+    const out = {};
+    if (name) {
+      save({ categories: (cfg().categories || []).map(c => (c.slug === cat.slug ? { ...c, name } : c)), republish: true });
+      out.category = cat.slug;
+      out.name = name;
+    }
+    // Open or private is the forum's OWN setting, and this is the only thing
+    // that changes it: not who joins, not who is named a member, not how many
+    // of either there are. AS2 already says it on a Group — a private
+    // category approves each join — so `manuallyApprovesFollowers` is the
+    // word for it, and the actor the forum publishes carries the same one.
+    if ('manuallyApprovesFollowers' in object) {
+      const priv = object.manuallyApprovesFollowers === true;
+      const closed = new Set(cfg().membersOnly || []);
+      if (priv) closed.add(cat.slug); else closed.delete(cat.slug);
+      // Turning a category private with nobody named yet leaves its
+      // moderators able to read it: a category nobody can read is a category
+      // nobody can moderate.
+      const named = { ...(cfg().memberWebIds || {}) };
+      if (priv && !(named[cat.slug] || []).length) named[cat.slug] = [...(cfg().moderatorWebIds || [])];
+      save({
+        membersOnly: [...closed], memberWebIds: named,
+        categories: (cfg().categories || []).map(c => (c.slug === cat.slug ? { ...c, private: priv } : c)),
+        republish: true, reprovision: true,
+      });
+      out.category = cat.slug;
+      out.private = priv;
+    }
+    return out;
   }
 
   const who = idOf(object);
@@ -74,14 +118,24 @@ export async function applySettings(forum, activity) {
     }
     // Who may read a members-only category, and who may read the queue: a
     // WebID, because only a WebID can be named in a pod's own access rule.
+    // A member named by their Fediverse actor rather than their WebID: what
+    // a moderator has in front of them when they admit a join request. The
+    // WebID is the pod the actor lives on, checked against that pod's own
+    // profile before it is granted anything.
+    if (cat && target === cat.urls.members && !/#|\/profile\//u.test(who)) {
+      const webid = await forum.webIdOf(who).catch(() => null);
+      if (!webid) throw new Error(`no WebID could be found for ${who}`);
+      return applySettings(forum, { ...activity, object: webid });
+    }
     if (cat && target === cat.urls.members) {
       const named = { ...(cfg().memberWebIds || {}) };
       const held = new Set(named[cat.slug] || []);
       if (on) held.add(who); else held.delete(who);
       named[cat.slug] = [...held];
-      const closed = new Set(cfg().membersOnly || []);
-      if (on) closed.add(cat.slug);
-      save({ memberWebIds: named, membersOnly: [...closed], republish: true, reprovision: true });
+      // Naming a member says NOTHING about whether the category is open or
+      // private. That is the forum's own setting and only an Update changes
+      // it; in an open category this list simply sits there unused.
+      save({ memberWebIds: named, republish: true, reprovision: true });
       return { category: cat.slug, members: held.size };
     }
     if (target === site.mod) {

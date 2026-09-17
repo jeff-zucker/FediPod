@@ -106,6 +106,34 @@ export async function publishAdministrators({ remote, store, urls }, actorIds, {
   return flat({ remote, store }, 'administrators', urls.administrators, fwire.administratorsCollection(urls.administrators, actorIds), force);
 }
 
+// The reader list of a private category, written where only those readers can
+// read it. This is the document a member's own pod copies into the access rule
+// on the container it writes that category's posts into: the forum cannot
+// write rules on somebody else's pod, so it publishes who the rule must name
+// and each member's own browser writes it.
+//
+// An open category has no list. If it had one it is taken down, so a category
+// turned open cannot leave a stale one behind for a member's browser to copy.
+export async function publishMembers(cat, readers, { force = false } = {}) {
+  const url = cat.urls.members;
+  const seen = cat.store.read('published.json', {});
+  if (!readers) {
+    if (!seen.members) return 0;
+    await cat.remote.delete(url).catch(() => {});
+    cat.store.write('published.json', { ...cat.store.read('published.json', {}), members: null });
+    return 0;
+  }
+  const doc = fwire.membersCollection(url, readers);
+  const digest = digestOf(doc);
+  if (!force && seen.members === digest) return 0;
+  await cat.remote.putJson(url, doc);
+  // Not public, and not owner-only either: the people named are the people who
+  // may read it.
+  await cat.remote.setAcl(url, [], { readAgents: readers });
+  cat.store.write('published.json', { ...cat.store.read('published.json', {}), members: digest });
+  return readers.length;
+}
+
 async function flat({ remote, store }, key, url, doc, force) {
   const seen = store.read('published.json', {});
   const digest = digestOf(doc);

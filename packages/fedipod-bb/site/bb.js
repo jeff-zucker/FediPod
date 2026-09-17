@@ -194,11 +194,17 @@ async function load() {
 }
 
 function crumbs(parts) {
+  // One stop is no trail: the front page needs no line saying it is the
+  // front page.
+  if (parts.length < 2) { $('crumbs').textContent = ''; $('crumbs').hidden = true; $('forum-status').hidden = false; return; }
+  $('crumbs').hidden = false;
   $('forum-status').hidden = parts.length > 1;
   $('crumbs').innerHTML = parts.map(([label, href], i) => (href && i < parts.length - 1 ? `<a href="${esc(href)}">${esc(label)}</a>` : esc(label))).join(' › ');
 }
 
 async function route() {
+  const mine = ++view;
+  void mine;
   const hash = location.hash.replace(/^#\/?/u, '');
   const [kind, a, b, c] = hash.split('/');
   $('reply-row').hidden = true;
@@ -218,6 +224,7 @@ async function route() {
 // in the topic, one click away.
 let feedFilter = 'all';        // 'all', or a category's slug
 let shown = 30;                // how many of the index's rows are on the page
+let view = 0;                  // which view the page is on; an older one must not draw
 let order = 'date';            // which column the index is ordered by
 let down = true;               // and which way
 let finding = '';              // what the reader is looking for, if anything
@@ -277,12 +284,15 @@ async function showQueue() {
     if (!rows.length) { $('main').innerHTML = '<p class="empty">Nothing is waiting.</p>'; return; }
     $('main').innerHTML = `<ul class="list">${rows.map(r => `<li>
       <div class="title">${esc(r.type)}${r.category ? ' · ' + esc(r.category) : ''}</div>
-      <div class="meta">${esc(r.by ? authorLabel(r.by) : '')} · ${esc(when(r.at))}${r.verified ? ' · checked' : ''}</div>
+      <div class="meta">${r.type === 'Flag' ? 'reported by ' : ''}${esc(r.by ? authorLabel(r.by) : '')}${r.about ? ` · about <a href="#/who/${encodeURIComponent(r.about)}">${esc(authorLabel(r.about))}</a>` : ''} · ${esc(when(r.at))}${r.verified ? ' · checked' : ''}</div>
       ${r.object ? `<div class="dim">${esc(r.object)}</div>` : ''}
       ${r.why ? `<article class="post"><div class="body">${esc(r.why)}</div></article>` : ''}
       ${r.object ? `<div class="acts mod" data-post="${esc(r.object)}" data-cat="${esc(r.category || '')}">
         ${r.type === 'Held' || r.type === 'Create' ? '<button data-act="approve">Let it through</button><button data-act="refuse">Turn it away</button>' : ''}
-        ${r.by ? '<button data-act="ban" data-who="' + esc(r.by) + '">Ban them</button>' : ''}
+        ${r.type === 'Join request' ? '<button data-act="admit">Admit</button><button data-act="refuse">Turn them away</button>' : ''}
+        ${r.about ? '<button data-act="ban" data-who="' + esc(r.about) + '">Ban the author</button>' : ''}
+        ${r.about && r.object ? '<button data-act="removepost" data-post="' + esc(r.object) + '">Remove the post</button>' : ''}
+        ${r.type !== 'Flag' && r.by ? '<button data-act="ban" data-who="' + esc(r.by) + '">Ban them</button>' : ''}
       </div>` : ''}
     </li>`).join('')}</ul>`;
   } catch (e) { $('main').innerHTML = `<p class="err">${esc(e.message)}</p>`; }
@@ -319,61 +329,60 @@ async function showSettings() {
   crumbs([['Home', '#/'], ['Settings', null]]);
   if (!iModerate()) { $('main').innerHTML = '<p class="empty">Only this forum\'s moderators may change it.</p>'; return; }
   if (!podAcct) { $('main').innerHTML = '<p class="empty">Changing the forum is done with your pod account.</p>'; return; }
-  const closed = new Set();
-  for (const c of cats()) { if (!(await read.canRead(c.base))) closed.add(c.id); }
   $('main').innerHTML = `
     <div class="topline"><h1>Settings</h1></div>
     <section class="reply">
       <h2>The forum</h2>
-      <div class="row">
+      <div class="row oneline">
         <label for="set-forum-name">Name</label>
         <input type="text" id="set-forum-name" value="${esc(forum.name || '')}">
         <button data-act="set-forum-name">Rename</button>
+        <button data-act="open-mods">Manage moderators</button>
       </div>
     </section>
     <section class="reply">
       <h2>Categories</h2>
-      <ul class="list">${cats().map(c => `<li>
+      <ul class="list bare">${cats().map(c => `<li>
         <div class="row">
           <input type="text" class="cat-name" data-cat="${esc(c.id)}" value="${esc(c.name)}">
           <button data-act="set-cat-name" data-cat="${esc(c.id)}">Rename</button>
-          <span class="dim">${esc(handleOf(c))}${closed.has(c.id) ? ' · members only' : ''}</span>
-        </div>
-        <div class="row">
-          <input type="text" class="cat-member" data-cat="${esc(c.id)}" placeholder="https://someone.example/profile/card#me">
-          <button data-act="add-member" data-cat="${esc(c.id)}">Let them in</button>
-          <button data-act="drop-member" data-cat="${esc(c.id)}">Take them out</button>
+          <button data-act="open-members" data-cat="${esc(c.id)}">Manage members</button>
+          <span class="dim">${esc(handleOf(c))}</span>
+          <label><input type="radio" name="cat-private-${esc(c.slug || c.id)}" data-act="set-cat-private" data-cat="${esc(c.id)}" value="open"${c.private ? '' : ' checked'}> Open</label>
+          <label><input type="radio" name="cat-private-${esc(c.slug || c.id)}" data-act="set-cat-private" data-cat="${esc(c.id)}" value="private"${c.private ? ' checked' : ''}> Private</label>
         </div>
       </li>`).join('')}</ul>
-      <div class="row">
-        <label for="set-new-slug">New category</label>
-        <input type="text" id="set-new-slug" placeholder="slug" size="12">
-        <input type="text" id="set-new-name" placeholder="Its name">
-        <button data-act="add-cat">Create</button>
-      </div>
-      <p class="hint">A slug is permanent: it is the category's address on the pod and its handle on the Fediverse.</p>
     </section>
     <section class="reply">
-      <h2>Moderators</h2>
-      <p class="hint">${moderators.map(m => esc(authorLabel(m))).join(', ') || 'nobody yet'}</p>
-      <div class="row">
-        <label for="set-mod">Their Fediverse actor</label>
-        <input type="text" id="set-mod" placeholder="https://their.server/users/them">
-        <button data-act="add-mod">Add</button><button data-act="drop-mod">Remove</button>
+      <h2>New Category</h2>
+      <div class="row oneline">
+        <label for="set-new-name">Category name</label>
+        <input type="text" id="set-new-name">
+        <label for="set-new-slug">Category slug</label>
+        <input type="text" id="set-new-slug" placeholder="Fediverse Username" size="18">
       </div>
       <div class="row">
-        <label for="set-mod-webid">And their WebID, to read the queue</label>
-        <input type="text" id="set-mod-webid" placeholder="https://their.pod/profile/card#me">
-        <button data-act="add-mod-webid">Add</button>
+        <label><input type="radio" name="set-new-private" value="open" checked> Open</label>
+        <label><input type="radio" name="set-new-private" value="private"> Private</label>
+        <button data-act="add-cat">Create</button>
       </div>
     </section>
-    <p class="hint">Each change is sent to the forum and takes effect once it has checked who asked, usually within a minute.</p>`;
+`;
 }
 
 async function showForum() {
+  const mineView = view;
   const here = cats().find(c => c.slug === feedFilter) || null;
   crumbs(here ? [['Home', '#/'], [here.name, `#/c/${here.slug}`]] : [['Home', '#/']]);
-  moderators = here ? await read.moderators(here.base) : [];
+  // Who moderates what is on screen. Showing the whole forum, that is
+  // whoever moderates its categories — otherwise a moderator looking at
+  // everything would look like a stranger.
+  if (here) moderators = await read.moderators(here.base);
+  else {
+    const all = new Set();
+    for (const c of cats()) for (const m of await read.moderators(c.base)) all.add(m);
+    moderators = [...all];
+  }
   const chip = (slug, label) => `<a class="chip${feedFilter === slug ? ' on' : ''}"${feedFilter === slug ? ' aria-current="page"' : ''} href="${slug === 'all' ? '#/' : `#/c/${esc(slug)}`}">${esc(label)}</a>`;
   // Starting a topic from the front page: in the category being shown, or the
   // first one when the whole forum is.
@@ -385,6 +394,7 @@ async function showForum() {
     <input type="text" id="find" placeholder="Search" value="${esc(finding)}" autocomplete="off">
     ${here && account() && podAcct ? `<button class="new" data-act="${own().isJoined(here.id) ? 'leave' : 'join'}" data-cat="${esc(here.id)}">${own().isJoined(here.id) ? 'Leave' : 'Join'}</button>` : ''}
     ${into ? `<button class="new" data-act="newtopic" data-slug="${esc(into.slug || '')}">New topic</button>` : ''}</p>`;
+  if (mineView !== view) return;
   $('main').innerHTML = head + '<p class="dim">Loading…</p>';
   say('Loading the latest posts');
   // Enough posts to fill a page of TOPICS: several posts can belong to one.
@@ -420,13 +430,17 @@ async function showForum() {
     // A members-only category that will not answer this reader looks exactly
     // like an empty one. Ask it a question only a member can have answered.
     if (here && !(await read.topics(here.base)).total && !(await read.canRead(here.base))) {
-      $('main').innerHTML = head + `<p class="empty">${account()
-        ? 'This category is for its members. Ask a moderator to add you.'
-        : 'This category is for its members. Sign in with the pod account that was added to it.'}</p>`;
+      if (mineView !== view) return;
+      $('main').innerHTML = head + (podAcct
+        ? `<p class="empty row">This category is for its members.
+           <button class="new" data-act="ask-join" data-cat="${esc(here.id)}">Request membership</button></p>`
+        : `<p class="empty row">This category is for its members, and membership needs a FediPod account.
+           <a class="big" href="${esc(front)}/new-account">Get a FediPod account</a></p>`);
       say('This category is for its members');
       return;
     }
     // The one thing to do on an empty page is the one thing offered.
+    if (mineView !== view) return;
     $('main').innerHTML = head + '<p class="empty">Nothing posted here yet. Use the button at the upper right to create a topic.</p>';
     say('Nothing posted here yet');
     return;
@@ -454,6 +468,7 @@ async function showForum() {
   // A table, so a reader can run their eye down any one of the four things
   // an entry says.
   const more = Math.max(0, topics.length - page.length) + (latest.more || 0);
+  if (mineView !== view) return;
   $('main').innerHTML = head + `<div class="scroll" role="region" aria-label="Topics, most recently posted in first" tabindex="0"><table class="index">
     <thead><tr><th scope="col">Topic</th><th scope="col">Category</th><th scope="col">Latest by</th>
       <th scope="col" aria-sort="${order === 'date' ? (down ? 'descending' : 'ascending') : 'none'}">
@@ -573,6 +588,44 @@ async function signIn(handleInput) {
       : `${host} does not offer a sign-in this page can use. Post from your account there, naming ${at}, and it arrives here.`;
 }
 
+// A box in front of the page is movable: press its heading and drag. It
+// stays where it was put until it is closed, and it cannot be dragged off
+// the edge and lost.
+function movable(dlg) {
+  const grip = dlg.querySelector('h2');
+  if (!grip || grip.dataset.movable) return;
+  grip.dataset.movable = '1';
+  grip.addEventListener('pointerdown', (e) => {
+    if (e.button && e.button !== 0) return;
+    const box = dlg.getBoundingClientRect();
+    const from = { x: e.clientX - box.left, y: e.clientY - box.top };
+    grip.setPointerCapture(e.pointerId);
+    const move = (ev) => {
+      const x = Math.min(Math.max(0, ev.clientX - from.x), window.innerWidth - box.width);
+      const y = Math.min(Math.max(0, ev.clientY - from.y), window.innerHeight - 40);
+      dlg.classList.add('moved');
+      dlg.style.left = `${x}px`;
+      dlg.style.top = `${y}px`;
+    };
+    const done = () => { grip.removeEventListener('pointermove', move); grip.removeEventListener('pointerup', done); };
+    grip.addEventListener('pointermove', move);
+    grip.addEventListener('pointerup', done);
+  });
+}
+
+// Anything the page opens in front of itself goes through here.
+function openPanel(title, html) {
+  $('panel-title').textContent = title;
+  $('panel-body').innerHTML = html;
+  $('panel-err').textContent = '';
+  const dlg = $('panel');
+  dlg.classList.remove('moved');
+  dlg.style.left = dlg.style.top = '';
+  movable(dlg);
+  dlg.showModal();
+}
+$('panel-close').addEventListener('click', () => $('panel').close());
+
 $('reply-open').addEventListener('click', () => { openReply({ inReplyToUrl: replyCtx?.inReplyToUrl || null }); });
 $('main').addEventListener('click', (e) => {
 
@@ -597,10 +650,37 @@ $('main').addEventListener('click', (e) => {
     return showForum();
   }
   if (act === 'join' || act === 'leave') return joinOrLeave(b.dataset.cat, act === 'join');
+  if (act === 'ask-join') return askToJoin(b.dataset.cat);
+  if (act === 'admit') return modAdmit(id, b.closest('[data-cat]')?.dataset.cat);
+  if (act === 'removepost') return modRemoveFromQueue(b.dataset.post, b.closest('[data-cat]')?.dataset.cat);
   if (act === 'save' || act === 'unsave') return saveOrNot(id, act === 'save');
   if (act === 'like' || act === 'unlike') return voteOn(id, act === 'like');
   if (act === 'approve' || act === 'refuse') return modHeld(id, b.closest('[data-cat]')?.dataset.cat, act === 'approve');
   if (act === 'ban') return modBan(b.dataset.who, b.closest('[data-cat]')?.dataset.cat);
+  if (act === 'open-mods') {
+    return openPanel('Moderators', `<p class="hint">${moderators.map(m => esc(authorLabel(m))).join(', ') || 'nobody yet'}</p>
+      <div class="row">
+        <label for="set-mod">Their Fediverse actor</label>
+        <input type="text" id="set-mod" placeholder="https://their.server/users/them">
+        <button data-act="add-mod">Add</button><button data-act="drop-mod">Remove</button>
+      </div>
+      <div class="row">
+        <label for="set-mod-webid">And their WebID, so they can read the queue</label>
+        <input type="text" id="set-mod-webid" placeholder="https://their.pod/profile/card#me">
+        <button data-act="add-mod-webid">Add</button>
+      </div>`);
+  }
+  if (act === 'open-members') {
+    const cat = cats().find(c => c.id === b.dataset.cat);
+    if (!cat) return;
+    return openPanel(`Members of ${cat.name}`, `<p class="hint">Naming anyone here closes this category to everyone else. A member is named by their WebID, which is what a pod's own rule can grant.</p>
+      <div class="row">
+        <label for="set-member">Their WebID</label>
+        <input type="text" id="set-member" class="cat-member" data-cat="${esc(cat.id)}" placeholder="https://someone.example/profile/card#me">
+        <button data-act="add-member" data-cat="${esc(cat.id)}">Let them in</button>
+        <button data-act="drop-member" data-cat="${esc(cat.id)}">Take them out</button>
+      </div>`);
+  }
   if (act.startsWith('set-') || act.startsWith('add-') || act.startsWith('drop-')) return onSettings(b);
   if (act === 'newpost') return openReply({ inReplyToUrl: replyCtx?.inReplyToUrl || null });
   if (act === 'newtopic') {
@@ -620,7 +700,22 @@ $('main').addEventListener('click', (e) => {
 // The dialog takes the focus when it opens and hands it back to whatever
 // opened it when it closes, so a keyboard is never left where the page was.
 let reopener = null;
+// What a private category actually promises the person about to write in it.
+// Said in the box, at the moment it matters, because the word Private on a
+// button is a claim and this is the whole of what is behind it.
+function sayPrivacy() {
+  const note = $('reply-private');
+  if (!note) return;
+  const cat = replyCtx?.cat;
+  if (!cat?.private) { note.hidden = true; note.textContent = ''; return; }
+  note.hidden = false;
+  note.textContent = `${cat.name} is private. This is written into your own pod for its members to read, `
+    + 'and goes to nobody else. Your followers are not sent it and cannot read it. '
+    + 'Anyone admitted later can read it, and anyone admitted now can copy it.';
+}
+
 function showDialog() {
+  sayPrivacy();
   reopener = document.activeElement;
   $('reply-dlg').showModal();
   (account() ? $('reply-text') : $('fedi-handle'))?.focus();
@@ -629,6 +724,7 @@ $('reply-dlg').addEventListener('close', () => { reopener?.focus?.(); reopener =
 
 // The dialog, armed for what it is about to do.
 function openReply({ inReplyToUrl = null } = {}) {
+  movable($('reply-dlg'));
   editing = null;
   if (replyCtx) replyCtx.inReplyToUrl = inReplyToUrl;
   $('reply-title').textContent = replyCtx?.title || 'Reply';
@@ -747,6 +843,31 @@ async function voteOn(postId, up) {
   } catch (e) { alert(e.message); }
 }
 
+// Asking to be let into a private category: the same Follow that joining
+// sends, which a category approving its members holds for a moderator.
+async function askToJoin(categoryId) {
+  const cat = cats().find(c => c.id === categoryId);
+  if (!cat || !podAcct) return;
+  try {
+    const inbox = await pod.podInboxOf(cat.id, { front, handle: cat.slug || null });
+    await pod.join({ actor: podAcct.actor, category: cat.id, inbox });
+    say('Asked. A moderator sees it in the forum\'s queue.');
+    alert('Your request is with the moderators.');
+  } catch (e) { alert(e.message); }
+}
+
+// Admitting somebody who asked: their follow is accepted, and in a private
+// category their pod is granted the reading that membership means.
+async function modAdmit(who, slug) {
+  const cat = cats().find(c => c.slug === slug) || replyCtx?.cat;
+  if (!cat || !who) return;
+  try {
+    await asksTo({ type: 'Join', object: who }, cat);
+    await asksTo({ type: 'Add', object: who, target: cat.base + 'ap/members' }, cat);
+    say('Admitted. It takes effect once the forum has checked who asked.');
+  } catch (e) { alert(e.message); }
+}
+
 // A bookmark is this reader's own note to come back to, in this browser.
 function saveOrNot(postId, on) {
   const m = own();
@@ -766,6 +887,20 @@ async function modHeld(postId, slug, through) {
   try {
     await asksTo({ type: through ? 'Accept' : 'Reject', object: postId }, cat);
     say(through ? 'Let through. It is carried once the forum has checked who asked.' : 'Turned away.');
+  } catch (e) { alert(e.message); }
+}
+
+// A reported post taken out of its topic, from the queue rather than from
+// the thread: the topic it is in is the one the forum has it in.
+async function modRemoveFromQueue(postId, slug) {
+  const cat = cats().find(c => c.slug === slug);
+  if (!cat || !postId) return;
+  if (!confirm('Remove this post from its topic?')) return;
+  try {
+    const copy = await read.post(cat.base, postId);
+    if (!copy?.topic) throw new Error('the forum does not say which topic holds it');
+    await asksTo({ type: 'Delete', object: postId, origin: copy.topic }, cat);
+    say('Asked. It takes effect once the forum has checked who asked.');
   } catch (e) { alert(e.message); }
 }
 
@@ -805,8 +940,10 @@ async function onSettings(b) {
   } else if (act === 'add-cat') {
     const slug = val('#set-new-slug').toLowerCase();
     const name = val('#set-new-name') || slug;
-    if (!/^[a-z0-9][a-z0-9-]{0,62}$/u.test(slug)) { alert('a slug is lower-case letters, digits and hyphens'); return; }
-    await settingsAsk({ type: 'Create', target: forum.id, object: { type: 'Group', preferredUsername: slug, name } });
+    if (!/^[a-z0-9][a-z0-9-]{0,62}$/u.test(slug)) { alert('a Fediverse username is lower-case letters, digits and hyphens'); return; }
+    const priv = document.querySelector('input[name="set-new-private"]:checked')?.value === 'private';
+    await settingsAsk({ type: 'Create', target: forum.id,
+      object: { type: 'Group', preferredUsername: slug, name, ...(priv ? { manuallyApprovesFollowers: true } : {}) } });
   } else if (act === 'add-member' || act === 'drop-member') {
     const webid = document.querySelector(`.cat-member[data-cat="${CSS.escape(catId)}"]`)?.value.trim();
     const cat = cats().find(c => c.id === catId);
@@ -846,7 +983,8 @@ async function removePost(id) {
     const cat = replyCtx.cat;
     if (podAcct) {
       const inbox = await pod.podInboxOf(cat.id, { front, handle: cat.slug || null });
-      await pod.remove({ actor: podAcct.actor, podHome: podAcct.podHome, id, category: cat.id, inbox });
+      await pod.remove({ actor: podAcct.actor, podHome: podAcct.podHome, id, category: cat.id,
+        categoryBase: cat.base, isPrivate: !!cat.private, inbox });
     } else {
       const p = await read.post(cat.base, id);
       await login.remove({ url: p?.page || id });
@@ -855,6 +993,20 @@ async function removePost(id) {
   } catch (e) { alert(e.message); }
 }
 $('reply-cancel').addEventListener('click', () => $('reply-dlg').close());
+// Open or private is the forum's setting, changed here and nowhere else:
+// nobody joining, and nobody being named a member, ever moves a category
+// between the two.
+$('main').addEventListener('change', async (e) => {
+  const r = e.target;
+  if (r?.dataset?.act !== 'set-cat-private' || !r.checked) return;
+  const cat = cats().find(c => c.id === r.dataset.cat);
+  if (!cat) return;
+  const priv = r.value === 'private';
+  if (priv === !!cat.private) return;
+  await settingsAsk({ type: 'Update', object: { id: cat.id, manuallyApprovesFollowers: priv } });
+  cat.private = priv;
+});
+
 let findTimer = null;
 $('main').addEventListener('input', (e) => {
   if (e.target?.id !== 'find') return;
@@ -901,7 +1053,8 @@ async function saveEdit({ body }) {
   const cat = replyCtx.cat;
   if (podAcct) {
     const inbox = await pod.podInboxOf(cat.id, { front, handle: cat.slug || null });
-    return pod.edit({ actor: podAcct.actor, podHome: podAcct.podHome, id: editing.id, text: body, category: cat.id, inbox });
+    return pod.edit({ actor: podAcct.actor, podHome: podAcct.podHome, id: editing.id, text: body, category: cat.id,
+      categoryBase: cat.base, isPrivate: !!cat.private, inbox });
   }
   return login.edit({ url: editing.page || editing.id, text: body });
 }
@@ -912,9 +1065,13 @@ async function postFromPod({ topic, body }) {
   const cat = replyCtx.cat;
   const inbox = await pod.podInboxOf(cat.id, { front, handle: cat.slug || null });
   if (!inbox) throw new Error('the forum did not say where to send it');
-  await pod.join({ actor: podAcct.actor, category: cat.id, inbox });
+  // Posting in an open category joins it on the way past, which is what makes
+  // the post carry. A private one is joined by asking and being admitted, so
+  // the post is refused here instead, and says so.
+  if (!cat.private) await pod.join({ actor: podAcct.actor, category: cat.id, inbox });
   return pod.post({
-    actor: podAcct.actor, podHome: podAcct.podHome, category: cat.id, categoryHandle: handleOf(cat), inbox,
+    actor: podAcct.actor, podHome: podAcct.podHome, category: cat.id, categoryBase: cat.base,
+    categoryHandle: handleOf(cat), isPrivate: !!cat.private, inbox,
     topic, text: body, inReplyTo: replyCtx.inReplyToUrl,
     context: replyCtx.topicId ? replyCtx.topicId : null,
   });

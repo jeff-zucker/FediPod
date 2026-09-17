@@ -103,6 +103,10 @@ export function reader({ fetch: f = globalThis.fetch.bind(globalThis), session =
         categories.push({
           id: a.id || id, base: cbase, slug: a.preferredUsername || null,
           name: a.name || a.preferredUsername || id, summary: a.summary || null,
+          // Open or private, as the forum itself says on the category's
+          // actor. A private category approves each join, which is what AS2
+          // spells `manuallyApprovesFollowers`.
+          private: a.manuallyApprovesFollowers === true,
           members: Number(followers?.totalItems) || 0,
         });
       }
@@ -243,6 +247,9 @@ export function reader({ fetch: f = globalThis.fetch.bind(globalThis), session =
         // rather than guessing it back out of the HTML.
         source: copy.source?.mediaType === 'text/markdown' && typeof copy.source?.content === 'string' ? copy.source.content : null,
         published: copy.published || null, updated: copy.updated || null, inReplyTo: idOf(copy.inReplyTo) || null,
+        // Which topic the forum placed it in: what a Delete has to name as
+        // the place the post is being taken out of.
+        topic: idOf(copy.context) || null,
       };
     },
   };

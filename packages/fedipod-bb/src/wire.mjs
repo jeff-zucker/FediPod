@@ -89,6 +89,11 @@ export function topicsPaging(topicIds, index = []) {
 
 // ── the forum ──────────────────────────────────────────────────────────
 export const categoriesCollection = (id, actorIds) => orderedCollection(id, actorIds);
+// Who may read a private category: the WebIDs its posts are written for. Its
+// readers are its items — nobody outside the list can read the list — and the
+// forum's own WebID is one of them, because the forum fetches every post back
+// from its author's pod before it carries it.
+export const membersCollection = (id, webIds) => orderedCollection(id, webIds);
 export const administratorsCollection = (id, actorIds) => orderedCollection(id, actorIds);
 // The latest posts: the forum's own copies of them, newest first. Its items
 // are the copies rather than the authors' ids, because one fetch of a copy
