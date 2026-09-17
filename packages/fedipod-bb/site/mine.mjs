@@ -24,11 +24,20 @@ export function mine({ storage, who }) {
     join: (id) => write(storage, who, 'joined', [...new Set([...read(storage, who, 'joined'), id])]),
     leave: (id) => write(storage, who, 'joined', read(storage, who, 'joined').filter(x => x !== id)),
 
-    // Posts this reader has voted for. The forum's count is the truth; this
-    // is only so the button can show which way it goes.
+    // Which way this reader voted on a post. The forum's count is the truth;
+    // this is only so the buttons can show which one is theirs. A post is
+    // remembered in one list or the other, never both.
+    votedOn: (id) => (read(storage, who, 'liked').includes(id) ? 'up'
+      : read(storage, who, 'disliked').includes(id) ? 'down' : 'none'),
     isLiked: (id) => read(storage, who, 'liked').includes(id),
-    like: (id) => write(storage, who, 'liked', [...new Set([...read(storage, who, 'liked'), id])]),
-    unlike: (id) => write(storage, who, 'liked', read(storage, who, 'liked').filter(x => x !== id)),
+    vote: (id, way) => {
+      write(storage, who, 'liked', way === 'up'
+        ? [...new Set([...read(storage, who, 'liked'), id])]
+        : read(storage, who, 'liked').filter(x => x !== id));
+      write(storage, who, 'disliked', way === 'down'
+        ? [...new Set([...read(storage, who, 'disliked'), id])]
+        : read(storage, who, 'disliked').filter(x => x !== id));
+    },
 
     // Posts kept to come back to.
     saved: () => read(storage, who, 'saved'),

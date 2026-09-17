@@ -238,11 +238,15 @@ export async function moderate({ actor, podHome, inbox, activity }) {
 // can read it, which is the pod's own rule doing the work.
 // A vote: a Like of the post, and its Undo to take it back. One per person;
 // the forum counts them and publishes the total with the post.
-export async function vote({ actor, post, category, inbox, up }) {
-  const like = { '@context': AS, id: `${actor}#like-${Date.now()}`, type: 'Like', actor, object: post, to: [category] };
-  const body = up ? like
-    : { '@context': AS, id: `${actor}#unlike-${Date.now()}`, type: 'Undo', actor, to: [category],
-      object: { type: 'Like', actor, object: post } };
+// A vote, the way Lemmy federates one: a Like up, a Dislike down, and the Undo
+// of whichever was cast to take it back. `way` is 'up', 'down' or 'none'.
+export async function vote({ actor, post, category, inbox, way, was = null }) {
+  const cast = (type) => ({ '@context': AS, id: `${actor}#${type.toLowerCase()}-${Date.now()}`,
+    type, actor, object: post, to: [category] });
+  const body = way === 'none'
+    ? { '@context': AS, id: `${actor}#unvote-${Date.now()}`, type: 'Undo', actor, to: [category],
+      object: { type: was === 'down' ? 'Dislike' : 'Like', actor, object: post } }
+    : cast(way === 'down' ? 'Dislike' : 'Like');
   const r = await fetch(inbox, { method: 'POST', headers: { 'content-type': 'application/ld+json' }, body: JSON.stringify(body) });
   if (!r.ok) throw new Error(`the forum did not take the vote (HTTP ${r.status})`);
   return true;

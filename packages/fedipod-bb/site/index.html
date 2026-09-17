@@ -102,6 +102,11 @@
   article.post .acts button { font-size: 16px; font-weight: 600; padding: .3rem .8rem; border-radius: .3rem;
     background: transparent; color: var(--accent); border: 1px solid var(--line); }
   article.post .acts button:hover { background: var(--field-bg); }
+  /* The vote you cast, told apart from the one you did not by more than
+     colour: it is filled, and its border is the accent rather than the
+     divider line. */
+  article.post .acts button.voted { background: var(--field-bg); border-color: var(--accent); color: var(--fg); }
+  .votes { color: var(--fg); font-weight: 600; }
   article.post .who b { color: var(--fg); }
   /* A post's title and its words are one thing: half a line between them,
      and the browser's own heading margins do not get a say. */

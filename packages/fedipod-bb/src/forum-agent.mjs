@@ -25,17 +25,22 @@ import { forumUrls, ROOT, isSlug } from './urls.mjs';
 import * as topics from './topics.mjs';
 import * as publish from './publish.mjs';
 import * as moderation from './moderation.mjs';
+import * as access from './access.mjs';
 import { provisionForum, provisionCategory } from './provision.mjs';
 import * as settings from './settings.mjs';
 
 const idOf = (v) => (typeof v === 'string' ? v : v?.id);
 
 // A Like of a post, or the taking back of one. Anything else is not a vote.
+// A vote, as Lemmy federates one: a Like for up, a Dislike for down, and the
+// Undo of either to take it back. Both are ordinary ActivityStreams.
 function voteIn(activity) {
   const t = activity?.type;
-  if (t === 'Like') return { post: idOf(activity.object), actor: idOf(activity.actor), up: true };
-  if (t === 'Undo' && activity.object && typeof activity.object === 'object' && activity.object.type === 'Like') {
-    return { post: idOf(activity.object.object), actor: idOf(activity.actor), up: false };
+  const inner = activity?.object && typeof activity.object === 'object' ? activity.object : null;
+  if (t === 'Like') return { post: idOf(activity.object), actor: idOf(activity.actor), way: 'up' };
+  if (t === 'Dislike') return { post: idOf(activity.object), actor: idOf(activity.actor), way: 'down' };
+  if (t === 'Undo' && (inner?.type === 'Like' || inner?.type === 'Dislike')) {
+    return { post: idOf(inner.object), actor: idOf(activity.actor), way: 'none' };
   }
   return null;
 }
@@ -556,77 +561,10 @@ export class ForumAgent {
     }
   }
 
-  // Who may read a private category: the WebIDs the forum was given for it,
-  // and its moderators'. Null means the category is OPEN, which is the usual
-  // case and the only thing that makes its pages public. A private category
-  // with nobody named yet returns an empty list, not null: the pod keeps
-  // everyone out rather than letting everyone in.
-  membersOf(cat) {
-    const closed = (this.config.membersOnly || []).includes(cat.slug);
-    if (!closed) return null;
-    const named = this.config.memberWebIds || {};
-    return [...new Set([...(named[cat.slug] || []), ...(this.config.moderatorWebIds || [])])];
-  }
-
-  // Who a private category's posts are written for: its members, its
-  // moderators, and the forum itself. The forum is on the list because it
-  // fetches every post back from its author's pod to check who wrote it
-  // (FEP-fe34), and a rule that left it out would refuse the forum the post it
-  // was just handed. Null for an open category.
-  readersOf(cat) {
-    const members = this.membersOf(cat);
-    if (!members) return null;
-    const mine = this.remote?.webId;
-    return [...new Set([...members, ...(mine ? [mine] : [])])];
-  }
-
-  // One document read as the forum itself rather than as a federating server.
-  // Straight to the session: a foreign pod's answer is not this pod's business
-  // and must not be gated behind its cooldown or run through its url map.
-  async podFetchAP(url) {
-    const send = this.remote?.session?.fetch
-      ? (u, i) => this.remote.session.fetch(u, i)
-      : (u, i) => this.remote.fetch(u, i);
-    try {
-      const r = await send(url, { headers: { accept: 'application/activity+json, application/ld+json, application/json;q=0.9' } });
-      if (!r?.ok) return null;
-      const doc = await r.json().catch(() => null);
-      return doc && typeof doc === 'object' ? doc : null;
-    } catch (e) {
-      this.log(`reading ${url} as the forum: ${e.message}`);
-      return null;
-    }
-  }
-
-  // A private category carries only to people its members' pods can let read,
-  // and that means a WebID. Anyone else following it — every follower it
-  // gathered while it was open, on Mastodon or anywhere else without one — is
-  // let go and told, rather than being sent posts they are refused.
-  async dropUnreadableFollowers(cat) {
-    if (!(this.config.membersOnly || []).includes(cat.slug)) return 0;
-    const contacts = cat.store.getContacts();
-    const dropped = [];
-    for (const f of [...contacts.followers]) {
-      const webid = await this.webIdOf(f.actor).catch(() => null);
-      if (webid) continue;
-      dropped.push(f);
-      contacts.followers = contacts.followers.filter(x => x.actor !== f.actor);
-    }
-    if (!dropped.length) return 0;
-    cat.store.setContacts(contacts);
-    await cat.publisher.publishCollections({ followers: true }).catch(() => {});
-    const wire = await import('../../../lib/core/wire.mjs');
-    for (const f of dropped) {
-      const inbox = f.sharedInbox || f.inbox;
-      if (!inbox) continue;
-      await cat.deliverer.deliver(inbox, wire.rejectActivity({
-        urls: cat.urls, serial: Date.now(),
-        followActivity: { id: f.followId || undefined, type: 'Follow', actor: f.actor, object: cat.urls.actor },
-      })).catch(e => this.log(`telling ${f.actor} the category is private: ${e.message}`));
-    }
-    this.log(`${cat.slug} is private: ${dropped.length} follower(s) with no WebID let go`);
-    return dropped.length;
-  }
+  membersOf(cat) { return access.membersOf(this, cat); }
+  readersOf(cat) { return access.readersOf(this, cat); }
+  podFetchAP(url) { return access.podFetchAP(this, url); }
+  dropUnreadableFollowers(cat) { return access.dropUnreadableFollowers(this, cat); }
 
   // A pin that holds across the whole forum, not just one category: the site
   // actor has a featured collection of its own, and this is it.
@@ -759,24 +697,36 @@ export class ForumAgent {
     return rows.length;
   }
 
-  // One vote per person per post. The count lives with the post's copy, as
-  // AS2's `likes`, so the website reads it with the post and nothing has to
-  // be asked for separately.
-  async countVote({ post, actor, up }) {
+  // One vote per person per post, either way. Up is AS2's `likes` on the
+  // post's copy, which the website reads with the post. Down has no property
+  // in AS2 and none is invented for it: it is published as a collection of
+  // its own beside the copy, named for the post it counts.
+  //
+  // A record written before there were downvotes is a bare list of who voted
+  // for the post; it is read as the up list and written back in both parts.
+  async countVote({ post, actor, way }) {
     if (!post || !actor) return false;
     const cat = this.categories.find(c => !!topics.topicOf(c.store, post));
     if (!cat) return false;
     const votes = cat.store.read('votes.json', {});
-    const held = new Set(votes[post] || []);
-    if (up) held.add(actor); else held.delete(actor);
-    votes[post] = [...held];
+    const was = votes[post];
+    const up = new Set(Array.isArray(was) ? was : (was?.up || []));
+    const down = new Set(Array.isArray(was) ? [] : (was?.down || []));
+    // Changing your mind is not two votes: whichever way it goes now, the
+    // other way lets go of you.
+    up.delete(actor);
+    down.delete(actor);
+    if (way === 'up') up.add(actor);
+    if (way === 'down') down.add(actor);
+    votes[post] = { up: [...up], down: [...down] };
     cat.store.write('votes.json', votes);
     const copy = await this.remote.getJson(cat.urls.cached(post)).catch(() => null);
     if (copy && copy.type !== 'Tombstone') {
-      await publish.cachePost(cat, copy, { likes: held.size });
+      await publish.cachePost(cat, copy, { likes: up.size });
+      await publish.publishDislikes(cat, post, down.size).catch(e => this.log(`downvotes on ${post}: ${e.message}`));
       await publish.publishLatest(this.siteAgent, { force: true }).catch(() => {});
     }
-    this.log(`${up ? 'vote' : 'vote withdrawn'} on ${post} — ${held.size}`);
+    this.log(`${way === 'none' ? 'vote withdrawn' : `vote ${way}`} on ${post} — ${up.size} up, ${down.size} down`);
     return true;
   }
 

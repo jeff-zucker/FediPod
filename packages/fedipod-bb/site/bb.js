@@ -144,6 +144,21 @@ function topicActs(topicId) {
   </div>`;
 }
 
+// Voting, both ways, as a forum has always had it: up, down, and the one you
+// cast again to take it back. A reader with no account sees the counts.
+function votes(p) {
+  const up = p.likes || 0;
+  const down = p.dislikes || 0;
+  if (!account()) {
+    return `<span class="votes" aria-label="${up} for, ${down} against">▲ ${up} ▼ ${down}</span>`;
+  }
+  const mineWay = own().votedOn(p.id);
+  const one = (way, mark, n, label) => `<button data-act="vote-${mineWay === way ? 'none' : way}"
+    data-was="${mineWay}"${mineWay === way ? ' aria-pressed="true" class="voted"' : ''}
+    aria-label="${mineWay === way ? `Take back your vote ${label}` : `Vote ${label} this post`}">${mark} ${n}</button>`;
+  return one('up', '▲', up, 'for') + one('down', '▼', down, 'against');
+}
+
 function card(p, { author = null, cat = null, extra = '', waiting = false, anchor = null } = {}) {
   const at = p.published ? when(p.published) : '';
   // What a screen reader hears before the words, and what each of this post's
@@ -156,7 +171,7 @@ function card(p, { author = null, cat = null, extra = '', waiting = false, ancho
     <div class="body">${p.gone ? 'This post was removed.' : (body(p, cat) || '<span class="dim">(not readable here)</span>')}</div>
     ${p.gone || waiting || !p.id ? '' : `<div class="acts" data-post="${esc(p.id)}">
       <button data-act="reply" aria-label="Reply to ${whose}">Reply</button>
-      ${account() ? `<button data-act="${own().isLiked(p.id) ? 'unlike' : 'like'}" aria-label="${own().isLiked(p.id) ? 'Take back your vote' : 'Vote for this post'}">▲ ${p.likes || 0}</button>` : `<span class="votes" aria-label="${p.likes || 0} votes">▲ ${p.likes || 0}</span>`}
+      ${votes(p)}
       <button data-act="share" aria-label="Copy a link to the post by ${whose}">Share</button>
       ${account() ? `<button data-act="${own().isSaved(p.id) ? 'unsave' : 'save'}" aria-label="${own().isSaved(p.id) ? 'Remove this post from your bookmarks' : 'Bookmark this post'}">${own().isSaved(p.id) ? 'Bookmarked' : 'Bookmark'}</button>` : ''}
       ${mine(p) || !account() ? '' : `<button data-act="report" aria-label="Report the post by ${whose}">Report</button>`}
@@ -316,7 +331,7 @@ async function showWho(handleOrId) {
     const tid = p.topic ? p.topic.split('/').pop() : null;
     const href = c && tid ? `#/t/${esc(c.slug)}/${esc(tid)}/${esc(await cacheKey(p.id))}` : '#/';
     items.push(`<li><a class="title" href="${href}">${esc(p.topicName || 'Topic')}</a>
-      <div class="meta">${c ? esc(c.name) + ' · ' : ''}${esc(when(p.published))} · ▲ ${p.likes || 0}</div>
+      <div class="meta">${c ? esc(c.name) + ' · ' : ''}${esc(when(p.published))} · ▲ ${p.likes || 0} ▼ ${p.dislikes || 0}</div>
       <article class="post"><div class="body">${p.content || ''}</div></article></li>`);
   }
   $('main').innerHTML = head + `<ul class="list">${items.join('')}</ul>`;
@@ -654,7 +669,7 @@ $('main').addEventListener('click', (e) => {
   if (act === 'admit') return modAdmit(id, b.closest('[data-cat]')?.dataset.cat);
   if (act === 'removepost') return modRemoveFromQueue(b.dataset.post, b.closest('[data-cat]')?.dataset.cat);
   if (act === 'save' || act === 'unsave') return saveOrNot(id, act === 'save');
-  if (act === 'like' || act === 'unlike') return voteOn(id, act === 'like');
+  if (act.startsWith('vote-')) return voteOn(id, act.slice(5), b.dataset.was || 'none');
   if (act === 'approve' || act === 'refuse') return modHeld(id, b.closest('[data-cat]')?.dataset.cat, act === 'approve');
   if (act === 'ban') return modBan(b.dataset.who, b.closest('[data-cat]')?.dataset.cat);
   if (act === 'open-mods') {
@@ -829,17 +844,18 @@ async function joinOrLeave(categoryId, on) {
   } catch (e) { alert(e.message); }
 }
 
-// A vote goes to the category as a Like, and its Undo takes it back. The
-// forum counts them; this browser only remembers which way this reader went.
-async function voteOn(postId, up) {
+// A vote goes to the category as a Like or a Dislike, and the Undo of
+// whichever was cast takes it back. The forum counts them; this browser only
+// remembers which way this reader went, so the buttons can say so.
+async function voteOn(postId, way, was) {
   if (!podAcct) { alert('voting needs your pod account'); return; }
   const cat = replyCtx?.cat || cats().find(c => c.slug === feedFilter) || cats()[0];
   if (!cat) return;
   try {
     const inbox = await pod.podInboxOf(cat.id, { front, handle: cat.slug || null });
-    await pod.vote({ actor: podAcct.actor, post: postId, category: cat.id, inbox, up });
-    if (up) own().like(postId); else own().unlike(postId);
-    say(up ? 'Voted. The count follows once the forum has taken it.' : 'Vote taken back.');
+    await pod.vote({ actor: podAcct.actor, post: postId, category: cat.id, inbox, way, was });
+    own().vote(postId, way);
+    say(way === 'none' ? 'Vote taken back.' : 'Voted. The count follows once the forum has taken it.');
   } catch (e) { alert(e.message); }
 }
 

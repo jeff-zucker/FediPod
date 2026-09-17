@@ -165,6 +165,21 @@ export async function cachePost({ remote, urls }, note, { topic = null, replies 
   return url;
 }
 
+// How many voted a post DOWN. ActivityStreams has the Dislike activity and no
+// property to publish a count of them, so none is invented here: the count is
+// an ordinary Collection published beside the post's copy, at that copy's
+// address with `-dislikes` after it. Only terms already in use appear in it.
+export async function publishDislikes({ remote, urls }, postId, n) {
+  const url = urls.cached(postId) + '-dislikes';
+  if (!n) { await remote.delete(url).catch(() => {}); return 0; }
+  await podNotes.write(remote, url, {
+    '@context': 'https://www.w3.org/ns/activitystreams',
+    id: url, type: 'Collection', totalItems: n,
+    summary: 'How many disliked the post this is named for',
+  });
+  return n;
+}
+
 // Who wrote a post, for the website: the author's actor as the host fetched
 // it, cut down to what a reader shows — name, handle, picture — filed beside
 // the posts under the digest of the actor's id. A FediPod actor's id does

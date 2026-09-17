@@ -430,3 +430,50 @@ test('a private category: posts written for its members, carried only to people 
   await publish.publishMembers(g, agent.readersOf(g));
   assert.equal(pod.docs.has(g.urls.members), false, 'an open category publishes no reader list');
 });
+
+test('votes go both ways: a Like up, a Dislike down, an Undo takes back whichever was cast', async () => {
+  const pod = fakePod();
+  const { agent } = await boot(pod, home());
+  await agent.init({ handle: 'forum', name: 'The Forum', categories: [{ slug: 'gardening', name: 'Gardening' }] });
+  assert.ok(await agent.connect());
+  const g = agent.categories[0];
+  const delivered = [];
+  wire(agent, delivered);
+  pod.deliver('f1', { '@context': 'https://www.w3.org/ns/activitystreams', id: MEI + '#follow-1', type: 'Follow', actor: MEI, object: g.urls.actor });
+  const P = 'https://mei.pod.example/fedipod/ap/notes/seeds';
+  remoteDocs[P] = note(P, { type: 'Article', name: 'Seed swap', audience: g.urls.actor });
+  pod.deliver('c1', { '@context': 'https://www.w3.org/ns/activitystreams', id: P + '-create', type: 'Create', actor: MEI, object: remoteDocs[P], to: remoteDocs[P].to, cc: [] });
+  await agent.intake.drain();
+
+  const votes = () => g.store.read('votes.json', {})[P];
+  const down = () => pod.docs.get(g.urls.cached(P) + '-dislikes')?.totalItems ?? 0;
+  const up = () => pod.docs.get(g.urls.cached(P))?.likes?.totalItems ?? 0;
+  const cast = (n, activity) => pod.deliver(n, { '@context': 'https://www.w3.org/ns/activitystreams', ...activity });
+
+  cast('v1', { id: KWAME + '#like-1', type: 'Like', actor: KWAME, object: P, to: [g.urls.actor] });
+  await agent.intake.drain();
+  assert.deepEqual(votes(), { up: [KWAME], down: [] });
+  assert.equal(up(), 1);
+
+  // The same person the other way is a changed mind, not a second vote.
+  cast('v2', { id: KWAME + '#dislike-1', type: 'Dislike', actor: KWAME, object: P, to: [g.urls.actor] });
+  await agent.intake.drain();
+  assert.deepEqual(votes(), { up: [], down: [KWAME] });
+  assert.equal(up(), 0);
+  assert.equal(down(), 1, 'the down count is published beside the post, since AS2 has no property for it');
+
+  cast('v3', { id: MEI + '#dislike-1', type: 'Dislike', actor: MEI, object: P, to: [g.urls.actor] });
+  await agent.intake.drain();
+  assert.equal(down(), 2);
+
+  // Undo of the Dislike takes back the Dislike, not some other vote.
+  cast('v4', { id: KWAME + '#undo-1', type: 'Undo', actor: KWAME, to: [g.urls.actor], object: { type: 'Dislike', actor: KWAME, object: P } });
+  await agent.intake.drain();
+  assert.deepEqual(votes(), { up: [], down: [MEI] });
+  assert.equal(down(), 1);
+
+  // And at nought the collection is taken down rather than published empty.
+  cast('v5', { id: MEI + '#undo-1', type: 'Undo', actor: MEI, to: [g.urls.actor], object: { type: 'Dislike', actor: MEI, object: P } });
+  await agent.intake.drain();
+  assert.equal(pod.docs.has(g.urls.cached(P) + '-dislikes'), false);
+});

@@ -174,7 +174,10 @@ export function reader({ fetch: f = globalThis.fetch.bind(globalThis), session =
       const out = [];
       const named = new Map();
       for (const url of ids) {
-        const copy = await get(url);
+        // The post and how many voted it down, asked for together: the down
+        // count is a collection of its own beside the copy, because AS2 has
+        // no property to publish one in.
+        const [copy, disliked] = await Promise.all([get(url), get(url + '-dislikes')]);
         if (!copy || copy.type === 'Tombstone') continue;
         out.push({
           id: copy.id || url,
@@ -188,6 +191,7 @@ export function reader({ fetch: f = globalThis.fetch.bind(globalThis), session =
           // Answers to THIS post, as the forum counted them.
           replies: Number(copy.replies?.totalItems) || 0,
           likes: Number(copy.likes?.totalItems) || 0,
+          dislikes: Number(disliked?.totalItems) || 0,
           category: idOf([].concat(copy.audience || [])[0]) || null,
           page: [].concat(copy.url || []).map(u => (typeof u === 'string' ? u : null)).find(Boolean) || null,
         });
@@ -232,7 +236,8 @@ export function reader({ fetch: f = globalThis.fetch.bind(globalThis), session =
 
     // The readable copy of a post, or null when the forum holds none.
     async post(cbase, postId) {
-      const copy = await get(cbase + 'ap/cache/' + await cacheKey(postId));
+      const at = cbase + 'ap/cache/' + await cacheKey(postId);
+      const [copy, disliked] = await Promise.all([get(at), get(at + '-dislikes')]);
       if (!copy) return null;
       // `url` is where a PERSON reads this post; `id` is where a server
       // fetches it. They are the same on some servers and never on a pod.
@@ -250,6 +255,8 @@ export function reader({ fetch: f = globalThis.fetch.bind(globalThis), session =
         // Which topic the forum placed it in: what a Delete has to name as
         // the place the post is being taken out of.
         topic: idOf(copy.context) || null,
+        likes: Number(copy.likes?.totalItems) || 0,
+        dislikes: Number(disliked?.totalItems) || 0,
       };
     },
   };

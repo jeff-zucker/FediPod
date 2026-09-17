@@ -183,3 +183,13 @@ Takes `@<handle>@fedipod.net` for the forum and one address per category,
 each a row of its own at the Gateway pointing at that category's tree on the
 pod and at the forum's one inbox. Deliveries arrive verified at the front;
 the next `start` republishes every actor under its front address.
+<!-- CLAUDE 2026-09-16 - voting both ways; delete these markers when done -->
+
+A post is voted up or down, the way Lemmy federates a vote: a `Like` for up,
+a `Dislike` for down, and the `Undo` of whichever was cast to take it back.
+One person has one vote, so voting the other way is a changed mind rather
+than a second vote. The up count is AS2's `likes` on the post's copy.
+ActivityStreams has no property for a down count and none is invented: it is
+an ordinary `Collection` published beside the copy, at that copy's address
+with `-dislikes` after it, and taken down again when it reaches nought.
+<!-- /CLAUDE -->
