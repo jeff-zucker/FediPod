@@ -73,6 +73,15 @@ A private category:
    rule covers that member's whole history there and is rewritten with each
    post.
 
+## Votes
+
+A vote is a `Like` or a `Dislike` addressed to the category, and the `Undo` of
+whichever was cast to take it back; one actor MAY hold one of them per object,
+so the second replaces the first. The up count is published as the object's
+`likes`. ActivityStreams has no property for a down count: implementations
+MUST NOT invent one. This publishes it as a `Collection` beside the object's
+cached copy, at that copy's address with `-dislikes` after it, absent at nought.
+
 ## Security considerations
 
 - **Revocation is not uniform.** The forum revokes its own copies at once.
