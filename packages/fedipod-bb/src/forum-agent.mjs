@@ -427,6 +427,39 @@ export class ForumAgent {
     return { front: origin, handles: rows.map(r => r.handle) };
   }
 
+  // One category's handle at the Gateway, claimed when a moderator creates
+  // that category from the settings page and at no other time. A name on a
+  // Gateway is public and only its admin can take one back, so nothing here
+  // claims names on its own account — not at a start, not on a repair, not
+  // for a category that arrived any other way.
+  async claimHandle(slug) {
+    const gw = this.config.gateway;
+    if (!gw?.front) return null;                       // not fronted: nothing to claim
+    if (gw.secrets?.[slug]) return null;               // already has one
+    const cred = this.readCredential();
+    const plain = forumUrls(cred.remotePod, cred.root || ROOT);
+    const urls = plain.category(slug);
+    const origin = String(gw.front).replace(/\/$/u, '');
+    const res = await this.remote.session.fetch(`${origin}/api/attach`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ handle: slug, podHome: urls.home, actorUrl: urls.actor, kind: 'group',
+        fronted: true, inboxUrl: plain.inbox }),
+    });
+    const d = await res.json().catch(() => ({}));
+    if (res.status !== 201 || !d.hmacSecret) {
+      // A name already taken, or a Gateway that refuses: the category is
+      // hosted all the same, with no handle until someone sorts it out.
+      this.log(`no handle for @${slug}: HTTP ${res.status}${d.error ? ' ' + d.error : ''}`);
+      return null;
+    }
+    const cfg = this.store.getConfig();
+    this.store.setConfig({ ...cfg, gateway: { ...cfg.gateway, secrets: { ...(cfg.gateway?.secrets || {}), [slug]: String(d.hmacSecret) } }, republish: true });
+    this.config = this.store.getConfig();
+    await this.store.flush().catch(() => {});
+    this.log(`claimed @${slug}@${new URL(origin).host}`);
+    return slug;
+  }
+
   // A queued moderator's ask, applied by the operator.
   // Topics written into a sub-folder before they were flat: read each one at
   // its old address and put it where the state can see it.
@@ -553,6 +586,11 @@ export class ForumAgent {
       if (!doc || doc.type !== entry.type || idOf(doc.actor) !== entry.moderator) continue;
       try {
         const done = await settings.applySettings(this, doc);
+        // The one place a name is claimed: a moderator asked for this
+        // category by name a moment ago.
+        if (done.category && doc.type === 'Create') {
+          await this.claimHandle(done.category).catch(e => this.log(`handle for ${done.category}: ${e.message}`));
+        }
         this.store.write('modqueue.json', this.store.read('modqueue.json', []).filter(e => e.id !== entry.id));
         await this.store.flush().catch(() => {});
         await this.noteModLog({ ...entry, activity: doc }, done);
