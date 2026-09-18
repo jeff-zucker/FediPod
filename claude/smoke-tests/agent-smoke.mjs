@@ -1226,6 +1226,80 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     `and both addressed actors are delivered to, beside the followers (${JSON.stringify(last.i)})`);
 }
 
+// --- 5c1k. the local actor a client-to-server client reads ---
+{
+  const { C2S } = await import(path.join(root, 'lib/client/c2s.mjs'));
+  const { Publisher } = await import(path.join(root, 'lib/core/publisher/index.mjs'));
+  const POD_ACTOR = 'https://pod.example/fedipod/ap/actor';
+  const mkPub = (extra = {}) => new Publisher({
+    config: { remotePod: 'https://pod.example/', handle: 'me', name: 'Me' },
+    remote: { putJson: async () => {}, setAcl: async () => {}, delete: async () => true, getJson: async () => null },
+    store: { read: () => [], write: () => {}, addStatus: () => {}, getStatuses: () => [], isBlocked: () => false,
+      getContacts: () => ({ followers: [], following: [] }), commit: async () => true },
+    deliverer: { deliverToAll: async () => {} }, publicKeyPem: 'x', log: () => {},
+    ...extra,
+  });
+  // `scheme` is left unset, as the DeviceAgent leaves it — only the Server
+  // passes one (lib/device/admin/server.mjs builds the surface without it), so
+  // a test that names a scheme would not exercise the build this is for.
+  const ask = async (pub, host, pathname = '/ap/actor', req = {}) => {
+    const c2s = new C2S({
+      agent: { publisher: pub, store: pub.store, remote: {}, configured: () => true },
+      log: () => {}, auth: async () => ({ ok: true }), mount: '',
+    });
+    const out = { status: 0, headers: {}, body: '' };
+    await c2s.handle({ method: 'GET', headers: { host }, socket: { encrypted: true }, ...req },
+      { writeHead: (s, h) => { out.status = s; out.headers = h || {}; }, end: (b) => { out.body = b || ''; } },
+      pathname, new URL(`https://${host}${pathname}`));
+    return out;
+  };
+
+  const standalone = mkPub();
+  const local = await ask(standalone, 'me.localhost:8030');
+  const doc = local.status === 200 ? JSON.parse(local.body) : {};
+  check(local.status === 200 && String(local.headers['content-type'] || '').startsWith('application/activity+json'),
+    `standalone, GET /ap/actor is served here rather than redirected (${local.status})`);
+  check(doc.endpoints?.oauthAuthorizationEndpoint === 'https://me.localhost:8030/oauth/authorize'
+    && doc.endpoints?.oauthTokenEndpoint === 'https://me.localhost:8030/oauth/token',
+    'and names both OAuth endpoints on the address the client used');
+  check(doc.outbox === 'https://me.localhost:8030/ap/outbox',
+    `and an outbox on that same address (${doc.outbox})`);
+  check(doc.id === 'https://me.localhost:8030/ap/actor',
+    `and names itself, so a client files its credential here and comes back (${doc.id})`);
+  check((doc.alsoKnownAs || []).includes(POD_ACTOR),
+    'with the pod\'s id kept as an alias — one identity, not two');
+
+  const alias = JSON.parse((await ask(standalone, '127.0.0.1:8030')).body);
+  check(alias.endpoints?.oauthTokenEndpoint === 'https://127.0.0.1:8030/oauth/token',
+    'a different accepted Host is named back to that client, not the first one seen');
+
+  // The scheme comes off the connection, because the DeviceAgent names none.
+  const plain = JSON.parse((await ask(standalone, 'me.localhost:8030', '/ap/actor',
+    { socket: {} })).body);
+  check(plain.endpoints?.oauthTokenEndpoint === 'http://me.localhost:8030/oauth/token',
+    'an unencrypted connection is named http, not https');
+  const proxied = JSON.parse((await ask(standalone, 'me.localhost:8030', '/ap/actor',
+    { socket: {}, headers: { host: 'me.localhost:8030', 'x-forwarded-proto': 'https' } })).body);
+  check(proxied.endpoints?.oauthTokenEndpoint === 'https://me.localhost:8030/oauth/token',
+    'and a proxy that terminated TLS is believed');
+
+  const published = standalone.actorDocFor({});
+  check(!published.endpoints?.oauthAuthorizationEndpoint && !published.endpoints?.oauthTokenEndpoint,
+    'the document the pod publishes still advertises no OAuth endpoints');
+
+  const embedded = mkPub({ clientOrigin: 'https://pod.example/' });
+  const viaPod = await ask(embedded, 'pod.example');
+  check(viaPod.status === 303 && viaPod.headers.location === POD_ACTOR,
+    `embedded, the pod's copy already names the surface, so GET /ap/actor still redirects (${viaPod.status})`);
+
+  const ob = await ask(standalone, 'me.localhost:8030', '/ap/outbox');
+  check(ob.status === 200 && JSON.parse(ob.body || '{}').id === 'https://me.localhost:8030/ap/outbox',
+    `standalone, GET /ap/outbox is served here too (${ob.status})`);
+  const obPod = await ask(embedded, 'pod.example', '/ap/outbox');
+  check(obPod.status === 303 && obPod.headers.location === 'https://pod.example/fedipod/ap/outbox',
+    `embedded, it still redirects to the pod copy (${obPod.status})`);
+}
+
 // --- 5b2. editing, visibility and content warnings ---
 {
   const { Publisher } = await import(path.join(root, 'lib/core/publisher/index.mjs'));
@@ -10202,6 +10276,12 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
     intake: { fetchAP: async (u) => ({ id: u, type: 'Person', inbox: u + '/inbox' }) },
     publisher: {
       urls: urls24,
+      // Standalone: nothing publicly reachable to advertise, so GET /ap/actor
+      // is answered here instead of redirected. The document's real shape is
+      // covered where the actual Publisher builds it.
+      clientOrigin: null,
+      actorDocFor: ({ clientOrigin }) => ({ id: urls24.actor, type: 'Person',
+        outbox: `${clientOrigin}ap/outbox` }),
       publishNote: async (content, opts) => {
         published24.push({ content, ...opts });
         return { id: urls24.notes + 'c2s-' + published24.length };
@@ -10225,13 +10305,13 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
 
   const okAuth = async () => ({ ok: true, webid: OWNER, via: 'stub' });
   const api24 = new C2S({ agent: agent24, log: () => {}, auth: okAuth });
-  const ask24 = async (api, body, { method = 'POST', pathname = '/ap/outbox', headers = {} } = {}) => {
+  const ask24 = async (api, body, { method = 'POST', pathname = '/ap/outbox', headers = {}, query = '' } = {}) => {
     const res = { status: 0, headers: null, body: null,
       writeHead(s, h) { this.status = s; this.headers = h; }, end(b) { this.body = b; } };
     const req = Readable.from(body === null ? [] : [Buffer.from(JSON.stringify(body))]);
     req.method = method;
     req.headers = { host: `localhost:${PORT}`, ...headers };
-    await api.handle(req, res, pathname, new URL('http://localhost' + pathname));
+    await api.handle(req, res, pathname, new URL('http://localhost' + pathname + query));
     let json = null;
     try { json = res.body ? JSON.parse(res.body) : null; } catch { /* redirects have no body */ }
     return { status: res.status, headers: res.headers || {}, json };
@@ -10383,13 +10463,23 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
   const badBody = await ask24(api24, null);
   check(badBody.status === 400, `an empty body → 400 (got ${badBody.status})`);
 
-  // GETs redirect to the pod's canonical documents.
+  // Standalone, GETs are answered here: the pod's copies name no address this
+  // client could use, and a fronted account's published outbox is a write door.
+  st24.write('outbox.json', [OURS]);
   const getOutbox = await ask24(api24, null, { method: 'GET' });
-  check(getOutbox.status === 303 && getOutbox.headers.location === urls24.outbox,
-    `GET outbox → 303 to the pod copy (got ${getOutbox.status} ${getOutbox.headers.location})`);
+  check(getOutbox.status === 200 && getOutbox.json?.type === 'OrderedCollection'
+    && getOutbox.json?.id === `http://localhost:${PORT}/ap/outbox`
+    && getOutbox.json?.first === `http://localhost:${PORT}/ap/outbox?page=1`,
+    `GET outbox → served here as a collection (got ${getOutbox.status})`);
+  const outboxPage1 = await ask24(api24, null, { method: 'GET', query: '?page=1' });
+  check(outboxPage1.json?.type === 'OrderedCollectionPage'
+    && outboxPage1.json?.orderedItems?.[0] === `${OURS}-create`,
+    'and its page lists the post by the Create beside it, as the pod copy does');
   const getActor = await ask24(api24, null, { method: 'GET', pathname: '/ap/actor' });
-  check(getActor.status === 303 && getActor.headers.location === urls24.actor,
-    'GET actor → 303 to the pod copy');
+  check(getActor.status === 200 && getActor.json?.id === `http://localhost:${PORT}/ap/actor`
+    && getActor.json?.outbox === `http://localhost:${PORT}/ap/outbox`
+    && (getActor.json?.alsoKnownAs || []).includes(urls24.actor),
+    `GET actor → served here, naming itself with the pod's id as an alias (got ${getActor.status})`);
 
   // Unconfigured and viewer-mode agents refuse rather than half-act.
   const apiUnconf = new C2S({ agent: { ...agent24, configured: () => false }, log: () => {}, auth: okAuth });

@@ -272,7 +272,11 @@ Item-by-item answers to the Solid/ActivityPub interop checklist.
   which asks twice. Where the POST lands differs by build: on the DeviceAgent
   and the Server, `POST /ap/outbox` on the agent answers 201 with the
   `-create` document's id in Location; the Server advertises that endpoint in
-  its actor document, the DeviceAgent's is on loopback. Behind a Gateway (a
+  its actor document, and the DeviceAgent, whose is on loopback, advertises it
+  in the actor it serves at its own address — that document names itself, so a
+  client files its credential there and comes back, and keeps the pod's id as
+  an alias. The published document is unchanged: loopback in a world-readable
+  actor would send clients nowhere. Behind a Gateway (a
   BrowserAgent or DeviceAgent account), the actor document and the WebID
   profile (`as:outbox`) name the Gateway's door, which answers 202 with the
   object's future address in Location, and the post goes out when the agent
@@ -325,9 +329,12 @@ Item-by-item answers to the Solid/ActivityPub interop checklist.
   `activitypub_actor_id`, and the authorize throttle answers 429 with
   Retry-After.
 - **Agent providing an endpoint** — DeviceAgent and Server, three:
-  `POST /ap/outbox` is the write API, `GET /ap/actor` and `GET /ap/outbox`
-  redirect to the pod's canonical documents, and `GET /ap/inbox` is the
-  owner's view of what arrived. The Mastodon API and the setup pages sit
+  `POST /ap/outbox` is the write API, and `GET /ap/inbox` is the owner's view
+  of what arrived. `GET /ap/actor` and `GET /ap/outbox` redirect to the pod's
+  canonical documents on the Server, where those are reachable; standalone
+  the agent answers both itself, because the published actor names no address
+  a local client could write to and a fronted account's published outbox
+  address is the Gateway's write door, which does not answer a read. The Mastodon API and the setup pages sit
   beside them. The Gateway provides the outbox door for every account
   attached to it.
 - **Server support** — none required; runs against a stock Community Solid
