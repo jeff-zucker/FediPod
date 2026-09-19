@@ -219,7 +219,14 @@ export async function dm({ actor, podHome, to, inbox, text }) {
   if (!s) throw new Error('sign in to your pod first');
   const home = homeOf(actor, podHome);
   const where = 'ap/private/dm/';
-  await priv.prepare(s, home + where, s.webId, []);
+  // Three requests to two hosts, and a network failure in any of them arrives
+  // as the browser's bare "Failed to fetch", which names neither the host nor
+  // what was being done. Each one says both.
+  try {
+    await priv.prepare(s, home + where, s.webId, []);
+  } catch (e) {
+    throw new Error(`${e.message} — making a private place for it on ${new URL(home).host}`);
+  }
   const name = `${stamp()}-${crypto.randomUUID().slice(0, 8)}`;
   const id = faceOf(actor) + where + name;
   const now = new Date().toISOString();
@@ -228,10 +235,15 @@ export async function dm({ actor, podHome, to, inbox, text }) {
     content: htmlOf(text), source: sourceOf(text), published: now,
     to: [to], cc: [], tag: [{ type: 'Mention', href: to }],
   };
-  const put = await s.fetch(home + where + name, {
-    method: 'PUT', headers: { 'content-type': 'application/activity+json' }, body: JSON.stringify(note),
-  });
-  if (!put.ok) throw new Error(`your pod refused to keep the message (HTTP ${put.status})`);
+  let put;
+  try {
+    put = await s.fetch(home + where + name, {
+      method: 'PUT', headers: { 'content-type': 'application/activity+json' }, body: JSON.stringify(note),
+    });
+  } catch (e) {
+    throw new Error(`${e.message} — writing it to ${new URL(home).host}`);
+  }
+  if (!put.ok) throw new Error(`your pod refused to keep the message (HTTP ${put.status}) — ${home + where + name}`);
   const create = { '@context': AS, id: `${id}#create`, type: 'Create', actor, published: now, object: note, to: [to], cc: [] };
   let sent;
   try {

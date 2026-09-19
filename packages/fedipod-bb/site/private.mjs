@@ -72,14 +72,27 @@ export function aclDoc(target, owner, readers) {
 // Make the container exist and say who may read it. Returns the container's
 // address on the pod. Throws rather than leaving either half undone.
 export async function prepare(session, container, owner, readers) {
+  // What went wrong, not only that something did: a refused request has a
+  // status, a request that never arrived has a reason, and "(HTTP ?)" said
+  // neither to whoever was trying to post.
+  let why = null;
   const keep = await session.fetch(container + '.keep', {
     method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ keep: true }),
-  }).catch(() => null);
-  if (!keep?.ok) throw new Error(`your pod would not make a private place for these posts (HTTP ${keep?.status || '?'})`);
+  }).catch((e) => { why = e.message; return null; });
+  if (!keep?.ok) {
+    throw new Error(why
+      ? `${why} — asking ${new URL(container).host} for ${container}`
+      : `your pod would not make a private place for these posts (HTTP ${keep.status}) — ${container}`);
+  }
   const aclUrl = await aclUrlOf(session, container);
+  why = null;
   const put = await session.fetch(aclUrl, {
     method: 'PUT', headers: { 'content-type': ACL_CT }, body: aclDoc(container, owner, readers),
-  }).catch(() => null);
-  if (!put?.ok) throw new Error(`your pod would not keep these posts private (HTTP ${put?.status || '?'}) — nothing was posted`);
+  }).catch((e) => { why = e.message; return null; });
+  if (!put?.ok) {
+    throw new Error(why
+      ? `${why} — writing the rule at ${aclUrl}, so nothing was written`
+      : `your pod would not keep this private (HTTP ${put.status}) at ${aclUrl} — nothing was written`);
+  }
   return container;
 }

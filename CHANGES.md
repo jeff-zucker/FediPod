@@ -1,5 +1,12 @@
 # Changes
 
+## 2026-09-19 (a message that fails says where — version 1.18.1)
+
+Sending a message makes three requests to two hosts, and any of them failing
+used to arrive as the browser's bare *Failed to fetch*, which names neither.
+Each now says which address would not answer and what was being done there,
+and a pod that refuses says so with its status and the address it refused.
+
 ## 2026-09-19 (a word with one person — version 1.18.0)
 
 **You can write to somebody from their page.** Signed in with a pod, there is a
