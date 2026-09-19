@@ -1,5 +1,19 @@
 # Changes
 
+## 2026-09-19 (a forum is an account like the others — version 1.23.0)
+
+**A forum lives with your other accounts and starts with them.** Its home goes
+under `profiles/`, and the runner that starts an account starts a forum where
+the home holds one — same unit, same startup, and `fedipod profiles` lists it
+as a forum, active or not. Its console keeps one address instead of a new one
+each restart, and opening that address once leaves the key in the browser, so
+the link from your own account's page works afterwards.
+
+**The opt-in page's button wakes up for a form it did not watch you fill.** A
+browser putting back what was in the boxes — a reload, the back button, its own
+remembered values — fills them without anybody typing, and the button stayed
+grey over a filled-in form with nothing to say why.
+
 ## 2026-09-19 (the forum has a window on the machine running it — version 1.22.0)
 
 **`fedipod-bb start` serves a console on this machine.** It says whether the

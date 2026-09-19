@@ -31,8 +31,8 @@ let offered = true;
     const n = $('run-note');
     n.hidden = false;
     n.textContent = 'This server does not run identities. Your agent stays where it is.';
-    runFormCheck();
   }
+  runFormCheck();
 })();
 
 function runFormCheck() {
@@ -53,6 +53,11 @@ $('run-pod-url').addEventListener('input', () => {
   runFormCheck();
 });
 $('run-issuer').addEventListener('input', runFormCheck);
+// A browser that puts back what was in these boxes — a reload, the back
+// button, its own remembered values — fills them without anybody typing, and
+// no typing meant the button was never asked to wake up. It stayed grey over
+// a filled-in form, with nothing to say why.
+runFormCheck();
 
 const runStart = async (action) => {
   const n = $('run-note');
