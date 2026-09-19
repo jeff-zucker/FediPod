@@ -8,6 +8,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { startConsole } from '../src/console.mjs';
+import { isForumHome } from '../src/run.mjs';
 import { forumUrls } from '../src/urls.mjs';
 import * as topics from '../src/topics.mjs';
 import { PodStore } from '../../../lib/core/store.mjs';
@@ -64,6 +65,14 @@ test('the console shows what the forum is holding, to whoever has the key', asyn
     assert.match(ok.body, /did not take/u, 'an ask that failed says so');
     assert.match(ok.body, /hosting forum: @software/u, 'and the log is on the page');
 
+    // Opening it once leaves the key here, so the link from the account page
+    // — which carries none — works afterwards.
+    const res = await fetch(con.url);
+    const cookie = res.headers.get('set-cookie');
+    assert.match(cookie || '', /bb-console=/u, 'the key is left in the browser');
+    const bare = await fetch(con.url.split('?')[0], { headers: { cookie: cookie.split(';')[0] } });
+    assert.equal(bare.status, 200, 'and opens it again with no key in the address');
+
     const nokey = await read(con.url.split('?')[0]);
     assert.equal(nokey.status, 403, 'without the key it shows nothing');
     const wrong = await read(con.url.split('?')[0] + '?k=guess');
@@ -90,4 +99,16 @@ test('a watching forum says so rather than claiming to host', async () => {
     con.stop();
     fs.rmSync(home, { recursive: true, force: true });
   }
+});
+
+test('a home that holds a forum says so, and one that holds a person does not', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bb-home-'));
+  try {
+    assert.equal(isForumHome(dir), false, 'a home with no credential is nobody');
+    fs.writeFileSync(path.join(dir, 'credential.json'), JSON.stringify({ remotePod: POD, root: 'fedipod/' }));
+    assert.equal(isForumHome(dir), false, 'a person keeps their things under their own root');
+    fs.writeFileSync(path.join(dir, 'credential.json'), JSON.stringify({ remotePod: POD, root: 'fedipod-bb/' }));
+    assert.equal(isForumHome(dir), true, 'a forum names its own');
+    assert.equal(isForumHome(dir + '/'), true, 'a trailing slash is the same home');
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });

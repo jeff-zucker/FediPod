@@ -730,6 +730,15 @@ export async function startAgent({
   handle = null,
 } = {}) {
   fs.mkdirSync(home, { recursive: true, mode: 0o700 });
+  // A home can hold a FORUM rather than a person or a group: same profiles
+  // directory, same unit, same startup — a different thing to run. Its
+  // credential says so, and running the agent over it would publish a person
+  // where a forum lives.
+  const { isForumHome, runForum } = await import('./packages/fedipod-bb/src/run.mjs');
+  if (isForumHome(home)) {
+    console.log(`[bb:${port}] this home holds a forum — running it`);
+    return runForum({ home, port, log: (...a) => console.log(`[bb:${port}]`, ...a) });
+  }
   // connect() sets this from pod state a moment later, but the browser may
   // already be opening — seed it from what setup recorded so the named origin
   // works from the first request.

@@ -81,56 +81,12 @@ if (cmd === 'init') {
   });
   console.log(JSON.stringify(cfg, null, 2));
 } else if (cmd === 'start') {
-  fs.mkdirSync(home, { recursive: true, mode: 0o700 });
-  // The last of what it said, for the console to show: a forum runs unattended
-  // and the question is always what it has been doing.
-  const said = [];
-  const keep = (line) => { said.push(line); if (said.length > 200) said.shift(); };
-  const agent = new ForumAgent({ home, log: (...a) => { keep(`${new Date().toISOString().slice(11, 19)} ${a.join(' ')}`); log(...a); } });
-  let up = false;
-  for (let attempt = 1; !up; attempt++) {
-    try {
-      up = await agent.connect();
-      if (!up) { console.error('nothing to host — run init first'); process.exit(1); }
-    } catch (e) {
-      // The attempt that just died may have taken the lease on its way in.
-      // Give it back, or the next attempt finds the forum held by a process
-      // that is this one, and waits five minutes to be told it may act.
-      // The release is a pod write too, and a pod that refused the start is
-      // usually still refusing: try it until it takes, or the forum locks
-      // itself out for the lease's whole life.
-      for (let i = 0; i < 4; i++) {
-        try { await agent.lease?.release(); break; } catch { await new Promise(r => setTimeout(r, 8000)); }
-      }
-      // The pod under load, a network blip, a slow start: all of them are
-      // waits, not failures.
-      const wait = Math.min(15 * attempt, 120);
-      log(`start failed (${e.message}) — trying again in ${wait}s`);
-      await new Promise(r => setTimeout(r, wait * 1000));
-    }
-  }
-  // A window on this machine: what it is hosting, what is waiting, what it
-  // has said. Read-only, loopback, and off with --no-console.
-  let console_ = null;
-  if (!args.includes('--no-console')) {
-    try {
-      const { startConsole, DEFAULT_CONSOLE_PORT } = await import('../src/console.mjs');
-      console_ = startConsole({ agent, home, log,
-        lines: () => said.slice(-60),
-        port: Number(flag('console-port')) || DEFAULT_CONSOLE_PORT });
-    } catch (e) { log(`console: not started (${e.message})`); }
-  }
-  // Every timer in the agent is unreferenced (the DeviceAgent's web server is
-  // what holds that process open); here nothing else would, and the host
-  // exited quietly once the push socket went idle. This holds it.
-  setInterval(() => {}, 1 << 30);
-  const shutdown = () => {
-    console_?.stop();
-    agent.stop().finally(() => process.exit(0));
-    setTimeout(() => process.exit(0), 3000).unref();
-  };
-  process.on('SIGTERM', shutdown);
-  process.on('SIGINT', shutdown);
+  const { runForum } = await import('../src/run.mjs');
+  const { DEFAULT_CONSOLE_PORT } = await import('../src/console.mjs');
+  const agent = await runForum({ home, log,
+    console: !args.includes('--no-console'),
+    port: Number(flag('console-port')) || Number(process.env.AP_PORT) || DEFAULT_CONSOLE_PORT });
+  if (!agent) process.exit(1);
 } else if (cmd === 'attach') {
   const front = flag('front');
   if (!front) { console.error('--front <https://gateway-origin> is required'); process.exit(2); }

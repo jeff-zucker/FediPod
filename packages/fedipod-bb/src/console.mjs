@@ -1,8 +1,8 @@
 // console.mjs — the forum's own window, on this machine: what it is doing,
 // what it is holding, and what it has just said. Loopback only, https like
-// every listener this project starts, and behind a key minted per run — the
-// queue it shows holds reports and held posts, which are a moderator's to
-// read.
+// every listener this project starts, and behind a key kept in the forum's
+// own home — the queue it shows holds reports and held posts, which are a
+// moderator's to read.
 //
 // It changes nothing. Everything a moderator DOES — letting a post through,
 // naming a moderator, renaming a category — is asked for at the website and
@@ -10,9 +10,11 @@
 // second door here that could act would be a weaker way into the same forum.
 
 import https from 'node:https';
+import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { ensureTrustedTls } from '../../../lib/device/certs.mjs';
+import { rootOf } from '../../../lib/device/home.mjs';
 import * as topics from './topics.mjs';
 
 export const DEFAULT_CONSOLE_PORT = 8031;
@@ -105,22 +107,62 @@ It refreshes itself every 15 seconds.</p>
 }
 
 // `agent` is a live ForumAgent; `lines` is a function returning the log ring.
-export function startConsole({ agent, lines = () => [], port = DEFAULT_CONSOLE_PORT, home, log = console.log }) {
+// The key is the home's, not the run's: an address that changes every restart
+// is an address nobody can keep. Owner-readable only, beside the credential it
+// sits next to; delete the file and the next start mints another.
+function keyFor(home) {
+  const at = path.join(home, 'console-key');
+  try { const held = fs.readFileSync(at, 'utf8').trim(); if (held) return held; } catch { /* mint one */ }
   const key = crypto.randomBytes(16).toString('hex');
-  const tls = ensureTrustedTls(path.join(home, 'certs'), { log: () => {} });
+  try { fs.writeFileSync(at, key + '\n', { mode: 0o600 }); } catch { /* this run's only */ }
+  return key;
+}
+
+export function startConsole({ agent, lines = () => [], port = DEFAULT_CONSOLE_PORT, home, log = console.log }) {
+  const key = keyFor(home);
+  // The certificate is the ROOT's, not this profile's: everything local that
+  // checks a certificate — `fedipod profiles`, the record page's probes — reads
+  // the one certificate authority under the root, and a profile minting its
+  // own is a forum nothing on this machine can verify.
+  const tls = ensureTrustedTls(path.join(rootOf(home), 'certs'), { log: () => {} });
   const handler = (req, res) => {
     const url = new URL(req.url || '/', 'https://localhost');
-    // The key is minted per run and printed once: a page holding reports and
-    // held posts is not something every process on this machine may read.
-    if (url.searchParams.get('k') !== key) {
-      res.writeHead(403, { 'content-type': 'text/plain' });
-      res.end('this console is opened with the address printed when the forum started\n');
+    // What every identity on this machine answers about itself, so a forum
+    // reads as one in `fedipod profiles` rather than as something not running.
+    // It says what it is and whether it is hosting, and nothing a moderator
+    // holds — so it needs no key.
+    if (url.pathname === '/status') {
+      const cfg = agent.config || {};
+      res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+      res.end(JSON.stringify({
+        kind: 'forum',
+        mode: agent.viewer === false ? 'active' : 'viewer',
+        handle: cfg.handle || null,
+        name: cfg.name || null,
+        categories: (agent.categories || []).length,
+        waiting: (agent.categories || []).reduce((n, c) => n + c.store.read('modqueue.json', []).length, 0),
+      }));
       return;
     }
+    // A page holding reports and held posts is not something every process on
+    // this machine may read. The key opens it, and opening it once leaves the
+    // key in this browser — so the link from your own account's page, which
+    // carries no key, works from then on.
+    const carried = /(?:^|;\s*)bb-console=([a-f0-9]+)/u.exec(req.headers.cookie || '')?.[1];
+    const given = url.searchParams.get('k');
+    if (given !== key && carried !== key) {
+      res.writeHead(403, { 'content-type': 'text/plain' });
+      res.end('this console is opened with the address the forum prints when it starts —'
+        + ' the key is in `console-key` in the forum\'s home\n');
+      return;
+    }
+    const cookie = given === key
+      ? { 'set-cookie': `bb-console=${key}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=31536000` }
+      : {};
     if (url.pathname !== '/') { res.writeHead(404, { 'content-type': 'text/plain' }); res.end('no such page\n'); return; }
     let body;
     try { body = page(agent, lines()); } catch (e) { body = `<pre>the console could not read the forum: ${esc(e.message)}</pre>`; }
-    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
+    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', ...cookie });
     res.end(body);
   };
   const servers = [];
