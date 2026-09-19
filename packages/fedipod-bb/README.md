@@ -76,7 +76,6 @@ the same page answers there for every path, with the forum named by the
 first path segment: `https://bb.fedipod.net/<handle>/`. It still reads
 through `<domain>`, where the handles live (the hosts are `BB_HOSTS` in the
 staging script). Anyone reads.
-<!-- CLAUDE 2026-09-16 - read state; delete these markers when done -->
 A topic whose newest post arrived since the reader last opened it is marked
 `New` on the index. The mark is the reader's own: one entry per topic in their
 browser's storage, written nowhere else and sent nowhere - a public forum has
@@ -89,8 +88,6 @@ every control, an `aria-label` on each post's buttons naming whose post they
 act on, `aria-current` on the category in view, `scope` on the index's
 headers, a polite live region for what the page has just done, and a reply
 box that takes the keyboard when it opens and returns it when it closes.
-<!-- /CLAUDE -->
-<!-- CLAUDE 2026-09-16 - the index, writing and moderating; delete these markers when done -->
 The front page is an index of the forum's newest posts, across every
 category: topic, category, author, date and the topic's reply count, one
 line each. The forum publishes that index itself (`ap/latest`, the copies it
@@ -111,7 +108,6 @@ report is queued for the moderators. Under a topic's title a moderator gets
 rename, pin, pin site-wide and delete. Every moderator request is published
 at the moderator's own pod and fetched back from there before the forum acts
 on it (FEP-fe34), which is what makes a button on a public page safe.
-<!-- CLAUDE 2026-09-16 - votes, profiles, the queue, members-only; delete these markers when done -->
 A post can be voted for: a `Like` to the category, its `Undo` to take it
 back, counted per person and published with the post as AS2 `likes`. The
 index sorts by newest or by votes, and searches what it is holding - topic
@@ -126,8 +122,6 @@ moderator lets a held post through (`Accept`), turns it away (`Reject`) or
 bans its author (`Block`) - each published at their own pod and checked
 there, like every other ask.
 
-<!-- /CLAUDE -->
-<!-- CLAUDE 2026-09-16 - the settings page and private categories; delete these markers when done -->
 A moderator gets a Settings page: rename the forum, rename a category,
 manage moderators and members, and make a new category. Each row carries
 Open and Private. Every change is an ordinary activity - a `Create` of a
@@ -163,7 +157,6 @@ admitted member can copy anything.
 The command-line equivalents are `--members-only <slug>` and
 `--member <slug>:<webid>`. A draft FEP for the layout and this model is in
 [fep-draft.md](fep-draft.md).
-<!-- /CLAUDE -->
 To reply, a reader signs in once with a
 Mastodon account: the page registers itself on their server, sends them to
 approve it, and keeps the token in their browser; a reply is posted from
@@ -183,7 +176,6 @@ Takes `@<handle>@fedipod.net` for the forum and one address per category,
 each a row of its own at the Gateway pointing at that category's tree on the
 pod and at the forum's one inbox. Deliveries arrive verified at the front;
 the next `start` republishes every actor under its front address.
-<!-- CLAUDE 2026-09-16 - voting both ways; delete these markers when done -->
 
 A post is voted up or down, the way Lemmy federates a vote: a `Like` for up,
 a `Dislike` for down, and the `Undo` of whichever was cast to take it back.
@@ -192,4 +184,3 @@ than a second vote. The up count is AS2's `likes` on the post's copy.
 ActivityStreams has no property for a down count and none is invented: it is
 an ordinary `Collection` published beside the copy, at that copy's address
 with `-dislikes` after it, and taken down again when it reaches nought.
-<!-- /CLAUDE -->

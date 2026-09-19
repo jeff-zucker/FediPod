@@ -48,28 +48,25 @@ signing key" on that screen and use the password you use now.
 
 ## What you can do
 
-<!-- CLAUDE 2026-09-18 — two clients and the switch; delete these markers when done -->
 There are two clients, both served by fedipod.net:
 [Sengi](https://github.com/NicolasConstant/sengi) (MIT, by Nicolas Constant),
 which you get by default, and [Phanpy](https://github.com/cheeaun/phanpy)
-(MIT, by Chee Aun). The links at the top right of the page switch between
-them, and your browser stays with whichever you chose. Sengi is patched —
-`sengi/PATCHES.md` says how and why, and every upgrade means re-applying them.
-<!-- /CLAUDE --> Through it you follow and unfollow, post, reply,
+(MIT, by Chee Aun). The links at the top right of every page switch between
+them, at any time; whichever you opened last is the one that opens next time.
+
+You follow and unfollow, post, reply,
 favourite, boost, attach media, edit and delete. Content warnings, polls with
 up to four options and one or several answers, all four visibility levels, a
 conversations view for direct messages, bookmarks, lists, keyword filters,
 pinned posts that other servers can see, blocking and muting, and the custom
 emojis other servers send.
 
-<!-- CLAUDE 2026-09-15 — quote posts and emoji reactions; delete these markers when done -->
 A post can quote another post. Quote is offered on posts whose author allows
 it; the quoted author's server is asked, and the quote shows as pending until
 they answer. Anyone may quote your public posts, nobody your followers-only
 or direct ones, and you are notified when someone does. Emoji reactions from
 Misskey, Sharkey, Pleroma and Akkoma arrive as notifications showing the
 emoji.
-<!-- /CLAUDE -->
 
 **Bluesky.** Connect a Bluesky account, or any other ATProto account, from the
 manage page. Your public posts are mirrored to it, Bluesky replies and
@@ -125,12 +122,10 @@ key: it verifies incoming mail, drops the junk, forwards the rest to your pod,
 and hands your browser the app. You can detach from it at any time and attach
 to a gateway of your own. Your address and your data do not change.
 
-<!-- CLAUDE 2026-09-15 — FediPod-BB pointer; delete these markers when done -->
 **A forum.** FediPod-BB, in `packages/fedipod-bb`, is a discussion board
 whose record lives on a Solid pod: categories are groups, topics are
 context collections, and a website at `/bb/` shows them. Its README says how
 to run one.
-<!-- /CLAUDE -->
 
 ## Other ways to run FediPod
 
@@ -144,7 +139,6 @@ to run one.
 - [FediPod Server](packages/fedipod-server/README.md): a full ActivityPub
   server as a Community Solid Server component, giving every pod on the server
   the option of a Fediverse account.
-
 
 ## Acknowledgements
 

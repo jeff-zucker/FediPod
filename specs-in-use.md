@@ -87,7 +87,6 @@ Mastodon-format CSV exports
   travels inside its moderation Announce). A Block that arrives verified
   drops the sender's follow of you and yours of them.
 
-<!-- CLAUDE 2026-09-15 — quote posts and emoji reactions; delete these markers when done -->
 - **FEP-044f (quote posts)** — both directions. A note that quotes carries
   `quote`, with Fedibird's `quoteUri` and Misskey's `_misskey_quote` beside it,
   and a `QuoteRequest` goes to the quoted author; their `Accept` names a
@@ -106,9 +105,7 @@ Mastodon-format CSV exports
   the litepub schema those servers name per instance, held here
   (`lib/core/contexts/litepub-0.1.json`). Nothing outbound: the client has no
   reaction control.
-<!-- /CLAUDE -->
 
-<!-- CLAUDE 2026-09-15 — FediPod-BB, the forum package; delete these markers when done -->
 - **FEP-7888 (conversation contexts)** — in FediPod-BB (`packages/fedipod-bb`):
   a topic is an `OrderedCollection` owned by its category (`attributedTo`),
   named on every post as `context`; a post is placed by its `context`, else
@@ -126,20 +123,17 @@ Mastodon-format CSV exports
   FediPod group per category, unchanged; the forum adds one inbox above them
   and routes by addressing. Not yet: FEP-f228 backfilling of a remote
   context; `postingRestrictedToMods` and the other Lemmy terms.
-<!-- /CLAUDE -->
 
 ## Client side (talking to the user's app)
 
 - **Mastodon REST API** — the facade clients log into and post through
   (`lib/client/masto/`), including OAuth for client sign-in. All four builds
   except the Gateway.
-<!-- CLAUDE 2026-09-15 — what the API version claim covers; delete these markers when done -->
   The instance document claims `api_versions.mastodon: 7`: grouped
   notifications (`/api/v2/notifications`, one group per notification), the
   filter blur action, and quote posts (`quoted_status_id` on compose, `quote`
   and `quote_approval` on a status, `quote` and `emoji_reaction` notification
   types). Nothing past 7 is claimed.
-<!-- /CLAUDE -->
 - **Mastodon streaming API** — live timeline updates
   (`lib/client/streaming.mjs`), on the DeviceAgent and the Server. The
   BrowserAgent has no socket to hold and says so in its instance document, so
@@ -293,17 +287,15 @@ Item-by-item answers to the Solid/ActivityPub interop checklist.
 
 - **Inbox and outbox collections** — outbox and followers served as paged
   AS2 collections; following, featured and the private collections as flat
-  ones. The outbox lists the Create of each post and every Announce.
-<!-- /CLAUDE --> The
+  ones. The outbox lists the Create of each post and every Announce. The
   inbox is never public: the pod's container takes deliveries append-only and
   the agent drains it, and the owner reads what arrived at `GET /ap/inbox` on
   the agent, authenticated as themselves.
 - **Relation to endpoints and LDP containers** — collections are plain pod
   resources; the inbox is the one container other servers write to.
 - **Conformance with activity+json** — yes; the ActivityStreams documents are
-  stored and served as `application/activity+json`,
-<!-- /CLAUDE --> and the agent sends and accepts the standard
-  AP content types.
+  stored and served as `application/activity+json`, and the agent sends and
+  accepts the standard AP content types.
 - **Direct messages** — yes; direct posts are addressed only to the named
   actors and delivered straight to their inboxes. They and followers-only
   posts live in the pod's owner-only private container, never appear on the
