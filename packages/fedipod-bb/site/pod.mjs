@@ -228,7 +228,11 @@ export async function dm({ actor, podHome, to, inbox, text }) {
     throw new Error(`${e.message} — making a private place for it on ${new URL(home).host}`);
   }
   const name = `${stamp()}-${crypto.randomUUID().slice(0, 8)}`;
-  const id = faceOf(actor) + where + name;
+  // The message's own address on the pod, not the face the account publishes
+  // under. A fronted address is the right id for anything the front can hand
+  // over; this one it cannot — the document is readable by its owner alone —
+  // so naming it there would name an address that answers nobody.
+  const id = home + where + name;
   const now = new Date().toISOString();
   const note = {
     '@context': AS, id, type: 'Note', attributedTo: actor,

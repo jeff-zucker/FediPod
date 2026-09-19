@@ -1,5 +1,12 @@
 # Changes
 
+## 2026-09-19 (a message is named where it lives — version 1.18.3)
+
+A message carries its own address on the sender's pod. It used to be named at
+the address the account publishes under, which cannot hand it over: the
+message is readable by its owner and nobody else, so that address answered
+nobody.
+
 ## 2026-09-19 (a message reaches somebody at a Gateway — version 1.18.2)
 
 A message to somebody whose address is at a Gateway is handed to the pod
