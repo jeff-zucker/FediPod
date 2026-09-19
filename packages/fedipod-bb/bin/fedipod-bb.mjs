@@ -82,7 +82,11 @@ if (cmd === 'init') {
   console.log(JSON.stringify(cfg, null, 2));
 } else if (cmd === 'start') {
   fs.mkdirSync(home, { recursive: true, mode: 0o700 });
-  const agent = new ForumAgent({ home, log });
+  // The last of what it said, for the console to show: a forum runs unattended
+  // and the question is always what it has been doing.
+  const said = [];
+  const keep = (line) => { said.push(line); if (said.length > 200) said.shift(); };
+  const agent = new ForumAgent({ home, log: (...a) => { keep(`${new Date().toISOString().slice(11, 19)} ${a.join(' ')}`); log(...a); } });
   let up = false;
   for (let attempt = 1; !up; attempt++) {
     try {
@@ -105,11 +109,26 @@ if (cmd === 'init') {
       await new Promise(r => setTimeout(r, wait * 1000));
     }
   }
+  // A window on this machine: what it is hosting, what is waiting, what it
+  // has said. Read-only, loopback, and off with --no-console.
+  let console_ = null;
+  if (!args.includes('--no-console')) {
+    try {
+      const { startConsole, DEFAULT_CONSOLE_PORT } = await import('../src/console.mjs');
+      console_ = startConsole({ agent, home, log,
+        lines: () => said.slice(-60),
+        port: Number(flag('console-port')) || DEFAULT_CONSOLE_PORT });
+    } catch (e) { log(`console: not started (${e.message})`); }
+  }
   // Every timer in the agent is unreferenced (the DeviceAgent's web server is
   // what holds that process open); here nothing else would, and the host
   // exited quietly once the push socket went idle. This holds it.
   setInterval(() => {}, 1 << 30);
-  const shutdown = () => { agent.stop().finally(() => process.exit(0)); setTimeout(() => process.exit(0), 3000).unref(); };
+  const shutdown = () => {
+    console_?.stop();
+    agent.stop().finally(() => process.exit(0));
+    setTimeout(() => process.exit(0), 3000).unref();
+  };
   process.on('SIGTERM', shutdown);
   process.on('SIGINT', shutdown);
 } else if (cmd === 'attach') {
@@ -127,5 +146,6 @@ if (cmd === 'init') {
   process.exit(0);
 } else {
   console.log('usage: fedipod-bb <init|start|status|attach> --home DIR [--handle H --name N --category slug:Name … --reply-policy open|review | --front URL]');
+  console.log('       start also serves a read-only console on this machine: --console-port N, or --no-console');
   process.exit(2);
 }

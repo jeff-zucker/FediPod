@@ -1,5 +1,19 @@
 # Changes
 
+## 2026-09-19 (the forum has a window on the machine running it — version 1.22.0)
+
+**`fedipod-bb start` serves a console on this machine.** It says whether the
+forum is hosting or watching, which pod it is on, each category with its topics
+and members, who moderates, what is waiting for a moderator — including an ask
+that failed and why — and the last of what the forum has said. It refreshes
+itself.
+
+It reads and changes nothing: moderating is done at the website, where an ask
+is published at the asker's own pod and can be checked. The address is
+loopback, https, and carries a key minted for that run, since the queue holds
+reports and held posts; the forum prints the address when it starts. `start`
+takes `--console-port N`, or `--no-console`.
+
 ## 2026-09-19 (a sign-in that cannot be renewed says so — version 1.21.0)
 
 **A failure while renewing your sign-in names itself.** Everything you do from
