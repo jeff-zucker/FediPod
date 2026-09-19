@@ -47,6 +47,9 @@ function voteIn(activity) {
 }
 const arr = (v) => (v === undefined || v === null ? [] : [].concat(v));
 const HEARTBEAT_MS = 10 * 60_000;
+// How often a moderator's ask is looked at again. Short enough that asking for
+// something and watching it happen feels like one act.
+const ASK_SWEEP_MS = 60_000;
 const VIEWER_REFRESH_MS = 5 * 60_000;
 
 // The forum's inbox, drained by one loop and handed out by address. Every
@@ -958,6 +961,18 @@ export class ForumAgent {
     this.heartbeatTimer = setInterval(() => {
       publish.publishHeartbeat(this.siteAgent).catch(e => this.log(`heartbeat: ${e.message}`));
     }, HEARTBEAT_MS);
+    // An ask is checked at its asker's pod before it is acted on, and that
+    // check used to happen only when the inbox was drained. A moderator asking
+    // for something on a quiet forum therefore waited for the next person to
+    // post — and if the document was a moment from being readable when the ask
+    // arrived, it waited for the one after that. So it is swept on its own
+    // clock as well.
+    this.asksTimer = setInterval(() => {
+      this.applyVerifiedAsks()
+        .then(() => this.publishModQueue())
+        .catch(e => this.log(`asks: ${e.message}`));
+    }, ASK_SWEEP_MS);
+    this.asksTimer.unref?.();
     this.heartbeatTimer.unref?.();
     this.log(`hosting ${this.config.handle}: ${this.categories.map(c => '@' + c.slug).join(', ')}`);
   }
@@ -1002,6 +1017,7 @@ export class ForumAgent {
     for (const cat of this.categories) cat.deliverer.stop();
     this.siteAgent?.deliverer.stop();
     clearInterval(this.heartbeatTimer);
+    clearInterval(this.asksTimer);
     this.lease?.stopRenewal();
     this.startViewer();
   }
@@ -1009,6 +1025,7 @@ export class ForumAgent {
   async stop() {
     clearInterval(this.refreshTimer);
     clearInterval(this.heartbeatTimer);
+    clearInterval(this.asksTimer);
     this.intake?.stop();
     for (const cat of this.categories) cat.deliverer.stop();
     this.siteAgent?.deliverer.stop();
