@@ -206,48 +206,44 @@ export async function remove({ actor, podHome, id, category, categoryBase = null
   return { id };
 }
 
-// A post on somebody's timeline: an ordinary public post of the sender's that
-// names them, so it reaches their notifications and reads as a post of theirs
-// to answer. It is written in the sender's own public container, like any
-// other post, and handed to that person's inbox.
+// A post on somebody's timeline, sent the way their server will accept it.
 //
-// Public is the whole of it: anyone can read it, and the page says so before
-// anything is typed. A server that takes only signed mail refuses it — a page
-// holds no signing key — and the refusal names the host.
-export async function postTo({ actor, podHome, to, handle = '', inbox, text }) {
+// The page holds no signing key, and a fediverse server refuses an unsigned
+// delivery — so the post is not delivered from here at all. It is handed to
+// the sender's OWN door at their Gateway, proved with their pod login, and
+// their own agent publishes it and signs the delivery.
+//
+// Two things follow from that, and the page says both before anything is
+// typed: it only works for an account with a door at this Gateway, and it
+// goes out when that account's agent next reads its inbox.
+export async function postTo({ actor, podHome, handle, to, toHandle = '', front, text }) {
   const s = await getSession();
   if (!s) throw new Error('sign in to your pod first');
-  const home = homeOf(actor, podHome);
-  const where = 'ap/notes/';
-  const name = `${stamp()}-to-${slug(handle) || 'someone'}-${crypto.randomUUID().slice(0, 8)}`;
-  // A public post is named at the address the account publishes under, which
-  // is where anyone reading it will ask for it.
-  const id = faceOf(actor) + where + name;
-  const now = new Date().toISOString();
+  const local = String(handle || '').replace(/^@/u, '').split('@')[0];
+  if (!front || !local) throw new Error('this page does not know which door to hand your post to');
+  const url = `${String(front).replace(/\/$/u, '')}/u/${encodeURIComponent(local)}/ap/outbox`;
   const note = {
-    '@context': AS, id, type: 'Note', attributedTo: actor,
-    content: htmlOf(text), source: sourceOf(text), published: now,
+    '@context': AS, type: 'Note',
+    content: htmlOf(text), source: sourceOf(text),
     to: [PUBLIC, to], cc: [],
-    tag: [{ type: 'Mention', href: to, ...(handle ? { name: handle } : {}) }],
+    tag: [{ type: 'Mention', href: to, ...(toHandle ? { name: toHandle } : {}) }],
   };
-  let put;
-  try {
-    put = await s.fetch(home + where + name, {
-      method: 'PUT', headers: { 'content-type': 'application/activity+json' }, body: JSON.stringify(note),
-    });
-  } catch (e) {
-    throw new Error(`${e.message} — writing it to ${new URL(home).host}`);
-  }
-  if (!put.ok) throw new Error(`your pod refused the post (HTTP ${put.status}) — ${home + where + name}`);
-  const create = { '@context': AS, id: `${id}#create`, type: 'Create', actor, published: now, object: note, to: [PUBLIC, to], cc: [] };
   let sent;
   try {
-    sent = await fetch(inbox, { method: 'POST', headers: { 'content-type': 'application/ld+json' }, body: JSON.stringify(create) });
+    sent = await s.fetch(url, {
+      method: 'POST', headers: { 'content-type': 'application/activity+json' }, body: JSON.stringify(note),
+    });
   } catch (e) {
-    throw new Error(`${e.message} — handing it to ${new URL(inbox).host}`);
+    throw new Error(`${e.message} — handing it to your own door at ${new URL(url).host}`);
   }
-  if (!sent.ok) throw new Error(`${new URL(inbox).host} did not take it (HTTP ${sent.status})`);
-  return { id };
+  if (sent.status === 404) {
+    throw new Error(`${new URL(url).host} keeps no door for @${local} — this page can only post for an account fronted there`);
+  }
+  if (!sent.ok) {
+    const said = await sent.json().catch(() => null);
+    throw new Error(`your own door refused it (HTTP ${sent.status})${said?.error ? ` — ${said.error}` : ''}`);
+  }
+  return { accepted: true };
 }
 
 // Reporting a post to the forum's moderators. A Flag names what is being

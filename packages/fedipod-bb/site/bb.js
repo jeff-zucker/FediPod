@@ -353,8 +353,9 @@ async function showWho(handleOrId) {
   const messageBox = podAcct && podAcct.actor !== handleOrId ? `<section class="reply">
     <h2>Post to ${named}'s timeline</h2>
     <p class="hint">A post of yours that names them, so it reaches them and anyone who reads either of
-      you. It is public: everybody can read it. A server that takes only signed mail will refuse it,
-      and you will be told which one did.</p>
+      you. It is public: everybody can read it. Your own account posts it and signs it, so it reaches
+      Mastodon and the rest of the Fediverse — which means it goes out when your agent next reads its
+      inbox, and that it needs an account fronted at this Gateway.</p>
     <label class="vh" for="dm-text">Your post</label>
     <textarea id="dm-text" rows="3" placeholder="Your post"></textarea>
     <p class="row"><button class="primary" data-act="post-to" data-to="${esc(handleOrId)}"
@@ -1129,19 +1130,16 @@ async function postToTimeline(to, handle) {
   err.className = '';
   err.textContent = 'Posting…';
   try {
+    // Their handle, for the mention the post carries. Nothing else about them
+    // is needed: the sender's own agent works out where it goes and signs it.
     const card = await read.actorCard(to).catch(() => null);
-    // An account fronted at a Gateway names the Gateway's door as its inbox,
-    // and that door takes signed mail between servers — not a page, which it
-    // refuses before anything is sent. The pod behind the door does take it,
-    // and saying so is what the Gateway answers when asked.
-    const at = (card?.handle || handle || '').replace(/^@/u, '').split('@')[0] || null;
-    const inbox = await pod.podInboxOf(to, { front, handle: at }) || card?.inbox;
-    if (!inbox) throw new Error(`${new URL(to).host} would not say where ${authorLabel(to)} takes mail`);
-    await pod.postTo({ actor: podAcct.actor, podHome: podAcct.podHome, to,
-      handle: card?.handle || handle || '', inbox, text });
+    await pod.postTo({
+      actor: podAcct.actor, podHome: podAcct.podHome, handle: podAcct.handle,
+      to, toHandle: card?.handle || handle || '', front, text,
+    });
     box.value = '';
     err.className = 'said';
-    err.textContent = 'Posted. It is on its way to them.';
+    err.textContent = 'Handed to your own account. It goes out signed when your agent next reads its inbox.';
     say('Posted.');
   } catch (e) {
     err.className = 'err';

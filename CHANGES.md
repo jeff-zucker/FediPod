@@ -1,5 +1,16 @@
 # Changes
 
+## 2026-09-19 (posting to somebody's timeline reaches the Fediverse — version 1.19.1)
+
+The post goes out signed, so Mastodon and every other server that requires
+signed mail accepts it. The page does not deliver it: it hands the post to your
+own account's door at the Gateway, proved with the pod login you are already
+using, and your agent publishes and delivers it.
+
+Two things follow, and the box says both before you type: it needs an account
+with a door at this Gateway, and the post goes out when your agent next reads
+its inbox.
+
 ## 2026-09-19 (post to somebody's timeline — version 1.19.0)
 
 The box on a person's page posts to their timeline. What you write is a post of
