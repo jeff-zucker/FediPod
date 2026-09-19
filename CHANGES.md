@@ -1,5 +1,12 @@
 # Changes
 
+## 2026-09-19 (a message reaches somebody at a Gateway — version 1.18.2)
+
+A message to somebody whose address is at a Gateway is handed to the pod
+behind it. Their account names the Gateway's door as its inbox, and that door
+takes mail between servers rather than from a page, so the message was refused
+before it left the browser.
+
 ## 2026-09-19 (a message that fails says where — version 1.18.1)
 
 Sending a message makes three requests to two hosts, and any of them failing

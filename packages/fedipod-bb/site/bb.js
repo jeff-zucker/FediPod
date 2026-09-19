@@ -1128,10 +1128,14 @@ async function sendMessage(to) {
   err.textContent = 'Sending…';
   try {
     const card = await read.actorCard(to).catch(() => null);
-    if (!card?.inbox) {
-      throw new Error(`${new URL(to).host} would not say where ${authorLabel(to)} takes mail`);
-    }
-    await pod.dm({ actor: podAcct.actor, podHome: podAcct.podHome, to, inbox: card.inbox, text });
+    // An account fronted at a Gateway names the Gateway's door as its inbox,
+    // and that door takes signed mail between servers — not a page, which it
+    // refuses before the message is even sent. The pod behind the door does
+    // take it, and saying so is what the Gateway answers when asked.
+    const at = (card?.handle || '').replace(/^@/u, '').split('@')[0] || null;
+    const inbox = await pod.podInboxOf(to, { front, handle: at }) || card?.inbox;
+    if (!inbox) throw new Error(`${new URL(to).host} would not say where ${authorLabel(to)} takes mail`);
+    await pod.dm({ actor: podAcct.actor, podHome: podAcct.podHome, to, inbox, text });
     box.value = '';
     err.className = 'said';
     err.textContent = 'Sent. It is in their inbox and nowhere else.';
