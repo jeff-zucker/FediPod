@@ -503,6 +503,34 @@ export class FediPodServerHandler extends HttpHandler implements Initializable, 
    * reply and nowhere else. Re-opting-in rotates the secret — that is how a
    * lost one is recovered.
    */
+  /**
+   * The WebIDs behind the account session in the request, or none. The server
+   * keeps that session in a `css-account` cookie; its own account API is what
+   * says which WebIDs the session owns, and it takes the same cookie. Nothing
+   * here trusts the cookie's presence — the account API does the deciding, and
+   * the caller picks the WebID that owns the pod being claimed.
+   */
+  public async webIdsFromSession(request: { headers: { get(name: string): string | null } }):
+  Promise<string[]> {
+    const cookie = request.headers.get('cookie');
+    if (!cookie || !/(?:^|;\s*)css-account=/u.test(cookie)) return [];
+    const base = this.args.frontOrigin.replace(/\/$/u, '');
+    const asJson = { cookie, accept: 'application/json' };
+    try {
+      const index = await fetch(`${base}/.account/`, { headers: asJson });
+      if (!index.ok) return [];
+      const controls = (await index.json() as { controls?: { account?: { webId?: string } } }).controls;
+      const webIdLink = controls?.account?.webId;
+      if (!webIdLink) return [];
+      const linked = await fetch(webIdLink, { headers: asJson });
+      if (!linked.ok) return [];
+      const links = (await linked.json() as { webIdLinks?: Record<string, unknown> }).webIdLinks ?? {};
+      return Object.keys(links);
+    } catch {
+      return [];
+    }
+  }
+
   public async optInPod({ podBase, webId }: { podBase: string; webId: string }):
   Promise<Record<string, unknown> & { httpStatus: number }> {
     if (!this.registry) return { httpStatus: 501, error: 'this server does not offer runtime opt-in' };
@@ -644,6 +672,11 @@ export class FediPodServerHandler extends HttpHandler implements Initializable, 
     const out = await routeFront(whatwg, {
       host: this.frontHost,
       frontOrigin: this.args.frontOrigin,
+      // This server issued the session the reader is already using, so it can
+      // read it rather than sending them to an identity provider that has just
+      // told them who they are. Same-origin only; front-core decides that.
+      webIdsFromSession: (req: { headers: { get(name: string): string | null } }) =>
+        this.webIdsFromSession(req),
       gatewayWebId: this.args.gatewayWebId,
       offersPods: !!this.args.offersPods,
       signupPage: this.args.signupPage || webFile('new-account.html'),

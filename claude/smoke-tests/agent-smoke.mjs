@@ -11440,6 +11440,43 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
     'but its owner cannot claim an ancestor of a sibling pod on the shared origin');
   check((await agentPost({ action: 'opt-in', podBase: ORIGIN + '/' }, ctxAgent)).status === 403,
     "and the gateway's own origin root is not a pod — the front lives there, not an identity");
+  // A server that issued the reader's session reads it instead of sending them
+  // to sign in again — same-origin only, and only the WebID that owns the pod.
+  const sessionCalls = [];
+  const sessionCtx = {
+    ...ctxAgent,
+    // Its own recorder: what the checks below opt in must not disturb the
+    // count the checks above this one are about to make of `calls`.
+    agentControl: {
+      optIn: async (a) => { sessionCalls.push(a); return { httpStatus: 201, ok: true, handle: 'mei', doorSecret: 's4', doorPath: '/fedipod/' }; },
+      optOut: async (a) => { sessionCalls.push(a); return { httpStatus: 200, ok: true, stopped: true }; },
+    },
+    verifier: async () => { throw new Error('no token'); },
+    webIdsFromSession: async () => [ 'https://someone.else/profile/card#me', 'https://mei.host/profile/card#me' ],
+  };
+  const withSession = (headers, body) => front.routeFront(
+    new Request(ORIGIN + '/api/agent', { method: 'POST',
+      headers: { 'content-type': 'application/json', ...headers },
+      body: JSON.stringify(body) }), sessionCtx);
+  check((await withSession({ 'sec-fetch-site': 'same-origin' },
+    { action: 'opt-in', podBase: 'https://mei.host/' })).status === 201,
+  'a session this server issued opts its own pod in, with no token');
+  check((await withSession({ origin: ORIGIN }, { action: 'opt-in', podBase: 'https://mei.host/' })).status === 201,
+    'an Origin naming this very front says the same thing where the browser sent no Sec-Fetch-Site');
+  check((await withSession({ 'sec-fetch-site': 'cross-site' },
+    { action: 'opt-in', podBase: 'https://mei.host/' })).status === 401,
+  'a request from another site is not proof of anything — the session is not read');
+  check((await withSession({ origin: 'https://elsewhere.example' },
+    { action: 'opt-in', podBase: 'https://mei.host/' })).status === 401,
+  'nor is one whose Origin is somebody else');
+  check((await withSession({ 'sec-fetch-site': 'same-origin' },
+    { action: 'opt-in', podBase: 'https://tamara.host/' })).status === 401,
+  'and a session holding no WebID for the pod being claimed proves nothing about it');
+  check((await withSession({}, { action: 'opt-in', podBase: 'https://mei.host/' })).status === 401,
+    'a request that says where it came from not at all is treated as if it came from elsewhere');
+  check(sessionCalls.every(a => a.webId === 'https://mei.host/profile/card#me'),
+    'and the pod server is handed the WebID that owns the pod, not the first one the session held');
+
   const okIn = await agentPost({ action: 'opt-in', podBase: 'https://mei.host/' }, ctxAgent);
   const okInBody = await okIn.clone?.().json?.() ?? JSON.parse(okIn.body);
   check(okIn.status === 201 && okInBody.doorSecret === 's3' && /x-dk-token: s3/.test(okInBody.command || ''),

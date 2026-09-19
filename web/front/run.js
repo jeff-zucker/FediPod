@@ -54,36 +54,40 @@ $('run-pod-url').addEventListener('input', () => {
 });
 $('run-issuer').addEventListener('input', runFormCheck);
 
-const runStart = (action) => {
+const runStart = async (action) => {
   const n = $('run-note');
-  if (!session) { n.hidden = false; n.textContent = 'the sign-in library did not load — reload and try again'; return; }
   const u = new URL($('run-pod-url').value.trim());
   if (u.pathname === '') u.pathname = '/';
   if (!u.pathname.endsWith('/')) u.pathname += '/';
   u.search = ''; u.hash = '';
-  sessionStorage.setItem('fp-run', JSON.stringify({ podBase: u.href, action }));
+  const p = { podBase: u.href, action };
+
+  // A pod server issued the session this page is being read with, so ask it
+  // first: where it knows who you are, there is nothing to sign in to again.
+  // A Gateway fronting somebody else's pod answers 401 here and the login
+  // below is the only way.
+  n.hidden = false;
+  n.textContent = 'asking the server…';
+  const known = await fetch('/api/agent', {
+    method: 'POST', credentials: 'same-origin',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(p),
+  }).catch(() => null);
+  if (known && known.status !== 401) { await showReply(known, p); return; }
+
+  if (!session) { n.textContent = 'the sign-in library did not load — reload and try again'; return; }
+  sessionStorage.setItem('fp-run', JSON.stringify(p));
   session.login($('run-issuer').value.trim(), location.origin + '/run')
-    .catch((e) => { n.hidden = false; n.textContent = 'sign-in failed to start: ' + e.message; });
+    .catch((e) => { n.textContent = 'sign-in failed to start: ' + e.message; });
 };
 $('run-continue').onclick = () => runStart('opt-in');
 $('run-leave').onclick = () => runStart('opt-out');
 
-// Back from the identity provider: finish the opt-in with the proven login.
-(async () => {
-  if (!session) return;
-  await session.handleRedirectFromLogin().catch(() => {});
-  const pending = sessionStorage.getItem('fp-run');
-  if (!session.isActive || !pending) return;
-  sessionStorage.removeItem('fp-run');
-  const p = JSON.parse(pending);
+// What came of it, however the server was satisfied — the session it already
+// had, or a login proved afterwards.
+async function showReply(res, p) {
   const n = $('run-note');
   n.hidden = false;
-  n.textContent = 'signed in as ' + session.webId + ' — asking the server…';
-  // The signed fetch builds a DPoP proof from the URL, so it must be absolute.
-  const res = await session.authFetch(location.origin + '/api/agent', {
-    method: 'POST', headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ action: p.action, podBase: p.podBase }),
-  }).catch(() => null);
   const d = res ? await res.json().catch(() => ({})) : {};
   if (res && res.status === 201 && d.doorSecret) {
     // Built as nodes, not as a string of HTML. Three of the pieces below come
@@ -104,4 +108,23 @@ $('run-leave').onclick = () => runStart('opt-out');
     n.textContent = (p.action === 'opt-in' ? 'opt-in' : 'opt-out') + ' failed: '
       + (d.error || (res ? 'HTTP ' + res.status : 'no response'));
   }
+}
+
+// Back from the identity provider: finish with the proven login.
+(async () => {
+  if (!session) return;
+  await session.handleRedirectFromLogin().catch(() => {});
+  const pending = sessionStorage.getItem('fp-run');
+  if (!session.isActive || !pending) return;
+  sessionStorage.removeItem('fp-run');
+  const p = JSON.parse(pending);
+  const n = $('run-note');
+  n.hidden = false;
+  n.textContent = 'signed in as ' + session.webId + ' — asking the server…';
+  // The signed fetch builds a DPoP proof from the URL, so it must be absolute.
+  const res = await session.authFetch(location.origin + '/api/agent', {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ action: p.action, podBase: p.podBase }),
+  }).catch(() => null);
+  await showReply(res, p);
 })();
