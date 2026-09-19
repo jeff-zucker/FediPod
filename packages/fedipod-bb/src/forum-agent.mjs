@@ -588,7 +588,18 @@ export class ForumAgent {
           if (i >= 0) { q2[i] = { ...q2[i], activity: doc, verified: true }; cat.store.write('modqueue.json', q2); }
           await this.applyModeration(cat.slug, entry.id);
           this.log(`applied ${entry.type} from ${entry.moderator}`);
-        } catch (e) { this.log(`ask ${entry.id}: ${e.message}`); }
+        } catch (e) {
+          this.log(`ask ${entry.id}: ${e.message}`);
+          // It stays in the queue and carries why it did not take, so a
+          // moderator sees an ask that failed rather than one that silently
+          // did nothing. The next sweep tries it again.
+          const q3 = cat.store.read('modqueue.json', []);
+          const j = q3.findIndex(x => x.id === entry.id);
+          if (j >= 0) {
+            q3[j] = { ...q3[j], failed: e.message, failedAt: new Date().toISOString() };
+            cat.store.write('modqueue.json', q3);
+          }
+        }
       }
     }
   }
@@ -743,7 +754,8 @@ export class ForumAgent {
         // on a report acts on its author and not on whoever reported it.
         const about = object ? (cat.store.getStatuses().find(st => st.noteId === object)?.actor || null) : null;
         rows.push({ category: cat.slug, id: e.id, type: e.type, by: e.moderator, at: e.at,
-          object, about, why: e.activity?.content || null, verified: !!e.verified });
+          object, about, why: e.activity?.content || null, verified: !!e.verified,
+          ...(e.failed ? { failed: e.failed, failedAt: e.failedAt || null } : {}) });
       }
       for (const r of cat.store.getRequests?.() || []) {
         rows.push({ category: cat.slug, id: 'join:' + r.actor, type: 'Join request', by: r.actor, at: r.at || null, object: r.actor });

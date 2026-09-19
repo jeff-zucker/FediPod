@@ -1,5 +1,18 @@
 # Changes
 
+## 2026-09-19 (a settings change that cannot be kept is refused — version 1.20.0)
+
+**A change to the forum is written to its pod before anything is published.**
+A pod that refuses the write — under load it answers "back off" — used to leave
+the change in the running forum's memory: the new moderator was published,
+announced, and then wiped by the next start, which reads the pod and republishes
+from it. Nothing said so.
+
+Now the record is written first. If the pod will not keep it, the forum is left
+exactly as it was, nothing is published, and the ask stays in the moderators'
+queue carrying why it did not take. The queue page shows that line, and the
+forum tries the ask again on its next sweep.
+
 ## 2026-09-19 (posting to somebody's timeline reaches the Fediverse — version 1.19.1)
 
 The post goes out signed, so Mastodon and every other server that requires

@@ -320,6 +320,7 @@ async function showQueue() {
       <div class="title">${esc(r.type)}${r.category ? ' · ' + esc(r.category) : ''}</div>
       <div class="meta">${r.type === 'Flag' ? 'reported by ' : ''}${esc(r.by ? authorLabel(r.by) : '')}${r.about ? ` · about <a href="#/who/${encodeURIComponent(r.about)}">${esc(authorLabel(r.about))}</a>` : ''} · ${esc(when(r.at))}${r.verified ? ' · checked' : ''}</div>
       ${r.object ? `<div class="dim">${esc(r.object)}</div>` : ''}
+      ${r.failed ? `<p class="err">It did not take: ${esc(r.failed)}${r.failedAt ? ` (${esc(when(r.failedAt))})` : ''}. It is still here and will be tried again.</p>` : ''}
       ${r.why ? `<article class="post"><div class="body">${esc(r.why)}</div></article>` : ''}
       ${r.object ? `<div class="acts mod" data-post="${esc(r.object)}" data-cat="${esc(r.category || '')}">
         ${r.type === 'Held' || r.type === 'Create' ? '<button data-act="approve">Let it through</button><button data-act="refuse">Turn it away</button>' : ''}

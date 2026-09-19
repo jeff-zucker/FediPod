@@ -21,7 +21,9 @@ function forum(config = {}) {
     moderators: [], moderatorWebIds: [PRIYA_WEBID], membersOnly: [], memberWebIds: {}, ...config };
   const f = {
     site,
-    store: { getConfig: () => f.config, setConfig: (c) => { f.config = c; } },
+    // The record lives on the pod; `flush` is what puts it there, and a forum
+    // whose pod refuses the write must not go on to publish the change.
+    store: { getConfig: () => f.config, setConfig: (c) => { f.config = c; }, flush: async () => { if (f.podRefuses) throw new Error(f.podRefuses); } },
     config: held,
     categories: [{ slug: 'general', urls: site.category('general') }],
     webIdOf: async () => MEI_WEBID,
@@ -68,6 +70,28 @@ test('an ask addressed at the Gateway means what one addressed at the pod means'
   assert.equal(isSettingsAsk(f, { type: 'Add', object: mei, target: 'https://elsewhere.example/fedipod-bb/mod/' }), false);
 });
 
+
+test('a change the pod will not keep is refused, not published and then undone', async () => {
+  const f = forum();
+  const was = JSON.parse(JSON.stringify(f.config));
+  f.podRefuses = 'pod asked us to back off';
+  let published = 0;
+  f.republishAdministrators = async () => { published += 1; };
+
+  await assert.rejects(
+    applySettings(f, { type: 'Add', object: 'https://their.server/users/mei', target: f.site.administrators }),
+    /could not be written/u,
+    'the ask fails rather than quietly half-applying',
+  );
+  assert.deepEqual(f.config, was, 'and the forum is exactly as it was');
+  assert.equal(published, 0, 'nothing was published from a change that did not stick');
+
+  // The pod takes writes again: the same ask goes through.
+  f.podRefuses = null;
+  await applySettings(f, { type: 'Add', object: 'https://their.server/users/mei', target: f.site.administrators });
+  assert.deepEqual(f.config.moderators, ['https://their.server/users/mei']);
+  assert.equal(published, 1);
+});
 
 test('naming a member leaves an open category open, and dropping the last one leaves it as it was', async () => {
   const f = forum();

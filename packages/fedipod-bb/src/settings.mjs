@@ -47,7 +47,24 @@ export async function applySettings(forum, activity) {
   const target = idOf(activity?.target);
   const site = forum.site;
   const cfg = () => forum.store.getConfig();
-  const save = (next) => { forum.store.setConfig({ ...cfg(), ...next }); forum.config = forum.store.getConfig(); };
+  // The record on the pod IS the forum: everything published is written from
+  // it, and a start reads it back. A change that never reached it was still
+  // published, and the next start quietly republished the old lists over the
+  // top — a moderator added, announced, and gone again with nothing said. So
+  // the change is written first, and a write that fails puts memory back and
+  // says so instead of going on to publish.
+  const save = async (next) => {
+    const before = cfg();
+    forum.store.setConfig({ ...before, ...next });
+    forum.config = forum.store.getConfig();
+    try {
+      await forum.store.flush();
+    } catch (e) {
+      forum.store.setConfig(before);
+      forum.config = forum.store.getConfig();
+      throw new Error(`the forum's own record could not be written (${e.message}) — nothing was changed`);
+    }
+  };
 
   if (t === 'Create' && object?.type === 'Group') {
     const slug = String(object.preferredUsername || '').toLowerCase();
@@ -68,7 +85,7 @@ export async function applySettings(forum, activity) {
       next.memberWebIds = { ...(cfg().memberWebIds || {}), [slug]: [...(cfg().moderatorWebIds || [])] };
       next.reprovision = true;
     }
-    save(next);
+    await save(next);
     return { category: slug, private: priv };
   }
 
@@ -77,14 +94,14 @@ export async function applySettings(forum, activity) {
     const name = typeof object.name === 'string' ? object.name.trim().slice(0, 200) : '';
     if (same(forum, id, site.actor)) {
       if (!name) return {};
-      save({ name, republish: true });
+      await save({ name, republish: true });
       return { forum: name };
     }
     const cat = forum.categories.find(c => same(forum, c.urls.actor, id));
     if (!cat) return {};
     const out = {};
     if (name) {
-      save({ categories: (cfg().categories || []).map(c => (c.slug === cat.slug ? { ...c, name } : c)), republish: true });
+      await save({ categories: (cfg().categories || []).map(c => (c.slug === cat.slug ? { ...c, name } : c)), republish: true });
       out.category = cat.slug;
       out.name = name;
     }
@@ -102,7 +119,7 @@ export async function applySettings(forum, activity) {
       // nobody can moderate.
       const named = { ...(cfg().memberWebIds || {}) };
       if (priv && !(named[cat.slug] || []).length) named[cat.slug] = [...(cfg().moderatorWebIds || [])];
-      save({
+      await save({
         membersOnly: [...closed], memberWebIds: named,
         categories: (cfg().categories || []).map(c => (c.slug === cat.slug ? { ...c, private: priv } : c)),
         republish: true, reprovision: true,
@@ -121,7 +138,7 @@ export async function applySettings(forum, activity) {
     if (same(forum, target, site.administrators) || (cat && same(forum, target, cat.urls.moderators))) {
       const held = new Set(cfg().moderators || []);
       if (on) held.add(who); else held.delete(who);
-      save({ moderators: [...held], republish: true });
+      await save({ moderators: [...held], republish: true });
       // The forum's own list is what the website reads, so it is written now
       // rather than at the next start.
       await forum.republishAdministrators?.().catch(() => {});
@@ -146,7 +163,7 @@ export async function applySettings(forum, activity) {
       // Naming a member says NOTHING about whether the category is open or
       // private. That is the forum's own setting and only an Update changes
       // it; in an open category this list simply sits there unused.
-      save({ memberWebIds: named, republish: true, reprovision: true });
+      await save({ memberWebIds: named, republish: true, reprovision: true });
       return { category: cat.slug, members: held.size };
     }
     // Who may read the queue, named the way every moderator is named: by
@@ -161,7 +178,7 @@ export async function applySettings(forum, activity) {
     if (same(forum, target, site.mod)) {
       const held = new Set(cfg().moderatorWebIds || []);
       if (on) held.add(who); else held.delete(who);
-      save({ moderatorWebIds: [...held], republish: true, reprovision: true });
+      await save({ moderatorWebIds: [...held], republish: true, reprovision: true });
       return { moderatorWebIds: held.size };
     }
   }
