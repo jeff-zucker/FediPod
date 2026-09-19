@@ -1,5 +1,21 @@
 # Changes
 
+## 2026-09-19 (a sign-in that cannot be renewed says so — version 1.21.0)
+
+**A failure while renewing your sign-in names itself.** Everything you do from
+a page with your pod renews its token first, and a server refusing that under
+load reaches the browser as a bare "failed to fetch" — which the action then
+reported as its own step, sending you to look at your pod. It now says it was
+renewing your sign-in, and names the server that refused; a server asking us to
+slow down says that instead.
+
+**Opting in on a pod server uses the session you already have.** `/run` asked
+you to sign in again because the call behind it wanted a token, while a pod
+login is a cookie. Where the server being asked is the one that issued the
+session, it reads that session — same-origin requests only, and only the WebID
+that owns the pod being claimed. A Gateway fronting somebody else's pod holds
+no such session and still sends you to sign in.
+
 ## 2026-09-19 (a settings change that cannot be kept is refused — version 1.20.0)
 
 **A change to the forum is written to its pod before anything is published.**

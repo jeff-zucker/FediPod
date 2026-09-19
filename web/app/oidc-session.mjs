@@ -158,11 +158,24 @@ function sessionHandle(s) {
   const refresh = async () => {
     if (!refreshToken) throw new Error('session expired and there is no refresh token — sign in again');
     const jwk = await jwkP;
-    const res = await fetch(s.tokenEndpoint, {
-      method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded', dpop: await dpopProof(s.pair, jwk, 'POST', s.tokenEndpoint) },
-      body: new URLSearchParams({ grant_type: 'refresh_token', refresh_token: refreshToken, client_id: s.client_id, scope: 'openid webid offline_access' }),
-    });
+    let res;
+    try {
+      res = await fetch(s.tokenEndpoint, {
+        method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded', dpop: await dpopProof(s.pair, jwk, 'POST', s.tokenEndpoint) },
+        body: new URLSearchParams({ grant_type: 'refresh_token', refresh_token: refreshToken, client_id: s.client_id, scope: 'openid webid offline_access' }),
+      });
+    } catch (e) {
+      // A renewal that never reached the server is not a refused one: the
+      // session is still good, and saying "your pod refused the write" about
+      // it sends whoever reads it looking in the wrong place. Under load a
+      // server refuses the token endpoint first, and a refusal with no CORS
+      // headers arrives here as the browser's bare "Failed to fetch".
+      throw new Error(`${e.message} — renewing your sign-in at ${new URL(s.tokenEndpoint).host}`);
+    }
     const tok = await res.json().catch(() => ({}));
+    if (res.status === 429) {
+      throw new Error(`${new URL(s.tokenEndpoint).host} is asking us to slow down — your sign-in could not be renewed just now`);
+    }
     if (!res.ok || !tok.access_token) { await idbDel('session'); throw new Error('refresh failed — sign in again'); }
     accessToken = tok.access_token;
     expiresAt = Date.now() + Math.max(30, (tok.expires_in || 300)) * 1000;
