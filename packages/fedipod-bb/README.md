@@ -9,7 +9,8 @@ This package holds the pod layout, the writers for it, the host, and the
 website: where every document lives, how a topic's pages are written and
 sealed, how a member's post is cached for readers, the process that runs
 the forum from a moderator's machine, and the page that shows the forum.
-The moderator console is not here yet; the design and the phases are in
+A moderator's console is part of that page: the queue of reports, held posts
+and asks, and the settings. The design and the phases are in
 `claude/plans/fedipod-bb.md` at the repository root.
 
 ```
