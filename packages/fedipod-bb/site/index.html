@@ -90,6 +90,11 @@
   table.index td:first-child, table.index th:first-child { width: 100%; font-weight: 600; }
   table.index td:not(:first-child), table.index th:not(:first-child) { white-space: nowrap; }
   table.index td:last-child, table.index th:last-child { text-align: right; }
+  /* A handle can run as long as the name of the topic itself. The column it is
+     in keeps to its width, the name takes the rest, and the whole handle is
+     still there to read on the cell. */
+  table.index td .who { display: inline-block; max-width: 22ch; overflow: hidden; text-overflow: ellipsis;
+    white-space: nowrap; vertical-align: bottom; }
   ul.list { list-style: none; padding: 0; margin: 0; }
   ul.list li { padding: .8rem 0; border-bottom: 1px solid var(--line); }
   /* A list of things to change is not a list of things to read: no rules
@@ -158,6 +163,8 @@
   dialog { border: 2px solid var(--dialog-edge); border-radius: .5rem; padding: 0; background: var(--bg); color: var(--fg);
     width: min(38rem, calc(100vw - 2rem)); box-shadow: 0 .6rem 2rem rgba(0, 0, 0, .35); }
   dialog::backdrop { background: rgba(0, 0, 0, .45); }
+  /* What came of pressing a button in a panel, where the button is. */
+  #panel-err.said { color: var(--ok); }
   /* The settings panels put a label, its field and the buttons side by side,
      which needs more width than a reply box does. */
   #panel { width: min(48rem, calc(100vw - 2rem)); }

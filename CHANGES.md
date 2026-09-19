@@ -1,5 +1,26 @@
 # Changes
 
+## 2026-09-19 (a button that worked now says so — version 1.17.4)
+
+**A settings change says what came of it, where the button is.** Adding a
+moderator worked and told you nothing you could see: the confirmation went to
+the line that reads aloud for a screen reader, which is invisible on the
+screen. It now appears in the panel, in green, and a refusal appears there too
+instead of in a box to dismiss. An empty field says so rather than doing
+nothing.
+
+**Your own vote shows the moment you cast it.** The arrows take your vote
+straight away; the forum's own count follows when it has taken it.
+
+**A moderator added while the forum is running appears in the list.** The
+forum's own list of who moderates is written when it changes, rather than at
+the next start, and the line under the rule follows the categories' lists as
+the page reads them.
+
+**Long handles keep to their column.** A handle as long as an address is cut
+with an ellipsis in the index, so the topic's name gets the width; the whole
+handle is on the cell to read.
+
 ## 2026-09-19 (search asks for its room — version 1.17.3)
 
 Search is a button beside New topic, and opens into a box when it is pressed;

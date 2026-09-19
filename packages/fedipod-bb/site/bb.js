@@ -469,10 +469,15 @@ async function showForum() {
   // Moderators come out of the index below, which holds them for every
   // category — so this no longer decides what to fetch, only what to show.
   const showMods = (idx) => {
-    if (here) { moderators = idx.mods.get(here.id) || []; return; }
-    const all = new Set();
-    for (const list of idx.mods.values()) for (const m of list) all.add(m);
-    moderators = [...all];
+    if (here) { moderators = idx.mods.get(here.id) || []; } else {
+      const all = new Set();
+      for (const list of idx.mods.values()) for (const m of list) all.add(m);
+      moderators = [...all];
+    }
+    // The line under the rule says who they are. It is painted from the
+    // forum's own list when the page loads; this keeps it with the categories'
+    // lists, which is where a moderator added while you read appears first.
+    paintMods(moderators);
   };
   const chip = (slug, label) => `<a class="chip${feedFilter === slug ? ' on' : ''}"${feedFilter === slug ? ' aria-current="page"' : ''} href="${slug === 'all' ? '#/' : `#/c/${esc(slug)}`}">${esc(label)}</a>`;
   // Starting a topic from the front page: in the category being shown, or the
@@ -583,11 +588,12 @@ async function showForum() {
     // New to THIS reader: posted since they last had the topic open.
     const isNew = !!seen?.isNew(p.topic, p.published);
     if (isNew) fresh += 1;
+    const byline = who ? who.handle : (p.author ? authorLabel(p.author) : '');
     rows.push(`<tr>
       <td>${pins.site.has(p.topic) ? '<span class="pin" title="Pinned across the forum" role="img" aria-label="pinned across the forum">\u2B50</span> ' : pins.cat.has(p.topic) ? '<span class="pin" title="Pinned in this category" role="img" aria-label="pinned in this category">\uD83D\uDCCC</span> ' : ''}${href ? `<a href="${href}">${name}</a>` : name}${isNew
         ? ' <span class="badge">New<span class="vh"> since you last opened this topic</span></span>' : ''}</td>
       <td>${cat ? esc(cat.name) : ''}</td>
-      <td>${who ? esc(who.handle) : esc(p.author ? authorLabel(p.author) : '')}</td>
+      <td>${byline ? `<span class="who" title="${esc(byline)}">${esc(byline)}</span>` : ''}</td>
       <td>${esc(when(p.published))}</td>
       <td>${Number.isFinite(p.topicReplies) ? p.topicReplies + 1 : ''}</td>
     </tr>`);
@@ -1076,12 +1082,39 @@ async function voteOn(postId, way, was) {
     await pod.vote({ actor: podAcct.actor, post: postId, category: cat.id, inbox, way, was });
     own().vote(postId, way);
     forgetIndex();
+    paintVote(postId, way, was);
     say(way === 'none' ? 'Vote taken back.' : 'Voted. The count follows once the forum has taken it.');
   } catch (e) {
     // Which step failed, not only that one did: "failed to fetch" on its own
     // says nothing about which address would not answer.
     alert(`${e.message} — while ${step}`);
   }
+}
+
+// The reader's own vote, on the buttons they just pressed. The forum's count
+// is the truth and follows when it has taken the vote; until then the page
+// showed the row exactly as it was, so a vote looked like nothing happening.
+function paintVote(postId, way, was) {
+  const acts = document.querySelector(`.acts[data-post="${CSS.escape(postId)}"]`);
+  const [upBtn, downBtn] = acts ? acts.querySelectorAll('button[data-act^="vote-"]') : [];
+  if (!upBtn || !downBtn) return;
+  const count = (b) => Number(String(b.textContent).replace(/[^0-9]/gu, '')) || 0;
+  let up = count(upBtn);
+  let down = count(downBtn);
+  if (was === 'up') up -= 1;
+  if (was === 'down') down -= 1;
+  if (way === 'up') up += 1;
+  if (way === 'down') down += 1;
+  const set = (b, its, mark, n, label) => {
+    b.dataset.act = `vote-${way === its ? 'none' : its}`;
+    b.dataset.was = way;
+    b.textContent = `${mark} ${Math.max(0, n)}`;
+    b.classList.toggle('voted', way === its);
+    if (way === its) b.setAttribute('aria-pressed', 'true'); else b.removeAttribute('aria-pressed');
+    b.setAttribute('aria-label', way === its ? `Take back your vote ${label}` : `Vote ${label} this post`);
+  };
+  set(upBtn, 'up', '\u25B2', up, 'for');
+  set(downBtn, 'down', '\u25BC', down, 'against');
 }
 
 // Asking to be let into a private category: the same Follow that joining
@@ -1160,6 +1193,19 @@ async function modBan(who, slug) {
   } catch (e) { alert(e.message); }
 }
 
+// The line naming who moderates, from actor ids: each one's own handle where
+// something says it, and the address it was read from otherwise.
+async function paintMods(ids) {
+  if (!ids.length) return;
+  const cat = cats()[0];
+  const named = await Promise.all(ids.map(async (id) => {
+    const card = cat ? await authorOnce(cat.base, id).catch(() => null) : null;
+    const handle = card?.handle || await modLabel(id);
+    return `<a href="${esc(card?.url || id)}">${esc(handle)}</a>`;
+  }));
+  $('mods-who').innerHTML = `<span class="lead">moderators:</span> ${named.join(', ')}`;
+}
+
 // What to call a moderator: the card the forum kept of them, then the actor's
 // own word for it, and a name read off the address only when neither answers.
 async function modLabel(actorId) {
@@ -1174,20 +1220,34 @@ async function modLabel(actorId) {
 // person who typed it is looking, rather than on the forum an hour later.
 async function actorFor(typed) {
   if (!typed) return null;
-  try { return await actorOfHandle(typed); } catch (e) { alert(e.message); return null; }
+  try { return await actorOfHandle(typed); } catch (e) { settingsSaid(e.message, true); return null; }
 }
 
 // Every settings change is an ordinary activity naming what it changes: a
 // Create of a Group for a new category, an Update for a name, an Add or a
 // Remove for who moderates and who may read.
+// What came of a settings change, where the reader can see it: the line that
+// reads aloud is invisible on the screen, so a change that worked looked
+// exactly like a button that did nothing.
+function settingsSaid(text, bad = false) {
+  say(text);
+  if ($('panel').open) {
+    const box = $('panel-err');
+    box.textContent = text;
+    box.className = bad ? 'err' : 'said';
+    return;
+  }
+  alert(text);
+}
+
 async function settingsAsk(...activities) {
   try {
     const inbox = await pod.podInboxOf(cats()[0]?.id || forum.id, { front, handle: cats()[0]?.slug || forum.handle });
     for (const activity of activities) {
       await pod.moderate({ actor: podAcct.actor, podHome: podAcct.podHome, inbox, activity });
     }
-    say('Sent. It takes effect once the forum has checked who asked.');
-  } catch (e) { alert(e.message); }
+    settingsSaid('Sent. It takes effect once the forum has checked who asked.');
+  } catch (e) { settingsSaid(e.message, true); }
 }
 
 async function onSettings(b) {
@@ -1212,15 +1272,17 @@ async function onSettings(b) {
     const cat = cats().find(c => c.id === catId);
     if (webid && cat) await settingsAsk({ type: act === 'add-member' ? 'Add' : 'Remove', object: webid, target: cat.base + 'ap/members' });
   } else if (act === 'add-mod' || act === 'drop-mod') {
-    const who = await actorFor(val('#set-mod'));
+    const typed = val('#set-mod');
+    if (!typed) { settingsSaid('Type a handle first, like @mei@their.server.', true); return; }
+    const who = await actorFor(typed);
     const cat = cats()[0];
+    if (!who) return;                       // actorFor has already said why
+    if (!cat) { settingsSaid('This forum has no category to moderate yet.', true); return; }
     // One handle says two things: who may ask for moderation, and whose pod
     // the rule on the queue names. The forum finds the pod behind the actor.
-    if (who && cat) {
-      const type = act === 'add-mod' ? 'Add' : 'Remove';
-      await settingsAsk({ type, object: who, target: cat.base + 'ap/moderators' },
-        { type, object: who, target: `${base}mod/` });
-    }
+    const type = act === 'add-mod' ? 'Add' : 'Remove';
+    await settingsAsk({ type, object: who, target: cat.base + 'ap/moderators' },
+      { type, object: who, target: `${base}mod/` });
   }
 }
 

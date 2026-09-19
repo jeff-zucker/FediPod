@@ -345,6 +345,14 @@ export class ForumAgent {
     return cat;
   }
 
+  // Who moderates, as the forum publishes it. A category writes its own list
+  // when its profile is published; this is the forum's, which the website
+  // reads, and nothing but a full publish used to rewrite it — so a moderator
+  // added while the forum ran did not appear until it was next started.
+  async republishAdministrators() {
+    await publish.publishAdministrators(this.siteAgent, this.config.moderators || [], { force: true });
+  }
+
   // The forum's own actor: an Application that answers for the site, whose
   // inbox is the one every category names. Its store is the forum's.
   async buildSite() {

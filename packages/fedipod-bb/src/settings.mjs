@@ -122,6 +122,9 @@ export async function applySettings(forum, activity) {
       const held = new Set(cfg().moderators || []);
       if (on) held.add(who); else held.delete(who);
       save({ moderators: [...held], republish: true });
+      // The forum's own list is what the website reads, so it is written now
+      // rather than at the next start.
+      await forum.republishAdministrators?.().catch(() => {});
       return { moderators: held.size };
     }
     // Who may read a members-only category, and who may read the queue: a
