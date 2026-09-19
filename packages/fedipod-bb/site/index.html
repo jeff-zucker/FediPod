@@ -24,7 +24,8 @@
   header.top { display: flex; gap: 1rem; align-items: baseline; flex-wrap: wrap; border-bottom: 1px solid var(--line); padding-bottom: .6rem; margin-bottom: 1rem; }
   header.top h1 { font-size: 1.4rem; margin: 0; }
   header.top a { color: var(--heading); text-decoration: none; }
-  header.top #forum-status a { color: var(--accent); }
+  #mods-line { margin: .4rem 0 0; }
+  #mods-line a { color: var(--accent); }
   header.top .who { margin-left: auto; display: flex; gap: .6rem; align-items: baseline; }
   header.top .who button { font-weight: 600; background: var(--bg); color: var(--fg);
     border: 1px solid var(--line); border-radius: .4rem; padding: .3rem .7rem; cursor: pointer; }
@@ -144,6 +145,9 @@
   dialog { border: 2px solid var(--dialog-edge); border-radius: .5rem; padding: 0; background: var(--bg); color: var(--fg);
     width: min(38rem, calc(100vw - 2rem)); box-shadow: 0 .6rem 2rem rgba(0, 0, 0, .35); }
   dialog::backdrop { background: rgba(0, 0, 0, .45); }
+  /* The settings panels put a label, its field and the buttons side by side,
+     which needs more width than a reply box does. */
+  #panel { width: min(48rem, calc(100vw - 2rem)); }
   section.reply { padding: 1.1rem 1.2rem; background: var(--surface); }
   section.reply h2 { margin-top: 0; }
   ul.list li article.post { margin: .6rem 0 .2rem; }
@@ -192,12 +196,12 @@
 <a class="skip" href="#main">Skip to content</a>
 <header class="top">
   <h1><a id="forum-link" href="#/">Forum</a></h1>
-  <span class="dim" id="forum-status"></span>
   <span class="who">
     <span class="dim" id="who-name"></span>
     <button id="who-act">Sign in</button>
   </span>
 </header>
+<p class="dim" id="mods-line"></p>
 <nav class="crumbs" id="crumbs" aria-label="Breadcrumb"></nav>
 <p class="vh" id="say" role="status" aria-live="polite"></p>
 <main id="main" tabindex="-1">

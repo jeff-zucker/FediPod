@@ -123,7 +123,7 @@ test('a forum hosts its categories as groups and drains one inbox to all of them
   const dir = home();
   const { agent, log } = await boot(pod, dir);
   const cfg = await agent.init({ handle: 'forum', name: 'The Forum', categories: [{ slug: 'gardening', name: 'Gardening' }, 'compost'],
-    moderators: ['https://priya.pod.example/fedipod/ap/actor'] });
+    moderators: ['https://priya.pod.example/fedipod/ap/actor'], replyPolicy: 'review' });
   assert.equal(cfg.categories.length, 2);
   assert.ok(await agent.connect(), 'the forum connects');
   assert.equal(agent.viewer, false, 'the first device hosts');
@@ -186,7 +186,8 @@ test('a forum hosts its categories as groups and drains one inbox to all of them
   assert.deepEqual(pod.docs.get(g.urls.topicPage(tid, 1)).orderedItems, [A1, R1, R2], 'context places a reply (FEP-7888)');
   assert.equal(pod.docs.get(g.urls.topic(tid)).totalItems, 3);
 
-  // A non-member's post is not carried and opens nothing.
+  // A non-member's post is not carried and opens nothing: this forum is set
+  // to review, so posting into it is not joining it.
   const K1 = 'https://kwame.example/notes/1';
   remoteDocs[K1] = note(K1, { by: KWAME, audience: g.urls.actor, content: '<p>drive-by</p>' });
   pod.deliver('c4', { type: 'Create', actor: KWAME, object: remoteDocs[K1], to: remoteDocs[K1].to, cc: [] });
@@ -235,6 +236,43 @@ test('a forum hosts its categories as groups and drains one inbox to all of them
   assert.equal(pod.inbox.length, 0);
   assert.equal(agent.status().categories[0].topics, 1);
   await agent.stop();
+});
+
+test('posting into an open category joins it; a private one still waits for a moderator', async () => {
+  const pod = fakePod();
+  const { agent, log } = await boot(pod, home());
+  // No reply policy given: an open category takes a post as the joining.
+  await agent.init({ handle: 'forum', name: 'The Forum',
+    categories: [{ slug: 'gardening', name: 'Gardening' }, { slug: 'members', name: 'Members' }],
+    moderators: ['https://priya.pod.example/fedipod/ap/actor'], membersOnly: ['members'] });
+  assert.ok(await agent.connect());
+  const delivered = [];
+  wire(agent, delivered);
+  const open = agent.categories[0];
+  const closed = agent.categories[1];
+
+  // Kwame has never been here and sends nothing but the post itself.
+  const K1 = 'https://kwame.example/notes/joined';
+  remoteDocs[K1] = note(K1, { by: KWAME, audience: open.urls.actor, name: 'Straight in', content: '<p>first post</p>' });
+  pod.deliver('k1', { type: 'Create', actor: KWAME, object: remoteDocs[K1], to: remoteDocs[K1].to, cc: [] });
+  await agent.intake.drain();
+  assert.ok(open.store.getContacts().followers.some(f => f.actor === KWAME), 'the poster is a member now');
+  assert.equal(open.store.getContacts().followers.find(f => f.actor === KWAME).inbox, remoteDocs[KWAME].inbox,
+    'recorded with the inbox its actor names, so the category reaches them');
+  assert.ok(delivered.some(d => d.who === 'gardening' && d.a.type === 'Announce'), 'and the post is carried');
+  assert.equal(topics.list(open.store).length, 1, 'it opens its topic like any other');
+  assert.ok(log.some(l => /joined by posting/u.test(l)));
+  assert.equal(open.store.read('modqueue.json', []).length, 0, 'nothing waits for a moderator');
+
+  // The same arrival in a members-only category: membership there is the right
+  // to read it, which only a moderator gives.
+  const K2 = 'https://kwame.example/notes/uninvited';
+  remoteDocs[K2] = note(K2, { by: KWAME, audience: closed.urls.actor, content: '<p>let me in</p>' });
+  pod.deliver('k2', { type: 'Create', actor: KWAME, object: remoteDocs[K2], to: remoteDocs[K2].to, cc: [] });
+  await agent.intake.drain();
+  assert.ok(!closed.store.getContacts().followers.some(f => f.actor === KWAME), 'a private category admits nobody by post');
+  assert.ok(closed.store.read('modqueue.json', []).some(e => e.type === 'Create'), 'it waits for a moderator');
+  assert.equal(topics.list(closed.store).length, 0);
 });
 
 test('two devices share the forum: the second watches, and hosts when the first stops', async () => {

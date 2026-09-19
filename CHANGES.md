@@ -1,5 +1,23 @@
 # Changes
 
+## 2026-09-19 (posting into a forum joins it — version 1.17.0)
+
+**A post from somebody who has not joined an open category joins them, and is
+carried.** Posting from the forum's own website always did that; a post
+arriving from another server had no Follow in front of it and waited for a
+moderator, so every first post from the Fediverse sat in the queue. A category
+that is private still waits for a moderator, because membership there is the
+right to read what members write. `fedipod-bb init --reply-policy review` puts
+the holding back.
+
+**The buttons in a settings panel work.** A panel is a box in front of the
+page and sits outside it, where the page's own click handling never reached —
+so Add in Manage moderators did nothing at all. The panel is also wide enough
+for the field and its buttons to sit on one row.
+
+**The top row.** It reads *signed in as @you@your.server*, and who moderates
+the forum is listed under the line rather than who hosts it.
+
 ## 2026-09-19 (a moderator sees the Queue and Settings again — version 1.16.3)
 
 **The forum's Queue and Settings links come back.** The row of links is drawn

@@ -203,17 +203,18 @@ async function load() {
   }
   document.title = forum.name || 'FediPod-BB';
   $('forum-link').textContent = forum.name || 'Forum';
-  const by = (forum.admins || []).map(a => `<a href="${esc(a.url)}">${esc(a.handle)}</a>`).join(', ');
-  $('forum-status').innerHTML = by ? `hosted by ${by}` : '';
+  // Who moderates, under the line: the forum's own list, each name linking to
+  // the page that account keeps.
+  const mods = (forum.admins || []).map(a => `<a href="${esc(a.url)}">${esc(a.handle)}</a>`).join(', ');
+  $('mods-line').innerHTML = mods ? `moderators: ${mods}` : '';
   route();
 }
 
 function crumbs(parts) {
   // One stop is no trail: the front page needs no line saying it is the
   // front page.
-  if (parts.length < 2) { $('crumbs').textContent = ''; $('crumbs').hidden = true; $('forum-status').hidden = false; return; }
+  if (parts.length < 2) { $('crumbs').textContent = ''; $('crumbs').hidden = true; return; }
   $('crumbs').hidden = false;
-  $('forum-status').hidden = parts.length > 1;
   $('crumbs').innerHTML = parts.map(([label, href], i) => (href && i < parts.length - 1 ? `<a href="${esc(href)}">${esc(label)}</a>` : esc(label))).join(' › ');
 }
 
@@ -222,7 +223,7 @@ function crumbs(parts) {
 // moderator's Queue and Settings reachable at all.
 function paintWho() {
   const acct = account();
-  $('who-name').textContent = acct ? `Signed in as ${acct.handle}` : '';
+  $('who-name').textContent = acct ? `signed in as ${acct.handle}` : '';
   $('who-act').textContent = acct ? 'Sign out' : 'Sign in';
 }
 
@@ -741,6 +742,16 @@ function openPanel(title, html) {
 }
 $('panel-close').addEventListener('click', () => $('panel').close());
 
+// A panel is a box in front of the page, and it sits OUTSIDE <main> — so the
+// page's own click handler never saw the buttons in one, and pressing Add did
+// nothing at all. Its buttons are settings acts like any other.
+$('panel').addEventListener('click', (e) => {
+  const b = e.target.closest('button[data-act]');
+  const act = b?.dataset.act || '';
+  if (act.startsWith('set-') || act.startsWith('add-') || act.startsWith('drop-')) return onSettings(b);
+  return undefined;
+});
+
 $('reply-open').addEventListener('click', () => { openReply({ inReplyToUrl: replyCtx?.inReplyToUrl || null }); });
 $('main').addEventListener('click', async (e) => {
 
@@ -778,7 +789,7 @@ $('main').addEventListener('click', async (e) => {
   if (act === 'open-mods') {
     const named = await Promise.all(moderators.map(m => modLabel(m)));
     return openPanel('Moderators', `<p class="hint">${named.map(esc).join(', ') || 'nobody yet'}</p>
-      <div class="row">
+      <div class="row oneline">
         <label for="set-mod">Their handle</label>
         <input type="text" id="set-mod" placeholder="@mei@their.server">
         <button data-act="add-mod">Add</button><button data-act="drop-mod">Remove</button>

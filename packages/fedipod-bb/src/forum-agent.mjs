@@ -182,7 +182,7 @@ export class ForumAgent {
   // The first act on a fresh pod: the forum's containers, its config, and
   // nothing else — the actors are published on the first connect.
   async init({ handle, name, categories = [], moderators = [], moderatorWebIds = [],
-    membersOnly = [], memberWebIds = {}, approveJoins = false, review = false, replyPolicy = 'review' }) {
+    membersOnly = [], memberWebIds = {}, approveJoins = false, review = false, replyPolicy = 'open' }) {
     const cred = this.readCredential();
     if (!cred) throw new Error('no credential.json — make one first');
     await this.attachRemote(cred);
@@ -608,13 +608,42 @@ export class ForumAgent {
   // forum usually wants; 'open' is not offered — a forum that carries
   // anything addressed to it is a forum for spam.
   async onStranger(cat, { noteId, actor, activity }) {
-    const how = this.config.replyPolicy || 'review';
-    if (how !== 'review') return false;
-    cat.intake.queueModeration(
-      { type: 'Create', actor, object: noteId, ...(activity?.id ? { id: activity.id } : {}) },
-      actor, { trusted: false },
-    );
-    return true;
+    const how = this.config.replyPolicy || 'open';
+    // A private category's membership IS the right to read it, and only a
+    // moderator gives that; a forum set to review holds a stranger either way.
+    const closed = (this.config.membersOnly || []).includes(cat.slug);
+    const hold = () => {
+      cat.intake.queueModeration(
+        { type: 'Create', actor, object: noteId, ...(activity?.id ? { id: activity.id } : {}) },
+        actor, { trusted: false },
+      );
+      return true;
+    };
+    if (how === 'review' || closed) return hold();
+    return (await this.joinOnPost(cat, actor)) ? false : hold();
+  }
+
+  // Posting into an open category joins it, which is what the website's own
+  // posting does before it posts: a post from elsewhere arrives with no Follow
+  // in front of it, and holding it for a moderator made every first post from
+  // another server wait. There is nothing to Accept — no Follow was sent — so
+  // the member is recorded and the category is published again.
+  async joinOnPost(cat, actor) {
+    try {
+      const contacts = cat.store.getContacts();
+      if (contacts.followers.some(f => f.actor === actor)) return true;
+      const doc = await cat.intake.fetchAP(actor);
+      if (!doc?.inbox) { this.log(`${actor} posted but its actor names no inbox — held instead`); return false; }
+      contacts.followers.push({ actor, inbox: doc.inbox, sharedInbox: doc.endpoints?.sharedInbox });
+      cat.store.setContacts(contacts);
+      cat.store.addNotification({ type: 'follow', actor });
+      await cat.intake.republish({ followers: true });
+      this.log(`joined by posting: ${actor} → @${cat.slug}`);
+      return true;
+    } catch (e) {
+      this.log(`could not join ${actor} on posting (${e.message}) — held instead`);
+      return false;
+    }
   }
 
   // Requests about the forum itself: a category created, a name changed, who

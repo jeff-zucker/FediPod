@@ -38,6 +38,17 @@ const log = (...a) => {
   try { fs.appendFileSync(logFile, line + '\n'); } catch { /* logging never throws */ }
 };
 
+// --reply-policy open|review, checked here so a typo does not quietly become
+// the strictest reading of it.
+const replyPolicy = () => {
+  const said = String(flag('reply-policy') || '').toLowerCase();
+  if (said !== 'open' && said !== 'review') {
+    console.error('--reply-policy takes open or review');
+    process.exit(2);
+  }
+  return said;
+};
+
 if (cmd === 'init') {
   const handle = flag('handle');
   if (!handle) { console.error('--handle is required'); process.exit(2); }
@@ -63,6 +74,10 @@ if (cmd === 'init') {
       return m;
     }, {}),
     approveJoins: args.includes('--approve-joins'), review: args.includes('--review'),
+    // What becomes of a post from somebody who has not joined: `open` takes
+    // the post as the joining, `review` holds it for a moderator. A private
+    // category holds it whatever this says.
+    ...(flag('reply-policy') ? { replyPolicy: replyPolicy() } : {}),
   });
   console.log(JSON.stringify(cfg, null, 2));
 } else if (cmd === 'start') {
@@ -111,6 +126,6 @@ if (cmd === 'init') {
   console.log(JSON.stringify(up ? agent.status() : { mode: 'unconfigured' }, null, 2));
   process.exit(0);
 } else {
-  console.log('usage: fedipod-bb <init|start|status|attach> --home DIR [--handle H --name N --category slug:Name … | --front URL]');
+  console.log('usage: fedipod-bb <init|start|status|attach> --home DIR [--handle H --name N --category slug:Name … --reply-policy open|review | --front URL]');
   process.exit(2);
 }
