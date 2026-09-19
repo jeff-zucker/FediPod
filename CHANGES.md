@@ -1,10 +1,11 @@
 # Changes
 
-## 2026-09-19 (search asks for its room — version 1.17.2)
+## 2026-09-19 (search asks for its room — version 1.17.3)
 
-Search is a button beside New topic, in the same style, and opens into a box
-when it is pressed; left empty, it goes back to being a button. The row's own
-controls — Join, Search, New topic — sit together at its right end.
+Search is a button beside New topic, and opens into a box when it is pressed;
+left empty, it goes back to being a button. Both sit flush right on the line
+that names who moderates, above whatever is being read. Join stays with the
+categories.
 
 ## 2026-09-19 (the forum's own colours in its top row — version 1.17.1)
 

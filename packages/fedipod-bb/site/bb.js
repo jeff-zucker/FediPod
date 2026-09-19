@@ -206,7 +206,7 @@ async function load() {
   // Who moderates, under the line: the forum's own list, each name linking to
   // the page that account keeps.
   const mods = (forum.admins || []).map(a => `<a href="${esc(a.url)}">${esc(a.handle)}</a>`).join(', ');
-  $('mods-line').innerHTML = mods ? `<span class="lead">moderators:</span> ${mods}` : '';
+  $('mods-who').innerHTML = mods ? `<span class="lead">moderators:</span> ${mods}` : '';
   route();
 }
 
@@ -229,6 +229,9 @@ function paintWho() {
 
 async function route() {
   paintWho();
+  // Searching and starting a topic belong to the forum's own view; the rest of
+  // the page keeps the moderators line and nothing else.
+  $('mods-acts').innerHTML = '';
   const mine = ++view;
   void mine;
   const hash = location.hash.replace(/^#\/?/u, '');
@@ -482,11 +485,13 @@ async function showForum() {
     ${iModerate() ? '<a class="chip" href="#/queue">Queue</a><a class="chip" href="#/settings">Settings</a>' : ''}
     <span class="rowend">
       ${here && account() && podAcct ? `<button class="new" data-act="${own().isJoined(here.id) ? 'leave' : 'join'}" data-cat="${esc(here.id)}">${own().isJoined(here.id) ? 'Leave' : 'Join'}</button>` : ''}
-      <label class="vh" for="find">Search this forum</label>
-      <input type="text" id="find" placeholder="Search" value="${esc(finding)}" autocomplete="off"${finding ? '' : ' hidden'}>
-      <button class="new" data-act="search"${finding ? ' hidden' : ''}>Search</button>
-      ${into ? `<button class="new" data-act="newtopic" data-slug="${esc(into.slug || '')}">New topic</button>` : ''}
     </span></p>`;
+  // Search and New topic ride at the right end of the moderators row, which is
+  // the one line the page keeps above whatever is being read.
+  const acts = () => `<label class="vh" for="find">Search this forum</label>
+    <input type="text" id="find" placeholder="Search" value="${esc(finding)}" autocomplete="off"${finding ? '' : ' hidden'}>
+    <button data-act="search"${finding ? ' hidden' : ''}>Search</button>
+    ${into ? `<button data-act="newtopic" data-slug="${esc(into.slug || '')}">New topic</button>` : ''}`;
   if (mineView !== view) return;
   // Enough posts to fill a page of TOPICS: several posts can belong to one.
   const want = Math.min(300, shown * 5);
@@ -495,6 +500,7 @@ async function showForum() {
   // them was the whole of the delay they could see.
   const willFetch = !(index && index.limit >= want && Date.now() - index.at < INDEX_STALE_MS);
   if (willFetch) {
+    $('mods-acts').innerHTML = acts();
     $('main').innerHTML = head() + '<p class="dim">Loading…</p>';
     say('Loading the latest posts');
   }
@@ -538,7 +544,8 @@ async function showForum() {
     // like an empty one. Ask it a question only a member can have answered.
     if (here && !(await read.topics(here.base)).total && !(await read.canRead(here.base))) {
       if (mineView !== view) return;
-      $('main').innerHTML = head() + (podAcct
+      $('mods-acts').innerHTML = acts();
+    $('main').innerHTML = head() + (podAcct
         ? `<p class="empty row">This category is for its members.
            <button class="new" data-act="ask-join" data-cat="${esc(here.id)}">Request membership</button></p>`
         : `<p class="empty row">This category is for its members, and membership needs a FediPod account.
@@ -548,6 +555,7 @@ async function showForum() {
     }
     // The one thing to do on an empty page is the one thing offered.
     if (mineView !== view) return;
+    $('mods-acts').innerHTML = acts();
     $('main').innerHTML = head() + '<p class="empty">Nothing posted here yet. Use the button at the upper right to create a topic.</p>';
     say('Nothing posted here yet');
     return;
@@ -588,7 +596,8 @@ async function showForum() {
   // an entry says.
   const more = Math.max(0, topics.length - page.length) + (latest.more || 0);
   if (mineView !== view) return;
-  $('main').innerHTML = head() + `<div class="scroll" role="region" aria-label="Topics, most recently posted in first" tabindex="0"><table class="index">
+  $('mods-acts').innerHTML = acts();
+    $('main').innerHTML = head() + `<div class="scroll" role="region" aria-label="Topics, most recently posted in first" tabindex="0"><table class="index">
     <thead><tr><th scope="col">Topic</th><th scope="col">Category</th><th scope="col">Latest by</th>
       <th scope="col" aria-sort="${order === 'date' ? (down ? 'descending' : 'ascending') : 'none'}">
         <button class="sort" data-act="order" data-order="date">Date ${order === 'date' ? (down ? '▼' : '▲') : '<span class="dim">▽</span>'}</button></th>
@@ -1276,7 +1285,7 @@ $('main').addEventListener('change', async (e) => {
 });
 
 let findTimer = null;
-$('main').addEventListener('input', (e) => {
+function onFind(e) {
   if (e.target?.id !== 'find') return;
   finding = e.target.value;
   clearTimeout(findTimer);
@@ -1286,18 +1295,43 @@ $('main').addEventListener('input', (e) => {
     const box = document.getElementById('find');
     if (box) { box.focus(); box.setSelectionRange(where, where); }
   }, 250);
+}
+$('main').addEventListener('input', onFind);
+
+// The moderators row is above <main>, so the page's own handlers never see the
+// controls at its end: they are the same acts, listened for here.
+$('mods-line').addEventListener('click', (e) => {
+  const b = e.target.closest('button[data-act]');
+  if (!b) return;
+  if (b.dataset.act === 'search') {
+    const box = $('find');
+    if (!box) return;
+    b.hidden = true;
+    box.hidden = false;
+    box.focus();
+    return;
+  }
+  if (b.dataset.act === 'newtopic') {
+    const cat = catBySlug(b.dataset.slug);
+    if (!cat) return;
+    replyBox({ cat, title: 'Start a topic', inReplyToUrl: null, topicId: null });
+    $('reply-row').hidden = true;
+    openReply({ inReplyToUrl: null });
+  }
 });
+$('mods-line').addEventListener('input', onFind);
+$('mods-line').addEventListener('focusout', onFindOut);
 
 // Nothing typed and the reader has gone elsewhere: the row takes its width
 // back. Something typed stays open, so what is being searched for is visible.
-$('main').addEventListener('focusout', (e) => {
+function onFindOut(e) {
   if (e.target?.id !== 'find' || e.target.value.trim()) return;
-  const box = e.target;
   const button = document.querySelector('button[data-act="search"]');
   if (!button) return;
-  box.hidden = true;
+  e.target.hidden = true;
   button.hidden = false;
-});
+}
+$('main').addEventListener('focusout', onFindOut);
 
 $('reply-image').addEventListener('change', async (e) => {
   const file = e.target.files?.[0];

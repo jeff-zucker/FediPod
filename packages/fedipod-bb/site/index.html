@@ -24,7 +24,14 @@
   header.top { display: flex; gap: 1rem; align-items: baseline; flex-wrap: wrap; border-bottom: 1px solid var(--line); padding-bottom: .6rem; margin-bottom: .35rem; }
   header.top h1 { font-size: 1.4rem; margin: 0; }
   header.top a { color: var(--heading); text-decoration: none; }
-  #mods-line { margin: .15rem 0 .9rem; }
+  #mods-line { margin: .15rem 0 .9rem; display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
+  #mods-acts { margin-left: auto; display: flex; gap: .4rem; align-items: center; }
+  #mods-acts button { flex: 0 0 auto; font-size: 16px; font-weight: 600; background: var(--bg); color: var(--accent);
+    border: 1px solid var(--field-border); border-radius: 1rem; padding: .25rem .9rem; cursor: pointer; }
+  #mods-acts button:hover { background: var(--field-bg); }
+  /* The box search opens into keeps to the row rather than pushing the rest
+     of it onto a second line. */
+  #mods-acts input[type=text] { width: 11rem; max-width: 30vw; }
   #mods-line .lead { color: var(--heading); font-weight: 600; }
   #mods-line a { color: var(--accent); }
   header.top .who { margin-left: auto; display: flex; gap: .6rem; align-items: baseline; }
@@ -207,7 +214,7 @@
     <button id="who-act">Sign in</button>
   </span>
 </header>
-<p class="dim" id="mods-line"></p>
+<p class="dim" id="mods-line"><span id="mods-who"></span><span id="mods-acts"></span></p>
 <nav class="crumbs" id="crumbs" aria-label="Breadcrumb"></nav>
 <p class="vh" id="say" role="status" aria-live="polite"></p>
 <main id="main" tabindex="-1">
