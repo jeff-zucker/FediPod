@@ -21,6 +21,7 @@
     "ui",
     "vendor",
     "phanpy/dist",
+    "sengi/dist",
     "run-agent.mjs",
     "scripts",
     "gui.md",
