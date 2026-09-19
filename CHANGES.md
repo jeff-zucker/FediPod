@@ -1,5 +1,15 @@
 # Changes
 
+## 2026-09-19 (a moderator sees the Queue and Settings again — version 1.16.3)
+
+**The forum's Queue and Settings links come back.** The row of links is drawn
+when the page knows who moderates, rather than a moment before it finds out, so
+a moderator arriving at the forum sees their own links on the first screen.
+Opening Settings straight from a link works too: the page asks who moderates
+before deciding a reader is not one.
+
+The top row names what it is showing: *Signed in as @you@your.server*.
+
 ## 2026-09-19 (a way in from the top row — version 1.16.2)
 
 **The forum's top row says who you are, and signs you in.** At the far right:

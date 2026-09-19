@@ -222,7 +222,7 @@ function crumbs(parts) {
 // moderator's Queue and Settings reachable at all.
 function paintWho() {
   const acct = account();
-  $('who-name').textContent = acct?.handle || '';
+  $('who-name').textContent = acct ? `Signed in as ${acct.handle}` : '';
   $('who-act').textContent = acct ? 'Sign out' : 'Sign in';
 }
 
@@ -355,8 +355,18 @@ async function showWho(handleOrId) {
 // What a moderator may change about the forum itself. Every change is a
 // request published at the moderator's own pod and checked there, so this
 // page needs no rights on the forum's pod at all.
+// Who moderates is learned while the forum is drawn. A page opened straight
+// at a link — Settings, say, or a bookmark — has drawn nothing yet, and would
+// take a moderator for a stranger and turn them away.
+async function knowModerators() {
+  if (moderators.length || !cats().length) return;
+  const lists = await Promise.all(cats().map(c => read.moderators(c.base).catch(() => [])));
+  moderators = [...new Set(lists.flat())];
+}
+
 async function showSettings() {
   crumbs([['Home', '#/'], ['Settings', null]]);
+  await knowModerators();
   if (!iModerate()) { $('main').innerHTML = '<p class="empty">Only this forum\'s moderators may change it.</p>'; return; }
   if (!podAcct) { $('main').innerHTML = '<p class="empty">Changing the forum is done with your pod account.</p>'; return; }
   $('main').innerHTML = `
@@ -464,7 +474,9 @@ async function showForum() {
   // Starting a topic from the front page: in the category being shown, or the
   // first one when the whole forum is.
   const into = cats().find(c => c.slug === feedFilter) || cats()[0] || null;
-  const head = `<p class="hint chips">Categories: ${chip('all', 'All')}${cats().map(c => chip(c.slug || '', c.name)).join('')}
+  // Built where it is drawn, not once above: whether this reader moderates is
+  // read with the index below, and a row composed before that always said no.
+  const head = () => `<p class="hint chips">Categories: ${chip('all', 'All')}${cats().map(c => chip(c.slug || '', c.name)).join('')}
     ${account() ? '<a class="chip" href="#/replies">Replies to you</a><a class="chip" href="#/bookmarks">Bookmarked</a>' : ''}
     ${iModerate() ? '<a class="chip" href="#/queue">Queue</a><a class="chip" href="#/settings">Settings</a>' : ''}
     <label class="vh" for="find">Search this forum</label>
@@ -479,7 +491,7 @@ async function showForum() {
   // them was the whole of the delay they could see.
   const willFetch = !(index && index.limit >= want && Date.now() - index.at < INDEX_STALE_MS);
   if (willFetch) {
-    $('main').innerHTML = head + '<p class="dim">Loading…</p>';
+    $('main').innerHTML = head() + '<p class="dim">Loading…</p>';
     say('Loading the latest posts');
   }
   const idx = await readIndex(want);
@@ -522,7 +534,7 @@ async function showForum() {
     // like an empty one. Ask it a question only a member can have answered.
     if (here && !(await read.topics(here.base)).total && !(await read.canRead(here.base))) {
       if (mineView !== view) return;
-      $('main').innerHTML = head + (podAcct
+      $('main').innerHTML = head() + (podAcct
         ? `<p class="empty row">This category is for its members.
            <button class="new" data-act="ask-join" data-cat="${esc(here.id)}">Request membership</button></p>`
         : `<p class="empty row">This category is for its members, and membership needs a FediPod account.
@@ -532,7 +544,7 @@ async function showForum() {
     }
     // The one thing to do on an empty page is the one thing offered.
     if (mineView !== view) return;
-    $('main').innerHTML = head + '<p class="empty">Nothing posted here yet. Use the button at the upper right to create a topic.</p>';
+    $('main').innerHTML = head() + '<p class="empty">Nothing posted here yet. Use the button at the upper right to create a topic.</p>';
     say('Nothing posted here yet');
     return;
   }
@@ -572,7 +584,7 @@ async function showForum() {
   // an entry says.
   const more = Math.max(0, topics.length - page.length) + (latest.more || 0);
   if (mineView !== view) return;
-  $('main').innerHTML = head + `<div class="scroll" role="region" aria-label="Topics, most recently posted in first" tabindex="0"><table class="index">
+  $('main').innerHTML = head() + `<div class="scroll" role="region" aria-label="Topics, most recently posted in first" tabindex="0"><table class="index">
     <thead><tr><th scope="col">Topic</th><th scope="col">Category</th><th scope="col">Latest by</th>
       <th scope="col" aria-sort="${order === 'date' ? (down ? 'descending' : 'ascending') : 'none'}">
         <button class="sort" data-act="order" data-order="date">Date ${order === 'date' ? (down ? '▼' : '▲') : '<span class="dim">▽</span>'}</button></th>
