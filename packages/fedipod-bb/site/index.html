@@ -25,6 +25,10 @@
   header.top h1 { font-size: 1.4rem; margin: 0; }
   header.top a { color: var(--heading); text-decoration: none; }
   header.top #forum-status a { color: var(--accent); }
+  header.top .who { margin-left: auto; display: flex; gap: .6rem; align-items: baseline; }
+  header.top .who button { font-weight: 600; background: var(--bg); color: var(--fg);
+    border: 1px solid var(--line); border-radius: .4rem; padding: .3rem .7rem; cursor: pointer; }
+  header.top .who button:hover { background: var(--field-bg); }
   nav.crumbs { color: var(--sub); margin: 0 0 1rem; }
   nav.crumbs a { color: var(--accent); }
   .dim { color: var(--sub); }
@@ -189,6 +193,10 @@
 <header class="top">
   <h1><a id="forum-link" href="#/">Forum</a></h1>
   <span class="dim" id="forum-status"></span>
+  <span class="who">
+    <span class="dim" id="who-name"></span>
+    <button id="who-act">Sign in</button>
+  </span>
 </header>
 <nav class="crumbs" id="crumbs" aria-label="Breadcrumb"></nav>
 <p class="vh" id="say" role="status" aria-live="polite"></p>

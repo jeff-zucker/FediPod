@@ -217,7 +217,17 @@ function crumbs(parts) {
   $('crumbs').innerHTML = parts.map(([label, href], i) => (href && i < parts.length - 1 ? `<a href="${esc(href)}">${esc(label)}</a>` : esc(label))).join(' › ');
 }
 
+// Who the page is holding, in the top row: the handle a reader posts under,
+// and the way in when there is nobody. Signing in from here is what makes the
+// moderator's Queue and Settings reachable at all.
+function paintWho() {
+  const acct = account();
+  $('who-name').textContent = acct?.handle || '';
+  $('who-act').textContent = acct ? 'Sign out' : 'Sign in';
+}
+
 async function route() {
+  paintWho();
   const mine = ++view;
   void mine;
   const hash = location.hash.replace(/^#\/?/u, '');
@@ -1280,9 +1290,18 @@ $('signin-handle').addEventListener('keydown', (e) => { if (e.key === 'Enter') $
 // happen to them the next time they sign in for something else.
 $('signin-cancel').addEventListener('click', () => { sessionStorage.removeItem('bb:intent'); $('signin-dlg').close(); });
 $('signin-dlg').addEventListener('cancel', () => sessionStorage.removeItem('bb:intent'));
-$('masto-logout').addEventListener('click', async () => {
+async function signOutOfEverything() {
   if (podAcct) { await pod.signOut(); podAcct = null; localStorage.removeItem('bb:acct'); sessionStorage.removeItem('bb:pod'); } else login.signOut();
   if (replyCtx) replyBox(replyCtx);
+  paintWho();
+}
+$('masto-logout').addEventListener('click', signOutOfEverything);
+
+$('who-act').addEventListener('click', async () => {
+  if (!account()) return askToSignIn('take part, and to moderate if you are a moderator');
+  await signOutOfEverything();
+  say('Signed out.');
+  route();
 });
 
 async function saveEdit({ body }) {

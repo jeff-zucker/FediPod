@@ -1,5 +1,13 @@
 # Changes
 
+## 2026-09-19 (a way in from the top row — version 1.16.2)
+
+**The forum's top row says who you are, and signs you in.** At the far right:
+your handle and Sign out when you are signed in, Sign in when you are not.
+Signing in used to be something only the reply box offered, so a reader the
+page no longer recognised had no way back to the moderator's Queue and
+Settings.
+
 ## 2026-09-19 (a moderator is named by their handle — version 1.16.1)
 
 **The forum's Moderators panel takes a handle.** Type `@mei@their.server` and
