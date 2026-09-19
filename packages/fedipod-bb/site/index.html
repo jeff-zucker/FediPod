@@ -164,7 +164,7 @@
     width: min(38rem, calc(100vw - 2rem)); box-shadow: 0 .6rem 2rem rgba(0, 0, 0, .35); }
   dialog::backdrop { background: rgba(0, 0, 0, .45); }
   /* What came of pressing a button in a panel, where the button is. */
-  #panel-err.said { color: var(--ok); }
+  #panel-err.said, p.said { color: var(--ok); }
   /* The settings panels put a label, its field and the buttons side by side,
      which needs more width than a reply box does. */
   #panel { width: min(48rem, calc(100vw - 2rem)); }
@@ -288,6 +288,7 @@
 </section>
 </dialog>
 <footer class="foot">
+  Powered by <a href="https://github.com/jeff-zucker/FediPod" rel="noopener">FediPod-BB</a>.
   This site adheres to the <a href="https://solidproject.org/code_of_conduct" rel="noopener">Solid Code of Conduct</a>;
   please use the report button as needed.
 </footer>

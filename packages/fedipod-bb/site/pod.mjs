@@ -206,6 +206,43 @@ export async function remove({ actor, podHome, id, category, categoryBase = null
   return { id };
 }
 
+// A message for one person and nobody else. It is written into a container on
+// the sender's own pod whose rule names only them, and handed to the
+// recipient's inbox, which is where the recipient reads it. The forum is not
+// told and holds no copy.
+//
+// What this is NOT: a message their server can be made to keep private, and
+// not something a server which requires signed delivery will accept from a
+// page — a browser holds no signing key. A refusal says which host refused.
+export async function dm({ actor, podHome, to, inbox, text }) {
+  const s = await getSession();
+  if (!s) throw new Error('sign in to your pod first');
+  const home = homeOf(actor, podHome);
+  const where = 'ap/private/dm/';
+  await priv.prepare(s, home + where, s.webId, []);
+  const name = `${stamp()}-${crypto.randomUUID().slice(0, 8)}`;
+  const id = faceOf(actor) + where + name;
+  const now = new Date().toISOString();
+  const note = {
+    '@context': AS, id, type: 'Note', attributedTo: actor,
+    content: htmlOf(text), source: sourceOf(text), published: now,
+    to: [to], cc: [], tag: [{ type: 'Mention', href: to }],
+  };
+  const put = await s.fetch(home + where + name, {
+    method: 'PUT', headers: { 'content-type': 'application/activity+json' }, body: JSON.stringify(note),
+  });
+  if (!put.ok) throw new Error(`your pod refused to keep the message (HTTP ${put.status})`);
+  const create = { '@context': AS, id: `${id}#create`, type: 'Create', actor, published: now, object: note, to: [to], cc: [] };
+  let sent;
+  try {
+    sent = await fetch(inbox, { method: 'POST', headers: { 'content-type': 'application/ld+json' }, body: JSON.stringify(create) });
+  } catch (e) {
+    throw new Error(`${e.message} — handing it to ${new URL(inbox).host}`);
+  }
+  if (!sent.ok) throw new Error(`${new URL(inbox).host} did not take the message (HTTP ${sent.status})`);
+  return { id };
+}
+
 // Reporting a post to the forum's moderators. A Flag names what is being
 // reported and, when the reader says why, carries their words with it.
 export async function report({ actor, object, category, inbox, why = '' }) {

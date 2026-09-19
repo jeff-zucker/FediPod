@@ -183,6 +183,8 @@ export function reader({ fetch: f = globalThis.fetch.bind(globalThis), session =
         id: doc.id, name: doc.name || doc.preferredUsername || null,
         handle: doc.preferredUsername && host ? `@${doc.preferredUsername}@${host}` : authorLabel(actorId),
         icon: icon || null, url: (typeof doc.url === 'string' && doc.url) || null,
+        // Where a message for them is handed in.
+        inbox: (typeof doc.inbox === 'string' && doc.inbox) || doc.endpoints?.sharedInbox || null,
       };
     },
 

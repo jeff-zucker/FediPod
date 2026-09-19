@@ -341,12 +341,28 @@ async function showWho(handleOrId) {
   // What the forum kept of them, and failing that their own actor: a moderator
   // who has never posted here has no card, and this page is where every handle
   // in the forum now leads.
-  const card = (cat ? await read.author(cat.base, handleOrId) : null)
-    || await read.actorCard(handleOrId).catch(() => null);
+  const kept = cat ? await read.author(cat.base, handleOrId) : null;
+  // The copy the forum kept may predate the account saying where its profile
+  // is, so where it names no page the account itself is asked.
+  const said = kept?.url ? null : await read.actorCard(handleOrId).catch(() => null);
+  const card = kept && said ? { ...kept, url: said.url, name: kept.name || said.name } : (kept || said);
   crumbs([['Home', '#/'], [card?.handle || authorLabel(handleOrId), null]]);
+  const named = esc(card?.handle || authorLabel(handleOrId));
+  // A word with them and nobody else. Only from a pod account: the message is
+  // written on the sender's own pod before it is handed over.
+  const messageBox = podAcct && podAcct.actor !== handleOrId ? `<section class="reply">
+    <h2>Message ${named}</h2>
+    <p class="hint">Only they see it. It is kept on your own pod where nobody else can read it and handed
+      to their inbox; the forum is not told and keeps no copy. A server that takes only signed mail will
+      refuse it, and you will be told which one did.</p>
+    <label class="vh" for="dm-text">Your message</label>
+    <textarea id="dm-text" rows="3" placeholder="Your message"></textarea>
+    <p class="row"><button class="primary" data-act="dm" data-to="${esc(handleOrId)}">Send</button></p>
+    <p class="err" id="dm-err" role="alert"></p>
+  </section>` : '';
   const head = `<div class="topline"><h1>${esc(card?.name || card?.handle || authorLabel(handleOrId))}</h1></div>
-    <p class="hint">${esc(card?.handle || authorLabel(handleOrId))}${card?.url ? ` · <a href="${esc(card.url)}">their profile</a>` : ''}
-      · ${theirs.length} post${theirs.length === 1 ? '' : 's'} here</p>`;
+    <p class="hint">${named}${card?.url ? ` · <a href="${esc(card.url)}">their profile</a>` : ''}
+      · ${theirs.length} post${theirs.length === 1 ? '' : 's'} here</p>${messageBox}`;
   if (!theirs.length) { $('main').innerHTML = head + '<p class="empty">Nothing from them in what the forum is holding.</p>'; return; }
   const items = [];
   for (const p of theirs) {
@@ -845,6 +861,7 @@ $('main').addEventListener('click', async (e) => {
     box.focus();
     return undefined;
   }
+  if (act === 'dm') return sendMessage(b.dataset.to);
   if (act === 'newpost') return openReply({ inReplyToUrl: replyCtx?.inReplyToUrl || null });
   if (act === 'newtopic') {
     const cat = catBySlug(b.dataset.slug);
@@ -1094,6 +1111,34 @@ async function voteOn(postId, way, was) {
     // Which step failed, not only that one did: "failed to fetch" on its own
     // says nothing about which address would not answer.
     alert(`${e.message} — while ${step}`);
+  }
+}
+
+// A message to one person: their inbox is asked for, the message is written
+// privately on the sender's pod, and handed over. Each way it can fail says
+// which address would not answer, since a bare "failed to fetch" names none.
+async function sendMessage(to) {
+  const box = $('dm-text');
+  const err = $('dm-err');
+  const text = box?.value.trim();
+  if (!err) return;
+  if (!text) { err.className = 'err'; err.textContent = 'Type a message first.'; return; }
+  if (!podAcct) { err.className = 'err'; err.textContent = 'Messaging someone is done from your own pod account.'; return; }
+  err.className = '';
+  err.textContent = 'Sending…';
+  try {
+    const card = await read.actorCard(to).catch(() => null);
+    if (!card?.inbox) {
+      throw new Error(`${new URL(to).host} would not say where ${authorLabel(to)} takes mail`);
+    }
+    await pod.dm({ actor: podAcct.actor, podHome: podAcct.podHome, to, inbox: card.inbox, text });
+    box.value = '';
+    err.className = 'said';
+    err.textContent = 'Sent. It is in their inbox and nowhere else.';
+    say('Message sent.');
+  } catch (e) {
+    err.className = 'err';
+    err.textContent = e.message;
   }
 }
 

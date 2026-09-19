@@ -1,5 +1,15 @@
 # Changes
 
+## 2026-09-19 (a word with one person — version 1.18.0)
+
+**You can write to somebody from their page.** Signed in with a pod, there is a
+box on a person's page in the forum. What you type is kept on your own pod
+where nobody else can read it and handed to that person's inbox; the forum is
+never told and keeps no copy. A server that accepts only signed mail will
+refuse it, and the refusal names the host that refused.
+
+The footer says what the site runs on.
+
 ## 2026-09-19 (every handle leads to the same page — version 1.17.5)
 
 A handle anywhere in the forum — a byline, the index's *Latest by*, the
