@@ -1,5 +1,16 @@
 # Changes
 
+## 2026-09-19 (post to somebody's timeline — version 1.19.0)
+
+The box on a person's page posts to their timeline. What you write is a post of
+your own that names them, written in your public container like any other post
+and handed to their inbox, so it reaches them and anyone who reads either of
+you. It is public, and the box says so before anything is typed.
+
+It replaces the private message that was there, which could not be delivered:
+a message nobody but its author may read cannot be checked by the server
+receiving it, and a page holds no key to prove it another way.
+
 ## 2026-09-19 (a message is named where it lives — version 1.18.3)
 
 A message carries its own address on the sender's pod. It used to be named at

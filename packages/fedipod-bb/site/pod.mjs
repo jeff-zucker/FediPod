@@ -206,38 +206,29 @@ export async function remove({ actor, podHome, id, category, categoryBase = null
   return { id };
 }
 
-// A message for one person and nobody else. It is written into a container on
-// the sender's own pod whose rule names only them, and handed to the
-// recipient's inbox, which is where the recipient reads it. The forum is not
-// told and holds no copy.
+// A post on somebody's timeline: an ordinary public post of the sender's that
+// names them, so it reaches their notifications and reads as a post of theirs
+// to answer. It is written in the sender's own public container, like any
+// other post, and handed to that person's inbox.
 //
-// What this is NOT: a message their server can be made to keep private, and
-// not something a server which requires signed delivery will accept from a
-// page — a browser holds no signing key. A refusal says which host refused.
-export async function dm({ actor, podHome, to, inbox, text }) {
+// Public is the whole of it: anyone can read it, and the page says so before
+// anything is typed. A server that takes only signed mail refuses it — a page
+// holds no signing key — and the refusal names the host.
+export async function postTo({ actor, podHome, to, handle = '', inbox, text }) {
   const s = await getSession();
   if (!s) throw new Error('sign in to your pod first');
   const home = homeOf(actor, podHome);
-  const where = 'ap/private/dm/';
-  // Three requests to two hosts, and a network failure in any of them arrives
-  // as the browser's bare "Failed to fetch", which names neither the host nor
-  // what was being done. Each one says both.
-  try {
-    await priv.prepare(s, home + where, s.webId, []);
-  } catch (e) {
-    throw new Error(`${e.message} — making a private place for it on ${new URL(home).host}`);
-  }
-  const name = `${stamp()}-${crypto.randomUUID().slice(0, 8)}`;
-  // The message's own address on the pod, not the face the account publishes
-  // under. A fronted address is the right id for anything the front can hand
-  // over; this one it cannot — the document is readable by its owner alone —
-  // so naming it there would name an address that answers nobody.
-  const id = home + where + name;
+  const where = 'ap/notes/';
+  const name = `${stamp()}-to-${slug(handle) || 'someone'}-${crypto.randomUUID().slice(0, 8)}`;
+  // A public post is named at the address the account publishes under, which
+  // is where anyone reading it will ask for it.
+  const id = faceOf(actor) + where + name;
   const now = new Date().toISOString();
   const note = {
     '@context': AS, id, type: 'Note', attributedTo: actor,
     content: htmlOf(text), source: sourceOf(text), published: now,
-    to: [to], cc: [], tag: [{ type: 'Mention', href: to }],
+    to: [PUBLIC, to], cc: [],
+    tag: [{ type: 'Mention', href: to, ...(handle ? { name: handle } : {}) }],
   };
   let put;
   try {
@@ -247,15 +238,15 @@ export async function dm({ actor, podHome, to, inbox, text }) {
   } catch (e) {
     throw new Error(`${e.message} — writing it to ${new URL(home).host}`);
   }
-  if (!put.ok) throw new Error(`your pod refused to keep the message (HTTP ${put.status}) — ${home + where + name}`);
-  const create = { '@context': AS, id: `${id}#create`, type: 'Create', actor, published: now, object: note, to: [to], cc: [] };
+  if (!put.ok) throw new Error(`your pod refused the post (HTTP ${put.status}) — ${home + where + name}`);
+  const create = { '@context': AS, id: `${id}#create`, type: 'Create', actor, published: now, object: note, to: [PUBLIC, to], cc: [] };
   let sent;
   try {
     sent = await fetch(inbox, { method: 'POST', headers: { 'content-type': 'application/ld+json' }, body: JSON.stringify(create) });
   } catch (e) {
     throw new Error(`${e.message} — handing it to ${new URL(inbox).host}`);
   }
-  if (!sent.ok) throw new Error(`${new URL(inbox).host} did not take the message (HTTP ${sent.status})`);
+  if (!sent.ok) throw new Error(`${new URL(inbox).host} did not take it (HTTP ${sent.status})`);
   return { id };
 }
 

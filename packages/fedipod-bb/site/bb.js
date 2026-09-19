@@ -351,13 +351,14 @@ async function showWho(handleOrId) {
   // A word with them and nobody else. Only from a pod account: the message is
   // written on the sender's own pod before it is handed over.
   const messageBox = podAcct && podAcct.actor !== handleOrId ? `<section class="reply">
-    <h2>Message ${named}</h2>
-    <p class="hint">Only they see it. It is kept on your own pod where nobody else can read it and handed
-      to their inbox; the forum is not told and keeps no copy. A server that takes only signed mail will
-      refuse it, and you will be told which one did.</p>
-    <label class="vh" for="dm-text">Your message</label>
-    <textarea id="dm-text" rows="3" placeholder="Your message"></textarea>
-    <p class="row"><button class="primary" data-act="dm" data-to="${esc(handleOrId)}">Send</button></p>
+    <h2>Post to ${named}'s timeline</h2>
+    <p class="hint">A post of yours that names them, so it reaches them and anyone who reads either of
+      you. It is public: everybody can read it. A server that takes only signed mail will refuse it,
+      and you will be told which one did.</p>
+    <label class="vh" for="dm-text">Your post</label>
+    <textarea id="dm-text" rows="3" placeholder="Your post"></textarea>
+    <p class="row"><button class="primary" data-act="post-to" data-to="${esc(handleOrId)}"
+      data-handle="${esc(card?.handle || '')}">Post</button></p>
     <p class="err" id="dm-err" role="alert"></p>
   </section>` : '';
   const head = `<div class="topline"><h1>${esc(card?.name || card?.handle || authorLabel(handleOrId))}</h1></div>
@@ -861,7 +862,7 @@ $('main').addEventListener('click', async (e) => {
     box.focus();
     return undefined;
   }
-  if (act === 'dm') return sendMessage(b.dataset.to);
+  if (act === 'post-to') return postToTimeline(b.dataset.to, b.dataset.handle || '');
   if (act === 'newpost') return openReply({ inReplyToUrl: replyCtx?.inReplyToUrl || null });
   if (act === 'newtopic') {
     const cat = catBySlug(b.dataset.slug);
@@ -1114,32 +1115,34 @@ async function voteOn(postId, way, was) {
   }
 }
 
-// A message to one person: their inbox is asked for, the message is written
-// privately on the sender's pod, and handed over. Each way it can fail says
-// which address would not answer, since a bare "failed to fetch" names none.
-async function sendMessage(to) {
+// A post on somebody's timeline: their inbox is asked for, the post is written
+// in the sender's own public container, and handed over. Each way it can fail
+// says which address would not answer, since a bare "failed to fetch" names
+// none of them.
+async function postToTimeline(to, handle) {
   const box = $('dm-text');
   const err = $('dm-err');
   const text = box?.value.trim();
   if (!err) return;
-  if (!text) { err.className = 'err'; err.textContent = 'Type a message first.'; return; }
-  if (!podAcct) { err.className = 'err'; err.textContent = 'Messaging someone is done from your own pod account.'; return; }
+  if (!text) { err.className = 'err'; err.textContent = 'Write something first.'; return; }
+  if (!podAcct) { err.className = 'err'; err.textContent = 'Posting to someone is done from your own pod account.'; return; }
   err.className = '';
-  err.textContent = 'Sending…';
+  err.textContent = 'Posting…';
   try {
     const card = await read.actorCard(to).catch(() => null);
     // An account fronted at a Gateway names the Gateway's door as its inbox,
     // and that door takes signed mail between servers — not a page, which it
-    // refuses before the message is even sent. The pod behind the door does
-    // take it, and saying so is what the Gateway answers when asked.
-    const at = (card?.handle || '').replace(/^@/u, '').split('@')[0] || null;
+    // refuses before anything is sent. The pod behind the door does take it,
+    // and saying so is what the Gateway answers when asked.
+    const at = (card?.handle || handle || '').replace(/^@/u, '').split('@')[0] || null;
     const inbox = await pod.podInboxOf(to, { front, handle: at }) || card?.inbox;
     if (!inbox) throw new Error(`${new URL(to).host} would not say where ${authorLabel(to)} takes mail`);
-    await pod.dm({ actor: podAcct.actor, podHome: podAcct.podHome, to, inbox, text });
+    await pod.postTo({ actor: podAcct.actor, podHome: podAcct.podHome, to,
+      handle: card?.handle || handle || '', inbox, text });
     box.value = '';
     err.className = 'said';
-    err.textContent = 'Sent. It is in their inbox and nowhere else.';
-    say('Message sent.');
+    err.textContent = 'Posted. It is on its way to them.';
+    say('Posted.');
   } catch (e) {
     err.className = 'err';
     err.textContent = e.message;
