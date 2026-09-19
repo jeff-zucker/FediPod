@@ -480,10 +480,13 @@ async function showForum() {
   const head = () => `<p class="hint chips">Categories: ${chip('all', 'All')}${cats().map(c => chip(c.slug || '', c.name)).join('')}
     ${account() ? '<a class="chip" href="#/replies">Replies to you</a><a class="chip" href="#/bookmarks">Bookmarked</a>' : ''}
     ${iModerate() ? '<a class="chip" href="#/queue">Queue</a><a class="chip" href="#/settings">Settings</a>' : ''}
-    <label class="vh" for="find">Search this forum</label>
-    <input type="text" id="find" placeholder="Search" value="${esc(finding)}" autocomplete="off">
-    ${here && account() && podAcct ? `<button class="new" data-act="${own().isJoined(here.id) ? 'leave' : 'join'}" data-cat="${esc(here.id)}">${own().isJoined(here.id) ? 'Leave' : 'Join'}</button>` : ''}
-    ${into ? `<button class="new" data-act="newtopic" data-slug="${esc(into.slug || '')}">New topic</button>` : ''}</p>`;
+    <span class="rowend">
+      ${here && account() && podAcct ? `<button class="new" data-act="${own().isJoined(here.id) ? 'leave' : 'join'}" data-cat="${esc(here.id)}">${own().isJoined(here.id) ? 'Leave' : 'Join'}</button>` : ''}
+      <label class="vh" for="find">Search this forum</label>
+      <input type="text" id="find" placeholder="Search" value="${esc(finding)}" autocomplete="off"${finding ? '' : ' hidden'}>
+      <button class="new" data-act="search"${finding ? ' hidden' : ''}>Search</button>
+      ${into ? `<button class="new" data-act="newtopic" data-slug="${esc(into.slug || '')}">New topic</button>` : ''}
+    </span></p>`;
   if (mineView !== view) return;
   // Enough posts to fill a page of TOPICS: several posts can belong to one.
   const want = Math.min(300, shown * 5);
@@ -811,6 +814,16 @@ $('main').addEventListener('click', async (e) => {
       </div>`);
   }
   if (act.startsWith('set-') || act.startsWith('add-') || act.startsWith('drop-')) return onSettings(b);
+  // Search asks for the room to type in rather than holding it open: the
+  // button becomes the box, and an empty box left alone becomes the button.
+  if (act === 'search') {
+    const box = $('find');
+    if (!box) return undefined;
+    b.hidden = true;
+    box.hidden = false;
+    box.focus();
+    return undefined;
+  }
   if (act === 'newpost') return openReply({ inReplyToUrl: replyCtx?.inReplyToUrl || null });
   if (act === 'newtopic') {
     const cat = catBySlug(b.dataset.slug);
@@ -1273,6 +1286,17 @@ $('main').addEventListener('input', (e) => {
     const box = document.getElementById('find');
     if (box) { box.focus(); box.setSelectionRange(where, where); }
   }, 250);
+});
+
+// Nothing typed and the reader has gone elsewhere: the row takes its width
+// back. Something typed stays open, so what is being searched for is visible.
+$('main').addEventListener('focusout', (e) => {
+  if (e.target?.id !== 'find' || e.target.value.trim()) return;
+  const box = e.target;
+  const button = document.querySelector('button[data-act="search"]');
+  if (!button) return;
+  box.hidden = true;
+  button.hidden = false;
 });
 
 $('reply-image').addEventListener('change', async (e) => {

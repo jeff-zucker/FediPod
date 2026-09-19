@@ -1,5 +1,11 @@
 # Changes
 
+## 2026-09-19 (search asks for its room — version 1.17.2)
+
+Search is a button beside New topic, in the same style, and opens into a box
+when it is pressed; left empty, it goes back to being a button. The row's own
+controls — Join, Search, New topic — sit together at its right end.
+
 ## 2026-09-19 (the forum's own colours in its top row — version 1.17.1)
 
 Who you are signed in as, and the button beside it, are in the site's green;

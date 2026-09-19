@@ -43,6 +43,10 @@
     padding: .3rem .8rem; border-radius: .3rem; background: transparent; color: var(--accent);
     border: 1px solid var(--line); }
   .topline button:hover, p.chips button.new:hover { background: var(--field-bg); }
+  /* The row's own controls sit together at its right end, whatever the
+     categories in front of them do. */
+  p.chips .rowend { margin-left: auto; display: flex; gap: .4rem; align-items: center; }
+  p.chips .rowend button.new { margin-left: 0; }
   p.chips button.new { margin-left: auto; }
   input[type=file] { font: inherit; font-size: 16px; }
   .filelabel { font-weight: 600; }
