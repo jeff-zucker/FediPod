@@ -1,5 +1,11 @@
 # Changes
 
+## 2026-09-19 (the forum's own colours in its top row — version 1.17.1)
+
+Who you are signed in as, and the button beside it, are in the site's green;
+who moderates sits directly under the line, with the word *moderators* in the
+same green and each name linking to that account's page.
+
 ## 2026-09-19 (posting into a forum joins it — version 1.17.0)
 
 **A post from somebody who has not joined an open category joins them, and is

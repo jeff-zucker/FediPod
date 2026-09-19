@@ -206,7 +206,7 @@ async function load() {
   // Who moderates, under the line: the forum's own list, each name linking to
   // the page that account keeps.
   const mods = (forum.admins || []).map(a => `<a href="${esc(a.url)}">${esc(a.handle)}</a>`).join(', ');
-  $('mods-line').innerHTML = mods ? `moderators: ${mods}` : '';
+  $('mods-line').innerHTML = mods ? `<span class="lead">moderators:</span> ${mods}` : '';
   route();
 }
 

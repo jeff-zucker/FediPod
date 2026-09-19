@@ -21,15 +21,17 @@
   a { color: var(--accent); text-decoration: none; }
   a:hover { text-decoration: underline; }
   h1, h2 { color: var(--heading); }
-  header.top { display: flex; gap: 1rem; align-items: baseline; flex-wrap: wrap; border-bottom: 1px solid var(--line); padding-bottom: .6rem; margin-bottom: 1rem; }
+  header.top { display: flex; gap: 1rem; align-items: baseline; flex-wrap: wrap; border-bottom: 1px solid var(--line); padding-bottom: .6rem; margin-bottom: .35rem; }
   header.top h1 { font-size: 1.4rem; margin: 0; }
   header.top a { color: var(--heading); text-decoration: none; }
-  #mods-line { margin: .4rem 0 0; }
+  #mods-line { margin: .15rem 0 .9rem; }
+  #mods-line .lead { color: var(--heading); font-weight: 600; }
   #mods-line a { color: var(--accent); }
   header.top .who { margin-left: auto; display: flex; gap: .6rem; align-items: baseline; }
-  header.top .who button { font-weight: 600; background: var(--bg); color: var(--fg);
-    border: 1px solid var(--line); border-radius: .4rem; padding: .3rem .7rem; cursor: pointer; }
-  header.top .who button:hover { background: var(--field-bg); }
+  header.top .who #who-name { color: var(--heading); }
+  header.top .who button { font-weight: 600; background: var(--btn); color: var(--btn-text);
+    border: 1px solid var(--btn); border-radius: .4rem; padding: .3rem .7rem; cursor: pointer; }
+  header.top .who button:hover { background: var(--btn-hover); border-color: var(--btn-hover); }
   nav.crumbs { color: var(--sub); margin: 0 0 1rem; }
   nav.crumbs a { color: var(--accent); }
   .dim { color: var(--sub); }
@@ -197,7 +199,7 @@
 <header class="top">
   <h1><a id="forum-link" href="#/">Forum</a></h1>
   <span class="who">
-    <span class="dim" id="who-name"></span>
+    <span id="who-name"></span>
     <button id="who-act">Sign in</button>
   </span>
 </header>
