@@ -165,7 +165,24 @@ export function reader({ fetch: f = globalThis.fetch.bind(globalThis), session =
       return {
         id: card.id || actorId, name: card.name || card.preferredUsername || null,
         handle: card.preferredUsername && host ? `@${card.preferredUsername}@${host}` : authorLabel(actorId),
-        icon: card.icon?.url || null, url: card.url || card.id || actorId,
+        // The page a person is sent to is the one the actor names. Its id is a
+        // document for machines, so it is not offered in its place.
+        icon: card.icon?.url || null, url: (typeof card.url === 'string' && card.url) || null,
+      };
+    },
+
+    // Somebody the forum has kept nothing about — a moderator who has not
+    // posted, say. Their own actor is what the page has to go on.
+    async actorCard(actorId) {
+      const doc = await get(actorId);
+      if (!doc?.id) return null;
+      let host = '';
+      try { host = new URL(doc.id).host; } catch { /* unlabelled */ }
+      const icon = typeof doc.icon === 'string' ? doc.icon : doc.icon?.url;
+      return {
+        id: doc.id, name: doc.name || doc.preferredUsername || null,
+        handle: doc.preferredUsername && host ? `@${doc.preferredUsername}@${host}` : authorLabel(actorId),
+        icon: icon || null, url: (typeof doc.url === 'string' && doc.url) || null,
       };
     },
 

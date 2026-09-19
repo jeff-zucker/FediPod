@@ -205,7 +205,7 @@ async function load() {
   $('forum-link').textContent = forum.name || 'Forum';
   // Who moderates, under the line: the forum's own list, each name linking to
   // the page that account keeps.
-  const mods = (forum.admins || []).map(a => `<a href="${esc(a.url)}">${esc(a.handle)}</a>`).join(', ');
+  const mods = (forum.admins || []).map(a => `<a href="#/who/${encodeURIComponent(a.id)}">${esc(a.handle)}</a>`).join(', ');
   $('mods-who').innerHTML = mods ? `<span class="lead">moderators:</span> ${mods}` : '';
   route();
 }
@@ -338,10 +338,14 @@ async function showWho(handleOrId) {
   const latest = await read.latest(base, { limit: 200 });
   const theirs = latest.filter(p => p.author === handleOrId);
   const cat = theirs[0] ? cats().find(c => c.id === theirs[0].category) : cats()[0];
-  const card = cat ? await read.author(cat.base, handleOrId) : null;
+  // What the forum kept of them, and failing that their own actor: a moderator
+  // who has never posted here has no card, and this page is where every handle
+  // in the forum now leads.
+  const card = (cat ? await read.author(cat.base, handleOrId) : null)
+    || await read.actorCard(handleOrId).catch(() => null);
   crumbs([['Home', '#/'], [card?.handle || authorLabel(handleOrId), null]]);
   const head = `<div class="topline"><h1>${esc(card?.name || card?.handle || authorLabel(handleOrId))}</h1></div>
-    <p class="hint">${esc(card?.handle || authorLabel(handleOrId))}${card?.url ? ` · <a href="${esc(card.url)}">their page</a>` : ''}
+    <p class="hint">${esc(card?.handle || authorLabel(handleOrId))}${card?.url ? ` · <a href="${esc(card.url)}">their profile</a>` : ''}
       · ${theirs.length} post${theirs.length === 1 ? '' : 's'} here</p>`;
   if (!theirs.length) { $('main').innerHTML = head + '<p class="empty">Nothing from them in what the forum is holding.</p>'; return; }
   const items = [];
@@ -593,7 +597,9 @@ async function showForum() {
       <td>${pins.site.has(p.topic) ? '<span class="pin" title="Pinned across the forum" role="img" aria-label="pinned across the forum">\u2B50</span> ' : pins.cat.has(p.topic) ? '<span class="pin" title="Pinned in this category" role="img" aria-label="pinned in this category">\uD83D\uDCCC</span> ' : ''}${href ? `<a href="${href}">${name}</a>` : name}${isNew
         ? ' <span class="badge">New<span class="vh"> since you last opened this topic</span></span>' : ''}</td>
       <td>${cat ? esc(cat.name) : ''}</td>
-      <td>${byline ? `<span class="who" title="${esc(byline)}">${esc(byline)}</span>` : ''}</td>
+      <td>${byline ? (p.author
+        ? `<a class="who" href="#/who/${encodeURIComponent(p.author)}" title="${esc(byline)}">${esc(byline)}</a>`
+        : `<span class="who" title="${esc(byline)}">${esc(byline)}</span>`) : ''}</td>
       <td>${esc(when(p.published))}</td>
       <td>${Number.isFinite(p.topicReplies) ? p.topicReplies + 1 : ''}</td>
     </tr>`);
@@ -1201,7 +1207,7 @@ async function paintMods(ids) {
   const named = await Promise.all(ids.map(async (id) => {
     const card = cat ? await authorOnce(cat.base, id).catch(() => null) : null;
     const handle = card?.handle || await modLabel(id);
-    return `<a href="${esc(card?.url || id)}">${esc(handle)}</a>`;
+    return `<a href="#/who/${encodeURIComponent(id)}">${esc(handle)}</a>`;
   }));
   $('mods-who').innerHTML = `<span class="lead">moderators:</span> ${named.join(', ')}`;
 }

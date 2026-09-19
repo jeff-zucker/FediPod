@@ -1,5 +1,14 @@
 # Changes
 
+## 2026-09-19 (every handle leads to the same page — version 1.17.5)
+
+A handle anywhere in the forum — a byline, the index's *Latest by*, the
+moderators under the line — opens that person's posts here. The moderators are
+underlined. On that page, **their profile** opens the page their account
+publishes for a person to read, and it is offered only where their account
+names one; somebody the forum has kept nothing about is read from their own
+account instead of coming up blank.
+
 ## 2026-09-19 (a button that worked now says so — version 1.17.4)
 
 **A settings change says what came of it, where the button is.** Adding a
