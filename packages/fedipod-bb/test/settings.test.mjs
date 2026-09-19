@@ -7,7 +7,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { forumUrls } from '../src/urls.mjs';
-import { applySettings } from '../src/settings.mjs';
+import { applySettings, isSettingsAsk } from '../src/settings.mjs';
 
 const POD = 'https://forum.example/';
 const PRIYA_WEBID = 'https://priya.pod.example/profile/card#me';
@@ -29,6 +29,45 @@ function forum(config = {}) {
   return f;
 }
 const isPrivate = (f, slug = 'general') => (f.config.membersOnly || []).includes(slug);
+
+const FRONT = 'https://fedipod.net';
+
+// The same forum as a page reads it through a Gateway: every address it can
+// name is the front's, and the agent maps one onto the pod at its transport.
+function frontedForum(config = {}) {
+  const f = forum(config);
+  f.site = forumUrls(POD, 'fedipod-bb/', { front: FRONT, handle: 'forum' });
+  f.categories = [{ slug: 'general', urls: f.site.category('general') }];
+  f.toPod = (u) => {
+    for (const c of f.categories) { const m = c.urls.toPod?.(u); if (m !== u) return m; }
+    return f.site.toPod ? f.site.toPod(u) : u;
+  };
+  return f;
+}
+
+test('an ask addressed at the Gateway means what one addressed at the pod means', async () => {
+  const f = frontedForum();
+  const mei = 'https://their.server/users/mei';
+
+  const named = { type: 'Add', object: mei, target: `${FRONT}/u/general/ap/moderators` };
+  assert.equal(isSettingsAsk(f, named), true);
+  await applySettings(f, named);
+  assert.deepEqual(f.config.moderators, [mei]);
+
+  // The queue container is never published, so the front's address is the only
+  // one a page reading through the Gateway can name for it.
+  const queue = { type: 'Add', object: mei, target: `${FRONT}/u/forum/mod/` };
+  assert.equal(isSettingsAsk(f, queue), true);
+  await applySettings(f, queue);
+  assert.deepEqual(f.config.moderatorWebIds, [PRIYA_WEBID, MEI_WEBID], 'the pod behind the actor is what the rule names');
+
+  // The pod's own addresses go on meaning what they meant.
+  assert.equal(isSettingsAsk(f, { type: 'Add', object: MEI_WEBID, target: f.site.mod }), true);
+  assert.equal(isSettingsAsk(f, { type: 'Remove', object: mei, target: f.categories[0].urls.moderators }), true);
+  // Somebody else's forum is still somebody else's.
+  assert.equal(isSettingsAsk(f, { type: 'Add', object: mei, target: 'https://elsewhere.example/fedipod-bb/mod/' }), false);
+});
+
 
 test('naming a member leaves an open category open, and dropping the last one leaves it as it was', async () => {
   const f = forum();
@@ -66,6 +105,26 @@ test('the forum says open or private, and that is the only thing that says it', 
   assert.deepEqual(open, { category: 'general', private: false });
   assert.equal(isPrivate(f), false);
   assert.equal(f.config.categories.find(c => c.slug === 'general').private, false);
+});
+
+test('the queue is granted by handle: the actor is looked up, and an account with no pod is refused', async () => {
+  const f = forum();
+  const mod = f.site.mod;
+  const out = await applySettings(f, { type: 'Add', object: 'https://their.server/users/mei', target: mod });
+  assert.deepEqual(f.config.moderatorWebIds, [PRIYA_WEBID, MEI_WEBID], 'the rule names the pod behind the actor');
+  assert.equal(out.moderatorWebIds, 2);
+
+  // A WebID given outright is taken as it stands.
+  await applySettings(f, { type: 'Remove', object: MEI_WEBID, target: mod });
+  assert.deepEqual(f.config.moderatorWebIds, [PRIYA_WEBID]);
+
+  // An account with no pod behind it: there is nothing an access rule could
+  // name, so nothing is granted and the ask says so.
+  const none = forum();
+  none.webIdOf = async () => null;
+  await assert.rejects(applySettings(none, { type: 'Add', object: 'https://mastodon.example/users/aisha', target: mod }),
+    /no WebID could be found/u);
+  assert.deepEqual(none.config.moderatorWebIds, [PRIYA_WEBID], 'nothing was granted');
 });
 
 test('a name and a privacy change are each their own change, and can arrive together', async () => {

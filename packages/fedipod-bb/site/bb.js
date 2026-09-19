@@ -11,7 +11,7 @@
 //   #/  #/c/<slug>  #/t/<slug>/<tid>
 
 import { reader, placeOf, authorLabel, cacheKey, categoryBase } from './read.mjs';
-import { MastoLogin, hostOfHandle, serverKind } from './masto.mjs';
+import { MastoLogin, hostOfHandle, serverKind, actorOfHandle } from './masto.mjs';
 import * as pod from './pod.mjs';
 import { mine as keptByReader } from './mine.mjs';
 import { readState } from './seen.mjs';
@@ -720,7 +720,7 @@ function openPanel(title, html) {
 $('panel-close').addEventListener('click', () => $('panel').close());
 
 $('reply-open').addEventListener('click', () => { openReply({ inReplyToUrl: replyCtx?.inReplyToUrl || null }); });
-$('main').addEventListener('click', (e) => {
+$('main').addEventListener('click', async (e) => {
 
   // Every button in the page that names an action, wherever it sits: a
   // post's row, a topic's row, or the categories line.
@@ -754,17 +754,17 @@ $('main').addEventListener('click', (e) => {
   if (act === 'approve' || act === 'refuse') return modHeld(id, b.closest('[data-cat]')?.dataset.cat, act === 'approve');
   if (act === 'ban') return modBan(b.dataset.who, b.closest('[data-cat]')?.dataset.cat);
   if (act === 'open-mods') {
-    return openPanel('Moderators', `<p class="hint">${moderators.map(m => esc(authorLabel(m))).join(', ') || 'nobody yet'}</p>
+    const named = await Promise.all(moderators.map(m => modLabel(m)));
+    return openPanel('Moderators', `<p class="hint">${named.map(esc).join(', ') || 'nobody yet'}</p>
       <div class="row">
-        <label for="set-mod">Their Fediverse actor</label>
-        <input type="text" id="set-mod" placeholder="https://their.server/users/them">
+        <label for="set-mod">Their handle</label>
+        <input type="text" id="set-mod" placeholder="@mei@their.server">
         <button data-act="add-mod">Add</button><button data-act="drop-mod">Remove</button>
       </div>
-      <div class="row">
-        <label for="set-mod-webid">And their WebID, so they can read the queue</label>
-        <input type="text" id="set-mod-webid" placeholder="https://their.pod/profile/card#me">
-        <button data-act="add-mod-webid">Add</button>
-      </div>`);
+      <p class="hint">Adding somebody makes them a moderator and lets them read the queue.
+        The queue is held under the pod's own access rule, and a rule names a person by the
+        WebID of their pod: a Mastodon account has none, so it can moderate and have its
+        asks acted on, but it cannot open the queue.</p>`);
   }
   if (act === 'open-members') {
     const cat = cats().find(c => c.id === b.dataset.cat);
@@ -1105,13 +1105,32 @@ async function modBan(who, slug) {
   } catch (e) { alert(e.message); }
 }
 
+// What to call a moderator: the card the forum kept of them, then the actor's
+// own word for it, and a name read off the address only when neither answers.
+async function modLabel(actorId) {
+  const cat = cats()[0];
+  const card = cat ? await authorOnce(cat.base, actorId) : null;
+  if (card?.handle) return card.handle;
+  return (await read.actorHandle(actorId).catch(() => null)) || authorLabel(actorId);
+}
+
+// What a moderator types is a handle; what the wire names is the actor behind
+// it. A server that will not say who that is stops the ask here, where the
+// person who typed it is looking, rather than on the forum an hour later.
+async function actorFor(typed) {
+  if (!typed) return null;
+  try { return await actorOfHandle(typed); } catch (e) { alert(e.message); return null; }
+}
+
 // Every settings change is an ordinary activity naming what it changes: a
 // Create of a Group for a new category, an Update for a name, an Add or a
 // Remove for who moderates and who may read.
-async function settingsAsk(activity) {
+async function settingsAsk(...activities) {
   try {
     const inbox = await pod.podInboxOf(cats()[0]?.id || forum.id, { front, handle: cats()[0]?.slug || forum.handle });
-    await pod.moderate({ actor: podAcct.actor, podHome: podAcct.podHome, inbox, activity });
+    for (const activity of activities) {
+      await pod.moderate({ actor: podAcct.actor, podHome: podAcct.podHome, inbox, activity });
+    }
     say('Sent. It takes effect once the forum has checked who asked.');
   } catch (e) { alert(e.message); }
 }
@@ -1138,12 +1157,15 @@ async function onSettings(b) {
     const cat = cats().find(c => c.id === catId);
     if (webid && cat) await settingsAsk({ type: act === 'add-member' ? 'Add' : 'Remove', object: webid, target: cat.base + 'ap/members' });
   } else if (act === 'add-mod' || act === 'drop-mod') {
-    const who = val('#set-mod');
+    const who = await actorFor(val('#set-mod'));
     const cat = cats()[0];
-    if (who && cat) await settingsAsk({ type: act === 'add-mod' ? 'Add' : 'Remove', object: who, target: cat.base + 'ap/moderators' });
-  } else if (act === 'add-mod-webid') {
-    const webid = val('#set-mod-webid');
-    if (webid) await settingsAsk({ type: 'Add', object: webid, target: `${base}mod/` });
+    // One handle says two things: who may ask for moderation, and whose pod
+    // the rule on the queue names. The forum finds the pod behind the actor.
+    if (who && cat) {
+      const type = act === 'add-mod' ? 'Add' : 'Remove';
+      await settingsAsk({ type, object: who, target: cat.base + 'ap/moderators' },
+        { type, object: who, target: `${base}mod/` });
+    }
   }
 }
 

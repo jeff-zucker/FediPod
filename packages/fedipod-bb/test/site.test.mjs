@@ -10,7 +10,7 @@ import * as topics from '../src/topics.mjs';
 import * as publish from '../src/publish.mjs';
 import { PodStore } from '../../../lib/core/store.mjs';
 import { reader, forumBase, placeOf, cacheKey, authorLabel } from '../site/read.mjs';
-import { MastoLogin, cleanHost, hostOfHandle, serverKind } from '../site/masto.mjs';
+import { MastoLogin, cleanHost, hostOfHandle, serverKind, actorOfHandle } from '../site/masto.mjs';
 import { readState } from '../site/seen.mjs';
 
 const POD = 'https://forum.example/';
@@ -164,6 +164,39 @@ test('replying from a Mastodon account: register, approve, exchange, resolve, po
   assert.equal(made.uri, 'https://mastodon.example/users/aisha/statuses/9001');
   login.signOut();
   assert.equal(login.account(), null);
+});
+
+test('a moderator is named by what their actor says, not by what its address looks like', async () => {
+  const docs = new Map([[MEI, { id: MEI, type: 'Person', preferredUsername: 'mei' }]]);
+  const r = reader({ fetch: fetchOver(docs) });
+  assert.equal(await r.actorHandle(MEI), '@mei@mei.pod.example');
+  // The address on its own reads the container the actor sits in as the name.
+  assert.equal(authorLabel(MEI), '@fedipod@mei.pod.example');
+  // A server that will not hand out its actor leaves the address as the guess.
+  assert.equal(await r.actorHandle('https://mastodon.example/users/aisha'), null);
+});
+
+test('a moderator is named by their handle: WebFinger says which actor that is', async () => {
+  const asked = [];
+  const jrd = (o) => new Response(JSON.stringify(o), { status: 200, headers: { 'content-type': 'application/jrd+json' } });
+  const wf = async (u) => {
+    asked.push(u);
+    if (!u.includes('acct%3Amei%40their.server')) return new Response('', { status: 404 });
+    return jrd({ subject: 'acct:mei@their.server', links: [
+      { rel: 'http://webfinger.net/rel/profile-page', type: 'text/html', href: 'https://their.server/@mei' },
+      { rel: 'self', type: 'application/activity+json', href: 'https://their.server/users/mei' }] });
+  };
+  assert.equal(await actorOfHandle('@mei@their.server', wf), 'https://their.server/users/mei');
+  assert.equal(asked[0], 'https://their.server/.well-known/webfinger?resource=acct%3Amei%40their.server');
+  assert.equal(await actorOfHandle('mei@their.server', wf), 'https://their.server/users/mei', 'the leading @ is optional');
+  assert.equal(await actorOfHandle('https://their.server/users/mei', wf), 'https://their.server/users/mei', 'an address is already an actor');
+  await assert.rejects(actorOfHandle('mei', wf), /a handle looks like/u);
+  await assert.rejects(actorOfHandle('@nobody@their.server', wf), /does not know/u);
+  // A server that answers without naming an actor stops the ask here, rather
+  // than storing something that matches nobody.
+  await assert.rejects(actorOfHandle('@mei@their.server',
+    async () => jrd({ links: [{ rel: 'http://webfinger.net/rel/profile-page', href: 'https://their.server/@mei' }] })),
+  /did not say where/u);
 });
 
 test('the latest feed: the forum\'s newest posts, each named by its topic', async () => {

@@ -21,6 +21,25 @@ export const hostOfHandle = (s) => {
   return cleanHost(m ? m[1] : t);
 };
 
+// The actor id behind a Fediverse handle, asked of the handle's own server:
+// WebFinger is answered from any origin (RFC 7033), so the page may ask it
+// directly. An address typed in full is already an actor id.
+export async function actorOfHandle(input, f = globalThis.fetch.bind(globalThis)) {
+  const typed = String(input || '').trim();
+  if (/^https?:\/\//u.test(typed)) return typed;
+  const host = hostOfHandle(typed);
+  const name = typed.replace(/^@/u, '').split('@')[0];
+  if (!host || !name || name === host) throw new Error('a handle looks like @you@their.server');
+  const at = `@${name}@${host}`;
+  const r = await f(`https://${host}/.well-known/webfinger?resource=${encodeURIComponent(`acct:${name}@${host}`)}`,
+    { headers: { accept: 'application/jrd+json, application/json' } }).catch(() => null);
+  if (!r?.ok) throw new Error(`${host} does not know ${at}`);
+  const jrd = await r.json().catch(() => null);
+  const self = (jrd?.links || []).find(l => l.rel === 'self' && /activity\+json|ld\+json/u.test(l.type || ''));
+  if (!self?.href) throw new Error(`${host} did not say where ${at} lives`);
+  return self.href;
+}
+
 // What a reader's server speaks — asked of the Gateway, not of the server:
 // a page may not probe a stranger's server from the browser. 'mastodon-api'
 // (Mastodon, Pleroma, Akkoma, GoToSocial, a FediPod agent) signs in here;

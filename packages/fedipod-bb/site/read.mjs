@@ -169,6 +169,15 @@ export function reader({ fetch: f = globalThis.fetch.bind(globalThis), session =
       };
     },
 
+    // The handle an actor says is its own. A name read off an address is a
+    // guess, right only where the address happens to spell the name; a server
+    // that will not hand out its actors unasked leaves the guess standing.
+    async actorHandle(actorId) {
+      const doc = await get(actorId);
+      if (!doc?.preferredUsername) return null;
+      try { return `@${doc.preferredUsername}@${new URL(doc.id || actorId).host}`; } catch { return null; }
+    },
+
     // The forum's newest posts, across every category: the index names the
     // forum's own copies, so one fetch of each tells who wrote it, when, and
     // which topic and category it belongs to.

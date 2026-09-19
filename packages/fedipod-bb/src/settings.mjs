@@ -10,6 +10,14 @@
 const idOf = (v) => (typeof v === 'string' ? v : v?.id);
 const SLUG = /^[a-z0-9][a-z0-9-]{0,62}$/u;
 
+// A page reading the forum through a Gateway names what it asks about by the
+// address it read there; read from the pod it names the pod's own. The queue
+// container has no published address at all, since nothing about it is
+// published. So both sides are put in the same space before they are compared,
+// and an ask means what it says whichever address it arrived under.
+const onPod = (forum, u) => (typeof u === 'string' && forum?.toPod ? forum.toPod(u) : u);
+const same = (forum, a, b) => !!a && !!b && (a === b || onPod(forum, a) === onPod(forum, b));
+
 // Which of these a delivered activity is, if any. The forum's own actor or
 // one of its collections has to be named, or it is somebody else's business.
 export function isSettingsAsk(forum, activity) {
@@ -18,16 +26,16 @@ export function isSettingsAsk(forum, activity) {
   const object = activity?.object;
   const site = forum.site;
   if (t === 'Create' && object && typeof object === 'object' && object.type === 'Group') {
-    return idOf(activity.target) === site.actor;
+    return same(forum, idOf(activity.target), site.actor);
   }
   if (t === 'Update' && object && typeof object === 'object') {
     const id = idOf(object);
-    return id === site.actor || forum.categories.some(c => c.urls.actor === id);
+    return same(forum, id, site.actor) || forum.categories.some(c => same(forum, c.urls.actor, id));
   }
   if (t === 'Add' || t === 'Remove') {
     if (!target) return false;
-    if (target === site.administrators || target === site.mod) return true;
-    return forum.categories.some(c => target === c.urls.moderators || target === c.urls.members);
+    if (same(forum, target, site.administrators) || same(forum, target, site.mod)) return true;
+    return forum.categories.some(c => same(forum, target, c.urls.moderators) || same(forum, target, c.urls.members));
   }
   return false;
 }
@@ -67,12 +75,12 @@ export async function applySettings(forum, activity) {
   if (t === 'Update' && object && typeof object === 'object') {
     const id = idOf(object);
     const name = typeof object.name === 'string' ? object.name.trim().slice(0, 200) : '';
-    if (id === site.actor) {
+    if (same(forum, id, site.actor)) {
       if (!name) return {};
       save({ name, republish: true });
       return { forum: name };
     }
-    const cat = forum.categories.find(c => c.urls.actor === id);
+    const cat = forum.categories.find(c => same(forum, c.urls.actor, id));
     if (!cat) return {};
     const out = {};
     if (name) {
@@ -109,8 +117,8 @@ export async function applySettings(forum, activity) {
   if ((t === 'Add' || t === 'Remove') && who) {
     const on = t === 'Add';
     // Who moderates: an actor id, which is what the wire and FEP-1b12 use.
-    const cat = forum.categories.find(c => target === c.urls.moderators || target === c.urls.members);
-    if (target === site.administrators || (cat && target === cat.urls.moderators)) {
+    const cat = forum.categories.find(c => same(forum, target, c.urls.moderators) || same(forum, target, c.urls.members));
+    if (same(forum, target, site.administrators) || (cat && same(forum, target, cat.urls.moderators))) {
       const held = new Set(cfg().moderators || []);
       if (on) held.add(who); else held.delete(who);
       save({ moderators: [...held], republish: true });
@@ -122,12 +130,12 @@ export async function applySettings(forum, activity) {
     // a moderator has in front of them when they admit a join request. The
     // WebID is the pod the actor lives on, checked against that pod's own
     // profile before it is granted anything.
-    if (cat && target === cat.urls.members && !/#|\/profile\//u.test(who)) {
+    if (cat && same(forum, target, cat.urls.members) && !/#|\/profile\//u.test(who)) {
       const webid = await forum.webIdOf(who).catch(() => null);
       if (!webid) throw new Error(`no WebID could be found for ${who}`);
       return applySettings(forum, { ...activity, object: webid });
     }
-    if (cat && target === cat.urls.members) {
+    if (cat && same(forum, target, cat.urls.members)) {
       const named = { ...(cfg().memberWebIds || {}) };
       const held = new Set(named[cat.slug] || []);
       if (on) held.add(who); else held.delete(who);
@@ -138,7 +146,16 @@ export async function applySettings(forum, activity) {
       save({ memberWebIds: named, republish: true, reprovision: true });
       return { category: cat.slug, members: held.size };
     }
-    if (target === site.mod) {
+    // Who may read the queue, named the way every moderator is named: by
+    // their Fediverse actor. The rule that holds the queue is the pod's own
+    // and can only name a WebID, so the pod behind the actor is looked up
+    // here; an account with no pod cannot be granted it at all.
+    if (same(forum, target, site.mod) && !/#|\/profile\//u.test(who)) {
+      const webid = await forum.webIdOf(who).catch(() => null);
+      if (!webid) throw new Error(`no WebID could be found for ${who}`);
+      return applySettings(forum, { ...activity, object: webid });
+    }
+    if (same(forum, target, site.mod)) {
       const held = new Set(cfg().moderatorWebIds || []);
       if (on) held.add(who); else held.delete(who);
       save({ moderatorWebIds: [...held], republish: true, reprovision: true });

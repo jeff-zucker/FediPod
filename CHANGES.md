@@ -1,5 +1,27 @@
 # Changes
 
+## 2026-09-19 (a moderator is named by their handle — version 1.16.1)
+
+**The forum's Moderators panel takes a handle.** Type `@mei@their.server` and
+press Add: the page asks that server who it means, and the forum is told both
+things that follow from it — who may ask for moderation, and whose pod the rule
+on the moderators' queue names. One field does both, where there were two
+asking for addresses you had to know. A handle whose server does not know it is
+refused at the panel rather than accepted and quietly ignored.
+
+An account with no pod behind it, a Mastodon one for instance, can moderate and
+have its asks acted on, but cannot open the queue: that queue is held under the
+pod's own access rule, and a rule names a person by the WebID of their pod. The
+panel says so.
+
+The list of who moderates now asks each account what it calls itself instead of
+reading a name out of its web address, so a pod moderator reads as
+`@mei@mei.pod.example`.
+
+**A setting asked for through a Gateway is acted on.** The forum reads the
+address an ask names in the same space as its own, so asking from a page served
+at fedipod.net means what asking at the pod means.
+
 ## 2026-09-18 (a choice of clients, and a forum that takes a moderator's word — version 1.16.0)
 
 **Two clients.** Sengi joins Phanpy, and it is the one you get by default. The
