@@ -48,8 +48,14 @@ signing key" on that screen and use the password you use now.
 
 ## What you can do
 
-The client is [Phanpy](https://github.com/cheeaun/phanpy) (MIT, by Chee Aun),
-served by fedipod.net. Through it you follow and unfollow, post, reply,
+<!-- CLAUDE 2026-09-18 — two clients and the switch; delete these markers when done -->
+There are two clients, both served by fedipod.net:
+[Sengi](https://github.com/NicolasConstant/sengi) (MIT, by Nicolas Constant),
+which you get by default, and [Phanpy](https://github.com/cheeaun/phanpy)
+(MIT, by Chee Aun). The links at the top right of the page switch between
+them, and your browser stays with whichever you chose. Sengi is patched —
+`sengi/PATCHES.md` says how and why, and every upgrade means re-applying them.
+<!-- /CLAUDE --> Through it you follow and unfollow, post, reply,
 favourite, boost, attach media, edit and delete. Content warnings, polls with
 up to four options and one or several answers, all four visibility levels, a
 conversations view for direct messages, bookmarks, lists, keyword filters,

@@ -4,6 +4,13 @@ Drop any static Mastodon web client dist here as `ui/<name>/` and the agent
 serves it at `https://<handle>.localhost:8030/<name>/`, same-origin with the API —
 no CORS, no mixed content. Phanpy stays at `/`.
 
+<!-- CLAUDE 2026-09-18 — the browser build carries two; delete these markers when done -->
+The browser build at fedipod.net does the same thing differently: it serves
+Sengi at `/sengi/` and Phanpy at `/app/`, and each has its own shell page
+under `/admin/` naming the one it frames. Which one the owner gets is their
+browser's own choice, kept there and nowhere else.
+<!-- /CLAUDE -->
+
 `/admin/` is taken: that is the agent's own surface — the record at `/admin/`,
 first-run setup at `/admin/setup/`, the framed client view at
 `/admin/client/` — served from `web/` rather than from here,

@@ -9841,7 +9841,9 @@ function actorDoc({
   return {
     "@context": context,
     id: urls.actor,
-    type: kind === "group" ? "Group" : "Person",
+    // A group is a community; an application is a service that speaks for a
+    // site rather than a person — the actor a forum publishes for itself.
+    type: kind === "group" ? "Group" : kind === "application" ? "Application" : "Person",
     ...approveJoins ? { manuallyApprovesFollowers: true } : {},
     ...assertionKey ? { assertionMethod: [{
       id: assertionKeyId(urls),
@@ -23637,7 +23639,7 @@ var require_constants = __commonJS({
   "node_modules/jsonld/lib/constants.js"(exports, module2) {
     "use strict";
     var RDF5 = "http://www.w3.org/1999/02/22-rdf-syntax-ns#";
-    var XSD2 = "http://www.w3.org/2001/XMLSchema#";
+    var XSD3 = "http://www.w3.org/2001/XMLSchema#";
     module2.exports = {
       // TODO: Deprecated and will be removed later. Use LINK_HEADER_CONTEXT.
       LINK_HEADER_REL: "http://www.w3.org/ns/json-ld#context",
@@ -23653,11 +23655,11 @@ var require_constants = __commonJS({
       RDF_JSON_LITERAL: RDF5 + "JSON",
       RDF_OBJECT: RDF5 + "object",
       RDF_LANGSTRING: RDF5 + "langString",
-      XSD: XSD2,
-      XSD_BOOLEAN: XSD2 + "boolean",
-      XSD_DOUBLE: XSD2 + "double",
-      XSD_INTEGER: XSD2 + "integer",
-      XSD_STRING: XSD2 + "string"
+      XSD: XSD3,
+      XSD_BOOLEAN: XSD3 + "boolean",
+      XSD_DOUBLE: XSD3 + "double",
+      XSD_INTEGER: XSD3 + "integer",
+      XSD_STRING: XSD3 + "string"
     };
   }
 });
@@ -34199,6 +34201,61 @@ var require_src = __commonJS({
     }
   }
 });
+
+// web/app/idb-kv.mjs
+var DB = "fedipod-accounts";
+function open() {
+  return new Promise((res, rej) => {
+    const r = indexedDB.open(DB, 1);
+    r.onupgradeneeded = () => {
+      const db = r.result;
+      if (!db.objectStoreNames.contains("kv")) db.createObjectStore("kv");
+    };
+    r.onsuccess = () => res(r.result);
+    r.onerror = () => rej(r.error);
+  });
+}
+async function kvGet(key) {
+  const db = await open();
+  return new Promise((res, rej) => {
+    const rq = db.transaction("kv", "readonly").objectStore("kv").get(key);
+    rq.onsuccess = () => res(rq.result ?? null);
+    rq.onerror = () => rej(rq.error);
+  });
+}
+async function kvAll() {
+  const db = await open();
+  return new Promise((res, rej) => {
+    const out = {};
+    const cur = db.transaction("kv", "readonly").objectStore("kv").openCursor();
+    cur.onsuccess = () => {
+      const c = cur.result;
+      if (c) {
+        out[c.key] = c.value;
+        c.continue();
+      } else res(out);
+    };
+    cur.onerror = () => rej(cur.error);
+  });
+}
+async function kvPut(key, val) {
+  const db = await open();
+  return new Promise((res, rej) => {
+    const tx = db.transaction("kv", "readwrite");
+    tx.objectStore("kv").put(val, key);
+    tx.oncomplete = () => res();
+    tx.onerror = () => rej(tx.error);
+  });
+}
+async function kvDel(key) {
+  const db = await open();
+  return new Promise((res, rej) => {
+    const tx = db.transaction("kv", "readwrite");
+    tx.objectStore("kv").delete(key);
+    tx.oncomplete = () => res();
+    tx.onerror = () => rej(tx.error);
+  });
+}
 
 // web/app/agent.mjs
 init_wire();
@@ -56033,8 +56090,40 @@ function isListHead(term3, ctx) {
   if (term3.termType !== "BlankNode" && term3.termType !== "NamedNode") return false;
   return !!ctx.bySubject.get(term3.value)?.has(RDF_FIRST);
 }
+var XSD2 = "http://www.w3.org/2001/XMLSchema#";
+var NUMERIC = new Set([
+  "integer",
+  "decimal",
+  "double",
+  "float",
+  "long",
+  "int",
+  "short",
+  "byte",
+  "nonNegativeInteger",
+  "positiveInteger",
+  "nonPositiveInteger",
+  "negativeInteger",
+  "unsignedLong",
+  "unsignedInt",
+  "unsignedShort",
+  "unsignedByte"
+].map((t) => XSD2 + t));
+function fromLiteral(term3) {
+  const type = term3.datatype?.value || "";
+  if (type === `${XSD2}boolean`) {
+    if (term3.value === "true" || term3.value === "1") return true;
+    if (term3.value === "false" || term3.value === "0") return false;
+    return term3.value;
+  }
+  if (NUMERIC.has(type)) {
+    const n = Number(term3.value);
+    return Number.isFinite(n) ? n : term3.value;
+  }
+  return term3.value;
+}
 function toValue(term3, ctx, depth, path) {
-  if (term3.termType === "Literal") return term3.value;
+  if (term3.termType === "Literal") return fromLiteral(term3);
   if (isListHead(term3, ctx)) return readList(term3.value, ctx, depth, path);
   const preds = ctx.bySubject.get(term3.value);
   if (preds && preds.size) return makeView(term3.value, ctx, depth + 1, path);
@@ -56148,6 +56237,17 @@ function groundContext(input) {
   if (!kept.some((c) => c === AS_CTX)) kept.unshift(AS_CTX);
   return { ...input, "@context": kept.length === 1 ? kept[0] : kept };
 }
+function carryRemovals(input, view) {
+  if (!input || typeof input !== "object" || !view || typeof view !== "object") return view;
+  for (const [key, value] of Object.entries(input)) {
+    if (value === null) {
+      if (!(key in view)) view[key] = null;
+    } else if (key === "object" && typeof value === "object" && !Array.isArray(value) && view.object && typeof view.object === "object" && !Array.isArray(view.object)) {
+      carryRemovals(value, view.object);
+    }
+  }
+  return view;
+}
 async function readLenient(raw) {
   let input = null;
   try {
@@ -56158,12 +56258,12 @@ async function readLenient(raw) {
   const root = typeof own === "string" && /^https?:\/\//u.test(own) ? own : null;
   try {
     const { doc, graph: graph2 } = await parseAS2(raw);
-    return { doc, graph: graph2, view: graphView(graph2, { root }), degraded: null };
+    return { doc, graph: graph2, view: carryRemovals(input, graphView(graph2, { root })), degraded: null };
   } catch (e) {
     if (!input || typeof input !== "object") return { doc: null, graph: null, view: null, degraded: e.message };
     try {
       const { graph: graph2 } = await parseAS2(groundContext(input));
-      return { doc: input, graph: graph2, view: graphView(graph2, { root }), degraded: e.message };
+      return { doc: input, graph: graph2, view: carryRemovals(input, graphView(graph2, { root })), degraded: e.message };
     } catch (inner) {
       return { doc: input, graph: null, view: null, degraded: `${e.message}; grounded read also failed: ${inner.message}` };
     }
@@ -57052,7 +57152,16 @@ var Publisher = class {
   // Every actor document this identity publishes, from one place: the
   // profile publish and a Move both write it, and a Move that rebuilt it
   // by hand dropped the gateway inbox, the outbox door and the collections.
-  actorDocFor({ priv = false, moderators = null, inbox = null, movedTo = this.config.movedTo || null } = {}) {
+  // `clientOrigin` is overridden only by the agent serving a client its own
+  // local actor: standalone, the published document cannot name a loopback
+  // address, but a client already talking to that address can be told it.
+  actorDocFor({
+    priv = false,
+    moderators = null,
+    inbox = null,
+    movedTo = this.config.movedTo || null,
+    clientOrigin = this.clientOrigin
+  } = {}) {
     const { urls } = this;
     return actorDoc({
       urls,
@@ -57077,11 +57186,11 @@ var Publisher = class {
       // The agent's own outbox endpoint, where it is reachable: a client
       // following the actor must arrive somewhere that will take a write.
       // Otherwise the Gateway's outbox door, when one is attached.
-      outbox: this.clientOrigin ? `${this.clientOrigin}ap/outbox` : this.gatewayOutbox(),
+      outbox: clientOrigin ? `${clientOrigin}ap/outbox` : this.gatewayOutbox(),
       // How a client-to-server client finds the way in with nothing configured
       // by hand. Advertised only where the surface is publicly reachable.
-      oauthAuthorize: this.clientOrigin ? `${this.clientOrigin}oauth/authorize` : null,
-      oauthToken: this.clientOrigin ? `${this.clientOrigin}oauth/token` : null
+      oauthAuthorize: clientOrigin ? `${clientOrigin}oauth/authorize` : null,
+      oauthToken: clientOrigin ? `${clientOrigin}oauth/token` : null
     });
   }
   // The human half: a page a browser can open and follow from. The actor
@@ -57125,7 +57234,7 @@ var Publisher = class {
     const moderators = (this.config.moderators || []).length ? urls.moderators : null;
     const gw = this.config.gateway;
     const gwActive = gw && gw.url && gw.mode && gw.mode !== "off";
-    const actorDoc2 = this.actorDocFor({ priv, moderators, inbox: gwActive ? gw.url : null });
+    const actorDoc2 = this.actorDocFor({ priv, moderators, inbox: gwActive ? gw.url : this.config.inboxUrl || null });
     const surface = node_crypto_default.createHash("sha256").update(JSON.stringify({
       actor: actorDoc2,
       handle: this.config.handle,
@@ -57139,18 +57248,20 @@ var Publisher = class {
       this.log("profile unchanged \u2014 nothing republished");
       return { unreachable: [], updated: 0, skipped: true };
     }
-    await writeWebfinger(
-      this.remote,
-      urls,
-      jrd({ handle: this.config.handle, host, actor: urls.actor, page: urls.profileHtml })
-    );
-    await writeHostMeta(this.remote, urls, hostMeta(urls.base));
-    const nodeinfoDocUrl = urls.home + "ap/nodeinfo-2.0";
-    const localPosts = this.store.getStatuses().filter((s) => s.kind === "post").length;
-    await writeNodeinfo(this.remote, urls, {
-      pointer: nodeinfoPointer(nodeinfoDocUrl),
-      doc: nodeinfoDoc({ version: AGENT_VERSION, localPosts })
-    });
+    if (!this.config.forum) {
+      await writeWebfinger(
+        this.remote,
+        urls,
+        jrd({ handle: this.config.handle, host, actor: urls.actor, page: urls.profileHtml })
+      );
+      await writeHostMeta(this.remote, urls, hostMeta(urls.base));
+      const nodeinfoDocUrl = urls.home + "ap/nodeinfo-2.0";
+      const localPosts = this.store.getStatuses().filter((s) => s.kind === "post").length;
+      await writeNodeinfo(this.remote, urls, {
+        pointer: nodeinfoPointer(nodeinfoDocUrl),
+        doc: nodeinfoDoc({ version: AGENT_VERSION, localPosts })
+      });
+    }
     const actor = actorDoc2;
     await write(this.remote, urls, actor);
     if (moderators) {
@@ -57161,7 +57272,8 @@ var Publisher = class {
       );
     }
     if (gwActive) await this.publishGatewayPolicy();
-    try {
+    if (this.config.forum) {
+    } else try {
       const wrote = await linkInWebIdProfile(this.remote, {
         actorUrl: urls.actor,
         accountName: `@${this.config.handle}@${host}`,
@@ -57227,8 +57339,8 @@ var Publisher = class {
   async verifyPublicSurface() {
     const { urls } = this;
     const targets = [
-      ["webfinger", urls.webfinger],
-      ["host-meta", urls.base + ".well-known/host-meta"],
+      // Discovery documents are the pod's, not a forum category's (see publishProfile).
+      ...this.config.forum ? [] : [["webfinger", urls.webfinger], ["host-meta", urls.base + ".well-known/host-meta"]],
       ["actor", urls.actor],
       ["notes", urls.notes],
       ["followers", urls.followers],
@@ -57531,8 +57643,18 @@ function trimActivity(a) {
     if (v) out[k] = String(v).slice(0, 2048);
   }
   const obj = idOf3(a.object);
-  if (obj) out.object = String(obj).slice(0, 2048);
-  else if (a.object && typeof a.object === "object" && a.object.type) {
+  if (obj) {
+    const asked = a.object && typeof a.object === "object" ? a.object : null;
+    const said = {};
+    if (asked) {
+      if (typeof asked.name === "string") said.name = asked.name.slice(0, 300);
+      if ("closed" in asked) {
+        const v = asked.closed;
+        said.closed = v === "false" ? false : v === "true" ? true : typeof v === "string" ? v.slice(0, 64) : !!v;
+      }
+    }
+    out.object = Object.keys(said).length ? { id: String(obj).slice(0, 2048), ...said } : String(obj).slice(0, 2048);
+  } else if (a.object && typeof a.object === "object" && a.object.type) {
     out.object = { type: String(a.object.type).slice(0, 64) };
   }
   return out;
@@ -57875,6 +57997,7 @@ async function isGone(intake, url) {
 
 // lib/core/intake/group.mjs
 function isModerationAsk(intake, activity) {
+  if (intake.isModerationAskExtra?.(activity)) return true;
   if (activity.type === "Block") return true;
   if (activity.type === "Undo") {
     return typeof activity.object === "object" && activity.object?.type === "Block";
@@ -57924,12 +58047,19 @@ async function amplify(intake, noteId, { approved = false, activity = null } = {
   const s = intake.store.getStatuses().find((x) => x.noteId === noteId);
   if (!s) return;
   if (s.announcedAt) return;
-  if (s.direct || s.nonPublic) {
+  if (s.direct || s.nonPublic && !intake.config.private) {
     intake.log(`not amplified \u2014 ${noteId} was not addressed publicly, and a group never widens a post's audience`);
     return;
   }
   const contacts = intake.store.getContacts();
   if (!contacts.followers.some((f) => f.actor === s.actor)) {
+    if (intake.onStranger) {
+      const held2 = await intake.onStranger({ noteId, actor: s.actor, activity }).catch(() => false);
+      if (held2) {
+        intake.log(`held for a moderator \u2014 ${s.actor} is not a member`);
+        return;
+      }
+    }
     intake.log(`not amplified \u2014 ${s.actor} is not a member`);
     return;
   }
@@ -57976,6 +58106,9 @@ async function amplify(intake, noteId, { approved = false, activity = null } = {
   await intake.publisher.recordOutbox(act);
   intake.store.setPending(intake.store.getPending().filter((p) => p.noteId !== noteId));
   intake.log(`amplified ${noteId} \u2192 ${inboxes.length} inbox(es)`);
+  if (intake.onCarried) {
+    await intake.onCarried({ noteId, actor: s.actor, activity: act, sent: activity }).catch((e) => intake.log(`after the carry of ${noteId}: ${e.message}`));
+  }
   await intake.bskyGroup?.mirrorCarry(s).catch((e) => intake.log(`bluesky mirror of the carry failed: ${e.message}`));
 }
 async function isCoMember(intake, actor) {
@@ -58250,6 +58383,9 @@ async function onDelete(intake, activity, actor) {
   }
   const s = intake.store.getStatuses().find((x) => x.noteId === objectId);
   if (s) await intake.forget(s);
+  if (s && intake.onCarriedGone) {
+    await intake.onCarriedGone({ noteId: objectId, actor }).catch((e) => intake.log(`carried gone ${objectId}: ${e.message}`));
+  }
   intake.log(`deleted upstream: ${objectId}`);
 }
 async function onUpdate(intake, activity, actor) {
@@ -58292,6 +58428,9 @@ async function onUpdate(intake, activity, actor) {
       poll: { ...freshPoll, voted: !!s.poll?.voted, ownVotes: s.poll?.ownVotes || [] }
     } : {}
   });
+  if (intake.onCarriedEdit) {
+    await intake.onCarriedEdit({ noteId: objectId, actor, note }).catch((e) => intake.log(`carried edit ${objectId}: ${e.message}`));
+  }
   intake.log(`edited upstream: ${objectId}`);
 }
 async function onReject(intake, activity, actor, { trusted = false } = {}) {
@@ -58502,6 +58641,7 @@ async function ingestNote(intake, objectId, actor, { via, inline = null } = {}) 
   const content = titledContent2(note);
   const author = authorOf(note, actor);
   if (!author) return `object names an author its origin does not vouch for (${objectId})`;
+  intake.recentNotes?.set(note.id, note);
   if (intake.store.isBlocked(author)) return `blocked author (${author})`;
   if (!via && !intake.concernsUs(note, author)) {
     return `the note its own server serves does not address us (${objectId})`;
@@ -63608,6 +63748,34 @@ var activitystreams_default2 = `# activitystreams.ttl \u2014 shapes for the Acti
     sh:minCount 1 ;
     sh:maxCount 1 ;
   ] .
+
+<#Update>
+  a sh:NodeShape ;
+  sh:targetClass as:Update ;
+  sh:name "Update" ;
+  sh:description "A change to the object it names, carrying the parts that are now different." ;
+  sh:property [
+    sh:path as:actor ;
+    sh:name "actor" ;
+    sh:description "The one that performed the activity." ;
+    sh:nodeKind sh:BlankNodeOrIRI ;
+    sh:minCount 1 ;
+    sh:maxCount 1 ;
+  ] ;
+  sh:property [
+    sh:path as:object ;
+    sh:name "object" ;
+    sh:description "The thing the activity is about." ;
+    sh:minCount 1 ;
+    sh:maxCount 1 ;
+  ] ;
+  sh:property [
+    sh:path ( as:object as:closed ) ;
+    sh:name "closed" ;
+    sh:description "The time the object stopped taking anything more." ;
+    sh:datatype xsd:dateTime ;
+    sh:maxCount 1 ;
+  ] .
 `;
 
 // web/app/shims/shapes-text.mjs
@@ -63636,6 +63804,18 @@ function asTerm(q) {
   };
   return rdf3.quad(term3(q.subject), term3(q.predicate), term3(q.object));
 }
+var SH_NAME = "http://www.w3.org/ns/shacl#name";
+function pathName(r) {
+  const direct = r.path?.value ?? null;
+  if (direct && /[#/]/u.test(direct)) return direct;
+  const shape = r.sourceShape;
+  if (shape) {
+    for (const q of shacl().$shapes?.dataset ?? []) {
+      if (q.subject.equals(shape) && q.predicate.value === SH_NAME) return q.object.value;
+    }
+  }
+  return direct;
+}
 async function checkShapes(quads) {
   if (!Array.isArray(quads) || quads.length === 0) return null;
   let report;
@@ -63653,7 +63833,12 @@ async function checkShapes(quads) {
     conforms: false,
     results: report.results.slice(0, 10).map((r) => ({
       focus: r.focusNode?.value ?? null,
-      path: r.path?.value ?? null,
+      // A SEQUENCE path — `( as:object as:closed )` — is an RDF list, so its
+      // node is blank and `.value` is a generated label like "n3-13". Reported
+      // as that, the record named nothing a reader could act on. The shape's
+      // own `sh:name` is what it is called, so that is used when the path
+      // cannot name itself.
+      path: pathName(r),
       message: r.message?.[0]?.value ?? String(r.sourceConstraintComponent?.value ?? "does not fit the shape"),
       shape: r.sourceShape?.value ?? null
     }))
@@ -63920,6 +64105,7 @@ var Intake = class {
     }
     this.lastDrain = (/* @__PURE__ */ new Date()).toISOString();
     this.lastDrainAtMs = Date.now();
+    if (this.afterDrain) setTimeout(() => this.afterDrain(), 0);
     this._pruneAttempts();
     let all;
     try {
@@ -64129,6 +64315,9 @@ var Intake = class {
         return this.onAddRemove(activity, actor);
       case "Block":
         return this.onBlock(activity, actor, { trusted });
+      case "Flag":
+        if (this.onReport) return this.onReport(activity, actor, { trusted });
+        return;
       default:
         this.log(`ignored ${activity.type} from ${actor}`);
     }
@@ -64723,6 +64912,7 @@ async function pinStatus(agent2, s, pinned) {
 init_wire();
 var MAX_BODY = 512 * 1024;
 var MAX_INBOX_PAGE = 500;
+var MAX_OUTBOX_PAGE = 50;
 var ACTIVITY_TYPES = /* @__PURE__ */ new Set([
   "Create",
   "Update",
@@ -64758,10 +64948,12 @@ function readBody(req) {
   });
 }
 var C2S = class {
-  constructor({ agent: agent2, log: log2 = console.log, auth }) {
+  constructor({ agent: agent2, log: log2 = console.log, auth, scheme = null, mount = "" }) {
     this.agent = agent2;
     this.log = log2;
     this.auth = auth;
+    this.scheme = scheme;
+    this.mount = mount;
   }
   get store() {
     return this.agent.store;
@@ -64848,6 +65040,79 @@ var C2S = class {
       orderedItems: kept.map((k) => k.activity)
     });
   }
+  // The actor a client-to-server client on this machine reads. The same
+  // document the pod holds, but for the fields naming where a write goes —
+  // the outbox and the two OAuth endpoints — and for `id`, which names this
+  // address so the client files its credential here and comes back. The pod's
+  // id stays on as an alias; the two are one identity.
+  // What this agent calls itself, to the client that just asked. The Host
+  // passed the Authorities firewall before any route ran, so whichever alias
+  // the client used is one this agent answers on. The scheme is read off the
+  // connection unless the caller named one: only the Server passes a scheme,
+  // and standalone this listener is its own TLS.
+  localOrigin(req) {
+    const host = req.headers.host;
+    if (!host) return null;
+    const scheme = this.scheme || (req.socket?.encrypted || req.headers["x-forwarded-proto"] === "https" ? "https" : "http");
+    return `${scheme}://${host}${this.mount}/`;
+  }
+  /**
+   * The owner's own outbox, from what this agent recorded. The pod holds the
+   * published copy and it stays the canonical one; this is served only where
+   * that copy cannot be read by the client asking.
+   */
+  sendLocalOutbox(res, url, origin) {
+    const id = `${origin}ap/outbox`;
+    const outbox = this.store.read("outbox.json", []);
+    const page2 = url?.searchParams?.get("page") || null;
+    const ct = { "content-type": "application/activity+json; charset=utf-8" };
+    if (!page2) {
+      return this.send(res, 200, {
+        "@context": AS_CTX,
+        id,
+        type: "OrderedCollection",
+        totalItems: outbox.length,
+        ...outbox.length ? { first: `${id}?page=1` } : { orderedItems: [] }
+      }, ct);
+    }
+    const n = Number(page2);
+    if (!Number.isInteger(n) || n < 1) {
+      return this.send(res, 400, { error: "page is a whole number from 1" });
+    }
+    const start = (n - 1) * MAX_OUTBOX_PAGE;
+    const items = outbox.slice(start, start + MAX_OUTBOX_PAGE);
+    return this.send(res, 200, {
+      "@context": AS_CTX,
+      id: `${id}?page=${n}`,
+      type: "OrderedCollectionPage",
+      partOf: id,
+      ...start + items.length < outbox.length ? { next: `${id}?page=${n + 1}` } : {},
+      // A post is recorded by its object id and published as the Create beside
+      // it — the same mapping the pod's copy uses, from the same helper.
+      orderedItems: items.map(outboxWireItem)
+    }, ct);
+  }
+  sendLocalActor(req, res, origin) {
+    const pub = this.agent.publisher;
+    const cfg = pub.config || {};
+    const gw = cfg.gateway;
+    const gwActive = gw && gw.url && gw.mode && gw.mode !== "off";
+    const doc = pub.actorDocFor({
+      inbox: gwActive ? gw.url : cfg.inboxUrl || null,
+      clientOrigin: origin
+    });
+    const canonical2 = doc.id;
+    doc.id = `${origin}ap/actor`;
+    doc.alsoKnownAs = [.../* @__PURE__ */ new Set([...doc.alsoKnownAs || [], canonical2])];
+    const body = JSON.stringify(doc);
+    res.writeHead(200, {
+      "content-type": "application/activity+json; charset=utf-8",
+      "cache-control": "no-store",
+      "content-length": Buffer.byteLength(body)
+    });
+    res.end(req.method === "HEAD" ? void 0 : body);
+    return true;
+  }
   async handle(req, res, pathname, url) {
     if (pathname !== "/ap/outbox" && pathname !== "/ap/actor" && pathname !== "/ap/inbox") return false;
     if (req.method === "OPTIONS") {
@@ -64867,6 +65132,9 @@ var C2S = class {
       return this.sendInbox(res, url);
     }
     if (req.method === "GET" || req.method === "HEAD") {
+      const local = this.agent.publisher?.clientOrigin ? null : this.localOrigin(req);
+      if (local && pathname === "/ap/actor") return this.sendLocalActor(req, res, local);
+      if (local && pathname === "/ap/outbox") return this.sendLocalOutbox(res, url, local);
       const target = pathname === "/ap/actor" ? this.urls.actor : this.urls.outbox;
       res.writeHead(303, { location: target, "cache-control": "no-store" });
       res.end();
@@ -65142,11 +65410,21 @@ var RENEW_MS = 9e4;
 var JITTER = () => 0.85 + Math.random() * 0.3;
 var UNREADABLE = /* @__PURE__ */ Symbol("lease-unreadable");
 var Lease = class {
-  constructor({ url, fetchImpl, log: log2 = console.log }) {
+  // `id` names the HOLDER, and acquire() lets a holder reclaim its own lease
+  // without waiting for the TTL — so whether it is stable decides whether a
+  // restart is the same agent coming back or a second one arriving. A process
+  // that is gone for good wants a new one each time; a browser does not, since
+  // its agent lives in a service worker the browser is free to kill and restart
+  // whenever it likes. Left to the default, every one of those restarts looked
+  // like another device and asked the owner to take over their own account —
+  // which is what switching between the two clients did, because that is a
+  // navigation and a navigation can take the worker with it. The browser build
+  // passes one it keeps.
+  constructor({ url, fetchImpl, log: log2 = console.log, id = null }) {
     this.url = url;
     this.fetchImpl = fetchImpl;
     this.log = log2;
-    this.id = node_crypto_default.randomUUID();
+    this.id = id || node_crypto_default.randomUUID();
     this.stopped = false;
     this.timer = null;
     this.heldUntil = 0;
@@ -65461,6 +65739,7 @@ function readBody2(req) {
       const ct = String(req.headers["content-type"] || "");
       try {
         if (ct.includes("application/json")) return resolve2(data ? JSON.parse(data) : {});
+        if (ct.includes("multipart/form-data")) return resolve2(textFields(data, ct));
         const form = new URLSearchParams(data);
         const out = {};
         for (const key of new Set(form.keys())) {
@@ -65472,6 +65751,76 @@ function readBody2(req) {
       }
     });
     req.on("error", reject);
+  });
+}
+function textFields(data, contentType) {
+  const m = /boundary=(?:"([^"]+)"|([^;]+))/.exec(contentType);
+  if (!m) return {};
+  const out = {};
+  for (const part of data.split("--" + (m[1] || m[2]).trim())) {
+    const sep = part.indexOf("\r\n\r\n");
+    if (sep < 0) continue;
+    const head = part.slice(0, sep);
+    const name = /name="([^"]*)"/.exec(head)?.[1];
+    if (!name || /filename="/.test(head)) continue;
+    const value = part.slice(sep + 4).replace(/\r\n$/, "");
+    if (name.endsWith("[]")) (out[name] ||= []).push(value);
+    else out[name] = value;
+  }
+  return out;
+}
+function readMultipart(req, limit = 12e6) {
+  return new Promise((resolve2, reject) => {
+    const chunks = [];
+    let n = 0;
+    req.on("data", (c) => {
+      n += c.length;
+      if (n > limit) {
+        reject(new Error("upload too large"));
+        req.destroy();
+        return;
+      }
+      chunks.push(c);
+    });
+    req.on("error", reject);
+    req.on("end", () => {
+      try {
+        const m = /boundary=(?:"([^"]+)"|([^;]+))/.exec(String(req.headers["content-type"] || ""));
+        if (!m) return resolve2({ fields: {}, file: null });
+        const buf = Buffer.concat(chunks);
+        const boundary = Buffer.from("--" + (m[1] || m[2]).trim());
+        const fields = {};
+        const files = {};
+        let file = null;
+        let i = buf.indexOf(boundary);
+        while (i >= 0) {
+          const start = i + boundary.length;
+          if (buf.slice(start, start + 2).toString() === "--") break;
+          const next = buf.indexOf(boundary, start);
+          if (next < 0) break;
+          const part = buf.slice(start + 2, next - 2);
+          const sep = part.indexOf("\r\n\r\n");
+          if (sep >= 0) {
+            const head = part.slice(0, sep).toString();
+            const body = part.slice(sep + 4);
+            const name = /name="([^"]*)"/.exec(head)?.[1];
+            const filename = /filename="([^"]*)"/.exec(head)?.[1];
+            if (filename !== void 0) {
+              file = {
+                filename,
+                contentType: /content-type:\s*([^\r\n]+)/i.exec(head)?.[1]?.trim() || "application/octet-stream",
+                data: body
+              };
+              if (name) files[name] = file;
+            } else if (name) fields[name] = body.toString();
+          }
+          i = next;
+        }
+        resolve2({ fields, file, files });
+      } catch (e) {
+        reject(e);
+      }
+    });
   });
 }
 
@@ -66149,6 +66498,7 @@ var BskyFeed = class {
 
 // lib/client/masto/render.mjs
 var TRANSPARENT_PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
+var DEFAULT_AVATAR = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAABd0lEQVR42u3ZoW4CQRDG8Xk6NBLbVCJ5gBpMTQ2iBlFR29RXNsFhz1JHXV9hydfkEkoobW5n2F34i0kIHMfN73ZvdwYbTabpmsMAAAAAAAAAAAAAAAAAAACiY3wzS/ePz+n1bZW6zTZ9fH59h17rPX2mYy4OQEktnl5+JP1b6Bgdey6IcIDb2Ty9r7s/Ez8MfUffbRpACfznrp8aDdEIFjnsh9z5YyMhcjqEAWge5ybfh87VFIDuWM7QPzYVokZBCICWM6/k+9A5mwHQmu4NoHM2A+A5/PenQTMA3sn3AQBTgIcgyyAbIbbCFEOUwzREaInRFKUtDgAAFQLcPSxDCqH9Z4V+o0oAXVhU4ofhiWCtJe+NYKV3e6V3idkAHvv9nDqhKIBnxVeqUrRaav5SvQKrqetTols0GGDdbaoB0LWcFUBP31qS72PoimCtD//caWC1tL1Ltc2ttbXfe08wCKC25HP+OgMAAAAAAAAAAAAAAAAArhNgB1PE/x/JOiuNAAAAAElFTkSuQmCC";
 var selfIcon = (api, self2, cached) => (self2 ? api.store.getConfig()?.icon : null) || cached.icon;
 function selfAccount(api) {
   return api.account(api.urls.actor, { selfAcct: publicHandle(api.store.getConfig()) });
@@ -66186,8 +66536,8 @@ function account(api, actorUrl, { selfAcct } = {}) {
     note: (self2 ? api.store.getConfig()?.summary : cached.summary) || "",
     url: actorUrl,
     uri: actorUrl,
-    avatar: selfIcon(api, self2, cached) || TRANSPARENT_PNG,
-    avatar_static: selfIcon(api, self2, cached) || TRANSPARENT_PNG,
+    avatar: selfIcon(api, self2, cached) || DEFAULT_AVATAR,
+    avatar_static: selfIcon(api, self2, cached) || DEFAULT_AVATAR,
     header: (self2 ? api.store.getConfig()?.image : null) || TRANSPARENT_PNG,
     header_static: (self2 ? api.store.getConfig()?.image : null) || TRANSPARENT_PNG,
     // A remote actor's counts are whatever its own collections said when we
@@ -66640,7 +66990,6 @@ var STUBS = new Map(Object.entries({
   "/api/v1/custom_emojis": [],
   "/api/v1/announcements": [],
   "/api/v1/instance/peers": [],
-  "/api/v1/trends/tags": [],
   "/api/v1/trends/links": [],
   "/api/v2/suggestions": [],
   "/api/v1/preferences": {}
@@ -66677,9 +67026,9 @@ function instanceTitle(api) {
   const cfg = api.store.getConfig();
   return cfg?.handle ? `@${cfg.handle}@${api.host}` : "FediPod";
 }
-function tagObject(api, name, following, req) {
+function tagObject(api, name, following, req, history = []) {
   const host = req?.headers?.host || api.host;
-  return { name, url: `https://${host}/tags/${name}`, history: [], following: !!following };
+  return { name, url: `https://${host}/tags/${name}`, history, following: !!following };
 }
 function instanceBlurb(api) {
   const kind = api.store.getConfig()?.kind === "group" ? "group" : "actor";
@@ -66743,124 +67092,15 @@ async function handle2(api, ctx) {
 // lib/client/masto/accounts.mjs
 var accounts_exports = {};
 __export(accounts_exports, {
-  handle: () => handle4
+  handle: () => handle3
 });
 init_node_crypto();
 
 // lib/pod/media.mjs
 var write6 = (pod, url, bytes, contentType) => pod.put(url, bytes, contentType);
 
-// lib/client/masto/media.mjs
-var media_exports = {};
-__export(media_exports, {
-  attachmentType: () => attachmentType,
-  extensionFor: () => extensionFor,
-  handle: () => handle3,
-  readMultipart: () => readMultipart
-});
-init_node_crypto();
-var ATTACHMENT_KINDS = /* @__PURE__ */ new Set(["image", "video", "audio"]);
-var NEVER = /* @__PURE__ */ new Set(["image/svg+xml", "image/svg"]);
-var OPAQUE = "application/octet-stream";
-function attachmentType(claimed) {
-  const t = String(claimed || "").split(";")[0].trim().toLowerCase();
-  if (!/^[a-z0-9.+-]+\/[a-z0-9.+-]+$/.test(t) || NEVER.has(t)) return OPAQUE;
-  return ATTACHMENT_KINDS.has(t.split("/")[0]) ? t : OPAQUE;
-}
-function extensionFor(mediaType, filename = "") {
-  if (mediaType === OPAQUE) return "bin";
-  const sub = mediaType.split("/")[1].replace(/[^a-z0-9]/g, "");
-  const given = String(filename || "").includes(".") ? filename.split(".").pop().toLowerCase().replace(/[^a-z0-9]/g, "") : "";
-  return given && (given === sub || sub.startsWith(given) || given.startsWith(sub)) ? given : sub || "bin";
-}
-function readMultipart(req, limit = 12e6) {
-  return new Promise((resolve2, reject) => {
-    const chunks = [];
-    let n = 0;
-    req.on("data", (c) => {
-      n += c.length;
-      if (n > limit) {
-        reject(new Error("upload too large"));
-        req.destroy();
-        return;
-      }
-      chunks.push(c);
-    });
-    req.on("error", reject);
-    req.on("end", () => {
-      try {
-        const m = /boundary=(?:"([^"]+)"|([^;]+))/.exec(String(req.headers["content-type"] || ""));
-        if (!m) return resolve2({ fields: {}, file: null });
-        const buf = Buffer.concat(chunks);
-        const boundary = Buffer.from("--" + (m[1] || m[2]).trim());
-        const fields = {};
-        const files = {};
-        let file = null;
-        let i = buf.indexOf(boundary);
-        while (i >= 0) {
-          const start = i + boundary.length;
-          if (buf.slice(start, start + 2).toString() === "--") break;
-          const next = buf.indexOf(boundary, start);
-          if (next < 0) break;
-          const part = buf.slice(start + 2, next - 2);
-          const sep = part.indexOf("\r\n\r\n");
-          if (sep >= 0) {
-            const head = part.slice(0, sep).toString();
-            const body = part.slice(sep + 4);
-            const name = /name="([^"]*)"/.exec(head)?.[1];
-            const filename = /filename="([^"]*)"/.exec(head)?.[1];
-            if (filename !== void 0) {
-              file = {
-                filename,
-                contentType: /content-type:\s*([^\r\n]+)/i.exec(head)?.[1]?.trim() || "application/octet-stream",
-                data: body
-              };
-              if (name) files[name] = file;
-            } else if (name) fields[name] = body.toString();
-          }
-          i = next;
-        }
-        resolve2({ fields, file, files });
-      } catch (e) {
-        reject(e);
-      }
-    });
-  });
-}
-async function handle3(api, ctx) {
-  const { req, res, pathname, url, send } = ctx;
-  if ((pathname === "/api/v2/media" || pathname === "/api/v1/media") && req.method === "POST") {
-    const { fields, file } = await readMultipart(req);
-    if (!file?.data?.length) return send(422, { error: "file required" });
-    const mediaType = attachmentType(file.contentType);
-    const ext = extensionFor(mediaType, file.filename);
-    const slug = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10) + "-" + node_crypto_default.randomBytes(4).toString("hex") + "." + ext;
-    const mediaUrl = api.urls.media + slug;
-    await api.agent.publisher.ensureMediaContainer();
-    await write6(api.agent.remote, mediaUrl, file.data, mediaType);
-    const entry = { url: mediaUrl, mediaType, description: fields.description || "" };
-    const id = api.store.idFor(mediaUrl);
-    api.store.setMedia(id, entry);
-    return send(200, api.mediaJson({ id, ...entry }));
-  }
-  const mMedia = /^\/api\/v1\/media\/([a-f0-9]+)$/.exec(pathname);
-  if (mMedia) {
-    const entry = api.store.getMedia()[mMedia[1]];
-    if (!entry) return send(404, { error: "Record not found" });
-    if (req.method === "PUT") {
-      const body = await readBody2(req);
-      if (typeof body.description === "string") {
-        entry.description = body.description;
-        api.store.setMedia(mMedia[1], entry);
-      }
-    }
-    return send(200, api.mediaJson({ id: mMedia[1], ...entry }));
-  }
-  return false;
-}
-
 // lib/client/masto/accounts.mjs
-async function handle4(api, ctx) {
+async function handle3(api, ctx) {
   const { req, res, pathname, url, send } = ctx;
   if (pathname === "/api/v1/accounts/verify_credentials") {
     const cfg0 = api.store.getConfig() || {};
@@ -67040,7 +67280,7 @@ async function handle4(api, ctx) {
   }
   if (/^\/api\/v1\/accounts\/[a-f0-9]+\/featured_tags$/.test(pathname)) return send(200, []);
   if (pathname === "/api/v1/directory") return send(200, api.urls?.actor ? [api.account(api.urls.actor)] : []);
-  if (pathname === "/api/v1/suggestions" || pathname === "/api/v1/trends") return send(200, []);
+  if (pathname === "/api/v1/suggestions") return send(200, []);
   const mAccLists = /^\/api\/v1\/accounts\/([a-f0-9]+)\/lists$/.exec(pathname);
   if (mAccLists && req.method === "GET") {
     const actorUrl = api.store.urlFor(mAccLists[1]);
@@ -67103,11 +67343,11 @@ async function handle4(api, ctx) {
 // lib/client/masto/timelines.mjs
 var timelines_exports = {};
 __export(timelines_exports, {
-  handle: () => handle5
+  handle: () => handle4
 });
 init_node_crypto();
 init_wire();
-async function handle5(api, ctx) {
+async function handle4(api, ctx) {
   const { req, res, pathname, url, send } = ctx;
   if (pathname === "/api/v1/timelines/home" || pathname === "/api/v1/timelines/public" || pathname === "/api/v1/trends/statuses") {
     const localOnly = pathname === "/api/v1/timelines/public" && url.searchParams.get("local") === "true";
@@ -67137,6 +67377,41 @@ async function handle5(api, ctx) {
     const name = decodeURIComponent(mTagGet[1]).replace(/^#/, "").toLowerCase();
     const following = (api.agent.tagfeed?.config().tags || []).includes(name);
     return send(200, api.tagObject(name, following, req));
+  }
+  if (pathname === "/api/v1/trends/tags" || pathname === "/api/v1/trends") {
+    const DAY = 864e5;
+    const today = Math.floor(Date.now() / DAY) * DAY;
+    const seen = /* @__PURE__ */ new Map();
+    for (const st2 of api.store.getStatuses()) {
+      if (st2.kind !== "tag" || !st2.tag) continue;
+      const at = Date.parse(st2.published || "");
+      if (!Number.isFinite(at) || at < today - 6 * DAY) continue;
+      const day = Math.floor(at / DAY) * DAY;
+      if (!seen.has(st2.tag)) seen.set(st2.tag, /* @__PURE__ */ new Map());
+      const days = seen.get(st2.tag);
+      if (!days.has(day)) days.set(day, { uses: 0, accounts: /* @__PURE__ */ new Set() });
+      const rec = days.get(day);
+      rec.uses++;
+      if (st2.actor) rec.accounts.add(st2.actor);
+    }
+    const followed = new Set(api.agent.tagfeed?.config().tags || []);
+    const ranked = [...seen.entries()].map(([name, days]) => {
+      const history = [];
+      for (let i = 0; i < 7; i++) {
+        const rec = days.get(today - i * DAY);
+        history.push({
+          day: String(Math.floor((today - i * DAY) / 1e3)),
+          uses: String(rec ? rec.uses : 0),
+          accounts: String(rec ? rec.accounts.size : 0)
+        });
+      }
+      return {
+        total: history.reduce((n, h) => n + Number(h.uses), 0),
+        tag: api.tagObject(name, followed.has(name), req, history)
+      };
+    }).sort((a, b) => b.total - a.total);
+    const limit = Math.min(Math.max(Number(url.searchParams.get("limit")) || 10, 1), 40);
+    return send(200, ranked.slice(0, limit).map((x) => x.tag));
   }
   const mTagTl = pathname.match(/^\/api\/v1\/timelines\/tag\/([^/]+)$/);
   if (mTagTl && req.method === "GET") {
@@ -67435,10 +67710,10 @@ async function searchHandler(api, ctx) {
 // lib/client/masto/statuses.mjs
 var statuses_exports = {};
 __export(statuses_exports, {
-  handle: () => handle6
+  handle: () => handle5
 });
 init_node_crypto();
-async function handle6(api, ctx) {
+async function handle5(api, ctx) {
   const { req, res, pathname, url, send } = ctx;
   if (pathname === "/api/v1/statuses" && req.method === "POST") {
     const body = await readBody2(req);
@@ -67752,6 +68027,60 @@ async function handle6(api, ctx) {
   return false;
 }
 
+// lib/client/masto/media.mjs
+var media_exports2 = {};
+__export(media_exports2, {
+  attachmentType: () => attachmentType,
+  extensionFor: () => extensionFor,
+  handle: () => handle6
+});
+init_node_crypto();
+var ATTACHMENT_KINDS = /* @__PURE__ */ new Set(["image", "video", "audio"]);
+var NEVER = /* @__PURE__ */ new Set(["image/svg+xml", "image/svg"]);
+var OPAQUE = "application/octet-stream";
+function attachmentType(claimed) {
+  const t = String(claimed || "").split(";")[0].trim().toLowerCase();
+  if (!/^[a-z0-9.+-]+\/[a-z0-9.+-]+$/.test(t) || NEVER.has(t)) return OPAQUE;
+  return ATTACHMENT_KINDS.has(t.split("/")[0]) ? t : OPAQUE;
+}
+function extensionFor(mediaType, filename = "") {
+  if (mediaType === OPAQUE) return "bin";
+  const sub = mediaType.split("/")[1].replace(/[^a-z0-9]/g, "");
+  const given = String(filename || "").includes(".") ? filename.split(".").pop().toLowerCase().replace(/[^a-z0-9]/g, "") : "";
+  return given && (given === sub || sub.startsWith(given) || given.startsWith(sub)) ? given : sub || "bin";
+}
+async function handle6(api, ctx) {
+  const { req, res, pathname, url, send } = ctx;
+  if ((pathname === "/api/v2/media" || pathname === "/api/v1/media") && req.method === "POST") {
+    const { fields, file } = await readMultipart(req);
+    if (!file?.data?.length) return send(422, { error: "file required" });
+    const mediaType = attachmentType(file.contentType);
+    const ext = extensionFor(mediaType, file.filename);
+    const slug = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10) + "-" + node_crypto_default.randomBytes(4).toString("hex") + "." + ext;
+    const mediaUrl = api.urls.media + slug;
+    await api.agent.publisher.ensureMediaContainer();
+    await write6(api.agent.remote, mediaUrl, file.data, mediaType);
+    const entry = { url: mediaUrl, mediaType, description: fields.description || "" };
+    const id = api.store.idFor(mediaUrl);
+    api.store.setMedia(id, entry);
+    return send(200, api.mediaJson({ id, ...entry }));
+  }
+  const mMedia = /^\/api\/v1\/media\/([a-f0-9]+)$/.exec(pathname);
+  if (mMedia) {
+    const entry = api.store.getMedia()[mMedia[1]];
+    if (!entry) return send(404, { error: "Record not found" });
+    if (req.method === "PUT") {
+      const body = await readBody2(req);
+      if (typeof body.description === "string") {
+        entry.description = body.description;
+        api.store.setMedia(mMedia[1], entry);
+      }
+    }
+    return send(200, api.mediaJson({ id: mMedia[1], ...entry }));
+  }
+  return false;
+}
+
 // lib/client/masto/index.mjs
 var MastoApi = class _MastoApi {
   constructor({
@@ -67848,7 +68177,7 @@ var MastoApi = class _MastoApi {
       const took = await this.agent.requestTakeover?.();
       if (!took) return send(503, { error: "another agent is active for this pod \u2014 takeover failed, try again" });
     }
-    for (const area of [accounts_exports, timelines_exports, statuses_exports, media_exports]) {
+    for (const area of [accounts_exports, timelines_exports, statuses_exports, media_exports2]) {
       if (await area.handle(this, ctx)) return true;
     }
     this.log(`mastoapi: unhandled ${req.method} ${pathname} \u2014 punch list`);
@@ -67971,11 +68300,32 @@ var MastoApi = class _MastoApi {
 var MAX_TIMELINE_BYTES = 2 * 1024 * 1024;
 var DEFAULTS2 = {
   instance: "https://mastodon.social",
-  tags: ["solidproject", "linkeddata", "rdf"],
+  tags: [
+    "fediverse",
+    "activitypub",
+    // the network this account is on
+    "opensource",
+    "foss",
+    // how the software gets made
+    "solidproject",
+    "linkeddata",
+    // where the data lives
+    "privacy",
+    "digitalrights",
+    // what is at stake
+    "indieweb",
+    "smallweb",
+    // publishing for yourself
+    "commons",
+    "platformcooperativism"
+    // owning it together
+  ],
   intervalMin: 15
 };
 var PER_TAG = 20;
-var MAX_NEW_PER_SWEEP = 12;
+var MAX_NEW_PER_SWEEP = 8;
+var MAX_NEW_PER_TAG = 2;
+var TAGS_PER_SWEEP = 4;
 var MAX_TAG_ENTRIES = 200;
 var BACKOFF_MIN_MS2 = 15 * 6e4;
 var BACKOFF_MAX_MS2 = 6 * 60 * 6e4;
@@ -67985,6 +68335,7 @@ var TagFeed = class {
     Object.assign(this, { store, intake, log: log2, fetcher: fetcher2 });
     this.lastSweep = null;
     this.lastAdded = 0;
+    this.cursor = 0;
   }
   config() {
     return { ...DEFAULTS2, ...this.store.read("tagfeed.json", {}) };
@@ -68042,9 +68393,13 @@ var TagFeed = class {
     const known2 = new Set(this.store.getStatuses().map((s) => s.noteId));
     let budget = MAX_NEW_PER_SWEEP;
     let added = 0;
+    const start = this.cursor % tags.length;
+    this.cursor = (start + TAGS_PER_SWEEP) % tags.length;
+    const order = [...tags, ...tags].slice(start, start + Math.min(TAGS_PER_SWEEP, tags.length));
     this.store.hold?.();
     try {
-      for (const tag of tags) {
+      for (const tag of order) {
+        let perTag = MAX_NEW_PER_TAG;
         let list3;
         try {
           const { safeFetch: safeFetch2, retryAfterMs: retryAfterMs3, readCapped: readCapped3 } = await Promise.resolve().then(() => (init_safefetch(), safefetch_exports));
@@ -68064,7 +68419,9 @@ var TagFeed = class {
         for (const st2 of Array.isArray(list3) ? list3 : []) {
           const noteId = st2?.uri;
           if (!noteId || known2.has(noteId) || this.store.isBlocked(noteId)) continue;
-          if (budget-- <= 0) break;
+          if (perTag <= 0 || budget <= 0) break;
+          perTag--;
+          budget--;
           const note = await this.intake.fetchAP(noteId).catch(() => null);
           if (!note || note.id !== noteId || !isContentType(note.type)) continue;
           const author = authorOf(note);
@@ -68088,6 +68445,7 @@ var TagFeed = class {
           known2.add(noteId);
           added++;
         }
+        if (budget <= 0) break;
       }
       const all = this.store.getStatuses();
       const tagged = all.filter((s) => s.kind === "tag");
@@ -68099,7 +68457,7 @@ var TagFeed = class {
       this.store.release?.();
     }
     this.lastAdded = added;
-    if (added) this.log(`tagfeed: +${added} from #${tags.join(" #")}`);
+    if (added) this.log(`tagfeed: +${added} from #${order.join(" #")}`);
   }
 };
 
@@ -68392,7 +68750,7 @@ var PodTransport = class {
   // leaves the private trees world-readable. $rdf.sym() also throws on an
   // illegal IRI, so a pod URL with something odd in it fails here rather than
   // silently producing a document that means something else.
-  aclDoc(targetUrl, publicModes, { appendAgents = [], aclUrl = null } = {}) {
+  aclDoc(targetUrl, publicModes, { appendAgents = [], readAgents = [], aclUrl = null } = {}) {
     const url = aclUrl || targetUrl + ".acl";
     const doc = namedNode2(url);
     const target = namedNode2(targetUrl);
@@ -68408,6 +68766,7 @@ var PodTransport = class {
       authorize(namedNode2(url + "#public"), ACL("agentClass"), FOAF("Agent"), publicModes);
     }
     appendAgents.forEach((webId, i) => authorize(namedNode2(url + `#gw${i}`), ACL("agent"), namedNode2(webId), ["Append"]));
+    readAgents.forEach((webId, i) => authorize(namedNode2(url + `#r${i}`), ACL("agent"), namedNode2(webId), ["Read"]));
     authorize(
       namedNode2(url + "#owner"),
       ACL("agent"),
@@ -68596,61 +68955,6 @@ var BrowserRemotePod = class extends PodTransport {
     }
   }
 };
-
-// web/app/idb-kv.mjs
-var DB = "fedipod-accounts";
-function open() {
-  return new Promise((res, rej) => {
-    const r = indexedDB.open(DB, 1);
-    r.onupgradeneeded = () => {
-      const db = r.result;
-      if (!db.objectStoreNames.contains("kv")) db.createObjectStore("kv");
-    };
-    r.onsuccess = () => res(r.result);
-    r.onerror = () => rej(r.error);
-  });
-}
-async function kvGet(key) {
-  const db = await open();
-  return new Promise((res, rej) => {
-    const rq = db.transaction("kv", "readonly").objectStore("kv").get(key);
-    rq.onsuccess = () => res(rq.result ?? null);
-    rq.onerror = () => rej(rq.error);
-  });
-}
-async function kvAll() {
-  const db = await open();
-  return new Promise((res, rej) => {
-    const out = {};
-    const cur = db.transaction("kv", "readonly").objectStore("kv").openCursor();
-    cur.onsuccess = () => {
-      const c = cur.result;
-      if (c) {
-        out[c.key] = c.value;
-        c.continue();
-      } else res(out);
-    };
-    cur.onerror = () => rej(cur.error);
-  });
-}
-async function kvPut(key, val) {
-  const db = await open();
-  return new Promise((res, rej) => {
-    const tx = db.transaction("kv", "readwrite");
-    tx.objectStore("kv").put(val, key);
-    tx.oncomplete = () => res();
-    tx.onerror = () => rej(tx.error);
-  });
-}
-async function kvDel(key) {
-  const db = await open();
-  return new Promise((res, rej) => {
-    const tx = db.transaction("kv", "readwrite");
-    tx.objectStore("kv").delete(key);
-    tx.oncomplete = () => res();
-    tx.onerror = () => rej(tx.error);
-  });
-}
 
 // web/app/keystore.mjs
 var PEM = (der, label) => {
@@ -69579,6 +69883,7 @@ var ADMIN_PATHS = /* @__PURE__ */ new Set([
   "/inbox/prune",
   "/park",
   "/revive",
+  "/takeover",
   "/fediacct/connect",
   "/fediacct/disconnect",
   "/fediacct/callback"
@@ -69803,6 +70108,14 @@ var AdminFacade = class {
         await a.store.flush();
         await a.publisher.publishProfile();
         return json2(200, { ok: true, summary: cfg.summary || null, icon: cfg.icon || null });
+      }
+      // Taking the account back. A viewer publishes nothing and drains
+      // nothing, so an account whose lease is held by something that is not
+      // running any more stays silent with no way to say so. The owner acting
+      // HERE outranks whatever holds it.
+      case "/takeover": {
+        if (!await a.requestTakeover?.()) return json2(503, { error: "the lease could not be taken \u2014 the pod refused the write" });
+        return json2(200, { ok: true, mode: a.status().mode });
       }
       // Going quiet, and coming back. The record page's active/parked select.
       case "/park": {
@@ -71334,6 +71647,21 @@ var BrowserAgent = class _BrowserAgent {
    *  - { credential, keysRecord, config }: a client-credential session with the
    *    material in hand (the offline test path).
    */
+  // This browser's name for itself, minted once and kept. Not an identity and
+  // not a secret — it says only "the same browser as last time" to the lease.
+  // If storage cannot be reached, a fresh one is honest: this browser cannot
+  // prove it is the one that held the lease, so it should not claim to be.
+  async deviceId() {
+    try {
+      const had = await kvGet("device-id");
+      if (had) return had;
+      const made = crypto.randomUUID();
+      await kvPut("device-id", made);
+      return made;
+    } catch {
+      return null;
+    }
+  }
   async boot({ oidc, credential, keysRecord, config, frontOrigin }) {
     let session;
     let webId;
@@ -71395,7 +71723,17 @@ var BrowserAgent = class _BrowserAgent {
     this.atproto = new BrowserAtproto({ store: this.store, actorId: this.urls.actor, log: this.log });
     this.publisher.atproto = this.atproto;
     this.fediaccts = new BrowserFediAccounts({ store: this.store, actorId: this.urls.actor, log: this.log });
-    this.lease = new Lease({ url: this.urls.state + "lease.json", fetchImpl: podFetch, log: this.log });
+    this.lease = new Lease({
+      url: this.urls.state + "lease.json",
+      fetchImpl: podFetch,
+      log: this.log,
+      // Kept on this origin, so THIS browser is one holder however many times
+      // its worker is killed and restarted. Without it every restart was a new
+      // holder: the old lease still had minutes to run, so the browser found
+      // its own account "active on another device" and asked to take it over.
+      // Switching between the clients did it every time, being a navigation.
+      id: await this.deviceId()
+    });
     this.c2s = new C2S({ agent: this, log: this.log });
     this.intake = new Intake({
       config: this.store.getConfig(),

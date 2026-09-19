@@ -58,3 +58,35 @@ body { background: var(--surface); }
    underlined rather than removed. */
 #bar button[aria-current="page"], #bar a[aria-current="page"] {
   text-decoration: underline; text-underline-offset: .3rem; }
+/* The client control: which fediverse client this browser opens. The label is
+   quieter than the links; the one in use is marked `aria-current="true"` — the
+   current item of a set, which on the record page is not the current PAGE — so
+   it needs its own mark rather than borrowing the rule above. */
+#bar #client-pick { display: inline-flex; gap: .6rem; align-items: baseline;
+  white-space: nowrap; margin-left: 1rem; }
+#bar #client-now { opacity: .75; }
+#bar a[aria-current="true"] {
+  font-weight: 700; text-decoration: underline; text-underline-offset: .3rem; }
+
+/* The two-clients notice: said once, to somebody who knew this page when it
+   had one client. Sized and placed rather than left to the browser's default,
+   which stretched it edge to edge and put it over the very links it names. */
+#client-news {
+  /* Low rather than centred: it points at the links in the bar, so the bar has
+     to stay in view while it is read. */
+  max-width: 34rem; margin: auto auto 2.5rem; padding: 1.5rem 1.7rem;
+  border: 1px solid var(--dialog-edge); border-radius: .6rem;
+  background: var(--raised); color: var(--fg);
+  font: 1rem/1.55 var(--font);
+  box-shadow: 0 .6rem 2rem rgba(0, 0, 0, .25);
+}
+#client-news::backdrop { background: rgba(0, 0, 0, .45); }
+#client-news h2 { font-size: 1.25rem; margin: 0 0 .9rem; color: var(--heading); }
+#client-news p { margin: 0 0 1.2rem; }
+#client-news p:last-child { margin: 0; }
+#client-news button {
+  font: inherit; padding: .55rem 1.3rem; border-radius: .35rem; cursor: pointer;
+  background: var(--btn); color: var(--btn-text); border: 1px solid var(--btn);
+}
+#client-news button:hover { background: var(--btn-hover); border-color: var(--btn-hover); }
+#client-news button:focus-visible { outline: 3px solid var(--ring); outline-offset: 2px; }

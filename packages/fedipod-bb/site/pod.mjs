@@ -226,9 +226,22 @@ export async function moderate({ actor, podHome, inbox, activity }) {
   const name = `${stamp()}-${String(activity.type).toLowerCase()}-${crypto.randomUUID().slice(0, 8)}`;
   const place = placeOf(actor, podHome);
   const doc = { '@context': AS, ...activity, id: place.id(name), actor, published: new Date().toISOString() };
-  const put = await s.fetch(place.at(name), { method: 'PUT', headers: { 'content-type': 'application/activity+json' }, body: JSON.stringify(doc) });
+  // Two requests to two different servers, and a network failure in either
+  // arrives as the browser's bare "Failed to fetch". Said on its own it names
+  // neither, so each is named here — the refusals already were.
+  let put;
+  try {
+    put = await s.fetch(place.at(name), { method: 'PUT', headers: { 'content-type': 'application/activity+json' }, body: JSON.stringify(doc) });
+  } catch (e) {
+    throw new Error(`${e.message} — writing it to ${new URL(place.at(name)).host}`);
+  }
   if (!put.ok) throw new Error(`your pod refused to publish the request (HTTP ${put.status})`);
-  const sent = await fetch(inbox, { method: 'POST', headers: { 'content-type': 'application/ld+json' }, body: JSON.stringify(doc) });
+  let sent;
+  try {
+    sent = await fetch(inbox, { method: 'POST', headers: { 'content-type': 'application/ld+json' }, body: JSON.stringify(doc) });
+  } catch (e) {
+    throw new Error(`${e.message} — handing it to ${new URL(inbox).host}`);
+  }
   if (!sent.ok) throw new Error(`the forum did not take the request (HTTP ${sent.status})`);
   return doc.id;
 }

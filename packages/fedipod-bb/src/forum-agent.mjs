@@ -8,6 +8,7 @@
 // deliverer and intake are FediPod's own, configured as a group. What is new
 // is the routing, the topic placement, and the lifecycle around N of them.
 
+import crypto from 'node:crypto';
 import path from 'node:path';
 import fs from 'node:fs';
 import { PodStore } from '../../../lib/core/store.mjs';
@@ -134,6 +135,28 @@ export class ForumAgent {
     this.viewer = true;
   }
 
+  // This installation's name for itself, minted once and kept beside the
+  // credential. The lease lets a holder reclaim its own without waiting, so
+  // whether this is stable decides whether a RESTART is the same host coming
+  // back or a second one arriving: left to the lease's own default it was a
+  // fresh name every time, the old lease still had minutes of its five to run,
+  // and the forum came back up read-only — not draining its inbox, not applying
+  // a moderator's ask — until it expired. Which is what a restart to pick up a
+  // fix looked like from the outside: the fix changing nothing.
+  hostId() {
+    const at = path.join(this.home, 'host-id');
+    try { return fs.readFileSync(at, 'utf8').trim() || null; } catch { /* not yet */ }
+    try {
+      const made = crypto.randomUUID();
+      fs.writeFileSync(at, made + '\n', { mode: 0o600 });
+      return made;
+    } catch {
+      // Unwritable: a fresh name each time is honest, since this host cannot
+      // prove it is the one that held the lease.
+      return null;
+    }
+  }
+
   readCredential() {
     try { return JSON.parse(fs.readFileSync(path.join(this.home, 'credential.json'), 'utf8')); }
     catch { return null; }
@@ -219,7 +242,8 @@ export class ForumAgent {
     if (!this.config) { this.log('credential present but the forum has no config — run init'); return false; }
     const front = this.config.gateway?.front || null;
     this.site = forumUrls(cred.remotePod, cred.root || ROOT, front ? { front, handle: this.config.handle } : {});
-    this.lease = new Lease({ url: this.site.state + 'lease.json', fetchImpl: (u, i) => this.remote.fetch(u, i), log: this.log });
+    this.lease = new Lease({ url: this.site.state + 'lease.json', fetchImpl: (u, i) => this.remote.fetch(u, i), log: this.log,
+      id: this.hostId() });
     this.viewer = act ? !(await this.lease.acquire()) : true;
     this.categories = [];
     for (const c of this.config.categories || []) this.categories.push(await this.buildCategory(c));

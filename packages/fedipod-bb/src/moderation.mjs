@@ -191,8 +191,15 @@ export async function applyForumModeration(forum, cat, entry) {
       const tid = tidOf(cat, object);
       const asked = typeof entry.activity?.object === 'object' ? entry.activity.object : null;
       if (!tid || !asked) break;
-      // `closed` present and truthy: no more replies are placed in it.
-      if ('closed' in asked) return lockTopic(cat, tid, !!asked.closed);
+      // `closed` present and truthy: no more replies are placed in it. The
+      // STRING "false" is false — a boolean that has been through a form, a
+      // template or an RDF round trip arrives as text, and `!!"false"` is true,
+      // which turns every reopen into another close.
+      if ('closed' in asked) {
+        const shut = asked.closed !== false && asked.closed !== 'false' && !!asked.closed;
+        cat.log?.(`topic ${tid}: ${shut ? 'closing' : 'reopening'} (asked closed=${JSON.stringify(asked.closed)})`);
+        return lockTopic(cat, tid, shut);
+      }
       if (asked.name) return renameTopic(cat, tid, asked.name);
       break;
     }

@@ -127,3 +127,31 @@
     sh:minCount 1 ;
     sh:maxCount 1 ;
   ] .
+
+<#Update>
+  a sh:NodeShape ;
+  sh:targetClass as:Update ;
+  sh:name "Update" ;
+  sh:description "A change to the object it names, carrying the parts that are now different." ;
+  sh:property [
+    sh:path as:actor ;
+    sh:name "actor" ;
+    sh:description "The one that performed the activity." ;
+    sh:nodeKind sh:BlankNodeOrIRI ;
+    sh:minCount 1 ;
+    sh:maxCount 1 ;
+  ] ;
+  sh:property [
+    sh:path as:object ;
+    sh:name "object" ;
+    sh:description "The thing the activity is about." ;
+    sh:minCount 1 ;
+    sh:maxCount 1 ;
+  ] ;
+  sh:property [
+    sh:path ( as:object as:closed ) ;
+    sh:name "closed" ;
+    sh:description "The time the object stopped taking anything more." ;
+    sh:datatype xsd:dateTime ;
+    sh:maxCount 1 ;
+  ] .

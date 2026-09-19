@@ -137,10 +137,10 @@ function topicActs(topicId) {
   if (!iModerate()) return '';
   return `<div class="acts mod" role="group" aria-label="Moderator actions for this topic" data-topic="${esc(topicId)}">
     <button data-act="rename">Rename topic</button>
-    <button data-act="lock">Close topic</button><button data-act="unlock">Reopen topic</button>
+    <button data-act="unlock">Reopen topic</button>
     <button data-act="pin">Pin topic</button><button data-act="unpin">Unpin topic</button>
     <button data-act="sitepin">Pin site-wide</button><button data-act="siteunpin">Unpin site-wide</button>
-    <button data-act="droptopic">Delete topic</button>
+    <button class="grave" data-act="lock">Close topic</button><button class="grave" data-act="droptopic">Delete topic</button>
   </div>`;
 }
 
@@ -149,10 +149,10 @@ function topicActs(topicId) {
 function votes(p) {
   const up = p.likes || 0;
   const down = p.dislikes || 0;
-  if (!account()) {
-    return `<span class="votes" aria-label="${up} for, ${down} against">▲ ${up} ▼ ${down}</span>`;
-  }
-  const mineWay = own().votedOn(p.id);
+  // Signed out, the buttons are still buttons: pressing one asks who you are
+  // and then casts the vote. Showing the counts as dead text hid the fact that
+  // voting was possible at all.
+  const mineWay = account() ? own().votedOn(p.id) : 'none';
   const one = (way, mark, n, label) => `<button data-act="vote-${mineWay === way ? 'none' : way}"
     data-was="${mineWay}"${mineWay === way ? ' aria-pressed="true" class="voted"' : ''}
     aria-label="${mineWay === way ? `Take back your vote ${label}` : `Vote ${label} this post`}">${mark} ${n}</button>`;
@@ -231,6 +231,11 @@ async function route() {
   if (kind === 'who' && a) return showWho(decodeURIComponent(a));
   if (kind === 'c' && a) { if (feedFilter !== a) shown = 30; feedFilter = a; return showForum(); }
   if (kind === 't' && a && b) return showTopic(a, b, c || null);
+  // `#/` IS the whole forum, so arriving at it clears the category. Leaving the
+  // filter where it was meant Home redrew whatever category you had been in,
+  // and All — whose link is `#/` — redrew the same one, which from the reader's
+  // side was a button that did nothing at all.
+  if (feedFilter !== 'all') { feedFilter = 'all'; shown = 30; }
   return showForum();
 }
 
@@ -385,6 +390,51 @@ async function showSettings() {
 `;
 }
 
+// The index, read once and filtered here. Changing category, ordering it,
+// or typing in the search box changes NOTHING about what the forum holds — yet
+// each of them refetched every post, every category's moderators and every
+// category's pinned topics, and blanked the page to "Loading…" while it went.
+// Searching did it on every keystroke.
+//
+// So it is read once and kept: whole, unfiltered, for every category, because
+// which subset is on screen is the reader's business and not the network's.
+// Thrown away after a minute, when more rows are asked for than were fetched,
+// and by hand whenever this page writes something the forum will show back.
+let index = null;
+const INDEX_STALE_MS = 60_000;
+function forgetIndex() { index = null; authors.clear(); }
+
+// Who wrote it, and the digest a topic link carries. Both are asked once per
+// ROW, and the same people and the same posts come round again every time the
+// index is redrawn — so each was a fresh lookup for an answer that cannot have
+// changed. Serially, too: thirty rows was thirty round trips one after another,
+// which is where the wait after choosing a category actually went.
+const authors = new Map();
+const digests = new Map();
+function authorOnce(catBase, id) {
+  const key = `${catBase}|${id}`;
+  if (!authors.has(key)) authors.set(key, read.author(catBase, id).catch(() => null));
+  return authors.get(key);
+}
+function digestOnce(id) {
+  if (!digests.has(id)) digests.set(id, cacheKey(id));
+  return digests.get(id);
+}
+
+async function readIndex(want) {
+  if (index && index.limit >= want && Date.now() - index.at < INDEX_STALE_MS) return index;
+  const latest = await read.latest(base, { limit: want });
+  const site = new Set(await read.featured(base));
+  const pinned = new Map();
+  const mods = new Map();
+  for (const c of cats()) {
+    pinned.set(c.id, new Set(await read.featured(c.base)));
+    mods.set(c.id, await read.moderators(c.base));
+  }
+  index = { at: Date.now(), limit: want, latest, site, pinned, mods };
+  return index;
+}
+
 async function showForum() {
   const mineView = view;
   const here = cats().find(c => c.slug === feedFilter) || null;
@@ -392,12 +442,14 @@ async function showForum() {
   // Who moderates what is on screen. Showing the whole forum, that is
   // whoever moderates its categories — otherwise a moderator looking at
   // everything would look like a stranger.
-  if (here) moderators = await read.moderators(here.base);
-  else {
+  // Moderators come out of the index below, which holds them for every
+  // category — so this no longer decides what to fetch, only what to show.
+  const showMods = (idx) => {
+    if (here) { moderators = idx.mods.get(here.id) || []; return; }
     const all = new Set();
-    for (const c of cats()) for (const m of await read.moderators(c.base)) all.add(m);
+    for (const list of idx.mods.values()) for (const m of list) all.add(m);
     moderators = [...all];
-  }
+  };
   const chip = (slug, label) => `<a class="chip${feedFilter === slug ? ' on' : ''}"${feedFilter === slug ? ' aria-current="page"' : ''} href="${slug === 'all' ? '#/' : `#/c/${esc(slug)}`}">${esc(label)}</a>`;
   // Starting a topic from the front page: in the category being shown, or the
   // first one when the whole forum is.
@@ -410,10 +462,20 @@ async function showForum() {
     ${here && account() && podAcct ? `<button class="new" data-act="${own().isJoined(here.id) ? 'leave' : 'join'}" data-cat="${esc(here.id)}">${own().isJoined(here.id) ? 'Leave' : 'Join'}</button>` : ''}
     ${into ? `<button class="new" data-act="newtopic" data-slug="${esc(into.slug || '')}">New topic</button>` : ''}</p>`;
   if (mineView !== view) return;
-  $('main').innerHTML = head + '<p class="dim">Loading…</p>';
-  say('Loading the latest posts');
   // Enough posts to fill a page of TOPICS: several posts can belong to one.
-  const latest = await read.latest(base, { limit: Math.min(300, shown * 5) });
+  const want = Math.min(300, shown * 5);
+  // Only say "Loading" when something is actually going to be waited for. The
+  // reader changing category has everything already; blanking the page for
+  // them was the whole of the delay they could see.
+  const willFetch = !(index && index.limit >= want && Date.now() - index.at < INDEX_STALE_MS);
+  if (willFetch) {
+    $('main').innerHTML = head + '<p class="dim">Loading…</p>';
+    say('Loading the latest posts');
+  }
+  const idx = await readIndex(want);
+  if (mineView !== view) return;
+  showMods(idx);
+  const latest = idx.latest;
   const looking = finding.trim().toLowerCase();
   const mine = latest.filter(p => (feedFilter === 'all'
     || (cats().find(c => c.id === p.category)?.slug === feedFilter))
@@ -422,10 +484,10 @@ async function showForum() {
     && (!looking || [p.topicName, p.author, p.content].some(v => String(v || '').toLowerCase().includes(looking))));
   // Pinned topics first. A pin belongs to a category; the forum has a
   // featured collection of its own for a pin that holds everywhere.
-  const pins = { cat: new Set(), site: new Set(await read.featured(base)) };
+  const pins = { cat: new Set(), site: idx.site };
   for (const c of cats()) {
     if (feedFilter !== 'all' && c.slug !== feedFilter) continue;
-    for (const id of await read.featured(c.base)) pins.cat.add(id);
+    for (const id of idx.pinned.get(c.id) || []) pins.cat.add(id);
   }
   // One row per topic: the newest post in it stands for it, which is what a
   // reader wants to open — the thing they have not read.
@@ -437,7 +499,11 @@ async function showForum() {
   }
   const rank = (p) => (pins.site.has(p.topic) ? 2 : pins.cat.has(p.topic) ? 1 : 0);
   // Pinned first whatever the order; then the column the reader chose.
-  const by = (p) => (order === 'replies' ? (p.topicReplies || 0) : String(p.published || ''));
+  // Posts, not replies: a topic with nobody answering yet still HAS the post
+  // that started it, and a column reading 0 beside a topic you can open and
+  // read says the wrong thing. The count the forum keeps is of replies, so the
+  // opening post is the one added here.
+  const by = (p) => (order === 'replies' ? (p.topicReplies || 0) + 1 : String(p.published || ''));
   const topics = [...byTopic.values()].sort((a, b) => rank(b) - rank(a)
     || (down ? (by(a) > by(b) ? -1 : by(a) < by(b) ? 1 : 0) : (by(a) > by(b) ? 1 : by(a) < by(b) ? -1 : 0)));
   const page = topics.slice(0, shown);
@@ -462,11 +528,23 @@ async function showForum() {
   }
   const rows = [];
   let fresh = 0;
-  for (const p of page) {
+  // Every row's author and digest at once rather than one row at a time: they
+  // do not depend on each other, and waiting for each in turn is the whole of
+  // the delay between choosing a category and seeing it.
+  const looked = await Promise.all(page.map(async (p) => {
     const cat = cats().find(c => c.id === p.category) || null;
-    const who = cat && p.author ? await read.author(cat.base, p.author) : null;
+    return {
+      cat,
+      who: cat && p.author ? await authorOnce(cat.base, p.author) : null,
+      digest: await digestOnce(p.id),
+    };
+  }));
+  if (mineView !== view) return;
+  for (let i = 0; i < page.length; i++) {
+    const p = page[i];
+    const { cat, who, digest } = looked[i];
     const tid = p.topic ? p.topic.split('/').pop() : null;
-    const href = cat && tid ? `#/t/${esc(cat.slug)}/${esc(tid)}/${esc(await cacheKey(p.id))}` : null;
+    const href = cat && tid ? `#/t/${esc(cat.slug)}/${esc(tid)}/${esc(digest)}` : null;
     const name = esc(p.topicName || 'Topic');
     // New to THIS reader: posted since they last had the topic open.
     const isNew = !!seen?.isNew(p.topic, p.published);
@@ -477,7 +555,7 @@ async function showForum() {
       <td>${cat ? esc(cat.name) : ''}</td>
       <td>${who ? esc(who.handle) : esc(p.author ? authorLabel(p.author) : '')}</td>
       <td>${esc(when(p.published))}</td>
-      <td>${Number.isFinite(p.topicReplies) ? p.topicReplies : ''}</td>
+      <td>${Number.isFinite(p.topicReplies) ? p.topicReplies + 1 : ''}</td>
     </tr>`);
   }
   // A table, so a reader can run their eye down any one of the four things
@@ -489,7 +567,7 @@ async function showForum() {
       <th scope="col" aria-sort="${order === 'date' ? (down ? 'descending' : 'ascending') : 'none'}">
         <button class="sort" data-act="order" data-order="date">Date ${order === 'date' ? (down ? '▼' : '▲') : '<span class="dim">▽</span>'}</button></th>
       <th scope="col" aria-sort="${order === 'replies' ? (down ? 'descending' : 'ascending') : 'none'}">
-        <button class="sort" data-act="order" data-order="replies">Replies ${order === 'replies' ? (down ? '▼' : '▲') : '<span class="dim">▽</span>'}</button></th></tr></thead>
+        <button class="sort" data-act="order" data-order="replies">Posts ${order === 'replies' ? (down ? '▼' : '▲') : '<span class="dim">▽</span>'}</button></th></tr></thead>
     <tbody>${rows.join('')}</tbody></table>
     ${more ? `<p class="row"><button data-act="more">Show ${Math.min(more, 30)} more of ${more}</button></p>` : ''}</div>`;
   say(`${rows.length} topic${rows.length === 1 ? '' : 's'}${fresh ? `, ${fresh} with something new` : ''}`);
@@ -574,11 +652,11 @@ function replyBox(ctx) {
 // From a handle to a way in. A server that speaks the Mastodon API signs the
 // reader in here; a Lemmy server takes part by its own community address; any
 // other account posts from where it is, naming the category.
-async function signIn(handleInput) {
+async function signIn(handleInput, noteId = 'fedi-note') {
   const host = hostOfHandle(handleInput);
   if (!host) throw new Error('a handle looks like @you@your.server');
   const at = replyCtx?.cat ? handleOf(replyCtx.cat) : 'the category';
-  $('fedi-note').textContent = `Asking ${host}…`;
+  $(noteId).textContent = `Asking ${host}…`;
   const handle = String(handleInput).trim().replace(/^@/u, '').split('@')[0];
   const said = await serverKind(host, front, undefined, handle);
   const kind = said.kind;
@@ -587,7 +665,7 @@ async function signIn(handleInput) {
     location.href = await login.begin(host);
     return;
   }
-  const note = $('fedi-note');
+  const note = $(noteId);
   note.textContent = '';
   if (kind === 'fedipod') {
     if (!said.issuer || !said.actor) throw new Error(`${host} did not say where ${handleInput} signs in`);
@@ -664,6 +742,9 @@ $('main').addEventListener('click', (e) => {
     shown = 30;
     return showForum();
   }
+  // Anything that acts as somebody asks who that is first, and remembers what
+  // was pressed so signing in finishes it.
+  if (GATED[act] && !account()) { rememberIntent(b); return askToSignIn(GATED[act]); }
   if (act === 'join' || act === 'leave') return joinOrLeave(b.dataset.cat, act === 'join');
   if (act === 'ask-join') return askToJoin(b.dataset.cat);
   if (act === 'admit') return modAdmit(id, b.closest('[data-cat]')?.dataset.cat);
@@ -803,9 +884,23 @@ async function report(id) {
 
 async function asksTo(activity, forCat = null) {
   if (!podAcct) throw new Error('moderating from here needs your pod account');
-  const cat = forCat || replyCtx.cat;
-  const inbox = await pod.podInboxOf(cat.id, { front, handle: cat.slug || null });
-  await pod.moderate({ actor: podAcct.actor, podHome: podAcct.podHome, inbox, activity });
+  const cat = forCat || replyCtx?.cat;
+  if (!cat) throw new Error('this is not in a category the page knows about — open the topic and try from there');
+  // Which step failed, not only that one did. Three requests go out here — ask
+  // the Gateway where the forum takes mail, write the request on your own pod,
+  // hand it to the forum — and each can fail with the browser's bare "Failed to
+  // fetch", which on its own says nothing about which address would not answer.
+  // The same reason voteOn says it.
+  let step = 'finding where the forum takes mail';
+  try {
+    const inbox = await pod.podInboxOf(cat.id, { front, handle: cat.slug || null });
+    if (!inbox) throw new Error('the forum did not say where to send it');
+    // moderate() names its own two requests, so nothing is added over the top.
+    step = 'sending the request';
+    await pod.moderate({ actor: podAcct.actor, podHome: podAcct.podHome, inbox, activity });
+  } catch (e) {
+    throw new Error(`${e.message} — while ${step}`);
+  }
   alert('Sent to the forum. It takes effect once the forum has checked who asked.');
 }
 
@@ -832,7 +927,13 @@ async function modRename(topicId) {
 // posting from here work at all.
 async function joinOrLeave(categoryId, on) {
   const cat = cats().find(c => c.id === categoryId);
-  if (!cat || !podAcct) { alert('joining from here needs your pod account'); return; }
+  if (!cat) return;
+  if (!podAcct) {
+    alert(account()
+      ? 'Joining is sent from your own pod, so it needs a pod account — sign out and sign in with your @you@your-pod handle.'
+      : 'Joining needs an account.');
+    return;
+  }
   try {
     const inbox = await pod.podInboxOf(cat.id, { front, handle: cat.slug || null });
     const ok = on
@@ -840,15 +941,76 @@ async function joinOrLeave(categoryId, on) {
       : await pod.leave({ actor: podAcct.actor, category: cat.id, inbox });
     if (!ok) throw new Error('the forum did not take it');
     if (on) own().join(cat.id); else own().leave(cat.id);
+    forgetIndex();
     await showForum();
   } catch (e) { alert(e.message); }
+}
+
+// --- signing in where the reader is, rather than where the form is ---
+//
+// Everything below the counts needs an account: voting, joining, saving,
+// asking to be let into a private category. A reader without one used to see
+// no button at all for some of these and a bare refusal for others, and the
+// way in was hidden inside the Reply box. Now the button is there, pressing it
+// asks who you are, and the thing you pressed happens when you come back.
+//
+// Signing in leaves the page — it is somebody else's login — so what you were
+// doing has to outlive the trip. It goes in sessionStorage beside `bb:return`,
+// which is how the hash already survives it.
+const GATED = {
+  'vote-up': 'vote on a post', 'vote-down': 'vote on a post', 'vote-none': 'take back your vote',
+  join: 'join a category', leave: 'leave a category', 'ask-join': 'ask to join a category',
+  save: 'save a post', unsave: 'remove a saved post',
+};
+
+function rememberIntent(b) {
+  const d = b.dataset;
+  sessionStorage.setItem('bb:intent', JSON.stringify({
+    // The SAME places the dispatcher reads them from, or the replay acts on a
+    // different post from the one that was pressed: the id is on the enclosing
+    // `data-post`, never on the button.
+    act: d.act, id: b.closest('[data-post]')?.dataset.post || null,
+    cat: d.cat || b.closest('[data-cat]')?.dataset.cat || null,
+    was: d.was || null,
+  }));
+}
+
+// Open the sign-in dialog, saying what it is for. `why` is the plain-English
+// name of the action from GATED, so the reader is told what signing in buys
+// them rather than being asked for a handle out of nowhere.
+function askToSignIn(why) {
+  $('signin-why').textContent = why ? `Sign in to ${why}.` : '';
+  $('signin-note').textContent = '';
+  $('signin-dlg').showModal();
+  $('signin-handle').focus();
+}
+
+// Back from the login with something to finish. Runs the same handler the
+// click would have run, so there is one path through each action and not two.
+async function replayIntent() {
+  let want = null;
+  try { want = JSON.parse(sessionStorage.getItem('bb:intent') || 'null'); } catch { /* unreadable */ }
+  sessionStorage.removeItem('bb:intent');
+  if (!want || !account()) return;
+  if (String(want.act).startsWith('vote-')) return voteOn(want.id, want.act.slice(5), want.was || 'none');
+  if (want.act === 'join' || want.act === 'leave') return joinOrLeave(want.cat, want.act === 'join');
+  if (want.act === 'ask-join') return askToJoin(want.cat);
+  if (want.act === 'save' || want.act === 'unsave') return saveOrNot(want.id, want.act === 'save');
 }
 
 // A vote goes to the category as a Like or a Dislike, and the Undo of
 // whichever was cast takes it back. The forum counts them; this browser only
 // remembers which way this reader went, so the buttons can say so.
 async function voteOn(postId, way, was) {
-  if (!podAcct) { alert('voting needs your pod account'); return; }
+  // A vote is signed by the pod that casts it, so a Fediverse-only sign-in
+  // cannot cast one. Said plainly: the reader has just signed in and is being
+  // refused, and "needs your pod account" on its own does not say what to do.
+  if (!podAcct) {
+    alert(account()
+      ? 'A vote is sent from your own pod, so it needs a pod account — sign out and sign in with your @you@your-pod handle.'
+      : 'Voting needs an account.');
+    return;
+  }
   const cat = replyCtx?.cat || cats().find(c => c.slug === feedFilter) || cats()[0];
   if (!cat) return;
   let step = 'finding where the forum takes mail';
@@ -858,6 +1020,7 @@ async function voteOn(postId, way, was) {
     step = `sending the vote to ${new URL(inbox).host}`;
     await pod.vote({ actor: podAcct.actor, post: postId, category: cat.id, inbox, way, was });
     own().vote(postId, way);
+    forgetIndex();
     say(way === 'none' ? 'Vote taken back.' : 'Voted. The count follows once the forum has taken it.');
   } catch (e) {
     // Which step failed, not only that one did: "failed to fetch" on its own
@@ -882,6 +1045,7 @@ async function askToJoin(categoryId) {
 // Admitting somebody who asked: their follow is accepted, and in a private
 // category their pod is granted the reading that membership means.
 async function modAdmit(who, slug) {
+  forgetIndex();   // whatever this does, the index behind it is now out of date
   const cat = cats().find(c => c.slug === slug) || replyCtx?.cat;
   if (!cat || !who) return;
   try {
@@ -905,6 +1069,7 @@ function saveOrNot(postId, on) {
 // A held post: let through, or turned away. Both are asks like any other,
 // published at the moderator's own pod and checked there.
 async function modHeld(postId, slug, through) {
+  forgetIndex();   // whatever this does, the index behind it is now out of date
   const cat = cats().find(c => c.slug === slug) || replyCtx?.cat;
   if (!cat) { alert('which category is that in?'); return; }
   try {
@@ -916,6 +1081,7 @@ async function modHeld(postId, slug, through) {
 // A reported post taken out of its topic, from the queue rather than from
 // the thread: the topic it is in is the one the forum has it in.
 async function modRemoveFromQueue(postId, slug) {
+  forgetIndex();   // whatever this does, the index behind it is now out of date
   const cat = cats().find(c => c.slug === slug);
   if (!cat || !postId) return;
   if (!confirm('Remove this post from its topic?')) return;
@@ -982,8 +1148,18 @@ async function onSettings(b) {
 }
 
 async function modLock(topicId, on) {
+  // AS2 types `closed` as a TIME, so closing carries the moment it closed and
+  // reopening REMOVES it — which ActivityPub spells as `null` (§6.3.1, partial
+  // updates). It used to send `closed: false`, which is neither a time nor a
+  // removal: it arrived as the text "false" typed as a date, and `!!"false"` is
+  // true, so every reopen closed the topic again.
+  //
+  // The type is named because the reading is built from a graph, and a node
+  // with nothing on it but an id collapses to a bare id — taking the removal
+  // with it. A topic IS an OrderedCollection, which is what the forum publishes.
   try {
-    await asksTo({ type: 'Update', object: { id: topicId, closed: on ? new Date().toISOString() : false } });
+    await asksTo({ type: 'Update',
+      object: { id: topicId, type: 'OrderedCollection', closed: on ? new Date().toISOString() : null } });
   } catch (e) { alert(e.message); }
 }
 
@@ -1012,6 +1188,7 @@ async function removePost(id) {
       const p = await read.post(cat.base, id);
       await login.remove({ url: p?.page || id });
     }
+    forgetIndex();
     await route();
   } catch (e) { alert(e.message); }
 }
@@ -1067,6 +1244,20 @@ $('fedi-login').addEventListener('click', async () => {
   $('fedi-login').disabled = false;
 });
 $('fedi-handle').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('fedi-login').click(); });
+
+// The stand-alone sign-in. Same signIn() as the Reply box's, reporting into
+// this dialog's own line rather than the other one's.
+$('signin-go').addEventListener('click', async () => {
+  $('signin-note').textContent = '';
+  $('signin-go').disabled = true;
+  try { await signIn($('signin-handle').value, 'signin-note'); } catch (e) { $('signin-note').textContent = e.message; }
+  $('signin-go').disabled = false;
+});
+$('signin-handle').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('signin-go').click(); });
+// Cancelling drops what was remembered: the reader said no, and it should not
+// happen to them the next time they sign in for something else.
+$('signin-cancel').addEventListener('click', () => { sessionStorage.removeItem('bb:intent'); $('signin-dlg').close(); });
+$('signin-dlg').addEventListener('cancel', () => sessionStorage.removeItem('bb:intent'));
 $('masto-logout').addEventListener('click', async () => {
   if (podAcct) { await pod.signOut(); podAcct = null; localStorage.removeItem('bb:acct'); sessionStorage.removeItem('bb:pod'); } else login.signOut();
   if (replyCtx) replyBox(replyCtx);
@@ -1124,6 +1315,7 @@ $('reply-send').addEventListener('click', async () => {
     $('reply-text').value = '';
     $('topic-title').value = '';
     $('reply-dlg').close();
+    forgetIndex();
     await route();
   } catch (e) { $('reply-err').textContent = e.message; }
   $('reply-send').disabled = false;
@@ -1178,4 +1370,7 @@ $('reply-send').addEventListener('click', async () => {
   $('fedipod-signup').href = front + '/new-account';
   window.addEventListener('hashchange', () => route());
   await load();
+  // Whatever the reader pressed before being asked to sign in. After `load`,
+  // because voting and joining both need the categories to be known.
+  await replayIntent();
 })();

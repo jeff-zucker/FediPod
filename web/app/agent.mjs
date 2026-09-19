@@ -5,6 +5,7 @@
 // the signing key comes from WebCrypto (keys-browser), and delivery goes through
 // the relay (deliver-relay). Everything between — wire, the store, the
 // publisher, intake, the Mastodon facade — is lib/, unchanged.
+import { kvGet, kvPut } from './idb-kv.mjs';
 import { apUrls } from '../../lib/core/wire.mjs';
 import * as containers from '../../lib/pod/containers.mjs';
 import * as podState from '../../lib/pod/state.mjs';
@@ -160,6 +161,22 @@ export class BrowserAgent {
    *  - { credential, keysRecord, config }: a client-credential session with the
    *    material in hand (the offline test path).
    */
+  // This browser's name for itself, minted once and kept. Not an identity and
+  // not a secret — it says only "the same browser as last time" to the lease.
+  // If storage cannot be reached, a fresh one is honest: this browser cannot
+  // prove it is the one that held the lease, so it should not claim to be.
+  async deviceId() {
+    try {
+      const had = await kvGet('device-id');
+      if (had) return had;
+      const made = crypto.randomUUID();
+      await kvPut('device-id', made);
+      return made;
+    } catch {
+      return null;
+    }
+  }
+
   async boot({ oidc, credential, keysRecord, config, frontOrigin }) {
     let session; let webId; let remotePod;
     if (oidc) {
@@ -263,7 +280,13 @@ export class BrowserAgent {
     // one browser/device may ACT on a pod at a time — a later arrival runs
     // read-only until the owner acts on it and it takes over. Written with fresh
     // fetches, never the cached store. Passed into Intake so the drain checks it.
-    this.lease = new Lease({ url: this.urls.state + 'lease.json', fetchImpl: podFetch, log: this.log });
+    this.lease = new Lease({ url: this.urls.state + 'lease.json', fetchImpl: podFetch, log: this.log,
+      // Kept on this origin, so THIS browser is one holder however many times
+      // its worker is killed and restarted. Without it every restart was a new
+      // holder: the old lease still had minutes to run, so the browser found
+      // its own account "active on another device" and asked to take it over.
+      // Switching between the clients did it every time, being a navigation.
+      id: await this.deviceId() });
     // The client-to-server dispatcher, here only for what the Gateway's
     // outbox door takes on the owner's behalf: the browser answers no
     // /ap/outbox of its own.

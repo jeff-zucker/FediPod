@@ -295,6 +295,23 @@ if (up) {
   check(!!appRec.client_id && !!appRec.client_secret && appRec.client_id !== 'dk-ap-client',
     'POST /api/v1/apps registers a client with its own id and secret');
 
+  // A client that registers with a FormData sends multipart, not a query
+  // string. Read as one, every field came back undefined and the registration
+  // answered with the out-of-band URN, so the client had nowhere to return to
+  // — which is exactly what Sengi does.
+  const mpBoundary = 'fedipodsmoke';
+  const mpField = (n, v) => `--${mpBoundary}\r\nContent-Disposition: form-data; name="${n}"\r\n\r\n${v}\r\n`;
+  const mpBack = 'https://client.example/sengi/';
+  const mp = await fetchLocal(`https://127.0.0.1:${PORT}/api/v1/apps`, {
+    method: 'POST',
+    headers: { ...gh, 'content-type': `multipart/form-data; boundary=${mpBoundary}` },
+    body: mpField('client_name', 'Sengi') + mpField('redirect_uris', mpBack)
+      + mpField('scopes', 'read write follow') + `--${mpBoundary}--\r\n`,
+  });
+  const mpRec = await mp.json();
+  check(mpRec.name === 'Sengi' && mpRec.redirect_uri === mpBack,
+    `a multipart registration keeps its name and redirect (got ${mpRec.name} / ${mpRec.redirect_uri})`);
+
   const authz = await fetchLocal(`https://127.0.0.1:${PORT}/oauth/authorize?redirect_uri=urn:ietf:wg:oauth:2.0:oob&client_id=dk-ap-client`, { headers: gh });
   const { code } = await authz.json();
   const tok = await fetchLocal(`https://127.0.0.1:${PORT}/oauth/token`, {
@@ -5071,8 +5088,10 @@ async function call(pathAndQuery, { method = 'GET', body = null, contentType = '
 {
   const dir = await call('/api/v1/directory');
   check(dir.status === 200 && dir.json.length === 1 && dir.json[0].url === urls2.actor, 'the directory lists this account');
-  check((await call('/api/v1/suggestions')).json?.length === 0 && (await call('/api/v1/trends')).json?.length === 0,
-    'suggestions and trends are empty, not missing');
+  // Trends is no longer part of this: it answers with whatever the tag feed has
+  // mirrored, which is the point of it, and is checked on its own below.
+  check((await call('/api/v1/suggestions')).json?.length === 0,
+    'suggestions are empty, not missing');
   const lists0 = store2.getLists(); store2.setLists([...lists0, { id: 'abc123', title: 'pals', members: [ALICE] }]);
   const onLists = await call(`/api/v1/accounts/${store2.idFor(ALICE)}/lists`);
   check(onLists.status === 200 && onLists.json.length === 1 && onLists.json[0].title === 'pals', 'an account\'s lists are the ones it is on');
@@ -5168,6 +5187,21 @@ check(me.json.following_count === myFollowing.json.length
   && me.json.followers_count === myFollowers.json.length,
   `the counts equal the lists behind them (${me.json?.following_count}/${me.json?.followers_count})`);
 
+// An account with no icon of its own still has to be VISIBLE. The placeholder
+// was a transparent pixel, which drew nothing: Sengi's left bar showed an empty
+// square where the button that opens the account is, so clicking it looked like
+// nothing happening. The banner is the opposite case and stays invisible.
+// It has to be a RASTER data URI: Angular refuses `data:image/svg+xml` on an
+// `<img src>` binding — an SVG can carry script — and hands the client
+// `unsafe:…`, which draws nothing. That is a client-side rule no test here can
+// see, so the shape of the URI is what gets asserted.
+check(/^data:image\/png;base64,/.test(String(me.json?.avatar || ''))
+  && String(me.json.avatar).length > 200
+  && String(me.json.avatar) === String(me.json.avatar_static),
+  `an account with no icon gets a visible default avatar (${String(me.json?.avatar).length} chars of PNG)`);
+check(String(me.json?.header || '').length < 200 && /^data:image\/png/.test(String(me.json?.header || '')),
+  'the banner nobody set stays an invisible pixel');
+
 // A stranger's collections live on their own server; opening a profile does not
 // buy a fetch of it. Empty is a truthful answer, an error is not.
 const theirs = await call(`/api/v1/accounts/${store2.idFor(ALICE)}/following`);
@@ -5176,6 +5210,51 @@ check(theirs.status === 200 && Array.isArray(theirs.json) && theirs.json.length 
 
 const noSuch = await call('/api/v1/accounts/deadbeef/followers');
 check(noSuch.status === 404, 'an unknown account is still 404');
+
+// Trending tags are what the tag feed has actually brought in — a single-actor
+// instance has no firehose to measure, and an empty Explore surface in every
+// client was the alternative.
+{
+  // Three tags, unevenly used, two people — so the ordering, the per-day counts
+  // and the distinct-account count all have something to be wrong about.
+  const dayAgo = (n) => new Date(Date.now() - n * 86400000).toISOString();
+  const seedTag = (tag, actor, n, days = 0) => {
+    for (let i = 0; i < n; i++) {
+      store2.addStatus({ noteId: `https://tagged.example/${tag}/${actor}/${days}/${i}`,
+        kind: 'tag', tag, actor: `https://tagged.example/${actor}`, url: `https://tagged.example/${tag}/${i}`,
+        content: `<p>about #${tag}</p>`, published: dayAgo(days), visibility: 'public' });
+    }
+  };
+  seedTag('fediverse', 'ines', 3);
+  seedTag('fediverse', 'tomasz', 2, 1);
+  seedTag('opensource', 'ines', 2);
+  seedTag('smallweb', 'tomasz', 1, 2);
+
+  const tr = await call('/api/v1/trends/tags');
+  const named = (tr.json || []).map(t => t.name);
+  check(tr.status === 200 && Array.isArray(tr.json),
+    `/api/v1/trends/tags answers a list (${tr.status})`);
+  check(named.join(' ') === 'fediverse opensource smallweb',
+    `busiest tag first, every mirrored tag named (${named.join(' ')})`);
+  const fedi = (tr.json || []).find(t => t.name === 'fediverse');
+  check(fedi?.history?.[0]?.uses === '3' && fedi?.history?.[0]?.accounts === '1'
+    && fedi?.history?.[1]?.uses === '2',
+    `today's uses and distinct people are counted per day (${JSON.stringify(fedi?.history?.slice(0, 2))})`);
+  const one = (tr.json || [])[0];
+  check(!one || (one.history.length === 7 && one.history.every(h => typeof h.uses === 'string')),
+    'each tag carries seven days of history, counted as strings');
+  const ordered = (tr.json || []).map(t => t.history.reduce((n, h) => n + Number(h.uses), 0));
+  check(ordered.every((n, i) => i === 0 || ordered[i - 1] >= n),
+    `busiest first (${ordered.join(' ')})`);
+  const alias = await call('/api/v1/trends');
+  check(alias.status === 200 && JSON.stringify(alias.json) === JSON.stringify(tr.json),
+    "/api/v1/trends is the same answer under Mastodon's older name");
+
+  // Put the store back: the tag-feed sweep further down counts mirrored notes
+  // and these are not its.
+  store2.write('statuses.json',
+    store2.getStatuses().filter(x => !String(x.noteId).startsWith('https://tagged.example/')));
+}
 
 // Cursors name an ACTOR here, not a note — page() took the field as a parameter
 // so the statuses paths keep naming notes.
@@ -12621,6 +12700,22 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
   check(await fits({ '@context': AS, id: 'https://m.example/f/1', type: 'Follow',
     actor: 'https://m.example/u/s', object: 'https://p.example/a' }) === null,
     'a well-formed Follow fits its shape');
+
+  // An Update carries the parts that are now different, and `closed` is a TIME:
+  // AS2 types it xsd:dateTime. A moderator's reopen sent `closed: false`, which
+  // lands as "false" typed as a dateTime — not a boolean and not a date — and
+  // nothing looked at it, because there was no Update shape at all.
+  const upd = (object) => ({ '@context': AS, id: 'https://m.example/act/1', type: 'Update',
+    actor: 'https://m.example/u/s', object });
+  check(await fits(upd({ id: 'https://m.example/t/1', closed: '2026-09-18T23:29:53.133Z' })) === null,
+    'an Update closing a topic at a time fits its shape');
+  check(await fits(upd({ id: 'https://m.example/t/2', name: 'A renamed topic' })) === null,
+    'an Update renaming a topic fits its shape');
+  check(await fits(upd('https://m.example/t/3')) === null,
+    'an Update naming its object by id alone fits its shape');
+  const wrong = await fits(upd({ id: 'https://m.example/t/4', closed: false }));
+  check(/closed/u.test(String(wrong)) && /dateTime/u.test(String(wrong)),
+    `a closed that is not a time is caught, and named (${wrong})`);
   check(await fits({ '@context': [AS, 'https://w3id.org/security/v1'],
     id: 'https://m.social/users/a/statuses/1/activity', type: 'Create', actor: 'https://m.social/users/a',
     published: '2026-09-12T00:00:00Z', to: [AS + '#Public'],

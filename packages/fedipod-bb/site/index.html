@@ -5,6 +5,7 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https: data:; connect-src 'self' https:; object-src 'none'; base-uri 'none'; frame-ancestors 'self'; form-action 'self'">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>FediPod-BB</title>
+<link rel="icon" href="/icons/forum.svg" type="image/svg+xml">
 <link rel="stylesheet" href="/bb/tokens.css">
 <style>
   /* The site's shared tokens are in tokens.css (web/admin/tokens.css): the
@@ -99,6 +100,11 @@
   .acts.mod button { font-size: 16px; font-weight: 600; padding: .3rem .8rem; border-radius: .3rem;
     background: transparent; color: var(--accent); border: 1px solid var(--line); }
   .acts.mod button:hover { background: var(--field-bg); }
+  /* The two that cannot be undone by pressing them again: closing a topic and
+     deleting one. Marked so a moderator's eye catches them before the click,
+     not after — they sit together at the end of the row for the same reason. */
+  .acts.mod button.grave { border-color: var(--danger); color: var(--danger); }
+  .acts.mod button.grave:hover { background: var(--danger); color: var(--btn-text); border-color: var(--danger); }
   article.post .acts button { font-size: 16px; font-weight: 600; padding: .3rem .8rem; border-radius: .3rem;
     background: transparent; color: var(--accent); border: 1px solid var(--line); }
   article.post .acts button:hover { background: var(--field-bg); }
@@ -196,6 +202,23 @@
   <div id="panel-body"></div>
   <p class="err" id="panel-err" role="alert"></p>
   <p class="row"><button id="panel-close" class="plain">Close</button></p>
+</section>
+</dialog>
+<!-- Signing in on its own, for any action that needs an account rather than
+     only for writing. Whatever the reader was trying to do is remembered and
+     carried out once they are back. -->
+<dialog id="signin-dlg" aria-labelledby="signin-title">
+<section class="reply">
+  <h2 id="signin-title">Sign in</h2>
+  <p class="hint" id="signin-why" role="status"></p>
+  <div class="row">
+    <label for="signin-handle">Your handle</label>
+    <input type="text" id="signin-handle" placeholder="@you@your.server" autocomplete="off">
+    <button id="signin-go" class="primary">Sign in</button>
+  </div>
+  <p class="hint" id="signin-note" role="status"></p>
+  <p class="row">No account yet? <a class="big" href="/new-account">Get a FediPod account</a></p>
+  <div class="row"><button id="signin-cancel" class="plain">Cancel</button></div>
 </section>
 </dialog>
 <dialog id="reply-dlg" aria-labelledby="reply-title">

@@ -10,6 +10,7 @@ import * as topics from '../src/topics.mjs';
 import * as publish from '../src/publish.mjs';
 import * as moderation from '../src/moderation.mjs';
 import { PodStore } from '../../../lib/core/store.mjs';
+import { trimActivity } from '../../../lib/core/intake/activity.mjs';
 
 const POD = 'https://forum.example/';
 const MEI = 'https://mei.pod.example/fedipod/ap/actor';
@@ -156,4 +157,45 @@ test('which arriving activities are a moderator\'s ask, and how one is applied',
   const gone = await moderation.applyForumModeration(forum, c, { type: 'Remove', moderator: PRIYA, activity: { type: 'Remove', object: c.urls.topic(tid), target: c.urls.actor } });
   assert.equal(gone.removed, 1);
   assert.equal(topics.list(c.store).length, 0);
+});
+
+// An Update carries its instruction INSIDE its object — close this topic,
+// reopen it, call it something else. The queue used to keep only the object's
+// id, so every one of them reached the moderator's queue saying nothing but
+// which topic, and did nothing at all. A reopen is the sharpest case: `false`
+// is the whole of it, and a queue that drops falsy values drops the request.
+test('a close, a reopen and a rename survive the queue and are applied', async () => {
+  const pod = fakePod(); const delivered = []; const retracted = [];
+  const g = category(pod, forumUrls(POD), 'gardening', delivered, retracted);
+  pod.docs.set(g.urls.actor, { id: g.urls.actor, type: 'Group', preferredUsername: 'gardening' });
+  const tid = await seed(g, { posts: 1 });
+  const topic = g.urls.topic(tid);
+  const forum = { categories: [g] };
+  const queued = (object) => ({ type: 'Update', moderator: PRIYA,
+    activity: trimActivity({ type: 'Update', actor: PRIYA, object }) });
+
+  await moderation.applyForumModeration(forum, g, queued({ id: topic, closed: new Date().toISOString() }));
+  assert.equal(moderation.isLocked(g, tid), true, 'a close closes it');
+
+  await moderation.applyForumModeration(forum, g, queued({ id: topic, closed: false }));
+  assert.equal(moderation.isLocked(g, tid), false, 'and a reopen opens it again');
+
+  await moderation.applyForumModeration(forum, g, queued({ id: topic, name: 'Renamed by a moderator' }));
+  assert.equal(topics.list(g.store).find(t => t.tid === tid)?.title, 'Renamed by a moderator');
+
+  // A plain id still arrives as a plain id: nothing else was let through.
+  assert.equal(typeof trimActivity({ type: 'Update', object: topic }).object, 'string');
+
+  // The AS2 way to reopen: `closed` REMOVED, which ActivityPub spells as null.
+  await moderation.applyForumModeration(forum, g, queued({ id: topic, closed: new Date().toISOString() }));
+  assert.equal(moderation.isLocked(g, tid), true);
+  await moderation.applyForumModeration(forum, g, queued({ id: topic, closed: null }));
+  assert.equal(moderation.isLocked(g, tid), false, 'a removed closed reopens it');
+
+  // And a boolean that arrived as text is still a boolean. `!!"false"` is true,
+  // so without this every reopen closes the topic again.
+  await moderation.applyForumModeration(forum, g, queued({ id: topic, closed: 'true' }));
+  assert.equal(moderation.isLocked(g, tid), true, '"true" closes it');
+  await moderation.applyForumModeration(forum, g, queued({ id: topic, closed: 'false' }));
+  assert.equal(moderation.isLocked(g, tid), false, 'and "false" reopens it rather than closing it again');
 });

@@ -33000,7 +33000,7 @@ var PodTransport = class {
   // leaves the private trees world-readable. $rdf.sym() also throws on an
   // illegal IRI, so a pod URL with something odd in it fails here rather than
   // silently producing a document that means something else.
-  aclDoc(targetUrl, publicModes, { appendAgents = [], aclUrl = null } = {}) {
+  aclDoc(targetUrl, publicModes, { appendAgents = [], readAgents = [], aclUrl = null } = {}) {
     const url = aclUrl || targetUrl + ".acl";
     const doc = namedNode2(url);
     const target = namedNode2(targetUrl);
@@ -33016,6 +33016,7 @@ var PodTransport = class {
       authorize(namedNode2(url + "#public"), ACL("agentClass"), FOAF("Agent"), publicModes);
     }
     appendAgents.forEach((webId, i) => authorize(namedNode2(url + `#gw${i}`), ACL("agent"), namedNode2(webId), ["Append"]));
+    readAgents.forEach((webId, i) => authorize(namedNode2(url + `#r${i}`), ACL("agent"), namedNode2(webId), ["Read"]));
     authorize(
       namedNode2(url + "#owner"),
       ACL("agent"),

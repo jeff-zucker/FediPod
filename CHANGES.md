@@ -1,5 +1,53 @@
 # Changes
 
+## 2026-09-18 (a choice of clients, and a forum that takes a moderator's word — version 1.16.0)
+
+**Two clients.** Sengi joins Phanpy, and it is the one you get by default. The
+links at the top right of the page switch between them and your browser keeps
+the choice; each client has its own shell page naming the app it frames, so
+nothing is ever loaded into the frame by script. A first visit says so, once.
+Sengi is signed in for you the way Phanpy always was, lands on a Home column
+rather than a screen telling you to right-click your avatar, and its columns
+are wider. It is a patched build — `sengi/PATCHES.md` lists the nine changes
+and warns that two of them fail silently if an upgrade drops them.
+
+**Something to read on the first morning.** The tag feed's defaults went from
+three tags to twelve, two from each of six subjects, and a sweep now takes four
+of them in turn rather than all of them at once: a sweep holds its writes until
+it finishes, the browser kills a service worker whenever it likes, and twelve
+tags ran long enough to be killed and contribute nothing. Trending tags are
+answered for the first time, counted from the notes the feed has actually
+brought in — seven days each, distinct people per day, busiest first.
+
+**A restart is the same device coming back.** The lease that stops two agents
+acting at once identified its holder by an id minted per process, so every
+restart looked like a second device and asked the owner to take over their own
+account. Switching clients did it every time, being a navigation. Both the
+browser and the forum host now keep an id: the browser on its origin, the host
+beside its credential.
+
+**The forum takes a moderator's word.** An Update says what to change inside
+its object, and the moderation queue kept only the object's id — so close,
+reopen and rename all arrived saying nothing but which topic, and did nothing.
+Reopening is now valid ActivityPub: `closed` is a time, so closing carries the
+moment and reopening removes it, which §6.3.1 spells as `null`. A shape for
+Update watches it, and JSON-LD's inability to carry a null no longer loses the
+removal. Close topic has moved beside Delete topic and both are red; the index
+column counts posts rather than replies; signing in is offered for anything
+that needs an account, not only for posting, and finishes what you pressed.
+
+**Booleans are booleans.** An RDF literal's value is its lexical form, so every
+boolean and number arriving in an activity was a string — `!!"false"` is true,
+which is how a reopen was applied as another close. Converted by datatype now;
+dates are left as the strings everything here carries them as.
+
+**Smaller things.** Favicons: a door for the gateway's pages, a house for your
+own, speech bubbles for the forum. An account with no icon gets a visible
+avatar rather than a transparent pixel. A client registering with a FormData
+is understood — multipart bodies were read as query strings, so every field
+arrived undefined. Switching a forum category no longer refetches the whole
+forum: 6–12ms rather than ~900.
+
 ## 2026-09-16 (FediPod-BB, a forum on a pod — version 1.15.0, fedipod-server 0.25.0)
 
 A discussion forum whose record lives on a Solid pod, as ActivityPub

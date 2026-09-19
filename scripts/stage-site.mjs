@@ -41,6 +41,77 @@ const copyDir = (from, to) => { fs.mkdirSync(to, { recursive: true });
     else fs.copyFileSync(s, d);
   } };
 copyDir(path.join(root, 'phanpy/dist'), path.join(site, 'app'));
+// A second client at /sengi, so the owner has a choice. Sengi is a plain
+// client-side Angular SPA whose whole OAuth login runs in the browser, so the
+// worker answers its API calls exactly as it answers Phanpy's. Vendored
+// without its Angular service worker and without the emoji sizes the bundle
+// never asks for — this origin has one worker, and 128/ and 32/ are 54 MB of
+// images nothing loads.
+const copyPlain = (from, to) => { fs.mkdirSync(to, { recursive: true });
+  for (const e of fs.readdirSync(from, { withFileTypes: true })) {
+    const s = path.join(from, e.name), d = path.join(to, e.name);
+    if (e.isDirectory()) copyPlain(s, d); else fs.copyFileSync(s, d);
+  } };
+copyPlain(path.join(root, 'sengi/dist'), path.join(site, 'sengi'));
+
+// The clients this site carries, and which one it opens by default: the FIRST
+// is the default. It is what /admin/client/ frames, and so where signing in
+// lands. `login` names a client the shell can log in for the owner — that is
+// client.js, and it speaks Phanpy's routes and reads Phanpy's stored accounts;
+// Sengi is added once through its own "+" and remembers itself after that.
+//
+// Each client gets its OWN shell page, whose markup declares the app it frames.
+// Nothing here is ever loaded into a frame by script.
+const CLIENTS = [
+  { id: 'sengi', name: 'Sengi', path: '/sengi/', login: false },
+  { id: 'phanpy', name: 'Phanpy', path: '/app/', login: true },
+];
+// Sibling shells rather than nested ones, so `../bar.css`, `../bar.js` and
+// `../` for "manage account" mean the same thing on every one of them.
+const shellPath = (c) => (c === CLIENTS[0] ? '/admin/client/' : `/admin/client-${c.id}/`);
+// The shell as copyAdmin leaves it — brand link, sign out, hidden actor picker,
+// version stamp — before any one client's marks are made on it. Every shell is
+// cut from this, so none of them inherits another's.
+let shellSource = null;
+
+// One client's shell, out of the source shell web/admin/client/index.html.
+// Two things differ between them: what the frame declares it loads, and whether
+// client.js comes along — it logs Phanpy in for the owner and knows only
+// Phanpy's routes and stored accounts.
+const shell = (text, c) => text
+  .replace('src="../../"', `src="${c.path}"`)
+  .replace('<script src="client.js"></script>',
+    c.login ? '<script src="/admin/client/client.js"></script>' : '')
+  .replace('>sign out</a>', `>sign out</a>${clientBar()}`)
+  .replace('</head>', '<script src="/admin/client-pick.js"></script>\n</head>')
+  .replace('</body>', `${clientNews()}</body>`);
+
+// The bar control: every client as a link, the current one marked. The same
+// markup on the record page and on every shell, so the answer to "which client
+// am I using" is in the same place wherever the owner is. The links carry their
+// destinations; client-pick.js only marks the current one and records a change.
+// One element around the label and the links, so a narrow bar wraps the control
+// as a unit instead of leaving a client stranded on a line of its own.
+const clientBar = () => '\n  <span id="client-pick"><span id="client-now">client:</span>'
+  + CLIENTS.map((c) => `\n  <a class="client-switch" href="${shellPath(c)}"`
+    + ` title="   Open this account in ${c.name} and keep it as the client this browser uses">${c.name}</a>`).join('')
+  + '</span>';
+
+// Said once, to somebody who last saw one client and now has two. It is a
+// change to a page they already know, so it is worth a sentence — and only one,
+// shown once per browser, dismissed for good.
+const clientNews = () => `
+<dialog id="client-news" aria-labelledby="client-news-title">
+  <section>
+    <h2 id="client-news-title">There are two clients now</h2>
+    <p>You can read your account in <b>${CLIENTS.map((c) => c.name).join('</b> or in <b>')}</b>.
+      The links at the top right of this page switch between them, and this browser
+      stays with whichever you choose. You can switch between clients at any time.</p>
+    <p class="row"><button id="client-news-ok" class="primary">Got it</button></p>
+  </section>
+</dialog>
+`;
+
 // The owner's record/manage surface: the SAME web/admin pages the Node agent
 // serves, reused as static files (the agent answers their data endpoints from
 // the worker — see admin-facade.mjs). Two browser adaptations: the client shell
@@ -65,10 +136,16 @@ const copyAdmin = (from, to) => { fs.mkdirSync(to, { recursive: true });
       .replace('</head>', '<style>#actor-pick{display:none!important}</style>\n</head>');
     text = withUpdate(text);
     if (/[/\\]client$/.test(from)) {
-      // The client shell frames the client at /app/ (locally the client is the
-      // origin root, so the source says "../../").
-      text = text.replace('src="../../"', 'src="/app/"');
+      // This copy is the DEFAULT client's shell; the others are written out
+      // below, each cut from the same unmarked source.
+      shellSource = text;
+      text = shell(text, CLIENTS[0]);
     } else if (/[/\\]admin$/.test(from)) {
+      // The record page carries the same client control as the shells: it is
+      // the page the owner is on when they want to change which client opens.
+      text = text.replace('>sign out</a>', `>sign out</a>${clientBar()}`)
+        .replace('</head>', '<script src="/admin/client-pick.js"></script>\n</head>')
+  .replace('</body>', `${clientNews()}</body>`);
       // Hide controls the browser build does not carry: the manual drain (it
       // drains automatically over notifications), the local logfile viewer
       // (there is no local log in a browser), and the "create a handle at the
@@ -94,6 +171,18 @@ const copyAdmin = (from, to) => { fs.mkdirSync(to, { recursive: true });
     fs.writeFileSync(d, text);
   } };
 copyAdmin(path.join(root, 'web/admin'), path.join(site, 'admin'));
+// The favicons. One for the gateway's own pages, one for this account's pages,
+// one for the forum — so three FediPod tabs are three different tabs.
+copyPlain(path.join(root, 'web/icons'), path.join(site, 'icons'));
+// A shell per client that is not the default, beside the default's own. Each is
+// cut from the same unmarked staged text, so no client's page carries a trace of
+// another's — the Phanpy shell lost its own client.js when these were made from
+// the Sengi one, which had already dropped it.
+for (const c of CLIENTS.slice(1)) {
+  const dir = path.join(site, `admin/client-${c.id}`);
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, 'index.html'), shell(shellSource, c));
+}
 // Netlify routing. The project sends every path to the gateway function by
 // default, which would shadow these static files, so file-based rules (which
 // win over the project's UI redirect) serve the app directly and forward only
@@ -122,6 +211,7 @@ fs.writeFileSync(path.join(site, '_redirects'), [
     // One forum on this site, so its root IS that forum.
     `https://${h}/           /forum/         301!`,
     `https://${h}/bb/*      /bb/:splat      200!`,
+    `https://${h}/icons/*   /icons/:splat   200!`,
     `https://${h}/update.js /update.js      200!`,
     `https://${h}/build.json /build.json     200!`,
     `https://${h}/api/*     /.netlify/functions/front  200!`,
@@ -138,6 +228,11 @@ fs.writeFileSync(path.join(site, '_redirects'), [
   '/bb/*        /bb/:splat     200',
   '/admin       /admin/        301',
   '/admin/*     /admin/:splat  200',
+  // Sengi routes client-side from its own root, and its OAuth redirect comes
+  // back to `/sengi/` with the code in the query — so every path under it is
+  // that one page, and the bare path is the page too.
+  '/sengi       /sengi/        301',
+  '/sengi/*     /sengi/:splat  200',
   '', ].join('\n'));
 // Response headers. Same-origin IS the trust boundary for this build — the
 // worker answers the admin routes on this origin, and one page here renders
