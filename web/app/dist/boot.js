@@ -33972,7 +33972,8 @@ if (typeof document !== "undefined") (async () => {
         "pod-error": { title: "Your pod had an error", retry: "Reload", go: reload, wait: 20 },
         "pod-unreachable": { title: "Your pod could not be reached", retry: "Reload", go: reload, wait: 20 },
         "no-account-here": { title: "No FediPod account in that pod", retry: "Use another pod", go: signIn },
-        "no-account": { title: "No FediPod account in that pod", retry: "Use another pod", go: signIn }
+        "no-account": { title: "No FediPod account in that pod", retry: "Use another pod", go: signIn },
+        "device-account": { title: "This account is run from a device", retry: "Use another pod", go: signIn }
       }[e.code];
       if (e.code === "sign-in-refused" && once("fedipod-renewing")) {
         $("loading").hidden = true;

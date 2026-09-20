@@ -1,5 +1,14 @@
 # Changes
 
+## 2026-09-20 (an account run from a device is called that — version 1.26.1)
+
+**Signing in at fedipod.net with a pod whose account a DeviceAgent runs no
+longer says the account does not exist.** The browser opens an account by
+reading its record from the pod; a DeviceAgent keeps that record on the
+device, so the pod holds the account's public documents and no record. The
+page now sees the account's actor there and says so: the account is run by
+a DeviceAgent, and opens from that device's admin page.
+
 ## 2026-09-20 (an account any app can act with — version 1.26.0)
 
 **A library other apps can use: `fediverse-account`, in `lib/session/`.** A

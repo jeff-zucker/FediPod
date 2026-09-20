@@ -306,6 +306,7 @@ if (typeof document !== 'undefined') (async () => {
         'pod-unreachable': { title: 'Your pod could not be reached', retry: 'Reload', go: reload, wait: 20 },
         'no-account-here': { title: 'No FediPod account in that pod', retry: 'Use another pod', go: signIn },
         'no-account': { title: 'No FediPod account in that pod', retry: 'Use another pod', go: signIn },
+        'device-account': { title: 'This account is run from a device', retry: 'Use another pod', go: signIn },
       }[e.code];
 
       // A sign-in the pod would not take: renew it here, and if the pod will

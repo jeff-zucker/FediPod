@@ -71562,7 +71562,7 @@ var originAuthorities = (host) => ({
   }
   // fetch-only: this build serves no socket
 });
-function accountNotRead({ unread, podBase, state, webId }) {
+async function accountNotRead({ unread, podBase, state, webId, actorUrl = null, fetchImpl = globalThis.fetch }) {
   const host = (() => {
     try {
       return new URL(podBase).host;
@@ -71576,6 +71576,17 @@ function accountNotRead({ unread, podBase, state, webId }) {
     return e;
   };
   if (!unread) {
+    const actor = actorUrl ? await fetchImpl(actorUrl, { headers: { accept: "application/activity+json" } }).then((r) => r.ok ? r.json() : null).catch(() => null) : null;
+    if (actor?.preferredUsername) {
+      const at = (() => {
+        try {
+          return `@${actor.preferredUsername}@${new URL(actor.id || actorUrl).host}`;
+        } catch {
+          return actor.preferredUsername;
+        }
+      })();
+      return of("device-account", `${host} holds the account ${at}, but not its record: this account is run by a DeviceAgent, and its record lives on that device. Open it from that device's admin page, not here. The sign-in used here was ${webId}.`);
+    }
     return of("no-account", `${host} answered, and there is no FediPod account in it. Sign in with the pod that holds your account, or make an account in this one \u2014 both start from the sign-in page. The sign-in used here was ${webId}.`);
   }
   const status2 = Number((/HTTP (\d{3})/u.exec(unread.message) || [])[1]) || 0;
@@ -71736,7 +71747,7 @@ var BrowserAgent = class _BrowserAgent {
       unread = e;
     });
     const cfg = config || this.store.getConfig();
-    if (!cfg) throw accountNotRead({ unread, podBase: remotePod, state: this.urls.state, webId });
+    if (!cfg) throw await accountNotRead({ unread, podBase: remotePod, state: this.urls.state, webId, actorUrl: this.urls.actor });
     this.store.setConfig({ ...this.store.getConfig() || {}, ...cfg, root });
     config = this.store.getConfig();
     const publicBase = config.gateway?.frontActor ? config.gateway.frontActor.replace(/ap\/actor\/?$/, "") : null;

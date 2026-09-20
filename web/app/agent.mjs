@@ -59,10 +59,22 @@ const originAuthorities = (host) => ({
 // Each message says three things and stops: what the pod did, what that means
 // for the account, what to do about it. The pod's own wording is carried only
 // where it adds something the status code does not.
-function accountNotRead({ unread, podBase, state, webId }) {
+async function accountNotRead({ unread, podBase, state, webId, actorUrl = null, fetchImpl = globalThis.fetch }) {
   const host = (() => { try { return new URL(podBase).host; } catch { return podBase; } })();
   const of = (code, message) => { const e = new Error(message); e.code = code; return e; };
   if (!unread) {
+    // A pod that holds the account's actor and no record is an account a
+    // DeviceAgent runs: the record lives on the device, and only the device
+    // can open it. Said so, rather than "there is no account".
+    const actor = actorUrl
+      ? await fetchImpl(actorUrl, { headers: { accept: 'application/activity+json' } }).then((r) => (r.ok ? r.json() : null)).catch(() => null)
+      : null;
+    if (actor?.preferredUsername) {
+      const at = (() => { try { return `@${actor.preferredUsername}@${new URL(actor.id || actorUrl).host}`; } catch { return actor.preferredUsername; } })();
+      return of('device-account', `${host} holds the account ${at}, but not its record: this account is run by a`
+        + ` DeviceAgent, and its record lives on that device. Open it from that device's admin page, not here.`
+        + ` The sign-in used here was ${webId}.`);
+    }
     return of('no-account', `${host} answered, and there is no FediPod account in it.`
       + ` Sign in with the pod that holds your account, or make an account in this one —`
       + ` both start from the sign-in page. The sign-in used here was ${webId}.`);
@@ -265,7 +277,7 @@ export class BrowserAgent {
     await this.store.load().catch((e) => { unread = e; });
     // Config: handed in on sign-up, or read from the pod on a returning sign-in.
     const cfg = config || this.store.getConfig();
-    if (!cfg) throw accountNotRead({ unread, podBase: remotePod, state: this.urls.state, webId });
+    if (!cfg) throw await accountNotRead({ unread, podBase: remotePod, state: this.urls.state, webId, actorUrl: this.urls.actor });
     // `root` is written INTO the config, not just used above. The Publisher
     // builds its own urls from `config.root` (publisher.mjs), and a config
     // without one falls to the Node default — so an account set up elsewhere
@@ -600,3 +612,5 @@ export class BrowserAgent {
     return { ...moved, ...r, snapshot: following.length };
   }
 }
+
+export { accountNotRead };
