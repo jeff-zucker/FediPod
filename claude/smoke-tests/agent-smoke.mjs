@@ -11290,10 +11290,10 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
 
   // The run page: served only where the adapter supplies one.
   const ctx3 = { ...ctx2, runPage: '<!doctype html><title>run here</title>' };
-  const runPage = await front.routeFront(R('GET', '/run'), ctx3);
+  const runPage = await front.routeFront(R('GET', '/.fediverse-account'), ctx3);
   check(runPage.status === 200 && /text\/html/.test(runPage.headers['content-type']) && runPage.body.includes('run here'),
     '/run serves the run page when the host supplies one');
-  const noRun = await front.routeFront(R('GET', '/run'), ctx2);
+  const noRun = await front.routeFront(R('GET', '/.fediverse-account'), ctx2);
   check(noRun.status === 404, 'a host with no run page 404s /run');
   const runReserved = JSON.parse((await front.routeFront(R('GET', '/api/handle?handle=run'), ctx2)).body);
   check(runReserved.available === false && /reserved/.test(runReserved.reason),

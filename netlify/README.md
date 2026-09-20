@@ -22,7 +22,7 @@ Community Solid Server can run the same door as a component of itself instead
 
 The front also serves the installer at `/install`
 (`curl -fsSL https://<host>/install | sh`) and the vendored sign-in bundle.
-The `/run` page is served too, but opting in to being run is answered only on
+The `/.fediverse-account` page is served too, but opting in to being run is answered only on
 a pod server — on Netlify the form's submit is refused.
 
 ## Deploying

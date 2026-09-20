@@ -3,7 +3,7 @@
 // It lived inline in run.html until 2026-09-09. Out here the page can be served
 // under `script-src 'self'`, which is what stops a stray bit of markup from
 // becoming running code; inline script cannot be told apart from injected
-// script by any policy. Served by the front at /run.js.
+// script by any policy. Served by the front beside the page it belongs to.
 //
 // A module, because it awaits an import of /solid-oidc-client.js at the top
 // level — which is itself the proof this mechanism works: that file has been
@@ -13,10 +13,14 @@ const $ = (id) => document.getElementById(id);
 // The Solid-OIDC client for the sign-in round trip. Constructed once; the
 // redirect state (PKCE, csrf) lives in this tab's sessionStorage, so the same
 // session finishes the login on the way back.
+// This page's own address. The identity provider is told it and sends the
+// reader back to it, so a hard-coded name would end the sign-in on a page that
+// does not exist wherever the operator put this one.
+const HERE = location.origin + location.pathname.replace(/\/$/u, '');
 let session = null;
 try {
   const { SessionCore } = await import('/solid-oidc-client.js');
-  session = new SessionCore({ redirect_uris: [location.origin + '/run'], client_name: 'FediPod gateway' });
+  session = new SessionCore({ redirect_uris: [HERE], client_name: 'FediPod gateway' });
 } catch { /* leave null — the "did not load" notes below fire */ }
 
 // Offered only where this server actually runs identities. An
@@ -82,7 +86,7 @@ const runStart = async (action) => {
 
   if (!session) { n.textContent = 'the sign-in library did not load — reload and try again'; return; }
   sessionStorage.setItem('fp-run', JSON.stringify(p));
-  session.login($('run-issuer').value.trim(), location.origin + '/run')
+  session.login($('run-issuer').value.trim(), HERE)
     .catch((e) => { n.textContent = 'sign-in failed to start: ' + e.message; });
 };
 $('run-continue').onclick = () => runStart('opt-in');

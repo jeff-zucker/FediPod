@@ -13,7 +13,7 @@ import { HttpHandler, getLoggerFor } from '@solid/community-server';
 import type {
   HttpHandlerInput, ResourceStore, Initializable, Finalizable, ClusterManager,
 } from '@solid/community-server';
-import { claims, agentClaims } from './claims';
+import { claims, agentClaims, DEFAULT_RUN_PATH } from './claims';
 import { nodeToWhatwg, applyToNode } from './adapt';
 import { makeStoreIO } from './store-css';
 import { makeStoreSession } from './store-pod';
@@ -35,8 +35,10 @@ export interface FediPodServerArgs {
   offersPods?: boolean;
   /** The new-account page HTML served at the root. */
   signupPage?: string;
-  /** The run-your-identity page HTML served at /run. */
+  /** The run-your-identity page HTML. */
   runPage?: string;
+  /** Where that page answers. Defaults to `/.fediverse-account`; the path it takes is one the pod server no longer serves, so an operator may name it. */
+  runPath?: string;
   /** The accounts-roster page HTML served at /roster. */
   adminPage?: string;
   /** Directory holding each agent identity's signing key and log. Required when runtime opt-in is on. */
@@ -127,6 +129,13 @@ function deriveHandle(podBase: string): string {
   return segments.length > 0 ? segments[segments.length - 1] : u.hostname.split('.')[0];
 }
 
+/** The opt-in page's path: leading slash, no trailing one, the default when unset. */
+function normalizeRunPath(raw?: string): string {
+  const said = String(raw ?? '').trim().replace(/\/+$/u, '');
+  if (!said) return DEFAULT_RUN_PATH;
+  return said.startsWith('/') ? said : `/${said}`;
+}
+
 /** A door path always has both slashes, so claiming and stripping agree. */
 function normalizeUiPath(raw?: string): string {
   if (raw === '') return '';
@@ -138,6 +147,7 @@ export class FediPodServerHandler extends HttpHandler implements Initializable, 
   private readonly args: FediPodServerArgs;
   private readonly io: IO;
   public readonly dir: Directory;
+  private readonly runPath: string;
   private readonly podPut: (url: string, body: string, contentType: string) => Promise<boolean>;
   private readonly logger = getLoggerFor(this);
   // Every pod whose routes this server claims, keyed by pod base. A claim
@@ -178,6 +188,9 @@ export class FediPodServerHandler extends HttpHandler implements Initializable, 
     // hostname, not host: the claim check compares bare hostnames, so a port
     // carried here would stop the front matching its own requests.
     this.frontHost = args.frontHost || new URL(args.frontOrigin).hostname;
+    // One answer for both the claim and the route, so a server cannot answer
+    // at one path and refuse at another.
+    this.runPath = normalizeRunPath(args.runPath);
     this.uiPath = normalizeUiPath(args.agentUiPath);
     this.registry = args.agentRuntimeOptIn
       ? makeAgentRegistry(this.io, absolute(args.agentRegistryContainer ?? '/.internal/fedipod/agents/'))
@@ -461,7 +474,7 @@ export class FediPodServerHandler extends HttpHandler implements Initializable, 
     // The front's own routes win first, so a suffix pod can never shadow the
     // door's dispatch, its WebFinger or its API even where its mount would
     // otherwise contain that path.
-    if (claims({ host, pathname }, this.frontHost)) return;
+    if (claims({ host, pathname }, this.frontHost, this.runPath)) return;
     // Claimed from the opt-in roster, never from what is running: a pod resource
     // must not be served by CSS for the seconds before an identity finishes
     // starting, and then stop being served once it has. The path is matched
@@ -631,7 +644,7 @@ export class FediPodServerHandler extends HttpHandler implements Initializable, 
     // The front's own routes win first — its dispatch, WebFinger and API sit at
     // the apex above every suffix pod — so a claim is consulted only where the
     // front does not answer.
-    const claimed = claims({ host, pathname }, this.frontHost) ? null : this.resolveClaim(host, pathname);
+    const claimed = claims({ host, pathname }, this.frontHost, this.runPath) ? null : this.resolveClaim(host, pathname);
     if (claimed) {
       const identity = this.surfaces.get(claimed.podBase);
       if (!identity) {
@@ -681,9 +694,10 @@ export class FediPodServerHandler extends HttpHandler implements Initializable, 
       offersPods: !!this.args.offersPods,
       signupPage: this.args.signupPage || webFile('new-account.html'),
       runPage: this.args.runPage || webFile('run.html'),
+      runPath: this.runPath,
       adminPage: this.args.adminPage || webFile('admin.html'),
-      // The /run and /roster pages load the sign-in library, and the signup page
-      // hands out the installer command; without these the pages render but
+      // The opt-in and roster pages load the sign-in library, and the installer
+      // command is handed out with it; without these the pages render but
       // cannot be used.
       authBundle: webFile('solid-oidc-client.js'),
       // Each page's own script — inline until 2026-09-09, so that the pages can

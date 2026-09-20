@@ -3,18 +3,30 @@
 // front's apex the gateway answers the fediverse routes; a pod subdomain is a
 // real Solid pod and is never claimed.
 
-const FRONT_PATHS = new Set(['/', '/signup', '/new-account', '/run', '/roster',
+// Signing up is CSS's, untouched: a person makes an account and a pod the way
+// this server already does it, and nothing here needs saying to them about
+// FediPod. Becoming a fediverse identity comes later and separately — they
+// have a pod, they are logged in, and they opt it in at /run. So none of '/',
+// '/signup' or '/new-account' is claimed on a pod server. A gateway is the
+// other case: it has no pod server behind it, arranging the pod IS its job,
+// and its own front keeps those pages.
+const FRONT_PATHS = new Set(['/roster',
   '/.well-known/webfinger', '/api/handle', '/api/attach', '/api/agent',
   '/api/roster', '/api/revoke',
-  // What the pages load: the sign-in library the /run and /admin pages use, and
-  // the installer the signup page hands every new user.
+  // What the pages that remain load: the sign-in library the opt-in and
+  // roster pages use, and the installer, which is FediPod's own to hand out.
   '/solid-oidc-client.js', '/install']);
 
-export function claims(input: { host?: string; pathname: string }, frontHost: string): boolean {
+/** Where a pod owner opts their identity in, when the operator named it. */
+export const DEFAULT_RUN_PATH = '/.fediverse-account';
+
+export function claims(input: { host?: string; pathname: string }, frontHost: string,
+  runPath: string = DEFAULT_RUN_PATH): boolean {
   if (!input.host || !frontHost) return false;
   const bare = String(input.host).split(':')[0].toLowerCase();
   if (bare !== String(frontHost).toLowerCase()) return false;   // a pod subdomain → not ours
-  return FRONT_PATHS.has(input.pathname) || input.pathname.startsWith('/u/')
+  return FRONT_PATHS.has(input.pathname) || input.pathname === runPath
+    || input.pathname.startsWith('/u/')
     || input.pathname.startsWith('/@');   // the short profile address
 }
 

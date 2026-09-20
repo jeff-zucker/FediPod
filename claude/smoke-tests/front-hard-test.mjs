@@ -154,7 +154,7 @@ try {
   check(home.status === 200 && /sign up/.test(await home.text()), 'the signup page is served at /');
   check((await get('/signup')).status === 200 && (await get('/new-account')).status === 200,
     'and at its two other names');
-  const run = await get('/run');
+  const run = await get('/.fediverse-account');
   check(run.status === 200 && /run/.test(await run.text()), 'the opt-in page is served at /run');
   const bundle = await get('/solid-oidc-client.js');
   check(bundle.status === 200 && /auth/.test(await bundle.text()),
@@ -170,6 +170,11 @@ try {
     'WebFinger resolves the handle to the actor on their own pod');
   check(wf.headers.get('access-control-allow-origin') === '*',
     'and the JRD may be read from any origin');
+  // Every server that has heard of an account asks for this; the edge answers
+  // most of them, or each one is a function call and a read of the pod.
+  check(/max-age=\d+/.test(wf.headers.get('cache-control') || '')
+    && /s-maxage=\d+/.test(wf.headers.get('netlify-cdn-cache-control') || ''),
+  `and it may be held by a cache (${wf.headers.get('cache-control')} | ${wf.headers.get('netlify-cdn-cache-control')})`);
   check(jrd.links.some((l) => l.rel === 'http://webfinger.net/rel/profile-page' && l.href === POD + 'ap/profile.html'),
     `and it links the profile page on the pod (${JSON.stringify(jrd.links)})`);
   const at = await get('/@alice', { redirect: 'manual' });

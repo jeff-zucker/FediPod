@@ -15,7 +15,16 @@ import { makeDirectory, makeStorePodPut, makeAgentRegistry, agentKey, frontRow }
 test('claims only the front host, only its routes', () => {
   const F = 'fedipod.net';
   assert.equal(claims({ host: 'fedipod.net', pathname: '/.well-known/webfinger' }, F), true);
-  assert.equal(claims({ host: 'fedipod.net:443', pathname: '/' }, F), true);
+  // Signing up is the pod server's own business — the root and the signup
+  // pages are left alone. What is FediPod's is opting an existing pod in.
+  assert.equal(claims({ host: 'fedipod.net:443', pathname: '/' }, F), false, 'the root is the pod server\'s');
+  assert.equal(claims({ host: 'fedipod.net:443', pathname: '/signup' }, F), false, 'and so is signing up');
+  assert.equal(claims({ host: 'fedipod.net:443', pathname: '/new-account' }, F), false);
+  assert.equal(claims({ host: 'fedipod.net:443', pathname: '/.fediverse-account' }, F), true,
+    'opting a pod in is FediPod\'s, at the path it answers on');
+  assert.equal(claims({ host: 'fedipod.net:443', pathname: '/run' }, F), false, 'and only at that one');
+  assert.equal(claims({ host: 'fedipod.net:443', pathname: '/joining' }, F, '/joining'), true,
+    'an operator may name it something else');
   assert.equal(claims({ host: 'fedipod.net', pathname: '/u/alice/ap/actor' }, F), true);
   assert.equal(claims({ host: 'fedipod.net', pathname: '/@alice' }, F), true, 'the short profile address is the front\'s');
   assert.equal(claims({ host: 'fedipod.net', pathname: '/some/pod/doc' }, F), false, 'a non-front path falls through');
@@ -28,7 +37,7 @@ test('claims every route the front core serves, pages and the files they load', 
   const F = 'fedipod.net';
   // Each page is useless without what it loads, so the assets are claims too:
   // an unclaimed one falls through to the pod and 404s.
-  for (const pathname of ['/', '/signup', '/new-account', '/run', '/roster',
+  for (const pathname of ['/.fediverse-account', '/roster',
     '/.well-known/webfinger', '/api/handle', '/api/attach', '/api/agent',
     '/api/roster', '/api/revoke',
     '/solid-oidc-client.js', '/install']) {

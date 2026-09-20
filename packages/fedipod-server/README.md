@@ -4,7 +4,7 @@
 
 This is a CSS component. Install it in a fresh server instance or an instance
 you already run for pods, and turn sign-up on. A pod owner signs in at the
-server's `/run` page and opts in; from then on their pod is a full fediverse
+server's `/.fediverse-account` page and opts in; from then on their pod is a full fediverse
 account: it accepts follows, delivers their posts, and serves their Mastodon
 client at the pod's own address. Signing up is the only way an account is
 made, and opting out is the only way one ends.
@@ -110,7 +110,8 @@ naming the pod the identity runs on. Nothing private is in it.
 | `agentDataDir` | Where each identity keeps the file naming its pod; its log lines go to the server's own log. Required whenever sign-up is on. |
 | `agentUiPath` | Where the owner's pages live on the pod's origin. `/fp/` by default; empty serves no pages. On a suffix pod it is under the pod's path, e.g. `/aisha/fp/`. |
 | `agentRegistryContainer` | The internal container holding the sign-up rows. |
-| `runPage` | The HTML served at `/run`: the page where a pod owner opts in or out. The package's own `web/front/run.html` is served unless you set this. |
+| `runPage` | The HTML of the page where a pod owner opts in or out. The package's own `web/front/run.html` is served unless you set this. |
+| `runPath` | Where that page answers. `/.fediverse-account` unless you set it. The path it takes is one the pod no longer serves, so it is yours to name; the dot keeps it out of the way of anybody's data. |
 | `agentWebIdSuffix` | Path from a pod's base to its owner's WebID. Defaults to `profile/card#me`. |
 | `agentPollSeconds` | How often the inbox is swept. Deliveries also wake the sweep as they land, so this is the fallback. |
 | `agentAutoAcceptFollows` | Whether a newly provisioned identity accepts follows without review. On by default. |
@@ -122,7 +123,7 @@ naming the pod the identity runs on. Nothing private is in it.
 | `directoryContainer` | The internal container holding the handle directory. |
 | `agentAutoFront` | Whether every identity that starts also gets a `@handle@frontHost` address — an inbox-only directory row, written once. Off by default. |
 | `offersPods` | Whether the signup page offers to create pods here. |
-| `signupPage` | The signup page served at `/`, `/signup` and `/new-account`. The package's own is served unless you set this. |
+| `signupPage` | Unused on a pod server: making an account and a pod is the server's own, and this component does not answer `/`, `/signup` or `/new-account`. A gateway, which has no pod server behind it, serves this page. |
 | `gatewayWebId` | The WebID stamped on verification receipts. |
 
 `signupPage` and `runPage` are the page's HTML itself, not a path to a file.
@@ -195,7 +196,7 @@ as before.
 
 ## How sign-up works
 
-A pod owner opens the `/run` page, signs in with their pod,
+A pod owner opens the `/.fediverse-account` page, signs in with their pod,
 and opts in or out. Underneath it is one endpoint:
 
 ```

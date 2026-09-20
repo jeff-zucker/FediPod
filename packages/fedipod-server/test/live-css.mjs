@@ -57,7 +57,11 @@ const mkRes = () => ({ s: 0, h: null, b: '', writeHead(s, h) { this.s = s; this.
 const canHandle = async (req) => handler.canHandle({ request: req }).then(() => true).catch(() => false);
 
 // canHandle: front host + route claimed; pod subdomain + other paths rejected.
-check(await canHandle(mkReq('GET', '/', 'fedipod.net')) === true, 'canHandle claims GET / on the front host');
+// Making an account and a pod is the server's own, untouched; what FediPod
+// adds is opting an existing pod in, at /run.
+check(await canHandle(mkReq('GET', '/', 'fedipod.net')) === false, 'canHandle leaves GET / to the pod server');
+check(await canHandle(mkReq('GET', '/signup', 'fedipod.net')) === false, 'and leaves signing up to it too');
+check(await canHandle(mkReq('GET', '/.fediverse-account', 'fedipod.net')) === true, 'canHandle claims the opt-in page');
 check(await canHandle(mkReq('GET', '/.well-known/webfinger?resource=acct:me@fedipod.net', 'fedipod.net')) === true,
   'canHandle claims WebFinger on the front host');
 check(await canHandle(mkReq('GET', '/.well-known/webfinger', 'alice.fedipod.net')) === false,
@@ -65,10 +69,10 @@ check(await canHandle(mkReq('GET', '/.well-known/webfinger', 'alice.fedipod.net'
 check(await canHandle(mkReq('GET', '/some/pod/doc', 'fedipod.net')) === false,
   'canHandle REJECTS a non-front path — falls through to CSS');
 
-// handle: the signup page.
+// handle: the opt-in page, which is what this server offers a pod owner.
 let res = mkRes();
-await handler.handle({ request: mkReq('GET', '/', 'fedipod.net'), response: res });
-check(res.s === 200 && /join/.test(res.b), 'handle serves the new-account page at /');
+await handler.handle({ request: mkReq('GET', '/.fediverse-account', 'fedipod.net'), response: res });
+check(res.s === 200 && /identity/i.test(res.b), 'handle serves the opt-in page at /run');
 
 // handle: WebFinger resolves the fronted actor.
 res = mkRes();

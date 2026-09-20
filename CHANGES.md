@@ -1,5 +1,23 @@
 # Changes
 
+## 2026-09-19 (a public document is read once, not once per reader — version 1.24.0)
+
+**What the front hands over from a pod may be held by a cache.** Every read of
+an actor, a topic, a post or a card came back "do not store", so each one was
+answered from the pod: a single visit to a forum is twenty of them, and every
+visitor and every refresh paid again. Public documents are now held for half a
+minute, and a handle's WebFinger answer for five, with a stale copy served
+while a fresh one is fetched. Anything signed in, anything posted, and the
+site's own APIs are unchanged.
+
+**A pod server leaves signing up alone.** Making an account and a pod is the
+server's own, exactly as it was before FediPod was installed: the component no
+longer answers `/`, `/signup` or `/new-account`. What it adds is the page where
+somebody who already has a pod turns it into a Fediverse account, and that page
+has moved to **`/.fediverse-account`** — an operator can name it with `runPath`.
+The path it takes is one the pod no longer serves, which is why it is theirs to
+choose.
+
 ## 2026-09-19 (a forum is an account like the others — version 1.23.0)
 
 **A forum lives with your other accounts and starts with them.** Its home goes
