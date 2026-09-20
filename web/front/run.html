@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>FediPod — run your identity on this server</title>
+<title>FediPod — turn your pod into a Fediverse account</title>
 <link rel="icon" href="/icons/gateway.svg" type="image/svg+xml">
 <style>
   :root { color-scheme: light dark; --line:#d9d4c7; --dim:#45443d; --accent:#6a8a5a; }
@@ -24,14 +24,16 @@
   .primary[disabled], button[disabled] { opacity: .5; cursor: not-allowed; }
   [hidden] { display: none !important; }
   code { background: rgba(120,120,120,.12); padding: .05em .35em; border-radius: 4px; }
+  .pod code { background: #fff3c4; color: #1a1a1a; font-size: 16px; }
+  @media (prefers-color-scheme: dark) { .pod code { background: #5a4a00; color: #fff; } }
   pre { background: rgba(120,120,120,.12); padding: .7rem .9rem; border-radius: 8px; overflow-x: auto; }
 </style>
 </head>
 <body>
-<h1>Run your identity on this server</h1>
-<p class="lede">If your pod is hosted by this server, the server can run your Fediverse identity
-for you: it accepts follows, delivers your posts and serves your Mastodon app, with nothing for
-you to keep running. Sign in with your pod to prove it is yours.</p>
+<h1>Turn your pod into a Fediverse account</h1>
+<p class="lede">Users with pods on this server may opt-in below to create a Fediverse account
+that stores your data on your pod. You'll be able to interact with Mastodon and users of other
+Fediverse services straight from your pod.</p>
 
 <section id="run-known" hidden aria-live="polite"></section>
 
@@ -48,8 +50,8 @@ you to keep running. Sign in with your pod to prove it is yours.</p>
     <button type="button" id="run-continue" class="primary" disabled>Sign in with your pod &amp; opt in</button>
     <button type="button" id="run-leave">Stop running it here</button>
   </p>
-  <p class="hint" id="run-note" hidden></p>
 </form>
+<p class="hint" id="run-note" hidden></p>
 
 <script type="module" src="/run.js"></script>
 </body>

@@ -590,13 +590,25 @@ export class FediPodServerHandler extends HttpHandler implements Initializable, 
    * What a pod would be as an identity here, without changing anything: its
    * handle, the host its address carries, and whether it runs here already.
    */
-  public describePod({ podBase }: { podBase: string }):
-  { handle: string; host: string; address: string; running: boolean } {
+  public async describePod({ podBase }: { podBase: string }):
+  Promise<{ handle: string; host: string; address: string; running: boolean; manage: string }> {
     const base = podBase.endsWith('/') ? podBase : `${podBase}/`;
     const handle = deriveHandle(base);
     let host: string;
     try { host = this.validateAgentPod(base).host; } catch { host = new URL(base).host.toLowerCase(); }
-    return { handle, host, address: `@${handle}@${host}`, running: this.agentHandles.get(handle) === base };
+    const running = this.agentHandles.get(handle) === base;
+    // The management page's door takes its key once in the address and keeps
+    // the browser in with a cookie. Only the owner's own page ever asks for
+    // this description, so the key rides on the link for a running account.
+    // Read from the pod, where the key always is, rather than from what this
+    // process happens to hold: an account still starting has none in memory.
+    let key: string | undefined;
+    if (running) {
+      try { key = (await this.doorSecretFor(base)).secret; } catch { key = this.doorSecrets.get(base); }
+    }
+    const door = base.replace(/\/$/u, '') + this.uiPath;
+    return { handle, host, address: `@${handle}@${host}`, running,
+      manage: key ? `${door}?dk-token=${encodeURIComponent(key)}` : door };
   }
 
   /** The reverse: stop the identity and let the pod be plain LDP again. */

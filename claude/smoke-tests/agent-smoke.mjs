@@ -11452,7 +11452,8 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
     ...ctxAgent,
     webIdsFromSession: async () => [ 'https://someone.else/profile/card#me', 'https://mei.host/profile/card#me' ],
     agentControl: { ...ctxAgent.agentControl,
-      describe: async ({ podBase }) => ({ handle: 'mei', host: 'mei.host', address: '@mei@mei.host', running: podBase === 'https://mei.host/' && false }) },
+      // Plain, not async: the server's own describe answers without a promise.
+      describe: ({ podBase }) => ({ handle: 'mei', host: 'mei.host', address: '@mei@mei.host', running: podBase === 'https://mei.host/' && false }) },
   };
   const known = await bodyOf(agentGet({ 'sec-fetch-site': 'same-origin', cookie: 'css-account=x' }, knowsCtx));
   check(known.session === 'ok' && known.pods.length === 2 && known.pods[1].podBase === 'https://mei.host/' && known.pods[1].address === '@mei@mei.host',

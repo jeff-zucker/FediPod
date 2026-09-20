@@ -47,6 +47,12 @@ const say = (tag, text) => { const e = document.createElement(tag); e.textConten
   runFormCheck();
 })();
 
+async function refreshKnown() {
+  const res = await fetch('/api/agent', { credentials: 'same-origin', headers: { accept: 'application/json' } }).catch(() => null);
+  const d = res && res.ok ? await res.json().catch(() => ({})) : {};
+  if (d.session === 'ok' && Array.isArray(d.pods) && d.pods.length) showPods(d.pods);
+}
+
 function showSignIn(loginUrl) {
   const k = $('run-known');
   k.hidden = false;
@@ -68,19 +74,21 @@ function showPods(pods) {
   k.replaceChildren();
   for (const pod of pods) {
     const box = document.createElement('div'); box.className = 'pod';
-    box.append(say('p', `You are signed in as ${pod.webId}.`));
-    box.append(say('p', `Your pod is ${pod.podBase}.`));
+    // The names stand out from the sentences around them.
+    const line = (before, id, after = '.') => { const p = say('p', before); p.append(say('code', id), after); return p; };
+    box.append(line('Solid Identity (WebID): ', pod.webId, ''));
     const actions = document.createElement('p'); actions.className = 'actions';
+    box.append(line('Fediverse Identity: ', pod.address, ''));
     if (pod.running) {
-      box.append(say('p', `This pod is a Fediverse account: ${pod.address}.`));
-      const again = say('button', 'Get a new door secret'); again.type = 'button';
-      again.onclick = () => runStart('opt-in', pod.podBase);
-      const stop = say('button', 'Stop running it here'); stop.type = 'button';
+      const links = say('p', 'Manage your account: ');
+      const m = say('a', pod.manage.split('?')[0]); m.href = pod.manage;
+      links.append(m);
+      box.append(links);
+      const stop = say('button', 'Close this Fediverse account'); stop.type = 'button'; stop.className = 'primary';
       stop.onclick = () => runStart('opt-out', pod.podBase);
-      actions.append(again, ' ', stop);
+      actions.append(stop);
     } else {
-      box.append(say('p', `Your Fediverse address will be ${pod.address}.`));
-      const go = say('button', 'Make this pod a Fediverse account'); go.type = 'button'; go.className = 'primary';
+      const go = say('button', 'Create a Fediverse account'); go.type = 'button'; go.className = 'primary';
       go.onclick = () => runStart('opt-in', pod.podBase);
       actions.append(go);
     }
@@ -153,15 +161,14 @@ async function showReply(res, p) {
     // back from the server and one comes from sessionStorage, and pasting any
     // of them into innerHTML means whatever markup they contain is rendered.
     // Only the fixed wording is markup here; everything variable is text.
-    n.textContent = 'Your identity runs here now. This is your door secret — ';
-    n.append(say('b', 'save it now'));
-    n.append(', it is shown only this once. It opens your admin pages at ');
-    n.append(say('code', p.podBase.replace(/\/$/, '') + d.doorPath));
-    n.append(':', say('pre', d.doorSecret));
-    n.append('To check it works:', say('pre', d.command));
-    n.append('Lost it? Opt in again — that mints a fresh one and retires this one.');
+    const manage = `${p.podBase.replace(/\/$/, '')}${d.doorPath}?dk-token=${encodeURIComponent(d.doorSecret)}`;
+    n.textContent = 'Your Fediverse account is ready. Manage it at ';
+    const a = say('a', p.podBase.replace(/\/$/, '') + d.doorPath); a.href = manage;
+    n.append(a, '.');
+    refreshKnown();
   } else if (res && res.status === 200) {
-    n.textContent = 'Done — this server no longer runs that identity. Your pod and its data are untouched.';
+    n.textContent = 'Your Fediverse account is closed. Your pod and its data are untouched.';
+    refreshKnown();
   } else {
     n.textContent = (p.action === 'opt-in' ? 'opt-in' : 'opt-out') + ' failed: '
       + (d.error || (res ? 'HTTP ' + res.status : 'no response'));

@@ -19,6 +19,17 @@ server now hands out the three page scripts itself.
 **No credit line on served pages.** The `(cc)` line is gone from the opt-in,
 admin and sign-up pages.
 
+**A client signs you in through your pod, not a password.** A Mastodon
+client, the account's own or a phone app, sends you to the account's
+sign-in page; it has one button, you sign in at your pod, and you come back
+signed in and are handed on to the client. Nothing of ours asks for a
+password. Coming through the account's management page also counts as
+signed in. The page uses `fediverse-account` to do it.
+
+**The management page keeps you in.** Its door's cookie used to be lost on
+the way from the server's own page to the pod's address, so the door forgot
+you the moment it had let you in.
+
 ## 2026-09-20 (an account run from a device is called that — version 1.26.1)
 
 **Signing in at fedipod.net with a pod whose account a DeviceAgent runs no

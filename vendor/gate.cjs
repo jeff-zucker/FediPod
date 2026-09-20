@@ -7,8 +7,11 @@
 // authorized when it carries the secret:
 //   1. header `x-dk-token` — the Electron shell injects this on app traffic, or
 //   2. cookie `dk-token` — a browser "blessed" via the token URL, or
-//   3. query `?dk-token=<secret>` — answered with a SameSite=Strict cookie and
-//      a redirect to the same URL minus the param (the blessing flow), or
+//   3. query `?dk-token=<secret>` — answered with a SameSite=Lax cookie and
+//      a redirect to the same URL minus the param (the blessing flow). Lax,
+//      not Strict: a link from another site — the pod server's own opt-in
+//      page among them — must arrive with the cookie it was just handed, and
+//      Lax still withholds it from cross-site POSTs and subresources; or
 //   4. (opt-in, proxy only) an Origin/Referer on the allowOrigins list — app
 //      pages in a blessed browser call the proxy with plain fetch(), which
 //      doesn't attach cookies cross-port; a hostile page can't forge Origin.
@@ -105,7 +108,7 @@ function makeGate(token, { allowOrigins = [], publicEndpoints = false, secureCoo
         // Path scopes the cookie to this identity's own door: on a shared
         // origin (suffix pods) two co-tenants must not clobber each other's,
         // and a whole-origin cookie would. Defaults to '/'.
-        'set-cookie': `${COOKIE}=${t}; Path=${cookiePath}; HttpOnly; SameSite=Strict; Max-Age=31536000`
+        'set-cookie': `${COOKIE}=${t}; Path=${cookiePath}; HttpOnly; SameSite=Lax; Max-Age=31536000`
           + (secureCookie ? '; Secure' : ''),
         'location': url.pathname + url.search,
       });
