@@ -1,5 +1,27 @@
 # Changes
 
+## 2026-09-20 (an account any app can act with — version 1.26.0)
+
+**A library other apps can use: `fediverse-account`, in `lib/session/`.** A
+person types a Fediverse handle or a WebID into any web page; they are sent
+to wherever that account signs in, their Mastodon-family server or their
+Solid pod, and come back to where they were with an account the page can
+act with: post, reply, read the home timeline, follow, favourite, boost,
+and show the profile. The page never asks which kind it got. A Mastodon
+account acts at once through its own server. A FediPod account acts
+through its outbox door, and one made in the browser at fedipod.net carries
+a notice for the page to show: its posts and follows go out the next time
+fedipod.net is open. Three files, no dependencies, ready to publish to npm
+and so to any CDN. A demo page sits beside it.
+
+**The browser's own sign-in became that library's engine.** The Solid-OIDC
+session the BrowserAgent and the forum sign in with moved to
+`lib/session/oidc-session.mjs`, with the app's database name and client
+name as parameters; `web/app/oidc-session.mjs` binds them, so every
+signed-in browser keeps its session and nothing else changed. The guard
+script now holds the library to the pod library's rules: no imports above
+itself, no Node built-ins, no FediPod in its code.
+
 ## 2026-09-20 (a follow from another server lands somewhere — version 1.25.0)
 
 **Pressing Follow and naming this host used to end in "not found".** Every
