@@ -26,6 +26,13 @@ signed in and are handed on to the client. Nothing of ours asks for a
 password. Coming through the account's management page also counts as
 signed in. The page uses `fediverse-account` to do it.
 
+**The DeviceAgent's certificate is trusted even beside old ones.** A
+machine that has run several agents holds several "FediPod Local CA"
+certificates of the same name, and Chrome, matching by name, picked the
+wrong one and refused the page. Every certificate the agent mints now
+names the key that signed it, and an older one is re-minted at the next
+start.
+
 **The management page keeps you in.** Its door's cookie used to be lost on
 the way from the server's own page to the pod's address, so the door forgot
 you the moment it had let you in.

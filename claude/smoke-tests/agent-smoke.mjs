@@ -14,6 +14,7 @@
 
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
+import net from 'node:net';
 import path from 'node:path';
 import os from 'node:os';
 import httpsMod from 'node:https';
@@ -2483,7 +2484,11 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     check(/from '((\.\.\/)+lib\/device|\.|\.\.)\/ports\.mjs'/.test(src), `${f} imports the shared one`);
   }
   const { freePortFrom } = await import(path.join(root, 'lib/device/ports.mjs'));
-  check(await freePortFrom(1, 1) === null, 'the shared helper returns null rather than throwing');
+  // A port this test holds itself: port 1 used to stand in, but a node that
+  // may bind low ports (setcap) finds it free.
+  const held = await new Promise((r) => { const srv = net.createServer(); srv.listen(0, '127.0.0.1', () => r(srv)); });
+  check(await freePortFrom(held.address().port, 1) === null, 'the shared helper returns null rather than throwing');
+  held.close();
 
   // rebuild is one pod GET per post ever made, in one burst.
   check(/REBUILD_MAX_PER_RUN/.test(fs.readFileSync(path.join(root, 'lib/core/publisher/restore.mjs'), 'utf8')),
