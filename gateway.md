@@ -158,6 +158,14 @@ fedipod gateway --attach <front-origin> --name <name> --fronted
 Choose at attach time: changing an existing identity's front later renames
 every published id, and the attach refuses it.
 
+**Following from elsewhere.** Each account's WebFinger answer names the front's
+`/authorize_interaction?uri={uri}` page in the link other servers read for it
+(`http://ostatus.org/schema/1.0/subscribe`). That is what a remote **Follow**
+button uses when its reader says they are at this host: the reader lands on
+that page, and the follow is sent by the agent in their own browser. Without
+the link, and without the page, pressing Follow and naming this host ends in
+"not found" on the other server.
+
 **A front is only a doorway.** It never hosts pods and never dictates where
 they live. A host who also wants to offer pods to people who have none runs a
 pod server separately, with the duties that carries — and users may always

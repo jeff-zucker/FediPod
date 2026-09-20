@@ -58060,8 +58060,10 @@ async function amplify(intake, noteId, { approved = false, activity = null } = {
         return;
       }
     }
-    intake.log(`not amplified \u2014 ${s.actor} is not a member`);
-    return;
+    if (!intake.store.getContacts().followers.some((f) => f.actor === s.actor)) {
+      intake.log(`not amplified \u2014 ${s.actor} is not a member`);
+      return;
+    }
   }
   if (intake.store.getMuted().actors.includes(s.actor)) {
     intake.log(`not amplified \u2014 ${s.actor} is muted`);
@@ -69874,6 +69876,7 @@ var ADMIN_PATHS = /* @__PURE__ */ new Set([
   "/log",
   "/fediacct",
   "/describe",
+  "/follow",
   "/atproto",
   "/atproto/connect",
   "/atproto/disconnect",
@@ -70108,6 +70111,21 @@ var AdminFacade = class {
         await a.store.flush();
         await a.publisher.publishProfile();
         return json2(200, { ok: true, summary: cfg.summary || null, icon: cfg.icon || null });
+      }
+      // Following somebody, the same call the Node agent's admin surface takes
+      // (lib/device/admin/routes/social.mjs): by handle normally, by actor url
+      // when WebFinger cannot answer for them. The remote-follow page
+      // (/authorize_interaction) is what asks for it here — another server
+      // sends its reader to that page when they press Follow and say they are
+      // at this host.
+      case "/follow": {
+        await a.requestTakeover?.();
+        if (body.actor) {
+          await followActor(a, String(body.actor));
+          return json2(200, { ok: true, actor: String(body.actor) });
+        }
+        if (!body.handle) return json2(400, { error: "handle or actor required" });
+        return json2(200, await followHandle(a, String(body.handle)));
       }
       // Taking the account back. A viewer publishes nothing and drains
       // nothing, so an account whose lease is held by something that is not
@@ -71544,6 +71562,29 @@ var originAuthorities = (host) => ({
   }
   // fetch-only: this build serves no socket
 });
+function accountNotRead({ unread, podBase, state, webId }) {
+  const host = (() => {
+    try {
+      return new URL(podBase).host;
+    } catch {
+      return podBase;
+    }
+  })();
+  if (unread) {
+    const status2 = Number((/HTTP (\d{3})/u.exec(unread.message) || [])[1]) || 0;
+    if (status2 === 401 || status2 === 403) {
+      const err3 = new Error(`${host} refused this sign-in when the agent asked it for your account (HTTP ${status2}). Your account is still there. Sign in again \u2014 the sign-in this browser is holding has expired or is not the owner of ${podBase}.`);
+      err3.code = "sign-in-refused";
+      return err3;
+    }
+    const err2 = new Error(`Your pod did not hand over your account: ${unread.message}. Your account is still there \u2014 nothing here could read it just now. Reload to try again; if ${host} keeps saying this, it is busy, refusing, or out of reach.`);
+    err2.code = "pod-unreadable";
+    return err2;
+  }
+  const err = new Error(`${host} answered, and there is no FediPod account in it (${state}). Sign in with the pod that holds your account, or make an account in this one \u2014 both start from the sign-in page. The sign-in used here was ${webId}.`);
+  err.code = "no-account";
+  return err;
+}
 var BrowserAgent = class _BrowserAgent {
   constructor({ log: log2 = console.log } = {}) {
     this.log = log2;
@@ -71682,10 +71723,12 @@ var BrowserAgent = class _BrowserAgent {
     this.urls = apUrls2(remotePod, root);
     const podFetch = (u, i) => this.remote.fetch(u, i);
     this.store = new PodStore({ storage: new HttpStorage(this.urls.state, podFetch), log: this.log });
-    await this.store.load().catch(() => {
+    let unread = null;
+    await this.store.load().catch((e) => {
+      unread = e;
     });
     const cfg = config || this.store.getConfig();
-    if (!cfg) throw new Error("no account config on this pod \u2014 sign up first");
+    if (!cfg) throw accountNotRead({ unread, podBase: remotePod, state: this.urls.state, webId });
     this.store.setConfig({ ...this.store.getConfig() || {}, ...cfg, root });
     config = this.store.getConfig();
     const publicBase = config.gateway?.frontActor ? config.gateway.frontActor.replace(/ap\/actor\/?$/, "") : null;
@@ -72043,12 +72086,20 @@ function sessionHandle(s) {
   const refresh = async () => {
     if (!refreshToken) throw new Error("session expired and there is no refresh token \u2014 sign in again");
     const jwk = await jwkP;
-    const res = await fetch(s.tokenEndpoint, {
-      method: "POST",
-      headers: { "content-type": "application/x-www-form-urlencoded", dpop: await dpopProof(s.pair, jwk, "POST", s.tokenEndpoint) },
-      body: new URLSearchParams({ grant_type: "refresh_token", refresh_token: refreshToken, client_id: s.client_id, scope: "openid webid offline_access" })
-    });
+    let res;
+    try {
+      res = await fetch(s.tokenEndpoint, {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded", dpop: await dpopProof(s.pair, jwk, "POST", s.tokenEndpoint) },
+        body: new URLSearchParams({ grant_type: "refresh_token", refresh_token: refreshToken, client_id: s.client_id, scope: "openid webid offline_access" })
+      });
+    } catch (e) {
+      throw new Error(`${e.message} \u2014 renewing your sign-in at ${new URL(s.tokenEndpoint).host}`);
+    }
     const tok = await res.json().catch(() => ({}));
+    if (res.status === 429) {
+      throw new Error(`${new URL(s.tokenEndpoint).host} is asking us to slow down \u2014 your sign-in could not be renewed just now`);
+    }
     if (!res.ok || !tok.access_token) {
       await idbDel("session");
       throw new Error("refresh failed \u2014 sign in again");

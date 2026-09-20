@@ -1,5 +1,25 @@
 # Changes
 
+## 2026-09-20 (a follow from another server lands somewhere — version 1.25.0)
+
+**Pressing Follow and naming this host used to end in "not found".** Every
+Fediverse server asks a reader who is not signed in which server they are on,
+and hands them to that server's own follow page; this one had no such page,
+and its accounts' WebFinger answers named none — so following anybody from a
+profile page, the form on your own profile page included, ended in a 404. Both
+halves are there now: **`/authorize_interaction`** names who you are about to
+follow and sends the follow from the browser you are signed in to, and the
+WebFinger answer tells other servers where to find it.
+
+**A sign-in that could not read your account no longer tells you to sign up.**
+The browser agent reads its record from your pod; when that read failed it
+dropped what the pod had said and reported one thing — "no account config on
+this pod — sign up first" — to somebody who had just signed in, with their
+account sitting on the pod unread. It now says which of three happened: your
+pod refused the sign-in (and offers to sign in again), your pod did not answer
+(and offers to reload), or the pod really holds no account (and offers to use
+another pod). The stack trace under the message is gone for all three.
+
 ## 2026-09-19 (a public document is read once, not once per reader — version 1.24.0)
 
 **What the front hands over from a pod may be held by a cache.** Every read of

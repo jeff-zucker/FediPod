@@ -21,6 +21,10 @@ cp('web/app/index.html', 'index.html');
 cp('web/app/dist/boot.js', 'boot.js');
 cp('web/app/dist/sw.js', 'sw.js');
 cp('web/app/update.js', 'update.js');
+// The remote-follow door another server sends its reader to. Static, because
+// the account doing the following is the agent in that reader's browser.
+cp('web/app/authorize_interaction.html', 'authorize_interaction.html');
+cp('web/app/authorize_interaction.js', 'authorize_interaction.js');
 // Every page carries the version it was staged with and the script that
 // compares it with the site's and reloads once when a newer build is up.
 const VERSION = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')).version;
@@ -221,6 +225,10 @@ fs.writeFileSync(path.join(site, '_redirects'), [
   '/            /index.html    200',
   '/sw.js       /sw.js         200',
   '/boot.js     /boot.js       200',
+  // The path other servers hand their readers on a remote follow. It has no
+  // extension, so it needs a rule of its own; the page's script beside it is a
+  // file Netlify serves without one.
+  '/authorize_interaction  /authorize_interaction.html  200',
 
   '/app         /app/          301',
   '/app/*       /app/:splat    200',
@@ -282,6 +290,7 @@ cp('web/app/oidc-session.mjs', 'bb/oidc-session.mjs');   // signing in to a pod,
 }
 injectUpdate(path.join(site, 'bb/index.html'));
 injectUpdate(path.join(site, 'index.html'));
+injectUpdate(path.join(site, 'authorize_interaction.html'));
 fs.writeFileSync(path.join(site, '_headers'), [
   // The worker and the update script are fetched fresh, so a new build is
   // seen the moment it is up; the pages themselves revalidate by default.
@@ -289,6 +298,14 @@ fs.writeFileSync(path.join(site, '_headers'), [
   '  Cache-Control: no-cache',
   '/update.js',
   '  Cache-Control: no-cache',
+  '',
+  // The remote-follow page: it is arrived at from another server, and it drives
+  // the owner's own /follow route, so it gets the same refusal of anything
+  // inline that the pages behind it do.
+  '/authorize_interaction',
+  "  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'self'; form-action 'self'",
+  '  X-Content-Type-Options: nosniff',
+  '  Referrer-Policy: same-origin',
   '',
   '/app/*',
   "  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https: data: blob:; media-src 'self' https: blob:; connect-src 'self' https:; font-src 'self' data:; object-src 'none'; base-uri 'none'; frame-ancestors 'self'; form-action 'self'",

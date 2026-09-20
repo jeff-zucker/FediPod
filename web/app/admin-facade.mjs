@@ -17,6 +17,7 @@
 import { publicHandle, webfingerHost } from '../../lib/core/wire.mjs';
 import * as podInbox from '../../lib/pod/inbox.mjs';
 import { normalizeImport, IMPORT_KINDS } from '../../lib/connections/import.mjs';
+import { followActor, followHandle } from '../../lib/core/social.mjs';
 import { hashPassword } from '../../lib/client/masto/index.mjs';
 
 // The identity itself — changing any means a different actor, i.e. a new setup.
@@ -29,7 +30,7 @@ const WIRE_CONFIG = ['name', 'summary', 'icon', 'image', 'fields', 'aliases'];
 // not here falls through to the network as a static file or the gateway.
 export const ADMIN_PATHS = new Set([
   '/status', '/config', '/gateway', '/alias', '/rotate-key', '/import',
-  '/deadletter', '/blocks', '/profiles', '/modqueue', '/log', '/fediacct', '/describe',
+  '/deadletter', '/blocks', '/profiles', '/modqueue', '/log', '/fediacct', '/describe', '/follow',
   '/atproto', '/atproto/connect', '/atproto/disconnect',
   '/rebuild', '/move', '/retire', '/inbox/prune', '/park', '/revive', '/takeover',
   '/fediacct/connect', '/fediacct/disconnect', '/fediacct/callback',
@@ -239,6 +240,19 @@ export class AdminFacade {
         await a.store.flush();
         await a.publisher.publishProfile();
         return json(200, { ok: true, summary: cfg.summary || null, icon: cfg.icon || null });
+      }
+
+      // Following somebody, the same call the Node agent's admin surface takes
+      // (lib/device/admin/routes/social.mjs): by handle normally, by actor url
+      // when WebFinger cannot answer for them. The remote-follow page
+      // (/authorize_interaction) is what asks for it here — another server
+      // sends its reader to that page when they press Follow and say they are
+      // at this host.
+      case '/follow': {
+        await a.requestTakeover?.();
+        if (body.actor) { await followActor(a, String(body.actor)); return json(200, { ok: true, actor: String(body.actor) }); }
+        if (!body.handle) return json(400, { error: 'handle or actor required' });
+        return json(200, await followHandle(a, String(body.handle)));
       }
 
       // Taking the account back. A viewer publishes nothing and drains

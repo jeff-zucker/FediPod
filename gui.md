@@ -106,6 +106,18 @@ follows the group's own moderation settings; see [Groups](groups.md).
 **new followers** control switches between waiting for your approval and
 accepting automatically.
 
+## Following from somebody else's server
+
+Every Fediverse profile page has a **Follow** button that asks which server
+you are on. Give it the host your account answers at (`fedipod.net`, say) and
+it hands you to that host's `/authorize_interaction` page, which names who you
+are about to follow and follows them for you — your account, your key, from
+the browser you are signed in to. It is the same door Mastodon has, at the
+same address, so another server needs to know nothing about FediPod to send
+you there. A handle's WebFinger answer is what tells them where it is.
+
+Your own profile page carries that form too, for readers coming the other way.
+
 ## The gateway
 
 The **gateway** row on the record (under **software**) attaches this account

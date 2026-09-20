@@ -33677,12 +33677,20 @@ function sessionHandle(s) {
   const refresh = async () => {
     if (!refreshToken) throw new Error("session expired and there is no refresh token \u2014 sign in again");
     const jwk = await jwkP;
-    const res = await fetch(s.tokenEndpoint, {
-      method: "POST",
-      headers: { "content-type": "application/x-www-form-urlencoded", dpop: await dpopProof(s.pair, jwk, "POST", s.tokenEndpoint) },
-      body: new URLSearchParams({ grant_type: "refresh_token", refresh_token: refreshToken, client_id: s.client_id, scope: "openid webid offline_access" })
-    });
+    let res;
+    try {
+      res = await fetch(s.tokenEndpoint, {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded", dpop: await dpopProof(s.pair, jwk, "POST", s.tokenEndpoint) },
+        body: new URLSearchParams({ grant_type: "refresh_token", refresh_token: refreshToken, client_id: s.client_id, scope: "openid webid offline_access" })
+      });
+    } catch (e) {
+      throw new Error(`${e.message} \u2014 renewing your sign-in at ${new URL(s.tokenEndpoint).host}`);
+    }
     const tok = await res.json().catch(() => ({}));
+    if (res.status === 429) {
+      throw new Error(`${new URL(s.tokenEndpoint).host} is asking us to slow down \u2014 your sign-in could not be renewed just now`);
+    }
     if (!res.ok || !tok.access_token) {
       await idbDel("session");
       throw new Error("refresh failed \u2014 sign in again");
@@ -33933,14 +33941,23 @@ if (typeof document !== "undefined") (async () => {
       $("landing").hidden = true;
       $("brand").hidden = false;
       $("running").hidden = false;
-      $("running-title").textContent = "Signed in, but the agent could not start";
+      const known = {
+        "pod-unreadable": { title: "Your pod did not answer", retry: "Reload", go: () => location.reload() },
+        "sign-in-refused": { title: "Your pod refused this sign-in", retry: "Sign in again", go: () => {
+          location.href = "/?add";
+        } },
+        "no-account": { title: "No FediPod account in that pod", retry: "Use another pod", go: () => {
+          location.href = "/?add";
+        } }
+      }[e.code];
+      $("running-title").textContent = known ? known.title : "Signed in, but the agent could not start";
       $("run-error").style.whiteSpace = "pre-wrap";
-      $("run-error").textContent = (e.message || String(e)) + (e.detail ? `
+      $("run-error").textContent = (e.message || String(e)) + (!known && e.detail ? `
 
 ${e.detail}` : "");
       $("run-actions").hidden = false;
-      $("run-retry").textContent = "Reload";
-      $("run-retry").addEventListener("click", () => location.reload());
+      $("run-retry").textContent = known ? known.retry : "Reload";
+      $("run-retry").addEventListener("click", known ? known.go : () => location.reload());
       $("run-back").textContent = "Sign out";
       $("run-back").addEventListener("click", async () => {
         try {

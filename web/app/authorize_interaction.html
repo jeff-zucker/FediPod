@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- The remote-follow door, at the path every Fediverse server sends its
+     readers to: /authorize_interaction?uri=<who>. Another server's Follow
+     button asks its reader which server they are on; when they say this one,
+     that server looks up the subscribe link in our WebFinger (front-core.mjs)
+     and lands them here. A static page, not a function: the account that does
+     the following is the agent in THIS browser, and the page asks it over the
+     same origin routes the record page uses. The underscore is Mastodon's
+     spelling of the path, kept so the address is the one other servers
+     already know. -->
+<title>Follow — FediPod</title>
+<link rel="icon" href="/icons/local.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/admin/tokens.css">
+<style>
+  body { margin: 0; background: var(--surface); color: var(--fg); font-family: var(--font); }
+  main { max-width: 34rem; margin: 0 auto; padding: 2.5rem 1.25rem 3rem; }
+  h1 { color: var(--heading); margin: 0 0 1.5rem; font-size: 1.6rem; }
+  .address { background: var(--raised); border: 1px solid var(--line); border-radius: 8px;
+             padding: 1rem 1.1rem; margin: 0 0 1.25rem; word-break: break-word; }
+  .as { color: var(--ok); margin: 0 0 1.5rem; }
+  .row { margin: 0 0 1.25rem; }
+  button { font: inherit; padding: 0.6rem 1.4rem; border-radius: 8px; border: 1px solid var(--btn);
+           background: var(--btn); color: var(--btn-text); cursor: pointer; }
+  button:hover { background: var(--btn-hover); }
+  button:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+  .msg { margin: 0 0 1.25rem; }
+  .msg.err { color: var(--err); }
+  .msg.ok { color: var(--ok); }
+  p { line-height: 1.55; }
+  a { color: var(--accent); }
+  .hint { color: var(--sub); }
+</style>
+<script src="/authorize_interaction.js" defer></script>
+</head>
+<body>
+<main>
+  <h1>Follow</h1>
+  <p class="address" id="target">…</p>
+  <p class="as" id="as" hidden></p>
+  <p class="row"><button id="go" hidden>Follow</button></p>
+  <p class="msg" id="msg" role="status" aria-live="polite"></p>
+  <div id="by-hand" hidden>
+    <p>No FediPod account is signed in to this browser, so the follow cannot be
+      sent from here. If your agent runs on your own machine, or you are signed
+      in somewhere else, paste the address above into your client's search box
+      and follow from the profile it finds.</p>
+    <p><a href="/">Sign in to FediPod</a></p>
+  </div>
+  <p class="hint"><a href="/admin/client/">Your account</a></p>
+</main>
+</body>
+</html>

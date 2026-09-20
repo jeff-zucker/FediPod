@@ -283,11 +283,22 @@ if (typeof document !== 'undefined') (async () => {
       console.error(e);
       $('loading').hidden = true; $('hero').hidden = true; $('landing').hidden = true;
       $('brand').hidden = false; $('running').hidden = false;
-      $('running-title').textContent = 'Signed in, but the agent could not start';
+      // Two failures the agent can name are the reader's own business, not a
+      // crash: the pod would not give the account up, or the pod holds no
+      // account. Each gets a title that says which, the sentence the agent
+      // wrote, and the button that actually leads somewhere — and no stack,
+      // which tells the person nothing and reads like a broken site.
+      const known = {
+        'pod-unreadable': { title: 'Your pod did not answer', retry: 'Reload', go: () => location.reload() },
+        'sign-in-refused': { title: 'Your pod refused this sign-in', retry: 'Sign in again', go: () => { location.href = '/?add'; } },
+        'no-account': { title: 'No FediPod account in that pod', retry: 'Use another pod', go: () => { location.href = '/?add'; } },
+      }[e.code];
+      $('running-title').textContent = known ? known.title : 'Signed in, but the agent could not start';
       $('run-error').style.whiteSpace = 'pre-wrap';
-      $('run-error').textContent = (e.message || String(e)) + (e.detail ? `\n\n${e.detail}` : '');
+      $('run-error').textContent = (e.message || String(e)) + (!known && e.detail ? `\n\n${e.detail}` : '');
       $('run-actions').hidden = false;
-      $('run-retry').textContent = 'Reload'; $('run-retry').addEventListener('click', () => location.reload());
+      $('run-retry').textContent = known ? known.retry : 'Reload';
+      $('run-retry').addEventListener('click', known ? known.go : () => location.reload());
       $('run-back').textContent = 'Sign out'; $('run-back').addEventListener('click', async () => { try { await window.fedipodSignOut(); } catch {} location.href = '/'; });
       return;
     }

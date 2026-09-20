@@ -50,6 +50,36 @@ const originAuthorities = (host) => ({
   wsAuthorities() { return []; },     // fetch-only: this build serves no socket
 });
 
+// Why an account did not open, in words for the person it happened to, and a
+// `code` the sign-in page uses to offer the right button (boot.mjs). Two
+// different things, which used to be reported as one: the pod would not give
+// the record up, or the pod has no account in it.
+function accountNotRead({ unread, podBase, state, webId }) {
+  const host = (() => { try { return new URL(podBase).host; } catch { return podBase; } })();
+  if (unread) {
+    const status = Number((/HTTP (\d{3})/u.exec(unread.message) || [])[1]) || 0;
+    // A refused token is the one of these the person can act on, and the
+    // action is not "reload" — it is to sign in again.
+    if (status === 401 || status === 403) {
+      const err = new Error(`${host} refused this sign-in when the agent asked it for your account`
+        + ` (HTTP ${status}). Your account is still there. Sign in again — the sign-in this browser`
+        + ` is holding has expired or is not the owner of ${podBase}.`);
+      err.code = 'sign-in-refused';
+      return err;
+    }
+    const err = new Error(`Your pod did not hand over your account: ${unread.message}.`
+      + ` Your account is still there — nothing here could read it just now.`
+      + ` Reload to try again; if ${host} keeps saying this, it is busy, refusing, or out of reach.`);
+    err.code = 'pod-unreadable';
+    return err;
+  }
+  const err = new Error(`${host} answered, and there is no FediPod account in it (${state}).`
+    + ` Sign in with the pod that holds your account, or make an account in this one —`
+    + ` both start from the sign-in page. The sign-in used here was ${webId}.`);
+  err.code = 'no-account';
+  return err;
+}
+
 export class BrowserAgent {
   constructor({ log = console.log } = {}) {
     this.log = log;
@@ -203,10 +233,18 @@ export class BrowserAgent {
     // The Node agent has always passed remote.fetch here.
     const podFetch = (u, i) => this.remote.fetch(u, i);
     this.store = new PodStore({ storage: new HttpStorage(this.urls.state, podFetch), log: this.log });
-    await this.store.load().catch(() => { /* first boot: nothing there yet */ });
+    // A read that FAILED is not an account that is not there. load() already
+    // tells those apart — a missing container, a refused token, a pod saying
+    // "too many requests" each come back with their own reason — and throwing
+    // the reason away turned every one of them into "sign up first", said to
+    // somebody who had just signed in and whose account was sitting on the pod
+    // unread. Keep it: below is the only place that can tell whether it
+    // mattered, because a sign-up hands its config in and needs no read at all.
+    let unread = null;
+    await this.store.load().catch((e) => { unread = e; });
     // Config: handed in on sign-up, or read from the pod on a returning sign-in.
     const cfg = config || this.store.getConfig();
-    if (!cfg) throw new Error('no account config on this pod — sign up first');
+    if (!cfg) throw accountNotRead({ unread, podBase: remotePod, state: this.urls.state, webId });
     // `root` is written INTO the config, not just used above. The Publisher
     // builds its own urls from `config.root` (publisher.mjs), and a config
     // without one falls to the Node default — so an account set up elsewhere

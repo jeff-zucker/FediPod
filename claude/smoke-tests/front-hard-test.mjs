@@ -177,6 +177,12 @@ try {
   `and it may be held by a cache (${wf.headers.get('cache-control')} | ${wf.headers.get('netlify-cdn-cache-control')})`);
   check(jrd.links.some((l) => l.rel === 'http://webfinger.net/rel/profile-page' && l.href === POD + 'ap/profile.html'),
     `and it links the profile page on the pod (${JSON.stringify(jrd.links)})`);
+  // Somebody reading this account on another server presses Follow and says
+  // they are here; their server reads this link to find out where to send
+  // them. Without it the Follow ends in "not found" on their side.
+  check(jrd.links.some((l) => l.rel === 'http://ostatus.org/schema/1.0/subscribe'
+    && l.template === `${ORIGIN}/authorize_interaction?uri={uri}`),
+  `and it names the door a remote follow is handed to (${JSON.stringify(jrd.links.at(-1))})`);
   const at = await get('/@alice', { redirect: 'manual' });
   check(at.status === 302 && at.headers.get('location') === POD + 'ap/profile.html',
     `https://<front>/@alice sends a person to that page (${at.status} ${at.headers.get('location')})`);
