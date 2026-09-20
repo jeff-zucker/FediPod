@@ -191,12 +191,29 @@ function sessionHandle(s) {
     }
     await idbPut('session', { ...s, accessToken, expiresAt, refreshToken });
   };
-  const authFetch = async (url, init = {}) => {
-    if (Date.now() > expiresAt - 30_000) await refresh();
+  const send = async (url, init) => {
     const jwk = await jwkP;
     const ath = b64u(await sha256(accessToken));
     const headers = { ...(init.headers || {}), authorization: `DPoP ${accessToken}`, dpop: await dpopProof(s.pair, jwk, (init.method || 'GET'), url, ath) };
     return fetch(url, { ...init, headers });
   };
-  return { webId: s.webId, fetch: authFetch, refresh, signOut };
+  const authFetch = async (url, init = {}) => {
+    if (Date.now() > expiresAt - 30_000) await refresh();
+    const res = await send(url, init);
+    // A token the pod REFUSES is not only ever an expired one: a pod that
+    // restarted, a clock that drifted, a token the server stopped recognising
+    // all answer 401 while the clock here still says the token is good — so the
+    // renewal above never fires and every call fails from then on. Renew once
+    // and ask again. Until this was here, the first such 401 of a session
+    // surfaced as "no account config on this pod — sign up first", and the
+    // person was told to sign up for an account they already had.
+    if (res.status === 401 && refreshToken) {
+      try { await refresh(); } catch { return res; }
+      return send(url, init);
+    }
+    return res;
+  };
+  // `issuer` so a page that cannot renew can send the person back to the right
+  // login without asking them for their address again (boot.mjs).
+  return { webId: s.webId, issuer: s.issuer, fetch: authFetch, refresh, signOut };
 }

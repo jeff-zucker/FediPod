@@ -278,27 +278,91 @@ if (typeof document !== 'undefined') (async () => {
         return;
       }
       // We logged in (or had a saved session) but the agent could not start.
-      // Show exactly why — including where it threw — instead of silently
-      // dropping back to the landing, which hides every real failure.
+      // What the agent could name. Most of these the page can act on ITSELF,
+      // and does: a sign-in the pod will not take is renewed (and, if the
+      // renewal is refused too, taken back to the pod's own login), and a pod
+      // that was busy or unreachable is asked again on a timer. Nobody is
+      // asked to press a button to find out what happened, and nobody is left
+      // pressing Reload by hand. A button is still there for whoever does not
+      // want to wait — and for the failures where waiting would not help.
+      //
+      // Each automatic step happens ONCE per tab (`once` below): a renewal
+      // that comes back refused, or a retry that fails the same way, means
+      // something the page cannot fix, and the reader gets the message rather
+      // than a loop.
+      const once = (key) => {
+        try {
+          if (sessionStorage.getItem(key)) return false;
+          sessionStorage.setItem(key, '1');
+          return true;
+        } catch { return false; }        // no storage: never automatic, always the button
+      };
+      const reload = () => location.reload();
+      const signIn = () => { location.href = '/?add'; };
+      const known = {
+        'sign-in-refused': { title: 'Your pod refused this sign-in', retry: 'Sign in again', go: signIn },
+        'pod-busy': { title: 'Your pod is asking for a pause', retry: 'Reload', go: reload, wait: 45 },
+        'pod-error': { title: 'Your pod had an error', retry: 'Reload', go: reload, wait: 20 },
+        'pod-unreachable': { title: 'Your pod could not be reached', retry: 'Reload', go: reload, wait: 20 },
+        'no-account-here': { title: 'No FediPod account in that pod', retry: 'Use another pod', go: signIn },
+        'no-account': { title: 'No FediPod account in that pod', retry: 'Use another pod', go: signIn },
+      }[e.code];
+
+      // A sign-in the pod would not take: renew it here, and if the pod will
+      // not renew it either, go to the pod's own login. Both without asking.
+      if (e.code === 'sign-in-refused' && once('fedipod-renewing')) {
+        $('loading').hidden = true; $('hero').hidden = true; $('landing').hidden = true;
+        $('brand').hidden = false; $('running').hidden = false;
+        $('running-title').textContent = 'Renewing your sign-in';
+        // Not red: nothing has gone wrong for the reader yet, something is
+        // being done about it. The pane is shared with the real failures,
+        // which keep the alarm colouring.
+        $('run-error').style.color = 'var(--sub)';
+        $('run-error').style.borderLeftColor = 'var(--line)';
+        $('run-error').textContent = 'Your pod would not take the sign-in this browser is holding. Renewing it now.';
+        $('run-actions').hidden = true;
+        const session = await getSession().catch(() => null);
+        if (session) {
+          try {
+            await session.refresh();
+            location.reload();                     // renewed: boot again with it
+            return;
+          } catch { /* the pod will not renew it either: its login is the only way */ }
+          try {
+            const { authorizationUrl } = await beginLogin({ issuer: session.issuer, redirectUri: REDIRECT });
+            location.href = authorizationUrl;
+            return;
+          } catch { /* cannot even reach the login: fall through and say so */ }
+        }
+      }
+
       console.error(e);
       $('loading').hidden = true; $('hero').hidden = true; $('landing').hidden = true;
       $('brand').hidden = false; $('running').hidden = false;
-      // Two failures the agent can name are the reader's own business, not a
-      // crash: the pod would not give the account up, or the pod holds no
-      // account. Each gets a title that says which, the sentence the agent
-      // wrote, and the button that actually leads somewhere — and no stack,
-      // which tells the person nothing and reads like a broken site.
-      const known = {
-        'pod-unreadable': { title: 'Your pod did not answer', retry: 'Reload', go: () => location.reload() },
-        'sign-in-refused': { title: 'Your pod refused this sign-in', retry: 'Sign in again', go: () => { location.href = '/?add'; } },
-        'no-account': { title: 'No FediPod account in that pod', retry: 'Use another pod', go: () => { location.href = '/?add'; } },
-      }[e.code];
       $('running-title').textContent = known ? known.title : 'Signed in, but the agent could not start';
       $('run-error').style.whiteSpace = 'pre-wrap';
       $('run-error').textContent = (e.message || String(e)) + (!known && e.detail ? `\n\n${e.detail}` : '');
       $('run-actions').hidden = false;
+      // The button that leads somewhere goes first. The pane is shared with the
+      // sign-up flow, where "Start over" leads and "Try again" follows; here
+      // the reader is being told what to do, so what to do is the first thing
+      // under it.
+      $('run-actions').prepend($('run-retry'));
       $('run-retry').textContent = known ? known.retry : 'Reload';
-      $('run-retry').addEventListener('click', known ? known.go : () => location.reload());
+      $('run-retry').addEventListener('click', known ? known.go : reload);
+      // Busy, broken or out of reach: the transport already climbed its own
+      // retry ladder to get here, so this waits longer and asks once more by
+      // itself. The button counts down so the wait is not a blank stare, and
+      // pressing it goes now.
+      if (known?.wait && once(`fedipod-waited-${e.code}`)) {
+        let left = known.wait;
+        const tick = () => {
+          $('run-retry').textContent = left > 0 ? `Trying again in ${left}s` : 'Trying again…';
+          if (left-- <= 0) { clearInterval(timer); location.reload(); }
+        };
+        const timer = setInterval(tick, 1000);
+        tick();
+      }
       $('run-back').textContent = 'Sign out'; $('run-back').addEventListener('click', async () => { try { await window.fedipodSignOut(); } catch {} location.href = '/'; });
       return;
     }

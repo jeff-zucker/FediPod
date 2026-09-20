@@ -33704,14 +33704,26 @@ function sessionHandle(s) {
     }
     await idbPut("session", { ...s, accessToken, expiresAt, refreshToken });
   };
-  const authFetch = async (url, init = {}) => {
-    if (Date.now() > expiresAt - 3e4) await refresh();
+  const send = async (url, init) => {
     const jwk = await jwkP;
     const ath = b64u2(await sha2562(accessToken));
     const headers = { ...init.headers || {}, authorization: `DPoP ${accessToken}`, dpop: await dpopProof(s.pair, jwk, init.method || "GET", url, ath) };
     return fetch(url, { ...init, headers });
   };
-  return { webId: s.webId, fetch: authFetch, refresh, signOut };
+  const authFetch = async (url, init = {}) => {
+    if (Date.now() > expiresAt - 3e4) await refresh();
+    const res = await send(url, init);
+    if (res.status === 401 && refreshToken) {
+      try {
+        await refresh();
+      } catch {
+        return res;
+      }
+      return send(url, init);
+    }
+    return res;
+  };
+  return { webId: s.webId, issuer: s.issuer, fetch: authFetch, refresh, signOut };
 }
 
 // web/app/boot.mjs
@@ -33935,29 +33947,81 @@ if (typeof document !== "undefined") (async () => {
         $("unlock-password").focus();
         return;
       }
+      const once = (key) => {
+        try {
+          if (sessionStorage.getItem(key)) return false;
+          sessionStorage.setItem(key, "1");
+          return true;
+        } catch {
+          return false;
+        }
+      };
+      const reload = () => location.reload();
+      const signIn = () => {
+        location.href = "/?add";
+      };
+      const known = {
+        "sign-in-refused": { title: "Your pod refused this sign-in", retry: "Sign in again", go: signIn },
+        "pod-busy": { title: "Your pod is asking for a pause", retry: "Reload", go: reload, wait: 45 },
+        "pod-error": { title: "Your pod had an error", retry: "Reload", go: reload, wait: 20 },
+        "pod-unreachable": { title: "Your pod could not be reached", retry: "Reload", go: reload, wait: 20 },
+        "no-account-here": { title: "No FediPod account in that pod", retry: "Use another pod", go: signIn },
+        "no-account": { title: "No FediPod account in that pod", retry: "Use another pod", go: signIn }
+      }[e.code];
+      if (e.code === "sign-in-refused" && once("fedipod-renewing")) {
+        $("loading").hidden = true;
+        $("hero").hidden = true;
+        $("landing").hidden = true;
+        $("brand").hidden = false;
+        $("running").hidden = false;
+        $("running-title").textContent = "Renewing your sign-in";
+        $("run-error").style.color = "var(--sub)";
+        $("run-error").style.borderLeftColor = "var(--line)";
+        $("run-error").textContent = "Your pod would not take the sign-in this browser is holding. Renewing it now.";
+        $("run-actions").hidden = true;
+        const session = await getSession().catch(() => null);
+        if (session) {
+          try {
+            await session.refresh();
+            location.reload();
+            return;
+          } catch {
+          }
+          try {
+            const { authorizationUrl } = await beginLogin({ issuer: session.issuer, redirectUri: REDIRECT });
+            location.href = authorizationUrl;
+            return;
+          } catch {
+          }
+        }
+      }
       console.error(e);
       $("loading").hidden = true;
       $("hero").hidden = true;
       $("landing").hidden = true;
       $("brand").hidden = false;
       $("running").hidden = false;
-      const known = {
-        "pod-unreadable": { title: "Your pod did not answer", retry: "Reload", go: () => location.reload() },
-        "sign-in-refused": { title: "Your pod refused this sign-in", retry: "Sign in again", go: () => {
-          location.href = "/?add";
-        } },
-        "no-account": { title: "No FediPod account in that pod", retry: "Use another pod", go: () => {
-          location.href = "/?add";
-        } }
-      }[e.code];
       $("running-title").textContent = known ? known.title : "Signed in, but the agent could not start";
       $("run-error").style.whiteSpace = "pre-wrap";
       $("run-error").textContent = (e.message || String(e)) + (!known && e.detail ? `
 
 ${e.detail}` : "");
       $("run-actions").hidden = false;
+      $("run-actions").prepend($("run-retry"));
       $("run-retry").textContent = known ? known.retry : "Reload";
-      $("run-retry").addEventListener("click", known ? known.go : () => location.reload());
+      $("run-retry").addEventListener("click", known ? known.go : reload);
+      if (known?.wait && once(`fedipod-waited-${e.code}`)) {
+        let left = known.wait;
+        const tick = () => {
+          $("run-retry").textContent = left > 0 ? `Trying again in ${left}s` : "Trying again\u2026";
+          if (left-- <= 0) {
+            clearInterval(timer);
+            location.reload();
+          }
+        };
+        const timer = setInterval(tick, 1e3);
+        tick();
+      }
       $("run-back").textContent = "Sign out";
       $("run-back").addEventListener("click", async () => {
         try {

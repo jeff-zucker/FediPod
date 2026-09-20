@@ -71570,20 +71570,28 @@ function accountNotRead({ unread, podBase, state, webId }) {
       return podBase;
     }
   })();
-  if (unread) {
-    const status2 = Number((/HTTP (\d{3})/u.exec(unread.message) || [])[1]) || 0;
-    if (status2 === 401 || status2 === 403) {
-      const err3 = new Error(`${host} refused this sign-in when the agent asked it for your account (HTTP ${status2}). Your account is still there. Sign in again \u2014 the sign-in this browser is holding has expired or is not the owner of ${podBase}.`);
-      err3.code = "sign-in-refused";
-      return err3;
-    }
-    const err2 = new Error(`Your pod did not hand over your account: ${unread.message}. Your account is still there \u2014 nothing here could read it just now. Reload to try again; if ${host} keeps saying this, it is busy, refusing, or out of reach.`);
-    err2.code = "pod-unreadable";
-    return err2;
+  const of = (code, message) => {
+    const e = new Error(message);
+    e.code = code;
+    return e;
+  };
+  if (!unread) {
+    return of("no-account", `${host} answered, and there is no FediPod account in it. Sign in with the pod that holds your account, or make an account in this one \u2014 both start from the sign-in page. The sign-in used here was ${webId}.`);
   }
-  const err = new Error(`${host} answered, and there is no FediPod account in it (${state}). Sign in with the pod that holds your account, or make an account in this one \u2014 both start from the sign-in page. The sign-in used here was ${webId}.`);
-  err.code = "no-account";
-  return err;
+  const status2 = Number((/HTTP (\d{3})/u.exec(unread.message) || [])[1]) || 0;
+  if (status2 === 401 || status2 === 403) {
+    return of("sign-in-refused", `${host} would not let this sign-in read your account \u2014 it answered "not allowed" (HTTP ${status2}) \u2014 and renewing the sign-in did not change its mind. Your account and everything in it are untouched. Signing in at ${host} again is the one thing that helps.`);
+  }
+  if (status2 === 429) {
+    return of("pod-busy", `${host} is telling this browser it has asked for too much too quickly (HTTP 429), so your account could not be read. Nothing is wrong with your account, and nothing here needs doing: this page is waiting the throttle out and will ask again by itself. While a pod is rate-limiting you, only time helps.`);
+  }
+  if (status2 >= 500) {
+    return of("pod-error", `${host} broke while handing your account over (HTTP ${status2}). That is the pod's own failure, not your account's. This page asks again by itself in a moment; if it keeps saying this, the pod is down and there is nothing to do here.`);
+  }
+  if (status2 === 404) {
+    return of("no-account-here", `${host} says there is nothing at ${state} (HTTP 404). Either no FediPod account has ever been set up in this pod, or you signed in with a different pod than the one holding yours. Sign in with that one, or make an account in this one \u2014 both start from the sign-in page.`);
+  }
+  return of("pod-unreachable", `This browser could not reach ${host} to read your account (${unread.message}). Your account is still there. This page tries again by itself; if it keeps saying this, check that you are online and that the pod is up.`);
 }
 var BrowserAgent = class _BrowserAgent {
   constructor({ log: log2 = console.log } = {}) {
@@ -72113,14 +72121,26 @@ function sessionHandle(s) {
     }
     await idbPut("session", { ...s, accessToken, expiresAt, refreshToken });
   };
-  const authFetch = async (url, init = {}) => {
-    if (Date.now() > expiresAt - 3e4) await refresh();
+  const send = async (url, init) => {
     const jwk = await jwkP;
     const ath = b64u3(await sha2564(accessToken));
     const headers = { ...init.headers || {}, authorization: `DPoP ${accessToken}`, dpop: await dpopProof(s.pair, jwk, init.method || "GET", url, ath) };
     return fetch(url, { ...init, headers });
   };
-  return { webId: s.webId, fetch: authFetch, refresh, signOut };
+  const authFetch = async (url, init = {}) => {
+    if (Date.now() > expiresAt - 3e4) await refresh();
+    const res = await send(url, init);
+    if (res.status === 401 && refreshToken) {
+      try {
+        await refresh();
+      } catch {
+        return res;
+      }
+      return send(url, init);
+    }
+    return res;
+  };
+  return { webId: s.webId, issuer: s.issuer, fetch: authFetch, refresh, signOut };
 }
 
 // web/app/sw-src.mjs

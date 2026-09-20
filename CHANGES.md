@@ -11,14 +11,20 @@ halves are there now: **`/authorize_interaction`** names who you are about to
 follow and sends the follow from the browser you are signed in to, and the
 WebFinger answer tells other servers where to find it.
 
-**A sign-in that could not read your account no longer tells you to sign up.**
-The browser agent reads its record from your pod; when that read failed it
-dropped what the pod had said and reported one thing — "no account config on
-this pod — sign up first" — to somebody who had just signed in, with their
-account sitting on the pod unread. It now says which of three happened: your
-pod refused the sign-in (and offers to sign in again), your pod did not answer
-(and offers to reload), or the pod really holds no account (and offers to use
-another pod). The stack trace under the message is gone for all three.
+**A sign-in that could not read your account fixes itself where it can.** The
+browser agent reads its record from your pod; when that read failed it dropped
+whatever the pod had said and reported one thing — "no account config on this
+pod — sign up first" — to somebody who had just signed in, with their account
+sitting on the pod unread. Now nothing is handed to you to press unless
+pressing it is the only thing left. A token the pod refuses is renewed and the
+read is made again, in the session itself, which is where most of these
+started and ended. If the pod will not renew it either, the page takes you to
+your pod's own login. A pod that is busy, broken or out of reach has already
+been retried by the transport, and the page then waits and asks again on its
+own, counting down where you can see it. What is left — the pod refusing a
+freshly renewed sign-in, or a pod that genuinely holds no account — is said in
+a sentence that names what the pod did, what it means for your account, and
+the one thing that helps. The stack trace under it is gone.
 
 ## 2026-09-19 (a public document is read once, not once per reader — version 1.24.0)
 

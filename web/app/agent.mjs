@@ -51,33 +51,54 @@ const originAuthorities = (host) => ({
 });
 
 // Why an account did not open, in words for the person it happened to, and a
-// `code` the sign-in page uses to offer the right button (boot.mjs). Two
-// different things, which used to be reported as one: the pod would not give
-// the record up, or the pod has no account in it.
+// `code` the sign-in page turns into a title and the one button that leads
+// somewhere (boot.mjs). Every one of these used to be the same sentence —
+// "no account config on this pod — sign up first" — which named the wrong
+// cause, offered the wrong cure, and left the reader with nothing to press.
+//
+// Each message says three things and stops: what the pod did, what that means
+// for the account, what to do about it. The pod's own wording is carried only
+// where it adds something the status code does not.
 function accountNotRead({ unread, podBase, state, webId }) {
   const host = (() => { try { return new URL(podBase).host; } catch { return podBase; } })();
-  if (unread) {
-    const status = Number((/HTTP (\d{3})/u.exec(unread.message) || [])[1]) || 0;
-    // A refused token is the one of these the person can act on, and the
-    // action is not "reload" — it is to sign in again.
-    if (status === 401 || status === 403) {
-      const err = new Error(`${host} refused this sign-in when the agent asked it for your account`
-        + ` (HTTP ${status}). Your account is still there. Sign in again — the sign-in this browser`
-        + ` is holding has expired or is not the owner of ${podBase}.`);
-      err.code = 'sign-in-refused';
-      return err;
-    }
-    const err = new Error(`Your pod did not hand over your account: ${unread.message}.`
-      + ` Your account is still there — nothing here could read it just now.`
-      + ` Reload to try again; if ${host} keeps saying this, it is busy, refusing, or out of reach.`);
-    err.code = 'pod-unreadable';
-    return err;
+  const of = (code, message) => { const e = new Error(message); e.code = code; return e; };
+  if (!unread) {
+    return of('no-account', `${host} answered, and there is no FediPod account in it.`
+      + ` Sign in with the pod that holds your account, or make an account in this one —`
+      + ` both start from the sign-in page. The sign-in used here was ${webId}.`);
   }
-  const err = new Error(`${host} answered, and there is no FediPod account in it (${state}).`
-    + ` Sign in with the pod that holds your account, or make an account in this one —`
-    + ` both start from the sign-in page. The sign-in used here was ${webId}.`);
-  err.code = 'no-account';
-  return err;
+  const status = Number((/HTTP (\d{3})/u.exec(unread.message) || [])[1]) || 0;
+  if (status === 401 || status === 403) {
+    // The page renews a refused sign-in by itself, and takes the person to
+    // their pod's login when the renewal is refused too (boot.mjs). By the
+    // time anybody reads this, both have already been tried.
+    return of('sign-in-refused', `${host} would not let this sign-in read your account — it answered`
+      + ` "not allowed" (HTTP ${status}) — and renewing the sign-in did not change its mind.`
+      + ` Your account and everything in it are untouched. Signing in at ${host} again is the`
+      + ` one thing that helps.`);
+  }
+  if (status === 429) {
+    return of('pod-busy', `${host} is telling this browser it has asked for too much too quickly`
+      + ` (HTTP 429), so your account could not be read. Nothing is wrong with your account, and`
+      + ` nothing here needs doing: this page is waiting the throttle out and will ask again by`
+      + ` itself. While a pod is rate-limiting you, only time helps.`);
+  }
+  if (status >= 500) {
+    return of('pod-error', `${host} broke while handing your account over (HTTP ${status}).`
+      + ` That is the pod's own failure, not your account's. This page asks again by itself in`
+      + ` a moment; if it keeps saying this, the pod is down and there is nothing to do here.`);
+  }
+  if (status === 404) {
+    return of('no-account-here', `${host} says there is nothing at ${state} (HTTP 404).`
+      + ` Either no FediPod account has ever been set up in this pod, or you signed in with a`
+      + ` different pod than the one holding yours. Sign in with that one, or make an account`
+      + ` in this one — both start from the sign-in page.`);
+  }
+  // No status at all: the request never got an answer. The pod's own words are
+  // the only thing that says anything here, so they come along.
+  return of('pod-unreachable', `This browser could not reach ${host} to read your account`
+    + ` (${unread.message}). Your account is still there. This page tries again by itself;`
+    + ` if it keeps saying this, check that you are online and that the pod is up.`);
 }
 
 export class BrowserAgent {
