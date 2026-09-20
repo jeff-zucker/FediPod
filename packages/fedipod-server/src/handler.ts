@@ -586,6 +586,19 @@ export class FediPodServerHandler extends HttpHandler implements Initializable, 
       doorSecret: door.secret, doorPath: this.uiPath, status: 'starting' };
   }
 
+  /**
+   * What a pod would be as an identity here, without changing anything: its
+   * handle, the host its address carries, and whether it runs here already.
+   */
+  public describePod({ podBase }: { podBase: string }):
+  { handle: string; host: string; address: string; running: boolean } {
+    const base = podBase.endsWith('/') ? podBase : `${podBase}/`;
+    const handle = deriveHandle(base);
+    let host: string;
+    try { host = this.validateAgentPod(base).host; } catch { host = new URL(base).host.toLowerCase(); }
+    return { handle, host, address: `@${handle}@${host}`, running: this.agentHandles.get(handle) === base };
+  }
+
   /** The reverse: stop the identity and let the pod be plain LDP again. */
   public async optOutPod({ podBase }: { podBase: string }):
   Promise<Record<string, unknown> & { httpStatus: number }> {
@@ -740,6 +753,7 @@ export class FediPodServerHandler extends HttpHandler implements Initializable, 
         ? {
           optIn: (a: { podBase: string; webId: string }) => this.optInPod(a),
           optOut: (a: { podBase: string }) => this.optOutPod(a),
+          describe: (a: { podBase: string }) => this.describePod(a),
         }
         : undefined,
     });

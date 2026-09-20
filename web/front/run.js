@@ -23,21 +23,71 @@ try {
   session = new SessionCore({ redirect_uris: [HERE], client_name: 'FediPod gateway' });
 } catch { /* leave null — the "did not load" notes below fire */ }
 
-// Offered only where this server actually runs identities. An
-// unauthenticated probe tells the two apart: 501 = not offered here,
-// anything else = offered (a real opt-in still needs the signed-in proof).
+// What this server knows before anything is typed. 501: it runs no
+// identities. A pod server that issued the reader's session names their pod
+// and its address, and the page shows one button per pod. Not signed in
+// there: one button, to its login. A Gateway knows nothing: the form below.
 let offered = true;
+const say = (tag, text) => { const e = document.createElement(tag); e.textContent = text; return e; };
 (async () => {
-  const res = await fetch('/api/agent', { method: 'POST',
-    headers: { 'content-type': 'application/json' }, body: '{}' }).catch(() => null);
+  const res = await fetch('/api/agent', { credentials: 'same-origin', headers: { accept: 'application/json' } }).catch(() => null);
+  const d = res && res.ok ? await res.json().catch(() => ({})) : {};
+  const n = $('run-note');
   if (!res || res.status === 501) {
     offered = false;
-    const n = $('run-note');
     n.hidden = false;
     n.textContent = 'This server does not run identities. Your agent stays where it is.';
+  } else if (d.session === 'none') {
+    $('run-form').hidden = true;
+    showSignIn(d.loginUrl);
+  } else if (d.session === 'ok' && Array.isArray(d.pods) && d.pods.length) {
+    $('run-form').hidden = true;
+    showPods(d.pods);
   }
   runFormCheck();
 })();
+
+function showSignIn(loginUrl) {
+  const k = $('run-known');
+  k.hidden = false;
+  k.replaceChildren();
+  k.append(say('p', 'You are not signed in at this server.'));
+  if (loginUrl) {
+    const go = say('button', 'Sign in');
+    go.type = 'button'; go.className = 'primary';
+    go.onclick = () => { location.href = loginUrl; };
+    const p = document.createElement('p'); p.className = 'actions'; p.append(go);
+    k.append(p, say('p', 'Sign in, then come back to this page.'));
+    k.lastChild.className = 'hint';
+  }
+}
+
+function showPods(pods) {
+  const k = $('run-known');
+  k.hidden = false;
+  k.replaceChildren();
+  for (const pod of pods) {
+    const box = document.createElement('div'); box.className = 'pod';
+    box.append(say('p', `You are signed in as ${pod.webId}.`));
+    box.append(say('p', `Your pod is ${pod.podBase}.`));
+    const actions = document.createElement('p'); actions.className = 'actions';
+    if (pod.running) {
+      box.append(say('p', `This pod is a Fediverse account: ${pod.address}.`));
+      const again = say('button', 'Get a new door secret'); again.type = 'button';
+      again.onclick = () => runStart('opt-in', pod.podBase);
+      const stop = say('button', 'Stop running it here'); stop.type = 'button';
+      stop.onclick = () => runStart('opt-out', pod.podBase);
+      actions.append(again, ' ', stop);
+    } else {
+      box.append(say('p', `Your Fediverse address will be ${pod.address}.`));
+      const go = say('button', 'Make this pod a Fediverse account'); go.type = 'button'; go.className = 'primary';
+      go.onclick = () => runStart('opt-in', pod.podBase);
+      actions.append(go);
+    }
+    box.append(actions);
+    k.append(box);
+  }
+}
 
 function runFormCheck() {
   let ok = false;
@@ -63,9 +113,9 @@ $('run-issuer').addEventListener('input', runFormCheck);
 // a filled-in form, with nothing to say why.
 runFormCheck();
 
-const runStart = async (action) => {
+const runStart = async (action, podBase = null) => {
   const n = $('run-note');
-  const u = new URL($('run-pod-url').value.trim());
+  const u = new URL(podBase || $('run-pod-url').value.trim());
   if (u.pathname === '') u.pathname = '/';
   if (!u.pathname.endsWith('/')) u.pathname += '/';
   u.search = ''; u.hash = '';
@@ -103,7 +153,6 @@ async function showReply(res, p) {
     // back from the server and one comes from sessionStorage, and pasting any
     // of them into innerHTML means whatever markup they contain is rendered.
     // Only the fixed wording is markup here; everything variable is text.
-    const say = (tag, text) => { const e = document.createElement(tag); e.textContent = text; return e; };
     n.textContent = 'Your identity runs here now. This is your door secret — ';
     n.append(say('b', 'save it now'));
     n.append(', it is shown only this once. It opens your admin pages at ');

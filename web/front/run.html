@@ -15,6 +15,9 @@
   input[type=text], input[type=url] { width: 100%; padding: .5rem .6rem; font: inherit;
     border: 1px solid var(--line); border-radius: 8px; box-sizing: border-box; }
   .hint { color: var(--dim); font-size: .95rem; }
+  .pod { border: 1px solid var(--line); border-radius: 9px; padding: .9rem 1.1rem; margin: .8rem 0; }
+  .pod p { margin: .3rem 0; }
+  .pod .actions { margin-top: .8rem; }
   .primary { background: var(--accent); color: #fff; border: none; border-radius: 9px;
     padding: .6rem 1.1rem; font: inherit; cursor: pointer; }
   button { font: inherit; }
@@ -29,6 +32,8 @@
 <p class="lede">If your pod is hosted by this server, the server can run your Fediverse identity
 for you: it accepts follows, delivers your posts and serves your Mastodon app, with nothing for
 you to keep running. Sign in with your pod to prove it is yours.</p>
+
+<section id="run-known" hidden aria-live="polite"></section>
 
 <form id="run-form">
   <p class="field">
@@ -47,6 +52,5 @@ you to keep running. Sign in with your pod to prove it is yours.</p>
 </form>
 
 <script type="module" src="/run.js"></script>
-<i>(cc) 4.0 By, Jeff Zucker, 2026</i>
 </body>
 </html>

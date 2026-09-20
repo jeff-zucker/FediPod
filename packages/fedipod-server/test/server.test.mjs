@@ -40,7 +40,7 @@ test('claims every route the front core serves, pages and the files they load', 
   for (const pathname of ['/.fediverse-account', '/roster',
     '/.well-known/webfinger', '/api/handle', '/api/attach', '/api/agent',
     '/api/roster', '/api/revoke',
-    '/solid-oidc-client.js', '/install']) {
+    '/solid-oidc-client.js', '/install', '/new-account.js', '/run.js', '/admin.js']) {
     assert.equal(claims({ host: 'fedipod.net', pathname }, F), true, pathname);
   }
 });

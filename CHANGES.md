@@ -1,5 +1,24 @@
 # Changes
 
+## 2026-09-20 (the pod server's opt-in page knows who you are — version 1.27.0, fedipod-server 0.26.0)
+
+**On a pod server, the opt-in page asks for nothing.** Signed in at the
+server, you open `/.fediverse-account` and it says who you are, which pod
+is yours and what its Fediverse address will be, with one button. A pod
+already running here shows its address, a button for a new door secret and
+one to stop. Not signed in, one button takes you to the server's login.
+Own more than one pod and each gets its block. The two boxes, the pod's
+address and the identity provider, remain only on a Gateway, which holds no
+session and cannot know.
+
+**The page's own script was never served by the server.** Since the script
+left the page for a file of its own, `/run.js` fell through to the pod and
+answered 404, so the page's buttons never woke up on a pod server. The
+server now hands out the three page scripts itself.
+
+**No credit line on served pages.** The `(cc)` line is gone from the opt-in,
+admin and sign-up pages.
+
 ## 2026-09-20 (an account run from a device is called that — version 1.26.1)
 
 **Signing in at fedipod.net with a pod whose account a DeviceAgent runs no

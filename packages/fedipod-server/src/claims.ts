@@ -15,7 +15,10 @@ const FRONT_PATHS = new Set(['/roster',
   '/api/roster', '/api/revoke',
   // What the pages that remain load: the sign-in library the opt-in and
   // roster pages use, and the installer, which is FediPod's own to hand out.
-  '/solid-oidc-client.js', '/install']);
+  '/solid-oidc-client.js', '/install',
+  // Each page's own script, served beside it; a page without its script has
+  // buttons that never wake up.
+  '/new-account.js', '/run.js', '/admin.js']);
 
 /** Where a pod owner opts their identity in, when the operator named it. */
 export const DEFAULT_RUN_PATH = '/.fediverse-account';

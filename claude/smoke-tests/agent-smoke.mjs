@@ -11440,6 +11440,28 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
     'but its owner cannot claim an ancestor of a sibling pod on the shared origin');
   check((await agentPost({ action: 'opt-in', podBase: ORIGIN + '/' }, ctxAgent)).status === 403,
     "and the gateway's own origin root is not a pod — the front lives there, not an identity");
+  // Before the form: GET /api/agent says who is here and which pod is theirs,
+  // so a pod server's page can show one button. A Gateway says it cannot know.
+  const agentGet = (headers, ctx_) => front.routeFront(
+    new Request(ORIGIN + '/api/agent', { method: 'GET', headers: { accept: 'application/json', ...headers } }), ctx_);
+  const bodyOf = async (r) => JSON.parse((await r).body);
+  check((await agentGet({}, ctx)).status === 501, 'GET /api/agent: 501 where no pod server is behind the front');
+  check((await bodyOf(agentGet({}, ctxAgent))).session === 'unknown',
+    'a Gateway answers "unknown": it holds no session, the page asks by hand');
+  const knowsCtx = {
+    ...ctxAgent,
+    webIdsFromSession: async () => [ 'https://someone.else/profile/card#me', 'https://mei.host/profile/card#me' ],
+    agentControl: { ...ctxAgent.agentControl,
+      describe: async ({ podBase }) => ({ handle: 'mei', host: 'mei.host', address: '@mei@mei.host', running: podBase === 'https://mei.host/' && false }) },
+  };
+  const known = await bodyOf(agentGet({ 'sec-fetch-site': 'same-origin', cookie: 'css-account=x' }, knowsCtx));
+  check(known.session === 'ok' && known.pods.length === 2 && known.pods[1].podBase === 'https://mei.host/' && known.pods[1].address === '@mei@mei.host',
+    'a pod server names the signed-in owner\'s pods and the address each would have');
+  const notHere = await bodyOf(agentGet({ 'sec-fetch-site': 'cross-site' }, knowsCtx));
+  check(notHere.session === 'none' && !notHere.pods, 'from another site the session is not read: nobody is signed in');
+  const noCookie = await bodyOf(agentGet({ 'sec-fetch-site': 'same-origin' }, { ...knowsCtx, webIdsFromSession: async () => [] }));
+  check(noCookie.session === 'none' && noCookie.loginUrl === '/.account/login/password/', 'no session: the page is told where to sign in');
+
   // A server that issued the reader's session reads it instead of sending them
   // to sign in again — same-origin only, and only the WebID that owns the pod.
   const sessionCalls = [];
