@@ -72016,43 +72016,14 @@ var BrowserAgent = class _BrowserAgent {
   }
 };
 
-// web/app/oidc-session.mjs
-var DB2 = "fedipod-oidc";
+// lib/session/oidc-session.mjs
 var STORE = "session";
 var b64u3 = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 var enc3 = (o) => b64u3(new TextEncoder().encode(JSON.stringify(o)));
 var sha2564 = (s) => crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
-function idb() {
-  return new Promise((res, rej) => {
-    const r = indexedDB.open(DB2, 1);
-    r.onupgradeneeded = () => r.result.createObjectStore(STORE);
-    r.onsuccess = () => res(r.result);
-    r.onerror = () => rej(r.error);
-  });
-}
-async function idbGet(key) {
-  const db = await idb();
-  return new Promise((res, rej) => {
-    const t = db.transaction(STORE).objectStore(STORE).get(key);
-    t.onsuccess = () => res(t.result);
-    t.onerror = () => rej(t.error);
-  });
-}
-async function idbPut(key, val) {
-  const db = await idb();
-  return new Promise((res, rej) => {
-    const t = db.transaction(STORE, "readwrite").objectStore(STORE).put(val, key);
-    t.onsuccess = () => res();
-    t.onerror = () => rej(t.error);
-  });
-}
-async function idbDel(key) {
-  const db = await idb();
-  return new Promise((res, rej) => {
-    const t = db.transaction(STORE, "readwrite").objectStore(STORE).delete(key);
-    t.onsuccess = () => res();
-    t.onerror = () => rej(t.error);
-  });
+var rand = (n = 32) => b64u3(crypto.getRandomValues(new Uint8Array(n)));
+async function dpopKey() {
+  return crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, false, ["sign"]);
 }
 async function publicJwk(pair) {
   const j = await crypto.subtle.exportKey("jwk", pair.publicKey);
@@ -72065,83 +72036,216 @@ async function dpopProof(pair, jwk, htm, htu, ath) {
   const sig = await crypto.subtle.sign({ name: "ECDSA", hash: "SHA-256" }, pair.privateKey, new TextEncoder().encode(data));
   return `${data}.${b64u3(sig)}`;
 }
-async function getSession() {
-  const s = await idbGet("session");
-  return s ? sessionHandle(s) : null;
-}
-async function signOut() {
-  const s = await idbGet("session").catch(() => null);
-  if (s?.revocationEndpoint && s.refreshToken) {
-    try {
-      await fetch(s.revocationEndpoint, {
-        method: "POST",
-        headers: { "content-type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams({
-          token: s.refreshToken,
-          token_type_hint: "refresh_token",
-          client_id: s.client_id
-        })
-      });
-    } catch {
-    }
+var jwtPayload = (jwt) => {
+  try {
+    return JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(jwt.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")), (c) => c.charCodeAt(0))));
+  } catch {
+    return {};
   }
-  await idbDel("session");
-  await idbDel("pending");
+};
+async function discover(issuer) {
+  const res = await fetch(`${issuer.replace(/\/+$/, "")}/.well-known/openid-configuration`, { headers: { accept: "application/json" } });
+  if (!res.ok) throw new Error(`OIDC discovery failed at ${issuer} (HTTP ${res.status})`);
+  return res.json();
 }
-function sessionHandle(s) {
-  let { accessToken, expiresAt, refreshToken } = s;
-  const jwkP = publicJwk(s.pair);
-  const refresh = async () => {
-    if (!refreshToken) throw new Error("session expired and there is no refresh token \u2014 sign in again");
-    const jwk = await jwkP;
-    let res;
-    try {
-      res = await fetch(s.tokenEndpoint, {
-        method: "POST",
-        headers: { "content-type": "application/x-www-form-urlencoded", dpop: await dpopProof(s.pair, jwk, "POST", s.tokenEndpoint) },
-        body: new URLSearchParams({ grant_type: "refresh_token", refresh_token: refreshToken, client_id: s.client_id, scope: "openid webid offline_access" })
-      });
-    } catch (e) {
-      throw new Error(`${e.message} \u2014 renewing your sign-in at ${new URL(s.tokenEndpoint).host}`);
-    }
+async function registerClient(cfg, redirectUri, clientName) {
+  const res = await fetch(cfg.registration_endpoint, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      client_name: clientName,
+      redirect_uris: [redirectUri],
+      token_endpoint_auth_method: "none",
+      grant_types: ["authorization_code", "refresh_token"],
+      response_types: ["code"],
+      application_type: "web",
+      scope: "openid webid offline_access"
+    })
+  });
+  if (!res.ok) throw new Error(`client registration failed (HTTP ${res.status})`);
+  return (await res.json()).client_id;
+}
+function solidOidcSession({ dbName = "solid-oidc-session", clientName = "Solid app" } = {}) {
+  function idb() {
+    return new Promise((res, rej) => {
+      const r = indexedDB.open(dbName, 1);
+      r.onupgradeneeded = () => r.result.createObjectStore(STORE);
+      r.onsuccess = () => res(r.result);
+      r.onerror = () => rej(r.error);
+    });
+  }
+  async function idbGet(key) {
+    const db = await idb();
+    return new Promise((res, rej) => {
+      const t = db.transaction(STORE).objectStore(STORE).get(key);
+      t.onsuccess = () => res(t.result);
+      t.onerror = () => rej(t.error);
+    });
+  }
+  async function idbPut(key, val) {
+    const db = await idb();
+    return new Promise((res, rej) => {
+      const t = db.transaction(STORE, "readwrite").objectStore(STORE).put(val, key);
+      t.onsuccess = () => res();
+      t.onerror = () => rej(t.error);
+    });
+  }
+  async function idbDel(key) {
+    const db = await idb();
+    return new Promise((res, rej) => {
+      const t = db.transaction(STORE, "readwrite").objectStore(STORE).delete(key);
+      t.onsuccess = () => res();
+      t.onerror = () => rej(t.error);
+    });
+  }
+  async function beginLogin2({ issuer, redirectUri, clientName: name = clientName, returnTo = null }) {
+    const cfg = await discover(issuer);
+    const client_id = await registerClient(cfg, redirectUri, name);
+    const pair = await dpopKey();
+    const verifier = rand(48);
+    const challenge = b64u3(await sha2564(verifier));
+    const state = rand(16);
+    await idbPut("pending", {
+      issuer,
+      client_id,
+      redirectUri,
+      verifier,
+      state,
+      pair,
+      returnTo,
+      tokenEndpoint: cfg.token_endpoint,
+      authorizationEndpoint: cfg.authorization_endpoint,
+      revocationEndpoint: cfg.revocation_endpoint || null
+    });
+    const url = new URL(cfg.authorization_endpoint);
+    for (const [k, v] of Object.entries({
+      client_id,
+      redirect_uri: redirectUri,
+      response_type: "code",
+      scope: "openid webid offline_access",
+      code_challenge: challenge,
+      code_challenge_method: "S256",
+      state,
+      prompt: "consent"
+    })) url.searchParams.set(k, v);
+    return { authorizationUrl: url.href };
+  }
+  async function completeLogin2({ currentUrl }) {
+    const u = new URL(currentUrl);
+    const code = u.searchParams.get("code");
+    const state = u.searchParams.get("state");
+    if (!code) return null;
+    const p = await idbGet("pending");
+    if (!p || p.state !== state) throw new Error("login state mismatch");
+    const jwk = await publicJwk(p.pair);
+    const res = await fetch(p.tokenEndpoint, {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded", dpop: await dpopProof(p.pair, jwk, "POST", p.tokenEndpoint) },
+      body: new URLSearchParams({ grant_type: "authorization_code", code, redirect_uri: p.redirectUri, client_id: p.client_id, code_verifier: p.verifier })
+    });
     const tok = await res.json().catch(() => ({}));
-    if (res.status === 429) {
-      throw new Error(`${new URL(s.tokenEndpoint).host} is asking us to slow down \u2014 your sign-in could not be renewed just now`);
-    }
-    if (!res.ok || !tok.access_token) {
-      await idbDel("session");
-      throw new Error("refresh failed \u2014 sign in again");
-    }
-    accessToken = tok.access_token;
-    expiresAt = Date.now() + Math.max(30, tok.expires_in || 300) * 1e3;
-    if (tok.refresh_token) refreshToken = tok.refresh_token;
-    const now = await idbGet("session");
-    if (now && now.webId !== s.webId) {
-      throw new Error("signed in as somebody else while this session was refreshing");
-    }
-    await idbPut("session", { ...s, accessToken, expiresAt, refreshToken });
-  };
-  const send = async (url, init) => {
-    const jwk = await jwkP;
-    const ath = b64u3(await sha2564(accessToken));
-    const headers = { ...init.headers || {}, authorization: `DPoP ${accessToken}`, dpop: await dpopProof(s.pair, jwk, init.method || "GET", url, ath) };
-    return fetch(url, { ...init, headers });
-  };
-  const authFetch = async (url, init = {}) => {
-    if (Date.now() > expiresAt - 3e4) await refresh();
-    const res = await send(url, init);
-    if (res.status === 401 && refreshToken) {
+    if (!res.ok || !tok.access_token) throw new Error(`token exchange failed (HTTP ${res.status}): ${tok.error || ""}`);
+    const webId = jwtPayload(tok.access_token).webid || jwtPayload(tok.id_token || "").webid || null;
+    const session = {
+      issuer: p.issuer,
+      client_id: p.client_id,
+      tokenEndpoint: p.tokenEndpoint,
+      pair: p.pair,
+      // Where to hand the refresh token back at sign-out. Kept on the session
+      // because discovery is a network round trip and sign-out should not need
+      // one — see signOut().
+      revocationEndpoint: p.revocationEndpoint || null,
+      refreshToken: tok.refresh_token || null,
+      accessToken: tok.access_token,
+      expiresAt: Date.now() + Math.max(30, tok.expires_in || 300) * 1e3,
+      webId
+    };
+    await idbPut("session", session);
+    await idbDel("pending");
+    return Object.assign(sessionHandle(session), p.returnTo ? { returnTo: p.returnTo } : {});
+  }
+  async function getSession2() {
+    const s = await idbGet("session");
+    return s ? sessionHandle(s) : null;
+  }
+  async function signOut2() {
+    const s = await idbGet("session").catch(() => null);
+    if (s?.revocationEndpoint && s.refreshToken) {
       try {
-        await refresh();
+        await fetch(s.revocationEndpoint, {
+          method: "POST",
+          headers: { "content-type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({
+            token: s.refreshToken,
+            token_type_hint: "refresh_token",
+            client_id: s.client_id
+          })
+        });
       } catch {
-        return res;
       }
-      return send(url, init);
     }
-    return res;
-  };
-  return { webId: s.webId, issuer: s.issuer, fetch: authFetch, refresh, signOut };
+    await idbDel("session");
+    await idbDel("pending");
+  }
+  function sessionHandle(s) {
+    let { accessToken, expiresAt, refreshToken } = s;
+    const jwkP = publicJwk(s.pair);
+    const refresh = async () => {
+      if (!refreshToken) throw new Error("session expired and there is no refresh token \u2014 sign in again");
+      const jwk = await jwkP;
+      let res;
+      try {
+        res = await fetch(s.tokenEndpoint, {
+          method: "POST",
+          headers: { "content-type": "application/x-www-form-urlencoded", dpop: await dpopProof(s.pair, jwk, "POST", s.tokenEndpoint) },
+          body: new URLSearchParams({ grant_type: "refresh_token", refresh_token: refreshToken, client_id: s.client_id, scope: "openid webid offline_access" })
+        });
+      } catch (e) {
+        throw new Error(`${e.message} \u2014 renewing your sign-in at ${new URL(s.tokenEndpoint).host}`);
+      }
+      const tok = await res.json().catch(() => ({}));
+      if (res.status === 429) {
+        throw new Error(`${new URL(s.tokenEndpoint).host} is asking us to slow down \u2014 your sign-in could not be renewed just now`);
+      }
+      if (!res.ok || !tok.access_token) {
+        await idbDel("session");
+        throw new Error("refresh failed \u2014 sign in again");
+      }
+      accessToken = tok.access_token;
+      expiresAt = Date.now() + Math.max(30, tok.expires_in || 300) * 1e3;
+      if (tok.refresh_token) refreshToken = tok.refresh_token;
+      const now = await idbGet("session");
+      if (now && now.webId !== s.webId) {
+        throw new Error("signed in as somebody else while this session was refreshing");
+      }
+      await idbPut("session", { ...s, accessToken, expiresAt, refreshToken });
+    };
+    const send = async (url, init) => {
+      const jwk = await jwkP;
+      const ath = b64u3(await sha2564(accessToken));
+      const headers = { ...init.headers || {}, authorization: `DPoP ${accessToken}`, dpop: await dpopProof(s.pair, jwk, init.method || "GET", url, ath) };
+      return fetch(url, { ...init, headers });
+    };
+    const authFetch = async (url, init = {}) => {
+      if (Date.now() > expiresAt - 3e4) await refresh();
+      const res = await send(url, init);
+      if (res.status === 401 && refreshToken) {
+        try {
+          await refresh();
+        } catch {
+          return res;
+        }
+        return send(url, init);
+      }
+      return res;
+    };
+    return { webId: s.webId, issuer: s.issuer, fetch: authFetch, refresh, signOut: signOut2 };
+  }
+  return { beginLogin: beginLogin2, completeLogin: completeLogin2, getSession: getSession2, signOut: signOut2 };
 }
+
+// web/app/oidc-session.mjs
+var { beginLogin, completeLogin, getSession, signOut } = solidOidcSession({ dbName: "fedipod-oidc", clientName: "FediPod" });
 
 // web/app/sw-src.mjs
 var agent = null;

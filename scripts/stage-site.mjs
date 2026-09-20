@@ -269,7 +269,14 @@ fs.writeFileSync(path.join(site, '_redirects'), [
 fs.mkdirSync(path.join(site, 'bb'), { recursive: true });
 for (const f of ['index.html', 'bb.js', 'read.mjs', 'masto.mjs', 'pod.mjs', 'markdown.mjs', 'seen.mjs', 'mine.mjs', 'private.mjs']) cp(`packages/fedipod-bb/site/${f}`, `bb/${f}`);
 cp('web/admin/tokens.css', 'bb/tokens.css');   // the site's shared palette, size and family
-cp('web/app/oidc-session.mjs', 'bb/oidc-session.mjs');   // signing in to a pod, the browser build's own
+cp('lib/session/oidc-session.mjs', 'bb/solid-oidc-session.mjs');   // signing in to a pod: the library
+cp('web/app/oidc-session.mjs', 'bb/oidc-session.mjs');   // and the browser build's binding of it, same database as the app
+// The account library's demo page, with the library beside it, under /demo/.
+fs.mkdirSync(path.join(site, 'demo'), { recursive: true });
+for (const f of ['fedi-account.mjs', 'fedi-login.mjs', 'oidc-session.mjs']) cp(`lib/session/${f}`, `demo/${f}`);
+cp('web/admin/tokens.css', 'demo/tokens.css');
+fs.writeFileSync(path.join(site, 'demo/index.html'),
+  fs.readFileSync(path.join(root, 'lib/session/demo.html'), 'utf8').replace('../../web/admin/tokens.css', './tokens.css'));
 // Each file the forum page loads is named with a hash of its content. A
 // browser holding the last build cannot serve half of it back: the page is
 // revalidated (no-cache below) and every url under it changes with its bytes.
@@ -278,6 +285,7 @@ cp('web/app/oidc-session.mjs', 'bb/oidc-session.mjs');   // signing in to a pod,
   const stamp = (n) => createHash('sha256').update(fs.readFileSync(bb(n))).digest('hex').slice(0, 10);
   const sub = (n, pairs) => { let t = fs.readFileSync(bb(n), 'utf8');
     for (const [a, b] of pairs) t = t.split(a).join(b); fs.writeFileSync(bb(n), t); };
+  sub('oidc-session.mjs', [["'../../lib/session/oidc-session.mjs'", `'./solid-oidc-session.mjs?v=${stamp('solid-oidc-session.mjs')}'`]]);
   sub('pod.mjs', [["'./oidc-session.mjs'", `'./oidc-session.mjs?v=${stamp('oidc-session.mjs')}'`],
     ["'./markdown.mjs'", `'./markdown.mjs?v=${stamp('markdown.mjs')}'`],
     ["'./private.mjs'", `'./private.mjs?v=${stamp('private.mjs')}'`],
@@ -323,6 +331,13 @@ fs.writeFileSync(path.join(site, '_headers'), [
   '/bb/*',
   // Revalidate every time: the page and its modules are small, and a stale
   // page with fresh modules (or the reverse) is the failure this prevents.
+  '  Cache-Control: no-cache',
+  "  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https: data:; connect-src 'self' https:; object-src 'none'; base-uri 'none'; frame-ancestors 'self'; form-action 'self'",
+  '  X-Content-Type-Options: nosniff',
+  '  Referrer-Policy: same-origin',
+  '',
+  // The account demo reads pods and Mastodon servers and shows their avatars.
+  '/demo/*',
   '  Cache-Control: no-cache',
   "  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https: data:; connect-src 'self' https:; object-src 'none'; base-uri 'none'; frame-ancestors 'self'; form-action 'self'",
   '  X-Content-Type-Options: nosniff',

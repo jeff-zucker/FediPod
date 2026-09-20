@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Act as a Fediverse account</title>
+<link rel="stylesheet" href="../../web/admin/tokens.css">
+<style>
+  body { font-family: var(--font, Arial, Helvetica, sans-serif); background: var(--bg); color: var(--fg); margin: 0; padding: .75rem 1rem 2rem; }
+  main { max-width: 44rem; margin: 0 auto; }
+  h1 { margin-top: .5rem; }
+  form { display: flex; gap: .75rem; flex-wrap: wrap; align-items: end; margin: 1.25rem 0; }
+  label { display: flex; flex-direction: column; gap: .35rem; flex: 1 1 18rem; }
+  input { font: inherit; padding: .6rem .8rem; background: var(--field-bg); color: var(--field-text); border: 1px solid var(--field-border); border-radius: .4rem; }
+  button { font: inherit; padding: .6rem 1.2rem; background: var(--btn); color: var(--btn-text); border: 1px solid var(--btn-edge); border-radius: .4rem; cursor: pointer; }
+  button:hover { background: var(--btn-hover); }
+  a { color: var(--link); }
+  .kinds { padding-left: 1.4rem; margin: .75rem 0 1.25rem; } .kinds li { margin: .4rem 0; }
+  :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+  .skip { position: absolute; left: -999px; } .skip:focus { left: 1rem; top: 1rem; }
+  #status, #profile { padding: 1rem 1.2rem; border: 1px solid var(--line); border-radius: .4rem; background: var(--surface); margin: 1rem 0; }
+  #status { min-height: 1.5em; }
+  #status[data-kind="error"] { border-color: var(--err); }
+  #status[hidden] { display: none; }
+  #profile { display: grid; grid-template-columns: auto 1fr; gap: .5rem 1.2rem; align-items: start; }
+  #profile img { width: 5rem; height: 5rem; border-radius: .6rem; object-fit: cover; background: var(--raised); }
+  #profile dl { margin: 0; display: grid; grid-template-columns: max-content 1fr; gap: .3rem 1rem; }
+  #profile dt { font-weight: bold; } #profile dd { margin: 0; overflow-wrap: anywhere; }
+  section[hidden] { display: none; }
+</style>
+</head>
+<body>
+<a href="#main" class="skip">Skip to content</a>
+<main id="main">
+  <h1>Act as a Fediverse account</h1>
+  <p>Type an address and you are sent to wherever that account signs in, then come back here signed in as it. Any of these works:</p>
+  <ul class="kinds">
+    <li><strong>A FediPod handle</strong> — <code>@jeff@fedipod.net</code> — signs in at your Solid pod</li>
+    <li><strong>Other Fediverse handle</strong> — <code>@you@mastodon.social</code> — signs in at your server</li>
+    <li><strong>A WebID</strong> — <code>https://you.solidcommunity.net/profile/card#me</code> — signs in at your Solid pod</li>
+  </ul>
+  <p>This demo is created with the <a href="https://github.com/jeff-zucker/FediPod/tree/main/lib/session">fediverse-account</a> library. Once signed in, the demo shows you your profile. The library itself returns an account session with methods to post, reply, like, etc.</p>
+  <form id="form">
+    <label>Your address
+      <input id="address" name="address" type="text" autocomplete="username" placeholder="@you@your.server" required>
+    </label>
+    <button type="submit" id="go">Sign in</button>
+    <button type="button" id="out" hidden>Sign out</button>
+  </form>
+  <p id="status" role="status" aria-live="polite">Not signed in.</p>
+  <section id="acting" hidden aria-labelledby="profile-h">
+    <h2 id="profile-h">Profile</h2>
+    <div id="profile"></div>
+  </section>
+</main>
+<script type="module">
+  import { fediAccount } from './fedi-account.mjs';
+  const accounts = fediAccount({ dbName: 'fedi-account-demo', clientName: 'Fediverse account demo' });
+  const $ = (id) => document.getElementById(id);
+  const say = (text, kind = '') => { $('status').hidden = false; $('status').textContent = text; $('status').dataset.kind = kind; $('status').setAttribute('role', kind === 'error' ? 'alert' : 'status'); };
+  const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const link = (u) => (u ? `<a href="${esc(u)}">${esc(u)}</a>` : '—');
+  const showProfile = async (me) => {
+    try {
+      const p = await me.profile();
+      $('profile').innerHTML = `${p.avatar ? `<img src="${esc(p.avatar)}" alt="">` : '<span></span>'}
+        <dl>
+          <dt>Name</dt><dd>${esc(p.name || '—')}</dd>
+          <dt>Handle</dt><dd>${esc(p.handle || '—')}</dd>
+          <dt>Kind</dt><dd>${me.kind === 'pod' ? 'a FediPod account on a Solid pod' : 'a Mastodon account'}</dd>
+          <dt>Bio</dt><dd>${p.bio || '—'}</dd>
+          <dt>Counts</dt><dd>${p.posts ?? '?'} posts, ${p.followers ?? '?'} followers, ${p.following ?? '?'} following</dd>
+          <dt>Profile page</dt><dd>${link(p.url)}</dd>
+          <dt>Actor</dt><dd>${link(p.actor)}</dd>
+          ${p.webId ? `<dt>WebID</dt><dd>${link(p.webId)}</dd>` : ''}
+        </dl>`;
+    } catch (e) { $('profile').textContent = `The profile could not be read: ${e.message}`; }
+  };
+  const show = async () => {
+    const me = await accounts.current();
+    $('out').hidden = !me; $('acting').hidden = !me; $('status').hidden = !!me;
+    if (!me) { say('Not signed in.'); $('profile').innerHTML = ''; return; }
+    await showProfile(me);
+  };
+  try { await accounts.resume(); } catch (e) { say(e.message, 'error'); }
+  await show();
+  $('form').addEventListener('submit', async (e) => {
+    e.preventDefault(); say('Finding that account…');
+    try { await accounts.login($('address').value); } catch (err) { say(err.message, 'error'); }
+  });
+  $('out').addEventListener('click', async () => { await accounts.signOut(); await show(); });
+</script>
+</body>
+</html>
