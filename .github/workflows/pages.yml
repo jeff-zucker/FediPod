@@ -1,0 +1,35 @@
+# The fediverse-account library and its demo, served by GitHub Pages at
+# https://jeff-zucker.github.io/FediPod/ — the demo as the front page, the
+# three modules beside it so the page imports them as it does in the repo.
+name: pages
+on:
+  push:
+    branches: [main]
+    paths: ['lib/session/**', 'web/admin/tokens.css', '.github/workflows/pages.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: pages
+  cancel-in-progress: true
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: assemble the site
+        run: |
+          mkdir -p site
+          cp lib/session/fedi-account.mjs lib/session/fedi-login.mjs lib/session/oidc-session.mjs site/
+          cp web/admin/tokens.css site/
+          sed 's|\.\./\.\./web/admin/tokens\.css|./tokens.css|' lib/session/demo.html > site/index.html
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - id: deploy
+        uses: actions/deploy-pages@v4

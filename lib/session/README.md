@@ -38,7 +38,8 @@ browser-based one.
 
 Three files, no dependencies. It runs in a page and in a service worker.
 
-[demo.html](demo.html) shows the sign-in and the profile that comes back.
+[The demo](https://jeff-zucker.github.io/FediPod/) shows the sign-in and
+the profile that comes back.
 
 ## Get it
 
