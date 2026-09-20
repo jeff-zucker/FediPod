@@ -7,12 +7,27 @@
   "author": "Jeff Zucker",
   "repository": {
     "type": "git",
-    "url": "https://github.com/jeff-zucker/FediPod.git",
+    "url": "git+https://github.com/jeff-zucker/FediPod.git",
     "directory": "lib/session"
   },
   "homepage": "https://github.com/jeff-zucker/FediPod/tree/main/lib/session#readme",
-  "keywords": ["fediverse", "activitypub", "mastodon", "solid", "solid-oidc", "webid", "login", "oauth", "fedipod"],
-  "files": ["fedi-account.mjs", "fedi-login.mjs", "oidc-session.mjs", "README.md"],
+  "keywords": [
+    "fediverse",
+    "activitypub",
+    "mastodon",
+    "solid",
+    "solid-oidc",
+    "webid",
+    "login",
+    "oauth",
+    "fedipod"
+  ],
+  "files": [
+    "fedi-account.mjs",
+    "fedi-login.mjs",
+    "oidc-session.mjs",
+    "README.md"
+  ],
   "exports": {
     ".": "./fedi-account.mjs",
     "./fedi-account.mjs": "./fedi-account.mjs",
