@@ -1,5 +1,24 @@
 # Changes
 
+## 2026-09-21 (the edge answers for the pod — version 1.27.1)
+
+**The edge holds a public document for ten minutes, and a handle for an
+hour.** Every read of an actor, a post or a collection from a Gateway was a
+function call once it was half a minute old, and a handle's WebFinger answer
+after five; on Netlify's plan those calls are what the account is charged
+for, and one server that had heard of an account asked for its actor over
+and over. The edge now holds a public document for ten minutes and a
+WebFinger answer for an hour, and serves the copy it has while it fetches a
+fresh one. A browser is still told to keep nothing for more than a minute,
+so a profile you have just edited does not stay stale in front of you.
+Anything signed in, anything posted, and the site's own APIs are unchanged.
+
+**The Gateway's log says what each request was.** One line per request:
+method, path, status, how long it took and who asked. Until now the log
+held only how long the function ran, and a rise in calls could not be traced
+to a route or a caller. The path is logged without its query, which on some
+routes carries a token.
+
 ## 2026-09-20 (the pod server's opt-in page knows who you are — version 1.27.0, fedipod-server 0.26.0)
 
 **On a pod server, the opt-in page asks for nothing.** Signed in at the

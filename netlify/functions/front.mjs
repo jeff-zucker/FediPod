@@ -108,9 +108,21 @@ async function directory() {
   return dir;
 }
 
+// One line per request in the function log, so the log says what the calls
+// were for: method, path, status, how long, and who asked. The path only,
+// never the query, which on some routes carries a token.
+const logRequest = (request, status, startedAt) => {
+  let path = request.url;
+  try { path = new URL(request.url).pathname; } catch { /* log what was asked */ }
+  const agent = (request.headers.get('user-agent') || '-').replace(/\s+/gu, ' ').slice(0, 80);
+  console.log(`${request.method} ${path} ${status} ${Date.now() - startedAt}ms ${agent}`);
+};
+
 export default async function handler(request) {
+  const startedAt = Date.now();
   let map;
   try { map = await directory(); } catch (e) {
+    logRequest(request, 503, startedAt);
     return new Response(`directory unavailable: ${e.message}\n`, { status: 503 });
   }
   const out = await routeFront(request, {
@@ -152,6 +164,7 @@ export default async function handler(request) {
         report: (status) => { if (status >= 400 || status === 0) console.log(`door @${handle}: pod answered ${status || 'nothing'} to PUT ${url}${rec.appendToken ? ' (with token)' : ' (anonymous)'}`); } });
     },
   });
+  logRequest(request, out.status, startedAt);
   return new Response(out.body ?? null, { status: out.status, headers: out.headers });
 }
 
