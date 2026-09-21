@@ -45643,7 +45643,8 @@ var ALL_COLLECTIONS = {
   outbox: true,
   acls: true,
   pending: true,
-  blocked: true
+  blocked: true,
+  featured: true
 };
 async function publishOutbox(publisher, outbox, { acls = false, force = false } = {}) {
   const { urls } = publisher;
@@ -45742,6 +45743,7 @@ async function publishCollections(publisher, which = ALL_COLLECTIONS) {
   }
   if (which.pending) await publisher.publishPending();
   if (which.blocked) await publisher.publishBlocked();
+  if (which.featured) await publisher.publishFeatured();
   if (which.outbox) {
     const outbox = publisher.store.read("outbox.json", []);
     const known2 = publisher.store.read("published.json", {}).outboxIndex;
@@ -57345,6 +57347,7 @@ var Publisher = class {
       ["notes", urls.notes],
       ["followers", urls.followers],
       ["following", urls.following],
+      ["featured", urls.featured],
       ["outbox", urls.outbox]
     ];
     const unreachable = [];
@@ -65852,6 +65855,39 @@ function checkPassword(rec, password) {
 }
 var escapeHtml = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 var parseRedirects = (v) => (Array.isArray(v) ? v : String(v || "").split(/\s+/)).map((s) => s.trim()).filter(Boolean);
+function sendPodSigninPage(res, client, webId, mount = "") {
+  let asking = "";
+  if (client && (client.name || client.redirect)) {
+    let where = "";
+    try {
+      where = client.redirect ? new URL(client.redirect).host : "";
+    } catch {
+    }
+    const who = client.name ? escapeHtml(client.name) : where ? escapeHtml(where) : "A client";
+    asking = `<p><strong>${who}</strong> is asking to use your account${where ? `, and will be sent back to <code>${escapeHtml(where)}</code>` : ""}.</p>`;
+  }
+  res.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-cache" });
+  res.end(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sign in with your pod</title>
+<style>:root{color-scheme:light dark;--heading:#1a4f8a;--btn:#3d6b35;--line:#9a9a9a}
+body{font:20px Arial,Helvetica,sans-serif;max-width:28rem;margin:12vh auto;padding:0 1rem}
+h1{color:var(--heading);font-size:1.5rem}
+code{word-break:break-all;background:rgba(120,120,120,.12);padding:.05em .35em;border-radius:4px}
+button{font:inherit;padding:.6rem 1.1rem;background:var(--btn);color:#fff;border:none;border-radius:9px;cursor:pointer}
+button[hidden]{display:none}
+#signin-status{min-height:1.5em;padding:.6rem .8rem;border:1px solid var(--line);border-radius:8px;margin-top:1rem}
+@media (prefers-color-scheme:dark){:root{--heading:#7fb3e8;--btn:#5a8a4f}}</style></head><body>
+<main>
+<h1>Sign in with your pod</h1>
+${asking}
+<p>This account belongs to <a id="webid" href="${escapeHtml(webId)}">${escapeHtml(webId)}</a>. Sign in at that pod to allow it.</p>
+<p><button type="button" id="signin" hidden>Sign in with your pod</button></p>
+<p id="signin-status" role="status" aria-live="polite"></p>
+</main>
+<script type="module" src="${escapeHtml(mount)}/oauth/session/signin.mjs"><\/script>
+</body></html>`);
+  return true;
+}
 function sendLoginForm(res, params, error2 = "", client = null, status2 = null, headers = {}) {
   const hidden = [...params.entries()].filter(([k]) => k !== "password").map(([k, v]) => `<input type="hidden" name="${escapeHtml(k)}" value="${escapeHtml(v)}">`).join("\n");
   let asking = "<p>Enter the agent password to authorize this client.</p>";
@@ -66120,6 +66156,16 @@ async function handle(api, ctx) {
       params = new URLSearchParams(body);
     }
     const redirect = params.get("redirect_uri") || "";
+    let proved = false;
+    if (req.method === "POST" && req.headers.authorization && req.headers.dpop && api.podAuth) {
+      const proof = await api.podAuth(req, pathname);
+      if (!proof.ok) return send(proof.status || 401, { error: proof.error });
+      proved = true;
+    }
+    const ownerWebId = api.ownerWebId?.() || null;
+    if (req.method === "GET" && !params.get("client_id") && params.get("code") && params.get("state") && ownerWebId) {
+      return sendPodSigninPage(res, null, ownerWebId, api.mount || "");
+    }
     const app = api.findApp(params.get("client_id") || "");
     const doc = app ? null : await api.resolveClientDocument(params.get("client_id") || "");
     const external = !!app || !!doc;
@@ -66127,13 +66173,14 @@ async function handle(api, ctx) {
       api.log(`authorize refused: cross-site navigation to the mint from ${req.headers.referer || "nowhere"}`);
       return send(403, { error: "a cross-site navigation may not authorize a client" });
     }
-    if (external && !api.store.getConfig()?.uiPassword && !api.redirectAllowed(redirect)) {
+    const client = { name: app?.name || doc?.name || null, redirect, scope: params.get("scope") || "read" };
+    if (external && !proved && !api.store.getConfig()?.uiPassword && !api.redirectAllowed(redirect)) {
+      if (req.method === "GET" && ownerWebId) return sendPodSigninPage(res, client, ownerWebId, api.mount || "");
       api.log(`authorize refused: no UI password, and "${redirect}" is not an address of this agent`);
       return send(403, {
         error: "this client asks to be sent somewhere other than this agent, and no password is set to approve that with. Run `fedipod passwd` and try again."
       });
     }
-    const client = { name: app?.name || doc?.name || null, redirect, scope: params.get("scope") || "read" };
     if (app) {
       if (!app.redirectUris.includes(redirect)) {
         api.log(`authorize refused: redirect_uri "${redirect}" not registered for ${app.clientId}`);
@@ -66152,7 +66199,7 @@ async function handle(api, ctx) {
       api.log(`authorize refused: redirect_uri "${redirect}" is not this agent`);
       return send(400, { error: "redirect_uri must be an address of this agent" });
     }
-    if (req.method === "POST") {
+    if (req.method === "POST" && !proved) {
       if (api.rateLimited()) {
         api.log("authorize rate limited");
         return sendLoginForm(
@@ -66167,12 +66214,13 @@ async function handle(api, ctx) {
       if (!pw || !checkPassword(pw, body.password || "")) {
         return sendLoginForm(res, params, "wrong password \u2014 try again", client);
       }
-    } else if (pw) {
+    } else if (pw && !proved) {
       return sendLoginForm(res, params, "", client);
-    } else if (api.allowed && !api.allowed.isLocalRequest(req)) {
+    } else if (!proved && api.allowed && !api.allowed.isLocalRequest(req) && !api.throughDoor?.(req)) {
+      if (req.method === "GET" && ownerWebId) return sendPodSigninPage(res, client, ownerWebId, api.mount || "");
       api.log(`authorize refused: no UI password, and "${req.headers.host}" is not this machine`);
       return send(403, {
-        error: "this agent answers on an address outside this machine and has no password set \u2014 " + (api.embedded ? `POST {"password":"\u2026"} to the owner door's /config with its door secret before logging in` : "run `fedipod passwd` before logging in over that address")
+        error: api.embedded ? "Open your account's management page first, then sign in from there." : "Signing in from another machine needs a password. On the machine that runs your account, run: fedipod passwd"
       });
     }
     const code = external ? api.mintCode({
@@ -66186,6 +66234,7 @@ async function handle(api, ctx) {
     const target = new URL(redirect);
     target.searchParams.set("code", code);
     if (params.get("state")) target.searchParams.set("state", params.get("state"));
+    if (proved) return send(200, { redirect: target.href });
     res.writeHead(302, { location: target.href });
     res.end();
     return true;
@@ -68091,6 +68140,7 @@ var MastoApi = class _MastoApi {
     allowed = null,
     scheme = null,
     embedded = false,
+    throughDoor = null,
     mount = "",
     streaming = true,
     webPush = true,
@@ -68101,6 +68151,7 @@ var MastoApi = class _MastoApi {
     this.embedded = embedded;
     this.log = log2;
     this.allowed = allowed;
+    this.throughDoor = throughDoor;
     this.scheme = scheme;
     this.streaming = streaming;
     this.webPush = webPush;

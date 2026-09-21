@@ -635,8 +635,8 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
   const all = mk();
   await all.pub.publishCollections();
-  check(all.seen.length === 15,
-    `an unnarrowed publish is still the whole surface — pages + heads, plus the private container the pending/blocked probe ensures, plus the HEAD that asks whether it is already there (saw ${all.seen.length})`);
+  check(all.seen.length === 17,
+    `an unnarrowed publish is still the whole surface — pages + heads, the featured collection and its ACL, plus the private container the pending/blocked probe ensures, plus the HEAD that asks whether it is already there (saw ${all.seen.length})`);
   check(all.seen.filter(x => /^GET .*\.keep$/.test(x)).length === 1,
     `the probe is one READ of the canary, not another write (${all.seen.filter(x => /\.keep$/.test(x)).join(', ')})`);
 
@@ -1627,7 +1627,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   check(sentAccept === '*/*', 'the public probe asks for */*, not turtle');
 
   const blind = await mkPub(401).verifyPublicSurface();
-  check(blind.length === 7 && blind.includes('actor') && blind.includes('webfinger'),
+  check(blind.length === 8 && blind.includes('actor') && blind.includes('webfinger') && blind.includes('featured'),
     'verifyPublicSurface names every document the fediverse cannot read');
 
   const open = await mkPub(200).verifyPublicSurface();
@@ -2524,6 +2524,8 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
   await pub.publishProfile();
   check(seen.length > 20, `the first publish writes the whole surface (${seen.length} requests)`);
+  check(seen.some(s => s === 'PUT https://pod.example/fedipod/ap/featured'),
+    'and the featured collection is among it, though nothing is pinned yet');
 
   // Phanpy's editor submits the whole form every time, so "saved without
   // changing anything" is the ordinary case rather than a rare one.

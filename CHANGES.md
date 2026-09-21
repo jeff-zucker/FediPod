@@ -1,5 +1,16 @@
 # Changes
 
+## 2026-09-21 (every account has a featured collection — version 1.27.2)
+
+**The pinned-posts collection exists before anything is pinned.** The actor
+has always named its featured collection, and a server showing the profile
+reads it whether or not the owner ever pinned a post. Until now the
+document was written only on the first pin, so an account with no pins had
+none at all; the pod refused every reader, a refusal nothing caches, and
+every server asked again. The empty collection is now written with the
+rest of the surface, and an account already running writes it the next
+time its agent starts. The public-surface check reports it with the others.
+
 ## 2026-09-21 (the edge answers for the pod — version 1.27.1)
 
 **The edge holds a public document for ten minutes, and a handle for an
