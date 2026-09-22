@@ -119,12 +119,7 @@ $('confirm-form').addEventListener('submit', async (ev) => {
   const what = pending;
   const body = what === 'retire' ? { confirm: $('confirm-handle').value.trim() }
     : what === 'move' ? { target: $('move-target').value.trim(), confirm: $('confirm-handle-move').value.trim() }
-      // Only where the field is shown (the browser build — see index.html).
-      // On the Node agent the row stays hidden and nothing is sent, which is
-      // what that agent expects.
-      : what === 'rotate-key' && !$('rotate-pw-row').hidden
-        ? { password: $('rotate-password').value }
-        : {};
+      : {};
   if (what === 'move' && !body.target) { say('name the account to transfer to', 'err'); return; }
   $('confirm-go').disabled = true;
   say(`${what} — this talks to the pod and to other servers, so it takes a moment`);

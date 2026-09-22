@@ -276,16 +276,8 @@ export class AdminFacade {
 
       case '/rotate-key': {
         await a.requestTakeover?.();
-        // The pod's copy of the key is wrapped under the account password, so a
-        // rotation has to be given one. 428 rather than 400: nothing is wrong
-        // with the request, something is required before it can be made.
-        try {
-          const r = await a.rotateKey({ password: body.password });
-          return json(200, { ok: true, changed: !!r?.changed });
-        } catch (e) {
-          if (e.code !== 'key-password-needed') throw e;
-          return json(428, { error: e.message, needsPassword: true });
-        }
+        const r = await a.rotateKey();
+        return json(200, { ok: true, changed: !!r?.changed });
       }
 
       // Recover posts this browser lost, from what the pod still holds.

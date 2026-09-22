@@ -495,15 +495,6 @@ pre { overflow-x: auto; background: #0001; padding: .6rem; border-radius: .3rem;
   <div id="warn-rotate-key" class="warn" hidden>
     <p>A new keypair replaces the one in this home and the actor is republished so other
       servers learn it. Any other device still holding the old key stops being able to sign.</p>
-    <!-- Browser build only: there the key on the pod is locked under the account
-         password, so a new one has to be locked too. The Node agent keeps its key
-         on disk and needs nothing here — stage-site.mjs reveals this row. -->
-    <div id="rotate-pw-row" hidden>
-      <label for="rotate-password">Your account password</label>
-      <input type="password" id="rotate-password" autocomplete="current-password">
-      <p class="hint">Your signing key is kept on your pod locked under this, so the
-        replacement has to be locked under it too. It is not sent anywhere else.</p>
-    </div>
   </div>
   <div id="warn-retire" class="warn" hidden>
     <p><strong>This cannot be undone.</strong> A Delete goes to every follower's inbox telling

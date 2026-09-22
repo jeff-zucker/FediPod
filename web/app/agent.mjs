@@ -20,7 +20,7 @@ import { TagFeed } from '../../lib/connections/tagfeed.mjs';
 import { makeDpopSession } from './pod-auth.mjs';
 import { BrowserRemotePod } from './pod-remote.mjs';
 import { importSigningKey, loadKeysFromPod, cacheOpenedKeys, podActorOf } from './keys-browser.mjs';
-import { generateKeys, wrapKeys } from './keystore.mjs';
+import { generateKeys } from './keystore.mjs';
 import { RelayDeliverer, doorKeyOf } from './deliver-relay.mjs';
 import { AdminFacade } from './admin-facade.mjs';
 import { BrowserAtproto } from './atproto-browser.mjs';
@@ -471,24 +471,11 @@ export class BrowserAgent {
   // actor so the new public key is on the wire. The old key stops signing the
   // moment this returns — same one-way change as the Node agent's rotateKey
   // (run-agent.mjs).
-  //
-  // The pod's copy is wrapped, so this needs the account password. There is
-  // nowhere to get it from without asking: the worker boots from a stored
-  // session and holds no password, and caching one to save a prompt on a
-  // once-in-a-while action would put the account password in storage to avoid
-  // typing it. So the caller supplies it, and rotating without one is refused
-  // rather than quietly writing a bare key back where a wrapped one was.
-  async rotateKey({ password } = {}) {
-    if (!password) {
-      const e = new Error('rotating the signing key needs your account password — '
-        + 'it is what the new key is locked under on the pod');
-      e.code = 'key-password-needed';
-      throw e;
-    }
+  async rotateKey() {
     const before = this.publisher.publicKeyPem;
     const rec = await generateKeys();
     rec.mintedFor = this.urls.actor;                  // one key, one actor (lib/keys.mjs)
-    await podState.writeWrappedKeys(this.remote, this.urls, await wrapKeys(rec, password));
+    await podState.writeKeys(this.remote, this.urls, rec);
     const keys = await cacheOpenedKeys(podActorOf(this.urls), rec);
     this.publisher.publicKeyPem = keys.rsaPublicPem;
     this.deliverer.rsaPrivate = keys.rsaPrivate;

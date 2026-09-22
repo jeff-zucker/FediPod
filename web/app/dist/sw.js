@@ -34320,8 +34320,8 @@ async function probePrivateEnforcement(probe, podKeepUrl) {
 }
 
 // lib/pod/state.mjs
-var readWrappedKeys = (pod, urls) => pod.getJson(urls.state + "keys.json");
-var writeWrappedKeys = (pod, urls, envelope) => pod.putJson(urls.state + "keys.json", envelope, "application/json");
+var readKeys = (pod, urls) => pod.getJson(urls.state + "keys.json");
+var writeKeys = (pod, urls, keys) => pod.putJson(urls.state + "keys.json", keys, "application/json");
 
 // lib/core/store.mjs
 init_node_crypto();
@@ -69040,18 +69040,6 @@ async function generateKeys() {
   }
   return rec;
 }
-var PBKDF2_ITERATIONS = 31e4;
-async function deriveAesKey(password, salt, iterations) {
-  const base = await crypto.subtle.importKey("raw", new TextEncoder().encode(password), "PBKDF2", false, ["deriveKey"]);
-  return crypto.subtle.deriveKey(
-    { name: "PBKDF2", salt, iterations, hash: "SHA-256" },
-    base,
-    { name: "AES-GCM", length: 256 },
-    false,
-    ["encrypt", "decrypt"]
-  );
-}
-var toB64 = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf)));
 function isKeyEnvelope(doc) {
   return !!doc && doc.v === 1 && typeof doc.ct === "string" && typeof doc.salt === "string";
 }
@@ -69061,21 +69049,6 @@ var KeyPasswordNeeded = class extends Error {
   }
   code = "key-password-needed";
 };
-async function wrapKeys(keysRecord, password) {
-  const salt = crypto.getRandomValues(new Uint8Array(16));
-  const iv = crypto.getRandomValues(new Uint8Array(12));
-  const aes = await deriveAesKey(password, salt, PBKDF2_ITERATIONS);
-  const plaintext = new TextEncoder().encode(JSON.stringify(keysRecord));
-  const ct = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, aes, plaintext);
-  return {
-    v: 1,
-    kdf: "PBKDF2-SHA256",
-    iterations: PBKDF2_ITERATIONS,
-    salt: toB64(salt),
-    iv: toB64(iv),
-    ct: toB64(ct)
-  };
-}
 
 // web/app/keys-browser.mjs
 var pemToDer = (pem) => Uint8Array.from(
@@ -69107,7 +69080,7 @@ async function loadKeysFromPod(remote, urls) {
   const cached = await kvGet(keyCacheKey(podActor)).catch(() => null);
   if (isOpenedKey(cached)) return fromCache(cached);
   if (cached?.rsa?.privatePem) return cacheOpenedKeys(podActor, cached);
-  const doc = await readWrappedKeys(remote, urls);
+  const doc = await readKeys(remote, urls);
   if (isKeyEnvelope(doc)) throw new KeyPasswordNeeded();
   if (!doc || !doc.rsa) throw new Error("no signing key on the pod \u2014 sign up did not finish");
   return cacheOpenedKeys(podActor, doc);
@@ -70197,13 +70170,8 @@ var AdminFacade = class {
       }
       case "/rotate-key": {
         await a.requestTakeover?.();
-        try {
-          const r = await a.rotateKey({ password: body.password });
-          return json2(200, { ok: true, changed: !!r?.changed });
-        } catch (e) {
-          if (e.code !== "key-password-needed") throw e;
-          return json2(428, { error: e.message, needsPassword: true });
-        }
+        const r = await a.rotateKey();
+        return json2(200, { ok: true, changed: !!r?.changed });
       }
       // Recover posts this browser lost, from what the pod still holds.
       case "/rebuild": {
@@ -71927,23 +71895,11 @@ var BrowserAgent = class _BrowserAgent {
   // actor so the new public key is on the wire. The old key stops signing the
   // moment this returns — same one-way change as the Node agent's rotateKey
   // (run-agent.mjs).
-  //
-  // The pod's copy is wrapped, so this needs the account password. There is
-  // nowhere to get it from without asking: the worker boots from a stored
-  // session and holds no password, and caching one to save a prompt on a
-  // once-in-a-while action would put the account password in storage to avoid
-  // typing it. So the caller supplies it, and rotating without one is refused
-  // rather than quietly writing a bare key back where a wrapped one was.
-  async rotateKey({ password } = {}) {
-    if (!password) {
-      const e = new Error("rotating the signing key needs your account password \u2014 it is what the new key is locked under on the pod");
-      e.code = "key-password-needed";
-      throw e;
-    }
+  async rotateKey() {
     const before = this.publisher.publicKeyPem;
     const rec = await generateKeys();
     rec.mintedFor = this.urls.actor;
-    await writeWrappedKeys(this.remote, this.urls, await wrapKeys(rec, password));
+    await writeKeys(this.remote, this.urls, rec);
     const keys = await cacheOpenedKeys(podActorOf(this.urls), rec);
     this.publisher.publicKeyPem = keys.rsaPublicPem;
     this.deliverer.rsaPrivate = keys.rsaPrivate;

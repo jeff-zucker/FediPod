@@ -83,7 +83,6 @@ function resetConfirm() {
   $('confirm-handle').value = '';
   $('confirm-handle-move').value = '';
   $('move-target').value = '';
-  $('rotate-password').value = '';
 }
 function closePanels(keep = null) {
   if (!keep) solWindow.close();

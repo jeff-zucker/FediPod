@@ -22024,196 +22024,6 @@ var require_browser_ponyfill = __commonJS({
   }
 });
 
-// web/app/pod-auth.mjs
-var b64u = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-var enc = (o) => b64u(new TextEncoder().encode(JSON.stringify(o)));
-var sha256 = async (str) => crypto.subtle.digest("SHA-256", new TextEncoder().encode(str));
-async function accountFetch(url, { method = "GET", body, token } = {}) {
-  const headers = { accept: "application/json" };
-  if (body !== void 0) headers["content-type"] = "application/json";
-  if (token) headers.authorization = `CSS-Account-Token ${token}`;
-  const res = await fetch(url, { method, headers, body: body === void 0 ? void 0 : JSON.stringify(body) });
-  let json = null;
-  try {
-    json = await res.json();
-  } catch {
-  }
-  return { status: res.status, json };
-}
-async function createAccountWithPod({ issuer, email, password, podName }) {
-  const origin = issuer.replace(/\/+$/, "");
-  const accountRoot = `${origin}/.account/`;
-  let token;
-  const login = await accountFetch(`${accountRoot}login/password/`, { method: "POST", body: { email, password } });
-  if (login.status < 400 && login.json?.authorization) {
-    token = login.json.authorization;
-  } else {
-    const create = await accountFetch(`${accountRoot}account/`, { method: "POST" });
-    if (!create.json?.authorization) {
-      throw new Error(`could not create an account at ${origin} (HTTP ${create.status}) \u2014 is sign-up open there? ${create.json?.message || ""}`);
-    }
-    token = create.json.authorization;
-    const pwCreate = (await accountFetch(accountRoot, { token })).json?.controls?.password?.create;
-    if (!pwCreate) throw new Error("this server is not a CSS v7 account API (no password control)");
-    const pw = await accountFetch(pwCreate, { method: "POST", token, body: { email, password } });
-    if (pw.status >= 400) throw new Error(`could not set the password (HTTP ${pw.status}): ${pw.json?.message || ""}`);
-  }
-  const podCreate = (await accountFetch(accountRoot, { token })).json?.controls?.account?.pod;
-  if (!podCreate) throw new Error("this server does not offer pod creation through its account API");
-  const findOwn = async () => {
-    const pods = (await accountFetch(podCreate, { token })).json?.pods || {};
-    return Object.entries(pods).find(([url]) => {
-      try {
-        const u = new URL(url);
-        return u.hostname === podName || u.hostname.startsWith(`${podName}.`) || u.pathname.split("/").filter(Boolean).includes(podName);
-      } catch {
-        return false;
-      }
-    }) || null;
-  };
-  const owned = Object.keys((await accountFetch(podCreate, { token })).json?.pods || {});
-  if (owned.length && !await findOwn()) {
-    throw new Error(`${email} already has a pod on ${new URL(origin).host} \u2014 one account, one pod. A second identity needs its own account. Nothing was created.`);
-  }
-  const made = await accountFetch(podCreate, { method: "POST", token, body: { name: podName } });
-  let pod = made.json?.pod || made.json?.podBaseUrl || null;
-  let webId = made.json?.webId || null;
-  if (made.status >= 400 || !pod) {
-    const own = await findOwn();
-    if (own) {
-      pod = own[0];
-      webId = webId || own[1]?.webId || null;
-    } else if (made.status >= 400) throw new Error(`pod creation failed (HTTP ${made.status}): ${made.json?.message || ""}`);
-  }
-  if (!pod) throw new Error("the server did not report a pod URL");
-  return { pod: pod.endsWith("/") ? pod : pod + "/", webId, accountToken: token };
-}
-async function mintCredential({ issuer, email, password, webId, podUrl, accountToken, name = "fedipod" }) {
-  const origin = issuer.replace(/\/+$/, "");
-  const accountRoot = `${origin}/.account/`;
-  let token = accountToken;
-  if (!token) {
-    const tryLogin = async (id) => {
-      const r = await accountFetch(`${accountRoot}login/password/`, { method: "POST", body: { email: id, password } });
-      return r.status < 400 && r.json?.authorization ? r.json.authorization : null;
-    };
-    const ownsPod = async (tok) => {
-      if (!podUrl) return true;
-      try {
-        const ctl = (await accountFetch(accountRoot, { token: tok })).json?.controls?.account?.webId;
-        const links = ctl ? (await accountFetch(ctl, { token: tok })).json?.webIdLinks : null;
-        return Object.keys(links || {}).some((w) => new URL(w).origin === new URL(podUrl).origin);
-      } catch {
-        return false;
-      }
-    };
-    token = await tryLogin(email);
-    let sub = null;
-    try {
-      sub = podUrl ? new URL(podUrl).host.split(".")[0] : null;
-    } catch {
-    }
-    if (sub && sub !== email && (!token || !await ownsPod(token))) {
-      const alt = await tryLogin(sub);
-      if (alt) token = alt;
-    }
-    if (!token) throw new Error("account login failed \u2014 check the email or username and the password");
-  }
-  const controls = (await accountFetch(accountRoot, { token })).json?.controls;
-  const ccUrl = controls?.account?.clientCredentials;
-  if (!ccUrl) throw new Error("this server is not a CSS account API (no clientCredentials control)");
-  let wid = webId;
-  if (!wid) {
-    const linkCtl = controls?.account?.webId;
-    const links = linkCtl ? (await accountFetch(linkCtl, { token })).json?.webIdLinks : null;
-    const all = links ? Object.keys(links) : [];
-    if (!all.length) throw new Error("no WebID is linked to this account");
-    if (podUrl) {
-      let origins = [];
-      try {
-        origins = all.filter((w) => new URL(w).origin === new URL(podUrl).origin);
-      } catch {
-      }
-      if (!origins.length) {
-        throw new Error(`the account you signed in with does not own ${new URL(podUrl).origin}. It is linked to ${all.length} WebID${all.length > 1 ? "s" : ""} \u2014 on ${all.map((w) => new URL(w).host).join(", ")} \u2014 none of them this pod. Sign in with the account that owns this pod, or let FediPod make you a new one.`);
-      }
-      wid = origins[0];
-    } else {
-      wid = all[0];
-    }
-  }
-  const made = await accountFetch(ccUrl, { method: "POST", token, body: { name, webId: wid } });
-  if (made.status >= 400 || !made.json?.secret) throw new Error(`mint failed (HTTP ${made.status}): ${made.json?.message || ""}`);
-  const tokenEndpoint = await discoverTokenEndpoint(origin);
-  return {
-    clientId: made.json.id,
-    secret: made.json.secret,
-    webId: wid,
-    tokenEndpoint,
-    resource: made.json.resource,
-    issuerOrigin: origin,
-    // Carried so sign-up can hand it straight back to revokeCredential. It is a
-    // session token for the ACCOUNT — never stored, never written to the pod,
-    // and gone with the tab.
-    accountToken: token
-  };
-}
-async function revokeCredential({ resource, accountToken }) {
-  if (!resource || !accountToken) return false;
-  try {
-    const r = await accountFetch(resource, { method: "DELETE", token: accountToken });
-    return r.status < 400;
-  } catch {
-    return false;
-  }
-}
-async function discoverTokenEndpoint(issuer) {
-  const origin = issuer.replace(/\/+$/, "");
-  try {
-    const res = await fetch(`${origin}/.well-known/openid-configuration`, { headers: { accept: "application/json" } });
-    if (res.ok) {
-      const doc = await res.json();
-      if (doc.token_endpoint) return doc.token_endpoint;
-    }
-  } catch {
-  }
-  return `${origin}/.oidc/token`;
-}
-async function makeDpopSession({ clientId, secret, tokenEndpoint }) {
-  const proofKey = await crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, false, ["sign"]);
-  const jwk = await crypto.subtle.exportKey("jwk", proofKey.publicKey);
-  const publicJwk2 = { kty: jwk.kty, crv: jwk.crv, x: jwk.x, y: jwk.y };
-  const proof = async (htm, htu, ath) => {
-    const header = { typ: "dpop+jwt", alg: "ES256", jwk: publicJwk2 };
-    const payload = { htm, htu: htu.split("#")[0], jti: crypto.randomUUID(), iat: Math.floor(Date.now() / 1e3), ...ath ? { ath } : {} };
-    const data = `${enc(header)}.${enc(payload)}`;
-    const sig = await crypto.subtle.sign({ name: "ECDSA", hash: "SHA-256" }, proofKey.privateKey, new TextEncoder().encode(data));
-    return `${data}.${b64u(sig)}`;
-  };
-  let token = null;
-  let expiresAt = 0;
-  const refresh = async () => {
-    const basic = btoa(`${encodeURIComponent(clientId)}:${encodeURIComponent(secret)}`);
-    const res = await fetch(tokenEndpoint, {
-      method: "POST",
-      headers: { authorization: `Basic ${basic}`, "content-type": "application/x-www-form-urlencoded", dpop: await proof("POST", tokenEndpoint) },
-      body: "grant_type=client_credentials&scope=webid"
-    });
-    const tok = await res.json().catch(() => ({}));
-    if (!tok.access_token) throw new Error(`token request failed (HTTP ${res.status}): ${tok.error || ""}`);
-    token = tok.access_token;
-    expiresAt = Date.now() + Math.max(30, (tok.expires_in || 300) - 30) * 1e3;
-    return token;
-  };
-  const authFetch = async (url, init = {}) => {
-    if (!token || Date.now() > expiresAt) await refresh();
-    const ath = b64u(await sha256(token));
-    const headers = { ...init.headers || {}, authorization: `DPoP ${token}`, dpop: await proof(init.method || "GET", url, ath) };
-    return fetch(url, { ...init, headers });
-  };
-  return { fetch: authFetch, refresh };
-}
-
 // web/app/keystore.mjs
 var PEM = (der, label) => {
   const b64 = btoa(String.fromCharCode(...new Uint8Array(der)));
@@ -22245,7 +22055,6 @@ async function generateKeys() {
   }
   return rec;
 }
-var PBKDF2_ITERATIONS = 31e4;
 async function deriveAesKey(password, salt, iterations) {
   const base = await crypto.subtle.importKey("raw", new TextEncoder().encode(password), "PBKDF2", false, ["deriveKey"]);
   return crypto.subtle.deriveKey(
@@ -22256,25 +22065,9 @@ async function deriveAesKey(password, salt, iterations) {
     ["encrypt", "decrypt"]
   );
 }
-var toB64 = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf)));
 var fromB64 = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
 function isKeyEnvelope(doc) {
   return !!doc && doc.v === 1 && typeof doc.ct === "string" && typeof doc.salt === "string";
-}
-async function wrapKeys(keysRecord, password) {
-  const salt = crypto.getRandomValues(new Uint8Array(16));
-  const iv = crypto.getRandomValues(new Uint8Array(12));
-  const aes = await deriveAesKey(password, salt, PBKDF2_ITERATIONS);
-  const plaintext = new TextEncoder().encode(JSON.stringify(keysRecord));
-  const ct = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, aes, plaintext);
-  return {
-    v: 1,
-    kdf: "PBKDF2-SHA256",
-    iterations: PBKDF2_ITERATIONS,
-    salt: toB64(salt),
-    iv: toB64(iv),
-    ct: toB64(ct)
-  };
 }
 async function unwrapKeys(envelope, password) {
   if (!envelope || envelope.v !== 1) throw new Error("not a key envelope");
@@ -33207,44 +33000,18 @@ var BrowserRemotePod = class extends PodTransport {
 };
 
 // lib/pod/state.mjs
-var readWrappedKeys = (pod, urls) => pod.getJson(urls.state + "keys.json");
+var readKeys = (pod, urls) => pod.getJson(urls.state + "keys.json");
 var readConfig = (pod, urls) => pod.getJson(urls.state + "config.json");
-var writeWrappedKeys = (pod, urls, envelope) => pod.putJson(urls.state + "keys.json", envelope, "application/json");
+var writeKeys = (pod, urls, keys) => pod.putJson(urls.state + "keys.json", keys, "application/json");
 var writeConfig = (pod, urls, config) => pod.putJson(urls.state + "config.json", config, "application/json");
-async function provisionKey(pod, { stateUrl, keysUrl, envelope }) {
+async function provisionKey(pod, { stateUrl, keysUrl, keys }) {
   await pod.setAcl(stateUrl, []);
-  await pod.putJson(keysUrl, envelope, "application/json");
+  await pod.putJson(keysUrl, keys, "application/json");
 }
 
 // lib/pod/root.mjs
 var OWNER_LOOKUP_MS = 5e3;
 var PUBLIC_DOC_MAX_BYTES = 1024 * 1024;
-async function podLayout(fetchImpl, providerOrigin, { timeoutMs = OWNER_LOOKUP_MS } = {}) {
-  let origin;
-  try {
-    origin = new URL(providerOrigin).origin;
-  } catch {
-    return null;
-  }
-  let res;
-  try {
-    res = await fetchImpl(
-      `${origin}/.well-known/solid`,
-      { headers: { accept: "text/turtle" }, signal: AbortSignal.timeout(timeoutMs) }
-    );
-  } catch {
-    return null;
-  }
-  if (res.status === 501) return "host";
-  if (res.status !== 200) return null;
-  let body = "";
-  try {
-    body = await readCapped(res, 64 * 1024);
-  } catch {
-    return null;
-  }
-  return /ns\/pim\/space#Storage|pim:Storage/u.test(body) ? "path" : null;
-}
 async function resourceExists(fetchImpl, url, { timeoutMs = OWNER_LOOKUP_MS } = {}) {
   try {
     const res = await fetchImpl(
@@ -33255,6 +33022,15 @@ async function resourceExists(fetchImpl, url, { timeoutMs = OWNER_LOOKUP_MS } = 
   } catch {
     return false;
   }
+}
+
+// lib/pod/urls.mjs
+function podBaseOfWebId(webId) {
+  const u = new URL(webId);
+  u.hash = "";
+  u.search = "";
+  const dir = u.pathname.replace(/profile\/card$/u, "").replace(/[^/]*$/u, "");
+  return `${u.origin}${dir.endsWith("/") ? dir : dir + "/"}`;
 }
 
 // web/app/idb-kv.mjs
@@ -33315,7 +33091,7 @@ function handleProblem(handle) {
   return null;
 }
 var PROGRESS = /* @__PURE__ */ new Map();
-var progressKey = (a) => [a.issuer, a.mode, a.handle, a.mode === "new" ? a.podName || a.handle : a.pod].join("|");
+var progressKey = (webId, a) => [webId, a.handle, a.shape || "pod"].join("|");
 async function assertFrontNameFree(frontOrigin, handle) {
   const res = await fetch(
     `${frontOrigin.replace(/\/$/, "")}/api/handle?handle=${encodeURIComponent(handle)}`,
@@ -33325,18 +33101,18 @@ async function assertFrontNameFree(frontOrigin, handle) {
   if (!d) throw new Error(`${new URL(frontOrigin).host} did not answer whether @${handle} is free`);
   if (!d.available) throw new Error(d.reason || `the name @${handle}@${new URL(frontOrigin).host} is taken \u2014 choose another handle`);
 }
-async function signUp(answers, { onStep = () => {
+async function signUp(answers, { session, onStep = () => {
 }, frontOrigin = null } = {}) {
-  const { mode, issuer, email, password, handle } = answers;
+  const { handle } = answers;
   const bad = handleProblem(handle);
   if (bad) throw new Error(bad);
-  if (!email) throw new Error("an email is required");
-  if (!password) throw new Error("a password is required");
-  if (mode === "existing" && !answers.pod) throw new Error("a pod address is required");
+  if (!session?.webId || typeof session.fetch !== "function") throw new Error("sign in at your pod first");
   const wantsFront = answers.shape === "front";
   if (wantsFront && !frontOrigin) throw new Error("an address at the gateway needs a gateway, and this page has none");
   if (wantsFront) await assertFrontNameFree(frontOrigin, handle);
-  const key = progressKey(answers);
+  const webId = session.webId;
+  const pod = podBaseOfWebId(webId);
+  const key = progressKey(webId, answers);
   const prog = PROGRESS.get(key) || {};
   PROGRESS.set(key, prog);
   const step = (key2) => ({
@@ -33344,30 +33120,15 @@ async function signUp(answers, { onStep = () => {
     ok: (note) => onStep(key2, "ok", note),
     skip: (note) => onStep(key2, "skipped", note)
   });
-  let accountToken = null;
-  const acct = step("account");
+  const podStep = step("pod");
   if (!prog.pod) {
-    if (mode === "new") {
-      acct.running("creating the account and pod");
-      const made = await createAccountWithPod({ issuer, email, password, podName: answers.podName || handle });
-      prog.pod = made.pod;
-      prog.webId = made.webId;
-      accountToken = made.accountToken;
-      acct.ok(made.pod);
-    } else {
-      const brought = answers.pod.endsWith("/") ? answers.pod : answers.pod + "/";
-      acct.running("checking your pod");
-      const head = await fetch(brought, { method: "HEAD" }).catch(() => null);
-      if (!head || head.status >= 400) throw new Error(`the pod at ${brought} did not answer (HTTP ${head?.status || "no response"})`);
-      if (await resourceExists(fetch, actorUrlFor(brought))) throw new Error("The pod already hosts a FediPod account. If you want a second account, put it on a different pod.");
-      prog.pod = brought;
-      acct.skip("using the pod you brought");
-    }
+    podStep.running("checking your pod");
+    if (await resourceExists(session.fetch, actorUrlFor(pod))) throw new Error("The pod already hosts a FediPod account. If you want a second account, put it on a different pod.");
+    prog.pod = pod;
+    podStep.ok(pod);
   } else {
-    acct.ok(prog.pod);
+    podStep.ok(prog.pod);
   }
-  const pod = prog.pod;
-  const webId = prog.webId || null;
   const pathPod = new URL(pod).pathname !== "/";
   const fronted = pathPod || wantsFront;
   if (fronted && !frontOrigin) {
@@ -33376,20 +33137,6 @@ async function signUp(answers, { onStep = () => {
   if (pathPod && !wantsFront) await assertFrontNameFree(frontOrigin, handle);
   const actorUrl = actorUrlFor(pod);
   const frontActor = fronted ? `${frontOrigin.replace(/\/$/, "")}/u/${handle}/ap/actor` : null;
-  const cred = step("credential");
-  let credential;
-  if (!prog.credential) {
-    cred.running("minting a credential for this browser");
-    credential = await mintCredential({ issuer, email, password, webId, podUrl: pod, accountToken });
-    credential.remotePod = pod;
-    credential.root = AP_ROOT;
-    prog.credential = credential;
-    cred.ok();
-  } else {
-    credential = prog.credential;
-    cred.ok();
-  }
-  const session = await makeDpopSession(credential);
   let gateway = answers.gateway || prog.gateway || null;
   if (frontOrigin && !gateway) {
     const gw = step("gateway");
@@ -33414,22 +33161,22 @@ async function signUp(answers, { onStep = () => {
   } else if (frontOrigin && gateway) {
     step("gateway").ok();
   }
+  const remote = new BrowserRemotePod(session, { webId, role: "signup", log: () => {
+  } });
   const keysStep = step("keys");
   let keys;
   if (!prog.keysStored) {
-    keysStep.running("making your signing key and locking it under your password");
+    keysStep.running("making your signing key and storing it on your pod");
     keys = await generateKeys();
     keys.mintedFor = gateway?.frontActor || actorUrl;
-    const remote = new BrowserRemotePod(session, { webId: credential.webId, role: "signup", log: () => {
-    } });
     try {
       await provisionKey(remote, {
         stateUrl: `${pod}${AP_ROOT}ap-state/`,
         keysUrl: keysDocFor(pod),
-        envelope: await wrapKeys(keys, password)
+        keys
       });
     } catch (e) {
-      throw new Error(`could not store the signing key on the pod (${e.message}). The credential is for ${credential.webId} \u2014 that WebID must own ${pod} and its ${AP_ROOT} must be writable by it.`);
+      throw new Error(`could not store the signing key on the pod (${e.message}). You are signed in as ${webId} \u2014 that WebID must own ${pod} and its ${AP_ROOT} must be writable by it.`);
     }
     await cacheOpenedKeys(actorUrl, keys);
     prog.keys = keys;
@@ -33444,36 +33191,23 @@ async function signUp(answers, { onStep = () => {
     root: AP_ROOT,
     handle,
     name: handle,
-    issuer: credential.issuerOrigin,
+    issuer: String(session.issuer || "").replace(/\/+$/, ""),
     createdAt: (/* @__PURE__ */ new Date()).toISOString(),
     ...gateway ? { gateway } : {}
   };
-  const cfgRemote = new BrowserRemotePod(session, { webId: credential.webId, role: "signup", log: () => {
-  } });
   try {
-    await writeConfig(cfgRemote, { state: `${pod}${AP_ROOT}ap-state/` }, config);
+    await writeConfig(remote, { state: `${pod}${AP_ROOT}ap-state/` }, config);
   } catch (e) {
     throw new Error(`could not store the config on the pod (${e.message})`);
-  }
-  const revoked = await revokeCredential({
-    resource: credential.resource,
-    accountToken: credential.accountToken
-  });
-  delete credential.accountToken;
-  if (!revoked && credential.resource) {
-    onStep("credential", "ok", "this browser is ready (the setup credential could not be revoked automatically \u2014 you can remove it from your pod's account page)");
   }
   PROGRESS.delete(key);
   const host = gateway?.frontActor ? new URL(gateway.frontActor).host : new URL(pod).host;
   return {
-    credential,
     config,
     actorUrl,
+    pod,
     address: `@${handle}@${host}`,
     // The opened keys, for booting the agent in THIS browser session right away.
-    // The durable copy on the pod is wrapped under the account password; this
-    // browser also holds an opened one in IndexedDB (above), which is what the
-    // worker reads. A fresh browser asks for the password once and makes its own.
     keys,
     keysPublic: { rsa: keys.rsa.publicPem, ed25519: keys.ed25519?.publicPem || null }
   };
@@ -33492,21 +33226,12 @@ async function readIssuer(actorUrl, fetchImpl = fetch) {
   }
 }
 
-// lib/pod/urls.mjs
-function podBaseOfWebId(webId) {
-  const u = new URL(webId);
-  u.hash = "";
-  u.search = "";
-  const dir = u.pathname.replace(/profile\/card$/u, "").replace(/[^/]*$/u, "");
-  return `${u.origin}${dir.endsWith("/") ? dir : dir + "/"}`;
-}
-
 // lib/session/oidc-session.mjs
 var STORE = "session";
-var b64u2 = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-var enc2 = (o) => b64u2(new TextEncoder().encode(JSON.stringify(o)));
-var sha2562 = (s) => crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
-var rand = (n = 32) => b64u2(crypto.getRandomValues(new Uint8Array(n)));
+var b64u = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+var enc = (o) => b64u(new TextEncoder().encode(JSON.stringify(o)));
+var sha256 = (s) => crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
+var rand = (n = 32) => b64u(crypto.getRandomValues(new Uint8Array(n)));
 async function dpopKey() {
   return crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, false, ["sign"]);
 }
@@ -33517,9 +33242,9 @@ async function publicJwk(pair) {
 async function dpopProof(pair, jwk, htm, htu, ath) {
   const header = { typ: "dpop+jwt", alg: "ES256", jwk };
   const payload = { htm, htu: htu.split("#")[0], jti: crypto.randomUUID(), iat: Math.floor(Date.now() / 1e3), ...ath ? { ath } : {} };
-  const data = `${enc2(header)}.${enc2(payload)}`;
+  const data = `${enc(header)}.${enc(payload)}`;
   const sig = await crypto.subtle.sign({ name: "ECDSA", hash: "SHA-256" }, pair.privateKey, new TextEncoder().encode(data));
-  return `${data}.${b64u2(sig)}`;
+  return `${data}.${b64u(sig)}`;
 }
 var jwtPayload = (jwt) => {
   try {
@@ -33588,7 +33313,7 @@ function solidOidcSession({ dbName = "solid-oidc-session", clientName = "Solid a
     const client_id = await registerClient(cfg, redirectUri, name);
     const pair = await dpopKey();
     const verifier = rand(48);
-    const challenge = b64u2(await sha2562(verifier));
+    const challenge = b64u(await sha256(verifier));
     const state = rand(16);
     await idbPut("pending", {
       issuer,
@@ -33707,7 +33432,7 @@ function solidOidcSession({ dbName = "solid-oidc-session", clientName = "Solid a
     };
     const send = async (url, init) => {
       const jwk = await jwkP;
-      const ath = b64u2(await sha2562(accessToken));
+      const ath = b64u(await sha256(accessToken));
       const headers = { ...init.headers || {}, authorization: `DPoP ${accessToken}`, dpop: await dpopProof(s.pair, jwk, init.method || "GET", url, ath) };
       return fetch(url, { ...init, headers });
     };
@@ -33782,7 +33507,7 @@ async function readAccountState() {
   const urls = { state };
   const [cfg, doc] = await Promise.all([
     readConfig(remote, urls),
-    readWrappedKeys(remote, urls)
+    readKeys(remote, urls)
   ]);
   if (!cfg) throw new Error(`could not read this account's config under ${state}`);
   const actorUrl = `${cfg.remotePod}${cfg.root || AP_ROOT}ap/actor`;
@@ -33790,26 +33515,38 @@ async function readAccountState() {
 }
 window.fedipodUnlock = async (password) => {
   if (!password) throw new Error("Enter your password.");
-  const { doc, actorUrl } = await readAccountState();
+  const { remote, urls, doc, actorUrl } = await readAccountState();
   if (!doc) throw new Error("could not read this account's key on the pod");
-  if (!isKeyEnvelope(doc)) throw new Error("this account's key is not locked \u2014 nothing to unlock");
+  if (!isKeyEnvelope(doc)) throw new Error("this account's key is not under a password \u2014 nothing to unlock");
   const rec = await unwrapKeys(doc, password);
+  await writeKeys(remote, urls, rec);
   await cacheOpenedKeys(actorUrl, rec);
   await bootWorker();
 };
-window.fedipodNewKey = async (password) => {
-  if (!password) throw new Error("Enter the password you use for your pod now.");
+window.fedipodNewKey = async () => {
   const { remote, urls, cfg, actorUrl } = await readAccountState();
   const keys = await generateKeys();
   keys.mintedFor = cfg.gateway?.frontActor || actorUrl;
-  await writeWrappedKeys(remote, urls, await wrapKeys(keys, password));
+  await writeKeys(remote, urls, keys);
   await cacheOpenedKeys(actorUrl, keys);
   await bootWorker();
 };
-window.fedipodSignup = async ({ onStep, ...answers }) => {
-  await signUp(answers, { onStep, frontOrigin: location.origin });
-  const { authorizationUrl } = await beginLogin({ issuer: answers.issuer, redirectUri: REDIRECT });
+var SIGNUP_RETURN = "signup";
+var issuerOf = (v) => {
+  let s = String(v || "").trim();
+  if (!s) throw new Error("A pod provider is required.");
+  if (!/^https?:\/\//i.test(s)) s = "https://" + s;
+  return new URL(s).origin;
+};
+window.fedipodPodLogin = async ({ issuer }) => {
+  const { authorizationUrl } = await beginLogin({ issuer: issuerOf(issuer), redirectUri: REDIRECT, returnTo: SIGNUP_RETURN });
   location.href = authorizationUrl;
+};
+window.fedipodSignup = async ({ onStep, ...answers }) => {
+  const session = await getSession();
+  if (!session) throw new Error("Sign in at your pod first.");
+  await signUp(answers, { session, onStep, frontOrigin: location.origin });
+  await bootWorker({ reset: true });
 };
 function parseAddress(input) {
   let s = String(input || "").trim();
@@ -33857,8 +33594,12 @@ window.fedipodSignin = async ({ address }) => {
 };
 window.fedipodOnLoad = async () => {
   if (new URLSearchParams(location.search).get("code")) {
-    await completeLogin({ currentUrl: location.href });
+    const done = await completeLogin({ currentUrl: location.href });
     history.replaceState({}, "", REDIRECT);
+    if (done?.returnTo === SIGNUP_RETURN) {
+      const pod = podBaseOfWebId(done.webId);
+      if (!await resourceExists(done.fetch, `${pod}${AP_ROOT}ap-state/config.json`)) return "signup";
+    }
     await bootWorker({ reset: true });
     return "signed-in";
   }
@@ -33892,6 +33633,7 @@ window.fedipodHandleProblem = handleProblem;
 if (typeof document !== "undefined") (async () => {
   const $ = (id) => document.getElementById(id);
   const params = new URLSearchParams(location.search);
+  let pendingIdentity = false;
   const doUnlock = async () => {
     $("unlock-error").textContent = "";
     const btn = $("unlock-go");
@@ -33919,13 +33661,12 @@ if (typeof document !== "undefined") (async () => {
     const btn = $("unlock-newkey-go");
     btn.disabled = true;
     try {
-      await window.fedipodNewKey($("unlock-password").value);
+      await window.fedipodNewKey();
       $("unlock-password").value = "";
       location.href = "/admin/client/";
     } catch (err) {
       $("unlock-error").textContent = err.message || String(err);
       btn.disabled = false;
-      $("unlock-password").select();
     }
   };
   $("unlock-newkey-go")?.addEventListener("click", doNewKey);
@@ -33971,8 +33712,11 @@ if (typeof document !== "undefined") (async () => {
         "pod-busy": { title: "Your pod is asking for a pause", retry: "Reload", go: reload, wait: 45 },
         "pod-error": { title: "Your pod had an error", retry: "Reload", go: reload, wait: 20 },
         "pod-unreachable": { title: "Your pod could not be reached", retry: "Reload", go: reload, wait: 20 },
-        "no-account-here": { title: "No FediPod account in that pod", retry: "Use another pod", go: signIn },
-        "no-account": { title: "No FediPod account in that pod", retry: "Use another pod", go: signIn },
+        // A session with no account behind it is a sign-up that has not
+        // happened yet — the person who closed the tab between the pod's
+        // login and the identity screen lands here.
+        "no-account-here": { title: "No FediPod account in that pod", retry: "Create one on this pod", go: () => showIdentity() },
+        "no-account": { title: "No FediPod account in that pod", retry: "Create one on this pod", go: () => showIdentity() },
         "device-account": { title: "This account is run from a device", retry: "Use another pod", go: signIn }
       }[e.code];
       if (e.code === "sign-in-refused" && once("fedipod-renewing")) {
@@ -34043,8 +33787,11 @@ ${e.detail}` : "");
       location.href = "/admin/client/";
       return;
     }
-    $("loading").hidden = true;
-    $("landing").hidden = false;
+    if (state === "signup") pendingIdentity = true;
+    else {
+      $("loading").hidden = true;
+      $("landing").hidden = false;
+    }
   }
   const showLanding = () => {
     $("pane-form").hidden = true;
@@ -34060,6 +33807,23 @@ ${e.detail}` : "");
     $("pane-form").hidden = false;
     goStep(1);
   };
+  let signedPod = "";
+  async function showIdentity() {
+    const session = await getSession();
+    if (!session) {
+      showLanding();
+      return;
+    }
+    signedPod = podBaseOfWebId(session.webId);
+    $("loading").hidden = true;
+    $("hero").hidden = true;
+    $("landing").hidden = true;
+    $("running").hidden = true;
+    $("brand").hidden = false;
+    $("pane-form").hidden = false;
+    $("signed-pod").textContent = signedPod;
+    goStep(2);
+  }
   const doSignin = async () => {
     $("signin-error").textContent = "";
     try {
@@ -34089,64 +33853,28 @@ ${e.detail}` : "");
       return "";
     }
   };
-  const podHostOf = () => {
-    const sub = f().podName.value.trim().toLowerCase();
-    const ph = providerHost();
-    return sub && ph ? `${sub}.${ph}` : "";
+  const registerUrl = () => {
+    if (!providerHost()) return "";
+    const origin = new URL(providerUrl()).origin;
+    return f().provider.value ? `${origin}/.account/login/password/register/` : `${origin}/`;
   };
-  const podUrl = () => {
-    let v = f().pod.value.trim();
-    if (!v) return "";
-    if (!/^https?:\/\//i.test(v)) v = "https://" + v;
-    if (!v.endsWith("/")) v += "/";
+  const pathPod = () => {
     try {
-      return new URL(v).href;
-    } catch {
-      return "";
-    }
-  };
-  const isPathPod = (u) => {
-    try {
-      return new URL(u).pathname !== "/";
+      return new URL(signedPod).pathname !== "/";
     } catch {
       return false;
     }
   };
-  const layouts = /* @__PURE__ */ new Map();
-  let layout = null;
-  const learnLayout = async () => {
-    const origin = providerHost() ? new URL(providerUrl()).origin : "";
-    if (!origin) {
-      layout = null;
-      return;
-    }
-    if (!layouts.has(origin)) layouts.set(origin, podLayout(fetch, origin).catch(() => null));
-    const known = await layouts.get(origin);
-    if (providerHost() && new URL(providerUrl()).origin === origin) {
-      layout = known;
-      applyShape();
-      previewAddr();
-    }
-  };
-  const pathPod = () => f().mode.value === "existing" ? isPathPod(podUrl()) : layout === "path";
   const shape = () => pathPod() ? "front" : f().shape.value;
-  const answers = () => {
-    const mode = f().mode.value;
-    const a = {
-      mode,
-      handle: f().handle.value.trim().toLowerCase(),
-      email: f().email.value.trim(),
-      password: f().password.value,
-      issuer: providerUrl(),
-      shape: shape()
-    };
-    if (mode === "new") a.podName = f().podName.value.trim().toLowerCase();
-    else a.pod = podUrl();
-    return a;
-  };
+  const answers = () => ({ handle: f().handle.value.trim().toLowerCase(), shape: shape() });
   const previewAddr = () => {
     const handle = f().handle.value.trim().toLowerCase();
-    const host = shape() === "front" ? location.host : f().mode.value === "existing" ? podUrl() ? new URL(podUrl()).host : "" : podHostOf();
+    let host = "";
+    try {
+      host = shape() === "front" ? location.host : new URL(signedPod).host;
+    } catch {
+      host = "";
+    }
     $("preview").textContent = handle && host ? `@${handle}@${host}` : "@\u2026@\u2026";
   };
   const applyShape = () => {
@@ -34159,21 +33887,18 @@ ${e.detail}` : "");
   };
   const applyMode = () => {
     const existing = f().mode.value === "existing";
-    $("pod-field").hidden = !existing;
-    $("podname-field").hidden = existing;
+    $("newpod-field").hidden = existing;
     $("provider-other-field").hidden = f().provider.value !== "";
+    const url = registerUrl();
+    $("register-link").href = url || "#";
+    $("register-link").textContent = providerHost() ? `Create your pod at ${providerHost()}` : "Create your pod at your provider";
   };
   for (const el of $("form").elements) for (const evt of ["input", "change"]) el.addEventListener(evt, () => {
     applyMode();
     applyShape();
     previewAddr();
   });
-  for (const evt of ["input", "change"]) {
-    $("provider").addEventListener(evt, learnLayout);
-    $("providerOther").addEventListener(evt, learnLayout);
-  }
   applyMode();
-  learnLayout();
   const STEP_IDS = ["step-1", "step-2"];
   const FOCUS = { 1: "provider", 2: "handle" };
   const goStep = (n) => {
@@ -34185,22 +33910,11 @@ ${e.detail}` : "");
     if (n === 2) {
       applyShape();
       previewAddr();
-      learnLayout();
     }
     if (FOCUS[n]) $(FOCUS[n]).focus();
   };
   const validateStep1 = () => {
     if (!providerHost()) return f().provider.value === "" ? "A pod provider address is required under Other\u2026." : "A valid pod provider URL is required.";
-    if (f().mode.value === "existing") {
-      if (!podUrl()) return "A pod address is required, like https://alice.solidcommunity.net/ or https://server.example/alice/.";
-    } else {
-      const sub = f().podName.value.trim().toLowerCase();
-      if (!sub) return "A pod username/subdomain is required.";
-      const sp = window.fedipodHandleProblem(sub);
-      if (sp) return `Pod username: ${sp}`;
-    }
-    if (!f().email.value.trim()) return "A pod email is required.";
-    if (!f().password.value) return "A pod password is required.";
     return null;
   };
   const validateStep2 = () => {
@@ -34213,38 +33927,38 @@ ${e.detail}` : "");
     showLanding();
     goStep(1);
   });
-  $("to-2").addEventListener("click", () => {
+  $("to-2").addEventListener("click", async () => {
     const e = validateStep1();
     if (e) {
       $("err-1").textContent = e;
       return;
     }
-    goStep(2);
+    $("err-1").textContent = "";
+    $("to-2").disabled = true;
+    try {
+      await window.fedipodPodLogin({ issuer: providerUrl() });
+    } catch (err) {
+      $("err-1").textContent = err.message || String(err);
+      $("to-2").disabled = false;
+    }
   });
   $("back-1").addEventListener("click", () => goStep(1));
   const backToForm = (errMsg) => {
     $("running").hidden = true;
     $("brand").hidden = false;
     $("pane-form").hidden = false;
-    goStep(1);
-    if (errMsg) $("err-1").textContent = errMsg;
+    goStep(2);
+    if (errMsg) $("form-error").textContent = errMsg;
   };
   $("run-retry").addEventListener("click", () => backToForm($("run-error").textContent));
   $("run-back").addEventListener("click", () => {
     showLanding();
     goStep(1);
   });
-  const LABELS = { account: "Creating your account and pod", credential: "Preparing this browser", keys: "Making your signing key", gateway: "Connecting your mail door" };
+  const LABELS = { pod: "Checking your pod", keys: "Making your signing key", gateway: "Connecting your mail door" };
   $("form").addEventListener("submit", async (e) => {
     e.preventDefault();
     $("form-error").textContent = "";
-    const e1 = validateStep1();
-    if (e1) {
-      $("form-error").textContent = e1;
-      goStep(1);
-      $("err-1").textContent = e1;
-      return;
-    }
     const e2 = validateStep2();
     if (e2) {
       $("form-error").textContent = e2;
@@ -34270,12 +33984,14 @@ ${e.detail}` : "");
     };
     try {
       await window.fedipodSignup({ ...a, onStep });
+      location.href = "/admin/client/";
     } catch (err) {
       $("running-title").textContent = "Setup did not finish";
       $("run-error").textContent = err.message || String(err);
       $("run-actions").hidden = false;
     }
   });
+  if (pendingIdentity) await showIdentity();
 })();
 export {
   parseAddress

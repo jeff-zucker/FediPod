@@ -6,17 +6,19 @@
 // that same session from IndexedDB. So a returning visit restores silently, and
 // a new browser signs in with one redirect.
 //
-//   New account:  fedipodSignup(answers)  — create the account, then redirect.
-//   Returning:    fedipodSignin({ issuer }) — redirect to the pod's login.
+//   New account:  fedipodPodLogin({ issuer }) — sign in at the pod, and come
+//                 back to the identity screen; fedipodSignup(answers) then
+//                 sets the account up on that session and boots.
+//   Returning:    fedipodSignin({ address }) — redirect to the pod's login.
 //   On every load: fedipodOnLoad() — finish a redirect, or restore, then boot.
 import { signUp, handleProblem, AP_ROOT } from './signup.mjs';
 import * as podActor from '../../lib/pod/actor.mjs';
 import * as podState from '../../lib/pod/state.mjs';
 import { podBaseOfWebId } from '../../lib/pod/urls.mjs';
-import { podLayout } from '../../lib/pod/root.mjs';
+import { resourceExists } from '../../lib/pod/root.mjs';
 import { BrowserRemotePod } from './pod-remote.mjs';
 import { beginLogin, completeLogin, getSession, signOut } from './oidc-session.mjs';
-import { generateKeys, wrapKeys, unwrapKeys, isKeyEnvelope } from './keystore.mjs';
+import { generateKeys, unwrapKeys, isKeyEnvelope } from './keystore.mjs';
 import { cacheOpenedKeys } from './keys-browser.mjs';
 
 const REDIRECT = `${location.origin}/`;   // the app root doubles as the OIDC callback
@@ -55,12 +57,11 @@ async function bootWorker({ reset = false } = {}) {
   await booted;
 }
 
-// A browser that has signed in but has never opened this account's signing key.
-//
-// The key on the pod is wrapped under the account password (signup.mjs), which
-// is what keeps the pod's host from being able to sign as you. Opening it needs
-// the password once per browser; after that the opened copy lives in this
-// origin's IndexedDB and the worker boots from it with nothing to ask.
+// An account made before 1.28.0, whose key on the pod is still under the
+// sign-up password. Since 1.28.0 the key is stored as it is, behind the pod's
+// own login, and a new browser reads it with its session (keys-browser.mjs).
+// One of these older accounts is opened once, with the password, and the key
+// is then written back as it is — so no browser ever asks again.
 //
 // The unwrap happens HERE, in the page, and not in the worker: the worker boots
 // itself whenever the browser restarts it, with nobody present to type anything.
@@ -77,7 +78,7 @@ async function readAccountState() {
   const remote = new BrowserRemotePod(session, { webId: session.webId, role: 'signup', log: () => {} });
   const urls = { state };
   const [cfg, doc] = await Promise.all([
-    podState.readConfig(remote, urls), podState.readWrappedKeys(remote, urls),
+    podState.readConfig(remote, urls), podState.readKeys(remote, urls),
   ]);
   if (!cfg) throw new Error(`could not read this account's config under ${state}`);
   const actorUrl = `${cfg.remotePod}${cfg.root || AP_ROOT}ap/actor`;
@@ -86,35 +87,48 @@ async function readAccountState() {
 
 window.fedipodUnlock = async (password) => {
   if (!password) throw new Error('Enter your password.');
-  const { doc, actorUrl } = await readAccountState();
+  const { remote, urls, doc, actorUrl } = await readAccountState();
   if (!doc) throw new Error('could not read this account\'s key on the pod');
-  if (!isKeyEnvelope(doc)) throw new Error('this account\'s key is not locked — nothing to unlock');
+  if (!isKeyEnvelope(doc)) throw new Error('this account\'s key is not under a password — nothing to unlock');
   const rec = await unwrapKeys(doc, password);          // throws 'wrong password'
+  // Stored as it is from here on: the next browser reads it with the pod
+  // login and asks for nothing.
+  await podState.writeKeys(remote, urls, rec);
   await cacheOpenedKeys(actorUrl, rec);
   await bootWorker();
 };
 
-// The same pane, for someone who no longer has the sign-up password: a new key,
-// wrapped under the password they use now, written over the pod's copy. Nothing
-// is unwrapped, so the old password is never needed. The boot that follows
-// publishes the new public key (agent.goActive → publishProfile).
-window.fedipodNewKey = async (password) => {
-  if (!password) throw new Error('Enter the password you use for your pod now.');
+// The same pane, for someone who no longer has the old password: a new key,
+// stored as it is, written over the pod's copy. Nothing is unwrapped, so the
+// old password is never needed. The boot that follows publishes the new public
+// key (agent.goActive → publishProfile).
+window.fedipodNewKey = async () => {
   const { remote, urls, cfg, actorUrl } = await readAccountState();
   const keys = await generateKeys();
   keys.mintedFor = cfg.gateway?.frontActor || actorUrl;   // one key, one actor (signup.mjs)
-  await podState.writeWrappedKeys(remote, urls, await wrapKeys(keys, password));
+  await podState.writeKeys(remote, urls, keys);
   await cacheOpenedKeys(actorUrl, keys);
   await bootWorker();
 };
 
-// New account: create the account, pod, key, config and gateway attach (this
-// needs the password once), then redirect to the pod's login to establish the
-// durable session. The agent boots on return, reading config + key from the pod.
-window.fedipodSignup = async ({ onStep, ...answers }) => {
-  await signUp(answers, { onStep, frontOrigin: location.origin });
-  const { authorizationUrl } = await beginLogin({ issuer: answers.issuer, redirectUri: REDIRECT });
+// New account, first half: sign in at the pod. The pod already exists — made
+// on the provider's own page, or brought — and its login is the only place
+// a password is ever typed. `returnTo` marks the way back as a sign-up, so
+// the load that follows shows the identity screen instead of booting.
+const SIGNUP_RETURN = 'signup';
+const issuerOf = (v) => { let s = String(v || '').trim(); if (!s) throw new Error('A pod provider is required.'); if (!/^https?:\/\//i.test(s)) s = 'https://' + s; return new URL(s).origin; };
+window.fedipodPodLogin = async ({ issuer }) => {
+  const { authorizationUrl } = await beginLogin({ issuer: issuerOf(issuer), redirectUri: REDIRECT, returnTo: SIGNUP_RETURN });
   location.href = authorizationUrl;
+};
+// Second half, back on the session: key, config and gateway attach on the pod,
+// then the agent boots here. Nothing is typed and nothing leaves the browser
+// but pod writes on the session the pod itself issued.
+window.fedipodSignup = async ({ onStep, ...answers }) => {
+  const session = await getSession();
+  if (!session) throw new Error('Sign in at your pod first.');
+  await signUp(answers, { session, onStep, frontOrigin: location.origin });
+  await bootWorker({ reset: true });
 };
 
 // Returning / new browser: sign-in takes the full Fediverse address, @you@yourpod.
@@ -171,11 +185,19 @@ window.fedipodSignin = async ({ address }) => {
   location.href = authorizationUrl;
 };
 
-// Called on every page load. Returns 'signed-in' | 'restored' | 'anonymous'.
+// Called on every page load. Returns 'signed-in' | 'restored' | 'anonymous' |
+// 'signup' — the last being a return from the pod's login in the middle of
+// creating an account, with a session and no account on the pod yet.
 window.fedipodOnLoad = async () => {
   if (new URLSearchParams(location.search).get('code')) {
-    await completeLogin({ currentUrl: location.href });
+    const done = await completeLogin({ currentUrl: location.href });
     history.replaceState({}, '', REDIRECT);
+    if (done?.returnTo === SIGNUP_RETURN) {
+      // A pod that already holds an account boots as usual: "create an
+      // account" on a pod that has one is a sign-in, not a second account.
+      const pod = podBaseOfWebId(done.webId);
+      if (!(await resourceExists(done.fetch, `${pod}${AP_ROOT}ap-state/config.json`))) return 'signup';
+    }
     await bootWorker({ reset: true });        // this may be a different account
     return 'signed-in';
   }
@@ -209,6 +231,9 @@ window.fedipodHandleProblem = handleProblem;
 if (typeof document !== 'undefined') (async () => {
   const $ = (id) => document.getElementById(id);
   const params = new URLSearchParams(location.search);
+  // Set by the load below and acted on at the end, once the form is wired:
+  // the identity screen needs the step machine, which is built further down.
+  let pendingIdentity = false;
 
   // --- unlock: this browser's first use of an account whose key is locked ---
   //
@@ -242,13 +267,12 @@ if (typeof document !== 'undefined') (async () => {
     $('unlock-error').textContent = '';
     const btn = $('unlock-newkey-go'); btn.disabled = true;
     try {
-      await window.fedipodNewKey($('unlock-password').value);
+      await window.fedipodNewKey();
       $('unlock-password').value = '';
       location.href = '/admin/client/';
     } catch (err) {
       $('unlock-error').textContent = err.message || String(err);
       btn.disabled = false;
-      $('unlock-password').select();
     }
   };
   $('unlock-newkey-go')?.addEventListener('click', doNewKey);
@@ -304,8 +328,11 @@ if (typeof document !== 'undefined') (async () => {
         'pod-busy': { title: 'Your pod is asking for a pause', retry: 'Reload', go: reload, wait: 45 },
         'pod-error': { title: 'Your pod had an error', retry: 'Reload', go: reload, wait: 20 },
         'pod-unreachable': { title: 'Your pod could not be reached', retry: 'Reload', go: reload, wait: 20 },
-        'no-account-here': { title: 'No FediPod account in that pod', retry: 'Use another pod', go: signIn },
-        'no-account': { title: 'No FediPod account in that pod', retry: 'Use another pod', go: signIn },
+        // A session with no account behind it is a sign-up that has not
+        // happened yet — the person who closed the tab between the pod's
+        // login and the identity screen lands here.
+        'no-account-here': { title: 'No FediPod account in that pod', retry: 'Create one on this pod', go: () => showIdentity() },
+        'no-account': { title: 'No FediPod account in that pod', retry: 'Create one on this pod', go: () => showIdentity() },
         'device-account': { title: 'This account is run from a device', retry: 'Use another pod', go: signIn },
       }[e.code];
 
@@ -372,16 +399,32 @@ if (typeof document !== 'undefined') (async () => {
     // a fresh session and forwards deep links on a returning one, so both a
     // fresh sign-in and a restored session land in the same place.
     if (state === 'signed-in' || state === 'restored') { location.href = '/admin/client/'; return; }
-
-    // Anonymous: show the landing (sign-in address + create-account); form stays hidden.
-    $('loading').hidden = true;
-    $('landing').hidden = false;
+    // Back from the pod's login with no account there yet: the identity
+    // screen, once the form below is wired.
+    if (state === 'signup') pendingIdentity = true;
+    else {
+      // Anonymous: show the landing (sign-in address + create-account); form stays hidden.
+      $('loading').hidden = true;
+      $('landing').hidden = false;
+    }
   }
 
   // Views. The register form stands alone: the marketing hero and the sign-in
   // landing give way to the short brand, so only "FediPod" and the form show.
   const showLanding = () => { $('pane-form').hidden = true; $('running').hidden = true; $('brand').hidden = true; $('hero').hidden = false; $('landing').hidden = false; };
   const showForm = () => { $('hero').hidden = true; $('landing').hidden = true; $('brand').hidden = false; $('pane-form').hidden = false; goStep(1); };
+  // The identity screen, on a pod session: the pod is read off the WebID and
+  // fixes what the form can offer (a path pod is fronted, no choice).
+  let signedPod = '';
+  async function showIdentity() {
+    const session = await getSession();
+    if (!session) { showLanding(); return; }
+    signedPod = podBaseOfWebId(session.webId);
+    $('loading').hidden = true; $('hero').hidden = true; $('landing').hidden = true; $('running').hidden = true;
+    $('brand').hidden = false; $('pane-form').hidden = false;
+    $('signed-pod').textContent = signedPod;
+    goStep(2);
+  }
 
 
   // --- sign in: the full @you@yourpod address → redirect to your pod's login ---
@@ -393,45 +436,30 @@ if (typeof document !== 'undefined') (async () => {
   $('signin').addEventListener('click', doSignin);
   $('signin-address').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); doSignin(); } });
 
-  // --- register form: two screens, pod first then Fediverse identity ---
+  // --- register form: two screens, the pod's login first, then the identity ---
   const f = () => $('form').elements;
   // The pod provider is a free-text URL; default and normalise to a scheme.
   // The provider is picked from the list, or typed under "Other…".
   const providerUrl = () => { let v = (f().provider.value || f().providerOther.value).trim(); if (!v) return ''; if (!/^https?:\/\//i.test(v)) v = 'https://' + v; return v; };
   const providerHost = () => { try { return new URL(providerUrl()).host; } catch { return ''; } };
-  // A new pod is named by its subdomain under the provider; an existing pod is
-  // brought by its address, which may be its own host or a path on a shared one.
-  const podHostOf = () => { const sub = f().podName.value.trim().toLowerCase(); const ph = providerHost(); return (sub && ph) ? `${sub}.${ph}` : ''; };
-  const podUrl = () => { let v = f().pod.value.trim(); if (!v) return ''; if (!/^https?:\/\//i.test(v)) v = 'https://' + v; if (!v.endsWith('/')) v += '/'; try { return new URL(v).href; } catch { return ''; } };
+  // Where a new pod is made: the provider's own sign-up page. Every provider
+  // in the list runs Community Solid Server, whose page is at this path; a
+  // typed provider gets its front page, which links to it.
+  const registerUrl = () => {
+    if (!providerHost()) return '';
+    const origin = new URL(providerUrl()).origin;
+    return f().provider.value ? `${origin}/.account/login/password/register/` : `${origin}/`;
+  };
   // A pod on a suffix-based host cannot answer WebFinger, so its address
-  // lives at this site; a pod at its own host root gets the choice.
-  const isPathPod = (u) => { try { return new URL(u).pathname !== '/'; } catch { return false; } };
-  // Where the chosen provider puts new pods, asked of the provider itself
-  // (lib/pod/root.mjs podLayout) and remembered per provider: 'host', 'path',
-  // or null when it would not say.
-  const layouts = new Map();
-  let layout = null;
-  const learnLayout = async () => {
-    const origin = providerHost() ? new URL(providerUrl()).origin : '';
-    if (!origin) { layout = null; return; }
-    if (!layouts.has(origin)) layouts.set(origin, podLayout(fetch, origin).catch(() => null));
-    const known = await layouts.get(origin);
-    if (providerHost() && new URL(providerUrl()).origin === origin) { layout = known; applyShape(); previewAddr(); }
-  };
-  const pathPod = () => (f().mode.value === 'existing' ? isPathPod(podUrl()) : layout === 'path');
+  // lives at this site; a pod at its own host root gets the choice. Known
+  // from the signed-in pod, not guessed from the provider.
+  const pathPod = () => { try { return new URL(signedPod).pathname !== '/'; } catch { return false; } };
   const shape = () => (pathPod() ? 'front' : f().shape.value);
-  const answers = () => {
-    const mode = f().mode.value;
-    const a = { mode, handle: f().handle.value.trim().toLowerCase(), email: f().email.value.trim(),
-      password: f().password.value, issuer: providerUrl(), shape: shape() };
-    if (mode === 'new') a.podName = f().podName.value.trim().toLowerCase();
-    else a.pod = podUrl();
-    return a;
-  };
+  const answers = () => ({ handle: f().handle.value.trim().toLowerCase(), shape: shape() });
   const previewAddr = () => {
     const handle = f().handle.value.trim().toLowerCase();
-    const host = shape() === 'front' ? location.host
-      : (f().mode.value === 'existing' ? (podUrl() ? new URL(podUrl()).host : '') : podHostOf());
+    let host = '';
+    try { host = shape() === 'front' ? location.host : new URL(signedPod).host; } catch { host = ''; }
     $('preview').textContent = (handle && host) ? `@${handle}@${host}` : '@…@…';
   };
   // The shape choice is fixed for a path pod, and open for a host-root pod.
@@ -444,13 +472,14 @@ if (typeof document !== 'undefined') (async () => {
   };
   const applyMode = () => {
     const existing = f().mode.value === 'existing';
-    $('pod-field').hidden = !existing;
-    $('podname-field').hidden = existing;
+    $('newpod-field').hidden = existing;
     $('provider-other-field').hidden = f().provider.value !== '';
+    const url = registerUrl();
+    $('register-link').href = url || '#';
+    $('register-link').textContent = providerHost() ? `Create your pod at ${providerHost()}` : 'Create your pod at your provider';
   };
   for (const el of $('form').elements) for (const evt of ['input', 'change']) el.addEventListener(evt, () => { applyMode(); applyShape(); previewAddr(); });
-  for (const evt of ['input', 'change']) { $('provider').addEventListener(evt, learnLayout); $('providerOther').addEventListener(evt, learnLayout); }
-  applyMode(); learnLayout();
+  applyMode();
 
   // Step machine: one screen at a time, each gated by its own validation.
   const STEP_IDS = ['step-1', 'step-2'];
@@ -458,21 +487,11 @@ if (typeof document !== 'undefined') (async () => {
   const goStep = (n) => {
     STEP_IDS.forEach((id, i) => { $(id).hidden = i !== n - 1; });
     $('err-1').textContent = ''; $('form-error').textContent = '';
-    if (n === 2) { applyShape(); previewAddr(); learnLayout(); }
+    if (n === 2) { applyShape(); previewAddr(); }
     if (FOCUS[n]) $(FOCUS[n]).focus();
   };
   const validateStep1 = () => {
     if (!providerHost()) return f().provider.value === '' ? 'A pod provider address is required under Other….' : 'A valid pod provider URL is required.';
-    if (f().mode.value === 'existing') {
-      if (!podUrl()) return 'A pod address is required, like https://alice.solidcommunity.net/ or https://server.example/alice/.';
-    } else {
-      const sub = f().podName.value.trim().toLowerCase();
-      if (!sub) return 'A pod username/subdomain is required.';
-      const sp = window.fedipodHandleProblem(sub);
-      if (sp) return `Pod username: ${sp}`;
-    }
-    if (!f().email.value.trim()) return 'A pod email is required.';
-    if (!f().password.value) return 'A pod password is required.';
     return null;
   };
   const validateStep2 = () => {
@@ -482,33 +501,41 @@ if (typeof document !== 'undefined') (async () => {
   };
   $('create').addEventListener('click', showForm);
   $('cancel').addEventListener('click', () => { showLanding(); goStep(1); });
-  $('to-2').addEventListener('click', () => { const e = validateStep1(); if (e) { $('err-1').textContent = e; return; } goStep(2); });
+  // Off to the pod's login. The identity screen is shown by the load that
+  // brings the person back (fedipodOnLoad → 'signup').
+  $('to-2').addEventListener('click', async () => {
+    const e = validateStep1(); if (e) { $('err-1').textContent = e; return; }
+    $('err-1').textContent = ''; $('to-2').disabled = true;
+    try { await window.fedipodPodLogin({ issuer: providerUrl() }); }
+    catch (err) { $('err-1').textContent = err.message || String(err); $('to-2').disabled = false; }
+  });
   $('back-1').addEventListener('click', () => goStep(1));
 
   // From the setup screen back to the form (a failed run) or the landing.
   const backToForm = (errMsg) => {
     $('running').hidden = true; $('brand').hidden = false; $('pane-form').hidden = false;
-    goStep(1);
-    if (errMsg) $('err-1').textContent = errMsg;   // remind them what failed
+    goStep(2);
+    if (errMsg) $('form-error').textContent = errMsg;   // remind them what failed
   };
   $('run-retry').addEventListener('click', () => backToForm($('run-error').textContent));
   $('run-back').addEventListener('click', () => { showLanding(); goStep(1); });
 
-  const LABELS = { account: 'Creating your account and pod', credential: 'Preparing this browser', keys: 'Making your signing key', gateway: 'Connecting your mail door' };
+  const LABELS = { pod: 'Checking your pod', keys: 'Making your signing key', gateway: 'Connecting your mail door' };
   $('form').addEventListener('submit', async (e) => {
     e.preventDefault(); $('form-error').textContent = '';
-    const e1 = validateStep1(); if (e1) { $('form-error').textContent = e1; goStep(1); $('err-1').textContent = e1; return; }
     const e2 = validateStep2(); if (e2) { $('form-error').textContent = e2; goStep(2); return; }
     const a = answers();
     $('pane-form').hidden = true; $('running').hidden = false;
     $('running-title').textContent = 'Setting up…'; $('run-error').textContent = ''; $('run-actions').hidden = true;
     const steps = $('steps'); steps.textContent = ''; const mark = {};
     const onStep = (k, st) => { if (!mark[k]) { const li = document.createElement('li'); steps.appendChild(li); mark[k] = li; } mark[k].textContent = (st === 'ok' ? '✓ ' : st === 'running' ? '… ' : '') + (LABELS[k] || k); };
-    try { await window.fedipodSignup({ ...a, onStep }); }
+    try { await window.fedipodSignup({ ...a, onStep }); location.href = '/admin/client/'; }
     catch (err) {
       $('running-title').textContent = 'Setup did not finish';
       $('run-error').textContent = err.message || String(err);
       $('run-actions').hidden = false;                // the way out of the failure screen
     }
   });
+
+  if (pendingIdentity) await showIdentity();
 })();

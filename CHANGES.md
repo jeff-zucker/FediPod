@@ -1,5 +1,25 @@
 # Changes
 
+## 2026-09-22 (no password on fedipod.net — version 1.28.0)
+
+**fedipod.net never sees a pod password.** The sign-up form no longer asks
+for an email or a password. A person who needs a pod makes one on their
+provider's own sign-up page, linked from the form; then they sign in at
+their pod, and the identity screen on the way back sets the account up on
+that session. The credential sign-up used to mint, and revoke, is gone with
+the form.
+
+**The signing key is stored on the pod as it is.** It sits in the owner-only
+state container, reachable through the pod's own login and by nobody else,
+the same rule every private document on the pod lives under. A new browser
+reads it with its session and asks for nothing; rotating the key asks for
+nothing. Until now the pod's copy was sealed under the sign-up password, so
+that the pod's host could not sign as the owner; the host is now trusted
+the way it is for every other document. An account from before this
+version is asked once for the password it was made with, and its key is
+stored as it is from then on; someone who no longer has that password
+makes a new key from the same screen.
+
 ## 2026-09-21 (version 1.27.4)
 
 **The same as 1.27.3, under a number npm will take.** A publish of 1.27.3

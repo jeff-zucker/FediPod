@@ -2590,12 +2590,12 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   check(/it is a code-execution one/.test(admin),
     'the CSP comment says what the policy actually buys');
 
-  // The sign-up page holds the pod account password and sends it to the host in
-  // the provider box, so the page's policy decides which hosts it may reach at
-  // all. Naming one provider there made the box a trap: type any other and the
-  // page failed with "Failed to fetch" and nothing else. Two halves, and both
-  // matter — it may reach whatever is typed, and only this origin's scripts run
-  // on the page that reads the password.
+  // The sign-up page talks to whatever pod provider is typed in the provider
+  // box, so the page's policy decides which hosts it may reach at all. Naming
+  // one provider there made the box a trap: type any other and the page failed
+  // with "Failed to fetch" and nothing else. Two halves, and both matter — it
+  // may reach whatever is typed, and only this origin's scripts run on the
+  // page that holds the pod session.
   const signupPage = read('web/app/index.html');
   const csp = (signupPage.match(/http-equiv="Content-Security-Policy" content="([^"]*)"/i) || [, ''])[1];
   const directive = (name) => ((csp.match(new RegExp(`${name} ([^;]*)`)) || [, ''])[1] || '').trim();
@@ -2603,7 +2603,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     `the sign-up page may reach any https pod provider (connect-src ${directive('connect-src')})`);
   check(directive('script-src') === "'self'" && directive('base-uri') === "'none'"
     && directive('form-action') === "'self'",
-    'and the page that reads the password still runs nothing but its own script');
+    'and the page that holds the pod session still runs nothing but its own script');
   const bootSrc = read('web/app/boot.mjs');
   const paramsRead = [...bootSrc.matchAll(/params\.(?:has|get)\('([^']+)'\)/g)].map((m) => m[1]);
   check(!paramsRead.includes('provider') && !paramsRead.includes('issuer'),
@@ -2694,8 +2694,10 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     && await podLayout(answering(404), 'https://y.example') === null
     && await podLayout(async () => { throw new Error('no route'); }, 'https://z.example') === null,
     'podLayout tells a subdomain provider from a path one by its root storage description, and says nothing otherwise');
-  check(/layout === 'path'/.test(read('web/app/boot.mjs')) && /podLayout\(fetch, origin\)/.test(read('web/app/boot.mjs')),
-    'and the sign-up form fixes the shape to the Gateway when the provider keeps pods on paths');
+  // Since 1.28.0 the form learns the pod from the session that signed in at
+  // it, so the shape is fixed by the real pod, not guessed from the provider.
+  check(/signedPod = podBaseOfWebId\(session\.webId\)/.test(read('web/app/boot.mjs')) && !/podLayout/.test(read('web/app/boot.mjs')),
+    'and the sign-up form fixes the shape from the signed-in pod, not from a guess about the provider');
   // And the handle lookup goes through the agent's own remote read, which in
   // the browser is the relay — WebFinger was the one lookup made directly.
   const social = await import(path.join(root, 'lib/core/social.mjs'));
@@ -2733,12 +2735,22 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   const newKeyAt = bootSrc.indexOf("$('unlock-newkey-go')?.addEventListener");
   check(newKeyAt > 0 && newKeyAt < paneAt,
     'the new-key button on the unlock pane is wired before the pane can show and return');
-  // A new key from the unlock pane is wrapped under the password typed now and
-  // written over the pod's copy; nothing is unwrapped, so the old password is
-  // never needed — which is the whole point for someone who has lost it.
-  const newKeyFn = bootSrc.slice(bootSrc.indexOf('window.fedipodNewKey'), bootSrc.indexOf('window.fedipodSignup'));
-  check(/wrapKeys\(keys, password\)/.test(newKeyFn) && /writeWrappedKeys\(/.test(newKeyFn) && !/unwrapKeys/.test(newKeyFn),
-    'a new key from the unlock pane is wrapped under the given password and written over the pod copy, unwrapping nothing');
+  // A new key from the unlock pane is written over the pod's copy as it is;
+  // nothing is unwrapped, so the old password is never needed — which is the
+  // whole point for someone who has lost it. And an opened key is written back
+  // as it is too, so the password is asked for once and never again.
+  const newKeyFn = bootSrc.slice(bootSrc.indexOf('window.fedipodNewKey'), bootSrc.indexOf('const SIGNUP_RETURN'));
+  check(/writeKeys\(remote, urls, keys\)/.test(newKeyFn) && !/unwrapKeys/.test(newKeyFn) && !/password/.test(newKeyFn.split('\n').filter((l) => !l.trim().startsWith('//')).join('\n')),
+    'a new key from the unlock pane is written over the pod copy as it is, unwrapping nothing and asking for nothing');
+  const unlockFn = bootSrc.slice(bootSrc.indexOf('window.fedipodUnlock'), bootSrc.indexOf('window.fedipodNewKey'));
+  check(/unwrapKeys\(doc, password\)/.test(unlockFn) && /writeKeys\(remote, urls, rec\)/.test(unlockFn),
+    'an opened pre-1.28.0 key is written back to the pod as it is, so no browser asks for the password again');
+  // Nothing in the browser build wraps a key any more, and sign-up takes no
+  // password: the pod's own login is the only place one is typed.
+  check(!/wrapKeys\b/.test(read('web/app/keystore.mjs').replace(/unwrapKeys/g, ''))
+    && /const \{ handle \} = answers/.test(read('web/app/signup.mjs')) && !/createAccountWithPod|mintCredential|pod-auth/.test(read('web/app/signup.mjs'))
+    && !/type="password"[^>]*name="password"/.test(signupPage) && !/type="email"/.test(signupPage),
+    'the sign-up page has no password or email field, sign-up takes none, and the keystore cannot wrap');
 
   // readBody destroyed the socket and never settled, so the handler awaited
   // for the life of the process.

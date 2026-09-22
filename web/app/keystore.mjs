@@ -1,22 +1,19 @@
-// keystore.mjs — the signing keys, made in the browser and locked under the
-// account password, so the copy that lives on the pod is ciphertext.
+// keystore.mjs — the signing keys, made in the browser and stored on the pod.
 //
 // The Node agent keeps keys.json (RSA + Ed25519 PEMs) on disk, 0600. A browser
 // has no disk it can carry to the next machine, so the durable copy lives on
-// the pod, wrapped here first: the pod's owner-only ACL keeps strangers out,
-// and the password keeps the pod's HOST out — which the ACL cannot do, and
-// which matters more for a key than for any other document, because whoever
-// holds it is you to every server in the fediverse. The shape inside is exactly
-// the agent's keys.json, so once unwrapped it is used unchanged.
+// the pod, in an owner-only container: the same access rule every private
+// document on the pod lives under, reachable through the pod's own login and
+// by nobody else. The shape is exactly the agent's keys.json, so it is used
+// unchanged. A new browser reads it with its pod session and asks for nothing.
 //
-// Each browser opens it once and keeps the opened copy in its own IndexedDB
-// (see keys-browser.mjs). That is what lets the service worker boot itself
-// after an idle kill with nobody present to type anything, and it is why a NEW
-// browser asks for the password and a returning one does not.
-//
-// Until 2026-09-09 the wrap existed here but nothing called it: signup PUT the
-// bare record and the loader read it plain, while this header, web/app/README.md
-// and claude/plans/browser-agent.md all said otherwise. Now they agree.
+// Until 2026-09-22 the pod's copy was encrypted under the pod password, so a
+// new browser had to ask for the password once. That sealed the key against
+// the pod's host, which the access rule cannot do, at the price of fedipod.net
+// asking for a pod password. Jeff decided the host is trusted the way it is
+// for every other document, and the password went. `unwrapKeys`,
+// `isKeyEnvelope` and `KeyPasswordNeeded` remain for accounts made before
+// then: their key is opened once with the password and stored as it is.
 
 const PEM = (der, label) => {
   const b64 = btoa(String.fromCharCode(...new Uint8Array(der)));
@@ -56,38 +53,24 @@ async function deriveAesKey(password, salt, iterations) {
     base, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
 }
 
-const toB64 = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf)));
 const fromB64 = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
 
-/** Whether a document read off the pod is a wrapped envelope rather than a bare
- *  keys record. Installs made before wrapping have the bare record there, and
- *  those still have to boot — the shape is what tells them apart. */
+/** Whether a document read off the pod is an envelope from before 1.28.0
+ *  rather than the keys record. The shape is what tells them apart. */
 export function isKeyEnvelope(doc) {
   return !!doc && doc.v === 1 && typeof doc.ct === 'string' && typeof doc.salt === 'string';
 }
 
-/** Thrown when the pod holds a wrapped key and nothing in this browser can open
- *  it. The page catches it by `code` and asks for the account password; the
- *  worker cannot ask anyone anything. */
+/** Thrown when the pod holds a key from before 1.28.0, under a password, and
+ *  nothing in this browser can open it. The page catches it by `code` and asks
+ *  for the password once; the worker cannot ask anyone anything. */
 export class KeyPasswordNeeded extends Error {
   constructor() { super('this browser needs your account password to unlock the signing key'); }
   code = 'key-password-needed';
 }
 
-/** Wrap the keys record under the password. The envelope names its own KDF and
- *  parameters, so unwrap needs only the password and this document. */
-export async function wrapKeys(keysRecord, password) {
-  const salt = crypto.getRandomValues(new Uint8Array(16));
-  const iv = crypto.getRandomValues(new Uint8Array(12));
-  const aes = await deriveAesKey(password, salt, PBKDF2_ITERATIONS);
-  const plaintext = new TextEncoder().encode(JSON.stringify(keysRecord));
-  const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, aes, plaintext);
-  return { v: 1, kdf: 'PBKDF2-SHA256', iterations: PBKDF2_ITERATIONS,
-    salt: toB64(salt), iv: toB64(iv), ct: toB64(ct) };
-}
-
-/** Unwrap an envelope wrapKeys made. Throws on a wrong password (AES-GCM auth
- *  failure) — which is how a new browser tells a typo from a real key. */
+/** Open an envelope from before 1.28.0. Throws on a wrong password (AES-GCM
+ *  auth failure) — which is how the page tells a typo from a real problem. */
 export async function unwrapKeys(envelope, password) {
   if (!envelope || envelope.v !== 1) throw new Error('not a key envelope');
   const aes = await deriveAesKey(password, fromB64(envelope.salt), envelope.iterations);

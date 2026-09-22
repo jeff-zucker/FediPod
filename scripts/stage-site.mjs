@@ -163,12 +163,6 @@ const copyAdmin = (from, to) => { fs.mkdirSync(to, { recursive: true });
       text = text
         .replace('<style>#actor-pick', '<style>#gw-shape-front,#do-drain,#do-log,#actor-pick')
         .replace('>Recover posts<', '>Refresh Feed<')
-        // Reveal the password row on the rotate-key warning: here the key on
-        // the pod is wrapped under the account password (keystore.mjs), so a
-        // replacement has to be wrapped too and there is nowhere to get one
-        // from but the owner. The Node agent keeps its key on disk and leaves
-        // this row hidden.
-        .replace('<div id="rotate-pw-row" hidden>', '<div id="rotate-pw-row">')
         .replace('Put back posts this machine lost, from what the pod still holds',
           'Refresh your feed from what your pod still holds');
     }

@@ -26,6 +26,32 @@ Which specs FediPod follows, and where it stops short: [specs-in-use.md](specs-i
 
 ## Getting an account
 
+<!-- CLAUDE 2026-09-22 — sign-up without a password on fedipod.net; the four steps and the other-browser paragraph replace the ones below; delete these markers when done -->
+1. Open https://fedipod.net and choose **create an account**.
+2. Choose your pod provider. If you need a pod, make one on the provider's
+   own sign-up page; the link is on the form. Then sign in at your pod. Your
+   password is typed at your pod only; fedipod.net never sees it.
+3. Back on fedipod.net, choose your handle. Your address is `@handle@yourpod`.
+   Both parts are permanent; display name, bio and pictures are set later in
+   the client. With a pod at its own host you also choose where the address
+   lives: on your pod, `@handle@yourpod`, or at this site,
+   `@handle@fedipod.net`. A pod on a suffix-based host gets the fedipod.net
+   address. The choice is permanent.
+4. That is all. Your signing key is stored on your pod, in a container only
+   you can read.
+
+Anyone can open your profile at `https://fedipod.net/@handle`, signed in or
+not.
+
+Your account then opens in the client. To use it from another browser, go to
+https://fedipod.net, enter your address and sign in at your pod. Nothing else
+is asked.
+If your account is from before 2026-09-22, the first browser after that asks
+once for the password you gave at sign-up, and stores the key on your pod as
+it is from then on. If you no longer have that password, choose "make a new
+signing key" on that screen.
+<!-- /CLAUDE -->
+<!-- CLAUDE 2026-09-22 — the original steps, kept for comparison; delete when the block above is reworked
 1. Open https://fedipod.net and choose **create an account**.
 2. Choose a pod: a new one at the provider you name, or a pod you already have.
 3. Choose your handle. Your address is `@handle@yourpod`. Both parts are
@@ -37,14 +63,12 @@ Which specs FediPod follows, and where it stops short: [specs-in-use.md](specs-i
 4. Enter your pod password once. It creates the account and locks your
    signing key. The password is not stored.
 
-Anyone can open your profile at `https://fedipod.net/@handle`, signed in or
-not.
-
 Your account then opens in the client. To use it from another browser, go to
 https://fedipod.net, enter your address, sign in at your pod, and unlock your
 key with your password once on that browser.
 If you have changed your pod password since you signed up, choose "make a new
 signing key" on that screen and use the password you use now.
+/CLAUDE -->
 
 ## What you can do
 

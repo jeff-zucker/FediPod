@@ -5,10 +5,10 @@ See `claude/plans/browser-agent.md` for the whole design and status.
 
 | file | what |
 |---|---|
-| `pod-auth.mjs` | The pod side of sign-in, browser-native: create a CSS account + pod, mint a client credential, and a DPoP-bound `fetch` that writes to the pod. The twin of `lib/device/account.mjs` + `vendor/idp-grant.cjs`. |
-| `keystore.mjs` | WebCrypto RSA/Ed25519 key generation, and wrapping the keys under the account password (PBKDF2-SHA256 + AES-GCM-256). The pod holds only the wrapped form, so the pod's host cannot sign as you. |
-| `keys-browser.mjs` | Importing a keys record for signing, and finding one: this browser's opened copy in IndexedDB first, else the pod's. A wrapped one the browser has not opened yet raises `KeyPasswordNeeded`, which `boot.mjs` answers with the unlock pane — once per browser. The same pane offers a new key wrapped under the password used now, for someone who no longer has the sign-up password. |
-| `signup.mjs` | The `fedipod setup` flow, in the browser, up to publish: account, pod, credential, keys locked on the pod (owner-only ACL written *before* the key). Produces the credential/keys/config shapes the agent already reads. |
+| `pod-auth.mjs` | A CSS account API client, browser-native: create an account + pod, mint a client credential, and a DPoP-bound `fetch`. Since 1.28.0 the app itself uses none of it — a pod is made on the provider's own page and the app runs on the pod's Solid-OIDC login — but the harnesses do, to make scratch pods and stand in for a login form. The twin of `lib/device/account.mjs` + `vendor/idp-grant.cjs`. |
+| `keystore.mjs` | WebCrypto RSA/Ed25519 key generation. The key is stored on the pod as it is, in the owner-only state container, since 1.28.0 (2026-09-22); `unwrapKeys` remains for accounts from before then, whose key is under the sign-up password until it is opened once. |
+| `keys-browser.mjs` | Importing a keys record for signing, and finding one: this browser's opened copy in IndexedDB first, else the pod's, read with the pod session. A pre-1.28.0 envelope raises `KeyPasswordNeeded`, which `boot.mjs` answers with the open-once pane; the same pane offers a new key to someone who no longer has that password. |
+| `signup.mjs` | The `fedipod setup` flow, in the browser, up to publish, on the pod session the person already holds: pod check, gateway attach, key stored on the pod (owner-only ACL written *before* the key), config. Takes no password and no credential. |
 | `shims/fedify-sig.mjs` | Browser stand-in for `@fedify/fedify/sig` (which will not bundle for a browser). `sign()` returns signed headers as data for the relay; `signRequest()` wraps it Fedify-shaped. Proven byte-identical to Fedify. |
 | `shims/node-crypto.mjs` | Browser stand-in for `node:crypto` — the small synchronous slice the agent uses, via crypto-browserify, plus native WebCrypto. |
 | `shims/safefetch.mjs` | Browser stand-in for `lib/shared/safefetch.mjs`. Pinning and the private-address checks are unnecessary here (a browser closes DNS rebinding itself); the BYTE BUDGET is not, so `readCapped` streams and stops at the cap exactly as the Node one does. |
@@ -26,7 +26,7 @@ Build: `node scripts/build-app.mjs`. Tests live in `claude/validation/`:
 | `deliver-relay.mjs` | lib's Deliverer, sending through the relay (a browser cannot set Date/Host). |
 | `agent.mjs` | Wires lib's store, publisher, intake and Mastodon facade with the browser edges. |
 | `sw-src.mjs` | The service worker that hosts the agent and answers the facade (Mastodon paths + the owner/manage paths); static files fall through. Built to `dist/sw.js`. |
-| `boot.mjs` | Page side: sign up / sign in, register the worker, hand it the boot material, route into `/admin/client/`; `?signout` / `?add` teardown. Built to `dist/boot.js`. |
+| `boot.mjs` | Page side: sign in at the pod (also the first half of sign-up), the identity screen on the way back, sign in by address, register the worker, route into `/admin/client/`; `?signout` / `?add` teardown. Built to `dist/boot.js`. |
 | `shims/` | Browser stand-ins the bundle needs: `node-crypto`, `node-path`, `node-url`, `node-fs`, `web-push`, `safefetch`, `prelude` (process + Buffer). |
 
 ## The manage surface & connected accounts (built 2026-09-08)
@@ -55,11 +55,14 @@ Tests: `claude/smoke-tests/admin-facade-smoke.mjs`, and eight harnesses in
 Solid server — `run` (the agent and the facade), `sw-run` (the same through the
 service worker, plus media upload and notification paging), `full-run` (the
 staged site, sign-up to Phanpy rendering), `unlock-run` (a browser with no opened
-key), `oidc-run`, `resume-run`, `gateway-run`, and `provider-csp-run` (the
-sign-up page's own policy, read from the browser's refusal reports). Three
-helpers sit beside them: `idp-login.mjs` fills the pod's login and consent
-screens, `worker-log.mjs` reads the agent's console out of the service worker,
-and the attach and relay stubs in `sw-run.mjs` stand in for the front.
+key, and a pre-1.28.0 account opened once), `oidc-run`, `resume-run`,
+`gateway-run`, and `provider-csp-run` (the sign-up page's own policy, read from
+the browser's refusal reports). Four helpers sit beside them: `idp-login.mjs`
+fills the pod's login and consent screens, `page-signup.mjs` drives the page
+through sign-up the way a person does since 1.28.0 (pod first, then the pod's
+login, then the identity screen), `worker-log.mjs` reads the agent's console
+out of the service worker, and the attach and relay stubs in `sw-run.mjs` stand
+in for the front.
 
 ## What this build does not have
 

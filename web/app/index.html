@@ -110,30 +110,29 @@ a { color: var(--accent); }
     <a href="https://github.com/jeff-zucker/FediPod">github.com/jeff-zucker/FediPod</a></p>
 </section>
 
-<!-- Shown only on a browser that has signed in but has never opened the signing
-     key. The key is kept on the pod encrypted under the sign-up password, so
-     the pod's host cannot sign as you; a browser opens it once and remembers.
-     The second block is for someone who no longer has that password: a new
-     key, locked under the password they use now. -->
+<!-- Shown only for an account made before 2026-09-22, whose signing key on
+     the pod is still under the password given at sign-up. It is opened once
+     and stored as it is from then on. The second block is for someone who no
+     longer has that password: a new key. -->
 <section id="unlock" hidden>
-  <h2>Unlock your signing key</h2>
-  <p>Your signing key is stored on your pod, locked under the password you gave
-  when you signed up, so nobody who can read your pod — your pod's host included
-  — can post as you. This browser has not opened it yet.</p>
+  <h2>Open your signing key</h2>
+  <p>Your account was made when this site kept your signing key under the
+  password you gave at sign-up. Enter that password once. Your key is then
+  stored on your pod as it is, behind your pod's own login, and no browser
+  asks again.</p>
   <p class="row">
     <input type="password" id="unlock-password" autocomplete="current-password"
-      placeholder="Your password" aria-label="Your password">
-    <button type="button" class="primary" id="unlock-go">unlock</button>
+      placeholder="The password you gave at sign-up" aria-label="The password you gave at sign-up">
+    <button type="button" class="primary" id="unlock-go">open</button>
   </p>
   <p class="err" id="unlock-error" role="alert"></p>
   <p class="hint">This browser only — it is not sent anywhere.</p>
-  <h2>Changed your pod password, or lost the old one?</h2>
-  <p>Make a new signing key, locked under the password you use now. Your account,
-  address, posts and followers stay as they are; other servers learn the new key
-  the next time they hear from you.</p>
+  <h2>Lost that password?</h2>
+  <p>Make a new signing key instead. Your account, address, posts and followers
+  stay as they are; other servers learn the new key the next time they hear
+  from you.</p>
   <p><button type="button" id="unlock-newkey">make a new signing key</button></p>
-  <p id="unlock-newkey-confirm" hidden>This replaces the key on your pod. Type the
-  password you use now in the field above, then
+  <p id="unlock-newkey-confirm" hidden>This replaces the key on your pod.
   <button type="button" id="unlock-newkey-go">make the new key</button></p>
 </section>
 
@@ -154,7 +153,7 @@ a { color: var(--accent); }
 
         <label for="provider">Pod provider</label>
         <!-- The providers listed at https://solidproject.org/get_a_pod that run Community
-             Solid Server, whose account API is what "A new pod" uses. Checked 2026-09-14. -->
+             Solid Server, whose sign-up page "Create your pod" links to. Checked 2026-09-14. -->
         <select id="provider" name="provider">
           <option value="https://solidcommunity.net">solidcommunity.net</option>
           <option value="https://privatedatapod.com">privatedatapod.com</option>
@@ -169,43 +168,28 @@ a { color: var(--accent); }
           <input type="url" id="providerOther" name="providerOther" autocomplete="url" placeholder="https://pods.example.org">
         </div>
 
-        <div id="podname-field">
-          <label for="podName">Pod username</label>
-          <input type="text" id="podName" name="podName" autocomplete="off" aria-describedby="podname-hint">
-          <p class="hint" id="podname-hint">Depending on your provider's setup, your pod will be at
-            either https://USERNAME.podprovider or https://podprovider/USERNAME.</p>
+        <div id="newpod-field">
+          <p>Make your pod on your provider's own page, then come back here.</p>
+          <p><a id="register-link" href="#" target="_blank" rel="noopener">Create your pod at your provider</a></p>
         </div>
 
-        <div id="pod-field" hidden>
-          <label for="pod">Pod address</label>
-          <input type="url" id="pod" name="pod" autocomplete="url" aria-describedby="pod-hint"
-            placeholder="https://alice.solidcommunity.net/ or https://server.example/alice/">
-          <p class="hint" id="pod-hint">The address of your pod: its own host, or a path on a
-            suffix-based host.</p>
-        </div>
-
-        <label for="email">Email (used as pod id)</label>
-        <input type="email" id="email" name="email" autocomplete="email" placeholder="you@example.org">
-
-        <label for="password">Pod password</label>
-        <input type="password" id="password" name="password" autocomplete="new-password"
-          aria-describedby="password-hint">
-        <p class="hint" id="password-hint">Your password is sent once, to make your account and to
-          lock your signing key. It is never stored. The credential used to set things up is
-          deleted when setup finishes — from then on this browser signs in through your pod,
-          the way any other Solid app does.</p>
+        <p class="hint" id="signin-hint">Your password is typed at your pod only. This site
+          never sees it: you sign in at your pod, and it sends you back here.</p>
       </fieldset>
       <p class="err" id="err-1" role="alert"></p>
       <p>
         <button type="button" id="cancel">Cancel</button>
-        <button type="button" class="primary" id="to-2">Continue</button>
+        <button type="button" class="primary" id="to-2">Sign in at your pod</button>
       </p>
     </div>
 
-    <!-- Screen 2: Your Fediverse Identity -->
+    <!-- Screen 2: Your Fediverse Identity — shown on return from the pod's login -->
     <div class="step" id="step-2" hidden>
       <fieldset>
         <legend>Your Fediverse Identity</legend>
+
+        <span id="signed-pod-label" class="grouplabel">Your pod</span>
+        <p id="signed-pod" role="status" aria-labelledby="signed-pod-label"></p>
 
         <label for="handle">Fediverse handle</label>
         <input type="text" id="handle" name="handle" autocomplete="off"
@@ -229,7 +213,7 @@ a { color: var(--accent); }
       <p class="err" id="form-error" role="alert"></p>
       <p>
         <button type="button" id="back-1">Back</button>
-        <button type="submit" class="primary" id="submit">Create Pod and Fediverse accounts</button>
+        <button type="submit" class="primary" id="submit">Create your Fediverse account</button>
       </p>
     </div>
 
