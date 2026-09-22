@@ -1,6 +1,6 @@
 {
   "name": "fedipod",
-  "version": "1.27.3",
+  "version": "1.27.4",
   "description": "Standalone single-actor ActivityPub agent whose wire face, RDF truth and state all live on a Solid pod (CSS). Bundles a Phanpy UI and a Mastodon client-API facade.",
   "type": "module",
   "license": "MIT",

@@ -1,5 +1,11 @@
 # Changes
 
+## 2026-09-21 (version 1.27.4)
+
+**The same as 1.27.3, under a number npm will take.** A publish of 1.27.3
+uploaded its tarball and then failed at the one-time code, and npm keeps
+such an upload as a staged version that nothing can publish over.
+
 ## 2026-09-21 (a DeviceAgent writes the featured collection it lacks — version 1.27.3)
 
 **An account already running gets its featured collection at start.** 1.27.2
