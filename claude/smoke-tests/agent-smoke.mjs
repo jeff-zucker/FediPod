@@ -1655,6 +1655,27 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   check(again === false && there.published() === 0, 'an actor that exists is left alone');
 }
 
+// --- 5c4. a missing featured collection is published at start ---
+{
+  const { Agent } = await import(path.join(root, 'run-agent.mjs'));
+  const mk = (featuredDoc) => {
+    const agent = new Agent({ home: '/tmp', log: () => {} });
+    let published = 0;
+    agent.urls = { featured: 'https://pod.example/fedipod/ap/featured' };
+    agent.remote = { getJson: async () => featuredDoc };
+    agent.publisher = { publishFeatured: async () => { published++; return 0; } };
+    return { agent, published: () => published };
+  };
+  const gone = mk(null);
+  check(await gone.agent.ensureFeaturedPublished() === true && gone.published() === 1,
+    'an account from before the collection existed writes it at start');
+  const there = mk({ id: 'https://pod.example/fedipod/ap/featured', type: 'OrderedCollection' });
+  check(await there.agent.ensureFeaturedPublished() === false && there.published() === 0,
+    'a featured collection that exists is left alone');
+  check(/ensureFeaturedPublished\(\)/.test(fs.readFileSync(path.join(root, 'run-agent.mjs'), 'utf8').split('async startActive(')[1] || ''),
+    'and the start-up repair runs the check');
+}
+
 // --- 5d. a pod that says 429/503 is left alone until Retry-After passes ---
 {
   const { RemotePod } = await import(path.join(root, 'lib/device/remote.mjs'));

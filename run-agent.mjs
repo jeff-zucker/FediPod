@@ -497,6 +497,18 @@ export class Agent {
     return true;
   }
 
+  // The featured collection was once written only on the first pin, so an
+  // account from before then has none, and every server that shows the
+  // profile is refused and asks again. One authenticated GET; the empty
+  // collection goes up when the pod lacks it. True when it had to.
+  async ensureFeaturedPublished() {
+    const doc = await this.remote.getJson(this.urls.featured);
+    if (doc?.id) return false;
+    this.log('featured collection missing from the pod — publishing it');
+    await this.publisher.publishFeatured();
+    return true;
+  }
+
   // Read-only mode: refresh the state cache periodically, and take over the
   // moment the active agent's lease frees.
   startViewer() {
@@ -588,6 +600,8 @@ export class Agent {
     if (repair) {
       this.ensureActorPublished()
         .catch(e => this.log(`actor check failed: ${e.message}`));
+      this.ensureFeaturedPublished()
+        .catch(e => this.log(`featured check failed: ${e.message}`));
       // The human page, rewritten only when what it shows has changed: one
       // local digest compare, and a write the first time after an upgrade.
       this.publisher.publishProfilePage()

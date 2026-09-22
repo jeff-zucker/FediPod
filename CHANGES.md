@@ -1,5 +1,15 @@
 # Changes
 
+## 2026-09-21 (a DeviceAgent writes the featured collection it lacks — version 1.27.3)
+
+**An account already running gets its featured collection at start.** 1.27.2
+said an account already running would write the collection on its next
+start; that was true of a browser account, which republishes its profile
+when its tab goes active, and not of a DeviceAgent, which republishes at
+start only when the actor document itself is missing. The DeviceAgent now
+makes one read for the collection at start and writes the empty one when
+the pod has none.
+
 ## 2026-09-21 (every account has a featured collection — version 1.27.2)
 
 **The pinned-posts collection exists before anything is pinned.** The actor
