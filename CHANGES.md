@@ -1,5 +1,18 @@
 # Changes
 
+## 2026-09-23 (what the log showed — version 1.32.1)
+
+**Mail was not landing, and the site was answering questions nobody needed
+asked.** A DeviceAgent now re-opens its inbox door every time it starts:
+the group's inbox had come back from a root move without public Append,
+so every delivery to it was refused for nine days and its followers were
+talking to a wall. A page no longer asks the site once a minute whether
+there is a new build when the build file has already said no — a third of
+everything the site was doing. A public document the pod would not give
+(an old account's pinned posts, a forum count nobody wrote) is held at the
+edge for two minutes, so the servers that keep asking are answered there.
+And a page on the test alias talks to the alias, not to the real site.
+
 ## 2026-09-23 (the bar, and notices — version 1.32.0)
 
 **The bar reads as two groups.** The client group is as it was; the account

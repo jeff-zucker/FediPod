@@ -355,8 +355,9 @@ export class BrowserAgent {
     // somebody reads from counting as a quiet one. Only a closed address
     // stops the boot; a gateway that cannot be reached is no reason to
     // refuse a sign-in.
-    this.gatewayApi = null;
-    try { if (config.gateway?.url) this.gatewayApi = `${new URL(config.gateway.url).origin}/api`; } catch { this.gatewayApi = null; }
+    // At the page's own origin, as the relay is: a page on the test alias
+    // asked the real site instead and could not get past its preflight.
+    this.gatewayApi = config.gateway?.url ? `${frontOrigin.replace(/\/$/, '')}/api` : null;
     this.doorKey = doorKeyOf(config.gateway?.url) || config.handle;
     this.gatewayStanding = null;
     const standing = await this.openAtGateway();

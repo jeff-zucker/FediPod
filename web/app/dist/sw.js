@@ -71913,12 +71913,7 @@ var BrowserAgent = class _BrowserAgent {
       sessionFetch: session.fetch,
       onGone: () => this.publisher.publishCollections({ followers: true })
     });
-    this.gatewayApi = null;
-    try {
-      if (config.gateway?.url) this.gatewayApi = `${new URL(config.gateway.url).origin}/api`;
-    } catch {
-      this.gatewayApi = null;
-    }
+    this.gatewayApi = config.gateway?.url ? `${frontOrigin.replace(/\/$/, "")}/api` : null;
     this.doorKey = doorKeyOf(config.gateway?.url) || config.handle;
     this.gatewayStanding = null;
     const standing = await this.openAtGateway();

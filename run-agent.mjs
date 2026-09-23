@@ -53,6 +53,7 @@ import { exposureProblem, hostLabel } from './lib/shared/guard.mjs';
 import { pendingSteps } from './lib/device/migrate.mjs';
 import { apUrls, assertionKeyId , publicHandle } from './lib/core/wire.mjs';
 import { followActor, unfollowActor, resolveHandle } from './lib/core/social.mjs';
+import * as podInbox from './lib/pod/inbox.mjs';
 
 export class Agent {
   constructor({ home, log }) {
@@ -510,6 +511,19 @@ export class Agent {
     return true;
   }
 
+  // The inbox's door must be open to the world (or to the gateway alone, in
+  // locked mode) or nothing anyone sends ever lands. The permission is written
+  // at setup, and a container made again later — a root move, a pod rebuilt —
+  // came back without it: the group's inbox on fp2 refused every delivery for
+  // nine days while its agent ran on, healthy-looking. One write per start,
+  // and it is idempotent.
+  async ensureInboxOpen() {
+    const g = this.store.getConfig()?.gateway;
+    const posture = g?.mode === 'locked' && g.webId ? { gatewayWebId: g.webId } : 'open';
+    await podInbox.setPosture(this.remote, this.urls, posture);
+    return posture;
+  }
+
   // Read-only mode: refresh the state cache periodically, and take over the
   // moment the active agent's lease frees.
   startViewer() {
@@ -607,6 +621,8 @@ export class Agent {
         .catch(e => this.log(`actor check failed: ${e.message}`));
       this.ensureFeaturedPublished()
         .catch(e => this.log(`featured check failed: ${e.message}`));
+      this.ensureInboxOpen()
+        .catch(e => this.log(`inbox door check failed: ${e.message}`));
       // The human page, rewritten only when what it shows has changed: one
       // local digest compare, and a write the first time after an upgrade.
       this.publisher.publishProfilePage()

@@ -537,6 +537,14 @@ try {
       'with a receipt beside it, signed with that row\'s secret');
   }
 
+  // ---- a document the pod would not give is held at the edge ---------------
+  {
+    const miss = await get('/u/alice/ap/featured-nothing-here');
+    check(miss.status === 404 && /s-maxage=120/u.test(miss.headers.get('netlify-cdn-cache-control') || '')
+      && miss.headers.get('access-control-allow-origin') === '*',
+      `a missing public document answers 404 and is held at the edge two minutes (${miss.status}, ${miss.headers.get('netlify-cdn-cache-control')})`);
+  }
+
   // ---- notices from the operator ---------------------------------------------
   // Anyone reads them; only the admin writes them; the page and its script
   // are served; a handle may not take the page's name.

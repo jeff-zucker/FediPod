@@ -51,6 +51,10 @@
         const b = await fetch('/build.json', { cache: 'no-store', headers: { accept: 'application/json' } })
           .then(x => (x.ok ? x.json() : null)).catch(() => null);
         if (b?.build && b.build !== myBuild) { go(); return; }
+        // A build that matched is the whole answer. Falling through here asked
+        // the site's function the same question once a minute from every open
+        // tab, for nothing — a third of everything the site was doing.
+        if (b?.build) return;
       }
       const r = await fetch('/api/handle?handle=__probe__', { cache: 'no-store', headers: { accept: 'application/json' } });
       const v = (await r.json())?.version;
