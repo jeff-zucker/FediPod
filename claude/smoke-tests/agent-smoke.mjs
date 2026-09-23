@@ -11105,6 +11105,24 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
   r = await gw.handleDelivery(mkReq28({ type: 'Follow', actor: 'https://s.example/u', object: ident.actorUrl }),
     ident, { podPut: failPod.put });
   check(r.status === 502, 'a pod-write failure returns 5xx so the sender retries — the buffer is preserved');
+
+  // A paused account (front-core: accounts that go quiet): content is taken
+  // and discarded with the same quiet 202 a blocked sender gets, control
+  // still lands, and a forwarded delivery says what it was and how big.
+  const paused = mkPut();
+  r = await gw.handleDelivery(mkReq28({ type: 'Create', actor: 'https://friend.example/actor',
+    object: { type: 'Note', to: [ident.followersUrl] } }), ident, { podPut: paused.put, paused: true });
+  check(r.status === 202 && r.reason === 'paused' && paused.puts.length === 0,
+    'paused: a post from someone followed is accepted and discarded, no pod write');
+  r = await gw.handleDelivery(mkReq28({ type: 'Follow', actor: 'https://stranger.example/u/z', object: ident.actorUrl }),
+    ident, { podPut: paused.put, paused: true });
+  check(r.status === 202 && r.reason !== 'paused' && paused.puts.length === 2 && r.content === false && r.bytes > 0,
+    'paused: a Follow still reaches the pod, and the result says control, with its size');
+  const counted = mkPut();
+  r = await gw.handleDelivery(mkReq28({ type: 'Create', actor: 'https://friend.example/actor',
+    object: { type: 'Note', to: [ident.followersUrl] } }), ident, { podPut: counted.put });
+  check(r.status === 202 && r.content === true && r.bytes > 0 && counted.puts.length === 2,
+    'not paused: the same post is forwarded and reported as content, so the door can count it');
   delete process.env.AP_ALLOW_PRIVATE_TARGETS;
 
   // The drain acts on a receipt ONLY in trust mode.

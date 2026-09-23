@@ -33662,6 +33662,7 @@ async function podForFrontedAddress(handle) {
     `/.well-known/webfinger?resource=${encodeURIComponent(`acct:${handle}@${location.host}`)}`,
     { headers: { accept: "application/jrd+json, application/json" } }
   ).catch(() => null);
+  if (res?.status === 410) throw new Error(`@${handle}@${location.host} is closed: nothing on the pod behind it was touched, but the address is gone for good.`);
   if (!res || res.status >= 400) throw new Error(`nobody at this site is called @${handle}@${location.host}`);
   const doc = await res.json().catch(() => ({}));
   const podActorId = (doc.aliases || []).find((a) => /\/ap\/actor$/u.test(String(a)));
@@ -33809,7 +33810,8 @@ if (typeof document !== "undefined") (async () => {
         // login and the identity screen lands here.
         "no-account-here": { title: "No FediPod account in that pod", retry: "Create one on this pod", go: () => showIdentity() },
         "no-account": { title: "No FediPod account in that pod", retry: "Create one on this pod", go: () => showIdentity() },
-        "device-account": { title: "This account is run from a device", retry: "Use another pod", go: signIn }
+        "device-account": { title: "This account is run from a device", retry: "Use another pod", go: signIn },
+        "address-closed": { title: "This address is closed", retry: "Sign in with another account", go: signIn }
       }[e.code];
       if (e.code === "sign-in-refused" && once("fedipod-renewing")) {
         $("loading").hidden = true;

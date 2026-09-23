@@ -13,8 +13,9 @@
 //     kind, following, blocklist,   // public facts for the edge concerns-us check
 //     followersUrl, notesPrefix,    // derived if omitted
 //     gatewayWebId, hmacSecret,     // this box's WebID + the user's receipt secret
-//     appendToken                   // Append credential for THIS user's pod inbox
-//   }
+//     appendToken,                  // Append credential for THIS user's pod inbox
+//     openedAt, pausedAt, closedAt  // when the owner was last here; paused or closed
+//   }                               // by them (see "accounts that go quiet" in front-core)
 //
 // Env:
 //   FEDIPOD_FRONT_HOST     "fedipod.net"
@@ -22,6 +23,8 @@
 //   FEDIPOD_DIRECTORY_URL  a JSON map { handle: record, … } (public policy fields only;
 //                          keep appendToken/hmacSecret out of anything world-readable)
 //   FEDIPOD_ADMIN_WEBID    the WebID allowed to read the roster at /roster
+//   FEDIPOD_PAUSE_ITEMS    content deliveries since a sign-in before an account pauses (5000)
+//   FEDIPOD_CLOSE_DAYS     days without a sign-in before an address closes (183)
 
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -157,6 +160,14 @@ export default async function handler(request) {
     // Per-user Append to that user's pod inbox — with the user's credential
     // when the record carries one, plain when the inbox is public-Append
     // (FediPod's default posture).
+    // What arrived for an account since its owner last signed in, one small
+    // record per sign-in, in a store of its own so a delivery never writes
+    // the directory row (front-core: accounts that go quiet).
+    readReceived: async (key) => getStore('received').get(key, { type: 'json' }),
+    writeReceived: async (key, n) => getStore('received').setJSON(key, n),
+    dropReceived: async (key) => getStore('received').delete(key),
+    pauseItems: process.env.FEDIPOD_PAUSE_ITEMS,
+    closeDays: process.env.FEDIPOD_CLOSE_DAYS,
     podPut: async (handle, url, body, ct) => {
       const rec = map[handle];
       if (!rec) return false;

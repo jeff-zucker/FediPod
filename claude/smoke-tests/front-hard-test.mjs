@@ -98,6 +98,10 @@ const directory = {
   },
 };
 const attached = {};
+// What arrived for an account since its owner signed in (front-core: accounts
+// that go quiet). The cap and the window are set small here so a test can
+// reach them.
+const received = new Map();
 const front = http.createServer(async (req, res) => {
   const body = await new Promise((resolve) => {
     const chunks = [];
@@ -124,6 +128,10 @@ const front = http.createServer(async (req, res) => {
     lookup: (h) => directory[h] || attached[h] || null,
     listDirectory: async () => ({ ...directory, ...attached }),
     putDirectory: async (h, rec) => { attached[h] = rec; },
+    readReceived: async (k) => received.get(k) || null,
+    writeReceived: async (k, n) => { received.set(k, n); },
+    dropReceived: async (k) => { received.delete(k); },
+    pauseItems: 3, closeDays: 30,
     // Mirrors the adapter: only attach-created rows can go; seeds survive.
     removeDirectory: async (h) => { delete attached[h]; return !directory[h]; },
     podPut: async (_h, url, b, ct) => {
@@ -520,6 +528,89 @@ try {
     check(!inboxWrites.some(w => w.url.includes('/fedipod-bb/c/gardening/ap/inbox/')), 'and never into the category\'s own');
     check(inboxWrites.some(w => w.url.includes('/fedipod-bb/ap/inbox/') && w.url.endsWith('.receipt.json')),
       'with a receipt beside it, signed with that row\'s secret');
+  }
+
+  // ---- accounts that go quiet ----------------------------------------------
+  // The owner's sign-in stamps the account; content since then is counted;
+  // at the cap the door accepts and discards content and still lands
+  // control; a sign-in lifts it; the owner can pause and close; a closed
+  // address answers 410 everywhere and stays taken; an address nobody opens
+  // for the window is closed by time.
+  {
+    const asOwner = { 'content-type': 'application/json', authorization: 'Bearer path-owner', dpop: 'proof' };
+    const post = (p, body, headers = asOwner) => get(p, { method: 'POST', headers, body: JSON.stringify(body) });
+    const att = await post('/api/attach', { handle: 'robin', podHome: POD, fronted: true });
+    check(att.status === 201 && attached.robin?.actorUrl === `${ORIGIN}/u/robin/ap/actor`,
+      `robin attaches as a fronted account whose owner signs in from a browser (${att.status})`);
+    const robinActor = `${ORIGIN}/u/robin/ap/actor`;
+    const deliverTo = (activity, handle = 'robin') => get(`/u/${handle}/ap/inbox/`, {
+      method: 'POST', headers: { 'content-type': 'application/activity+json' }, body: JSON.stringify(activity) });
+    const aPost = (n) => ({ '@context': 'https://www.w3.org/ns/activitystreams', id: `https://m.example/a/r${n}`, type: 'Create',
+      actor: 'https://m.example/u/friend', to: [robinActor],
+      object: { id: `https://m.example/n/r${n}`, type: 'Note', content: 'hi robin', to: [robinActor] } });
+    const aFollow = (n) => ({ '@context': 'https://www.w3.org/ns/activitystreams', id: `https://m.example/f/r${n}`, type: 'Follow',
+      actor: `https://m.example/u/f${n}`, object: robinActor });
+    const itemsNow = () => inboxWrites.filter(w => !w.url.endsWith('.receipt.json')).length;
+
+    let before = itemsNow();
+    for (let i = 1; i <= 4; i++) await deliverTo(aPost(i));
+    check(itemsNow() === before + 4, 'before its owner has ever signed in nothing is counted: four posts, four writes');
+
+    const opened = await (await post('/api/open', { handle: 'robin' })).json();
+    check(opened.ok === true && typeof opened.openedAt === 'string' && opened.received.items === 0
+      && opened.paused === false && opened.closed === false && opened.pauseItems === 3,
+      'signing in stamps the account and starts the count at zero');
+    check((await post('/api/open', { handle: 'robin' }, { ...asOwner, authorization: 'Bearer someone-else' })).status === 403,
+      'only the owner can say they are here');
+    before = itemsNow();
+    for (let i = 5; i <= 7; i++) await deliverTo(aPost(i));
+    check(itemsNow() === before + 3, 'three posts since the sign-in are written (the cap here is three)');
+    const dropped = await deliverTo(aPost(8));
+    check(dropped.status === 202 && itemsNow() === before + 3,
+      `the next is accepted and discarded: the account is paused (${dropped.status}, ${received.get(`robin/${opened.openedAt}`)?.items} counted)`);
+    const fol = await deliverTo(aFollow(1));
+    check(fol.status === 202 && itemsNow() === before + 4, 'a Follow still lands while paused');
+
+    const again = await (await post('/api/open', { handle: 'robin' })).json();
+    check(again.paused === false && again.received.items === 0 && !received.has(`robin/${opened.openedAt}`),
+      'signing in again ends the pause, the count starts over and the old count is dropped');
+    before = itemsNow();
+    await deliverTo(aPost(9));
+    check(itemsNow() === before + 1, 'and posts are written again');
+
+    const p1 = await (await post('/api/pause', { handle: 'robin', paused: true })).json();
+    check(p1.paused === true && p1.pausedBy === 'owner', 'the owner can pause the account');
+    before = itemsNow();
+    await deliverTo(aPost(10)); await deliverTo(aFollow(2));
+    check(itemsNow() === before + 1, 'then a post is discarded and a Follow lands');
+    const reopened = await (await post('/api/open', { handle: 'robin' })).json();
+    check(reopened.paused === true && reopened.pausedBy === 'owner', 'a pause the owner set survives a sign-in');
+    const p0 = await (await post('/api/pause', { handle: 'robin', paused: false })).json();
+    check(p0.paused === false && p0.pausedBy === null, 'until the owner lifts it');
+    check((await post('/api/pause', { handle: 'robin', paused: 'yes' })).status === 400, 'paused must be true or false');
+
+    check((await post('/api/close', { handle: 'robin' })).status === 400, 'closing needs confirm: true');
+    const closed = await (await post('/api/close', { handle: 'robin', confirm: true })).json();
+    check(closed.closed === true && closed.closedBy === 'owner' && typeof attached.robin.closedAt === 'string',
+      'the owner closes the address for good');
+    const wfClosed = await get(`/.well-known/webfinger?resource=acct:robin@${HOST}`);
+    check(wfClosed.status === 410 && wfClosed.headers.get('access-control-allow-origin') === '*', `its handle answers 410 (${wfClosed.status})`);
+    check((await get('/u/robin/ap/actor')).status === 410 && (await get('/u/robin/ap/outbox')).status === 410, 'its actor and outbox answer 410');
+    check((await deliverTo(aPost(11))).status === 410 && (await deliverTo(aFollow(3))).status === 410, 'its door answers 410 to content and control alike');
+    check((await post('/api/open', { handle: 'robin' })).status === 410, 'a sign-in is told the address is closed');
+    check((await post('/api/close', { handle: 'robin', confirm: true })).status === 200, 'closing again changes nothing');
+    check((await (await get('/api/handle?handle=robin')).json()).available === false, 'and the name stays taken');
+
+    const att2 = await post('/api/attach', { handle: 'lark', podHome: POD, fronted: true });
+    const larkOpen = await post('/api/open', { handle: 'lark' });
+    check(att2.status === 201 && larkOpen.status === 200, 'lark attaches and signs in');
+    attached.lark.openedAt = new Date(Date.now() - 40 * 86400_000).toISOString();   // past the 30-day window set above
+    check((await get(`/.well-known/webfinger?resource=acct:lark@${HOST}`)).status === 410
+      && attached.lark.closedBy === 'quiet' && typeof attached.lark.closedAt === 'string',
+      'an address nobody opened for the window is closed the next time anything asks, and written down as closed');
+    check((await post('/api/open', { handle: 'lark' })).status === 410, 'and stays closed when its owner comes back');
+    check((await get(`/.well-known/webfinger?resource=acct:alice@${HOST}`)).status === 200,
+      'an account whose owner never signed in from a browser is untouched by any of this');
   }
 
 } finally {

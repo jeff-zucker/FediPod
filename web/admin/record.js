@@ -94,6 +94,7 @@ function resetConfirm() {
   for (const k of Object.keys(LIFECYCLE)) $(`warn-${k}`)?.hidden !== undefined && ($(`warn-${k}`).hidden = true);
   $('confirm-handle').value = '';
   $('confirm-handle-move').value = '';
+  $('confirm-handle-close').value = '';
   $('move-target').value = '';
 }
 function closePanels(keep = null) {

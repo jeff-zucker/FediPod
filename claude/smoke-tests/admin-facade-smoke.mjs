@@ -154,6 +154,27 @@ assert.equal(r.status, 200); assert.equal(r.json.configured, true); assert.equal
 assert.equal(r.json.hasSecret, true); assert.equal(r.json.hmacSecret, undefined);
 ok('GET /gateway reports config without leaking the secret');
 
+// The account's standing at the gateway rides along when the agent holds
+// one, and the pause and close controls go through the agent to the gateway.
+agent.gatewayStanding = { status: 200, paused: true, pausedBy: 'owner', closed: false };
+r = await call(facade, 'GET', '/gateway');
+assert.equal(r.status, 200); assert.equal(r.json.standing.paused, true); assert.equal(r.json.standing.pausedBy, 'owner');
+ok('GET /gateway carries the account\'s standing at the gateway');
+agent.gatewayApi = 'https://fedipod.net/api';
+agent.pauseAtGateway = async (p) => ({ status: 200, ok: true, paused: p, pausedBy: p ? 'owner' : null });
+agent.closeAtGateway = async () => ({ status: 200, ok: true, closed: true, closedBy: 'owner' });
+r = await call(facade, 'POST', '/gateway/pause', { paused: false });
+assert.equal(r.status, 200); assert.equal(r.json.paused, false);
+r = await call(facade, 'POST', '/gateway/pause', { paused: 'yes' });
+assert.equal(r.status, 400);
+ok('POST /gateway/pause pauses and resumes through the agent, and wants a boolean');
+r = await call(facade, 'POST', '/gateway/close', { confirm: 'wrong' });
+assert.equal(r.status, 400);
+r = await call(facade, 'POST', '/gateway/close', { confirm: 'fp1' });
+assert.equal(r.status, 200); assert.equal(r.json.closed, true);
+ok('POST /gateway/close needs the typed handle, then closes through the agent');
+agent.gatewayStanding = null;
+
 // POST /rotate-key → delegates to the agent
 r = await call(facade, 'POST', '/rotate-key');
 assert.equal(r.status, 200); assert.equal(r.json.ok, true); assert.equal(r.json.changed, true);

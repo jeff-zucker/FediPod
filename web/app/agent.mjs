@@ -137,10 +137,35 @@ export class BrowserAgent {
     return true;
   }
 
+  // One call to the gateway's owner API, proved with the pod session. What
+  // comes back on 200 or 410 is the account's standing there, kept for the
+  // manage page; anything else is logged and forgotten.
+  async tellGateway(what, body) {
+    if (!this.gatewayApi) return null;
+    let res;
+    try {
+      res = await this.sessionFetch(`${this.gatewayApi}/${what}`, {
+        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
+      });
+    } catch (e) { this.log(`gateway ${what}: ${e.message}`); return null; }
+    const json = await res.json().catch(() => ({}));
+    const out = { status: res.status, ...json };
+    if (res.status === 200 || res.status === 410) this.gatewayStanding = out;
+    else this.log(`gateway ${what}: ${res.status} ${json.error || ''}`);
+    return out;
+  }
+  openAtGateway() { return this.tellGateway('open', { handle: this.doorKey }); }
+  pauseAtGateway(paused) { return this.tellGateway('pause', { handle: this.doorKey, paused: !!paused }); }
+  closeAtGateway() { return this.tellGateway('close', { handle: this.doorKey, confirm: true }); }
+  static OPEN_EVERY_MS = 60 * 60_000;
+
   // Become the active agent: renew the lease, then start what a viewer skips —
   // publish the face, drain the inbox, run the mirrors.
   async goActive() {
     this.viewer = false;
+    // Reading here is being here: the gateway hears so once an hour.
+    clearInterval(this._openTimer);
+    this._openTimer = setInterval(() => { this.openAtGateway(); }, BrowserAgent.OPEN_EVERY_MS);
     this.lease.onLost = () => this.demote();
     this.lease.startRenewal();
     try {
@@ -179,6 +204,7 @@ export class BrowserAgent {
     this.viewer = true;
     this.log('another device took over — read-only here');
     this.lease.stopRenewal();
+    clearInterval(this._openTimer); this._openTimer = null;
     this.intake?.stop?.();
     // The delivery queue as well. Its timer starts in the Deliverer's
     // constructor and nothing here ever switched it off, so a demoted device
@@ -321,6 +347,28 @@ export class BrowserAgent {
       handle: doorKeyOf(config.gateway?.url) || config.handle, sessionFetch: session.fetch,
       onGone: () => this.publisher.publishCollections({ followers: true }),
     });
+
+    // The gateway this account's mail comes through, and the account's own
+    // standing there — paused, closed, how much arrived unread (front-core:
+    // accounts that go quiet). The gateway is told on every sign-in and
+    // hourly while this device is active: that is what keeps an account
+    // somebody reads from counting as a quiet one. Only a closed address
+    // stops the boot; a gateway that cannot be reached is no reason to
+    // refuse a sign-in.
+    this.gatewayApi = null;
+    try { if (config.gateway?.url) this.gatewayApi = `${new URL(config.gateway.url).origin}/api`; } catch { this.gatewayApi = null; }
+    this.doorKey = doorKeyOf(config.gateway?.url) || config.handle;
+    this.gatewayStanding = null;
+    const standing = await this.openAtGateway();
+    if (standing?.status === 410) {
+      const host = (() => { try { return new URL(this.gatewayApi).host; } catch { return 'the gateway'; } })();
+      const address = this.doorKey.includes('@') ? `@${this.doorKey}` : `@${this.doorKey}@${host}`;
+      const why = standing.closedBy === 'owner' ? 'you closed it' : 'nothing opened it for six months';
+      const e = new Error(`${address} is closed at ${host}: ${why}, and a closed address does not come back.`
+        + ` Everything on your pod is untouched. The sign-in used here was ${webId}.`);
+      e.code = 'address-closed';
+      throw e;
+    }
 
     this.publisher = new Publisher({
       config: this.store.getConfig(), remote: this.remote, store: this.store,

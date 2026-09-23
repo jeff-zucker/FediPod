@@ -1,5 +1,24 @@
 # Changes
 
+## 2026-09-23 (accounts that go quiet — version 1.31.0)
+
+**An account nobody opens is paused, then closed.** The gateway holds no
+mail: every delivery it accepts is written into the owner's pod, read only
+while their browser is open. It now keeps two facts about each browser
+account — when its owner last signed in or posted, and how much content has
+arrived since — and acts on them. After about 5,000 posts, replies, likes,
+boosts and edits since the owner was last here the account is **paused**:
+content is accepted and discarded, follows, unfollows, moves, deletions and
+blocks still land, and the owner's next sign-in ends it. After six months
+without a sign-in the address is **closed** for good: its handle, actor and
+door answer 410 Gone, the name stays taken, and nothing on the pod is
+touched. The manage page has **Pause my account**, **Resume my account** and
+**Close this address**; a pause the owner sets lasts until they lift it.
+Only accounts opened from a browser are counted — a DeviceAgent drains its
+own inbox as it runs — and accounts from before this release are counted
+from their next sign-in. A gateway operator sets the cap and the window with
+`FEDIPOD_PAUSE_ITEMS` and `FEDIPOD_CLOSE_DAYS`.
+
 ## 2026-09-23 (a DeviceAgent moves in; the forum speaks Lemmy's terms — version 1.30.0)
 
 **A DeviceAgent moves an address from another gateway.** Setting up with a

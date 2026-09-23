@@ -69919,6 +69919,8 @@ var ADMIN_PATHS = /* @__PURE__ */ new Set([
   "/park",
   "/revive",
   "/takeover",
+  "/gateway/pause",
+  "/gateway/close",
   "/fediacct/connect",
   "/fediacct/disconnect",
   "/fediacct/callback"
@@ -70023,7 +70025,11 @@ var AdminFacade = class {
             frontActor: g?.frontActor || null,
             mode: g?.mode || "off",
             hasSecret: !!g?.hmacSecret,
-            stats: a.store.read("gateway-stats.json", { verified: 0, unverified: 0, lastAt: null })
+            stats: a.store.read("gateway-stats.json", { verified: 0, unverified: 0, lastAt: null }),
+            // The account's standing at the gateway — paused, closed — as the
+            // gateway last said it (agent.mjs tellGateway). The record page
+            // shows its pause and close controls only when this is here.
+            standing: a.gatewayStanding || null
           });
         }
         case "/deadletter":
@@ -70166,6 +70172,24 @@ var AdminFacade = class {
       case "/takeover": {
         if (!await a.requestTakeover?.()) return json2(503, { error: "the lease could not be taken \u2014 the pod refused the write" });
         return json2(200, { ok: true, mode: a.status().mode });
+      }
+      // The account's standing at its gateway: paused by its owner, or closed
+      // for good (front-core: accounts that go quiet). Both go to the gateway
+      // with the pod session as proof, and its answer is the new standing.
+      case "/gateway/pause": {
+        if (typeof body.paused !== "boolean") return json2(400, { error: "paused must be true or false" });
+        if (!a.pauseAtGateway || !a.gatewayApi) return json2(501, { error: "this account is not at a gateway" });
+        const r = await a.pauseAtGateway(body.paused);
+        if (!r) return json2(502, { error: "the gateway could not be reached" });
+        return json2(r.status === 200 ? 200 : r.status, r);
+      }
+      case "/gateway/close": {
+        const handle7 = String(a.store.getConfig()?.handle || "").toLowerCase();
+        if (!handle7 || String(body.confirm || "").toLowerCase() !== handle7) return json2(400, { error: "type the handle to confirm" });
+        if (!a.closeAtGateway || !a.gatewayApi) return json2(501, { error: "this account is not at a gateway" });
+        const r = await a.closeAtGateway();
+        if (!r) return json2(502, { error: "the gateway could not be reached" });
+        return json2(r.status === 200 ? 200 : r.status, r);
       }
       // Going quiet, and coming back. The record page's active/parked select.
       case "/park": {
@@ -71708,10 +71732,46 @@ var BrowserAgent = class _BrowserAgent {
     this.log("took over from the other device (action here)");
     return true;
   }
+  // One call to the gateway's owner API, proved with the pod session. What
+  // comes back on 200 or 410 is the account's standing there, kept for the
+  // manage page; anything else is logged and forgotten.
+  async tellGateway(what, body) {
+    if (!this.gatewayApi) return null;
+    let res;
+    try {
+      res = await this.sessionFetch(`${this.gatewayApi}/${what}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body)
+      });
+    } catch (e) {
+      this.log(`gateway ${what}: ${e.message}`);
+      return null;
+    }
+    const json2 = await res.json().catch(() => ({}));
+    const out = { status: res.status, ...json2 };
+    if (res.status === 200 || res.status === 410) this.gatewayStanding = out;
+    else this.log(`gateway ${what}: ${res.status} ${json2.error || ""}`);
+    return out;
+  }
+  openAtGateway() {
+    return this.tellGateway("open", { handle: this.doorKey });
+  }
+  pauseAtGateway(paused) {
+    return this.tellGateway("pause", { handle: this.doorKey, paused: !!paused });
+  }
+  closeAtGateway() {
+    return this.tellGateway("close", { handle: this.doorKey, confirm: true });
+  }
+  static OPEN_EVERY_MS = 60 * 6e4;
   // Become the active agent: renew the lease, then start what a viewer skips —
   // publish the face, drain the inbox, run the mirrors.
   async goActive() {
     this.viewer = false;
+    clearInterval(this._openTimer);
+    this._openTimer = setInterval(() => {
+      this.openAtGateway();
+    }, _BrowserAgent.OPEN_EVERY_MS);
     this.lease.onLost = () => this.demote();
     this.lease.startRenewal();
     try {
@@ -71738,6 +71798,8 @@ var BrowserAgent = class _BrowserAgent {
     this.viewer = true;
     this.log("another device took over \u2014 read-only here");
     this.lease.stopRenewal();
+    clearInterval(this._openTimer);
+    this._openTimer = null;
     this.intake?.stop?.();
     this.deliverer?.stop?.();
     this.importer?.stop?.();
@@ -71851,6 +71913,29 @@ var BrowserAgent = class _BrowserAgent {
       sessionFetch: session.fetch,
       onGone: () => this.publisher.publishCollections({ followers: true })
     });
+    this.gatewayApi = null;
+    try {
+      if (config.gateway?.url) this.gatewayApi = `${new URL(config.gateway.url).origin}/api`;
+    } catch {
+      this.gatewayApi = null;
+    }
+    this.doorKey = doorKeyOf(config.gateway?.url) || config.handle;
+    this.gatewayStanding = null;
+    const standing = await this.openAtGateway();
+    if (standing?.status === 410) {
+      const host = (() => {
+        try {
+          return new URL(this.gatewayApi).host;
+        } catch {
+          return "the gateway";
+        }
+      })();
+      const address = this.doorKey.includes("@") ? `@${this.doorKey}` : `@${this.doorKey}@${host}`;
+      const why = standing.closedBy === "owner" ? "you closed it" : "nothing opened it for six months";
+      const e = new Error(`${address} is closed at ${host}: ${why}, and a closed address does not come back. Everything on your pod is untouched. The sign-in used here was ${webId}.`);
+      e.code = "address-closed";
+      throw e;
+    }
     this.publisher = new Publisher({
       config: this.store.getConfig(),
       remote: this.remote,

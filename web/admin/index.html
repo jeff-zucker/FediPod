@@ -321,6 +321,14 @@ pre { overflow-x: auto; background: #0001; padding: .6rem; border-radius: .3rem;
     title="   Attach this account to a mail-filtering gateway">Attach to a gateway</button>
   <button type="button" id="gateway-open-detach" class="inline danger" hidden
     title="   Go back to your pod's own inbox">Detach from gateway</button>
+  <!-- Shown only when the agent reports the account's standing at the gateway
+       (the browser build does; a DeviceAgent's admin does not). -->
+  <button type="button" id="gateway-pause" class="inline" hidden
+    title="   Stop keeping the posts sent to you until you resume; follows still arrive">Pause my account</button>
+  <button type="button" id="gateway-resume" class="inline" hidden
+    title="   Keep the posts sent to you again">Resume my account</button>
+  <button type="button" id="gateway-close" class="inline danger" hidden data-confirm="close-address"
+    title="   Close your address at this gateway for good; nothing on your pod is touched">Close this address</button>
 </span>
 
 <section id="pane-group" hidden>
@@ -515,6 +523,14 @@ pre { overflow-x: auto; background: #0001; padding: .6rem; border-radius: .3rem;
       hands your followers to another account.</p>
     <label for="confirm-handle">Type the handle to confirm</label>
     <input type="text" id="confirm-handle" autocomplete="off">
+  </div>
+  <div id="warn-close-address" class="warn" hidden>
+    <p><strong>This cannot be undone.</strong> Your address at the gateway is closed for good:
+      mail to it is turned away, other servers drop the account the next time they look, and
+      nobody can take the name. Nothing on your pod is touched — your posts, key and data stay
+      where they are.</p>
+    <label for="confirm-handle-close">Type the handle to confirm</label>
+    <input type="text" id="confirm-handle-close" autocomplete="off">
   </div>
   <!-- "Move private data" (POST /state-move) had a panel here and no way to
        open it: nothing in this page has ever carried data-confirm="move-state",

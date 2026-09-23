@@ -153,6 +153,35 @@ on the setup page). Setup reads the account on the pod, keeps its state and
 key there, attaches at the new gateway, and completes the move when the
 agent first acts. See [the DeviceAgent](device-agent.md).
 
+<!-- CLAUDE 2026-09-23 — accounts that go quiet: the automatic pause and close, and the manage-page controls; delete these markers when done -->
+## Accounts that go quiet
+
+A gateway holds no mail. Every delivery it accepts is written into your pod
+inbox, and your agent reads it from there. A BrowserAgent reads only while
+its page is open, so an account nobody opens grows on its pod without limit
+and comes back to a drain of everything at once. fedipod.net keeps two facts
+about each browser account — when its owner last signed in or posted, and
+how much content has arrived since — and acts on them.
+
+**Paused.** After about 5,000 posts, replies, likes, boosts and edits since
+you were last here, or when you say so on the manage page, the door accepts
+content and discards it. Follows, unfollows, account moves, deletions and
+blocks still reach your pod. Signing in ends an automatic pause by itself; a
+pause you set lasts until you lift it.
+
+**Closed.** After six months without a sign-in, or when you say so on the
+manage page, the address is closed for good: its handle, its actor and its
+door answer 410 Gone, other servers drop the account the next time they look,
+and nobody can take the name. Nothing on your pod is touched. An address that
+had already moved to another gateway keeps answering as moved.
+
+Only accounts opened from a browser are counted. A DeviceAgent behind the
+gateway drains its own inbox as it runs, and is never paused or closed by
+time. Accounts from before this was built are counted from their next
+sign-in. A gateway operator sets the cap and the window with
+`FEDIPOD_PAUSE_ITEMS` and `FEDIPOD_CLOSE_DAYS`.
+<!-- /CLAUDE -->
+
 ## What the gateway can see
 
 It reads only public data to decide what concerns you: your published

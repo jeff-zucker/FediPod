@@ -18,12 +18,31 @@ async function refreshGateway() {
     GATEWAY_WORD.textContent = frontName ? `${host} — publishing as @${frontName}@${host}` : host;
     GW_OPEN_ATTACH.hidden = true;
     GW_OPEN_DETACH.hidden = false;
+    // The account's standing at the gateway — paused, closed. The browser
+    // build's agent reports it; a DeviceAgent's does not, and the pause and
+    // close controls stay hidden.
+    const st = g.standing;
+    const known = !!st && (st.status === 200 || st.status === 410);
+    $('gateway-pause').hidden = !known || !!st.closed || !!st.paused;
+    $('gateway-resume').hidden = !known || !!st.closed || !st.paused;
+    $('gateway-close').hidden = !known || !!st.closed;
+    if (known && st.closed) GATEWAY_WORD.textContent += ' — this address is closed';
+    else if (known && st.paused) GATEWAY_WORD.textContent += st.pausedBy === 'owner' ? ' — paused by you' : ' — paused';
   } else {
     GATEWAY_WORD.textContent = '';
     GW_OPEN_ATTACH.hidden = false;
     GW_OPEN_DETACH.hidden = true;
+    for (const id of ['gateway-pause', 'gateway-resume', 'gateway-close']) $(id).hidden = true;
   }
 }
+const setPausedAtGateway = async (paused) => {
+  const r = await write('/gateway/pause', { paused },
+    paused ? 'paused — posts sent to you are not kept until you resume; follows still arrive'
+      : 'resumed — posts sent to you are kept again');
+  if (r) refreshGateway();
+};
+$('gateway-pause').addEventListener('click', () => setPausedAtGateway(true));
+$('gateway-resume').addEventListener('click', () => setPausedAtGateway(false));
 const gwShape = () => document.querySelector('input[name=gwShape]:checked')?.value || 'pod';
 function gwPreviews() {
   $('gw-pod-preview').textContent = config?.address || `@${config?.handle || 'you'}@your.pod`;

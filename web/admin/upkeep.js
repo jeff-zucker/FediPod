@@ -76,6 +76,9 @@ const LIFECYCLE = {
   retire: { path: '/retire', title: 'Retire this identity', go: 'Retire it', danger: true, done: (r) => `retired ${r.deletedAt}: Delete delivered to ${r.inboxes} inbox(es)` },
   move: { path: '/move', title: 'Transfer this account away', go: 'Transfer it', focus: 'move-target',
     done: (r) => `transferred to ${r.target}: Move delivered to ${r.inboxes} inbox(es), unfollowed ${r.unfollowed}/${r.following}` },
+  // The address at the gateway, not the identity: the pod keeps everything.
+  'close-address': { path: '/gateway/close', title: 'Close this address', go: 'Close it', danger: true, focus: 'confirm-handle-close',
+    done: (r) => (r.closed ? 'closed — this address is gone for good; everything on your pod is untouched' : 'not closed') },
 };
 let pending = null;
 
@@ -119,7 +122,8 @@ $('confirm-form').addEventListener('submit', async (ev) => {
   const what = pending;
   const body = what === 'retire' ? { confirm: $('confirm-handle').value.trim() }
     : what === 'move' ? { target: $('move-target').value.trim(), confirm: $('confirm-handle-move').value.trim() }
-      : {};
+      : what === 'close-address' ? { confirm: $('confirm-handle-close').value.trim() }
+        : {};
   if (what === 'move' && !body.target) { say('name the account to transfer to', 'err'); return; }
   $('confirm-go').disabled = true;
   say(`${what} — this talks to the pod and to other servers, so it takes a moment`);

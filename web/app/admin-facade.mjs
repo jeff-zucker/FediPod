@@ -33,6 +33,7 @@ export const ADMIN_PATHS = new Set([
   '/deadletter', '/blocks', '/profiles', '/modqueue', '/log', '/fediacct', '/describe', '/follow',
   '/atproto', '/atproto/connect', '/atproto/disconnect',
   '/rebuild', '/move', '/retire', '/inbox/prune', '/park', '/revive', '/takeover',
+  '/gateway/pause', '/gateway/close',
   '/fediacct/connect', '/fediacct/disconnect', '/fediacct/callback',
 ]);
 
@@ -138,6 +139,10 @@ export class AdminFacade {
             configured: !!(g && g.url), url: g?.url || null, webId: g?.webId || null,
             frontActor: g?.frontActor || null, mode: g?.mode || 'off', hasSecret: !!g?.hmacSecret,
             stats: a.store.read('gateway-stats.json', { verified: 0, unverified: 0, lastAt: null }),
+            // The account's standing at the gateway — paused, closed — as the
+            // gateway last said it (agent.mjs tellGateway). The record page
+            // shows its pause and close controls only when this is here.
+            standing: a.gatewayStanding || null,
           });
         }
         case '/deadletter': return json(200, { items: a.store.getDeadLetters() });
@@ -262,6 +267,25 @@ export class AdminFacade {
       case '/takeover': {
         if (!await a.requestTakeover?.()) return json(503, { error: 'the lease could not be taken — the pod refused the write' });
         return json(200, { ok: true, mode: a.status().mode });
+      }
+
+      // The account's standing at its gateway: paused by its owner, or closed
+      // for good (front-core: accounts that go quiet). Both go to the gateway
+      // with the pod session as proof, and its answer is the new standing.
+      case '/gateway/pause': {
+        if (typeof body.paused !== 'boolean') return json(400, { error: 'paused must be true or false' });
+        if (!a.pauseAtGateway || !a.gatewayApi) return json(501, { error: 'this account is not at a gateway' });
+        const r = await a.pauseAtGateway(body.paused);
+        if (!r) return json(502, { error: 'the gateway could not be reached' });
+        return json(r.status === 200 ? 200 : r.status, r);
+      }
+      case '/gateway/close': {
+        const handle = String(a.store.getConfig()?.handle || '').toLowerCase();
+        if (!handle || String(body.confirm || '').toLowerCase() !== handle) return json(400, { error: 'type the handle to confirm' });
+        if (!a.closeAtGateway || !a.gatewayApi) return json(501, { error: 'this account is not at a gateway' });
+        const r = await a.closeAtGateway();
+        if (!r) return json(502, { error: 'the gateway could not be reached' });
+        return json(r.status === 200 ? 200 : r.status, r);
       }
 
       // Going quiet, and coming back. The record page's active/parked select.
