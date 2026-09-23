@@ -1,6 +1,6 @@
 # Sengi is patched
 
-`sengi/dist/` is **not** a stock Sengi build. It is Sengi 1.9.1 with nine
+`sengi/dist/` is **not** a stock Sengi build. It is Sengi 1.9.1 with ten
 changes of ours, listed below. Phanpy at `/app/` is vendored untouched; Sengi is
 not, and **every upgrade means re-applying these**, or the client breaks in ways
 that are not obvious from the outside (two of them fail silently).
@@ -15,12 +15,12 @@ Sengi is Angular 7 and will not build on a current Node. Under nvm:
 nvm use 12.22.6 && npm ci && npm run build
 ```
 
-Then trim and vendor — the emoji sizes the bundle never asks for are 54 MB, and
+Then trim and vendor — the emoji pictures come from the CDN (change 10), and
 this origin already has a service worker of its own:
 
 ```bash
 rm -rf sengi/dist && cp -a <build>/dist sengi/dist
-rm -rf sengi/dist/assets/emoji/128 sengi/dist/assets/emoji/32
+rm -rf sengi/dist/assets/emoji
 rm -f sengi/dist/ngsw.json sengi/dist/ngsw-worker.js sengi/dist/safety-worker.js sengi/dist/worker-basic.min.js
 ```
 
@@ -93,3 +93,15 @@ not use that variable and restated `320px` instead — `.stream-statuses` in
 `stream.component.scss` and `$inner-column-size` in `hashtag.component.scss` —
 so a wider column was wider whitespace with the posts still 320px inside it.
 Both follow the variable now.
+
+**10. Emoji pictures come from the CDN.** `services/emoji.service.ts` (the
+converter's `applyEmojis`) and the composer's emoji button in
+`status-editor.component.html`. Sengi's emoji are JoyPixels, which the
+jsdelivr CDN serves; Sengi rewrote that CDN address to its own
+`assets/emoji/` folder and shipped 3,828 pictures, 20 MB, in every build.
+The rewrite is gone and the button names the CDN picture directly, so the
+folder is not vendored at all: the deploy tree went from 4,144 files to
+about 300. A reader whose browser cannot reach jsdelivr sees text emoji.
+In the built bundle the two spots are the
+`for(;t.includes("https://cdn.jsdelivr.net/joypixels/…");)` loop, removed,
+and `["src","/assets/emoji/64/1f636.png"]`, now the CDN URL.

@@ -48,9 +48,9 @@ copyDir(path.join(root, 'phanpy/dist'), path.join(site, 'app'));
 // A second client at /sengi, so the owner has a choice. Sengi is a plain
 // client-side Angular SPA whose whole OAuth login runs in the browser, so the
 // worker answers its API calls exactly as it answers Phanpy's. Vendored
-// without its Angular service worker and without the emoji sizes the bundle
-// never asks for — this origin has one worker, and 128/ and 32/ are 54 MB of
-// images nothing loads.
+// without its Angular service worker and without any emoji pictures — this
+// origin has one worker, and the emoji come from the JoyPixels CDN (Sengi
+// patch 10), which keeps 3,828 files out of every deploy.
 const copyPlain = (from, to) => { fs.mkdirSync(to, { recursive: true });
   for (const e of fs.readdirSync(from, { withFileTypes: true })) {
     const s = path.join(from, e.name), d = path.join(to, e.name);

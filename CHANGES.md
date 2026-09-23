@@ -1,5 +1,15 @@
 # Changes
 
+## 2026-09-23 (Sengi's emoji come from the CDN — version 1.29.2)
+
+**3,828 emoji pictures leave the deploy.** Sengi's emoji are JoyPixels,
+which the jsdelivr CDN serves; Sengi rewrote that address to its own folder
+and shipped every picture, 20 MB, in each build. The rewrite is gone (Sengi
+patch 10), the composer's emoji button names the CDN picture directly, and
+the folder is no longer vendored. The deploy tree is 316 files instead of
+4,144, and 22 MB instead of 42. A reader whose browser cannot reach
+jsdelivr sees text emoji in Sengi; Phanpy is unaffected.
+
 ## 2026-09-23 (the record page says how to sign in — version 1.29.1)
 
 **A browser with no sign-in is told where to go.** The record page at
