@@ -107,6 +107,10 @@ body { background: var(--surface); }
 #client-news button:hover, #notices-list button:hover, #notice-view button:hover { background: var(--btn-hover); border-color: var(--btn-hover); }
 #client-news button:focus-visible, #notices-list button:focus-visible, #notice-view button:focus-visible { outline: 3px solid var(--ring); outline-offset: 2px; }
 
+/* The notices dialogs are centred and never taller than the window: the
+   client-news rule above sits low, and a short window pushed a list of
+   notices up past the top edge where nothing could reach it. */
+#notices-list, #notice-view { margin: auto; max-height: calc(100dvh - 3rem); overflow: auto; box-sizing: border-box; }
 /* The list of notices: each title a button that opens that notice, the date
    beside it, the ones not yet opened here in bold. */
 #notices-items { list-style: none; margin: 0 0 1.2rem; padding: 0; }
