@@ -515,3 +515,78 @@ test('votes go both ways: a Like up, a Dislike down, an Undo takes back whicheve
   await agent.intake.drain();
   assert.equal(pod.docs.has(g.urls.cached(P) + '-dislikes'), false);
 });
+
+test('a quiet forum writes nothing: the mod queue and the heartbeat rule are stated once, a batch is one write per document', async () => {
+  const pod = fakePod();
+  // Count what reaches the pod, by document.
+  const stateWrites = new Map();
+  const inner = pod.storageFor;
+  pod.storageFor = (base) => {
+    const st = inner(base);
+    const write = st.write;
+    st.write = async (name, body) => { stateWrites.set(base + name, (stateWrites.get(base + name) || 0) + 1); return write(name, body); };
+    return st;
+  };
+  const dir = home();
+  const { agent } = await boot(pod, dir);
+  await agent.init({ handle: 'forum', name: 'The Forum', categories: [{ slug: 'gardening', name: 'Gardening', open: true }],
+    moderators: ['https://priya.pod.example/fedipod/ap/actor'] });
+  assert.ok(await agent.connect());
+  const site = agent.site;
+  const queueUrl = site.mod + 'queue.json';
+  const puts = (u) => [...pod.docs.keys()].filter((k) => k === u).length;   // present or not
+  const before = { acls: pod.acls.length, queue: pod.docs.get(queueUrl) };
+  // Ten idle sweeps: the queue is written once (the rows did not change), the rule once.
+  await agent.publishModQueue();
+  const queueRules = () => pod.acls.filter(([u]) => u === site.mod);
+  const afterOne = queueRules().length;
+  for (let i = 0; i < 9; i++) await agent.publishModQueue();
+  assert.equal(queueRules().length, afterOne, 'the queue rule is not restated on every sweep');
+  assert.equal(queueRules().at(-1)[2]?.ifChanged, true, 'and is read before it is written');
+  assert.equal(pod.docs.get(queueUrl)?.rows?.length, 0, 'an empty queue is published');
+  const at = pod.docs.get(queueUrl).at;
+  await new Promise((r) => setTimeout(r, 5));
+  await agent.publishModQueue();
+  assert.equal(pod.docs.get(queueUrl).at, at, 'the same rows are not written again with a fresh timestamp');
+  // The heartbeat: its rule once per process, the document each time.
+  const hb = site.home + 'ap/heartbeat';
+  const hbRules = () => pod.acls.filter(([u]) => u === hb).length;
+  const ruled = hbRules();
+  await publish.publishHeartbeat(agent.siteAgent);
+  await publish.publishHeartbeat(agent.siteAgent);
+  assert.equal(hbRules(), ruled, 'the heartbeat is written without restating its rule');
+  assert.ok(ruled >= 1, 'which was stated when the forum started');
+  // A batch of three posts, each waiting on a slow server: the category's
+  // documents go to the pod once for the batch, not once per post.
+  const delivered = [];
+  wire(agent, delivered);
+  const g = agent.categories[0];
+  g.intake.fetchAP = async (u) => { await new Promise((r) => setTimeout(r, 330)); return remoteDocs[u] ?? null; };
+  const t1 = 'https://mei.pod.example/fedipod/ap/notes/t1';
+  remoteDocs[t1] = note(t1, { name: 'One', audience: g.urls.actor });
+  remoteDocs[t1 + '-r1'] = note(t1 + '-r1', { inReplyTo: t1, audience: g.urls.actor, published: '2026-09-15T10:01:00Z' });
+  remoteDocs[t1 + '-r2'] = note(t1 + '-r2', { inReplyTo: t1, audience: g.urls.actor, published: '2026-09-15T10:02:00Z' });
+  for (const [k, id] of [['c1', t1], ['c2', t1 + '-r1'], ['c3', t1 + '-r2']]) {
+    pod.deliver(k, { type: 'Create', actor: MEI, object: remoteDocs[id], to: remoteDocs[id].to, cc: [] });
+  }
+  stateWrites.clear();
+  const changes = new Map();   // what the handlers wrote, by document
+  const w = g.store.write.bind(g.store);
+  g.store.write = (name, obj) => { changes.set(name, (changes.get(name) || 0) + 1); return w(name, obj); };
+  await agent.intake.drain();
+  assert.equal(topics.list(g.store).length, 1, 'one topic, three posts');
+  assert.equal(topics.get(g.store, topics.list(g.store)[0].tid).posts.length, 3);
+  // Each post changed the category's index several times over; the pod saw
+  // the batch's commit and what changed after it, never one upload per change.
+  const catBase = g.store.base;
+  for (const name of ['published.json']) {
+    const uploads = stateWrites.get(catBase + name) || 0;
+    assert.ok(changes.get(name) >= 3 && uploads <= 2 && uploads < changes.get(name),
+      `${name}: ${changes.get(name)} changes reached the pod as ${uploads} upload(s)`);
+  }
+  // The latest list: forced on the first post and unchanged by an edit.
+  const latestRules = () => pod.acls.filter(([u]) => u === site.latest).length;
+  const r0 = latestRules();
+  await agent.onCarriedEdit(g, { noteId: t1, note: note(t1, { name: 'One, edited', audience: g.urls.actor }) });
+  assert.equal(latestRules(), r0, 'an edit does not restate the latest list\'s rule');
+});

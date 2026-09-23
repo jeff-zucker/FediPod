@@ -52,6 +52,15 @@ export class ForumIntake extends Intake {
     return 'names no category of this forum';
   }
 
+  // One commit boundary for every category too. The base drain holds only
+  // the forum's own store, so a category's topic, index and people documents
+  // went to the pod once per item instead of once per batch.
+  async drain() {
+    for (const cat of this.forum.categories) cat.store.hold?.();
+    try { return await super.drain(); }
+    finally { for (const cat of this.forum.categories) cat.store.release?.(); }
+  }
+
   // Every category's state has to be on the pod before an item leaves the
   // inbox, not only the forum's own.
   async _persisted() {

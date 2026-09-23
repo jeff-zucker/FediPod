@@ -365,7 +365,7 @@ export class ForumAgent {
     }
     await publish.publishTopic(cat, tid);
     await publish.publishTopicIndex(cat);
-    await publish.publishLatest(this.siteAgent, { force: true });
+    await publish.publishLatest(this.siteAgent);
     this.log(`${cat.slug}: ${noteId} in topic ${tid}`);
   }
 
@@ -455,7 +455,7 @@ export class ForumAgent {
   // title is the topic's title when that post opened it.
   async onCarriedEdit(cat, { noteId, note }) {
     await publish.cachePost(cat, note, { topic: (() => { const tid = topics.topicOf(cat.store, noteId); return tid ? cat.urls.topic(tid) : null; })() });
-    await publish.publishLatest(this.siteAgent, { force: true });
+    await publish.publishLatest(this.siteAgent);
     const tid = topics.topicOf(cat.store, noteId);
     if (!tid) return;
     await publish.publishTopic(cat, tid, { force: true });
@@ -470,7 +470,7 @@ export class ForumAgent {
     const answered = tid ? idOf(topics.get(cat.store, tid)?.posts?.find(p => p.id === noteId)?.inReplyTo) : null;
     this.dropLatest(cat, noteId);
     await publish.tombstoneCached(cat, noteId);
-    await publish.publishLatest(this.siteAgent, { force: true });
+    await publish.publishLatest(this.siteAgent);
     if (!tid) return;
     topics.remove(cat.store, tid, noteId);
     const left = topics.get(cat.store, tid);
@@ -662,9 +662,14 @@ export class ForumAgent {
 
   async publishModQueue() {
     // The rule follows the configuration: moderators come and go, and the
-    // container was provisioned once, long before this one was named.
-    await this.remote.setAcl(this.site.mod, [], { readAgents: this.config.moderatorWebIds || [] })
-      .catch(e => this.log(`queue rule: ${e.message}`));
+    // container was provisioned once, long before this one was named. Stated
+    // when the moderators change, and read rather than rewritten at start.
+    const mods = publish.digestOf(this.config.moderatorWebIds || []);
+    if (this._modRule !== mods) {
+      await this.remote.setAcl(this.site.mod, [], { readAgents: this.config.moderatorWebIds || [], ifChanged: true })
+        .catch(e => this.log(`queue rule: ${e.message}`));
+      this._modRule = mods;
+    }
     const rows = [];
     for (const cat of this.categories) {
       for (const e of cat.store.read('modqueue.json', [])) {
@@ -684,8 +689,13 @@ export class ForumAgent {
       }
     }
     rows.sort((a, b) => String(b.at).localeCompare(String(a.at)));
+    // Swept every minute, and on a quiet forum every sweep found the same
+    // rows: the timestamp alone made each one a write. The rows decide.
+    const digest = publish.digestOf(rows);
+    if (this._modQueue === digest) return rows.length;
     await this.remote.putJson(this.site.mod + 'queue.json',
       { at: new Date().toISOString(), rows }, 'application/json');
+    this._modQueue = digest;
     return rows.length;
   }
 
@@ -716,7 +726,7 @@ export class ForumAgent {
     if (copy && copy.type !== 'Tombstone') {
       await publish.cachePost(cat, copy, { likes: up.size });
       await publish.publishDislikes(cat, post, down.size).catch(e => this.log(`downvotes on ${post}: ${e.message}`));
-      await publish.publishLatest(this.siteAgent, { force: true }).catch(() => {});
+      await publish.publishLatest(this.siteAgent).catch(() => {});
     }
     this.log(`${way === 'none' ? 'vote withdrawn' : `vote ${way}`} on ${post} — ${up.size} up, ${down.size} down`);
     return true;
@@ -852,7 +862,7 @@ export class ForumAgent {
       const n = this.rebuildLatest();
       if (n) this.log(`latest: ${n} post(s) read back out of the topics`);
     }
-    await publish.publishLatest(this.siteAgent, { force: true });
+    await publish.publishLatest(this.siteAgent, { force });
     await publish.publishAdministrators(this.siteAgent, this.config.moderators || [], { force });
     if (asked) {
       this.store.setConfig({ ...this.store.getConfig(), republish: false, reprovision: false });

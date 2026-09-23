@@ -13,7 +13,7 @@ import { sanitizeHtml } from '../../../lib/core/wire.mjs';
 import * as fwire from './wire.mjs';
 import * as topics from './topics.mjs';
 
-const digestOf = (doc) => crypto.createHash('sha256').update(JSON.stringify(doc)).digest('hex').slice(0, 16);
+export const digestOf = (doc) => crypto.createHash('sha256').update(JSON.stringify(doc)).digest('hex').slice(0, 16);
 
 // One topic: its pages and its head. Returns how many documents were written.
 export async function publishTopic({ remote, store, urls }, tid, { force = false } = {}) {
@@ -134,11 +134,14 @@ export async function publishMembers(cat, readers, { force = false } = {}) {
   return readers.length;
 }
 
+// `force` republishes the document; the rule beside it is written once, when
+// the document first is. Forcing used to rewrite the rule too, so every post,
+// edit and vote was two writes where one would do.
 async function flat({ remote, store }, key, url, doc, force) {
   const seen = store.read('published.json', {});
   const digest = digestOf(doc);
   if (!force && seen[key] === digest) return 0;
-  await collection.writeFlat(remote, url, doc, { publicRead: !seen[key] || force });
+  await collection.writeFlat(remote, url, doc, { publicRead: !seen[key] });
   store.write('published.json', { ...store.read('published.json', {}), [key]: digest });
   return 1;
 }
@@ -210,6 +213,7 @@ export async function tombstoneCached({ remote, urls }, postId, { formerType = '
 // A public sign of life: when the forum was last hosted, and by which
 // version. The website reads it to say how current the forum is, since the
 // lease that really says so is owner-only.
+const heartbeatRuled = new WeakSet();   // remotes whose heartbeat rule this process has stated
 export async function publishHeartbeat({ remote, urls }, { version = null, at = new Date().toISOString() } = {}) {
   // Under the advertised face, like every read document, so a fronted forum's
   // reader finds it at the front and the transport lands it on the pod.
@@ -217,6 +221,10 @@ export async function publishHeartbeat({ remote, urls }, { version = null, at = 
   // document to a reader asking for ActivityPub, and the front asks that way.
   const url = urls.actor.replace(/ap\/actor$/u, '') + 'ap/heartbeat';
   await remote.putJson(url, { at, ...(version ? { version } : {}) }, 'application/activity+json');
-  await remote.setAcl(url, ['Read']);
+  // The rule never changes: stated once per process, and only if it differs.
+  if (!heartbeatRuled.has(remote)) {
+    await remote.setAcl(url, ['Read'], { ifChanged: true });
+    heartbeatRuled.add(remote);
+  }
   return url;
 }

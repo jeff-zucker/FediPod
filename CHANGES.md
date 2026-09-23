@@ -1,5 +1,16 @@
 # Changes
 
+## 2026-09-23 (a quiet forum leaves its pod alone — version 1.35.0)
+
+**A forum nobody is posting to no longer writes to its pod every minute.**
+The moderation queue is written when its rows change, not on every sweep,
+and its access rule when the moderators change. The heartbeat still says
+every ten minutes that the forum is hosted, but no longer restates its rule
+each time. A post, an edit, a deletion or a vote republishes the newest-posts
+list only when the list changed, and never rewrites its rule. A batch of
+posts arriving together reaches the pod as one upload per document instead
+of one per post.
+
 ## 2026-09-23 (the pod is asked for less — version 1.34.0)
 
 **Every account's pod does less work for the same result.** A like, a
