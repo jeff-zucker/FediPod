@@ -33,7 +33,7 @@ actor the first time, then drains the forum's one inbox, hands each activity
 to the category it names, places carried posts in topics, and carries them
 to the category's followers. Several moderators run `start` on their own
 machines against the same pod: one hosts, the others watch, and when the
-host stops another takes over within five minutes. A public
+host stops another takes over within fifteen minutes. A public
 `ap/heartbeat` says when the forum was last hosted. `status` prints
 what the pod's state says without hosting.
 

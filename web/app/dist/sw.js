@@ -34286,9 +34286,11 @@ async function provisionPublic(pod, base) {
   await pod.setAcl(base, ["Read"]);
 }
 async function provisionPrivate(pod, urls) {
+  if (await exists(pod, urls.state)) return false;
   await pod.putJson(keepUrl(urls.state), KEEP, KEEP_CT);
   await pod.setAcl(urls.state, []);
   await pod.setAcl(urls.home, []);
+  return true;
 }
 async function repairPrivateAcls(pod, trees, { isPublic } = {}) {
   const findings = [];
@@ -34367,6 +34369,8 @@ function dropFollower(contacts, actor, why) {
   contacts.removedFollowers = gone.slice(-500);
   return contacts;
 }
+var serialise = (obj) => JSON.stringify(obj, null, 2) + "\n";
+var sameButWhen = (a, b) => JSON.stringify({ ...a, fetchedAt: null }) === JSON.stringify({ ...b, fetchedAt: null });
 var PodStore = class {
   constructor({ storage = null, log: log2 = console.log } = {}) {
     this.lastSkipped = [];
@@ -34374,6 +34378,7 @@ var PodStore = class {
     this.log = log2;
     this.cache = /* @__PURE__ */ new Map();
     this.etags = /* @__PURE__ */ new Map();
+    this.lastText = /* @__PURE__ */ new Map();
     this.timers = /* @__PURE__ */ new Map();
     this.dirty = /* @__PURE__ */ new Set();
     this._held = 0;
@@ -34387,6 +34392,7 @@ var PodStore = class {
     if (this.storage && this.storage.base !== storage.base) {
       this.cache.clear();
       this.etags.clear();
+      this.lastText.clear();
     }
     this.storage = storage;
   }
@@ -34428,6 +34434,7 @@ var PodStore = class {
       this.etags.set(name, r.etag);
       try {
         this.cache.set(name, JSON.parse(r.body));
+        this.lastText.set(name, r.body);
       } catch (e) {
         this.log(`state load ${name}: unparsable (${e.message})`);
       }
@@ -34450,6 +34457,12 @@ var PodStore = class {
   write(name, obj) {
     this.cache.set(name, structuredClone(obj));
     if (!this.storage) return;
+    if (this.lastText.get(name) === serialise(obj)) {
+      clearTimeout(this.timers.get(name));
+      this.timers.delete(name);
+      this.dirty.delete(name);
+      return;
+    }
     if (this._held) {
       this.dirty.add(name);
       return;
@@ -34493,10 +34506,13 @@ var PodStore = class {
   // the returned promise so one failure cannot poison the queue.
   _put(name) {
     const done = this.chain.then(async () => {
-      const body = JSON.stringify(this.cache.get(name), null, 2) + "\n";
+      const body = serialise(this.cache.get(name));
       for (let attempt = 1; attempt <= PUT_RETRIES; attempt++) {
         const r = await this.storage.write(name, body, "application/json").catch((e) => ({ ok: false, retry: false, why: e.message }));
-        if (r.ok) return true;
+        if (r.ok) {
+          this.lastText.set(name, body);
+          return true;
+        }
         if (!r.retry) {
           this.log(`state write ${name} refused (${r.why}) \u2014 not retrying`);
           return false;
@@ -34523,6 +34539,7 @@ var PodStore = class {
   // migrates to the local machine — leaving the copy behind would defeat it).
   async remove(name) {
     this.cache.delete(name);
+    this.lastText.delete(name);
     clearTimeout(this.timers.get(name));
     this.timers.delete(name);
     if (!this.storage) return true;
@@ -34773,6 +34790,7 @@ var PodStore = class {
   }
   cacheActor(url, doc) {
     const a = this.getActors();
+    const known2 = a[url];
     a[url] = {
       name: clamp(plainText(doc.name || doc.preferredUsername || ""), MAX_NAME),
       preferredUsername: clamp(plainText(doc.preferredUsername || ""), MAX_NAME),
@@ -34785,9 +34803,13 @@ var PodStore = class {
       type: doc.type || "Person",
       followers: doc.followers || null,
       following: doc.following || null,
-      ...a[url]?.counts ? { counts: a[url].counts } : {},
+      ...known2?.counts ? { counts: known2.counts } : {},
       fetchedAt: (/* @__PURE__ */ new Date()).toISOString()
     };
+    if (known2 && sameButWhen(known2, a[url])) {
+      a[url] = known2;
+      return;
+    }
     this.write("actors.json", prune(a, ACTOR_CACHE_MAX, this.getContacts()));
   }
   // @user@host for an actor we have cached. Null when we have not, rather than
@@ -45487,11 +45509,11 @@ async function writeKeep(pod, urls) {
   await pod.putJson(urls.inbox + ".keep", { keep: true }, "application/json");
 }
 async function setPosture(pod, urls, posture) {
-  if (posture === "open") return pod.setAcl(urls.inbox, ["Append"]);
-  if (posture === "closed") return pod.setAcl(urls.inbox, []);
+  if (posture === "open") return pod.setAcl(urls.inbox, ["Append"], { ifChanged: true });
+  if (posture === "closed") return pod.setAcl(urls.inbox, [], { ifChanged: true });
   const webId = posture?.gatewayWebId;
   if (!webId) throw new Error(`inbox.setPosture: unknown posture ${JSON.stringify(posture)}`);
-  return pod.setAcl(urls.inbox, [], { appendAgents: [webId] });
+  return pod.setAcl(urls.inbox, [], { appendAgents: [webId], ifChanged: true });
 }
 async function list(pod, urls) {
   const children = await pod.listContainer(urls.inbox);
@@ -45508,6 +45530,9 @@ async function readDeliveryReceipt(pod, itemUrl, { maxBytes, readCapped: readCap
   return JSON.parse(await readCapped3(res, maxBytes));
 }
 var dropHandledItem = (pod, url) => pod.delete(url);
+var dropReceiptBeside = (pod, url) => pod.delete(url + ".receipt.json").catch(() => false);
+var orphanReceipts = (pod, urls) => pod.orphanReceipts?.(urls.inbox) ?? [];
+var dropStrayReceipt = (pod, url) => pod.delete(url).catch(() => false);
 
 // lib/pod/collection.mjs
 var PUBLIC_READ3 = ["Read"];
@@ -63870,6 +63895,7 @@ var DRAIN_COOLDOWN_MAX_MS = 30 * 6e4;
 var DELETE_GAP_MS = 150;
 var CHAIN_GAP_MS = 5e3;
 var DELETE_BATCH = 10;
+var ORPHAN_RECEIPTS_PER_SWEEP = 20;
 var ATTEMPTS_DOC = "intake-attempts.json";
 var ATTEMPTS_TTL_MS = 7 * 24 * 60 * 6e4;
 var MAX_ITEM_ATTEMPTS = 5;
@@ -64140,6 +64166,7 @@ var Intake = class {
     if (all.length > items.length) this.log(`inbox has ${all.length} items \u2014 processing ${items.length} this sweep`);
     let handled = 0;
     const pending = [];
+    const withReceipt = /* @__PURE__ */ new Set();
     const flush = async () => {
       if (!pending.length) return true;
       if (!await this._persisted()) {
@@ -64154,12 +64181,14 @@ var Intake = class {
         }
         this._clearAttempt(url);
         handled++;
+        if (withReceipt.has(url)) await dropReceiptBeside(this.remote, url);
         await new Promise((r) => setTimeout(r, DELETE_GAP_MS));
       }
       return true;
     };
-    for (const { url, size } of items) {
+    for (const { url, size, receipt: hasReceipt } of items) {
       if (url.endsWith(".keep")) continue;
+      if (hasReceipt) withReceipt.add(url);
       if (size > MAX_ITEM_BYTES) {
         this.store.addDeadLetter({ inboxUrl: url, reason: `oversized (${size} bytes)`, activity: null });
         pending.push(url);
@@ -64185,7 +64214,7 @@ var Intake = class {
             });
           }
         }
-        const receipt = activity ? await this._readReceipt(url) : null;
+        const receipt = activity && hasReceipt !== false ? await this._readReceipt(url) : null;
         if (activity && this.gatewaySecret()) this._bumpGatewayStat(!!receipt?.verified);
         const owned = activity && this.isOwnerPost(receipt);
         const rejection = !activity ? "unparsable JSON" : owned ? await this.ownerPostFrom(activity, raw, receipt) : await this.handle(activity, receipt);
@@ -64212,6 +64241,10 @@ var Intake = class {
       if (pending.length >= DELETE_BATCH && !await flush()) return;
     }
     if (!await this._finishSweep(flush)) return;
+    for (const stray of orphanReceipts(this.remote, this.urls).slice(0, ORPHAN_RECEIPTS_PER_SWEEP)) {
+      if (!await dropStrayReceipt(this.remote, stray)) break;
+      await new Promise((r) => setTimeout(r, DELETE_GAP_MS));
+    }
     if (handled > 0 && all.length > items.length && !this.stopped) this._drainAgain = true;
   }
   // The end of a sweep: publish whatever the follow graph did ONCE, then flush.
@@ -65418,8 +65451,8 @@ var C2S = class {
 
 // lib/core/lease.mjs
 init_node_crypto();
-var TTL_MS = 3e5;
-var RENEW_MS = 9e4;
+var TTL_MS = 9e5;
+var RENEW_MS = 3e5;
 var JITTER = () => 0.85 + Math.random() * 0.3;
 var UNREADABLE = /* @__PURE__ */ Symbol("lease-unreadable");
 var Lease = class {
@@ -66495,6 +66528,7 @@ var BskyFeed = class {
     this.lastSweep = (/* @__PURE__ */ new Date()).toISOString();
     const self2 = this.atproto.read()?.did;
     let added = 0;
+    this.store.hold?.();
     try {
       const ownMirrors = new Set(this.store.getStatuses().map((s) => s.atproto?.uri).filter(Boolean));
       const tl = await this.atproto.xrpc("app.bsky.feed.getTimeline", { params: { limit: PER_SWEEP } });
@@ -66543,6 +66577,8 @@ var BskyFeed = class {
     } catch (e) {
       this._backOff(e.status || 0, null);
       return;
+    } finally {
+      this.store.release?.();
     }
     const all = this.store.getStatuses();
     const mirrored = all.filter((s) => s.kind === "bsky");
@@ -68840,7 +68876,29 @@ var PodTransport = class {
     const podTarget = this.toPod ? this.toPod(targetUrl) : targetUrl;
     const url = await this.aclUrlFor(podTarget);
     if (!await this.aclWritable(url)) return null;
-    return this.put(url, this.aclDoc(podTarget, publicModes, { ...opts, aclUrl: url }), "text/turtle");
+    const doc = this.aclDoc(podTarget, publicModes, { ...opts, aclUrl: url });
+    if (opts.ifChanged && await this.aclSame(url, doc)) return { status: 304, unchanged: true };
+    return this.put(url, doc, "text/turtle");
+  }
+  // Whether the pod's rule at `aclUrl` states exactly what `doc` states.
+  // Compared as graphs, not bytes: the pod serialises what it holds its own
+  // way. Every rule this file writes names its subjects, so triple sets are
+  // enough; anything unreadable or with blank nodes reads as different.
+  async aclSame(aclUrl, doc) {
+    try {
+      const res = await this.fetch(aclUrl, { headers: { accept: "text/turtle" } });
+      if (res.status !== 200) return false;
+      const triples = (text) => {
+        const g = graph();
+        parse2(text, g, aclUrl, "text/turtle");
+        if (g.statements.some((st2) => st2.subject.termType === "BlankNode" || st2.object.termType === "BlankNode")) return null;
+        return g.statements.map((st2) => `${st2.subject.value} ${st2.predicate.value} ${st2.object.value}`).sort().join("\n");
+      };
+      const theirs = triples(await res.text());
+      return theirs !== null && theirs === triples(doc);
+    } catch {
+      return false;
+    }
   }
   // Child documents of an LDP container (URLs under it, excluding aux docs).
   // Revalidated: the inbox is polled every couple of minutes and is usually
@@ -68864,10 +68922,15 @@ var PodTransport = class {
     parse2(body, g, url, "text/turtle");
     const here = namedNode2(url);
     const seen = /* @__PURE__ */ new Set();
+    const receipts = /* @__PURE__ */ new Set();
     const list3 = [];
     for (const child of g.each(here, LDP2("contains"), null, here)) {
       const u = child.value;
-      if (!u.startsWith(url) || u === url || /\.(acl|meta|receipt\.json)$/.test(u) || seen.has(u)) continue;
+      if (u.endsWith(".receipt.json")) {
+        receipts.add(u);
+        continue;
+      }
+      if (!u.startsWith(url) || u === url || /\.(acl|meta)$/.test(u) || seen.has(u)) continue;
       seen.add(u);
       list3.push({
         url: u,
@@ -68875,9 +68938,15 @@ var PodTransport = class {
         modified: g.any(child, DC("modified"), null, here)?.value || null
       });
     }
+    for (const item of list3) item.receipt = receipts.has(item.url + ".receipt.json");
+    const orphans = [...receipts].filter((r) => !seen.has(r.slice(0, -".receipt.json".length)));
     list3.sort((a, b) => String(a.modified || "").localeCompare(String(b.modified || "")));
-    this._listCache.set(url, { etag: res.headers.get("etag"), children: list3 });
+    this._listCache.set(url, { etag: res.headers.get("etag"), children: list3, orphans });
     return list3;
+  }
+  /** Receipts in the last listing of `url` whose item is gone. */
+  orphanReceipts(url) {
+    return this._listCache?.get(url)?.orphans ?? [];
   }
   /**
    * The WebID profile advertises the actor as an account:
@@ -71858,7 +71927,8 @@ var BrowserAgent = class _BrowserAgent {
     this.lease.onLost = () => this.demote();
     this.lease.startRenewal();
     try {
-      await this.store.load({ force: true }).catch((e) => this.log(`re-reading state: ${e.message}`));
+      await this.store.load({ force: !!this._watched }).catch((e) => this.log(`re-reading state: ${e.message}`));
+      this._watched = false;
       await this.publisher.healStatuses().catch((e) => this.log(`healing the timeline index: ${e.message}`));
       await this.publisher.publishProfilePage().catch((e) => this.log(`profile page: ${e.message}`));
       this.deliverer?.startQueue?.();
@@ -71879,6 +71949,7 @@ var BrowserAgent = class _BrowserAgent {
   demote() {
     if (this.viewer) return;
     this.viewer = true;
+    this._watched = true;
     this.log("another device took over \u2014 read-only here");
     this.lease.stopRenewal();
     clearInterval(this._openTimer);
@@ -72074,6 +72145,7 @@ var BrowserAgent = class _BrowserAgent {
       await this.fediaccts.load();
       this.viewer = !await this.lease.acquire();
       if (this.viewer) {
+        this._watched = true;
         this.log(`read-only viewer: another device is active on @${config.handle}`);
         this.startViewerPoll();
         return;

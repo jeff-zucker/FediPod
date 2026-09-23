@@ -169,12 +169,14 @@ export class BrowserAgent {
     this.lease.onLost = () => this.demote();
     this.lease.startRenewal();
     try {
-      // Forced, not revalidated. While this device watched, the ACTIVE one was
-      // writing; our cache is however stale the last viewer poll left it, and
-      // the store is write-through — so the first write from here would push a
-      // whole document back over newer state. Read what is actually there
-      // before acting on it.
-      await this.store.load({ force: true }).catch((e) => this.log(`re-reading state: ${e.message}`));
+      // Forced, not revalidated, when this device WATCHED first: the active
+      // one was writing, our cache is however stale the last viewer poll left
+      // it, and the store is write-through — so the first write from here
+      // would push a whole document back over newer state. A device that
+      // booted straight into acting read everything a moment ago; asking
+      // again is one revalidation, not a second download of every document.
+      await this.store.load({ force: !!this._watched }).catch((e) => this.log(`re-reading state: ${e.message}`));
+      this._watched = false;
       // Own posts the outbox names and the timeline index lacks come back
       // here, before anything acts on the index.
       await this.publisher.healStatuses().catch((e) => this.log(`healing the timeline index: ${e.message}`));
@@ -202,6 +204,7 @@ export class BrowserAgent {
   demote() {
     if (this.viewer) return;
     this.viewer = true;
+    this._watched = true;
     this.log('another device took over — read-only here');
     this.lease.stopRenewal();
     clearInterval(this._openTimer); this._openTimer = null;
@@ -477,6 +480,7 @@ export class BrowserAgent {
       // The lease decides: this device ACTS on the pod, or reads it read-only.
       this.viewer = !(await this.lease.acquire());
       if (this.viewer) {
+        this._watched = true;
         this.log(`read-only viewer: another device is active on @${config.handle}`);
         this.startViewerPoll();       // reload the feed, and promote if the lease frees
         return;

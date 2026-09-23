@@ -1,5 +1,21 @@
 # Changes
 
+## 2026-09-23 (the pod is asked for less — version 1.34.0)
+
+**Every account's pod does less work for the same result.** A like, a
+bookmark, a follow or a sweep that found nothing new no longer uploads the
+whole timeline index and the whole people cache again unchanged; only what
+changed goes to the pod. An account says "I'm here" to its pod every five
+minutes instead of every ninety seconds, so an idle account costs twelve
+writes an hour instead of forty; if the active device dies, another takes
+over within fifteen minutes, and a person acting on a second device still
+takes over at once. The browser reads the account once at each start, not
+twice, and writes its containers and the inbox's rule only when they are
+missing or differ. The receipt a gateway leaves beside each delivery is
+removed with the delivery, is read only where there is one, and the strays
+earlier versions left behind are swept a few at a time. The Bluesky feed
+writes once per sweep rather than once per notification.
+
 ## 2026-09-23 (the site does less for the same result — version 1.33.0)
 
 **Fewer calls to fedipod.net for the same mail and the same pages.** A

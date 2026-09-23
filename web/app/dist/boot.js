@@ -32822,7 +32822,29 @@ var PodTransport = class {
     const podTarget = this.toPod ? this.toPod(targetUrl) : targetUrl;
     const url = await this.aclUrlFor(podTarget);
     if (!await this.aclWritable(url)) return null;
-    return this.put(url, this.aclDoc(podTarget, publicModes, { ...opts, aclUrl: url }), "text/turtle");
+    const doc = this.aclDoc(podTarget, publicModes, { ...opts, aclUrl: url });
+    if (opts.ifChanged && await this.aclSame(url, doc)) return { status: 304, unchanged: true };
+    return this.put(url, doc, "text/turtle");
+  }
+  // Whether the pod's rule at `aclUrl` states exactly what `doc` states.
+  // Compared as graphs, not bytes: the pod serialises what it holds its own
+  // way. Every rule this file writes names its subjects, so triple sets are
+  // enough; anything unreadable or with blank nodes reads as different.
+  async aclSame(aclUrl, doc) {
+    try {
+      const res = await this.fetch(aclUrl, { headers: { accept: "text/turtle" } });
+      if (res.status !== 200) return false;
+      const triples = (text) => {
+        const g = graph();
+        parse2(text, g, aclUrl, "text/turtle");
+        if (g.statements.some((st2) => st2.subject.termType === "BlankNode" || st2.object.termType === "BlankNode")) return null;
+        return g.statements.map((st2) => `${st2.subject.value} ${st2.predicate.value} ${st2.object.value}`).sort().join("\n");
+      };
+      const theirs = triples(await res.text());
+      return theirs !== null && theirs === triples(doc);
+    } catch {
+      return false;
+    }
   }
   // Child documents of an LDP container (URLs under it, excluding aux docs).
   // Revalidated: the inbox is polled every couple of minutes and is usually
@@ -32846,10 +32868,15 @@ var PodTransport = class {
     parse2(body, g, url, "text/turtle");
     const here = namedNode2(url);
     const seen = /* @__PURE__ */ new Set();
+    const receipts = /* @__PURE__ */ new Set();
     const list = [];
     for (const child of g.each(here, LDP("contains"), null, here)) {
       const u = child.value;
-      if (!u.startsWith(url) || u === url || /\.(acl|meta|receipt\.json)$/.test(u) || seen.has(u)) continue;
+      if (u.endsWith(".receipt.json")) {
+        receipts.add(u);
+        continue;
+      }
+      if (!u.startsWith(url) || u === url || /\.(acl|meta)$/.test(u) || seen.has(u)) continue;
       seen.add(u);
       list.push({
         url: u,
@@ -32857,9 +32884,15 @@ var PodTransport = class {
         modified: g.any(child, DC("modified"), null, here)?.value || null
       });
     }
+    for (const item of list) item.receipt = receipts.has(item.url + ".receipt.json");
+    const orphans = [...receipts].filter((r) => !seen.has(r.slice(0, -".receipt.json".length)));
     list.sort((a, b) => String(a.modified || "").localeCompare(String(b.modified || "")));
-    this._listCache.set(url, { etag: res.headers.get("etag"), children: list });
+    this._listCache.set(url, { etag: res.headers.get("etag"), children: list, orphans });
     return list;
+  }
+  /** Receipts in the last listing of `url` whose item is gone. */
+  orphanReceipts(url) {
+    return this._listCache?.get(url)?.orphans ?? [];
   }
   /**
    * The WebID profile advertises the actor as an account:

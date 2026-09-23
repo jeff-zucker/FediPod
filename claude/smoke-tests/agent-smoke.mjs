@@ -1786,6 +1786,118 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     'listContainer sends If-None-Match and serves the 304 from cache');
 }
 
+// --- 5d2. what the pod already holds is not sent again ---
+{
+  const { PodStore } = await import(path.join(root, 'lib/core/store.mjs'));
+  const writes = [];
+  const held = { 'statuses.json': JSON.stringify([{ noteId: 'n1', favourited: false }], null, 2) + '\n' };
+  const st = new PodStore({ log: () => {}, storage: {
+    kind: 'pod', base: 'https://pod.example/fedipod/ap-state/',
+    list: async () => ({ names: Object.keys(held), etag: 'e1' }),
+    read: async (name) => ({ ok: true, status: 200, body: held[name], etag: 'c1' }),
+    write: async (name, body) => { writes.push(name); held[name] = body; return { ok: true }; },
+  } });
+  await st.load();
+  st.write('statuses.json', [{ noteId: 'n1', favourited: false }]);
+  await st.flush();
+  check(writes.length === 0, 'writing back exactly what was loaded sends nothing');
+  st.write('statuses.json', [{ noteId: 'n1', favourited: true }]);
+  await st.flush();
+  check(writes.length === 1, 'a real change is sent');
+  st.write('statuses.json', [{ noteId: 'n1', favourited: true }]);
+  await st.flush();
+  check(writes.length === 1, 'and sending it again, unchanged, is not');
+  st.write('statuses.json', [{ noteId: 'n1', favourited: false }]);
+  st.write('statuses.json', [{ noteId: 'n1', favourited: true }]);
+  await st.flush();
+  check(writes.length === 1, 'a change undone before it went out is not sent either');
+  // The people cache: the same actor fetched again is not a write.
+  const doc = { name: 'Mei', preferredUsername: 'mei', summary: 'hi', type: 'Person' };
+  st.cacheActor('https://m.example/u/mei', doc);
+  await st.flush();
+  const after = writes.length;
+  st.cacheActor('https://m.example/u/mei', doc);
+  await st.flush();
+  check(writes.length === after && after === 2, 'an actor fetched again and found the same does not rewrite the people cache');
+  st.cacheActor('https://m.example/u/mei', { ...doc, name: 'Mei Lin' });
+  await st.flush();
+  check(writes.length === after + 1 && st.getActors()['https://m.example/u/mei'].name === 'Mei Lin', 'a changed one does');
+}
+
+// --- 5d3. a container is provisioned once; the inbox rule is written only when it differs ---
+{
+  const containers = await import(path.join(root, 'lib/pod/containers.mjs'));
+  const urls = { state: 'https://pod.example/fedipod/ap-state/', home: 'https://pod.example/fedipod/' };
+  const mkPod = (keepStatus) => {
+    const calls = [];
+    return { calls, pod: {
+      fetch: async (u, i) => { calls.push(`${i?.method || 'GET'} ${u}`); return { status: keepStatus }; },
+      putJson: async (u) => { calls.push(`PUT ${u}`); },
+      setAcl: async (u) => { calls.push(`ACL ${u}`); },
+    } };
+  };
+  const there = mkPod(200);
+  check(await containers.provisionPrivate(there.pod, urls) === false && there.calls.length === 1 && /^HEAD /.test(there.calls[0]),
+    'a state container that exists costs one HEAD and no writes at boot');
+  const fresh = mkPod(404);
+  check(await containers.provisionPrivate(fresh.pod, urls) === true && fresh.calls.filter((c) => /^(PUT|ACL) /.test(c)).length === 3,
+    'a missing one is made, with both rules');
+
+  const { RemotePod } = await import(path.join(root, 'lib/device/remote.mjs'));
+  const podInbox = await import(path.join(root, 'lib/pod/inbox.mjs'));
+  const pod = new RemotePod({ clientId: 'x', secret: 'y', webId: 'https://p.example/profile/card#me',
+    tokenEndpoint: 'https://p.example/.oidc/token', issuerOrigin: 'https://p.example' });
+  const inboxUrls = { inbox: 'https://p.example/fedipod/ap/inbox/' };
+  const stated = pod.aclDoc(inboxUrls.inbox, ['Append'], { aclUrl: inboxUrls.inbox + '.acl' });
+  // The pod serialises its copy its own way: same triples, different bytes.
+  const theirs = '# as the pod serves it\n' + stated.replace(/\n/g, '\n\n') + '\n';
+  const reqs = [];
+  pod.session = { fetch: async (u, i) => {
+    reqs.push(`${i?.method || 'GET'} ${u}`);
+    if ((i?.method || 'GET') === 'GET' && u.endsWith('.acl')) return { status: 200, headers: { get: () => null }, text: async () => theirs };
+    return { status: 200, headers: { get: () => null }, text: async () => '' };
+  } };
+  pod.aclUrls.set(inboxUrls.inbox, inboxUrls.inbox + '.acl');
+  const same = await podInbox.setPosture(pod, inboxUrls, 'open');
+  check(same?.unchanged === true && !reqs.some((r) => r.startsWith('PUT ')),
+    `the inbox rule the pod already states is read and not rewritten (${reqs.join(', ')})`);
+  reqs.length = 0;
+  await podInbox.setPosture(pod, inboxUrls, 'closed');
+  check(reqs.some((r) => r.startsWith('PUT ') && r.endsWith('.acl')), 'a different rule is written');
+}
+
+// --- 5d4. receipts: read where the listing shows one, deleted with the item, strays swept ---
+{
+  const { RemotePod } = await import(path.join(root, 'lib/device/remote.mjs'));
+  const podInbox = await import(path.join(root, 'lib/pod/inbox.mjs'));
+  const pod = new RemotePod({ clientId: 'x', secret: 'y', webId: 'https://p.example/profile/card#me',
+    tokenEndpoint: 'https://p.example/.oidc/token', issuerOrigin: 'https://p.example' });
+  const box = 'https://p.example/in/';
+  const ttl = `<${box}> a <http://www.w3.org/ns/ldp#Container> ; <http://www.w3.org/ns/ldp#contains> <${box}one>, <${box}one.receipt.json>, <${box}two>, <${box}gone.receipt.json> .`;
+  const deleted = [];
+  pod.session = { fetch: async (u, i) => {
+    if ((i?.method || 'GET') === 'DELETE') { deleted.push(u); return { status: 204, headers: { get: () => null }, text: async () => '' }; }
+    return { status: 200, headers: { get: (h) => (h === 'etag' ? '"v1"' : null) }, text: async () => ttl };
+  } };
+  const items = await podInbox.list(pod, { inbox: box });
+  check(items.length === 2 && items.find((c) => c.url === box + 'one').receipt === true && items.find((c) => c.url === box + 'two').receipt === false,
+    'the listing says which items have a receipt beside them, and lists no receipt as an item');
+  check(podInbox.orphanReceipts(pod, { inbox: box }).join() === box + 'gone.receipt.json',
+    'and names the receipts whose item is already gone');
+  await podInbox.dropReceiptBeside(pod, box + 'one');
+  check(deleted.join() === box + 'one.receipt.json', 'a receipt is deleted beside its item');
+  const drain = fs.readFileSync(path.join(root, 'lib/core/intake/index.mjs'), 'utf8');
+  check(/hasReceipt !== false \? await this\._readReceipt\(url\)/.test(drain) && /withReceipt\.has\(url\)\) await podInbox\.dropReceiptBeside/.test(drain)
+    && /orphanReceipts\(this\.remote, this\.urls\)\.slice\(0, ORPHAN_RECEIPTS_PER_SWEEP\)/.test(drain),
+  'the drain reads a receipt only where there is one, deletes it with the item, and sweeps strays');
+  const bsky = fs.readFileSync(path.join(root, 'lib/connections/bskyfeed.mjs'), 'utf8');
+  check(/this\.store\.hold\?\.\(\);\n    try \{/.test(bsky) && /finally \{\n      this\.store\.release\?\.\(\);/.test(bsky),
+    'the Bluesky sweep is one commit boundary, like the account and tag feeds');
+  const browser = fs.readFileSync(path.join(root, 'web/app/agent.mjs'), 'utf8');
+  check(/load\(\{ force: !!this\._watched \}\)/.test(browser) && (browser.match(/this\._watched = true/g) || []).length === 2,
+    'the browser re-reads every document on activation only when this device watched first');
+}
+
 // --- 5e. state reads revalidate instead of re-downloading ---
 {
   const store = new PodStore({ log: () => {} });
@@ -2013,8 +2125,8 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   const src = fs.readFileSync(path.join(root, 'lib/core/lease.mjs'), 'utf8');
   const ttl = Number((src.match(/const TTL_MS = ([\d_]+)/) || [])[1]?.replace(/_/g, ''));
   const renew = Number((src.match(/const RENEW_MS = ([\d_]+)/) || [])[1]?.replace(/_/g, ''));
-  check(renew === 90_000 && ttl === 300_000 && ttl / renew >= 3,
-    `lease renews every ${renew / 1000}s against a ${ttl / 1000}s TTL (3+ misses of headroom)`);
+  check(renew === 300_000 && ttl === 900_000 && ttl / renew >= 3,
+    `lease renews every ${renew / 1000}s against a ${ttl / 1000}s TTL (two misses of headroom, twelve writes an hour)`);
 
   // Renewal must be self-scheduling so agents drift apart rather than beating together.
   const lease = new Lease({ url: 'https://p.example/st/lease.json', fetchImpl: async () => ({ status: 404 }), log: () => {} });
@@ -2279,7 +2391,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     },
   });
   check(await absent.acquire() === true, 'a genuine 404 means nobody holds it, so it is claimed');
-  check(absent.heldUntil > Date.now() && absent.heldUntil <= Date.now() + 300_000,
+  check(absent.heldUntil > Date.now() && absent.heldUntil <= Date.now() + 900_000,
     'and heldUntil comes from the document actually written');
 
   // A 200 carrying garbage is not a lease anybody holds — overwriting it is
@@ -7459,7 +7571,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
     else await new Promise(r => setTimeout(r, 50));
   }
   check(resumed === 202 && rdone?.phase === 'done',
-    `it finishes without the password being asked for again (${rdone?.phase})`);
+    `it finishes without the password being asked for again (${rdone?.phase}${rdone?.phase === 'error' ? ': ' + JSON.stringify(rdone.error || rdone.reason || rdone.steps?.find((st) => st.state === 'failed') || rdone) : ''})`);
   check(mints === mintsBefore
     && rdone.steps.find(s => s.key === 'credential').state === 'skipped',
     'and mints no second credential — the first one cannot be minted twice');
