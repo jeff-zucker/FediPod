@@ -6,54 +6,26 @@ FediPod gives you a Fediverse account whose data lives on a Solid pod. You
 follow people on Mastodon, Bluesky, and other Fediverse or ATProto servers in
 one timeline. Your posts, followers and settings stay on your pod.
 
-<!-- CLAUDE 2026-09-23 — rewritten against the code: sign-up no longer makes the pod; delete these markers when done -->
 The easiest way to run FediPod is to use it in any browser at https://fedipod.net. Nothing to install. Sign-up points you to a pod provider if you need a pod, then attaches a Fediverse identity to the pod you sign in with.
-<!-- /CLAUDE -->
 
-There are also a number of [other ways to run FediPod](#other-ways-to-run-fedipod) which offer a variety of scenarios.  If interested in the code, see also : [architecture overview](architecture.md) and [files overview](files-overview.md).
-Which specs FediPod follows, and where it stops short: [specs-in-use.md](specs-in-use.md).
+
+This README is about the `FediPod BrowserAgent`. There are also a number of [other ways to run FediPod](#other-ways-to-run-fedipod) which offer a variety of scenarios.  If interested in the code, see also : [architecture overview](architecture.md) and [files overview](files-overview.md). Which specs FediPod follows, and where it stops short: [specs-in-use.md](specs-in-use.md).
 
 ## Requirements
 
-<!-- CLAUDE 2026-09-23 — rewritten against the code: any pod, host or path; Solid-OIDC and WAC are what sign-up needs; delete these markers when done -->
-- A current browser, on a desktop or a phone.
-- A Solid pod, such as `https://alice.solidcommunity.net/` or
-  `https://server.example/alice/`.
-  Its server must offer Solid-OIDC sign-in and WAC access control, which
-  Community Solid Server does; every provider listed on the sign-up form
-  runs it. If you have no pod, the form links to your provider's own
-  sign-up page.
-- Followers-only and direct posts need a pod that enforces WAC access control.
-  On one that does not, the composer refuses those two and says why. Public
-  and unlisted posts work on any pod.
-<!-- /CLAUDE -->
+- A current browser
+- A free account on a gateway such as https://fedipod.net
+- A Solid pod that supports WAC (you can get one if you don't have one as part of account setup)
 
 ## Getting an account
 
-<!-- CLAUDE 2026-09-23 — rewritten against the code (1.28.0); delete these markers when done -->
 1. Open https://fedipod.net and choose **create an account**.
-2. Choose your pod provider. If you need a pod, make one on the provider's
-   own sign-up page, linked from the form. Then choose **Sign in at your
-   pod**. Your password is typed at your pod only; fedipod.net never sees it.
+2. Choose your pod provider. You'll be redirected to your provider to login if you have a pod or sign up if you need to create one.
 3. Back on fedipod.net, choose your handle and where your address lives:
    on your pod, `@handle@yourpod`, or at this site, `@handle@fedipod.net`.
-   A pod on a path of a shared host gets the fedipod.net address, because
-   the shared host cannot answer for the handle. The handle, the pod and the
-   choice are permanent; display name, bio and pictures are set later in
-   the client.
-4. Your account opens in the client.
+4. You see your Fediverse timeline.
 
-Anyone can open your profile at `https://fedipod.net/@handle`, signed in or
-not.
-
-To use your account from another browser, go to https://fedipod.net, enter
-your address and sign in at your pod. Nothing else is asked.
-
-If your account is from before 2026-09-22, the first browser after that asks
-once for the password you gave at sign-up, and stores the key on your pod as
-it is from then on. If you no longer have that password, choose "make a new
-signing key" on that screen.
-<!-- /CLAUDE -->
+From now on, anyone can open your profile at `https://fedipod.net/@handle@provider`, signed in or not.
 
 ## What you can do
 
@@ -124,35 +96,29 @@ For these, see [Other ways to run FediPod](#other-ways-to-run-fedipod).
 
 ## Your data and your keys
 
-<!-- CLAUDE 2026-09-23 — rewritten against the code: the key is stored on the pod as it is; delete these markers when done -->
 Everything you publish and everything you read is stored on your pod. Your
 signing key is stored there too, in a container only you can read through
 your pod's login. fedipod.net holds no key: it verifies incoming mail, drops
 the junk, forwards the rest to your pod, and hands your browser the app.
-<!-- /CLAUDE --> You can detach from it at any time and attach
-to a gateway of your own. Your address and your data do not change.
+With an address on your pod, `@handle@yourpod`, you can detach from it at
+any time and attach to a gateway of your own; your address and your data do
+not change.
 
-**A forum.** FediPod-BB, in `packages/fedipod-bb`, is a discussion board
-whose record lives on a Solid pod: categories are groups, topics are
-context collections, and a website at `/bb/` shows them. Its README says how
-to run one.
+## Other ways to use FediPod
 
-## Other ways to run FediPod
-
-- [The DeviceAgent](device-agent.md) runs on your own machine and
-  adds scheduled posts, push notifications, live updates, group hosting and
-  the use of any Mastodon client.
-- [Groups](groups.md): hosting a discussion group of Fediverse and Bluesky
-  users from a pod.
-- [The gateway](gateway.md): running an always-on door of your own, on
-  Netlify or any small host.
+- [fediverse-account]() - an ESM library that supports both Solid-based and regular Fediverse accounts with methods to login, reply, boost, etc.
 - [FediPod Server](packages/fedipod-server/README.md): a full ActivityPub
   server as a Community Solid Server component, giving every pod on the server
   the option of a Fediverse account.
+- [FediPod BB](packages/fedipod-bb/README.md) - A Lemmy-like  bulletin board forum with the structure stored on a group pod and users' data stored on their own pod or on their Fediverse server if they don't have a pod.
+- [FediPod DeviceAgent](device-agent.md) a single-user AP server that lives partly in a gateway, partly on a local device, with all data stored on your pod.
+- [FediPod Groups](groups.md): hosting a discussion group of Fediverse and Bluesky users from a pod.
+- [FediPod Gateway](gateway.md): A thin, always-on door running on Netlify or any small host that provides a middleman between a pod and the single-user agents. (only needed with `BrowserAgent` and `DeviceAgent`)
+
 
 ## Acknowledgements
 
-This project is inspired by the fantastic [ActivityPods project](https://github.com/activitypods) and is meant to be a lightweight alternative rather than a replacement.  Thanks to [Sébastien](https://github.com/srosset81) and collaborators for all your work.  Thanks to [Damon](https://github.com/outlaw-dame), [Mikhal](https://github.com/mrkvon), [Alain](https://github.com/bourgeoa), and [Sharon](https://github.com/SharonStrats), for testing and encouragement.  Special thanks are due to [Joseph](https://github.com/jg10-mastodon-social) whose client-to-server authentication approach and the netlify/fronted-identity ideas I borrowed from [solid-activitypub-netlify](https://github.com/jg10-mastodon-social/solid-activitypub-netlify) and to [Vincent](https://github.com/Vinnl) and [Emilia](https://github.com/ThisIsMissEm) whose ideas on the multiple Fediverse accounts sparked FediPod's support for it.
+This project is inspired by the fantastic [ActivityPods project](https://github.com/activitypods) and is meant to be a lightweight alternative rather than a replacement.  Thanks to [Sébastien](https://github.com/srosset81) and collaborators for all your work.  Thanks to [Damon](https://github.com/outlaw-dame), [Mikhal](https://github.com/mrkvon), [Alain](https://github.com/bourgeoa), and [Sharon](https://github.com/SharonStrats), [Michael](@m5m5:matrix.org) for testing and encouragement.  Special thanks are due to [Joseph](https://github.com/jg10-mastodon-social) whose client-to-server authentication approach and the netlify/fronted-identity ideas I borrowed from [solid-activitypub-netlify](https://github.com/jg10-mastodon-social/solid-activitypub-netlify) and to [Vincent](https://github.com/Vinnl) and [Emilia](https://github.com/ThisIsMissEm) whose ideas on the multiple Fediverse accounts sparked FediPod's support for it.
 
 ## Transparency
 
