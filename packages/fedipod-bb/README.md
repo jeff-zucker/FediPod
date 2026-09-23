@@ -2,7 +2,7 @@
 
 A forum whose record lives on a Solid pod, as ActivityPub documents in the
 shapes the Fediverse's boards use: each category is a Group actor (FEP-1b12),
-each topic is a context collection (FEP-7888), each post is an Article or a
+each topic is a context collection (FEP-7888), each post is a Page (with a title, as Lemmy's are) or a
 Note that names its topic and its category.
 
 This package holds the pod layout, the writers for it, the host, and the

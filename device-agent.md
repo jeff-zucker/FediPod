@@ -20,6 +20,15 @@ connect to it; and it can host a [group](groups.md).
 - While the agent is off, your mail waits on your pod's host. Run it as a
   service, or attach to a gateway, so it does not pile up there.
 
+Moving in from another gateway: a pod that already holds an account whose
+address lives at a gateway (a browser account at fedipod.net, say) can be set
+up here with an address at a different gateway, and the account moves rather
+than being refused. Setup keeps the account's state and key on the pod,
+attaches at the new gateway, publishes the new address with the old one as an
+alias, tells the old gateway, and sends a Move to every follower from the old
+address. The old gateway then serves the old actor as a stub saying where it
+went. An address on the pod itself has nothing to move; it is a sign-in.
+
 ## Installing
 
 ```

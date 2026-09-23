@@ -146,8 +146,12 @@ What happens then, in order:
 The old gateway keeps the stub for as long as its row stands; the owner can
 remove the row from the roster later. An address on the pod, `@you@yourpod`,
 needs none of this: it detaches from one mail door and attaches to another.
-Only the browser build moves in this way for now; the DeviceAgent's setup
-does not yet read a pod that already holds an account.
+
+A DeviceAgent moves the same way: set it up with the pod you already have
+and an address at the new gateway (`--address front`, or "At the gateway"
+on the setup page). Setup reads the account on the pod, keeps its state and
+key there, attaches at the new gateway, and completes the move when the
+agent first acts. See [the DeviceAgent](device-agent.md).
 
 ## What the gateway can see
 

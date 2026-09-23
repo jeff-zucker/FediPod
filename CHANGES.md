@@ -1,5 +1,30 @@
 # Changes
 
+## 2026-09-23 (a DeviceAgent moves in; the forum speaks Lemmy's terms — version 1.30.0)
+
+**A DeviceAgent moves an address from another gateway.** Setting up with a
+pod that already holds an account, and asking for an address at a gateway,
+is a move rather than a refusal when that account's address lives at a
+different gateway. Setup reads the account with the credential it minted,
+keeps the account's state and key on the pod where they are, attaches at the
+new gateway, publishes the new address with the old one as an alias, tells
+the old gateway, and sends a Move to every follower from the old address,
+signed under the old key. A move the old gateway could not be told of is
+tried again when the agent next starts acting. An address on the pod itself
+is still a sign-in, and a group still cannot move.
+
+**A titled forum post is a Page.** Lemmy's own posts are Pages; Mastodon
+converts a Page and an Article alike to the title and a link, so nothing is
+lost there. **A category says whether only its moderators may post**
+(`postingRestrictedToMods`, Lemmy's term, declared through Lemmy's context),
+and **a pin or a lock reaches Lemmy** as an Update of the opening post from
+the category, carrying `stickied` and `commentsEnabled`. Mastodon drops an
+Update from anyone but the author, which is right for it.
+
+**The bundle-driven agent harness no longer stalls.** Its request shim
+fired the body's events before a late listener could hear them; it now
+replays them, as the service worker does.
+
 ## 2026-09-23 (Sengi's emoji come from the CDN — version 1.29.2)
 
 **3,828 emoji pictures leave the deploy.** Sengi's emoji are JoyPixels,

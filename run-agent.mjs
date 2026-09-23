@@ -33,6 +33,7 @@ import { apRoot, rootOf, writeJsonAtomic } from './lib/device/home.mjs';
 import { ensureTrustedTls } from './lib/device/certs.mjs';
 import { storageFor } from './lib/core/storage.mjs';
 import { resolveKeys } from './lib/core/keys.mjs';
+import { completeGatewayMove } from './lib/device/gateway-move.mjs';
 import { RemotePod } from './lib/device/remote.mjs';
 import { Deliverer } from './lib/core/deliver.mjs';
 import { Publisher } from './lib/core/publisher/index.mjs';
@@ -547,6 +548,10 @@ export class Agent {
       return;                                // renewal is already running, above
     }
     await this.intake.start();
+    // An address that moved here from another gateway, whose move was left
+    // pending (the old gateway could not be told): try again now that this
+    // agent acts and the actor is published.
+    completeGatewayMove(this).catch(e => this.log(`gateway move: ${e.message}`));
     // Reused, not replaced: demote() stops this instance but does not clear it,
     // so constructing a new one over the top orphaned the old chain beyond the
     // reach of any later stop().

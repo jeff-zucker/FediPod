@@ -121,9 +121,10 @@ export async function post({ actor, podHome, category, categoryBase = null, cate
   const note = {
     '@context': AS,
     id,
-    // A post with a title of its own is an Article (FEP-b2b8); the title is
-    // the POST's, and says nothing about what its topic is called.
-    type: title ? 'Article' : 'Note',
+    // A post with a title of its own is a Page, as Lemmy's own posts are;
+    // Mastodon converts a Page and an Article alike to the title and a link.
+    // The title is the POST's, and says nothing about what its topic is called.
+    type: title ? 'Page' : 'Note',
     attributedTo: actor,
     ...(title ? { name: String(title).slice(0, 200) } : {}),
     // The category is named in audience, in to, and as a Mention tag — the
@@ -173,7 +174,7 @@ export async function edit({ actor, podHome, id, title = '', text, category, cat
   const to = was?.to || (isPrivate && categoryBase ? [categoryBase + 'ap/followers'] : [PUBLIC, category]);
   const note = {
     ...(was || { '@context': AS, id, type: 'Note', attributedTo: actor, to }),
-    type: title ? 'Article' : 'Note',
+    type: title ? 'Page' : 'Note',
     content: htmlOf(text),
     source: sourceOf(text),
     updated: now,

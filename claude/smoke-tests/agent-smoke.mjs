@@ -7109,6 +7109,84 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
     fs.rmSync(HR, { recursive: true, force: true });
   }
 
+  // --- 12h. ...but with an address at THIS gateway, an account held at another gateway moves in ---
+  {
+    const { runSetup, newRun } = await import(path.join(root, 'lib/device/setup.mjs'));
+    const { needsStateMove } = await import(path.join(root, 'lib/device/migrate.mjs'));
+    const HM = fs.mkdtempSync('/tmp/fedipod-movein-');
+    const OLD = 'https://a.example/u/old/ap/actor';
+    let cfg = { handle: 'old', name: 'Old Name', remotePod: 'https://taken.example/', root: 'fedipod/', aliases: ['https://taken.example/profile/card#me'],
+      gateway: { url: 'https://a.example/u/old/ap/inbox/', frontActor: OLD, hmacSecret: 's', mode: 'trust' } };
+    const podDocs = { 'keys.json': { rsa: { publicPem: 'PUB', privatePem: 'PRIV' }, mintedFor: OLD } };
+    const calls = [];
+    const agent = { home: HM, urls: { actor: 'https://b.example/u/new/ap/actor' },
+      bootstrap: async (o) => { calls.push(['bootstrap', o]); cfg = { ...cfg, handle: o.handle, gateway: o.gateway }; },
+      connect: async () => { calls.push(['connect']); },
+      publisher: { publishProfile: async () => { calls.push(['publish']); return { unreachable: [] }; } },
+      store: { attach() {}, load: async () => {}, getConfig: () => cfg, setConfig(c) { cfg = c; }, flush: async () => {},
+        read: (k, d) => podDocs[k] ?? d, write: (k, v) => { podDocs[k] = v; } } };
+    const rM = newRun();
+    let completed = 0;
+    await runSetup({ home: HM, agent, run: rM,
+      answers: { mode: 'existing', pod: 'https://taken.example/', handle: 'new', shape: 'front', gatewayOrigin: 'https://b.example',
+        issuer: 'https://taken.example', email: 'e@x', password: 'pw' },
+      deps: { checkPodUsable: async () => ({ ok: true }), resourceExists: async () => true,
+        mintCredential: async () => ({ webId: 'https://taken.example/profile/card#me', issuerOrigin: 'https://taken.example', clientId: 'c', secret: 's' }),
+        readPodAccount: async () => ({ config: cfg, keys: podDocs['keys.json'] }),
+        attachGateway: async (o) => { calls.push(['attach', o.handle]); return { url: 'https://b.example/u/new/ap/inbox/', frontActor: 'https://b.example/u/new/ap/actor', hmacSecret: 't', mode: 'trust' }; },
+        completeGatewayMove: async () => { completed++; return { completedAt: 'now', moveSent: 1 }; } } });
+    check(rM.phase === 'done', `an account held at gateway a, set up with an address at gateway b, moves in: ${rM.error || rM.phase}`);
+    check(rM.steps.find((s) => s.key === 'account')?.note?.includes('moves here'), 'the account step says so');
+    check(calls.some(([k, h]) => k === 'attach' && h === 'new') && calls.findIndex(([k]) => k === 'attach') < calls.findIndex(([k]) => k === 'bootstrap'),
+      'it attaches fronted at b under the new handle, before bootstrap');
+    check(cfg.gateway?.frontActor === 'https://b.example/u/new/ap/actor' && cfg.aliases.includes(OLD) && cfg.movedFrom?.actor === OLD && cfg.movedFrom.handle === 'old',
+      'the config names b, keeps the old actor as an alias, and records where it moved from');
+    check(podDocs['keys.json'].mintedFor === 'https://b.example/u/new/ap/actor' && podDocs['keys.json'].rsa.privatePem === 'PRIV',
+      'the key stays and its stamp follows the actor');
+    const cred = JSON.parse(fs.readFileSync(path.join(HM, 'credential.json'), 'utf8'));
+    check(cred.keysMode === 'pod' && cred.stateOnPod === true && !cred.privateRoot && cred.layout === 1 && !needsStateMove(cred),
+      'the credential keeps state and key on the pod, deliberately, and is not nagged as an old layout');
+    check(completed === 1 && calls.findIndex(([k]) => k === 'publish') >= 0, 'and the move is completed after the actor is published');
+    check(rM.result?.address === '@new@b.example', `the address is the new one: ${rM.result?.address}`);
+
+    // The same pod with an address ON the pod asked for is still refused.
+    const HP = fs.mkdtempSync('/tmp/fedipod-movein2-');
+    const rP = newRun();
+    await runSetup({ home: HP, agent: { ...agent, home: HP }, run: rP,
+      answers: { mode: 'existing', pod: 'https://taken.example/', handle: 'new', shape: 'pod', issuer: 'https://taken.example', email: 'e@x', password: 'pw' },
+      deps: { checkPodUsable: async () => ({ ok: true }), resourceExists: async () => true, mintCredential: async () => ({}) } });
+    check(rP.phase === 'error' && /ask for an address at this gateway/.test(rP.error || ''), 'with an address on the pod asked for, it is refused and told how to move instead');
+    fs.rmSync(HM, { recursive: true, force: true }); fs.rmSync(HP, { recursive: true, force: true });
+  }
+
+  // --- 12i. the Node half of the move: the old gateway told, the Move signed under the old key ---
+  {
+    const { completeGatewayMove } = await import(path.join(root, 'lib/device/gateway-move.mjs'));
+    const OLD = 'https://a.example/u/old/ap/actor'; const NEW = 'https://b.example/u/new/ap/actor';
+    let cfg = { handle: 'new', movedFrom: { actor: OLD, gateway: 'https://a.example', handle: 'old', at: 'then' } };
+    const asked = []; const sent = [];
+    const agent = { log: () => {}, urls: { actor: NEW },
+      remote: { session: { fetch: async (u, i) => { asked.push({ u, body: JSON.parse(i.body) }); return { status: 200 }; } } },
+      deliverer: { rsaPrivate: 'KEY' },
+      store: { getConfig: () => cfg, setConfig(c) { cfg = c; }, flush: async () => {},
+        getContacts: () => ({ followers: [{ id: 'https://m.example/u/f1', inbox: 'https://m.example/u/f1/inbox', sharedInbox: 'https://m.example/inbox' }, { id: 'https://m.example/u/f2', inbox: 'https://m.example/u/f2/inbox', sharedInbox: 'https://m.example/inbox' }], following: [] }) } };
+    const made = [];
+    const done = await completeGatewayMove(agent, { makeDeliverer: (o) => { made.push(o); return { deliverNow: async (inbox, act) => { sent.push({ inbox, act }); } }; } });
+    check(asked.length === 1 && asked[0].u === 'https://a.example/api/move' && asked[0].body.handle === 'old' && asked[0].body.movedTo === NEW,
+      'the old gateway is told the address moved, by its old handle');
+    check(made[0]?.keyId === `${OLD}#main-key` && made[0].actorId === OLD && made[0].rsaPrivate === 'KEY' && made[0].passive === true,
+      'the Move is signed under the OLD key id with the same key, by a deliverer that drains nothing');
+    check(sent.length === 1 && sent[0].inbox === 'https://m.example/inbox' && sent[0].act.type === 'Move' && sent[0].act.actor === OLD && sent[0].act.target === NEW,
+      'one Move per shared inbox, from the old actor to the new');
+    check(done?.completedAt && cfg.movedFrom.completedAt && cfg.movedFrom.moveSent === 1, 'and the config records it done');
+    check(await completeGatewayMove(agent) === null && asked.length === 1, 'a completed move is not repeated');
+    // The old gateway unreachable: nothing sent, left pending for the next start.
+    let cfg2 = { movedFrom: { actor: OLD, gateway: 'https://a.example', handle: 'old' } };
+    const agent2 = { ...agent, store: { ...agent.store, getConfig: () => cfg2, setConfig(c) { cfg2 = c; } }, remote: { session: { fetch: async () => { throw new Error('down'); } } } };
+    const held = await completeGatewayMove(agent2, { makeDeliverer: () => ({ deliverNow: async () => { throw new Error('must not send'); } }) });
+    check(held?.told === false && !cfg2.movedFrom.completedAt, 'with the old gateway unreachable, nothing is sent and the move stays pending');
+  }
+
   fs.rmSync(H1, { recursive: true, force: true });
   fs.rmSync(H2, { recursive: true, force: true });
 }

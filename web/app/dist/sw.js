@@ -9700,6 +9700,7 @@ __export(wire_exports, {
   DEFAULT_ROOT: () => DEFAULT_ROOT,
   FOLLOWERS_PAGE_SIZE: () => FOLLOWERS_PAGE_SIZE,
   HASHTAG_RE: () => HASHTAG_RE,
+  LEMMY_CTX: () => LEMMY_CTX,
   MENTION_RE: () => MENTION_RE,
   OUTBOX_PAGE_SIZE: () => OUTBOX_PAGE_SIZE,
   POLICY_CTX: () => POLICY_CTX,
@@ -9812,7 +9813,8 @@ function actorDoc({
   inbox = null,
   outbox = null,
   oauthAuthorize = null,
-  oauthToken = null
+  oauthToken = null,
+  postingRestrictedToMods = null
 }) {
   const context = [AS_CTX, SEC_CTX];
   context.push({ toot: "http://joinmastodon.org/ns#", featured: { "@id": "toot:featured", "@type": "@id" } });
@@ -9835,6 +9837,7 @@ function actorDoc({
     });
   }
   if (webId || aliases.length) context.push({ alsoKnownAs: { "@id": "as:alsoKnownAs", "@type": "@id" } });
+  if (kind === "group" && postingRestrictedToMods !== null) context.push(LEMMY_CTX);
   if (fields.length) {
     context.push({ schema: "http://schema.org#", PropertyValue: "schema:PropertyValue", value: "schema:value" });
   }
@@ -9853,6 +9856,7 @@ function actorDoc({
     }] } : {},
     ...movedTo ? { movedTo } : {},
     ...webId || aliases.length ? { alsoKnownAs: [...webId ? [webId] : [], ...aliases] } : {},
+    ...kind === "group" && postingRestrictedToMods !== null ? { postingRestrictedToMods: !!postingRestrictedToMods } : {},
     preferredUsername: handle7,
     name: name || handle7,
     // The bio, and the avatar. For a group, `summary` is where what the group
@@ -10375,7 +10379,7 @@ function addRemoveActivity({ urls, type, object, target, serial }) {
     target
   };
 }
-var import_sanitize_html, AS_CTX, SEC_CTX, PUBLIC, DEFAULT_ROOT, assertionKeyId, OUTBOX_PAGE_SIZE, outboxPageId, outboxPageCount, outboxItemId, outboxWireItem, outboxLocalItem, FOLLOWERS_PAGE_SIZE, followersPageId, followersPageCount, ALLOWED_TAGS, ALLOWED_ATTRS, MAX_ATTACHMENTS, MAX_ATTACHMENT_URL, attachmentUrl, HTML_ESCAPES2, MENTION_RE, HASHTAG_RE, QUOTE_CTX, POLICY_CTX;
+var import_sanitize_html, AS_CTX, LEMMY_CTX, SEC_CTX, PUBLIC, DEFAULT_ROOT, assertionKeyId, OUTBOX_PAGE_SIZE, outboxPageId, outboxPageCount, outboxItemId, outboxWireItem, outboxLocalItem, FOLLOWERS_PAGE_SIZE, followersPageId, followersPageCount, ALLOWED_TAGS, ALLOWED_ATTRS, MAX_ATTACHMENTS, MAX_ATTACHMENT_URL, attachmentUrl, HTML_ESCAPES2, MENTION_RE, HASHTAG_RE, QUOTE_CTX, POLICY_CTX;
 var init_wire = __esm({
   "lib/core/wire.mjs"() {
     init_urls();
@@ -10383,6 +10387,7 @@ var init_wire = __esm({
     init_profile_page();
     import_sanitize_html = __toESM(require_sanitize_html(), 1);
     AS_CTX = "https://www.w3.org/ns/activitystreams";
+    LEMMY_CTX = "https://join-lemmy.org/context.json";
     SEC_CTX = "https://w3id.org/security/v1";
     PUBLIC = "https://www.w3.org/ns/activitystreams#Public";
     DEFAULT_ROOT = "fedipod/";
@@ -57180,6 +57185,9 @@ var Publisher = class {
       fields: this.config.fields || [],
       webId: this.remote.webId || null,
       aliases: this.config.aliases || [],
+      // A group says whether only its moderators may open posts (Lemmy's
+      // term); a person's actor carries nothing of the kind.
+      postingRestrictedToMods: this.config.kind === "group" ? !!this.config.postingRestrictedToMods : null,
       moderators,
       pendingFollowers: priv ? urls.pendingFollowers : null,
       pendingFollowing: priv ? urls.pendingFollowing : null,

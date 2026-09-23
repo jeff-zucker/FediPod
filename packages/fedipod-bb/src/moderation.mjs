@@ -10,7 +10,7 @@
 // A category here is the object the host builds: { urls, store, remote,
 // publisher, deliverer, intake, log }.
 
-import { AS_CTX, PUBLIC, orderedCollection, updateActorActivity } from '../../../lib/core/wire.mjs';
+import { AS_CTX, LEMMY_CTX, PUBLIC, orderedCollection, updateActorActivity } from '../../../lib/core/wire.mjs';
 import { announceModeration, applyModeration } from '../../../lib/core/social.mjs';
 import * as collection from '../../../lib/pod/collection.mjs';
 import * as podNotes from '../../../lib/pod/notes.mjs';
@@ -123,18 +123,48 @@ export async function moveTopic(from, to, tid) {
 }
 
 // Pinned topics are the category's featured collection; members' servers
-// learn of the change through an Update of the category.
+// learn of the change through an Update of the category, and Lemmy through
+// an Update of the opening post (below).
 export async function pinTopic(cat, tid, pinned) {
   if (!topics.get(cat.store, tid)) throw new Error(`no such topic: ${tid}`);
   topics.setFlags(cat.store, tid, { pinned });
   const ids = topics.list(cat.store).filter(t => t.pinned).map(t => cat.urls.topic(t.tid));
   await collection.writeFlat(cat.remote, cat.urls.featured, orderedCollection(cat.urls.featured, ids), { publicRead: true });
   const actor = await cat.remote.getJson(cat.urls.actor).catch(() => null);
-  const inboxes = [...new Set(cat.store.getContacts().followers.map(f => f.sharedInbox || f.inbox).filter(Boolean))];
+  const inboxes = memberInboxes(cat);
   if (actor && inboxes.length) {
     await cat.deliverer.deliverToAll(inboxes, updateActorActivity({ urls: cat.urls, actor, serial: Date.now() }));
   }
+  await announcePageFlags(cat, tid);
   return { pinned: ids };
+}
+
+const memberInboxes = (cat) => [...new Set(cat.store.getContacts().followers.map(f => f.sharedInbox || f.inbox).filter(Boolean))];
+
+// What Lemmy reads a pin and a lock from: the opening post itself, carrying
+// `stickied` and `commentsEnabled` in Lemmy's terms, sent as an Update from
+// the category — the moderator's edit of a post in its community, which is
+// how a Lemmy community tells its subscribers a post was featured or locked.
+// The copy sent is the forum's cached copy of the post, so the object is the
+// whole post and not a fragment. Mastodon drops an Update from anyone but
+// the author, which is the right answer for it.
+export async function announcePageFlags(cat, tid) {
+  const entry = topics.list(cat.store).find(t => t.tid === tid);
+  const opening = topics.get(cat.store, tid)?.posts?.[0];
+  if (!entry || !opening?.id) return null;
+  const copy = await cat.remote.getJson(cat.urls.cached(opening.id)).catch(() => null);
+  if (!copy?.id) return null;
+  const inboxes = memberInboxes(cat);
+  if (!inboxes.length) return null;
+  const page = { ...copy, '@context': [AS_CTX, LEMMY_CTX], stickied: !!entry.pinned, commentsEnabled: !entry.locked };
+  const activity = {
+    '@context': [AS_CTX, LEMMY_CTX],
+    id: `${cat.urls.actor}#page-${Date.now()}`,
+    type: 'Update', actor: cat.urls.actor, to: [PUBLIC], cc: [cat.urls.followers],
+    object: page,
+  };
+  await cat.deliverer.deliverToAll(inboxes, activity);
+  return activity;
 }
 
 // A topic's name, changed: the record and the published head follow, and
@@ -154,8 +184,10 @@ export async function lockTopic(cat, tid, locked) {
   if (!topics.get(cat.store, tid)) throw new Error(`no such topic: ${tid}`);
   topics.setFlags(cat.store, tid, { locked });
   // The topic says so itself, so a reader and any other server can see it:
-  // `closed` is what AS2 gives for a collection that takes no more.
+  // `closed` is what AS2 gives for a collection that takes no more. Lemmy
+  // reads it off the opening post instead (announcePageFlags).
   await publish.publishTopic(cat, tid, { force: true });
+  await announcePageFlags(cat, tid);
   return { locked: !!locked };
 }
 
