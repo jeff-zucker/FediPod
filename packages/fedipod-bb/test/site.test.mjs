@@ -210,7 +210,7 @@ test('the latest feed: the forum\'s newest posts, each named by its topic', asyn
   const B = 'https://mei.pod.example/fedipod/ap/notes/b';
   const tid = topics.open(gStore, { title: 'Tomato blight', post: { id: A, author: MEI, published: '2026-09-15T10:00:00Z' } });
   topics.append(gStore, tid, { id: B, author: MEI, published: '2026-09-15T11:00:00Z' });
-  await publish.cachePost(ctx, { id: A, type: 'Note', attributedTo: MEI, content: '<p>One.</p>', published: '2026-09-15T10:00:00Z', context: g.topic(tid), audience: g.actor }, { replies: 1 });
+  await publish.cachePost(ctx, { id: A, type: 'Note', attributedTo: MEI, content: '<p>One.</p>', published: '2026-09-15T10:00:00Z', context: g.topic(tid), audience: g.actor }, { replies: 1, likes: 2, dislikes: 1 });
   await publish.cachePost(ctx, { id: B, type: 'Note', attributedTo: MEI, content: '<p>Two.</p>', published: '2026-09-15T11:00:00Z', context: g.topic(tid), audience: g.actor }, { replies: 0 });
   await publish.publishTopic(ctx, tid);
   // The index the host keeps: newest first, naming the copies it holds.
@@ -227,6 +227,14 @@ test('the latest feed: the forum\'s newest posts, each named by its topic', asyn
   assert.equal(feed[0].topicName, 'Tomato blight', 'a post is named by its topic, having no title of its own');
   assert.equal(feed[0].replies, 0, 'a reply nobody answered has none of its own');
   assert.equal(feed[1].replies, 1, 'and the post it answers has one');
+  assert.equal(feed[1].likes, 2);
+  assert.equal(feed[1].dislikes, 1, 'the down count is read from the copy, not from a document beside it');
+  const asked = [];
+  const counting = reader({ fetch: async (u) => { asked.push(u); return fetchOver(pod.docs)(u); } });
+  await counting.latest(POD + 'fedipod-bb/');
+  assert.ok(!asked.some((u) => u.endsWith('-dislikes')), 'and the page asks for no dislikes document at all');
+  const one = await counting.post(g.home, A);
+  assert.equal(one.dislikes, 1);
   assert.equal(feed[0].topicReplies, 1, 'the topic has had one reply, which is what the index shows');
   assert.equal(feed[0].category, g.actor);
   assert.equal(feed[0].topic, g.topic(tid));

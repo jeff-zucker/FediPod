@@ -1,5 +1,13 @@
 # Changes
 
+## 2026-09-23 (the forum page reads the down count from the post — version 1.36.0)
+
+**Opening the forum asks the pod for half as many documents.** The number
+of people who voted a post down is carried in the forum's copy of the post,
+beside the number who liked it, and the page reads it there. Until now the
+page asked for a separate count document beside every post it showed, and
+for most posts there was none. An edited post keeps its counts.
+
 ## 2026-09-23 (a quiet forum leaves its pod alone — version 1.35.0)
 
 **A forum nobody is posting to no longer writes to its pod every minute.**

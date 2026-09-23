@@ -150,7 +150,7 @@ async function flat({ remote, store }, key, url, doc, force) {
 // Content is sanitised again on the way in; nothing else is changed, so the
 // copy says what the author said, under the author's own id. Returns the
 // copy's url.
-export async function cachePost({ remote, urls }, note, { topic = null, replies = null, likes = null } = {}) {
+export async function cachePost({ remote, urls }, note, { topic = null, replies = null, likes = null, dislikes = null } = {}) {
   const copy = { ...note };
   if (topic) copy.context = topic;
   if (!copy.audience) copy.audience = urls.actor;
@@ -158,9 +158,13 @@ export async function cachePost({ remote, urls }, note, { topic = null, replies 
   // The author's own replies collection is theirs and says something else:
   // this is what the forum holds, in the topic it placed the post in.
   if (Number.isFinite(replies)) copy.replies = { type: 'Collection', totalItems: replies };
-  // How many said they liked it (AS2 `likes`). A Dislike is an activity AS2
-  // has; a place to publish a count of them is not, so none is invented.
+  // How many said they liked it (AS2 `likes`), and how many voted it down.
+  // A Dislike is an activity AS2 has; a property for a count of them is not,
+  // so `dislikes` is the forum's own word, shaped like `likes`, in the copy
+  // the forum's page reads. Read here, the page no longer asks the pod for a
+  // count beside every post it shows.
   if (Number.isFinite(likes)) copy.likes = { type: 'Collection', totalItems: likes };
+  if (Number.isFinite(dislikes)) copy.dislikes = { type: 'Collection', totalItems: dislikes };
   if (typeof copy.content === 'string') copy.content = sanitizeHtml(copy.content);
   if (!copy['@context']) copy['@context'] = 'https://www.w3.org/ns/activitystreams';
   const url = urls.cached(note.id);

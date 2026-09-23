@@ -485,6 +485,7 @@ test('votes go both ways: a Like up, a Dislike down, an Undo takes back whicheve
 
   const votes = () => g.store.read('votes.json', {})[P];
   const down = () => pod.docs.get(g.urls.cached(P) + '-dislikes')?.totalItems ?? 0;
+  const downInCopy = () => pod.docs.get(g.urls.cached(P))?.dislikes?.totalItems ?? 0;
   const up = () => pod.docs.get(g.urls.cached(P))?.likes?.totalItems ?? 0;
   const cast = (n, activity) => pod.deliver(n, { '@context': 'https://www.w3.org/ns/activitystreams', ...activity });
 
@@ -499,6 +500,7 @@ test('votes go both ways: a Like up, a Dislike down, an Undo takes back whicheve
   assert.deepEqual(votes(), { up: [], down: [KWAME] });
   assert.equal(up(), 0);
   assert.equal(down(), 1, 'the down count is published beside the post, since AS2 has no property for it');
+  assert.equal(downInCopy(), 1, 'and carried in the copy itself, where the page reads it');
 
   cast('v3', { id: MEI + '#dislike-1', type: 'Dislike', actor: MEI, object: P, to: [g.urls.actor] });
   await agent.intake.drain();
@@ -509,6 +511,11 @@ test('votes go both ways: a Like up, a Dislike down, an Undo takes back whicheve
   await agent.intake.drain();
   assert.deepEqual(votes(), { up: [], down: [MEI] });
   assert.equal(down(), 1);
+  // An edit rewrites the copy from the author's note; the counts come back.
+  await agent.onCarriedEdit(g, { noteId: P, note: { ...remoteDocs[P], name: 'Seed swap, edited' } });
+  assert.equal(pod.docs.get(g.urls.cached(P)).name, 'Seed swap, edited');
+  assert.equal(downInCopy(), 1, 'an edited copy keeps its down count');
+  assert.equal(pod.docs.get(g.urls.cached(P)).likes?.totalItems, 0, 'and its up count');
 
   // And at nought the collection is taken down rather than published empty.
   cast('v5', { id: MEI + '#undo-1', type: 'Undo', actor: MEI, to: [g.urls.actor], object: { type: 'Dislike', actor: MEI, object: P } });

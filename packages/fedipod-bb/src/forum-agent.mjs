@@ -454,7 +454,13 @@ export class ForumAgent {
   // reads is rewritten from the note as verified at its origin, and a changed
   // title is the topic's title when that post opened it.
   async onCarriedEdit(cat, { noteId, note }) {
-    await publish.cachePost(cat, note, { topic: (() => { const tid = topics.topicOf(cat.store, noteId); return tid ? cat.urls.topic(tid) : null; })() });
+    // The copy is rewritten from the note as verified at its origin; the
+    // counts the forum keeps on it are put back from what the forum knows.
+    const v = cat.store.read('votes.json', {})[noteId];
+    const held = topics.topicOf(cat.store, noteId);
+    const replies = held ? (topics.get(cat.store, held)?.posts || []).filter(p => p.inReplyTo === noteId).length : null;
+    await publish.cachePost(cat, note, { topic: held ? cat.urls.topic(held) : null, replies,
+      likes: (Array.isArray(v) ? v : v?.up || []).length, dislikes: (Array.isArray(v) ? [] : v?.down || []).length });
     await publish.publishLatest(this.siteAgent);
     const tid = topics.topicOf(cat.store, noteId);
     if (!tid) return;
@@ -724,7 +730,7 @@ export class ForumAgent {
     cat.store.write('votes.json', votes);
     const copy = await this.remote.getJson(cat.urls.cached(post)).catch(() => null);
     if (copy && copy.type !== 'Tombstone') {
-      await publish.cachePost(cat, copy, { likes: up.size });
+      await publish.cachePost(cat, copy, { likes: up.size, dislikes: down.size });
       await publish.publishDislikes(cat, post, down.size).catch(e => this.log(`downvotes on ${post}: ${e.message}`));
       await publish.publishLatest(this.siteAgent).catch(() => {});
     }
