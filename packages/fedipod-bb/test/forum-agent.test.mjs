@@ -597,3 +597,23 @@ test('a quiet forum writes nothing: the mod queue and the heartbeat rule are sta
   await agent.onCarriedEdit(g, { noteId: t1, note: note(t1, { name: 'One, edited', audience: g.urls.actor }) });
   assert.equal(latestRules(), r0, 'an edit does not restate the latest list\'s rule');
 });
+
+test('a reprovision states the rules of the forum lists again, as a forum copied to another pod needs', async () => {
+  const pod = fakePod();
+  const { agent } = await boot(pod, home());
+  await agent.init({ handle: 'forum', name: 'The Forum', categories: [{ slug: 'gardening', name: 'Gardening' }],
+    moderators: ['https://priya.pod.example/fedipod/ap/actor'] });
+  assert.ok(await agent.connect());
+  const site = agent.site;
+  const rules = (u) => pod.acls.filter(([a]) => a === u).length;
+  const before = { latest: rules(site.latest), categories: rules(site.categories), administrators: rules(site.administrators) };
+  await agent.publishAll();
+  assert.deepEqual({ latest: rules(site.latest), categories: rules(site.categories), administrators: rules(site.administrators) }, before,
+    'an ordinary start restates none of them');
+  agent.store.setConfig({ ...agent.store.getConfig(), reprovision: true, republish: true });
+  agent.config = agent.store.getConfig();
+  await agent.publishAll();
+  assert.ok(rules(site.latest) > before.latest && rules(site.categories) > before.categories && rules(site.administrators) > before.administrators,
+    'a reprovision writes each list with its rule');
+  assert.equal(agent.store.getConfig().reprovision, false, 'and the request is cleared once done');
+});

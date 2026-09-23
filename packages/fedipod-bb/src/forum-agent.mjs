@@ -861,6 +861,10 @@ export class ForumAgent {
         }
       }
     }
+    // A reprovision states every rule again, the forum's flat lists' among
+    // them. Their rule is written with their first publish, so the record of
+    // that publish is forgotten here and the publish below writes it.
+    if (redo) this.store.write('published.json', { ...this.store.read('published.json', {}), categories: null, latest: null, administrators: null });
     const seen = this.store.read('published.json', {});
     if (force || !seen.actorDigest) await this.siteAgent.publisher.publishProfile({ force });
     await publish.publishCategories(this.siteAgent, this.categories.map(c => c.urls.actor), { force });

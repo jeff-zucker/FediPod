@@ -1,5 +1,12 @@
 # Changes
 
+## 2026-09-23 (a forum copied to another pod comes up readable — version 1.36.1)
+
+**A forum moved to a new pod publishes its lists with their rules.** After
+a copy, the host is asked to reprovision once and now states the rule on
+the newest-posts, categories and administrators lists as well as on its
+containers; before, those three stayed private on the new pod.
+
 ## 2026-09-23 (the forum page reads the down count from the post — version 1.36.0)
 
 **Opening the forum asks the pod for half as many documents.** The number
