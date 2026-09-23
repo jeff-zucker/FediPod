@@ -85,6 +85,20 @@ const DIR_TTL_MS = 60_000;
 
 // Rows created by attach live in a Netlify Blobs store; a seed roster may
 // also come from the environment. Blob rows win on a name collision.
+//
+// A request asks for ONE row, by its key: one Blobs read, held a minute per
+// process. The whole map (one read per account) is built only for the roster.
+const rows = new Map();   // handle → { rec, at }
+const ROWS_MAX = 1000;
+async function rowFor(handle) {
+  const hit = rows.get(handle);
+  if (hit && Date.now() - hit.at < DIR_TTL_MS) return hit.rec;
+  const rec = (await getStore('directory').get(handle, { type: 'json' })) || (await seedRows())[handle] || null;
+  if (rows.size >= ROWS_MAX) for (const [k, v] of rows) if (Date.now() - v.at >= DIR_TTL_MS) rows.delete(k);
+  rows.set(handle, { rec, at: Date.now() });
+  return rec;
+}
+
 async function blobRows() {
   try {
     const store = getStore('directory');
@@ -98,15 +112,17 @@ async function blobRows() {
   } catch { return {}; }
 }
 
+let seeds = null;   // read once per process: the environment does not change under it
 async function seedRows() {
+  if (seeds) return seeds;
   // A small seed roster can live directly in the environment — and must, if
   // it would otherwise be fetched from this site's own origin, which this
   // function intercepts (the fetch would recurse into itself).
-  if (process.env.FEDIPOD_DIRECTORY_JSON) return JSON.parse(process.env.FEDIPOD_DIRECTORY_JSON);
-  if (!process.env.FEDIPOD_DIRECTORY_URL) return {};
+  if (process.env.FEDIPOD_DIRECTORY_JSON) return (seeds = JSON.parse(process.env.FEDIPOD_DIRECTORY_JSON));
+  if (!process.env.FEDIPOD_DIRECTORY_URL) return (seeds = {});
   const res = await fetch(process.env.FEDIPOD_DIRECTORY_URL, { headers: { accept: 'application/json' } });
   if (!res.ok) throw new Error(`directory fetch → ${res.status}`);
-  return res.json();
+  return (seeds = await res.json());
 }
 
 async function directory() {
@@ -128,12 +144,20 @@ const logRequest = (request, status, startedAt) => {
 
 export default async function handler(request) {
   const startedAt = Date.now();
-  let map;
-  try { map = await directory(); } catch (e) {
+  let out;
+  try { out = await route(request); } catch (e) {
+    // The directory could not be read, or a route threw: a 503 the caller
+    // retries, never a 404 the edge would hold.
+    console.log(`front: ${e?.message || e}`);
     logRequest(request, 503, startedAt);
-    return new Response(`directory unavailable: ${e.message}\n`, { status: 503 });
+    return new Response(`front unavailable: ${e?.message || e}\n`, { status: 503 });
   }
-  const out = await routeFront(request, {
+  logRequest(request, out.status, startedAt);
+  return new Response(out.body ?? null, { status: out.status, headers: out.headers });
+}
+
+function route(request) {
+  return routeFront(request, {
     host: process.env.FEDIPOD_FRONT_HOST,
     frontOrigin: process.env.FEDIPOD_FRONT_ORIGIN,
     signupPage,
@@ -147,12 +171,13 @@ export default async function handler(request) {
     offersPods: process.env.FEDIPOD_OFFERS_PODS === '1',
     gatewayWebId: process.env.FEDIPOD_GATEWAY_WEBID || null,
     adminWebId: process.env.FEDIPOD_ADMIN_WEBID || null,
-    lookup: (handle) => map[handle] || null,
-    listDirectory: async () => map,
+    lookup: rowFor,
+    listDirectory: directory,
     // Drops the blob row; a handle that survives in the env seed stays.
     removeDirectory: async (handle) => {
       const store = getStore('directory');
       await store.delete(handle);
+      rows.delete(handle);
       dir = null;
       const seeds = await seedRows().catch(() => ({}));
       return !seeds[handle];
@@ -161,6 +186,7 @@ export default async function handler(request) {
     putDirectory: async (handle, record) => {
       const store = getStore('directory');
       await store.setJSON(handle, record);
+      rows.delete(handle);
       dir = null;
     },
     // Per-user Append to that user's pod inbox — with the user's credential
@@ -185,14 +211,12 @@ export default async function handler(request) {
     pauseItems: process.env.FEDIPOD_PAUSE_ITEMS,
     closeDays: process.env.FEDIPOD_CLOSE_DAYS,
     podPut: async (handle, url, body, ct) => {
-      const rec = map[handle];
+      const rec = await rowFor(handle);
       if (!rec) return false;
       return podInbox.appendWithToken(url, body, ct, { appendToken: rec.appendToken,
         report: (status) => { if (status >= 400 || status === 0) console.log(`door @${handle}: pod answered ${status || 'nothing'} to PUT ${url}${rec.appendToken ? ' (with token)' : ' (anonymous)'}`); } });
     },
   });
-  logRequest(request, out.status, startedAt);
-  return new Response(out.body ?? null, { status: out.status, headers: out.headers });
 }
 
 export const config = { path: '/*', preferStatic: true };

@@ -1115,6 +1115,76 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     'a queued delivery answered 410 is dropped, and everyone behind a gone shared inbox is forgotten');
 }
 
+// --- 5c1h2. a fan-out goes out in batches, and the relay's own "no such account" ends a delivery ---
+{
+  const { Deliverer } = await import(path.join(root, 'lib/core/deliver.mjs'));
+  const { RelayDeliverer } = await import(path.join(root, 'web/app/deliver-relay.mjs'));
+  const mkStore = () => {
+    const state = { queue: [], contacts: { followers: [], following: [] } };
+    return { state, store: { getQueue: () => state.queue, setQueue: (q) => { state.queue = q; },
+      getContacts: () => state.contacts, setContacts: (c) => { state.contacts = c; }, addDeadLetter: () => {} } };
+  };
+  // Batches: 45 recipients on 45 hosts, a batch size of 20, one attempt call per batch.
+  {
+    const { state, store } = mkStore();
+    const d = new Deliverer({ store, keyId: 'k', rsaPrivate: null, log: () => {}, passive: true });
+    d.batchSize = 20;
+    const calls = [];
+    d.deliverManyNow = async (targets) => {
+      calls.push(targets.length);
+      return targets.map((t) => (t.inbox.includes('down.example') ? { error: Object.assign(new Error('503'), { status: 503 }) }
+        : t.inbox.includes('gone.example') ? { error: Object.assign(new Error('410'), { status: 410 }) } : { ok: true }));
+    };
+    const inboxes = Array.from({ length: 45 }, (_, i) => `https://h${i}.example/inbox`);
+    inboxes[3] = 'https://down.example/inbox'; inboxes[7] = 'https://gone.example/inbox';
+    await d.deliverToAll(inboxes, { type: 'Create', actor: 'me' });
+    check(calls.join() === '20,20,5', `forty-five recipients are three attempts, not forty-five (${calls.join()})`);
+    check(state.queue.length === 1 && state.queue[0].inbox === 'https://down.example/inbox',
+      'the one that failed is queued; the one that is gone is dropped; the rest are delivered');
+    // A host cooled by the first batch is not asked by the second.
+    const later = [];
+    d.deliverManyNow = async (targets) => { later.push(...targets.map((t) => t.inbox)); return targets.map(() => ({ ok: true })); };
+    await d.deliverToAll(['https://down.example/u/two/inbox', 'https://fine.example/inbox'], { type: 'Create', actor: 'me' });
+    check(!later.includes('https://down.example/u/two/inbox') && later.includes('https://fine.example/inbox')
+      && state.queue.length === 2, 'a host found refusing stays unasked while it cools; the rest go out');
+  }
+  // The Node deliverer, untouched: one attempt per recipient, in order.
+  {
+    const { store } = mkStore();
+    const d = new Deliverer({ store, keyId: 'k', rsaPrivate: null, log: () => {}, passive: true });
+    const seen = [];
+    d.deliverNow = async (inbox) => { seen.push(inbox); };
+    await d.deliverToAll(['https://a.example/inbox', 'https://b.example/inbox', 'https://a.example/inbox'], { type: 'Create' });
+    check(seen.join() === 'https://a.example/inbox,https://b.example/inbox', 'the Node deliverer still opens one socket per distinct recipient');
+  }
+  // The relay deliverer: one relay call per batch; the far servers' answers land per recipient.
+  {
+    const { state, store } = mkStore();
+    const relayCalls = [];
+    let answer = { status: 200, json: async () => ({ results: [{ status: 202 }, { status: 410 }, { status: 503, retryAfter: '120' }] }) };
+    const d = new RelayDeliverer({ store, keyId: 'k', rsaPrivate: null, log: () => {}, passive: true,
+      relayUrl: 'https://front.example/api/relay', handle: 'mei',
+      sessionFetch: async (_u, init) => { relayCalls.push(JSON.parse(init.body)); return answer; } });
+    d._signedRequest = async (url, init) => ({ url, method: init.method || 'GET', headers: {}, body: init.body || '' });
+    check(d.batchSize === 20, 'the relay deliverer sends up to twenty per call');
+    await d.deliverToAll(['https://ok.example/inbox', 'https://gone.example/inbox', 'https://busy.example/inbox'], { type: 'Create', actor: 'me' });
+    check(relayCalls.length === 1 && relayCalls[0].requests.length === 3 && relayCalls[0].handle === 'mei',
+      `three recipients are one relay call carrying three requests (${relayCalls.length} call(s))`);
+    check(state.queue.length === 1 && state.queue[0].inbox === 'https://busy.example/inbox'
+      && state.queue[0].nextAt - Date.now() > 100_000,
+    'the busy one is queued for when it asked; the gone one is dropped; the delivered one is done');
+    // The relay itself says there is no such account: nothing to retry, ever.
+    answer = { status: 404, json: async () => ({ error: 'no such account' }) };
+    const before = state.queue.length;
+    await d.deliver('https://fine.example/inbox', { type: 'Create', actor: 'me' });
+    check(state.queue.length === before, 'a delivery the relay refuses with 404 is dropped, not retried for three days');
+    // The relay refusing for any other reason is a hiccup: queued.
+    answer = { status: 503, json: async () => ({}) };
+    await d.deliver('https://fine.example/inbox', { type: 'Create', actor: 'me' });
+    check(state.queue.length === before + 1, 'a relay that is down queues the delivery for later');
+  }
+}
+
 // --- 5c1i. an Undo unsays a favourite or a boost; a verified Block drops the follow both ways ---
 {
   const { Intake } = await import(path.join(root, 'lib/core/intake/index.mjs'));

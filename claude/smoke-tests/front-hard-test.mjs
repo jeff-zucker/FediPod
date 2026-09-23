@@ -188,8 +188,8 @@ try {
   // Every server that has heard of an account asks for this; the edge answers
   // most of them, or each one is a function call and a read of the pod.
   check(/max-age=\d+/.test(wf.headers.get('cache-control') || '')
-    && /s-maxage=\d+/.test(wf.headers.get('netlify-cdn-cache-control') || ''),
-  `and it may be held by a cache (${wf.headers.get('cache-control')} | ${wf.headers.get('netlify-cdn-cache-control')})`);
+    && /public, durable, s-maxage=\d+/.test(wf.headers.get('netlify-cdn-cache-control') || ''),
+  `and it may be held by a cache, one copy for every region that survives a deploy (${wf.headers.get('cache-control')} | ${wf.headers.get('netlify-cdn-cache-control')})`);
   check(jrd.links.some((l) => l.rel === 'http://webfinger.net/rel/profile-page' && l.href === POD + 'ap/profile.html'),
     `and it links the profile page on the pod (${JSON.stringify(jrd.links)})`);
   // Somebody reading this account on another server presses Follow and says
@@ -202,8 +202,12 @@ try {
   check(at.status === 302 && at.headers.get('location') === POD + 'ap/profile.html',
     `https://<front>/@alice sends a person to that page (${at.status} ${at.headers.get('location')})`);
   check((await get('/@nobody', { redirect: 'manual' })).status === 404, 'and 404s a handle nobody holds');
-  check((await get('/.well-known/webfinger?resource=acct:nobody@' + HOST)).status === 404,
-    'and 404s a handle nobody holds');
+  const wfMiss = await get('/.well-known/webfinger?resource=acct:nobody@' + HOST);
+  check(wfMiss.status === 404 && /s-maxage=120/u.test(wfMiss.headers.get('netlify-cdn-cache-control') || ''),
+    `and 404s a handle nobody holds, held at the edge two minutes (${wfMiss.headers.get('netlify-cdn-cache-control')})`);
+  const scan = await get('/xmlrpc.php');
+  check(scan.status === 404 && /s-maxage=120/u.test(scan.headers.get('netlify-cdn-cache-control') || ''),
+    'a path nothing answers is a 404 the edge holds, not a call per scanner');
 
   // ---- the name check the signup page makes --------------------------------
   const taken = await (await get('/api/handle?handle=alice')).json();
@@ -402,8 +406,9 @@ try {
     && !JSON.stringify(pathActor).includes(pathHome),
     'the actor is served from the path with every id rewritten onto the front');
   const pathMedia = await fetch(`${ORIGIN}/u/pwren/ap/media/face.png`, { redirect: 'manual' });
-  check(pathMedia.status === 302 && pathMedia.headers.get('location') === pathHome + 'ap/media/face.png',
-    'a picture under the fronted identity is answered by pointing at the pod, not proxied as JSON');
+  check(pathMedia.status === 302 && pathMedia.headers.get('location') === pathHome + 'ap/media/face.png'
+    && /s-maxage=86400/u.test(pathMedia.headers.get('netlify-cdn-cache-control') || ''),
+    `a picture under the fronted identity is answered by pointing at the pod, held a day at the edge (${pathMedia.headers.get('netlify-cdn-cache-control')})`);
   const pathFollowed = await fetch(`${ORIGIN}/u/pwren/ap/media/face.png`);
   check(pathFollowed.status === 200 && (pathFollowed.headers.get('content-type') || '').startsWith('image/png'),
     'and following it lands on the image');
@@ -647,11 +652,23 @@ try {
     check(closed.closed === true && closed.closedBy === 'owner' && typeof attached.robin.closedAt === 'string',
       'the owner closes the address for good');
     const wfClosed = await get(`/.well-known/webfinger?resource=acct:robin@${HOST}`);
-    check(wfClosed.status === 410 && wfClosed.headers.get('access-control-allow-origin') === '*', `its handle answers 410 (${wfClosed.status})`);
-    check((await get('/u/robin/ap/actor')).status === 410 && (await get('/u/robin/ap/outbox')).status === 410, 'its actor and outbox answer 410');
+    check(wfClosed.status === 410 && wfClosed.headers.get('access-control-allow-origin') === '*'
+      && /s-maxage=3600/u.test(wfClosed.headers.get('netlify-cdn-cache-control') || ''),
+    `its handle answers 410, held an hour at the edge (${wfClosed.status} ${wfClosed.headers.get('netlify-cdn-cache-control')})`);
+    const goneActor = await get('/u/robin/ap/actor');
+    check(goneActor.status === 410 && /s-maxage=3600/u.test(goneActor.headers.get('netlify-cdn-cache-control') || '')
+      && (await get('/u/robin/ap/outbox')).status === 410, 'its actor and outbox answer 410, held an hour at the edge');
     check((await deliverTo(aPost(11))).status === 410 && (await deliverTo(aFollow(3))).status === 410, 'its door answers 410 to content and control alike');
-    check((await post('/api/open', { handle: 'robin' })).status === 410, 'a sign-in is told the address is closed');
+    const toldClosed = await post('/api/open', { handle: 'robin' });
+    check(toldClosed.status === 410 && /no-store/u.test(toldClosed.headers.get('cache-control') || ''),
+      'a sign-in is told the address is closed, and that answer is not held');
     check((await post('/api/close', { handle: 'robin', confirm: true })).status === 200, 'closing again changes nothing');
+    const pre = await get('/api/open', { method: 'OPTIONS', headers: { origin: 'https://test.example', 'access-control-request-method': 'POST' } });
+    check(pre.status === 204 && /POST/u.test(pre.headers.get('access-control-allow-methods') || '')
+      && /DPoP/u.test(pre.headers.get('access-control-allow-headers') || ''),
+    `a page at another origin is told it may call /api/open (${pre.status})`);
+    check((await post('/api/pause', { handle: 'robin', paused: true })).headers.get('access-control-allow-origin') === '*',
+      'and the answer to its call may be read there');
     check((await (await get('/api/handle?handle=robin')).json()).available === false, 'and the name stays taken');
 
     const att2 = await post('/api/attach', { handle: 'lark', podHome: POD, fronted: true });

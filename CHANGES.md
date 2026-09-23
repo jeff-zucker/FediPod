@@ -1,5 +1,20 @@
 # Changes
 
+## 2026-09-23 (the site does less for the same result — version 1.33.0)
+
+**Fewer calls to fedipod.net for the same mail and the same pages.** A
+delivery the site refuses because it has no such account is dropped, not
+retried every minute for three days. A page at another origin is answered
+when it asks whether it may open, pause or close an account. The edge keeps
+one copy of every public answer for all regions, and keeps it across a
+deploy. A closed address, a handle nobody holds, a path nothing answers and
+a picture link are each held at the edge too, so the servers and scanners
+that keep asking are answered there. A post to many followers goes through
+the relay twenty at a time instead of one at a time. The pod-token check
+and the senders' keys are built once per process, not once per call. An
+account is looked up by its name in the directory rather than by reading
+every account. Nothing a person sees changes.
+
 ## 2026-09-23 (what the log showed — version 1.32.1)
 
 **Mail was not landing, and the site was answering questions nobody needed

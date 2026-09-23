@@ -69208,6 +69208,7 @@ var Deliverer = class {
     this.edPrivate = edPrivate;
     this.proofKeyId = proofKeyId;
     this.log = log2;
+    this.batchSize = 1;
     if (!passive) this.startQueue();
   }
   startQueue() {
@@ -69284,31 +69285,56 @@ var Deliverer = class {
       return activity;
     }
   }
+  // One attempt per target, answered in order: `{ ok: true }` or `{ error }`
+  // with the error deliverNow would have thrown. Here one at a time; the
+  // relay deliverer sends the whole list in one call.
+  async deliverManyNow(targets) {
+    const out = [];
+    for (const t of targets) {
+      try {
+        await this.deliverNow(t.inbox, t.activity);
+        out.push({ ok: true });
+      } catch (error2) {
+        out.push({ error: error2 });
+      }
+    }
+    return out;
+  }
   async deliver(inbox, activity) {
     const signed = await this.proofed(activity);
+    if (this._queueIfCooling(inbox, signed)) return;
+    const [result] = await this.deliverManyNow([{ inbox, activity: signed }]);
+    await this._settle(inbox, signed, result);
+  }
+  // A host we already know is refusing: queue without asking again. This is
+  // the path a FRESH activity takes, so without it a fan-out to a struggling
+  // server opened one socket per follower before any of this applied.
+  _queueIfCooling(inbox, signed) {
     const host = hostOf(inbox);
     const until = this._cooling?.get(host);
-    if (until && until > Date.now()) {
-      this.log(`${host} is cooling \u2014 queueing ${signed.type} rather than asking again`);
-      this._enqueue({ inbox, activity: signed, attempts: 1, nextAt: until });
+    if (!until || until <= Date.now()) return false;
+    this.log(`${host} is cooling \u2014 queueing ${signed.type} rather than asking again`);
+    this._enqueue({ inbox, activity: signed, attempts: 1, nextAt: until });
+    return true;
+  }
+  // What one attempt's outcome means for the queue.
+  async _settle(inbox, signed, result) {
+    if (result.ok) {
+      this.log(`delivered ${signed.type} \u2192 ${inbox}`);
       return;
     }
-    try {
-      await this.deliverNow(inbox, signed);
-      this.log(`delivered ${signed.type} \u2192 ${inbox}`);
-    } catch (e) {
-      if (unsalvageable(e)) {
-        await this._unsalvageable(inbox, e);
-        return;
-      }
-      this.log(`delivery failed (${e.message}) \u2014 queued`);
-      const wait = e.retryAfterMs || 6e4;
-      if (aboutTheHost(e)) {
-        this._cooling ||= /* @__PURE__ */ new Map();
-        this._cooling.set(host, Date.now() + wait);
-      }
-      this._enqueue({ inbox, activity: signed, attempts: 1, nextAt: Date.now() + wait });
+    const e = result.error;
+    if (unsalvageable(e)) {
+      await this._unsalvageable(inbox, e);
+      return;
     }
+    this.log(`delivery failed (${e.message}) \u2014 queued`);
+    const wait = e.retryAfterMs || 6e4;
+    if (aboutTheHost(e)) {
+      this._cooling ||= /* @__PURE__ */ new Map();
+      this._cooling.set(hostOf(inbox), Date.now() + wait);
+    }
+    this._enqueue({ inbox, activity: signed, attempts: 1, nextAt: Date.now() + wait });
   }
   // Not retried, and on a 410 the followers who received there are dropped,
   // so the next fan-out stops asking; the followers collection is republished
@@ -69344,7 +69370,13 @@ var Deliverer = class {
   }
   async deliverToAll(inboxes, activity) {
     const signed = await this.proofed(activity);
-    for (const inbox of [...new Set(inboxes)]) await this.deliver(inbox, signed);
+    const targets = [...new Set(inboxes)].map((inbox) => ({ inbox, activity: signed }));
+    for (let i = 0; i < targets.length; i += this.batchSize) {
+      const chunk = targets.slice(i, i + this.batchSize).filter((t) => !this._queueIfCooling(t.inbox, signed));
+      if (!chunk.length) continue;
+      const results = await this.deliverManyNow(chunk);
+      for (let k = 0; k < chunk.length; k++) await this._settle(chunk[k].inbox, signed, results[k]);
+    }
   }
   // Serialized, for the same reason Intake.drain is: the tick is 60s and a
   // drain over slow peers outlasts it, so a second run started on top of the
@@ -69444,6 +69476,7 @@ var Deliverer = class {
 
 // web/app/deliver-relay.mjs
 init_fedify_sig();
+var RELAY_MAX_REQUESTS = 20;
 function doorKeyOf(doorInboxUrl) {
   try {
     const seg2 = new URL(doorInboxUrl).pathname.split("/");
@@ -69458,6 +69491,7 @@ var RelayDeliverer = class extends Deliverer {
     this.relayUrl = opts.relayUrl;
     this.handle = opts.handle;
     this.sessionFetch = opts.sessionFetch;
+    this.batchSize = RELAY_MAX_REQUESTS;
   }
   // Same contract as Deliverer.signedFetch, DEFAULT INCLUDED: an init with no
   // method is a read. The Node one builds a `Request`, whose default is GET, and
@@ -69467,9 +69501,41 @@ var RelayDeliverer = class extends Deliverer {
   // never saw the document it asked for: a Follow from anyone new was rejected
   // with "actor fetch failed", and nothing needing a lookup could be ingested.
   async signedFetch(url, init = {}) {
+    const req = await this._signedRequest(url, init);
+    const [r0] = await this._relay([req]);
+    return this._outcome(r0, url, init.method || "GET");
+  }
+  // A fan-out in one call: the relay takes a list, so a post to twenty
+  // followers is one call, not twenty (Deliverer.deliverToAll, batchSize).
+  async deliverManyNow(targets) {
+    const reqs = await Promise.all(targets.map((t) => this._signedRequest(t.inbox, {
+      method: "POST",
+      headers: { "content-type": "application/activity+json" },
+      body: JSON.stringify(t.activity)
+    })));
+    let results;
+    try {
+      results = await this._relay(reqs);
+    } catch (error2) {
+      return targets.map(() => ({ error: error2 }));
+    }
+    return targets.map((t, i) => {
+      try {
+        this._outcome(results[i] || {}, t.inbox, "POST");
+        return { ok: true };
+      } catch (error2) {
+        return { error: error2 };
+      }
+    });
+  }
+  // Signed here, sent verbatim by the relay. Every signed header goes along,
+  // `accept` included: the signature covers it, so a relay request missing it
+  // carries an invalid signature — and a read without it gets the HTML page
+  // instead of the document.
+  async _signedRequest(url, init = {}) {
     const body = typeof init.body === "string" ? init.body : init.body ? new TextDecoder().decode(init.body) : "";
     const s = await sign({ url, method: init.method || "GET", headers: init.headers || {}, body }, this.rsaPrivate, this.keyId);
-    const relayReq = {
+    return {
       url: s.url,
       method: s.method,
       body,
@@ -69481,16 +69547,29 @@ var RelayDeliverer = class extends Deliverer {
         signature: s.headers.signature
       }
     };
+  }
+  // One relay call for a list of requests; the results in the same order.
+  // The relay's OWN answer, apart from the recipients': unreachable and a
+  // refusal are hiccups the queue retries. Its 404 is not — it says this
+  // account has no row here, and no retry changes that. It used to be read as
+  // a hiccup too, and a tab whose account the site did not know retried its
+  // deliveries every minute for three days.
+  async _relay(requests) {
     let res;
     try {
       res = await this.sessionFetch(this.relayUrl, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ handle: this.handle, requests: [relayReq] })
+        body: JSON.stringify({ handle: this.handle, requests })
       });
     } catch (e) {
       const err = new Error(`relay unreachable: ${e.message}`);
       err.status = 0;
+      throw err;
+    }
+    if (res.status === 404) {
+      const err = new Error("relay: no such account here");
+      err.status = 404;
       throw err;
     }
     if (res.status >= 400) {
@@ -69499,7 +69578,11 @@ var RelayDeliverer = class extends Deliverer {
       throw err;
     }
     const out = await res.json().catch(() => ({}));
-    const r0 = out.results && out.results[0] || {};
+    return Array.isArray(out.results) ? out.results : [];
+  }
+  // What the far server answered, as the Node deliverer would have seen it:
+  // a Response for a read, a thrown error carrying the status for a refusal.
+  _outcome(r0, url, method) {
     const status2 = r0.status || 0;
     if (status2 === 0) {
       const err = new Error(r0.error || "relay could not send");
@@ -69507,7 +69590,7 @@ var RelayDeliverer = class extends Deliverer {
       throw err;
     }
     if (status2 >= 400) {
-      const err = new Error(`${init.method || "POST"} ${url} \u2192 ${status2}`);
+      const err = new Error(`${method} ${url} \u2192 ${status2}`);
       err.status = status2;
       if (r0.retryAfter) {
         const secs = Number(r0.retryAfter);
