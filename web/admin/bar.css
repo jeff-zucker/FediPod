@@ -62,16 +62,32 @@ body { background: var(--surface); }
    quieter than the links; the one in use is marked `aria-current="true"` — the
    current item of a set, which on the record page is not the current PAGE — so
    it needs its own mark rather than borrowing the rule above. */
-#bar #client-pick { display: inline-flex; gap: .6rem; align-items: baseline;
+#bar #client-pick, #bar #account-pick { display: inline-flex; gap: .6rem; align-items: baseline;
   white-space: nowrap; margin-left: 1rem; }
-#bar #client-now { opacity: .75; }
+#bar #client-now, #bar #account-now { opacity: .75; }
+/* The notices bell: the one filled control in the bar, because it is the one
+   thing there that is not a place to go but something to be told. The count is
+   how many notices this browser has not opened yet; with none it is quiet. */
+#bar #bar-notices { display: inline-flex; align-items: center; gap: .35rem; margin-left: 1rem;
+  padding: .3rem .7rem; border-radius: 999px; font-size: 1.05rem; line-height: 1;
+  background: var(--btn); color: var(--btn-text); border: 1px solid var(--btn); }
+/* `display` on an id rule outranks the browser's own [hidden] rule, and the
+   shell has no !important of its own, so the bell hid on the record page and
+   showed on the client with nothing to show. Said here, once, for every page. */
+#bar #bar-notices[hidden] { display: none; }
+#bar #bar-notices:hover { background: var(--btn-hover); border-color: var(--btn-hover); }
+#bar #bar-notices:focus-visible { outline: 3px solid var(--ring); outline-offset: 2px; }
+#bar #bar-notices-count { font-size: .9rem; font-weight: 700; min-width: 1.3em; text-align: center;
+  padding: .05rem .4rem; border-radius: 999px; background: var(--btn-text); color: var(--btn); }
+#bar #bar-notices-count:empty { display: none; }
+#bar #bar-notices[data-new="0"] { background: var(--field-bg); color: var(--ink); border-color: var(--field-edge); }
 #bar a[aria-current="true"] {
   font-weight: 700; text-decoration: underline; text-underline-offset: .3rem; }
 
 /* The two-clients notice: said once, to somebody who knew this page when it
    had one client. Sized and placed rather than left to the browser's default,
    which stretched it edge to edge and put it over the very links it names. */
-#client-news {
+#client-news, #notices-list, #notice-view {
   /* Low rather than centred: it points at the links in the bar, so the bar has
      to stay in view while it is read. */
   max-width: 34rem; margin: auto auto 2.5rem; padding: 1.5rem 1.7rem;
@@ -80,13 +96,27 @@ body { background: var(--surface); }
   font: 1rem/1.55 var(--font);
   box-shadow: 0 .6rem 2rem rgba(0, 0, 0, .25);
 }
-#client-news::backdrop { background: rgba(0, 0, 0, .45); }
-#client-news h2 { font-size: 1.25rem; margin: 0 0 .9rem; color: var(--heading); }
-#client-news p { margin: 0 0 1.2rem; }
-#client-news p:last-child { margin: 0; }
-#client-news button {
+#client-news::backdrop, #notices-list::backdrop, #notice-view::backdrop { background: rgba(0, 0, 0, .45); }
+#client-news h2, #notices-list h2, #notice-view h2 { font-size: 1.25rem; margin: 0 0 .9rem; color: var(--heading); }
+#client-news p, #notices-list p, #notice-view p { margin: 0 0 1.2rem; }
+#client-news p:last-child, #notices-list p:last-child, #notice-view p:last-child { margin: 0; }
+#client-news button, #notices-list button, #notice-view button {
   font: inherit; padding: .55rem 1.3rem; border-radius: .35rem; cursor: pointer;
   background: var(--btn); color: var(--btn-text); border: 1px solid var(--btn);
 }
-#client-news button:hover { background: var(--btn-hover); border-color: var(--btn-hover); }
-#client-news button:focus-visible { outline: 3px solid var(--ring); outline-offset: 2px; }
+#client-news button:hover, #notices-list button:hover, #notice-view button:hover { background: var(--btn-hover); border-color: var(--btn-hover); }
+#client-news button:focus-visible, #notices-list button:focus-visible, #notice-view button:focus-visible { outline: 3px solid var(--ring); outline-offset: 2px; }
+
+/* The list of notices: each title a button that opens that notice, the date
+   beside it, the ones not yet opened here in bold. */
+#notices-items { list-style: none; margin: 0 0 1.2rem; padding: 0; }
+#notices-items li { display: flex; gap: .8rem; align-items: baseline; padding: .45rem 0;
+  border-bottom: 1px solid var(--line); }
+#notices-items li:last-child { border-bottom: 0; }
+#notices-items button.notice-open { flex: 1 1 auto; text-align: left; padding: .1rem 0;
+  background: none; border: 0; color: var(--link); text-decoration: underline; text-underline-offset: .2rem; }
+#notices-items li.new button.notice-open { font-weight: 700; }
+#notices-items .when, #notice-view .when { color: var(--sub); font-size: .9rem; white-space: nowrap; }
+#notices-items p.none { color: var(--sub); }
+#notice-view-body p { margin: 0 0 .9rem; }
+#notice-view-body a { color: var(--link); word-break: break-all; }

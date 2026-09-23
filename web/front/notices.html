@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FediPod — notices</title>
+<link rel="icon" href="/icons/gateway.svg" type="image/svg+xml">
+<style>
+  :root { color-scheme: light dark; --line:#d9d4c7; --dim:#45443d; --accent:#6a8a5a; --danger:#b00020; }
+  @media (prefers-color-scheme: dark) { :root { --dim:#c2c0b4; --danger:#ff8a9a; } }
+  body { font: 20px/1.6 Arial, Helvetica, sans-serif; max-width: 44rem; margin: 2rem auto; padding: 0 1.1rem; }
+  h1 { font-size: 1.7rem; margin: 0 0 .2rem; }
+  h2 { font-size: 1.25rem; margin: 1.6rem 0 .4rem; }
+  p.lede { color: var(--dim); margin-top: 0; }
+  label { display: block; font-weight: 600; margin: .8rem 0 .2rem; }
+  input[type=url], input[type=text], textarea { width: 100%; padding: .5rem .6rem; font: inherit;
+    border: 1px solid var(--line); border-radius: 8px; box-sizing: border-box; }
+  textarea { min-height: 9rem; resize: vertical; }
+  .hint { color: var(--dim); font-size: .95rem; }
+  .primary { background: var(--accent); color: #fff; border: none; border-radius: 9px;
+    padding: .6rem 1.1rem; font: inherit; cursor: pointer; }
+  .primary[disabled] { opacity: .5; cursor: not-allowed; }
+  button { font: inherit; cursor: pointer; }
+  button.danger { color: var(--danger); background: none; border: 1px solid var(--danger); border-radius: 9px; padding: .4rem .8rem; }
+  [hidden] { display: none !important; }
+  ul.notices { list-style: none; padding: 0; margin: 1rem 0; }
+  ul.notices li { padding: .8rem 0; border-bottom: 1px solid var(--line); }
+  ul.notices .title { font-weight: 600; }
+  ul.notices .when { color: var(--dim); font-size: .95rem; margin-left: .6rem; }
+  ul.notices .body { white-space: pre-wrap; margin: .3rem 0 .6rem; }
+  ul.notices .actions button { margin-right: .6rem; }
+</style>
+</head>
+<body>
+<h1>Notices</h1>
+<p class="lede">What every account on this server sees behind the bell in its bar. Sign in as the
+server's admin to write, change or remove them. <a href="/roster">Back to the roster.</a></p>
+
+<form id="notices-form">
+  <p class="field">
+  <label for="notices-issuer">Your identity provider</label>
+  <input type="url" id="notices-issuer" autocomplete="off" value="https://solidcommunity.net">
+  </p>
+  <p class="actions">
+    <button type="submit" id="notices-signin" class="primary">Sign in &amp; manage notices</button>
+  </p>
+  <p class="hint" id="notices-note" hidden></p>
+</form>
+
+<section id="notices-editor" hidden>
+  <h2 id="editor-title">New notice</h2>
+  <form id="editor-form">
+    <label for="notice-title">Title</label>
+    <input type="text" id="notice-title" maxlength="120" autocomplete="off" required>
+    <label for="notice-body">Text</label>
+    <textarea id="notice-body" maxlength="4000" required></textarea>
+    <p class="hint">Plain text. A blank line starts a new paragraph; a web address becomes a link.</p>
+    <p class="actions">
+      <button type="submit" id="notice-save" class="primary">Publish</button>
+      <button type="button" id="notice-cancel" hidden>Cancel</button>
+    </p>
+  </form>
+  <h2>Published</h2>
+  <ul class="notices" id="notices-list"></ul>
+</section>
+
+<script type="module" src="/notices.js"></script>
+</body>
+</html>

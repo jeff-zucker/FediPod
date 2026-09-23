@@ -86,7 +86,7 @@ const shell = (text, c) => text
   .replace('src="../../"', `src="${c.path}"`)
   .replace('<script src="client.js"></script>',
     c.login ? '<script src="/admin/client/client.js"></script>' : '')
-  .replace('>sign out</a>', `>sign out</a>${clientBar()}`)
+  .replace('<span id="account-pick">', `${clientBar()}\n  <span id="account-pick">`)
   .replace('</head>', '<script src="/admin/client-pick.js"></script>\n</head>')
   .replace('</body>', `${clientNews()}</body>`);
 
@@ -136,7 +136,7 @@ const copyAdmin = (from, to) => { fs.mkdirSync(to, { recursive: true });
       // A sign-out beside "manage account", on every bar. It clears the FediPod
       // session, the client's stored account, browser-stored connected keys, and
       // the worker — the /?signout page (boot.js) does the teardown.
-      .replace('>manage account</a>', '>manage account</a>\n  <a id="bar-signout" href="/?signout" title="   Sign out of FediPod and clear this browser">sign out</a>')
+      .replace(/(<a id="bar-manage"[^>]*>manage<\/a>)/u, '$1\n  <a id="bar-signout" href="/?signout" title="   Sign out of FediPod and clear this browser">sign out</a>')
       .replace('</head>', '<style>#actor-pick{display:none!important}</style>\n</head>');
     text = withUpdate(text);
     if (/[/\\]client$/.test(from)) {
@@ -147,7 +147,7 @@ const copyAdmin = (from, to) => { fs.mkdirSync(to, { recursive: true });
     } else if (/[/\\]admin$/.test(from)) {
       // The record page carries the same client control as the shells: it is
       // the page the owner is on when they want to change which client opens.
-      text = text.replace('>sign out</a>', `>sign out</a>${clientBar()}`)
+      text = text.replace('<span id="account-pick">', `${clientBar()}\n  <span id="account-pick">`)
         .replace('</head>', '<script src="/admin/client-pick.js"></script>\n</head>')
   .replace('</body>', `${clientNews()}</body>`);
       // Hide controls the browser build does not carry: the manual drain (it
@@ -197,6 +197,9 @@ fs.writeFileSync(path.join(site, '_redirects'), [
   '/api/roster             /.netlify/functions/front  200',
   '/api/revoke             /.netlify/functions/front  200',
   '/api/agent              /.netlify/functions/front  200',
+  '/api/notices            /.netlify/functions/front  200',
+  '/notices                /.netlify/functions/front  200',
+  '/notices.js             /.netlify/functions/front  200',
   '/u/*                    /.netlify/functions/front  200',
   '/.well-known/*          /.netlify/functions/front  200',
   '/@*                     /.netlify/functions/front  200',

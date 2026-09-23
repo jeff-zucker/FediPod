@@ -102,6 +102,8 @@ const attached = {};
 // that go quiet). The cap and the window are set small here so a test can
 // reach them.
 const received = new Map();
+// The operator's notices (lib/gateway/notices.mjs).
+const notices = {};
 const front = http.createServer(async (req, res) => {
   const body = await new Promise((resolve) => {
     const chunks = [];
@@ -122,6 +124,11 @@ const front = http.createServer(async (req, res) => {
     signupPage: '<!doctype html><title>sign up</title>',
     runPage: '<!doctype html><title>run</title>',
     adminPage: '<!doctype html><title>roster</title>',
+    noticesPage: '<!doctype html><title>notices</title>',
+    pageScripts: { 'notices.js': '// notices page script' },
+    listNotices: async () => ({ ...notices }),
+    putNotice: async (id, n) => { notices[id] = n; },
+    deleteNotice: async (id) => { delete notices[id]; },
     authBundle: '/* auth */', installScript: '#!/bin/sh\necho install\n',
     offersPods: false, gatewayWebId: ORIGIN + '/gw#it',
     adminWebId: 'https://wren.example/profile/card#me',
@@ -528,6 +535,44 @@ try {
     check(!inboxWrites.some(w => w.url.includes('/fedipod-bb/c/gardening/ap/inbox/')), 'and never into the category\'s own');
     check(inboxWrites.some(w => w.url.includes('/fedipod-bb/ap/inbox/') && w.url.endsWith('.receipt.json')),
       'with a receipt beside it, signed with that row\'s secret');
+  }
+
+  // ---- notices from the operator ---------------------------------------------
+  // Anyone reads them; only the admin writes them; the page and its script
+  // are served; a handle may not take the page's name.
+  {
+    const asAdmin = { 'content-type': 'application/json', authorization: 'Bearer pretend', dpop: 'proof' };
+    const asOther = { ...asAdmin, authorization: 'Bearer someone-else' };
+    const post = (body, headers = asAdmin) => get('/api/notices', { method: 'POST', headers, body: JSON.stringify(body) });
+    const empty = await get('/api/notices');
+    const emptyBody = await empty.json();
+    check(empty.status === 200 && Array.isArray(emptyBody.notices) && emptyBody.notices.length === 0
+      && empty.headers.get('access-control-allow-origin') === '*' && /s-maxage=60/u.test(empty.headers.get('netlify-cdn-cache-control') || ''),
+      'with none written, anyone reads an empty list, from any origin, held a minute at the edge');
+    check((await post({ action: 'create', title: 'Hi', body: 'x' }, asOther)).status === 403, 'somebody who is not the admin cannot write one');
+    check((await post({ action: 'create', title: '', body: 'x' })).status === 400, 'a notice needs a title');
+    check((await post({ action: 'create', title: 'Hi', body: '  ' })).status === 400, 'and a body');
+    const made = await post({ action: 'create', title: '  Welcome  ', body: 'First line.\r\n\r\nSecond paragraph https://example.org/x' });
+    const madeBody = await made.json();
+    check(made.status === 201 && madeBody.notice?.title === 'Welcome' && madeBody.notice.body === 'First line.\n\nSecond paragraph https://example.org/x'
+      && typeof madeBody.notice.id === 'string' && typeof madeBody.notice.at === 'string',
+      'the admin publishes one: trimmed, newlines normalised, stamped');
+    const second = await (await post({ action: 'create', title: 'Later', body: 'newer' })).json();
+    const listed = await (await get('/api/notices')).json();
+    check(listed.notices.length === 2 && listed.notices[0].id === second.notice.id && listed.notices[1].id === madeBody.notice.id,
+      'the list has both, newest first');
+    const changed = await (await post({ action: 'update', id: madeBody.notice.id, title: 'Welcome!', body: 'Changed.' })).json();
+    check(changed.ok === true && changed.notice.title === 'Welcome!' && changed.notice.at === madeBody.notice.at && changed.notice.updatedAt !== madeBody.notice.at,
+      'changing one keeps its date and stamps the change');
+    check((await post({ action: 'update', id: 'nope', title: 'x', body: 'y' })).status === 404, 'changing one that is not there is 404');
+    const gone = await (await post({ action: 'delete', id: second.notice.id })).json();
+    const after = await (await get('/api/notices')).json();
+    check(gone.deleted === true && after.notices.length === 1 && after.notices[0].id === madeBody.notice.id, 'removing one removes only that one');
+    check((await post({ action: 'tidy' })).status === 400, 'an unknown action is refused');
+    const page = await get('/notices');
+    check(page.status === 200 && /<title>notices<\/title>/u.test(await page.text()), 'the notices page is served');
+    check((await get('/notices.js')).status === 200, 'and so is its script');
+    check((await (await get('/api/handle?handle=notices')).json()).available === false, 'and no handle may take its name');
   }
 
   // ---- accounts that go quiet ----------------------------------------------

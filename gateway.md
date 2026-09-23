@@ -182,6 +182,18 @@ sign-in. A gateway operator sets the cap and the window with
 `FEDIPOD_PAUSE_ITEMS` and `FEDIPOD_CLOSE_DAYS`.
 <!-- /CLAUDE -->
 
+<!-- CLAUDE 2026-09-23 — notices from the operator; delete these markers when done -->
+## Notices
+
+Whoever runs the gateway can write notices to everyone with an account
+there. A bell at the right end of the bar, on the record page and in the
+client, shows how many this browser has not opened yet; the list gives the
+titles and each one opens on its own. The operator writes, changes and
+removes them at `/notices`, signed in as the admin the way the roster is.
+A notice is a title and plain text: a blank line starts a paragraph, and a
+web address becomes a link.
+<!-- /CLAUDE -->
+
 ## What the gateway can see
 
 It reads only public data to decide what concerns you: your published

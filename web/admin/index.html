@@ -165,7 +165,7 @@ pre { overflow-x: auto; background: #0001; padding: .6rem; border-radius: .3rem;
   fieldset { border-color: #555; } .rows li { border-color: #444; }
 }
 </style>
-<link rel="stylesheet" href="bar.css?v=3">
+<link rel="stylesheet" href="bar.css?v=4">
 <link rel="stylesheet" href="window.css">
 </head>
 <body>
@@ -175,8 +175,16 @@ pre { overflow-x: auto; background: #0001; padding: .6rem; border-radius: .3rem;
   <h1 class="name">FediPod</h1>
   <select id="actor-pick" aria-label="Local actors"
     title="   Every actor on this machine; choosing one goes to its record"></select>
-  <a id="bar-fediverse" href="client/" title="   Open the client and read your timeline">visit account</a>
-  <a id="bar-manage" href="./" title="   The record: what this actor is, and what you can do to it" aria-current="page">manage account</a>
+  <!-- The account group, styled like the client group beside it: one label,
+       then the places to go. The browser build adds "sign out" to it. -->
+  <span id="account-pick"><span id="account-now">account:</span>
+  <a id="bar-fediverse" href="client/" title="   Open the client and read your timeline">visit</a>
+  <a id="bar-manage" href="./" title="   The record: what this actor is, and what you can do to it" aria-current="page">manage</a>
+  </span>
+  <!-- Notices from whoever runs this site. Shown only when the site has any
+       (notices-bar.js asks /api/notices); the count is how many are new here. -->
+  <button type="button" id="bar-notices" hidden aria-haspopup="dialog" aria-controls="notices-list"
+    title="   Notices from the operator of this site">&#128276;<span id="bar-notices-count" aria-live="polite"></span></button>
 </nav>
 <main id="page">
 
@@ -572,5 +580,24 @@ pre { overflow-x: auto; background: #0001; padding: .6rem; border-radius: .3rem;
 <script src="group.js"></script>
 <script src="upkeep.js"></script>
 <script src="gateway.js"></script>
+
+<!-- The notices: the list, and one notice open. Declared here and filled by
+     notices-bar.js from /api/notices; nothing in them is markup from a notice. -->
+<dialog id="notices-list" aria-labelledby="notices-title">
+  <section>
+    <h2 id="notices-title">Notices</h2>
+    <ul id="notices-items"></ul>
+    <p class="row"><button type="button" id="notices-close" class="primary" title="   Close the list of notices">Close</button></p>
+  </section>
+</dialog>
+<dialog id="notice-view" aria-labelledby="notice-view-title">
+  <section>
+    <h2 id="notice-view-title"></h2>
+    <p class="when" id="notice-view-when"></p>
+    <div id="notice-view-body"></div>
+    <p class="row"><button type="button" id="notice-view-close" class="primary" title="   Back to the list of notices">Close</button></p>
+  </section>
+</dialog>
+<script src="notices-bar.js"></script>
 </body>
 </html>

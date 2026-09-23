@@ -721,6 +721,9 @@ export class FediPodServerHandler extends HttpHandler implements Initializable, 
       runPage: this.args.runPage || webFile('run.html'),
       runPath: this.runPath,
       adminPage: this.args.adminPage || webFile('admin.html'),
+      // The notices page renders here too, and says the server keeps none:
+      // a notices store is the Netlify front's, not this component's.
+      noticesPage: webFile('notices.html'),
       // The opt-in and roster pages load the sign-in library, and the installer
       // command is handed out with it; without these the pages render but
       // cannot be used.
@@ -731,6 +734,7 @@ export class FediPodServerHandler extends HttpHandler implements Initializable, 
         'new-account.js': webFile('new-account.js'),
         'run.js': webFile('run.js'),
         'admin.js': webFile('admin.js'),
+        'notices.js': webFile('notices.js'),
       },
       installScript: webFile('install.sh'),
       lookup: (h: string) => this.dir.lookup(h),

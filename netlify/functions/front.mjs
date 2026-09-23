@@ -47,7 +47,7 @@ try {
 // /new-account.js route in lib/front-core.mjs). Read at cold start, like the
 // pages themselves.
 const pageScripts = {};
-for (const name of ['new-account.js', 'run.js', 'admin.js']) {
+for (const name of ['new-account.js', 'run.js', 'admin.js', 'notices.js']) {
   try {
     pageScripts[name] = readFileSync(
       fileURLToPath(new URL(`../../web/front/${name}`, import.meta.url)), 'utf8');
@@ -68,6 +68,11 @@ try {
   adminPage = readFileSync(
     fileURLToPath(new URL('../../web/front/admin.html', import.meta.url)), 'utf8');
 } catch { /* without it /roster 404s */ }
+let noticesPage = '';
+try {
+  noticesPage = readFileSync(
+    fileURLToPath(new URL('../../web/front/notices.html', import.meta.url)), 'utf8');
+} catch { /* without it /notices 404s */ }
 // The deploy's own version: what the signup page shows as current.
 let frontVersion = null;
 try {
@@ -134,6 +139,7 @@ export default async function handler(request) {
     signupPage,
     runPage,
     adminPage,
+    noticesPage,
     authBundle,
     pageScripts,
     installScript,
@@ -160,6 +166,16 @@ export default async function handler(request) {
     // Per-user Append to that user's pod inbox — with the user's credential
     // when the record carries one, plain when the inbox is public-Append
     // (FediPod's default posture).
+    // The operator's notices, beside the directory (lib/gateway/notices.mjs).
+    listNotices: async () => {
+      const store = getStore('notices');
+      const { blobs } = await store.list();
+      const out = {};
+      for (const b of blobs) { const n = await store.get(b.key, { type: 'json' }); if (n) out[b.key] = n; }
+      return out;
+    },
+    putNotice: async (id, notice) => getStore('notices').setJSON(id, notice),
+    deleteNotice: async (id) => getStore('notices').delete(id),
     // What arrived for an account since its owner last signed in, one small
     // record per sign-in, in a store of its own so a delivery never writes
     // the directory row (front-core: accounts that go quiet).

@@ -1,5 +1,19 @@
 # Changes
 
+## 2026-09-23 (the bar, and notices — version 1.32.0)
+
+**The bar reads as two groups.** The client group is as it was; the account
+group now sits to its right in the same style — *account:* then *visit*,
+*manage* and, in the browser build, *sign out* — and the word "account" is
+said once. **A notices bell** stands at the right end of the bar, filled when
+there is something new. It lists the notices whoever runs the site has
+written, and each title opens that notice. What this browser has already
+opened stays in this browser. **The operator writes notices** on the
+`/notices` page, linked from the roster and signed in the same way: title and
+plain text, changed or removed later. They are kept beside the directory and
+read by every page through `GET /api/notices`. A DeviceAgent's own pages
+have no such bell: nothing there answers for a site.
+
 ## 2026-09-23 (accounts that go quiet — version 1.31.0)
 
 **An account nobody opens is paused, then closed.** The gateway holds no

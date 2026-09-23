@@ -59,8 +59,16 @@ button:disabled { opacity: .5; cursor: default; }
 <nav id="bar" aria-label="Site">
   <h1 class="name">FediPod</h1>
   <span id="bar-handle"></span>
-  <a id="bar-fediverse" href="../client/" title="   Open the client and read your timeline">visit account</a>
-  <a id="bar-manage" href="../" title="   The record: what this actor is, and what you can do to it">manage account</a>
+  <!-- The account group, styled like the client group beside it: one label,
+       then the places to go. The browser build adds "sign out" to it. -->
+  <span id="account-pick"><span id="account-now">account:</span>
+  <a id="bar-fediverse" href="../client/" title="   Open the client and read your timeline">visit</a>
+  <a id="bar-manage" href="../" title="   The record: what this actor is, and what you can do to it">manage</a>
+  </span>
+  <!-- Notices from whoever runs this site. Shown only when the site has any
+       (notices-bar.js asks /api/notices); the count is how many are new here. -->
+  <button type="button" id="bar-notices" hidden aria-haspopup="dialog" aria-controls="notices-list"
+    title="   Notices from the operator of this site">&#128276;<span id="bar-notices-count" aria-live="polite"></span></button>
   <a id="bar-add" href="../?new=1" title="   Set up another actor on this machine, with its own pod" aria-current="page">add new account</a>
 </nav>
 <main id="page">
@@ -210,5 +218,24 @@ button:disabled { opacity: .5; cursor: default; }
 <script src="../bar.js"></script>
 <script src="../common.js"></script>
 <script src="setup.js"></script>
+
+<!-- The notices: the list, and one notice open. Declared here and filled by
+     notices-bar.js from /api/notices; nothing in them is markup from a notice. -->
+<dialog id="notices-list" aria-labelledby="notices-title">
+  <section>
+    <h2 id="notices-title">Notices</h2>
+    <ul id="notices-items"></ul>
+    <p class="row"><button type="button" id="notices-close" class="primary" title="   Close the list of notices">Close</button></p>
+  </section>
+</dialog>
+<dialog id="notice-view" aria-labelledby="notice-view-title">
+  <section>
+    <h2 id="notice-view-title"></h2>
+    <p class="when" id="notice-view-when"></p>
+    <div id="notice-view-body"></div>
+    <p class="row"><button type="button" id="notice-view-close" class="primary" title="   Back to the list of notices">Close</button></p>
+  </section>
+</dialog>
+<script src="../notices-bar.js"></script>
 </body>
 </html>
