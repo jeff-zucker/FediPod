@@ -17,6 +17,11 @@ Which specs FediPod follows, and where it stops short: [specs-in-use.md](specs-i
 - A Solid pod with a host name of its own, such as
   `https://alice.solidcommunity.net/`. Sign-up can create one for you at
   solidcommunity.net or another provider, or use a pod you already have.
+<!-- CLAUDE 2026-09-23 — correction: sign-up no longer creates the pod; delete these markers when done -->
+  (Since 1.28.0 sign-up does not create the pod: you make it on the
+  provider's own sign-up page, linked from the form, or use a pod you
+  already have.)
+<!-- /CLAUDE -->
   A pod on a suffix-based host, like `https://server.example/alice/`,
   works too. Its address is then `@handle@fedipod.net`, because the shared
   host cannot answer for the handle; your posts, key and data stay on your pod.
@@ -31,12 +36,11 @@ Which specs FediPod follows, and where it stops short: [specs-in-use.md](specs-i
 2. Choose your pod provider. If you need a pod, make one on the provider's
    own sign-up page; the link is on the form. Then sign in at your pod. Your
    password is typed at your pod only; fedipod.net never sees it.
-3. Back on fedipod.net, choose your handle. Your address is `@handle@yourpod`.
-   Both parts are permanent; display name, bio and pictures are set later in
-   the client. With a pod at its own host you also choose where the address
-   lives: on your pod, `@handle@yourpod`, or at this site,
-   `@handle@fedipod.net`. A pod on a suffix-based host gets the fedipod.net
-   address. The choice is permanent.
+3. Back on fedipod.net, choose your handle and where your address lives:
+   on your pod, `@handle@yourpod`, or at this site, `@handle@fedipod.net`.
+   A pod on a suffix-based host gets the fedipod.net address. The handle,
+   the pod and the choice are permanent; display name, bio and pictures are
+   set later in the client.
 4. That is all. Your signing key is stored on your pod, in a container only
    you can read.
 
