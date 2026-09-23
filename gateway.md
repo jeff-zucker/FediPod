@@ -153,7 +153,6 @@ on the setup page). Setup reads the account on the pod, keeps its state and
 key there, attaches at the new gateway, and completes the move when the
 agent first acts. See [the DeviceAgent](device-agent.md).
 
-<!-- CLAUDE 2026-09-23 — accounts that go quiet: the automatic pause and close, and the manage-page controls; delete these markers when done -->
 ## Accounts that go quiet
 
 A gateway holds no mail. Every delivery it accepts is written into your pod
@@ -180,9 +179,7 @@ gateway drains its own inbox as it runs, and is never paused or closed by
 time. Accounts from before this was built are counted from their next
 sign-in. A gateway operator sets the cap and the window with
 `FEDIPOD_PAUSE_ITEMS` and `FEDIPOD_CLOSE_DAYS`.
-<!-- /CLAUDE -->
 
-<!-- CLAUDE 2026-09-23 — notices from the operator; delete these markers when done -->
 ## Notices
 
 Whoever runs the gateway can write notices to everyone with an account
@@ -192,7 +189,6 @@ titles and each one opens on its own. The operator writes, changes and
 removes them at `/notices`, signed in as the admin the way the roster is.
 A notice is a title and plain text: a blank line starts a paragraph, and a
 web address becomes a link.
-<!-- /CLAUDE -->
 
 ## What the gateway can see
 

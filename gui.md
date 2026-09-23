@@ -1,11 +1,11 @@
 # The Admin interface
 
-In the browser version at fedipod.net, `manage account` in the bar opens this
+In the browser version at fedipod.net, `manage`, in the bar's account group, opens this
 same page for your account. The rest of this page describes it as the
 DeviceAgent serves it; the controls are the same, minus the manual inbox
 drain and the local log, which a browser does not have.
 
-Open `https://localhost:8030/` while any agent is running — it forwards you to the agent — then choose `manage account` and select the actor you want from the local actors dropdown.
+Open `https://localhost:8030/` while any agent is running — it forwards you to the agent — then choose `manage` in the bar's account group and select the actor you want from the local actors dropdown.
 Picking an actor marked "(stopped)" starts its agent, then opens its page.
 
 The software row names the version the agent is running. When the copy on the machine is further ahead — after an update, or after pulling a checkout — it says so and asks for a restart, because an agent goes on serving the code it started with until it is restarted.

@@ -72,7 +72,7 @@ client-to-server, dokieli for one, can post as you. It sends to the outbox
 address in your actor document, which your WebID profile also names, signed in
 at your pod. The post goes out the next time you open fedipod.net.
 
-**The manage page.** `manage account` in the bar opens it: your profile,
+**The manage page.** `manage`, in the bar's account group, opens it: your profile,
 aliases, the gateway, key rotation, recovering posts, parking, moving to
 another server, retiring, and clearing a backlog. It is the same interface
 the DeviceAgent has, described in [the admin interface](gui.md).
