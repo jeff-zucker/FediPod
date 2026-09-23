@@ -157,7 +157,7 @@ async function serve(request, url) {
   // Boot on demand from the stored session, so the client works even when the
   // worker was restarted (idle-killed) and nobody posted 'boot' this time.
   if (!agent) { try { await ensureBooting(); } catch { /* no session → 503 below */ } }
-  if (!agent) return json(503, { error: 'the agent is not booted yet — open the app from the sign-in page' });
+  if (!agent) return json(503, { error: 'not signed in on this browser — sign in at the front page' });
   // Bytes, not text. A multipart upload is binary — read as text it comes back
   // through a UTF-8 round trip that replaces every byte that is not valid UTF-8,
   // which is most of a JPEG, so the boundary search found nothing and every

@@ -72408,7 +72408,7 @@ async function serve(request, url) {
     } catch {
     }
   }
-  if (!agent) return json(503, { error: "the agent is not booted yet \u2014 open the app from the sign-in page" });
+  if (!agent) return json(503, { error: "not signed in on this browser \u2014 sign in at the front page" });
   const bodyBytes = request.method === "GET" || request.method === "HEAD" ? null : Buffer.from(new Uint8Array(await request.arrayBuffer()));
   const bodyText = bodyBytes ? new TextDecoder().decode(bodyBytes) : "";
   const reqHeaders = {};

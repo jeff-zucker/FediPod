@@ -1,5 +1,13 @@
 # Changes
 
+## 2026-09-23 (the record page says how to sign in — version 1.29.1)
+
+**A browser with no sign-in is told where to go.** The record page at
+`/admin/`, opened in a browser that is not signed in, printed the worker's
+own line about the agent not being booted and stopped there. It now says
+"Not signed in on this browser. Sign in here." with the link to the front
+page, where a saved sign-in is restored or the sign-in form is shown.
+
 ## 2026-09-23 (an address moves to another gateway — version 1.29.0)
 
 **An address at a gateway can move to another gateway.** Open the new

@@ -61,6 +61,18 @@ async function load() {
     $('fatal').appendChild(a);
     return;
   }
+  // No agent answering on this browser: nobody is signed in here (the
+  // worker answers 503 with no session, and nothing answers at all before
+  // the worker exists). Say so, with the way on, rather than the reason.
+  if (status === 503 || status === 404) {
+    $('fatal').textContent = 'Not signed in on this browser. Sign in ';
+    const a = document.createElement('a');
+    a.href = '/';
+    a.textContent = 'here';
+    $('fatal').appendChild(a);
+    $('fatal').appendChild(document.createTextNode('.'));
+    return;
+  }
   if (status !== 200 || !json) {
     $('fatal').textContent = json?.error || `could not read the record (HTTP ${status})`;
     return;
