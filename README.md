@@ -6,73 +6,54 @@ FediPod gives you a Fediverse account whose data lives on a Solid pod. You
 follow people on Mastodon, Bluesky, and other Fediverse or ATProto servers in
 one timeline. Your posts, followers and settings stay on your pod.
 
-The easiest way to run FediPod is to use it in any browser at https://fedipod.net. Nothing to install. A wizard will walk you through getting a pod (you can also bring your own) and creating a Fediverse identity attached to the pod.  
+<!-- CLAUDE 2026-09-23 — rewritten against the code: sign-up no longer makes the pod; delete these markers when done -->
+The easiest way to run FediPod is to use it in any browser at https://fedipod.net. Nothing to install. Sign-up points you to a pod provider if you need a pod, then attaches a Fediverse identity to the pod you sign in with.
+<!-- /CLAUDE -->
 
 There are also a number of [other ways to run FediPod](#other-ways-to-run-fedipod) which offer a variety of scenarios.  If interested in the code, see also : [architecture overview](architecture.md) and [files overview](files-overview.md).
 Which specs FediPod follows, and where it stops short: [specs-in-use.md](specs-in-use.md).
 
 ## Requirements
 
+<!-- CLAUDE 2026-09-23 — rewritten against the code: any pod, host or path; Solid-OIDC and WAC are what sign-up needs; delete these markers when done -->
 - A current browser, on a desktop or a phone.
-- A Solid pod with a host name of its own, such as
-  `https://alice.solidcommunity.net/`. Sign-up can create one for you at
-  solidcommunity.net or another provider, or use a pod you already have.
-<!-- CLAUDE 2026-09-23 — correction: sign-up no longer creates the pod; delete these markers when done -->
-  (Since 1.28.0 sign-up does not create the pod: you make it on the
-  provider's own sign-up page, linked from the form, or use a pod you
-  already have.)
-<!-- /CLAUDE -->
-  A pod on a suffix-based host, like `https://server.example/alice/`,
-  works too. Its address is then `@handle@fedipod.net`, because the shared
-  host cannot answer for the handle; your posts, key and data stay on your pod.
+- A Solid pod, at a host of its own, such as `https://alice.solidcommunity.net/`,
+  or on a path of a shared host, such as `https://server.example/alice/`.
+  Its server must offer Solid-OIDC sign-in and WAC access control, which
+  Community Solid Server does; every provider listed on the sign-up form
+  runs it. If you have no pod, the form links to your provider's own
+  sign-up page.
 - Followers-only and direct posts need a pod that enforces WAC access control.
   On one that does not, the composer refuses those two and says why. Public
   and unlisted posts work on any pod.
+<!-- /CLAUDE -->
 
 ## Getting an account
 
-<!-- CLAUDE 2026-09-22 — sign-up without a password on fedipod.net; the four steps and the other-browser paragraph replace the ones below; delete these markers when done -->
+<!-- CLAUDE 2026-09-23 — rewritten against the code (1.28.0); delete these markers when done -->
 1. Open https://fedipod.net and choose **create an account**.
 2. Choose your pod provider. If you need a pod, make one on the provider's
-   own sign-up page; the link is on the form. Then sign in at your pod. Your
-   password is typed at your pod only; fedipod.net never sees it.
+   own sign-up page, linked from the form. Then choose **Sign in at your
+   pod**. Your password is typed at your pod only; fedipod.net never sees it.
 3. Back on fedipod.net, choose your handle and where your address lives:
    on your pod, `@handle@yourpod`, or at this site, `@handle@fedipod.net`.
-   A pod on a suffix-based host gets the fedipod.net address. The handle,
-   the pod and the choice are permanent; display name, bio and pictures are
-   set later in the client.
-4. That is all. Your signing key is stored on your pod, in a container only
-   you can read.
+   A pod on a path of a shared host gets the fedipod.net address, because
+   the shared host cannot answer for the handle. The handle, the pod and the
+   choice are permanent; display name, bio and pictures are set later in
+   the client.
+4. Your account opens in the client.
 
 Anyone can open your profile at `https://fedipod.net/@handle`, signed in or
 not.
 
-Your account then opens in the client. To use it from another browser, go to
-https://fedipod.net, enter your address and sign in at your pod. Nothing else
-is asked.
+To use your account from another browser, go to https://fedipod.net, enter
+your address and sign in at your pod. Nothing else is asked.
+
 If your account is from before 2026-09-22, the first browser after that asks
 once for the password you gave at sign-up, and stores the key on your pod as
 it is from then on. If you no longer have that password, choose "make a new
 signing key" on that screen.
 <!-- /CLAUDE -->
-<!-- CLAUDE 2026-09-22 — the original steps, kept for comparison; delete when the block above is reworked
-1. Open https://fedipod.net and choose **create an account**.
-2. Choose a pod: a new one at the provider you name, or a pod you already have.
-3. Choose your handle. Your address is `@handle@yourpod`. Both parts are
-   permanent; display name, bio and pictures are set later in the client.
-   With a pod at its own host you also choose where the address lives: on
-   your pod, `@handle@yourpod`, or at this site, `@handle@fedipod.net`. A pod
-   on a suffix-based host gets the fedipod.net address. The choice is
-   permanent.
-4. Enter your pod password once. It creates the account and locks your
-   signing key. The password is not stored.
-
-Your account then opens in the client. To use it from another browser, go to
-https://fedipod.net, enter your address, sign in at your pod, and unlock your
-key with your password once on that browser.
-If you have changed your pod password since you signed up, choose "make a new
-signing key" on that screen and use the password you use now.
-/CLAUDE -->
 
 ## What you can do
 
@@ -143,11 +124,12 @@ For these, see [Other ways to run FediPod](#other-ways-to-run-fedipod).
 
 ## Your data and your keys
 
+<!-- CLAUDE 2026-09-23 — rewritten against the code: the key is stored on the pod as it is; delete these markers when done -->
 Everything you publish and everything you read is stored on your pod. Your
-signing key is stored there too, encrypted under your password, so nobody who
-can read your pod, its host included, can post as you. fedipod.net holds no
-key: it verifies incoming mail, drops the junk, forwards the rest to your pod,
-and hands your browser the app. You can detach from it at any time and attach
+signing key is stored there too, in a container only you can read through
+your pod's login. fedipod.net holds no key: it verifies incoming mail, drops
+the junk, forwards the rest to your pod, and hands your browser the app.
+<!-- /CLAUDE --> You can detach from it at any time and attach
 to a gateway of your own. Your address and your data do not change.
 
 **A forum.** FediPod-BB, in `packages/fedipod-bb`, is a discussion board
