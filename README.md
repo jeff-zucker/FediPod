@@ -17,8 +17,8 @@ Which specs FediPod follows, and where it stops short: [specs-in-use.md](specs-i
 
 <!-- CLAUDE 2026-09-23 — rewritten against the code: any pod, host or path; Solid-OIDC and WAC are what sign-up needs; delete these markers when done -->
 - A current browser, on a desktop or a phone.
-- A Solid pod, at a host of its own, such as `https://alice.solidcommunity.net/`,
-  or on a path of a shared host, such as `https://server.example/alice/`.
+- A Solid pod, such as `https://alice.solidcommunity.net/` or
+  `https://server.example/alice/`.
   Its server must offer Solid-OIDC sign-in and WAC access control, which
   Community Solid Server does; every provider listed on the sign-up form
   runs it. If you have no pod, the form links to your provider's own
