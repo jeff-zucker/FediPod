@@ -235,11 +235,9 @@ Item-by-item answers to the Solid/ActivityPub interop checklist.
   and the Server also publish an Ed25519 key as `assertionMethod`
   (FEP-521a), which signs their activities (FEP-8b32); the BrowserAgent has
   none.
-<!-- CLAUDE 2026-09-23 — since 1.28.0 the BrowserAgent's key is stored as it is; delete these markers when done -->
 - **Handling of private key** — never in a public document. BrowserAgent: on
   the pod, in an owner-only container, as it is; an opened copy stays in
   that browser's storage as a non-extractable key.
-<!-- /CLAUDE -->
   DeviceAgent: PEM on disk with 0600 permissions, or in the owner-only pod
   state. Server: in the owner-only pod state. Gateway: holds no key.
 - **Sending a signed activity** — yes; every delivery is signed. A reply is

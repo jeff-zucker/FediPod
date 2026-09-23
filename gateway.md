@@ -120,7 +120,6 @@ not a note, an annotation say, is kept as the app sent it, under your name.
 
 ## Moving to another gateway
 
-<!-- CLAUDE 2026-09-23 — new in 1.29.0, browser build; delete these markers when done -->
 An address that lives at a gateway, `@you@gateway-a`, can move to another
 one and keep its pod, its posts, its followers and its key. Open the new
 gateway, choose **create an account**, and sign in with the same pod. The
@@ -149,7 +148,6 @@ remove the row from the roster later. An address on the pod, `@you@yourpod`,
 needs none of this: it detaches from one mail door and attaches to another.
 Only the browser build moves in this way for now; the DeviceAgent's setup
 does not yet read a pod that already holds an account.
-<!-- /CLAUDE -->
 
 ## What the gateway can see
 
