@@ -9,9 +9,12 @@
 //   New account:  fedipodPodLogin({ issuer }) — sign in at the pod, and come
 //                 back to the identity screen; fedipodSignup(answers) then
 //                 sets the account up on that session and boots.
+//   Move in:      the same door, on a pod whose account lives at ANOTHER
+//                 gateway: the identity screen becomes a move, and
+//                 fedipodMoveIn(answers) brings the address here.
 //   Returning:    fedipodSignin({ address }) — redirect to the pod's login.
 //   On every load: fedipodOnLoad() — finish a redirect, or restore, then boot.
-import { signUp, handleProblem, AP_ROOT } from './signup.mjs';
+import { signUp, moveIn, readAccount, handleProblem, AP_ROOT } from './signup.mjs';
 import * as podActor from '../../lib/pod/actor.mjs';
 import * as podState from '../../lib/pod/state.mjs';
 import { podBaseOfWebId } from '../../lib/pod/urls.mjs';
@@ -130,6 +133,18 @@ window.fedipodSignup = async ({ onStep, ...answers }) => {
   await signUp(answers, { session, onStep, frontOrigin: location.origin });
   await bootWorker({ reset: true });
 };
+// An account whose address lives at another gateway, moving here: the pod's
+// part (signup.mjs moveIn), then a boot under the new ids, which finishes
+// the move by telling the old gateway and the followers (gateway-move.mjs).
+window.fedipodMoveIn = async ({ onStep, ...answers }) => {
+  const session = await getSession();
+  if (!session) throw new Error('Sign in at your pod first.');
+  await moveIn(answers, { session, onStep, frontOrigin: location.origin });
+  await bootWorker({ reset: true });
+};
+// Set on the load that finds an account at another gateway; read by the
+// identity screen, which then offers a move instead of a new account.
+let moveFrom = null;
 
 // Returning / new browser: sign-in takes the full Fediverse address, @you@yourpod.
 // The host part IS the pod (a FediPod address lives at a host root), so the pod is
@@ -186,17 +201,20 @@ window.fedipodSignin = async ({ address }) => {
 };
 
 // Called on every page load. Returns 'signed-in' | 'restored' | 'anonymous' |
-// 'signup' — the last being a return from the pod's login in the middle of
-// creating an account, with a session and no account on the pod yet.
+// 'signup' | 'move-in' — the last two being a return from the pod's login
+// in the middle of creating an account: with no account on the pod yet, or
+// with one whose address lives at another gateway.
 window.fedipodOnLoad = async () => {
   if (new URLSearchParams(location.search).get('code')) {
     const done = await completeLogin({ currentUrl: location.href });
     history.replaceState({}, '', REDIRECT);
     if (done?.returnTo === SIGNUP_RETURN) {
-      // A pod that already holds an account boots as usual: "create an
-      // account" on a pod that has one is a sign-in, not a second account.
-      const pod = podBaseOfWebId(done.webId);
-      if (!(await resourceExists(done.fetch, `${pod}${AP_ROOT}ap-state/config.json`))) return 'signup';
+      const here = await readAccount(done).catch(() => null);
+      if (!here) return 'signup';
+      // An address at ANOTHER gateway: "create an account" here is a move
+      // in, not a second account. One at this gateway, or on the pod
+      // itself, is a sign-in.
+      if (here.frontHost && here.frontHost !== location.host) { moveFrom = here; return 'move-in'; }
     }
     await bootWorker({ reset: true });        // this may be a different account
     return 'signed-in';
@@ -399,9 +417,9 @@ if (typeof document !== 'undefined') (async () => {
     // a fresh session and forwards deep links on a returning one, so both a
     // fresh sign-in and a restored session land in the same place.
     if (state === 'signed-in' || state === 'restored') { location.href = '/admin/client/'; return; }
-    // Back from the pod's login with no account there yet: the identity
-    // screen, once the form below is wired.
-    if (state === 'signup') pendingIdentity = true;
+    // Back from the pod's login with no account there yet, or with one to
+    // move here: the identity screen, once the form below is wired.
+    if (state === 'signup' || state === 'move-in') pendingIdentity = true;
     else {
       // Anonymous: show the landing (sign-in address + create-account); form stays hidden.
       $('loading').hidden = true;
@@ -414,7 +432,9 @@ if (typeof document !== 'undefined') (async () => {
   const showLanding = () => { $('pane-form').hidden = true; $('running').hidden = true; $('brand').hidden = true; $('hero').hidden = false; $('landing').hidden = false; };
   const showForm = () => { $('hero').hidden = true; $('landing').hidden = true; $('brand').hidden = false; $('pane-form').hidden = false; goStep(1); };
   // The identity screen, on a pod session: the pod is read off the WebID and
-  // fixes what the form can offer (a path pod is fronted, no choice).
+  // fixes what the form can offer (a path pod is fronted, no choice). For a
+  // move in, the handle is the old one to start with, the address lives here
+  // by definition, and the button says what it does.
   let signedPod = '';
   async function showIdentity() {
     const session = await getSession();
@@ -423,6 +443,12 @@ if (typeof document !== 'undefined') (async () => {
     $('loading').hidden = true; $('hero').hidden = true; $('landing').hidden = true; $('running').hidden = true;
     $('brand').hidden = false; $('pane-form').hidden = false;
     $('signed-pod').textContent = signedPod;
+    $('movein-note').hidden = !moveFrom;
+    if (moveFrom) {
+      $('movein-from').textContent = moveFrom.address;
+      if (!f().handle.value) f().handle.value = moveFrom.config.handle;
+      $('submit').textContent = 'Move your account here';
+    }
     goStep(2);
   }
 
@@ -454,7 +480,8 @@ if (typeof document !== 'undefined') (async () => {
   // lives at this site; a pod at its own host root gets the choice. Known
   // from the signed-in pod, not guessed from the provider.
   const pathPod = () => { try { return new URL(signedPod).pathname !== '/'; } catch { return false; } };
-  const shape = () => (pathPod() ? 'front' : f().shape.value);
+  // A move between gateways is an address at a gateway: no choice either.
+  const shape = () => ((pathPod() || moveFrom) ? 'front' : f().shape.value);
   const answers = () => ({ handle: f().handle.value.trim().toLowerCase(), shape: shape() });
   const previewAddr = () => {
     const handle = f().handle.value.trim().toLowerCase();
@@ -465,10 +492,10 @@ if (typeof document !== 'undefined') (async () => {
   // The shape choice is fixed for a path pod, and open for a host-root pod.
   // A path pod has no choice to make: the radios go away and the note says why.
   const applyShape = () => {
-    const fixed = pathPod();
+    const fixed = pathPod() || !!moveFrom;
     for (const r of f().shape) { if (fixed) r.checked = r.value === 'front'; }
     $('shape-group').hidden = fixed;
-    $('shape-hint').hidden = !fixed;
+    $('shape-hint').hidden = !fixed || !!moveFrom;   // a move explains itself in its own note
   };
   const applyMode = () => {
     const existing = f().mode.value === 'existing';
@@ -521,6 +548,7 @@ if (typeof document !== 'undefined') (async () => {
   $('run-back').addEventListener('click', () => { showLanding(); goStep(1); });
 
   const LABELS = { pod: 'Checking your pod', keys: 'Making your signing key', gateway: 'Connecting your mail door' };
+  const MOVE_LABELS = { pod: 'Reading your account on your pod', gateway: 'Taking your address here', keys: 'Moving your key and account record' };
   $('form').addEventListener('submit', async (e) => {
     e.preventDefault(); $('form-error').textContent = '';
     const e2 = validateStep2(); if (e2) { $('form-error').textContent = e2; goStep(2); return; }
@@ -528,8 +556,13 @@ if (typeof document !== 'undefined') (async () => {
     $('pane-form').hidden = true; $('running').hidden = false;
     $('running-title').textContent = 'Setting up…'; $('run-error').textContent = ''; $('run-actions').hidden = true;
     const steps = $('steps'); steps.textContent = ''; const mark = {};
-    const onStep = (k, st) => { if (!mark[k]) { const li = document.createElement('li'); steps.appendChild(li); mark[k] = li; } mark[k].textContent = (st === 'ok' ? '✓ ' : st === 'running' ? '… ' : '') + (LABELS[k] || k); };
-    try { await window.fedipodSignup({ ...a, onStep }); location.href = '/admin/client/'; }
+    const labels = moveFrom ? MOVE_LABELS : LABELS;
+    const onStep = (k, st) => { if (!mark[k]) { const li = document.createElement('li'); steps.appendChild(li); mark[k] = li; } mark[k].textContent = (st === 'ok' ? '✓ ' : st === 'running' ? '… ' : '') + (labels[k] || k); };
+    try {
+      if (moveFrom) await window.fedipodMoveIn({ handle: a.handle, onStep });
+      else await window.fedipodSignup({ ...a, onStep });
+      location.href = '/admin/client/';
+    }
     catch (err) {
       $('running-title').textContent = 'Setup did not finish';
       $('run-error').textContent = err.message || String(err);

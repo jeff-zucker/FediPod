@@ -10,7 +10,7 @@
 // What it writes to the pod: an owner-only state container holding the
 // signing key and the account config; and, with a gateway, the attach.
 
-import { generateKeys } from './keystore.mjs';
+import { generateKeys, isKeyEnvelope } from './keystore.mjs';
 import { BrowserRemotePod } from './pod-remote.mjs';
 import * as podState from '../../lib/pod/state.mjs';
 import { resourceExists } from '../../lib/pod/root.mjs';
@@ -220,4 +220,99 @@ export async function signUp(answers, { session, onStep = () => {}, frontOrigin 
     keys,
     keysPublic: { rsa: keys.rsa.publicPem, ed25519: keys.ed25519?.publicPem || null },
   };
+}
+
+// ---- an account already on the pod ----
+
+/**
+ * What the pod already holds: null when there is no FediPod account on it,
+ * else its config, the pod, and where its address lives — `frontHost` is
+ * the gateway's host for an address at a gateway, null for one on the pod.
+ */
+export async function readAccount(session) {
+  const pod = podBaseOfWebId(session.webId);
+  const remote = new BrowserRemotePod(session, { webId: session.webId, role: 'signup', log: () => {} });
+  const config = await podState.readConfig(remote, { state: `${pod}${AP_ROOT}ap-state/` }).catch(() => null);
+  if (!config) return null;
+  const frontActor = config.gateway?.frontActor || null;
+  let frontHost = null;
+  try { frontHost = frontActor ? new URL(frontActor).host : null; } catch { frontHost = null; }
+  let podHost = '';
+  try { podHost = new URL(config.remotePod || pod).host; } catch { podHost = ''; }
+  return { pod, config, frontActor, frontHost, address: `@${config.handle}@${frontHost || podHost}` };
+}
+
+/**
+ * Move an account whose address lives at another gateway to this one. The
+ * pod, its posts, its followers and its key all stay where they are; what
+ * changes is the gateway that answers for it. This half does the pod's
+ * part: attach here, rewrite the config to name this gateway, restamp the
+ * key. The agent's first boot from that config publishes under the new
+ * ids, and then tells the old gateway and the followers (gateway-move.mjs).
+ *
+ * answers: { handle }  — the name here; the old one is the default.
+ * returns: { config, address, movedFrom }
+ */
+export async function moveIn(answers, { session, onStep = () => {}, frontOrigin = null } = {}) {
+  const { handle } = answers;
+  const bad = handleProblem(handle);
+  if (bad) throw new Error(bad);
+  if (!session?.webId || typeof session.fetch !== 'function') throw new Error('sign in at your pod first');
+  if (!frontOrigin) throw new Error('a move needs a gateway to move to, and this page has none');
+  const origin = frontOrigin.replace(/\/$/, '');
+  const step = (key) => ({ running: (note) => onStep(key, 'running', note), ok: (note) => onStep(key, 'ok', note) });
+
+  // --- the pod: the account that is there, and its key ---
+  const podStep = step('pod');
+  podStep.running('reading your account on your pod');
+  const here = await readAccount(session);
+  if (!here?.frontActor) throw new Error('this pod holds no account at another gateway to move here');
+  if (here.frontHost === new URL(origin).host) throw new Error('this account already lives at this gateway');
+  const { pod, config: old } = here;
+  const remote = new BrowserRemotePod(session, { webId: session.webId, role: 'signup', log: () => {} });
+  const urls = { state: `${pod}${AP_ROOT}ap-state/` };
+  const keys = await podState.readKeys(remote, urls);
+  if (!keys?.rsa) throw new Error('could not read this account\'s signing key on the pod');
+  if (isKeyEnvelope(keys)) throw new Error(`this account's key is still under a password from an earlier version — sign in once at ${here.frontHost} first, then come back`);
+  podStep.ok(here.address);
+
+  // --- this gateway: the name, then the attach, fronted ---
+  const gw = step('gateway');
+  gw.running(`taking your address at ${new URL(origin).host}`);
+  await assertFrontNameFree(origin, handle);
+  const res = await session.fetch(`${origin}/api/attach`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ handle, podHome: `${pod}${AP_ROOT}`, actorUrl: actorUrlFor(pod), kind: old.kind || 'person', fronted: true }),
+  });
+  const d = await res.json().catch(() => ({}));
+  if (res.status !== 201 || !d.hmacSecret) throw new Error(`could not attach to this gateway (HTTP ${res.status}): ${d.error || ''}`);
+  const gateway = {
+    url: `${origin}/u/${handle}/ap/inbox/`, frontActor: String(d.frontActor || `${origin}/u/${handle}/ap/actor`),
+    hmacSecret: d.hmacSecret, mode: 'trust',
+  };
+  gw.ok();
+
+  // --- the pod again: the config names this gateway, the key is restamped ---
+  //
+  // The old actor becomes an alias, which is what a server checks on the new
+  // actor before it honours a Move. `movedFrom` is the pending half: the
+  // agent completes it after its first boot under the new ids.
+  const keysStep = step('keys');
+  keysStep.running('moving your key and account record to the new address');
+  const aliases = [...new Set([...(old.aliases || []), here.frontActor])];
+  const config = {
+    ...old, handle, gateway, aliases,
+    movedFrom: { actor: here.frontActor, gateway: new URL(here.frontActor).origin, handle: old.handle, at: new Date().toISOString() },
+  };
+  keys.mintedFor = gateway.frontActor;                          // one key, one actor (lib/keys.mjs)
+  try {
+    await podState.writeKeys(remote, urls, keys);
+    await podState.writeConfig(remote, urls, config);
+  } catch (e) {
+    throw new Error(`could not update your account on the pod (${e.message})`);
+  }
+  await cacheOpenedKeys(actorUrlFor(pod), keys);
+  keysStep.ok();
+
+  return { config, address: `@${handle}@${new URL(origin).host}`, movedFrom: config.movedFrom };
 }

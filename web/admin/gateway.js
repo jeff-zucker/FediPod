@@ -43,6 +43,9 @@ GW_OPEN_ATTACH.addEventListener('click', () => {
 });
 GW_OPEN_DETACH.addEventListener('click', () => {
   $('gw-detach-fronted').hidden = !gwState?.frontActor;
+  // The move-in hint exists only in the browser build (see index.html).
+  const moveHint = $('gw-move-hint-browser');
+  if (moveHint) moveHint.hidden = !gwState?.frontActor;
   $('gw-detach-plain').hidden = !!gwState?.frontActor;
   solWindow.show('gateway-detach-form', 'Detach from gateway');
 });

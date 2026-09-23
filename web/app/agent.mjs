@@ -23,6 +23,7 @@ import { importSigningKey, loadKeysFromPod, cacheOpenedKeys, podActorOf } from '
 import { generateKeys } from './keystore.mjs';
 import { RelayDeliverer, doorKeyOf } from './deliver-relay.mjs';
 import { AdminFacade } from './admin-facade.mjs';
+import { completeGatewayMove } from './gateway-move.mjs';
 import { BrowserAtproto } from './atproto-browser.mjs';
 import { BskyFeed } from '../../lib/connections/bskyfeed.mjs';
 import { BrowserFediAccounts } from './fediacct-browser.mjs';
@@ -158,6 +159,9 @@ export class BrowserAgent {
       this.deliverer?.startQueue?.();
       await this.publisher.publishProfile();
       await this.store.flush?.();
+      // An address that just moved here from another gateway: the new
+      // actor is published, so the old gateway and the followers can be told.
+      await completeGatewayMove(this).catch((e) => this.log(`gateway move: ${e.message}`));
       await this.intake.start();
       this.startBsky();
       this.startAccts();
@@ -253,6 +257,9 @@ export class BrowserAgent {
       remotePod = credential.remotePod;
     }
     this.webId = webId;
+    // The pod session's own fetch, for the gateway APIs that take it as
+    // proof of the pod (attach, move) — the transport below is for the pod.
+    this.sessionFetch = session.fetch;
     const root = (config && config.root) || 'fedipod/';
     this.remote = new BrowserRemotePod(session, { webId, log: this.log });
     // Pod-native for now: the state store below is read with these, and only

@@ -163,6 +163,9 @@ const copyAdmin = (from, to) => { fs.mkdirSync(to, { recursive: true });
       text = text
         .replace('<style>#actor-pick', '<style>#gw-shape-front,#do-drain,#do-log,#actor-pick')
         .replace('>Recover posts<', '>Refresh Feed<')
+        // The move-to-another-gateway hint: only the browser build can move
+        // in (signup.mjs moveIn), so only here does gateway.js get to show it.
+        .replace('id="gw-move-hint" hidden>', 'id="gw-move-hint-browser" hidden>')
         .replace('Put back posts this machine lost, from what the pod still holds',
           'Refresh your feed from what your pod still holds');
     }

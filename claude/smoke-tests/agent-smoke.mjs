@@ -11558,6 +11558,96 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
   'the pod server was handed the proven WebID, not the claimed one — for the path pod too');
 }
 
+// --- 29s. an address at a gateway moves to another gateway ---
+{
+  const front = await import(path.join(root, 'lib/gateway/front-core.mjs'));
+  const ORIGIN = 'https://fedipod.net';
+  const NEW = 'https://other.example/u/new/ap/actor';
+  const OLD = `${ORIGIN}/u/old/ap/actor`;
+  const webId = 'https://alice.pod/profile/card#me';
+  const dir = {
+    old: { handle: 'old', podHome: 'https://alice.pod/fedipod/', webId, actorUrl: OLD, kind: 'person', hmacSecret: 's' },
+    'door@alice.pod': { handle: 'door', podHome: 'https://alice.pod/fedipod/', webId, actorUrl: 'https://alice.pod/fedipod/ap/actor', kind: 'person', hmacSecret: 's', inboxOnly: true },
+  };
+  // The pod's actor AFTER the move: it carries the NEW gateway's ids, with
+  // the old actor among its aliases, which is what the new agent publishes.
+  const podActor = {
+    '@context': ['https://www.w3.org/ns/activitystreams', 'https://w3id.org/security/v1', { alsoKnownAs: { '@id': 'as:alsoKnownAs', '@type': '@id' } }],
+    id: NEW, type: 'Person', preferredUsername: 'new', inbox: 'https://other.example/u/new/ap/inbox/', outbox: 'https://other.example/u/new/ap/outbox',
+    alsoKnownAs: [webId, OLD],
+    publicKey: { id: `${NEW}#main-key`, owner: NEW, publicKeyPem: '-----BEGIN PUBLIC KEY-----\nMIIB\n-----END PUBLIC KEY-----\n' },
+  };
+  const podGet = async (u) => (u === 'https://alice.pod/fedipod/ap/actor'
+    ? new Response(JSON.stringify(podActor), { status: 200, headers: { 'content-type': 'application/activity+json' } })
+    : new Response('', { status: 404 }));
+  const verifier = async (authz) => ({ webid: authz === 'DPoP alice' ? webId : authz === 'DPoP bob' ? 'https://bob.pod/profile/card#me' : null });
+  const ctx = { host: 'fedipod.net', frontOrigin: ORIGIN, lookup: (h) => dir[h] || null, putDirectory: async (h, r) => { dir[h] = r; }, verifier, podGet,
+    fetchImpl: async () => new Response('', { status: 202 }) };
+  const R = (method, p, { body = null, authz = null, headers = {} } = {}) => new Request(ORIGIN + p, {
+    method, headers: { ...(body ? { 'content-type': 'application/json' } : {}), ...(authz ? { authorization: authz, dpop: 'proof' } : {}), ...headers },
+    ...(body ? { body: JSON.stringify(body) } : {}) });
+  const move = (body, authz) => front.routeFront(R('POST', '/api/move', { body, authz }), ctx);
+
+  check((await move({ handle: 'old', movedTo: NEW })).status === 401, 'moving needs the pod token');
+  check((await move({ handle: 'old', movedTo: NEW }, 'DPoP bob')).status === 403, 'and the token has to be the account owner\'s');
+  check((await move({ handle: 'door@alice.pod', movedTo: NEW }, 'DPoP alice')).status === 400 && (await move({ handle: 'nobody', movedTo: NEW }, 'DPoP alice')).status === 404,
+    'an address on the pod has nothing to move: it detaches and attaches; an unknown name is unknown');
+  check((await move({ handle: 'old', movedTo: 'https://other.example/u/new/' }, 'DPoP alice')).status === 400
+    && (await move({ handle: 'old', movedTo: `${ORIGIN}/u/new/ap/actor` }, 'DPoP alice')).status === 400,
+    'the new address must be an actor URL at another gateway');
+  const pre = await front.routeFront(R('OPTIONS', '/api/move', { headers: { origin: 'https://other.example' } }), ctx);
+  check(pre.status === 204 && pre.headers['access-control-allow-origin'] === '*' && /DPoP/.test(pre.headers['access-control-allow-headers']),
+    'a browser at the new gateway may call it: the preflight is answered');
+  const ok = await move({ handle: 'old', movedTo: NEW }, 'DPoP alice');
+  const okBody = JSON.parse(ok.body);
+  check(ok.status === 200 && ok.headers['access-control-allow-origin'] === '*' && dir.old.movedTo === NEW && !!dir.old.movedAt,
+    'the owner moves it: the row records where, and when');
+  const again = await move({ handle: 'old', movedTo: NEW }, 'DPoP alice');
+  check(again.status === 200 && JSON.parse(again.body).movedAt === okBody.movedAt, 'moving to the same place again changes nothing');
+
+  // The old actor: a stub under the OLD id, the same key, movedTo the new.
+  const actorRes = await front.routeFront(R('GET', '/u/old/ap/actor', { headers: { accept: 'application/activity+json' } }), ctx);
+  const stub = actorRes.status === 200 ? JSON.parse(actorRes.body) : {};
+  check(stub.id === OLD && stub.movedTo === NEW && stub.publicKey?.id === `${OLD}#main-key` && stub.publicKey.owner === OLD
+    && stub.inbox === `${ORIGIN}/u/old/ap/inbox/` && stub.preferredUsername === 'old',
+    'the old actor is served under its old id with the same key and movedTo');
+  check(Array.isArray(stub.alsoKnownAs) && stub.alsoKnownAs.includes(NEW) && stub.alsoKnownAs.includes(webId) && !stub.alsoKnownAs.includes(OLD),
+    'and names the new actor as its alias, never itself');
+  check([].concat(stub['@context']).some((c) => c && typeof c === 'object' && 'movedTo' in c),
+    'with movedTo declared in the context, as Mastodon declares it');
+  // Every other old id says where it is now; the doors are shut.
+  const note = await front.routeFront(R('GET', '/u/old/ap/notes/1'), ctx);
+  check(note.status === 301 && note.headers.location === 'https://other.example/u/new/ap/notes/1', 'an old post id redirects to its new one');
+  const ob = await front.routeFront(R('GET', '/u/old/ap/outbox'), ctx);
+  check(ob.status === 301 && ob.headers.location === 'https://other.example/u/new/ap/outbox', 'the old outbox redirects to the new');
+  const inb = await front.routeFront(R('POST', '/u/old/ap/inbox/', { body: { type: 'Create' } }), ctx);
+  const obp = await front.routeFront(R('POST', '/u/old/ap/outbox', { body: { type: 'Note' } }), ctx);
+  check(inb.status === 410 && obp.status === 410 && /moved to/.test(inb.body), 'deliveries and posts to the old address are refused as gone');
+  const wf = await front.routeFront(R('GET', '/.well-known/webfinger?resource=acct:old@fedipod.net'), ctx);
+  check(wf.status === 200 && JSON.parse(wf.body).links.some((l) => l.href === OLD), 'the old handle still resolves, to the stub a Move is verified against');
+  // The relay still sends for the old account: the Move goes out through it.
+  const relayPre = await front.routeFront(R('OPTIONS', '/api/relay', { headers: { origin: 'https://other.example' } }), ctx);
+  check(relayPre.status === 204 && relayPre.headers['access-control-allow-origin'] === '*', 'the relay answers a preflight from another origin too');
+
+  // The browser side, by its text: sign-up reads what the pod holds and
+  // offers a move, the agent finishes it once active, and the Move is
+  // signed under the OLD key id through the OLD relay.
+  const read = (f) => fs.readFileSync(path.join(root, f), 'utf8');
+  const signupSrc = read('web/app/signup.mjs');
+  check(/export async function readAccount/.test(signupSrc) && /export async function moveIn/.test(signupSrc)
+    && /fronted: true/.test(signupSrc.slice(signupSrc.indexOf('export async function moveIn')))
+    && /movedFrom: \{ actor: here\.frontActor/.test(signupSrc) && /keys\.mintedFor = gateway\.frontActor/.test(signupSrc),
+    'moveIn attaches fronted at the new gateway, keeps the key, and leaves the Move pending in the config');
+  const bootSrc = read('web/app/boot.mjs');
+  check(/return 'move-in'/.test(bootSrc) && /window\.fedipodMoveIn/.test(bootSrc) && /moveFrom \? MOVE_LABELS : LABELS/.test(bootSrc),
+    'the sign-up page turns "create an account" on a pod held elsewhere into a move in');
+  const gm = read('web/app/gateway-move.mjs');
+  check(/keyId: `\$\{mv\.actor\}#main-key`/.test(gm) && /relayUrl: `\$\{mv\.gateway\}\/api\/relay`/.test(gm)
+    && /\/api\/move`/.test(gm) && gm.indexOf('/api/move') < gm.indexOf('deliverNow'),
+    'the Move is signed under the old key id, sent through the old relay, after the old gateway is told');
+  check(/completeGatewayMove\(this\)/.test(read('web/app/agent.mjs')), 'and the agent completes a pending move when it goes active');
+}
+
 // --- 30. fronted identity: apUrls publicBase split + agent publishes under it ---
 {
   const wire30 = await import(path.join(root, 'lib/core/wire.mjs'));

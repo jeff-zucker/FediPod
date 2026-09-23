@@ -104,8 +104,8 @@ a { color: var(--accent); }
   <p><button type="button" class="primary" id="create">create an account</button></p>
   <p>Fedipod.net is a FediPod Gateway operated by Jeff Zucker. You can detach from the gateway at any
   time and transfer your account either to your own FediPod Gateway (easy to set up on a free tier Netlify) 
-  or to any Fediverse server. All of your data lives on your pod and your Fediverse identity is yours
-  forever independent of which gateway you attach to.</p>
+  or to any Fediverse server. All of your data lives on your pod and is yours regardless of which
+  gateway you are attached to.</p>
   <p>For more information, see
     <a href="https://github.com/jeff-zucker/FediPod">github.com/jeff-zucker/FediPod</a></p>
 </section>
@@ -190,6 +190,12 @@ a { color: var(--accent); }
 
         <span id="signed-pod-label" class="grouplabel">Your pod</span>
         <p id="signed-pod" role="status" aria-labelledby="signed-pod-label"></p>
+
+        <!-- Shown when the pod's account lives at another gateway: this is a
+             move, not a new account. -->
+        <p id="movein-note" hidden>Moving <strong id="movein-from"></strong> to this site.
+          Your posts, followers and key come with you, and your followers are told the
+          new address. Keep the same handle, or choose a new one here.</p>
 
         <label for="handle">Fediverse handle</label>
         <input type="text" id="handle" name="handle" autocomplete="off"

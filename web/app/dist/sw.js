@@ -70470,6 +70470,60 @@ var AdminFacade = class {
   }
 };
 
+// web/app/gateway-move.mjs
+init_wire();
+async function completeGatewayMove(agent2) {
+  const cfg = agent2.store.getConfig();
+  const mv = cfg?.movedFrom;
+  if (!mv || mv.completedAt) return null;
+  const log2 = agent2.log;
+  const newActor = agent2.urls.actor;
+  let told;
+  try {
+    told = await agent2.sessionFetch(`${mv.gateway}/api/move`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ handle: mv.handle, movedTo: newActor })
+    });
+  } catch (e) {
+    told = { status: 0, statusText: e.message };
+  }
+  if (told.status !== 200) {
+    log2(`gateway move: ${mv.gateway} did not mark @${mv.handle} as moved (${told.status || told.statusText}) \u2014 will retry`);
+    return { told: false };
+  }
+  const contacts = agent2.store.getContacts();
+  const inboxes = [...new Set(contacts.followers.map((f) => f.sharedInbox || f.inbox).filter(Boolean))];
+  const activity = moveActivity({ actor: mv.actor }, newActor, Date.now());
+  const sender = new RelayDeliverer({
+    passive: true,
+    store: agent2.store,
+    rsaPrivate: agent2.deliverer.rsaPrivate,
+    keyId: `${mv.actor}#main-key`,
+    actorId: mv.actor,
+    log: log2,
+    relayUrl: `${mv.gateway}/api/relay`,
+    handle: mv.handle,
+    sessionFetch: agent2.sessionFetch
+  });
+  let sent = 0;
+  let failed = 0;
+  for (const inbox of inboxes) {
+    try {
+      await sender.deliverNow(inbox, activity);
+      sent++;
+    } catch (e) {
+      failed++;
+      log2(`gateway move: Move to ${inbox} failed: ${e.message}`);
+    }
+  }
+  const done = { ...mv, completedAt: (/* @__PURE__ */ new Date()).toISOString(), moveSent: sent, moveFailed: failed };
+  agent2.store.setConfig({ ...agent2.store.getConfig(), movedFrom: done });
+  await agent2.store.flush?.();
+  log2(`moved from ${mv.actor} to ${newActor}: Move sent to ${sent} inbox(es)${failed ? `, ${failed} failed` : ""}`);
+  return done;
+}
+
 // stub:node:os
 var fail2 = () => {
   throw new Error("node:os is not available in the browser agent");
@@ -71659,6 +71713,7 @@ var BrowserAgent = class _BrowserAgent {
       this.deliverer?.startQueue?.();
       await this.publisher.publishProfile();
       await this.store.flush?.();
+      await completeGatewayMove(this).catch((e) => this.log(`gateway move: ${e.message}`));
       await this.intake.start();
       this.startBsky();
       this.startAccts();
@@ -71756,6 +71811,7 @@ var BrowserAgent = class _BrowserAgent {
       remotePod = credential.remotePod;
     }
     this.webId = webId;
+    this.sessionFetch = session.fetch;
     const root = config && config.root || "fedipod/";
     this.remote = new BrowserRemotePod(session, { webId, log: this.log });
     this.urls = apUrls2(remotePod, root);

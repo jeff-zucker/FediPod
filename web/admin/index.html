@@ -486,6 +486,12 @@ pre { overflow-x: auto; background: #0001; padding: .6rem; border-radius: .3rem;
   <p class="warn" id="gw-detach-fronted" hidden>This identity publishes under the gateway's
     name. Detaching moves every published id back to the pod — a rename other servers
     see, not just a mail change.</p>
+  <!-- Browser build only: stage-site.mjs renames this id to gw-move-hint-browser,
+       and gateway.js shows it for an address that lives at a gateway. The
+       DeviceAgent has no move-in yet, so here it stays hidden under this id. -->
+  <p class="hint" id="gw-move-hint" hidden>To move this address to another gateway, open that
+    gateway, choose “create an account”, and sign in with this pod. Your posts, followers and
+    key come with you, and your followers are told the new address.</p>
   <p>
     <button id="gw-detach" type="button" class="primary"
       title="   Forget the gateway and republish the actor with the pod inbox">Detach</button>

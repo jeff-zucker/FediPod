@@ -33212,6 +33212,87 @@ async function signUp(answers, { session, onStep = () => {
     keysPublic: { rsa: keys.rsa.publicPem, ed25519: keys.ed25519?.publicPem || null }
   };
 }
+async function readAccount(session) {
+  const pod = podBaseOfWebId(session.webId);
+  const remote = new BrowserRemotePod(session, { webId: session.webId, role: "signup", log: () => {
+  } });
+  const config = await readConfig(remote, { state: `${pod}${AP_ROOT}ap-state/` }).catch(() => null);
+  if (!config) return null;
+  const frontActor = config.gateway?.frontActor || null;
+  let frontHost = null;
+  try {
+    frontHost = frontActor ? new URL(frontActor).host : null;
+  } catch {
+    frontHost = null;
+  }
+  let podHost = "";
+  try {
+    podHost = new URL(config.remotePod || pod).host;
+  } catch {
+    podHost = "";
+  }
+  return { pod, config, frontActor, frontHost, address: `@${config.handle}@${frontHost || podHost}` };
+}
+async function moveIn(answers, { session, onStep = () => {
+}, frontOrigin = null } = {}) {
+  const { handle } = answers;
+  const bad = handleProblem(handle);
+  if (bad) throw new Error(bad);
+  if (!session?.webId || typeof session.fetch !== "function") throw new Error("sign in at your pod first");
+  if (!frontOrigin) throw new Error("a move needs a gateway to move to, and this page has none");
+  const origin = frontOrigin.replace(/\/$/, "");
+  const step = (key) => ({ running: (note) => onStep(key, "running", note), ok: (note) => onStep(key, "ok", note) });
+  const podStep = step("pod");
+  podStep.running("reading your account on your pod");
+  const here = await readAccount(session);
+  if (!here?.frontActor) throw new Error("this pod holds no account at another gateway to move here");
+  if (here.frontHost === new URL(origin).host) throw new Error("this account already lives at this gateway");
+  const { pod, config: old } = here;
+  const remote = new BrowserRemotePod(session, { webId: session.webId, role: "signup", log: () => {
+  } });
+  const urls = { state: `${pod}${AP_ROOT}ap-state/` };
+  const keys = await readKeys(remote, urls);
+  if (!keys?.rsa) throw new Error("could not read this account's signing key on the pod");
+  if (isKeyEnvelope(keys)) throw new Error(`this account's key is still under a password from an earlier version \u2014 sign in once at ${here.frontHost} first, then come back`);
+  podStep.ok(here.address);
+  const gw = step("gateway");
+  gw.running(`taking your address at ${new URL(origin).host}`);
+  await assertFrontNameFree(origin, handle);
+  const res = await session.fetch(`${origin}/api/attach`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ handle, podHome: `${pod}${AP_ROOT}`, actorUrl: actorUrlFor(pod), kind: old.kind || "person", fronted: true })
+  });
+  const d = await res.json().catch(() => ({}));
+  if (res.status !== 201 || !d.hmacSecret) throw new Error(`could not attach to this gateway (HTTP ${res.status}): ${d.error || ""}`);
+  const gateway = {
+    url: `${origin}/u/${handle}/ap/inbox/`,
+    frontActor: String(d.frontActor || `${origin}/u/${handle}/ap/actor`),
+    hmacSecret: d.hmacSecret,
+    mode: "trust"
+  };
+  gw.ok();
+  const keysStep = step("keys");
+  keysStep.running("moving your key and account record to the new address");
+  const aliases = [.../* @__PURE__ */ new Set([...old.aliases || [], here.frontActor])];
+  const config = {
+    ...old,
+    handle,
+    gateway,
+    aliases,
+    movedFrom: { actor: here.frontActor, gateway: new URL(here.frontActor).origin, handle: old.handle, at: (/* @__PURE__ */ new Date()).toISOString() }
+  };
+  keys.mintedFor = gateway.frontActor;
+  try {
+    await writeKeys(remote, urls, keys);
+    await writeConfig(remote, urls, config);
+  } catch (e) {
+    throw new Error(`could not update your account on the pod (${e.message})`);
+  }
+  await cacheOpenedKeys(actorUrlFor(pod), keys);
+  keysStep.ok();
+  return { config, address: `@${handle}@${new URL(origin).host}`, movedFrom: config.movedFrom };
+}
 
 // lib/pod/actor.mjs
 var ACCEPT_AP = 'application/activity+json, application/ld+json; profile="https://www.w3.org/ns/activitystreams"';
@@ -33548,6 +33629,13 @@ window.fedipodSignup = async ({ onStep, ...answers }) => {
   await signUp(answers, { session, onStep, frontOrigin: location.origin });
   await bootWorker({ reset: true });
 };
+window.fedipodMoveIn = async ({ onStep, ...answers }) => {
+  const session = await getSession();
+  if (!session) throw new Error("Sign in at your pod first.");
+  await moveIn(answers, { session, onStep, frontOrigin: location.origin });
+  await bootWorker({ reset: true });
+};
+var moveFrom = null;
 function parseAddress(input) {
   let s = String(input || "").trim();
   if (s.startsWith("@")) s = s.slice(1);
@@ -33597,8 +33685,12 @@ window.fedipodOnLoad = async () => {
     const done = await completeLogin({ currentUrl: location.href });
     history.replaceState({}, "", REDIRECT);
     if (done?.returnTo === SIGNUP_RETURN) {
-      const pod = podBaseOfWebId(done.webId);
-      if (!await resourceExists(done.fetch, `${pod}${AP_ROOT}ap-state/config.json`)) return "signup";
+      const here = await readAccount(done).catch(() => null);
+      if (!here) return "signup";
+      if (here.frontHost && here.frontHost !== location.host) {
+        moveFrom = here;
+        return "move-in";
+      }
     }
     await bootWorker({ reset: true });
     return "signed-in";
@@ -33787,7 +33879,7 @@ ${e.detail}` : "");
       location.href = "/admin/client/";
       return;
     }
-    if (state === "signup") pendingIdentity = true;
+    if (state === "signup" || state === "move-in") pendingIdentity = true;
     else {
       $("loading").hidden = true;
       $("landing").hidden = false;
@@ -33822,6 +33914,12 @@ ${e.detail}` : "");
     $("brand").hidden = false;
     $("pane-form").hidden = false;
     $("signed-pod").textContent = signedPod;
+    $("movein-note").hidden = !moveFrom;
+    if (moveFrom) {
+      $("movein-from").textContent = moveFrom.address;
+      if (!f().handle.value) f().handle.value = moveFrom.config.handle;
+      $("submit").textContent = "Move your account here";
+    }
     goStep(2);
   }
   const doSignin = async () => {
@@ -33865,7 +33963,7 @@ ${e.detail}` : "");
       return false;
     }
   };
-  const shape = () => pathPod() ? "front" : f().shape.value;
+  const shape = () => pathPod() || moveFrom ? "front" : f().shape.value;
   const answers = () => ({ handle: f().handle.value.trim().toLowerCase(), shape: shape() });
   const previewAddr = () => {
     const handle = f().handle.value.trim().toLowerCase();
@@ -33878,12 +33976,12 @@ ${e.detail}` : "");
     $("preview").textContent = handle && host ? `@${handle}@${host}` : "@\u2026@\u2026";
   };
   const applyShape = () => {
-    const fixed = pathPod();
+    const fixed = pathPod() || !!moveFrom;
     for (const r of f().shape) {
       if (fixed) r.checked = r.value === "front";
     }
     $("shape-group").hidden = fixed;
-    $("shape-hint").hidden = !fixed;
+    $("shape-hint").hidden = !fixed || !!moveFrom;
   };
   const applyMode = () => {
     const existing = f().mode.value === "existing";
@@ -33956,6 +34054,7 @@ ${e.detail}` : "");
     goStep(1);
   });
   const LABELS = { pod: "Checking your pod", keys: "Making your signing key", gateway: "Connecting your mail door" };
+  const MOVE_LABELS = { pod: "Reading your account on your pod", gateway: "Taking your address here", keys: "Moving your key and account record" };
   $("form").addEventListener("submit", async (e) => {
     e.preventDefault();
     $("form-error").textContent = "";
@@ -33974,16 +34073,18 @@ ${e.detail}` : "");
     const steps = $("steps");
     steps.textContent = "";
     const mark = {};
+    const labels = moveFrom ? MOVE_LABELS : LABELS;
     const onStep = (k, st2) => {
       if (!mark[k]) {
         const li = document.createElement("li");
         steps.appendChild(li);
         mark[k] = li;
       }
-      mark[k].textContent = (st2 === "ok" ? "\u2713 " : st2 === "running" ? "\u2026 " : "") + (LABELS[k] || k);
+      mark[k].textContent = (st2 === "ok" ? "\u2713 " : st2 === "running" ? "\u2026 " : "") + (labels[k] || k);
     };
     try {
-      await window.fedipodSignup({ ...a, onStep });
+      if (moveFrom) await window.fedipodMoveIn({ handle: a.handle, onStep });
+      else await window.fedipodSignup({ ...a, onStep });
       location.href = "/admin/client/";
     } catch (err) {
       $("running-title").textContent = "Setup did not finish";

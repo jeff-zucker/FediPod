@@ -1,5 +1,28 @@
 # Changes
 
+## 2026-09-23 (an address moves to another gateway — version 1.29.0)
+
+**An address at a gateway can move to another gateway.** Open the new
+gateway, choose "create an account", and sign in with the same pod: the new
+gateway reads the account on the pod, sees its address lives elsewhere, and
+offers a move in place of a new account, with the old handle or a new one.
+The pod, the posts, the followers and the key stay where they are. The
+agent's first boot under the new address publishes it with the old one as an
+alias, tells the old gateway, and sends a Move to every follower from the
+old address, signed under the old key through the old gateway's relay.
+
+**A gateway serves a moved address as a stub.** Told by its owner
+(`POST /api/move`), it answers the old actor under the old id with the same
+key and `movedTo` the new address, so the Move verifies; every other old id
+redirects to its new one, and the door for the old address is shut. The
+move and relay APIs answer a browser at another gateway's origin, since the
+move is driven from the new gateway's page.
+
+**The manage page says how.** An address at a gateway shows, in its gateway
+panel, that moving means creating an account at the other gateway with this
+pod. Browser build only; the DeviceAgent's setup does not yet read a pod
+that already holds an account.
+
 ## 2026-09-22 (no password on fedipod.net — version 1.28.0)
 
 **fedipod.net never sees a pod password.** The sign-up form no longer asks
