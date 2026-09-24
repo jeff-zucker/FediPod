@@ -1,5 +1,11 @@
 # Changes
 
+## 2026-09-23 (a republish keeps the pinned topics — version 1.36.2)
+
+**A forum's pinned topics survive a forced republish.** A republish let the
+category's own publisher write its pinned posts, of which a forum has none,
+over the pinned topics; the pinned topics are now written back after it.
+
 ## 2026-09-23 (a forum copied to another pod comes up readable — version 1.36.1)
 
 **A forum moved to a new pod publishes its lists with their rules.** After

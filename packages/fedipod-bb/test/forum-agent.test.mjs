@@ -617,3 +617,20 @@ test('a reprovision states the rules of the forum lists again, as a forum copied
     'a reprovision writes each list with its rule');
   assert.equal(agent.store.getConfig().reprovision, false, 'and the request is cleared once done');
 });
+
+test('a republish keeps the pinned topics in the category\'s featured list', async () => {
+  const pod = fakePod();
+  const { agent } = await boot(pod, home());
+  await agent.init({ handle: 'forum', name: 'The Forum', categories: [{ slug: 'gardening', name: 'Gardening' }],
+    moderators: ['https://priya.pod.example/fedipod/ap/actor'] });
+  assert.ok(await agent.connect());
+  const g = agent.categories[0];
+  const tid = topics.open(g.store, { title: 'Welcome', post: { id: MEI + '/welcome', author: MEI, published: '2026-09-15T10:00:00Z' } });
+  const moderation = await import('../src/moderation.mjs');
+  await moderation.pinTopic(g, tid, true);
+  assert.deepEqual(pod.docs.get(g.urls.featured)?.orderedItems, [g.urls.topic(tid)], 'pinned: the topic is the featured list');
+  agent.store.setConfig({ ...agent.store.getConfig(), republish: true });
+  agent.config = agent.store.getConfig();
+  await agent.publishAll();
+  assert.deepEqual(pod.docs.get(g.urls.featured)?.orderedItems, [g.urls.topic(tid)], 'and still is after a forced republish');
+});

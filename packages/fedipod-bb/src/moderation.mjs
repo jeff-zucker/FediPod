@@ -128,8 +128,7 @@ export async function moveTopic(from, to, tid) {
 export async function pinTopic(cat, tid, pinned) {
   if (!topics.get(cat.store, tid)) throw new Error(`no such topic: ${tid}`);
   topics.setFlags(cat.store, tid, { pinned });
-  const ids = topics.list(cat.store).filter(t => t.pinned).map(t => cat.urls.topic(t.tid));
-  await collection.writeFlat(cat.remote, cat.urls.featured, orderedCollection(cat.urls.featured, ids), { publicRead: true });
+  const ids = await publish.publishPinnedTopics(cat);
   const actor = await cat.remote.getJson(cat.urls.actor).catch(() => null);
   const inboxes = memberInboxes(cat);
   if (actor && inboxes.length) {

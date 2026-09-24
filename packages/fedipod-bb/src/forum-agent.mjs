@@ -852,6 +852,9 @@ export class ForumAgent {
         // The category's own inbox container exists because the group's
         // publisher made it; nothing drains it, so nobody may append to it.
         await podInbox.setPosture(this.remote, cat.urls, 'closed');
+        // The profile publish above wrote the category's featured list as its
+        // pinned posts, of which a forum has none: the pinned topics go back.
+        await publish.publishPinnedTopics(cat);
         await publish.publishTopicIndex(cat, { force: true });
         for (const t of topics.list(cat.store)) {
           // A topic the state cannot produce must not stop the forum coming

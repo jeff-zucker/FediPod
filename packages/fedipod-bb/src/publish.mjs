@@ -9,7 +9,7 @@
 import crypto from 'node:crypto';
 import * as collection from '../../../lib/pod/collection.mjs';
 import * as podNotes from '../../../lib/pod/notes.mjs';
-import { sanitizeHtml } from '../../../lib/core/wire.mjs';
+import { sanitizeHtml, orderedCollection } from '../../../lib/core/wire.mjs';
 import * as fwire from './wire.mjs';
 import * as topics from './topics.mjs';
 
@@ -144,6 +144,16 @@ async function flat({ remote, store }, key, url, doc, force) {
   await collection.writeFlat(remote, url, doc, { publicRead: !seen[key] });
   store.write('published.json', { ...store.read('published.json', {}), [key]: digest });
   return 1;
+}
+
+// The category's pinned topics, as its featured collection. The category's
+// own publisher writes a featured list too, of its pinned POSTS, which a
+// forum has none of: a forced profile publish wrote that empty list over the
+// pinned topics. This one is written after it, from the topics' flags.
+export async function publishPinnedTopics(cat) {
+  const ids = topics.list(cat.store).filter(t => t.pinned).map(t => cat.urls.topic(t.tid));
+  await collection.writeFlat(cat.remote, cat.urls.featured, orderedCollection(cat.urls.featured, ids), { publicRead: true });
+  return ids;
 }
 
 // A member's post, as verified at its origin, made readable for the website.
