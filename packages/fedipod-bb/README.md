@@ -10,7 +10,13 @@ website: where every document lives, how a topic's pages are written and
 sealed, how a member's post is cached for readers, the process that runs
 the forum from a moderator's machine, and the page that shows the forum.
 A moderator's console is part of that page: the queue of reports, held posts
-and asks, and the settings. The design and the phases are in
+and asks, and the settings.
+<!-- CLAUDE 2026-09-23 — the queue shows only what a moderator can act on since 1.36.4; delete these markers when done -->
+The queue shows what needs a moderator: a report, a held post, a join
+request, and a request of a moderator's that did not take. A moderator's
+own request on its way through is not listed. Moderators are the forum's:
+a moderator added from Settings moderates every category.
+<!-- /CLAUDE --> The design and the phases are in
 `claude/plans/fedipod-bb.md` at the repository root.
 
 ```
@@ -34,6 +40,8 @@ to the category it names, places carried posts in topics, and carries them
 to the category's followers. Several moderators run `start` on their own
 machines against the same pod: one hosts, the others watch, and when the
 host stops another takes over within fifteen minutes. A public
+<!-- CLAUDE 2026-09-23 — "five minutes" became "fifteen" in 1.34.0 when the lease went to five-minute renewals; the sentence above was changed in place, sorry; delete these markers when done -->
+<!-- /CLAUDE -->
 `ap/heartbeat` says when the forum was last hosted. `status` prints
 what the pod's state says without hosting.
 
@@ -185,3 +193,8 @@ than a second vote. The up count is AS2's `likes` on the post's copy.
 ActivityStreams has no property for a down count and none is invented: it is
 an ordinary `Collection` published beside the copy, at that copy's address
 with `-dislikes` after it, and taken down again when it reaches nought.
+<!-- CLAUDE 2026-09-23 — the count moved into the copy in 1.36.0, his OK given; delete these markers when done -->
+The copy also carries the count itself, as `dislikes` shaped like `likes`,
+which is the forum's own word; the page reads it there rather than asking
+for a document beside every post it shows.
+<!-- /CLAUDE -->
