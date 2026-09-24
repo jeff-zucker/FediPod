@@ -50,6 +50,12 @@ const pod = http.createServer((req, res) => {
       icon: { type: 'Image', url: PP + 'ap/media/face.png' },
     }));
   }
+  if (url === '/pods/wren/fedipod/ap/notes/gone') {
+    res.writeHead(200, { 'content-type': 'application/activity+json' });
+    return res.end(JSON.stringify({ '@context': 'https://www.w3.org/ns/activitystreams',
+      id: PP + 'ap/notes/gone', type: 'Tombstone', formerType: 'Note', deleted: '2026-09-24T00:00:00Z' }));
+  }
+  if (url === '/pods/wren/fedipod/ap/notes/locked') { res.writeHead(401); return res.end(); }
   if (url === '/pods/wren/fedipod/ap/outbox') {
     res.writeHead(200, { 'content-type': 'application/activity+json' });
     return res.end(JSON.stringify({ '@context': 'https://www.w3.org/ns/activitystreams',
@@ -555,6 +561,11 @@ try {
         body: JSON.stringify({ type: 'Delete', actor: a, object: a.replace(/actor$/, 'notes/n') }) });
     }
     check(purged.includes('u-pwren'), `a relayed Delete purges the account's cached documents (${purged.join(',') || 'none'})`);
+    const gone = await get('/u/pwren/ap/notes/gone');
+    const goneBody = await gone.json().catch(() => ({}));
+    check(gone.status === 410 && goneBody.type === 'Tombstone', `a deleted post answers 410 Gone and says what it was (${gone.status})`);
+    check((await get('/u/pwren/ap/notes/locked')).status === 404,
+      'a stranger asking for what they may not read is told it is not found, not that it is there');
     const priv = await get(outbox.replace(/ap\/outbox$/, 'ap/private/liked'), { redirect: 'manual' });
     check(priv.status === 303 && /ap\/private\/liked$/.test(priv.headers.get('location') || '')
       && priv.headers.get('cache-control') === 'no-store',

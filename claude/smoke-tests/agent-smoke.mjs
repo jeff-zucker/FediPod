@@ -850,6 +850,20 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   check(sent[0]?.type === 'Update' && sent[0].object.bodyValue === 'new', 'the Update carries the merged object');
 }
 
+// --- 5b15. naming yourself never delivers to your own inbox ---
+{
+  const notesM = await import(path.join(root, 'lib/core/publisher/notes.mjs'));
+  const wireM = await import(path.join(root, 'lib/core/wire.mjs'));
+  const urls = wireM.apUrls('https://pod.example/');
+  const pub = { urls, log: () => {}, store: { getStatuses: () => [] },
+    resolveMention: async (h) => (h === 'me@pod.example' ? { id: urls.actor, inbox: urls.inbox }
+      : { id: 'https://m.example/u/kofi', inbox: 'https://m.example/inbox' }) };
+  const ms = await notesM.mentionsFor(pub, 'hi @me@pod.example and @kofi@m.example', null);
+  check(ms.length === 2 && ms.find(m => m.actor === urls.actor)?.inbox === null
+    && ms.find(m => m.actor === 'https://m.example/u/kofi')?.inbox === 'https://m.example/inbox',
+    'mentioning yourself still tags you, and nothing is delivered to your own inbox (§7.1)');
+}
+
 // --- 5c. the private trees are re-checked and repaired on every start ---
 {
   const { Publisher } = await import(path.join(root, 'lib/core/publisher/index.mjs'));

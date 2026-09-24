@@ -56382,7 +56382,8 @@ async function mentionsFor(publisher, content, inReplyTo) {
       continue;
     }
     if (!inText.has(handle7) && doc.type !== "Group") continue;
-    mentions.push({ handle: handle7, actor: doc.id, page: doc.url || null, inbox: doc.endpoints?.sharedInbox || doc.inbox });
+    const self2 = doc.id === publisher.urls.actor;
+    mentions.push({ handle: handle7, actor: doc.id, page: doc.url || null, inbox: self2 ? null : doc.endpoints?.sharedInbox || doc.inbox });
   }
   return mentions;
 }
@@ -56685,7 +56686,12 @@ async function updateNote(publisher, s, { content, spoilerText = null, sensitive
       publisher.log(`mention @${handle7} did not resolve \u2014 left as text`);
       continue;
     }
-    mentions.push({ handle: handle7, actor: doc.id, page: doc.url || null, inbox: doc.endpoints?.sharedInbox || doc.inbox });
+    mentions.push({
+      handle: handle7,
+      actor: doc.id,
+      page: doc.url || null,
+      inbox: doc.id === urls.actor ? null : doc.endpoints?.sharedInbox || doc.inbox
+    });
   }
   const atts = attachments ?? s.attachments ?? [];
   const container = String(s.noteId).startsWith(urls.privateNotes) ? urls.privateNotes : urls.notes;
