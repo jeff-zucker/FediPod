@@ -9815,6 +9815,7 @@ function actorDoc({
   moderators = null,
   pendingFollowers = null,
   pendingFollowing = null,
+  liked = null,
   blocked = null,
   inbox = null,
   outbox = null,
@@ -9915,7 +9916,7 @@ function actorDoc({
     following: urls.following,
     // What this actor has liked (§5.5). Its owner's to read, like the pending
     // lists below.
-    ...urls.liked ? { liked: urls.liked } : {},
+    ...liked ? { liked } : {},
     // FEP-1b12: attributedTo names the moderators collection; recipients
     // validate a group's announced moderation against it.
     ...moderators ? { attributedTo: moderators } : {},
@@ -10350,13 +10351,14 @@ function updateActivity(note, urls, { serial = null } = {}) {
     object: note
   };
 }
-function deleteActivity({ urls, noteId }) {
+function deleteActivity({ urls, noteId, to = [PUBLIC], cc = null }) {
   return {
     "@context": AS_CTX,
     id: deleteActivityId(noteId),
     type: "Delete",
     actor: urls.actor,
-    to: [PUBLIC],
+    to,
+    ...cc?.length ? { cc } : {},
     object: { id: noteId, type: "Tombstone" }
   };
 }
@@ -34605,8 +34607,16 @@ var PodStore = class {
     const b = this.read("blocklist.json", {});
     return { domains: b.domains || [], actors: b.actors || [] };
   }
+  // Blocking someone ends their following as well: a blocked actor, or anyone
+  // on a blocked domain, is no longer delivered to. The mark dropFollower leaves
+  // keeps a reconcile from bringing them back.
   setBlocklist(b) {
     this.write("blocklist.json", b);
+    const c = this.getContacts();
+    const gone = c.followers.filter((f) => f.actor && this.isBlocked(f.actor)).map((f) => f.actor);
+    if (!gone.length) return;
+    for (const actor of gone) dropFollower(c, actor, "blocked");
+    this.setContacts(c);
   }
   // Takes an actor URL or an object URL: the actor list only ever matches the
   // former, the domain list matches either.
@@ -45767,6 +45777,7 @@ function readPublishedFollowers(publisher) {
 }
 async function publishCollections(publisher, which = ALL_COLLECTIONS) {
   const { urls } = publisher;
+  if (which.blocked) which = { ...which, followers: true };
   const contacts = publisher.store.getContacts();
   if (which.followers) {
     const knownF = publisher.store.read("published.json", {}).followersIndex;
@@ -45786,6 +45797,10 @@ async function publishCollections(publisher, which = ALL_COLLECTIONS) {
   if (which.blocked) await publisher.publishBlocked();
   if (which.featured) await publisher.publishFeatured();
   if (which.outbox) {
+    if (publisher.config?.kind === "group" && publisher.config?.private) {
+      const carry = (i) => i?.type === "Announce" || i?.type === "Undo";
+      if (publisher.store.read("outbox.json", []).some(carry)) await unrecordOutbox(publisher, carry);
+    }
     const outbox = publisher.store.read("outbox.json", []);
     const known2 = publisher.store.read("published.json", {}).outboxIndex;
     if (which.force || !Array.isArray(known2)) await publisher.reconcileOutbox(outbox);
@@ -56504,6 +56519,9 @@ async function publishNote(publisher, content, { inReplyTo, attachments, visibil
     slug,
     text: content,
     visibility,
+    // Everyone a client named, blind copies included: an edit or a deletion
+    // must reach them too. Kept here only, never published.
+    ...also.length || deliverTo.length ? { addressed: [.../* @__PURE__ */ new Set([...also, ...deliverTo])] } : {},
     ...spoilerText ? { spoiler: spoilerText } : {},
     ...note.sensitive ? { sensitive: true } : {},
     ...attachments?.length ? { attachments } : {},
@@ -56579,7 +56597,8 @@ async function publishObject(publisher, object, { visibility = "public", slug: w
     published: row.published || published,
     kind: "post",
     slug: name,
-    visibility
+    visibility,
+    ...also.length || deliverTo.length ? { addressed: [.../* @__PURE__ */ new Set([...also, ...deliverTo])] } : {}
   });
   if (await publisher.store.commit?.() === false) publisher.log(`object published but its timeline row was refused: ${id}`);
   const createId = doc ? createActivityId(id) : createActivityId(container + name);
@@ -57227,6 +57246,7 @@ function ownSettled(publisher) {
 }
 async function publishOwn(publisher) {
   const { urls, store, remote } = publisher;
+  if (publisher.privateReady && await publisher.privateReady() !== true) return;
   const seen = store.read("published.json", {});
   const own = store.read(OWN, []);
   const out = outboxPaging(own, seen.ownIndex || []);
@@ -57355,6 +57375,8 @@ var Publisher = class {
       postingRestrictedToMods: this.config.kind === "group" ? !!this.config.postingRestrictedToMods : null,
       moderators,
       pendingFollowers: priv ? urls.pendingFollowers : null,
+      // Named only where the private folder is proved to keep it private.
+      liked: priv ? urls.liked : null,
       pendingFollowing: priv ? urls.pendingFollowing : null,
       blocked: priv ? urls.blocked : null,
       inbox,
@@ -57688,6 +57710,9 @@ var Publisher = class {
   }
   backfillLiked() {
     return backfillLiked(this);
+  }
+  inboxesFor(...a) {
+    return inboxesFor(this, ...a);
   }
   noteToSelf(...a) {
     return noteToSelf(this, ...a);
@@ -58299,7 +58324,7 @@ async function amplify(intake, noteId, { approved = false, activity = null } = {
   });
   await intake.deliverer.deliverToAll(inboxes, act);
   intake.store.updateStatus(noteId, { announcedAt: (/* @__PURE__ */ new Date()).toISOString(), announceActivity: act });
-  await intake.publisher.recordOutbox(act);
+  if (!intake.config.private) await intake.publisher.recordOutbox(act);
   intake.store.setPending(intake.store.getPending().filter((p) => p.noteId !== noteId));
   intake.log(`amplified ${noteId} \u2192 ${inboxes.length} inbox(es)`);
   if (intake.onCarried) {
@@ -58573,7 +58598,7 @@ async function onDelete(intake, activity, actor) {
       const gone2 = new Set(retracted.map((u) => u.object.id));
       await intake.publisher.unrecordOutbox(
         (i) => gone2.has(i?.id),
-        { record: (was) => retracted.filter((u) => was.includes(u.object.id)) }
+        { record: (was) => intake.config.private ? null : retracted.filter((u) => was.includes(u.object.id)) }
       );
     }
     await intake.republish({ followers: true, following: true });
@@ -58955,7 +58980,10 @@ async function retract(intake, noteId, { collect = null } = {}) {
   const undo = undoActivity2({ urls: intake.urls, activity: s.announceActivity, serial: intake.serial++ });
   await intake.deliverer.deliverToAll(inboxes, undo);
   if (collect) collect.push(undo);
-  else await intake.publisher.unrecordOutbox((i) => i?.id === s.announceActivity.id, { record: () => undo });
+  else await intake.publisher.unrecordOutbox(
+    (i) => i?.id === s.announceActivity.id,
+    { record: () => intake.config.private ? null : undo }
+  );
   intake.store.updateStatus(noteId, {
     announcedAt: void 0,
     announceActivity: void 0,
@@ -65003,8 +65031,16 @@ async function votePoll(agent2, s, choices) {
 }
 async function deleteNote(agent2, s) {
   const { urls } = agent2.publisher;
-  const inboxes = agent2.store.getContacts().followers.map((f) => f.sharedInbox || f.inbox).filter(Boolean);
-  const del = deleteActivity({ urls, noteId: s.noteId });
+  const doc = await Promise.resolve().then(() => read(agent2.remote, s.noteId)).catch(() => null);
+  const shape = addressing(urls, s.visibility || "public", (s.mentions || []).map((m) => m.href).filter(Boolean));
+  const to = Array.isArray(doc?.to) ? doc.to : shape.to;
+  const cc = Array.isArray(doc?.cc) ? doc.cc : shape.cc;
+  const named = [...to, ...cc, ...s.addressed || [], ...s.replyActor ? [s.replyActor] : []].filter((a) => typeof a === "string" && a !== PUBLIC && a !== urls.followers && a !== urls.actor);
+  const inboxes = [
+    ...s.visibility === "direct" ? [] : agent2.store.getContacts().followers.map((f) => f.sharedInbox || f.inbox),
+    ...agent2.publisher.inboxesFor ? await agent2.publisher.inboxesFor(named).catch(() => []) : []
+  ].filter(Boolean);
+  const del = deleteActivity({ urls, noteId: s.noteId, to, cc });
   await agent2.deliverer.deliverToAll(inboxes, del);
   const stuck = [];
   const deletedAt = (/* @__PURE__ */ new Date()).toISOString();
@@ -65028,8 +65064,9 @@ async function deleteNote(agent2, s) {
   if (s.atproto?.uri && agent2.atproto?.connected()) {
     await agent2.atproto.deleteCrossPost(s.atproto.uri).then(() => agent2.log?.(`bluesky mirror deleted: ${s.atproto.uri}`)).catch((e) => agent2.log?.(`bluesky mirror not deleted (${e.message}): ${s.atproto.uri}`));
   }
+  const itsOwn = (i) => i === s.noteId || i?.id && i.id === s.announceActivity?.id || i?.type === "Update" && (typeof i.object === "string" ? i.object : i.object?.id) === s.noteId;
   await agent2.publisher.unrecordOutbox(
-    (i) => i === s.noteId || i?.id && i.id === s.announceActivity?.id,
+    itsOwn,
     { record: (gone) => gone.includes(s.noteId) ? del : null }
   );
   agent2.store.removeStatus(s.noteId);
@@ -65399,7 +65436,8 @@ var C2S = class {
   visibilityOf(activity, object) {
     const to = arr(activity.to ?? object?.to).map(idOf2);
     const cc = arr(activity.cc ?? object?.cc).map(idOf2);
-    if (!to.length && !cc.length) return "public";
+    const blind = arr(activity.bto ?? object?.bto).length + arr(activity.bcc ?? object?.bcc).length;
+    if (!to.length && !cc.length) return blind ? "direct" : "public";
     if (to.includes(PUBLIC)) return "public";
     if (cc.includes(PUBLIC)) return "unlisted";
     if (to.includes(this.urls.followers)) return "private";
@@ -67576,6 +67614,8 @@ async function handle3(api, ctx) {
     if (req.method === "POST" && !b.domains.includes(domain)) b.domains.push(domain);
     if (req.method === "DELETE") b.domains = b.domains.filter((d) => d !== domain);
     api.store.setBlocklist(b);
+    Promise.resolve(api.agent?.publisher?.publishCollections?.({ blocked: true })).catch(() => {
+    });
     return send(200, {});
   }
   const mAccList = /^\/api\/v1\/accounts\/([a-f0-9]+)\/(following|followers)$/.exec(pathname);
@@ -69557,8 +69597,17 @@ var Deliverer = class {
       this.log(`owner's outbox record: ${e.message}`);
     }
   }
+  // An inbox on a blocked domain is never delivered to, whoever still lists it.
+  _blockedInbox(inbox) {
+    try {
+      return !!this.store.getBlocklist?.().domains.length && this.store.isBlocked?.(new URL(inbox).origin + "/");
+    } catch {
+      return false;
+    }
+  }
   async deliver(inbox, activity) {
     this._sent(activity);
+    if (this._blockedInbox(inbox)) return;
     const signed = await this.proofed(activity);
     if (this._queueIfCooling(inbox, signed)) return;
     const [result] = await this.deliverManyNow([{ inbox, activity: signed }]);
@@ -69629,7 +69678,7 @@ var Deliverer = class {
   async deliverToAll(inboxes, activity) {
     this._sent(activity);
     const signed = await this.proofed(activity);
-    const targets = [...new Set(inboxes)].map((inbox) => ({ inbox, activity: signed }));
+    const targets = [...new Set(inboxes)].filter((inbox) => !this._blockedInbox(inbox)).map((inbox) => ({ inbox, activity: signed }));
     for (let i = 0; i < targets.length; i += this.batchSize) {
       const chunk = targets.slice(i, i + this.batchSize).filter((t) => !this._queueIfCooling(t.inbox, signed));
       if (!chunk.length) continue;

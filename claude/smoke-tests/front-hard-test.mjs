@@ -500,6 +500,10 @@ try {
       JSON.stringify({ type: 'Note', content: 'hi', to: [`${ORIGIN}/u/pwren/ap/followers`] }));
     check(followersOnly.headers.get('location') === `${ORIGIN}/u/pwren/ap/private/fo-1-create`,
       `a followers-only post is addressed where the agent keeps it (${followersOnly.headers.get('location')})`);
+    const blind = await post({ authorization: 'Bearer path-owner', dpop: 'proof', slug: 'bl-1' },
+      JSON.stringify({ type: 'Note', content: 'psst', bto: ['https://m.example/u/x'] }));
+    check(blind.headers.get('location') === `${ORIGIN}/u/pwren/ap/private/bl-1-create`,
+      `a post for blind copies alone is named where private posts live (${blind.headers.get('location')})`);
     const like = await post({ authorization: 'Bearer path-owner', dpop: 'proof', slug: '' },
       JSON.stringify({ type: 'Like', object: 'https://elsewhere.example/n/1' }));
     check(like.status === 201 && /\/u\/pwren\/ap\/actor#like-\d+$/.test(like.headers.get('location') || ''),

@@ -622,6 +622,8 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   dl.deliverManyNow = async (targets) => targets.map(() => ({ ok: true }));
   const pub = new Publisher({ config: { remotePod: 'https://pod.example/' }, store, deliverer: dl, publicKeyPem: 'x',
     remote: { putJson: async (u, d) => { puts[u] = d; }, setAcl: async (u) => { acls.push(u); }, delete: async () => true }, log: () => {} });
+  let ready = false;
+  pub.privateReady = async () => ready || 'the private folder is not proved private';
   const A = pub.urls.actor;
   const like = { id: A + '#like-1', type: 'Like', actor: A, object: 'https://m.example/n/1' };
   await dl.deliver('https://m.example/inbox', like);
@@ -631,6 +633,10 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     object: { id: pub.urls.privateNotes + 'p1', type: 'Note' } });
   await dl.deliverToAll([], { id: 'https://elsewhere.example/a', type: 'Announce', actor: 'https://elsewhere.example/u' });
   await pub.ownSettled();
+  check(!puts[pub.urls.ownOutbox] && !puts[pub.urls.liked] && (mem['outbox-own.json'] || []).length === 3,
+    'nothing of the owner\'s view is published while the pod has not proved the private folder private — only recorded');
+  ready = true;
+  await pub.publishOwn();
   const own = mem['outbox-own.json'] || [];
   check(own.length === 3 && own[0] === pub.urls.privateNotes + 'p1' && own[1]?.type === 'Follow' && own[2]?.type === 'Like',
     'everything the actor sends goes on its owner\'s outbox once — a like, a follow, a followers-only post — and nobody else\'s activity does');
@@ -660,6 +666,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     const store = { read: (n, d) => (n in mem ? mem[n] : d), write: (n, v) => { mem[n] = v; }, getStatuses: () => rows };
     const pub = new Publisher({ config: { remotePod: 'https://pod.example/' }, store, publicKeyPem: 'x',
       remote: { putJson: async (u, d) => { puts[u] = d; }, setAcl: async () => {}, delete: async () => true }, log: () => {} });
+    pub.privateReady = async () => true;
     return { pub, mem, puts };
   };
   const a = make({});
@@ -695,6 +702,68 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   check(notes[0]?.type === 'mention' && notes[0].noteId === s0.noteId
     && written[s0.noteId]?.to?.[0] === urls.actor && written[s0.noteId].to.length === 1,
     'shown as a mention, and kept on the pod addressed to the owner alone');
+}
+
+// --- 5b12. the privacy fixes of the outbox review ---
+{
+  const { PodStore } = await import(path.join(root, 'lib/core/store.mjs'));
+  const social = await import(path.join(root, 'lib/core/social.mjs'));
+  const wireM = await import(path.join(root, 'lib/core/wire.mjs'));
+  const { C2S } = await import(path.join(root, 'lib/client/c2s.mjs'));
+  const collections = await import(path.join(root, 'lib/core/publisher/collections.mjs'));
+  const urls = wireM.apUrls('https://pod.example/');
+
+  // A block ends the blocked party's following, and a domain block everyone's there.
+  const st = new PodStore({ log: () => {} });
+  st.setContacts({ followers: [{ actor: 'https://m.example/u/troll', inbox: 'https://m.example/inbox' },
+    { actor: 'https://bad.example/u/a', inbox: 'https://bad.example/inbox' },
+    { actor: 'https://ok.example/u/b', inbox: 'https://ok.example/inbox' }], following: [] });
+  st.setBlocklist({ domains: [], actors: ['https://m.example/u/troll'] });
+  st.setBlocklist({ domains: ['bad.example'], actors: ['https://m.example/u/troll'] });
+  check(JSON.stringify(st.getContacts().followers.map(f => f.actor)) === JSON.stringify(['https://ok.example/u/b'])
+    && st.getContacts().removedFollowers.some(r => r.why === 'blocked'),
+    'a blocked person, and everyone on a blocked domain, stops being a follower — and stays gone');
+
+  // Blind copies alone make a direct post, never a public one.
+  const c2s = new C2S({ agent: { store: st, publisher: { urls } }, log: () => {} });
+  check(c2s.visibilityOf({ type: 'Create', bto: ['https://m.example/u/x'] }, {}) === 'direct'
+    && c2s.visibilityOf({ type: 'Create' }, {}) === 'public',
+    'a post addressed only in bto/bcc is direct; one addressed to nobody is still public');
+
+  // A deleted post takes its edits off the public record, and its deletion goes
+  // where the post went, addressed as the post was.
+  const N = urls.privateNotes + 'dm1';
+  const sent = []; let matcher = null;
+  const agent = {
+    publisher: { urls, inboxesFor: async (ids) => ids.map(i => i + '/inbox'),
+      unrecordOutbox: async (m) => { matcher = m; return []; } },
+    deliverer: { deliverToAll: async (inboxes, a) => sent.push({ inboxes, a }) },
+    remote: { getJson: async () => ({ id: N, to: ['https://m.example/u/kofi'], cc: [] }), delete: async () => true,
+      putJson: async () => {}, setAcl: async () => {} },
+    store: { getContacts: () => ({ followers: [{ actor: 'f', inbox: 'https://f.example/inbox' }] }), removeStatus: () => {} },
+    log: () => {},
+  };
+  await social.deleteNote(agent, { noteId: N, visibility: 'direct', addressed: ['https://m.example/u/blind'] });
+  const d = sent[0];
+  check(d && !JSON.stringify(d.a.to).includes('#Public') && d.a.to[0] === 'https://m.example/u/kofi'
+    && d.inboxes.includes('https://m.example/u/kofi/inbox') && d.inboxes.includes('https://m.example/u/blind/inbox')
+    && !d.inboxes.includes('https://f.example/inbox'),
+    "a direct post's deletion goes to the people it was sent to, blind copies included, and to no follower");
+  const P = urls.notes + 'p1';
+  await social.deleteNote({ ...agent, remote: { ...agent.remote, getJson: async () => null } }, { noteId: P, visibility: 'public' });
+  check(matcher({ type: 'Update', object: { id: P } }) && matcher(P) && !matcher({ type: 'Update', object: { id: urls.notes + 'other' } }),
+    "deleting a post takes its edits off the public outbox too, and nobody else's");
+
+  // A group made private takes its carries off the public outbox, for good.
+  const mem = { 'outbox.json': [{ id: urls.actor + '#announce-1', type: 'Announce' }, urls.notes + 'own'],
+    'published.json': { outboxIndex: [] } };
+  const pub = { urls, config: { kind: 'group', private: true }, log: () => {},
+    store: { read: (n, dflt) => mem[n] ?? dflt, write: (n, v) => { mem[n] = v; }, getContacts: () => ({ followers: [], following: [] }) },
+    publishOutbox: async () => {}, reconcileOutbox: async () => 0 };
+  await collections.publishCollections(pub, { outbox: true });
+  check(JSON.stringify(mem['outbox.json']) === JSON.stringify([urls.notes + 'own'])
+    && (mem['outbox-removed.json'] || []).some(r => r.id === urls.actor + '#announce-1'),
+    "a private group's public outbox loses what it carried, marked so nothing brings it back");
 }
 
 // --- 5c. the private trees are re-checked and repaired on every start ---

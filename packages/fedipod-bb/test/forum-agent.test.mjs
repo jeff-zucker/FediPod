@@ -458,6 +458,12 @@ test('a private category: posts written for its members, carried only to people 
   await agent.intake.drain();
   const carried = delivered.find(d => d.who === 'gardening' && d.a.type === 'Announce');
   assert.ok(carried, 'a private category carries a post addressed to its members');
+  // ...and never lists it where the world can read it.
+  assert.ok(!(g.store.read('outbox.json', []) || []).some(i => i?.type === 'Announce'),
+    "a private category's carry is not on its public outbox");
+  const pages = [...pod.docs.entries()].filter(([u]) => u.startsWith(g.urls.outbox));
+  assert.ok(!pages.some(([, d]) => JSON.stringify(d).includes('Behind the hall')),
+    "no public outbox page holds the member's words");
   assert.equal(topics.list(g.store).length, 1, 'and the post opens its topic like any other');
   assert.equal(pod.docs.get(g.urls.cached(P))?.content, '<p>Behind the hall.</p>');
 
