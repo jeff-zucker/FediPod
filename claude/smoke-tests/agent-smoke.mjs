@@ -692,7 +692,9 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     remote: { putJson: async (u, d) => { written[u] = d; } },
     store: { addStatus: (x) => statuses.push(x), addNotification: (n) => notes.push(n) } };
   publisher.noteToSelf = (t) => notesM.noteToSelf(publisher, t);
+  const seenMem = {};
   const fake = { publisher, log: () => {},
+    store: { read: (n, d) => seenMem[n] ?? d, write: (n, v) => { seenMem[n] = v; } },
     ownerPost: async () => ({ status: 422, body: { error: 'the note has no content' } }) };
   const why = await Intake.prototype.ownerPostFrom.call(fake, { type: 'Note' }, '{}', { slug: null });
   const s0 = statuses[0];
@@ -764,6 +766,65 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   check(JSON.stringify(mem['outbox.json']) === JSON.stringify([urls.notes + 'own'])
     && (mem['outbox-removed.json'] || []).some(r => r.id === urls.actor + '#announce-1'),
     "a private group's public outbox loses what it carried, marked so nothing brings it back");
+}
+
+// --- 5b13. the reliability and abuse fixes of the outbox review ---
+{
+  const { Intake } = await import(path.join(root, 'lib/core/intake/index.mjs'));
+  const acts = await import(path.join(root, 'lib/core/intake/activities.mjs'));
+  const { PodStore } = await import(path.join(root, 'lib/core/store.mjs'));
+  const wireM = await import(path.join(root, 'lib/core/wire.mjs'));
+  const cryptoM = await import('node:crypto');
+  const urls = wireM.apUrls('https://pod.example/');
+
+  // A door post is handled once, whatever brings it back; a body its receipt
+  // does not name is not the owner's.
+  const st = new PodStore({ log: () => {} });
+  let posted = 0; const told = [];
+  const fake = { store: st, log: () => {}, publisher: { noteToSelf: async (t) => told.push(t) },
+    ownerPost: async () => { posted++; return { status: 201, body: { id: 'x' } }; } };
+  const raw = JSON.stringify({ type: 'Note', content: 'once' });
+  const hash = cryptoM.createHash('sha256').update(raw).digest('hex');
+  await Intake.prototype.ownerPostFrom.call(fake, { type: 'Note' }, raw, { hash });
+  await Intake.prototype.ownerPostFrom.call(fake, { type: 'Note' }, raw, { hash });
+  check(posted === 1, 'the same door post seen twice — replayed, or left undeleted — is published once');
+  const wrong = await Intake.prototype.ownerPostFrom.call(fake, { type: 'Note' }, '{"type":"Note","content":"swapped"}', { hash });
+  check(posted === 1 && /not the one its receipt names/.test(wrong || ''), 'a body its receipt does not name is refused');
+  fake.ownerPost = async () => ({ status: 422, body: { error: 'no' } });
+  const raw2 = '{"type":"Note"}';
+  const h2 = cryptoM.createHash('sha256').update(raw2).digest('hex');
+  await Intake.prototype.ownerPostFrom.call(fake, { type: 'Note' }, raw2, { hash: h2 });
+  await Intake.prototype.ownerPostFrom.call(fake, { type: 'Note' }, raw2, { hash: h2 });
+  check(told.length === 1, 'a refused post is told to its owner once, not on every sweep');
+
+  // The same Follow over and over is answered once an hour, not every time.
+  const st2 = new PodStore({ log: () => {} });
+  st2.setContacts({ followers: [{ actor: 'https://m.example/u/z', inbox: 'https://m.example/inbox' }], following: [] });
+  let accepts = 0;
+  const intake = { store: st2, config: { kind: 'person', autoAcceptFollows: true }, urls, serial: 1, log: () => {},
+    fetchAP: async (u) => ({ id: u, inbox: 'https://m.example/inbox' }),
+    deliverer: { deliver: async () => { accepts++; } }, republish: async () => {} };
+  const follow = { id: 'https://m.example/f1', type: 'Follow', actor: 'https://m.example/u/z', object: urls.actor };
+  for (let i = 0; i < 5; i++) await acts.onFollow(intake, follow, 'https://m.example/u/z', { trusted: true });
+  check(accepts === 1, `a follower's refollow is answered once an hour, however often it comes (${accepts})`);
+
+  // The owner's view is capped, and its heads are written only when they change.
+  const { Publisher } = await import(path.join(root, 'lib/core/publisher/index.mjs'));
+  const { OWN_MAX } = await import(path.join(root, 'lib/core/publisher/own.mjs'));
+  const mem = { 'outbox-own.json': Array.from({ length: OWN_MAX }, (_, i) => ({ id: 'x#' + i, type: 'Like' })) };
+  const puts = [];
+  const pub = new Publisher({ config: { remotePod: 'https://pod.example/' }, publicKeyPem: 'x', log: () => {},
+    store: { read: (n, d) => (n in mem ? mem[n] : d), write: (n, v) => { mem[n] = v; }, getStatuses: () => [] },
+    remote: { putJson: async (u) => { puts.push(u); }, setAcl: async () => {}, delete: async () => true } });
+  pub.privateReady = async () => true;
+  pub.recordOwn({ id: pub.urls.actor + '#like-new', type: 'Like', actor: pub.urls.actor, object: 'https://m.example/n/9' });
+  await pub.ownSettled();
+  check(mem['outbox-own.json'].length === OWN_MAX && mem['outbox-own.json'][0].id.endsWith('#like-new'),
+    `the owner's view keeps its newest ${OWN_MAX} entries`);
+  puts.length = 0;
+  await pub.publishOwn();
+  check(!puts.includes(pub.urls.ownOutbox) && !puts.includes(pub.urls.liked),
+    'a publish that changes nothing writes no head');
 }
 
 // --- 5c. the private trees are re-checked and repaired on every start ---
@@ -1040,7 +1101,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   check(r === null && posts[0]?.raw?.type === 'Annotation' && posts[0].raw.bodyValue === 'hi' && posts[0].slug === 'anno-1',
     'the dispatcher gets the bytes as sent and the slug; a 201 is a publish');
   ik.ownerPost = async () => ({ status: 422, body: { error: 'no handler for Foo' } });
-  const bad = await ik.ownerPostFrom({ type: 'Foo' }, raw, rcpt());
+  const bad = await ik.ownerPostFrom({ type: 'Foo' }, JSON.stringify({ type: 'Foo' }), rcpt());
   check(/refused \(422\)/.test(bad || ''), 'a refusal comes back as the reason, for the dead letter');
 
   const mk = (gateway) => new Publisher({ config: { remotePod: 'https://pod.example/', handle: 'p', gateway }, store: st, log: () => {}, remote: {} });

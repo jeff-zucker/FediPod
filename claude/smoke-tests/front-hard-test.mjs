@@ -516,11 +516,13 @@ try {
       JSON.stringify({ type: 'Delete', object: `${ORIGIN}/u/pwren/ap/notes/anno-42` }));
     check(del.headers.get('location') === `${ORIGIN}/u/pwren/ap/notes/anno-42#delete`, 'a deletion by its note');
     // Reading: the owner, signed in, is sent to every message; others read the public copy.
-    const ownerRead = await get(outbox, { headers: { authorization: 'Bearer path-owner', dpop: 'proof' }, redirect: 'manual' });
+    // A token read, not verified: the claim chooses the address, the pod checks.
+    const jwt = (webid) => `DPoP e30.${Buffer.from(JSON.stringify({ webid })).toString('base64url')}.sig`;
+    const ownerRead = await get(outbox, { headers: { authorization: jwt(POD + 'pods/wren/profile/card#me'), dpop: 'proof' }, redirect: 'manual' });
     check(ownerRead.status === 303 && /ap\/private\/outbox$/.test(ownerRead.headers.get('location') || '')
       && ownerRead.headers.get('cache-control') === 'no-store',
       `the signed-in owner reading the outbox is sent to every message, on the pod, never held at the edge (${ownerRead.status} ${ownerRead.headers.get('location')})`);
-    const otherRead = await get(outbox, { headers: { authorization: 'Bearer someone-else', dpop: 'proof' }, redirect: 'manual' });
+    const otherRead = await get(outbox, { headers: { authorization: jwt('https://elsewhere.example/card#me'), dpop: 'proof' }, redirect: 'manual' });
     check(otherRead.status !== 303 || !/ap\/private\//.test(otherRead.headers.get('location') || ''),
       'anyone else signed in is not');
     const priv = await get(outbox.replace(/ap\/outbox$/, 'ap/private/liked'), { redirect: 'manual' });

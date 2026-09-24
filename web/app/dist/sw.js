@@ -57192,6 +57192,7 @@ init_node_crypto();
 init_wire();
 var OWN = "outbox-own.json";
 var LIKED = "liked.json";
+var OWN_MAX = 5e3;
 var localForm = (a) => a?.type === "Create" && (typeof a.object === "string" ? a.object : a.object?.id) || a;
 function recordOwn(publisher, activity) {
   const { urls, store } = publisher;
@@ -57201,7 +57202,7 @@ function recordOwn(publisher, activity) {
   const own = store.read(OWN, []);
   if (id && own.some((i) => outboxItemId(i) === id)) return false;
   own.unshift(item);
-  store.write(OWN, own);
+  store.write(OWN, own.slice(0, OWN_MAX));
   if (activity.type === "Like" || activity.type === "Undo" && activity.object?.type === "Like") {
     backfillLiked(publisher);
     const object = outboxItemId(activity.type === "Like" ? activity.object : activity.object.object);
@@ -57254,21 +57255,28 @@ async function publishOwn(publisher) {
     id: outboxPageId(urls.ownOutbox, i + 1),
     doc: outboxPage(urls.ownOutbox, i + 1, items)
   })));
-  await writeHead(remote, urls.ownOutbox, outboxHead(urls.ownOutbox, own.length, out.pages.length));
+  const ownHead = await writeHead4(remote, seen.ownHead, urls.ownOutbox, outboxHead(urls.ownOutbox, own.length, out.pages.length));
   const liked = store.read(LIKED, []);
   const lk = followersPaging(liked, seen.likedIndex || []);
   const likedPages = await writePages(remote, seen.likedPages, lk.pages.map((items, i) => ({
     id: followersPageId(urls.liked, i + 1),
     doc: followersPage(urls.liked, i + 1, items, lk.pages.length)
   })));
-  await writeHead(remote, urls.liked, followersHead(urls.liked, liked.length, lk.pages.length));
+  const likedHead = await writeHead4(remote, seen.likedHead, urls.liked, followersHead(urls.liked, liked.length, lk.pages.length));
   store.write("published.json", {
     ...store.read("published.json", {}),
     ownPages,
     ownIndex: out.index,
+    ownHead,
     likedPages,
-    likedIndex: lk.index
+    likedIndex: lk.index,
+    likedHead
   });
+}
+async function writeHead4(remote, before, url, doc) {
+  const digest = node_crypto_default.createHash("sha256").update(JSON.stringify(doc)).digest("hex").slice(0, 16);
+  if (digest !== before) await writeHead(remote, url, doc);
+  return digest;
 }
 async function writePages(remote, before = {}, pages) {
   const after = {};
@@ -58377,6 +58385,7 @@ function announceTargets(intake, author) {
 }
 
 // lib/core/intake/activities.mjs
+var REACCEPT_MS = 60 * 60 * 1e3;
 var idOf = (v) => typeof v === "string" ? v : v?.id;
 function onAddRemove(intake, activity, actor) {
   const target = typeof activity.target === "string" ? activity.target : activity.target?.id;
@@ -58431,6 +58440,18 @@ async function onFollow(intake, activity, actor, { trusted = false } = {}) {
     intake.store.addNotification({ type: "follow", actor });
     await intake.republish({ followers: true });
     intake.log(`new follower: ${actor}`);
+  }
+  if (existing) {
+    const c = intake.store.getContacts();
+    const f = c.followers.find((x) => x.actor === actor);
+    if (f?.acceptedAt && Date.now() - Date.parse(f.acceptedAt) < REACCEPT_MS) {
+      intake.log(`refollow from ${actor} \u2014 already accepted within the hour, not answered again`);
+      return;
+    }
+    if (f) {
+      f.acceptedAt = (/* @__PURE__ */ new Date()).toISOString();
+      intake.store.setContacts(c);
+    }
   }
   const { acceptActivity: acceptActivity2 } = await Promise.resolve().then(() => (init_wire(), wire_exports));
   await intake.deliverer.deliver(
@@ -64598,6 +64619,13 @@ var Intake = class {
   // document, not our reading of it); the graph is what it decides from.
   // Returns null when published, else the reason it was not — a dead letter.
   async ownerPostFrom(activity, raw, receipt) {
+    const hash = raw ? await sha256Hex(raw) : null;
+    if (receipt.hash && receipt.hash !== hash) return "owner post refused: the body is not the one its receipt names";
+    const seen = this.store.read("c2s-seen.json", []);
+    if (hash && seen.includes(hash)) {
+      this.log("owner post already handled \u2014 not published again");
+      return null;
+    }
     let asSent = null;
     try {
       asSent = raw ? JSON.parse(raw) : null;
@@ -64611,6 +64639,7 @@ var Intake = class {
       ...receipt.serial ? { serial: receipt.serial } : {},
       ...receipt.at ? { at: receipt.at } : {}
     });
+    if (hash) this.store.write("c2s-seen.json", [hash, ...this.store.read("c2s-seen.json", [])].slice(0, C2S_SEEN_MAX));
     if (!r || r.status >= 300) {
       const why = r?.body?.error || "no reason was given";
       await this.publisher.noteToSelf?.(`An app asked your account to publish ${article(activity.type)}, and your account refused it: ${why}. Nothing was sent.`).catch((e) => this.log(`could not tell the owner their post was refused: ${e.message}`));
@@ -64711,6 +64740,11 @@ var Intake = class {
   }
 };
 var article = (type) => `${/^[AEIOU]/u.test(String(type)) ? "an" : "a"} ${type || "post"}`;
+var C2S_SEEN_MAX = 500;
+var sha256Hex = async (text) => [...new Uint8Array(await globalThis.crypto.subtle.digest(
+  "SHA-256",
+  new TextEncoder().encode(text)
+))].map((b) => b.toString(16).padStart(2, "0")).join("");
 
 // lib/core/social.mjs
 var social_exports = {};
