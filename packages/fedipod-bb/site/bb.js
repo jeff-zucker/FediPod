@@ -314,7 +314,11 @@ async function showQueue() {
     const said = await serverKind(new URL(front).host, front, undefined, forum.handle || 'forum');
     if (!said?.podHome) throw new Error('this forum does not say where its pod is');
     const q = await pod.modQueue(said.podHome);
-    const rows = q?.rows || [];
+    // Only what a moderator can act on: a report, a held post, a join
+    // request, and an ask that did not take. Another moderator's ask on its
+    // way through is the forum's business, not a row with no button.
+    const ACTS = new Set(['Flag', 'Held', 'Create', 'Join request']);
+    const rows = (q?.rows || []).filter(r => r.failed || ACTS.has(r.type));
     if (!rows.length) { $('main').innerHTML = '<p class="empty">Nothing is waiting.</p>'; return; }
     $('main').innerHTML = `<ul class="list">${rows.map(r => `<li>
       <div class="title">${esc(r.type)}${r.category ? ' · ' + esc(r.category) : ''}</div>

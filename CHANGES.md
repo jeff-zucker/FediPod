@@ -1,5 +1,11 @@
 # Changes
 
+## 2026-09-23 (the queue shows what a moderator can act on — version 1.36.4)
+
+**The Queue lists only what needs a moderator:** a report, a held post, a
+join request, and an ask that did not take. A moderator's own request on
+its way through no longer appears there for everyone with nothing to press.
+
 ## 2026-09-23 (moderators are the forum's — version 1.36.3)
 
 **Adding a moderator from Settings makes them a moderator of the whole
