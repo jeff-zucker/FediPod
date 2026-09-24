@@ -1,5 +1,14 @@
 # Changes
 
+## 2026-09-23 (moderators are the forum's — version 1.36.3)
+
+**Adding a moderator from Settings makes them a moderator of the whole
+forum, at once.** The ask names the forum's list, the forum takes a
+moderator ask as its own whichever list it names, and every category's
+moderator list is written from the forum's the moment it is applied rather
+than at the next start. A forum with no gateway no longer mistakes one
+address for another when reading an ask.
+
 ## 2026-09-23 (a republish keeps the pinned topics — version 1.36.2)
 
 **A forum's pinned topics survive a forced republish.** A republish let the

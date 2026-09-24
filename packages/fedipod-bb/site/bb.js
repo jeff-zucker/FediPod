@@ -1332,13 +1332,13 @@ async function onSettings(b) {
     const typed = val('#set-mod');
     if (!typed) { settingsSaid('Type a handle first, like @mei@their.server.', true); return; }
     const who = await actorFor(typed);
-    const cat = cats()[0];
     if (!who) return;                       // actorFor has already said why
-    if (!cat) { settingsSaid('This forum has no category to moderate yet.', true); return; }
     // One handle says two things: who may ask for moderation, and whose pod
     // the rule on the queue names. The forum finds the pod behind the actor.
+    // Moderators are the forum's, so the ask names the forum's list; the
+    // forum writes every category's from it.
     const type = act === 'add-mod' ? 'Add' : 'Remove';
-    await settingsAsk({ type, object: who, target: cat.base + 'ap/moderators' },
+    await settingsAsk({ type, object: who, target: `${base}ap/administrators` },
       { type, object: who, target: `${base}mod/` });
   }
 }

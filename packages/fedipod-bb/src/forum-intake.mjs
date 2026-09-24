@@ -35,6 +35,15 @@ export class ForumIntake extends Intake {
       const done = await this.forum.countVote(vote);
       if (done) return undefined;
     }
+    // A moderator ask is the forum's whichever list it names: moderators are
+    // forum-wide. Asked before the categories, or a category took an ask
+    // naming its own list as a roster change and the forum never heard.
+    if ((activity?.type === 'Add' || activity?.type === 'Remove') && settings.isSettingsAsk(this.forum, activity)) {
+      const who = idOf(activity?.actor);
+      if (!(this.forum.config.moderators || []).includes(who)) return 'only a moderator may change this forum';
+      this.queueModeration(activity, who, { trusted: false });
+      return undefined;
+    }
     const cats = this.forum.route(activity);
     if (cats.length) {
       const results = [];

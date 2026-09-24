@@ -634,3 +634,34 @@ test('a republish keeps the pinned topics in the category\'s featured list', asy
   await agent.publishAll();
   assert.deepEqual(pod.docs.get(g.urls.featured)?.orderedItems, [g.urls.topic(tid)], 'and still is after a forced republish');
 });
+
+test('a moderator ask is forum-wide whichever list it names, and every category hears it at once', async () => {
+  const pod = fakePod();
+  const { agent } = await boot(pod, home());
+  const PRIYA = 'https://priya.pod.example/fedipod/ap/actor';
+  await agent.init({ handle: 'forum', name: 'The Forum', categories: [{ slug: 'gardening', name: 'Gardening' }, 'compost'],
+    moderators: [PRIYA], moderatorWebIds: ['https://priya.pod.example/profile/card#me'] });
+  assert.ok(await agent.connect());
+  wire(agent, []);
+  const [g, c] = agent.categories;
+  // Named at one category's list, the way the page's Settings button used to.
+  const askId = PRIYA.replace(/actor$/u, 'activities/add-mei');
+  remoteDocs[askId] = { '@context': 'https://www.w3.org/ns/activitystreams', id: askId, type: 'Add', actor: PRIYA, object: MEI, target: g.urls.moderators };
+  pod.deliver('a1', remoteDocs[askId]);
+  await agent.intake.drain();
+  assert.equal(g.store.read('modqueue.json', []).length, 0, 'the category did not take it as its own roster change');
+  await agent.applySettingsAsks();
+  assert.deepEqual(agent.config.moderators, [PRIYA, MEI], 'applied, the forum-wide list has the new moderator');
+  assert.deepEqual(pod.docs.get(agent.site.administrators)?.orderedItems, [PRIYA, MEI], 'the forum\'s published list too');
+  for (const cat of [g, c]) {
+    assert.deepEqual(pod.docs.get(cat.urls.moderators)?.orderedItems, [PRIYA, MEI], `${cat.slug}'s published list, at once`);
+    assert.deepEqual(cat.store.getConfig().moderators, [PRIYA, MEI], `and ${cat.slug}'s own settings`);
+  }
+  // Named at the forum's list, the way the page's Settings button does now.
+  const askId2 = PRIYA.replace(/actor$/u, 'activities/add-kwame');
+  remoteDocs[askId2] = { '@context': 'https://www.w3.org/ns/activitystreams', id: askId2, type: 'Add', actor: PRIYA, object: KWAME, target: agent.site.administrators };
+  pod.deliver('a2', remoteDocs[askId2]);
+  await agent.intake.drain();
+  await agent.applySettingsAsks();
+  assert.deepEqual(pod.docs.get(c.urls.moderators)?.orderedItems, [PRIYA, MEI, KWAME], 'a forum-wide add reaches every category');
+});

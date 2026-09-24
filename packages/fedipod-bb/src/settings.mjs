@@ -16,7 +16,7 @@ const SLUG = /^[a-z0-9][a-z0-9-]{0,62}$/u;
 // published. So both sides are put in the same space before they are compared,
 // and an ask means what it says whichever address it arrived under.
 const onPod = (forum, u) => (typeof u === 'string' && forum?.toPod ? forum.toPod(u) : u);
-const same = (forum, a, b) => !!a && !!b && (a === b || onPod(forum, a) === onPod(forum, b));
+const same = (forum, a, b) => { if (!a || !b) return false; if (a === b) return true; const pa = onPod(forum, a); return !!pa && pa === onPod(forum, b); };
 
 // Which of these a delivered activity is, if any. The forum's own actor or
 // one of its collections has to be named, or it is somebody else's business.

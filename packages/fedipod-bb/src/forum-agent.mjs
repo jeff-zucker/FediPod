@@ -19,7 +19,8 @@ import { Intake } from '../../../lib/core/intake/index.mjs';
 import { C2S } from '../../../lib/client/c2s.mjs';
 import { Lease } from '../../../lib/core/lease.mjs';
 import { resolveKeys } from '../../../lib/core/keys.mjs';
-import { assertionKeyId } from '../../../lib/core/wire.mjs';
+import { assertionKeyId, orderedCollection } from '../../../lib/core/wire.mjs';
+import * as podFeatured from '../../../lib/pod/featured.mjs';
 import { resolveHandle } from '../../../lib/core/social.mjs';
 import * as podInbox from '../../../lib/pod/inbox.mjs';
 import { forumUrls, ROOT, isSlug } from './urls.mjs';
@@ -184,7 +185,10 @@ export class ForumAgent {
   // Any advertised id on this pod, fronted or not, to where it is written.
   toPod(u) {
     if (typeof u !== 'string') return u;
-    for (const cat of this.categories) { const m = cat.urls.toPod?.(u); if (m !== u) return m; }
+    // A category with no front has no mapper; an address it does not map
+    // stays itself. Returning nothing here made every address the same as
+    // every other to a comparison of mapped addresses.
+    for (const cat of this.categories) { const m = cat.urls.toPod?.(u); if (m != null && m !== u) return m; }
     return this.site.toPod ? this.site.toPod(u) : u;
   }
 
@@ -269,7 +273,17 @@ export class ForumAgent {
   // reads, and nothing but a full publish used to rewrite it — so a moderator
   // added while the forum ran did not appear until it was next started.
   async republishAdministrators() {
-    await publish.publishAdministrators(this.siteAgent, this.config.moderators || [], { force: true });
+    const mods = this.config.moderators || [];
+    await publish.publishAdministrators(this.siteAgent, mods, { force: true });
+    // Every category's list is the forum's, written now rather than at the
+    // next start, and kept in the category's own settings so its queue and
+    // its actor agree with it.
+    for (const cat of this.categories) {
+      cat.config.moderators = mods;
+      cat.store.setConfig({ ...cat.store.getConfig(), moderators: mods });
+      await podFeatured.writeModerators(this.remote, cat.urls, orderedCollection(cat.urls.moderators, mods))
+        .catch(e => this.log(`moderators of ${cat.slug}: ${e.message}`));
+    }
   }
 
   // The forum's own actor: an Application that answers for the site, whose
