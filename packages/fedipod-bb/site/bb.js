@@ -198,7 +198,14 @@ async function load() {
   }
   forum = await read.forum(base);
   if (!forum) {
-    $('main').innerHTML = '<p class="err">No forum answers at this address.</p>';
+    // A forum that does not exist and one whose pod is down read the same
+    // to the reader above; asking once more tells them apart, so a reader is
+    // never told a forum is gone when its server is only unreachable.
+    const r = await fetch(base + 'ap/actor', { headers: { accept: 'application/activity+json' } }).catch(() => null);
+    const missing = r && (r.status === 404 || r.status === 410);
+    $('main').innerHTML = missing
+      ? '<p class="err">No forum answers at this address.</p>'
+      : '<p class="err">The pod that holds this forum is not answering right now, so the forum cannot be shown. Try again later.</p>';
     return;
   }
   document.title = forum.name || 'FediPod-BB';

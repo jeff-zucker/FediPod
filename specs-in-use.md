@@ -277,6 +277,14 @@ Item-by-item answers to the Solid/ActivityPub interop checklist.
   next runs. The door answers a CORS preflight and `Accept-Post`, so a browser
   client on another origin can use it. The advertised pod outbox document is
   the read collection.
+<!-- CLAUDE 2026-09-24 — every C2S reply now names what it made (1.37.0); delete these markers when done -->
+  Every kind of activity now answers 201 with the new activity's id in
+  Location, not only a new post: an edit, a deletion, a like, a follow, an
+  undo, a block, a pin, a follower decision. The door names the activity
+  itself when the client did not, and the agent makes it under that name. A
+  post the account then refuses leaves its owner a direct message from their
+  own account saying why; the app that posted it was already told 201.
+<!-- /CLAUDE -->
 - **Outbox processing / sending** — yes, decoupled: the agent builds the
   activity, writes the outbox (a static paged collection on the pod), and fans
   deliveries out to follower inboxes itself. Nothing watches the outbox
@@ -288,6 +296,16 @@ Item-by-item answers to the Solid/ActivityPub interop checklist.
 - **Inbox and outbox collections** — outbox and followers served as paged
   AS2 collections; following, featured and the private collections as flat
   ones. The outbox lists the Create of each post and every Announce. The
+<!-- CLAUDE 2026-09-24 — outbox filtered by who reads it (1.37.0); delete these markers when done -->
+  The public outbox also carries the Delete of a deleted post, the Update of
+  an edited one and the Undo of a withdrawn boost. Its owner, signed in, is
+  answered with every message the account produced instead (§5.1): likes,
+  follows, undos, follower decisions, blocks, pins, followers-only and direct
+  posts. A `liked` collection (§5.5) is published for the owner alone.
+  Serving it at the outbox address works through the Gateway and on the
+  Server; a DeviceAgent with no Gateway has only its public document.
+<!-- /CLAUDE -->
+  The
   inbox is never public: the pod's container takes deliveries append-only and
   the agent drains it, and the owner reads what arrived at `GET /ap/inbox` on
   the agent, authenticated as themselves.
@@ -299,7 +317,8 @@ Item-by-item answers to the Solid/ActivityPub interop checklist.
 - **Direct messages** — yes; direct posts are addressed only to the named
   actors and delivered straight to their inboxes. They and followers-only
   posts live in the pod's owner-only private container, never appear on the
-  public surface or in the outbox collection, and are never re-broadcast by
+  public surface or in the public outbox collection (only in the owner's own
+  view of it), and are never re-broadcast by
   group fan-out.
 
 ### Inbox and outbox processing architectures
@@ -325,8 +344,13 @@ Item-by-item answers to the Solid/ActivityPub interop checklist.
   of what arrived. `GET /ap/actor` and `GET /ap/outbox` redirect to the pod's
   canonical documents on the Server, where those are reachable; standalone
   the agent answers both itself, because the published actor names no address
-  a local client could write to and a fronted account's published outbox
-  address is the Gateway's write door, which does not answer a read. The Mastodon API and the setup pages sit
+  a local client could write to.
+<!-- CLAUDE 2026-09-24 — the door answers reads now; the old sentence said it did not; delete these markers when done -->
+  A fronted account's outbox address is the Gateway's door, which answers
+  reads as well as posts: the public copy to anyone, every message to the
+  signed-in owner.
+<!-- /CLAUDE -->
+  The Mastodon API and the setup pages sit
   beside them. The Gateway provides the outbox door for every account
   attached to it.
 - **Server support** — none required; runs against a stock Community Solid

@@ -127,6 +127,10 @@ function apUrls(remotePod, root, { publicBase = null } = {}) {
     pendingFollowers: face + "ap/private/pending-followers",
     pendingFollowing: face + "ap/private/pending-following",
     blocked: face + "ap/private/blocked",
+    // The outbox as its owner reads it (every message, §5.1) and what the
+    // owner has liked (§5.5): the owner's alone, so they sit here too.
+    ownOutbox: face + "ap/private/outbox",
+    liked: face + "ap/private/liked",
     profileHtml: face + "ap/profile.html",
     // Media stays on the pod even when fronted: attachment urls are not
     // identity-checked by remotes, and proxying blobs would be pure cost.
@@ -9721,6 +9725,7 @@ __export(wire_exports, {
   createActivity: () => createActivity,
   createActivityId: () => createActivityId,
   deleteActivity: () => deleteActivity,
+  deleteActivityId: () => deleteActivityId,
   deleteActorActivity: () => deleteActorActivity,
   followActivity: () => followActivity,
   followersHead: () => followersHead,
@@ -9762,6 +9767,7 @@ __export(wire_exports, {
   tombstoneDoc: () => tombstoneDoc,
   undoActivity: () => undoActivity,
   updateActivity: () => updateActivity,
+  updateActivityId: () => updateActivityId,
   updateActorActivity: () => updateActorActivity,
   webfingerHost: () => webfingerHost
 });
@@ -9907,6 +9913,9 @@ function actorDoc({
     featured: urls.featured,
     followers: urls.followers,
     following: urls.following,
+    // What this actor has liked (§5.5). Its owner's to read, like the pending
+    // lists below.
+    ...urls.liked ? { liked: urls.liked } : {},
     // FEP-1b12: attributedTo names the moderators collection; recipients
     // validate a group's announced moderation against it.
     ...moderators ? { attributedTo: moderators } : {},
@@ -10333,7 +10342,7 @@ function updateActorActivity({ urls, actor, serial, published = (/* @__PURE__ */
 function updateActivity(note, urls, { serial = null } = {}) {
   return {
     "@context": AS_CTX,
-    id: note.id + "#update-" + (note.updated ? String(note.updated).replace(/[^0-9TZ]/g, "") : "q" + (serial ?? Date.now())),
+    id: note.updated ? updateActivityId(note.id, note.updated) : note.id + "#update-q" + (serial ?? Date.now()),
     type: "Update",
     actor: urls.actor,
     to: note.to,
@@ -10344,7 +10353,7 @@ function updateActivity(note, urls, { serial = null } = {}) {
 function deleteActivity({ urls, noteId }) {
   return {
     "@context": AS_CTX,
-    id: noteId + "#delete",
+    id: deleteActivityId(noteId),
     type: "Delete",
     actor: urls.actor,
     to: [PUBLIC],
@@ -10379,7 +10388,7 @@ function addRemoveActivity({ urls, type, object, target, serial }) {
     target
   };
 }
-var import_sanitize_html, AS_CTX, LEMMY_CTX, SEC_CTX, PUBLIC, DEFAULT_ROOT, assertionKeyId, OUTBOX_PAGE_SIZE, outboxPageId, outboxPageCount, outboxItemId, outboxWireItem, outboxLocalItem, FOLLOWERS_PAGE_SIZE, followersPageId, followersPageCount, ALLOWED_TAGS, ALLOWED_ATTRS, MAX_ATTACHMENTS, MAX_ATTACHMENT_URL, attachmentUrl, HTML_ESCAPES2, MENTION_RE, HASHTAG_RE, QUOTE_CTX, POLICY_CTX;
+var import_sanitize_html, AS_CTX, LEMMY_CTX, SEC_CTX, PUBLIC, DEFAULT_ROOT, assertionKeyId, OUTBOX_PAGE_SIZE, outboxPageId, outboxPageCount, outboxItemId, outboxWireItem, outboxLocalItem, FOLLOWERS_PAGE_SIZE, followersPageId, followersPageCount, ALLOWED_TAGS, ALLOWED_ATTRS, MAX_ATTACHMENTS, MAX_ATTACHMENT_URL, attachmentUrl, HTML_ESCAPES2, MENTION_RE, HASHTAG_RE, QUOTE_CTX, POLICY_CTX, updateActivityId, deleteActivityId;
 var init_wire = __esm({
   "lib/core/wire.mjs"() {
     init_urls();
@@ -10452,6 +10461,8 @@ var init_wire = __esm({
       automaticApproval: { "@id": "gts:automaticApproval", "@type": "@id" },
       manualApproval: { "@id": "gts:manualApproval", "@type": "@id" }
     };
+    updateActivityId = (noteId, updated) => noteId + "#update-" + String(updated).replace(/[^0-9TZ]/g, "");
+    deleteActivityId = (noteId) => noteId + "#delete";
   }
 });
 
@@ -45808,7 +45819,7 @@ async function recordOutbox(publisher, item) {
   publisher.store.write("outbox.json", outbox);
   await publisher.publishOutbox(outbox);
 }
-async function unrecordOutbox(publisher, matches) {
+async function unrecordOutbox(publisher, matches, { record = null } = {}) {
   const before = publisher.store.read("outbox.json", []);
   const outbox = before.filter((i) => !matches(i));
   const gone = before.filter((i) => matches(i)).map((i) => typeof i === "string" ? i : i?.id).filter(Boolean);
@@ -45820,8 +45831,12 @@ async function unrecordOutbox(publisher, matches) {
       [...marks, ...gone.map((id) => ({ id, at }))].slice(-500)
     );
   }
+  const reasons = [].concat((gone.length && record ? record(gone) : null) || []);
+  for (const r of reasons) outbox.unshift(r);
   publisher.store.write("outbox.json", outbox);
   await publisher.publishOutbox(outbox);
+  publisher.unrecordOwn?.(matches);
+  return gone;
 }
 async function publishFeatured(publisher) {
   const ids = publisher.store.getStatuses().filter((s) => s.kind === "post" && s.pinned).map((s) => s.noteId);
@@ -56402,6 +56417,34 @@ async function slugFor(publisher, container, wanted, published) {
   if (name && !await read(publisher.remote, container + name).catch(() => null)) return name;
   return published.slice(0, 10) + "-" + node_crypto_default.randomBytes(4).toString("hex");
 }
+async function noteToSelf(publisher, text) {
+  const { urls } = publisher;
+  const published = (/* @__PURE__ */ new Date()).toISOString();
+  const slug = published.slice(0, 10) + "-" + node_crypto_default.randomBytes(4).toString("hex");
+  const id = urls.privateNotes + slug;
+  const content = contentHtml(text);
+  await write4(publisher.remote, id, {
+    "@context": AS_CTX,
+    id,
+    type: "Note",
+    attributedTo: urls.actor,
+    to: [urls.actor],
+    published,
+    content
+  }).catch((e) => publisher.log(`note to self kept here only \u2014 the pod would not take it: ${e.message}`));
+  publisher.store.addStatus({
+    noteId: id,
+    actor: urls.actor,
+    content,
+    text,
+    published,
+    kind: "post",
+    visibility: "direct",
+    slug
+  });
+  publisher.store.addNotification({ type: "mention", actor: urls.actor, noteId: id });
+  return id;
+}
 function rowContent(obj) {
   if (typeof obj?.content === "string" && obj.content.trim()) return sanitizeHtml(obj.content);
   const plain = [obj?.bodyValue, obj?.name, obj?.summary].find((v) => typeof v === "string" && v.trim());
@@ -56566,9 +56609,8 @@ function rowTags(note) {
   const hashtags = tags.filter((t) => t.type === "Hashtag").map((t) => ({ name: String(t.name).replace(/^#/, ""), url: t.href }));
   return { ...mentions.length ? { mentions } : {}, ...hashtags.length ? { tags: hashtags } : {} };
 }
-async function updateNote(publisher, s, { content, spoilerText = null, sensitive = null, attachments = null } = {}) {
+async function updateNote(publisher, s, { content, spoilerText = null, sensitive = null, attachments = null, updated = (/* @__PURE__ */ new Date()).toISOString() } = {}) {
   const { urls } = publisher;
-  const updated = (/* @__PURE__ */ new Date()).toISOString();
   const inText = new Set(mentionsIn(content));
   const mentions = [];
   for (const handle7 of inText) {
@@ -56620,6 +56662,7 @@ async function updateNote(publisher, s, { content, spoilerText = null, sensitive
     reply?.inbox
   ].filter(Boolean))];
   await publisher.deliverer.deliverToAll(inboxes, update);
+  if (publisher.store.read("outbox.json", []).includes(s.noteId)) await publisher.recordOutbox(update);
   publisher.log(`note edited: ${note.id} \u2192 ${inboxes.length} inbox(es)`);
   return patched;
 }
@@ -56909,7 +56952,8 @@ async function publishQuestion(publisher, content, {
   inReplyTo = void 0,
   visibility = "public",
   spoilerText = null,
-  sensitive = false
+  sensitive = false,
+  slug: wanted = null
 } = {}) {
   const { urls } = publisher;
   const priv = visibility === "private" || visibility === "direct";
@@ -56933,7 +56977,7 @@ async function publishQuestion(publisher, content, {
     }
   }
   const published = (/* @__PURE__ */ new Date()).toISOString();
-  const slug = published.slice(0, 10) + "-" + node_crypto_default.randomBytes(4).toString("hex");
+  const slug = await slugFor(publisher, priv ? urls.privateNotes : urls.notes, wanted, published);
   const mentions = await publisher._mentionsFor(content, inReplyTo);
   if (visibility === "direct") assertDirectAddressed(content, mentions);
   const reply = await replyTarget(publisher, inReplyTo, mentions, visibility);
@@ -57124,6 +57168,101 @@ function stopPolls(publisher) {
   publisher.pollTimers.clear();
 }
 
+// lib/core/publisher/own.mjs
+init_node_crypto();
+init_wire();
+var OWN = "outbox-own.json";
+var LIKED = "liked.json";
+var localForm = (a) => a?.type === "Create" && (typeof a.object === "string" ? a.object : a.object?.id) || a;
+function recordOwn(publisher, activity) {
+  const { urls, store } = publisher;
+  if (!activity?.type || activity.actor !== urls.actor) return false;
+  const item = localForm(activity);
+  const id = outboxItemId(item);
+  const own = store.read(OWN, []);
+  if (id && own.some((i) => outboxItemId(i) === id)) return false;
+  own.unshift(item);
+  store.write(OWN, own);
+  if (activity.type === "Like" || activity.type === "Undo" && activity.object?.type === "Like") {
+    backfillLiked(publisher);
+    const object = outboxItemId(activity.type === "Like" ? activity.object : activity.object.object);
+    if (object) {
+      const liked = store.read(LIKED, []).filter((o) => o !== object);
+      if (activity.type === "Like") liked.unshift(object);
+      store.write(LIKED, liked);
+    }
+  }
+  schedule(publisher);
+  return true;
+}
+function backfillLiked(publisher) {
+  const { store } = publisher;
+  if (store.read(LIKED, null) !== null) return 0;
+  const liked = (store.getStatuses?.() || []).filter((s) => s.favourited && s.noteId).sort((x, y) => String(y.published || "").localeCompare(String(x.published || ""))).map((s) => s.noteId);
+  store.write(LIKED, [...new Set(liked)]);
+  schedule(publisher);
+  return liked.length;
+}
+function unrecordOwn(publisher, matches) {
+  const own = publisher.store.read(OWN, []);
+  const kept = own.filter((i) => !matches(i));
+  if (kept.length === own.length) return;
+  publisher.store.write(OWN, kept);
+  schedule(publisher);
+}
+function schedule(publisher) {
+  if (publisher._ownQueued) return;
+  publisher._ownQueued = true;
+  publisher._ownChain = (publisher._ownChain || Promise.resolve()).then(async () => {
+    publisher._ownQueued = false;
+    try {
+      await publishOwn(publisher);
+    } catch (e) {
+      publisher.log?.(`owner's outbox view not published: ${e.message}`);
+    }
+  });
+}
+function ownSettled(publisher) {
+  return publisher._ownChain || Promise.resolve();
+}
+async function publishOwn(publisher) {
+  const { urls, store, remote } = publisher;
+  const seen = store.read("published.json", {});
+  const own = store.read(OWN, []);
+  const out = outboxPaging(own, seen.ownIndex || []);
+  const ownPages = await writePages(remote, seen.ownPages, out.pages.map((items, i) => ({
+    id: outboxPageId(urls.ownOutbox, i + 1),
+    doc: outboxPage(urls.ownOutbox, i + 1, items)
+  })));
+  await writeHead(remote, urls.ownOutbox, outboxHead(urls.ownOutbox, own.length, out.pages.length));
+  const liked = store.read(LIKED, []);
+  const lk = followersPaging(liked, seen.likedIndex || []);
+  const likedPages = await writePages(remote, seen.likedPages, lk.pages.map((items, i) => ({
+    id: followersPageId(urls.liked, i + 1),
+    doc: followersPage(urls.liked, i + 1, items, lk.pages.length)
+  })));
+  await writeHead(remote, urls.liked, followersHead(urls.liked, liked.length, lk.pages.length));
+  store.write("published.json", {
+    ...store.read("published.json", {}),
+    ownPages,
+    ownIndex: out.index,
+    likedPages,
+    likedIndex: lk.index
+  });
+}
+async function writePages(remote, before = {}, pages) {
+  const after = {};
+  for (const [i, { id, doc }] of pages.entries()) {
+    const n = i + 1;
+    after[n] = node_crypto_default.createHash("sha256").update(JSON.stringify(doc)).digest("hex").slice(0, 16);
+    if (before[n] !== after[n]) await writePage(remote, id, doc);
+  }
+  for (const n of Object.keys(before).map(Number).filter((n2) => Number.isFinite(n2) && n2 > pages.length)) {
+    await dropPage(remote, pages[0].id.replace(/-\d+$/u, `-${n}`));
+  }
+  return after;
+}
+
 // lib/core/publisher/index.mjs
 var AGENT_VERSION = JSON.parse(node_fs_default.readFileSync(
   node_path_default.join(node_path_default.dirname(fileURLToPath(import.meta.url)), "../../../package.json"),
@@ -57147,6 +57286,7 @@ var Publisher = class {
     this.remote = remote;
     this.store = store;
     this.deliverer = deliverer;
+    if (deliverer) deliverer.onSent = (a) => recordOwn(this, a);
     this.publicKeyPem = publicKeyPem;
     this.assertionKey = assertionKey;
     this.clientOrigin = clientOrigin;
@@ -57542,6 +57682,24 @@ var Publisher = class {
   }
   unrecordOutbox(...a) {
     return unrecordOutbox(this, ...a);
+  }
+  recordOwn(...a) {
+    return recordOwn(this, ...a);
+  }
+  backfillLiked() {
+    return backfillLiked(this);
+  }
+  noteToSelf(...a) {
+    return noteToSelf(this, ...a);
+  }
+  unrecordOwn(...a) {
+    return unrecordOwn(this, ...a);
+  }
+  publishOwn(...a) {
+    return publishOwn(this, ...a);
+  }
+  ownSettled() {
+    return ownSettled(this);
   }
   publishFeatured(...a) {
     return publishFeatured(this, ...a);
@@ -58412,8 +58570,11 @@ async function onDelete(intake, activity, actor) {
       await intake.forget(s2, { collect: retracted });
     }
     if (retracted.length) {
-      const gone2 = new Set(retracted);
-      await intake.publisher.unrecordOutbox((i) => gone2.has(i?.id));
+      const gone2 = new Set(retracted.map((u) => u.object.id));
+      await intake.publisher.unrecordOutbox(
+        (i) => gone2.has(i?.id),
+        { record: (was) => retracted.filter((u) => was.includes(u.object.id)) }
+      );
     }
     await intake.republish({ followers: true, following: true });
     intake.log(`account deleted upstream: ${actor}`);
@@ -58791,12 +58952,10 @@ async function retract(intake, noteId, { collect = null } = {}) {
   if (!s.announceActivity) throw new Error("that post was never carried");
   const { undoActivity: undoActivity2 } = await Promise.resolve().then(() => (init_wire(), wire_exports));
   const inboxes = intake.announceTargets(s.actor);
-  await intake.deliverer.deliverToAll(
-    inboxes,
-    undoActivity2({ urls: intake.urls, activity: s.announceActivity, serial: intake.serial++ })
-  );
-  if (collect) collect.push(s.announceActivity.id);
-  else await intake.publisher.unrecordOutbox((i) => i?.id === s.announceActivity.id);
+  const undo = undoActivity2({ urls: intake.urls, activity: s.announceActivity, serial: intake.serial++ });
+  await intake.deliverer.deliverToAll(inboxes, undo);
+  if (collect) collect.push(undo);
+  else await intake.publisher.unrecordOutbox((i) => i?.id === s.announceActivity.id, { record: () => undo });
   intake.store.updateStatus(noteId, {
     announcedAt: void 0,
     announceActivity: void 0,
@@ -64417,8 +64576,18 @@ var Intake = class {
     } catch {
       asSent = null;
     }
-    const r = await this.ownerPost(activity, { raw: asSent, slug: receipt.slug || null });
-    if (!r || r.status >= 300) return `owner post refused (${r?.status || "?"}): ${r?.body?.error || ""}`;
+    const r = await this.ownerPost(activity, {
+      raw: asSent,
+      slug: receipt.slug || null,
+      // What the door told the client this will be called, when it said.
+      ...receipt.serial ? { serial: receipt.serial } : {},
+      ...receipt.at ? { at: receipt.at } : {}
+    });
+    if (!r || r.status >= 300) {
+      const why = r?.body?.error || "no reason was given";
+      await this.publisher.noteToSelf?.(`An app asked your account to publish ${article(activity.type)}, and your account refused it: ${why}. Nothing was sent.`).catch((e) => this.log(`could not tell the owner their post was refused: ${e.message}`));
+      return `owner post refused (${r?.status || "?"}): ${why}`;
+    }
     this.log(`owner post from the outbox door published: ${r.body?.object || r.body?.id || activity.type}`);
     return null;
   }
@@ -64513,6 +64682,7 @@ var Intake = class {
     return addReply(this, ...a);
   }
 };
+var article = (type) => `${/^[AEIOU]/u.test(String(type)) ? "an" : "a"} ${type || "post"}`;
 
 // lib/core/social.mjs
 var social_exports = {};
@@ -64616,7 +64786,7 @@ async function cacheCounts(agent2, doc) {
   actors[doc.id] = { ...actors[doc.id], counts: { followers, following } };
   agent2.store.write("actors.json", actors);
 }
-async function followActor(agent2, actorUrl, { publish = true, doc: fetched = null } = {}) {
+async function followActor(agent2, actorUrl, { publish = true, doc: fetched = null, serial = Date.now() } = {}) {
   const doc = fetched || await agent2.intake.fetchAP(actorUrl);
   if (!doc?.inbox) throw new Error(`actor document unusable (${actorUrl})`);
   if (agent2.store.isBlocked(doc.id)) throw new Error("actor is blocked");
@@ -64626,16 +64796,16 @@ async function followActor(agent2, actorUrl, { publish = true, doc: fetched = nu
     rec = { actor: doc.id, inbox: doc.inbox, accepted: false };
     contacts.following.push(rec);
   }
-  const follow = followActivity({ urls: agent2.publisher.urls, targetActor: doc.id, serial: Date.now() });
+  const follow = followActivity({ urls: agent2.publisher.urls, targetActor: doc.id, serial });
   rec.followActivity = follow;
   agent2.store.setContacts(contacts);
   await agent2.deliverer.deliver(doc.inbox, follow);
   if (publish) await agent2.publisher.publishCollections({ following: true, pending: true });
   return doc;
 }
-async function followHandle(agent2, handle7) {
+async function followHandle(agent2, handle7, { serial = Date.now() } = {}) {
   const doc = await resolveHandle(agent2, handle7);
-  await followActor(agent2, doc.id);
+  await followActor(agent2, doc.id, { serial });
   const clean = String(handle7 || "").replace(/^@/, "");
   const contacts = agent2.store.getContacts();
   const rec = contacts.following.find((f) => f.actor === doc.id);
@@ -64645,14 +64815,14 @@ async function followHandle(agent2, handle7) {
   }
   return { ok: true, actor: doc.id };
 }
-async function unfollowActor(agent2, actor) {
+async function unfollowActor(agent2, actor, { serial = Date.now() } = {}) {
   const contacts = agent2.store.getContacts();
   const rec = contacts.following.find((f) => f.actor === actor);
   if (!rec) throw new Error("not following that actor");
   if (rec.followActivity) {
     await agent2.deliverer.deliver(
       rec.inbox,
-      undoActivity({ urls: agent2.publisher.urls, activity: rec.followActivity, serial: Date.now() })
+      undoActivity({ urls: agent2.publisher.urls, activity: rec.followActivity, serial })
     );
   }
   contacts.following = contacts.following.filter((f) => f.actor !== actor);
@@ -64660,30 +64830,30 @@ async function unfollowActor(agent2, actor) {
   await agent2.publisher.publishCollections({ following: true, pending: true });
   return { ok: true };
 }
-async function favourite(agent2, s) {
+async function favourite(agent2, s, { serial = Date.now() } = {}) {
   if (s.favourited) return s;
   const doc = await agent2.intake.fetchAP(s.actor);
   if (!doc?.inbox) throw new Error("author inbox unavailable");
-  const act = likeActivity({ urls: agent2.publisher.urls, noteId: s.noteId, serial: Date.now() });
+  const act = likeActivity({ urls: agent2.publisher.urls, noteId: s.noteId, serial });
   await agent2.deliverer.deliver(doc.endpoints?.sharedInbox || doc.inbox, act);
   return agent2.store.updateStatus(s.noteId, { favourited: true, likeActivity: act });
 }
-async function unfavourite(agent2, s) {
+async function unfavourite(agent2, s, { serial = Date.now() } = {}) {
   if (s.likeActivity) {
     const doc = await agent2.intake.fetchAP(s.actor).catch(() => null);
     if (doc?.inbox) {
       await agent2.deliverer.deliver(
         doc.endpoints?.sharedInbox || doc.inbox,
-        undoActivity({ urls: agent2.publisher.urls, activity: s.likeActivity, serial: Date.now() })
+        undoActivity({ urls: agent2.publisher.urls, activity: s.likeActivity, serial })
       );
     }
   }
   return agent2.store.updateStatus(s.noteId, { favourited: false, likeActivity: void 0 });
 }
-async function reblog(agent2, s) {
+async function reblog(agent2, s, { serial = Date.now() } = {}) {
   if (s.reblogged) return s;
   const { urls } = agent2.publisher;
-  const act = announceActivity({ urls, object: s.noteId, serial: Date.now() });
+  const act = announceActivity({ urls, object: s.noteId, serial });
   const inboxes = new Set(agent2.store.getContacts().followers.map((f) => f.sharedInbox || f.inbox).filter(Boolean));
   if (s.actor !== urls.actor) {
     const doc = await agent2.intake.fetchAP(s.actor).catch(() => null);
@@ -64695,14 +64865,14 @@ async function reblog(agent2, s) {
   if (await agent2.store.commit?.() === false) agent2.log(`boost sent but its timeline row was refused: ${s.noteId}`);
   return updated;
 }
-async function unreblog(agent2, s) {
+async function unreblog(agent2, s, { serial = Date.now() } = {}) {
   if (s.announceActivity) {
-    const undo = undoActivity({ urls: agent2.publisher.urls, activity: s.announceActivity, serial: Date.now() });
+    const undo = undoActivity({ urls: agent2.publisher.urls, activity: s.announceActivity, serial });
     const inboxes = new Set(agent2.store.getContacts().followers.map((f) => f.sharedInbox || f.inbox).filter(Boolean));
     const doc = await agent2.intake.fetchAP(s.actor).catch(() => null);
     if (doc?.inbox && s.actor !== agent2.publisher.urls.actor) inboxes.add(doc.endpoints?.sharedInbox || doc.inbox);
     await agent2.deliverer.deliverToAll([...inboxes], undo);
-    await agent2.publisher.unrecordOutbox((i) => i?.id === s.announceActivity.id);
+    await agent2.publisher.unrecordOutbox((i) => i?.id === s.announceActivity.id, { record: () => undo });
   }
   return agent2.store.updateStatus(s.noteId, { reblogged: false, announceActivity: void 0 });
 }
@@ -64734,7 +64904,7 @@ async function ejectFollower(agent2, actor) {
   }
   return { ok: true, actor, told: !!rec.inbox };
 }
-async function admitRequest(agent2, actor, { publish = true } = {}) {
+async function admitRequest(agent2, actor, { publish = true, serial = Date.now() } = {}) {
   const reqs = agent2.store.getRequests();
   const req = reqs.find((r) => r.actor === actor);
   if (!req) throw new Error("no such request");
@@ -64755,11 +64925,11 @@ async function admitRequest(agent2, actor, { publish = true } = {}) {
   await agent2.deliverer.deliver(req.inbox, acceptActivity({
     urls: agent2.publisher.urls,
     followActivity: req.activity,
-    serial: Date.now()
+    serial
   }));
   return { ok: true, actor };
 }
-async function refuseRequest(agent2, actor) {
+async function refuseRequest(agent2, actor, { serial = Date.now() } = {}) {
   const reqs = agent2.store.getRequests();
   const req = reqs.find((r) => r.actor === actor);
   if (!req) throw new Error("no such request");
@@ -64773,7 +64943,7 @@ async function refuseRequest(agent2, actor) {
   await agent2.deliverer.deliver(req.inbox, rejectActivity({
     urls: agent2.publisher.urls,
     followActivity: req.activity,
-    serial: Date.now()
+    serial
   }));
   return { ok: true, actor };
 }
@@ -64834,7 +65004,8 @@ async function votePoll(agent2, s, choices) {
 async function deleteNote(agent2, s) {
   const { urls } = agent2.publisher;
   const inboxes = agent2.store.getContacts().followers.map((f) => f.sharedInbox || f.inbox).filter(Boolean);
-  await agent2.deliverer.deliverToAll(inboxes, deleteActivity({ urls, noteId: s.noteId }));
+  const del = deleteActivity({ urls, noteId: s.noteId });
+  await agent2.deliverer.deliverToAll(inboxes, del);
   const stuck = [];
   const deletedAt = (/* @__PURE__ */ new Date()).toISOString();
   try {
@@ -64857,7 +65028,10 @@ async function deleteNote(agent2, s) {
   if (s.atproto?.uri && agent2.atproto?.connected()) {
     await agent2.atproto.deleteCrossPost(s.atproto.uri).then(() => agent2.log?.(`bluesky mirror deleted: ${s.atproto.uri}`)).catch((e) => agent2.log?.(`bluesky mirror not deleted (${e.message}): ${s.atproto.uri}`));
   }
-  await agent2.publisher.unrecordOutbox((i) => i === s.noteId || i?.id && i.id === s.announceActivity?.id);
+  await agent2.publisher.unrecordOutbox(
+    (i) => i === s.noteId || i?.id && i.id === s.announceActivity?.id,
+    { record: (gone) => gone.includes(s.noteId) ? del : null }
+  );
   agent2.store.removeStatus(s.noteId);
   return { ok: true };
 }
@@ -64870,7 +65044,7 @@ async function announceModeration(agent2, activity) {
   await agent2.publisher.recordOutbox(act);
   return act;
 }
-async function blockActor(agent2, actorUrl) {
+async function blockActor(agent2, actorUrl, { serial = Date.now() } = {}) {
   if (!/^https?:\/\/\S+$/.test(String(actorUrl || ""))) throw new Error("actor must be a URL");
   const b = agent2.store.getBlocklist();
   if (!b.actors.includes(actorUrl)) b.actors.push(actorUrl);
@@ -64881,11 +65055,11 @@ async function blockActor(agent2, actorUrl) {
   });
   await announceModeration(
     agent2,
-    blockActivity({ urls: agent2.publisher.urls, targetActor: actorUrl, serial: Date.now() })
+    blockActivity({ urls: agent2.publisher.urls, targetActor: actorUrl, serial })
   ).catch((e) => agent2.log?.(`moderation announce failed: ${e.message}`));
   return { ok: true, actor: actorUrl };
 }
-async function unblockActor(agent2, actorUrl) {
+async function unblockActor(agent2, actorUrl, { serial = Date.now() } = {}) {
   const b = agent2.store.getBlocklist();
   b.actors = b.actors.filter((a) => a !== actorUrl);
   agent2.store.setBlocklist(b);
@@ -64894,7 +65068,7 @@ async function unblockActor(agent2, actorUrl) {
   await announceModeration(agent2, undoActivity({
     urls: agent2.publisher.urls,
     activity: { type: "Block", actor: agent2.publisher.urls.actor, object: actorUrl },
-    serial: Date.now()
+    serial
   })).catch((e) => agent2.log?.(`moderation announce failed: ${e.message}`));
   return { ok: true, actor: actorUrl };
 }
@@ -65107,9 +65281,9 @@ var C2S = class {
    * published copy and it stays the canonical one; this is served only where
    * that copy cannot be read by the client asking.
    */
-  sendLocalOutbox(res, url, origin) {
+  sendLocalOutbox(res, url, origin, { owner = false } = {}) {
     const id = `${origin}ap/outbox`;
-    const outbox = this.store.read("outbox.json", []);
+    const outbox = this.store.read(owner ? "outbox-own.json" : "outbox.json", []);
     const page2 = url?.searchParams?.get("page") || null;
     const ct = { "content-type": "application/activity+json; charset=utf-8" };
     if (!page2) {
@@ -65178,10 +65352,12 @@ var C2S = class {
       return this.sendInbox(res, url);
     }
     if (req.method === "GET" || req.method === "HEAD") {
+      const owner = pathname === "/ap/outbox" && req.headers.authorization ? (await this.auth(req, pathname)).ok : false;
       const local = this.agent.publisher?.clientOrigin ? null : this.localOrigin(req);
       if (local && pathname === "/ap/actor") return this.sendLocalActor(req, res, local);
-      if (local && pathname === "/ap/outbox") return this.sendLocalOutbox(res, url, local);
-      const target = pathname === "/ap/actor" ? this.urls.actor : this.urls.outbox;
+      if (local && pathname === "/ap/outbox") return this.sendLocalOutbox(res, url, local, { owner });
+      const onPod = (u) => this.urls.toPod ? this.urls.toPod(u) : u;
+      const target = pathname === "/ap/actor" ? this.urls.actor : owner ? onPod(this.urls.ownOutbox) : this.urls.outbox;
       res.writeHead(303, { location: target, "cache-control": "no-store" });
       res.end();
       return true;
@@ -65229,7 +65405,10 @@ var C2S = class {
     if (to.includes(this.urls.followers)) return "private";
     return "direct";
   }
-  async dispatch(activity, { slug = null, raw = null } = {}) {
+  // `serial` and `at` name what this activity will make: the outbox door
+  // chose them and told the client, so they are used as given. A client
+  // posting here directly gets fresh ones.
+  async dispatch(activity, { slug = null, raw = null, serial = Date.now(), at = (/* @__PURE__ */ new Date()).toISOString() } = {}) {
     const reply = (status2, body, headers = {}) => ({ status: status2, body, headers });
     if (!activity || typeof activity !== "object" || Array.isArray(activity) || !activity.type) {
       return reply(400, { error: "a typed ActivityStreams object is required" });
@@ -65238,7 +65417,7 @@ var C2S = class {
       activity = { type: "Create", object: activity, to: activity.to, cc: activity.cc };
     }
     try {
-      return await this._dispatch(activity, { slug, raw, reply });
+      return await this._dispatch(activity, { slug, raw, reply, serial, at });
     } catch (e) {
       this.log(`c2s ${activity?.type}: ${e.message}`);
       return reply(422, { error: e.message || String(e) });
@@ -65251,8 +65430,14 @@ var C2S = class {
     const pick = (...fields) => [...new Set(fields.flatMap((f) => arr(activity[f] ?? object?.[f]).map(idOf2)))].filter((a) => typeof a === "string" && /^https?:\/\//u.test(a) && a !== PUBLIC && a !== this.urls.followers && a !== this.urls.actor);
     return { also: pick("to", "cc"), deliverTo: pick("bto", "bcc") };
   }
-  async _dispatch(activity, { slug, raw, reply }) {
+  async _dispatch(activity, { slug, raw, reply, serial, at }) {
     const agent2 = this.agent;
+    const made = (id, body = {}) => reply(201, { id, ...body }, { location: id });
+    const kept = (type, extra) => {
+      const act = { id: `${this.urls.actor}#${type.toLowerCase()}-${serial}`, type, actor: this.urls.actor, published: at, ...extra };
+      agent2.publisher.recordOwn?.(act);
+      return act.id;
+    };
     const object = typeof activity.object === "object" && activity.object !== null ? activity.object : null;
     const objectId = idOf2(activity.object);
     switch (activity.type) {
@@ -65263,8 +65448,8 @@ var C2S = class {
         const { also, deliverTo } = this.addressedActors(activity, object);
         if (makes !== "Note" && makes !== "Question") {
           const asSent = raw && typeof raw === "object" && !Array.isArray(raw) ? ACTIVITY_TYPES.has(raw.type) ? raw.object && typeof raw.object === "object" ? raw.object : null : raw : null;
-          const made = await agent2.publisher.publishObject(asSent || object, { visibility, slug, also, deliverTo });
-          return reply(201, { id: made.createId, object: made.id }, { location: made.createId });
+          const made2 = await agent2.publisher.publishObject(asSent || object, { visibility, slug, also, deliverTo });
+          return reply(201, { id: made2.createId, object: made2.id }, { location: made2.createId });
         }
         const text = String(object.source?.content ?? object.content ?? "");
         if (!text.trim()) return reply(422, { error: "the note has no content" });
@@ -65280,7 +65465,8 @@ var C2S = class {
               inReplyTo: idOf2(object.inReplyTo) || void 0,
               visibility,
               spoilerText: object.summary || null,
-              sensitive: object.sensitive === true
+              sensitive: object.sensitive === true,
+              slug
             });
             return reply(
               201,
@@ -65332,9 +65518,10 @@ var C2S = class {
           content: text,
           spoilerText: object?.summary || null,
           sensitive: object?.sensitive === void 0 ? null : object.sensitive === true,
-          attachments
+          attachments,
+          updated: at
         });
-        return reply(200, { ok: true, object: s.noteId });
+        return made(updateActivityId(s.noteId, at), { object: s.noteId });
       }
       case "Delete": {
         if (objectId === this.urls.actor) {
@@ -65347,81 +65534,70 @@ var C2S = class {
         }
         const r = await deleteNote(agent2, s);
         if (!r.ok) return reply(502, { error: r.error, stillPublished: r.stillPublished });
-        return reply(200, { ok: true });
+        return made(deleteActivityId(s.noteId), { object: s.noteId });
       }
       case "Follow": {
         if (!objectId) return reply(400, { error: "whom? object must name an actor" });
         if (/^acct:|^@|^[^/@]+@[^/@]+$/.test(objectId) && !/^https?:/.test(objectId)) {
-          const r = await followHandle(agent2, objectId.replace(/^acct:/, ""));
+          const r = await followHandle(agent2, objectId.replace(/^acct:/, ""), { serial });
           const rec2 = this.store.getContacts().following.find((f) => f.actor === r.actor);
-          return reply(
-            201,
-            { id: rec2?.followActivity?.id, object: r.actor },
-            rec2?.followActivity?.id ? { location: rec2.followActivity.id } : {}
-          );
+          return made(rec2?.followActivity?.id, { object: r.actor });
         }
-        const doc = await followActor(agent2, objectId);
+        const doc = await followActor(agent2, objectId, { serial });
         const rec = this.store.getContacts().following.find((f) => f.actor === doc.id);
-        return reply(
-          201,
-          { id: rec?.followActivity?.id, object: doc.id },
-          rec?.followActivity?.id ? { location: rec.followActivity.id } : {}
-        );
+        return made(rec?.followActivity?.id, { object: doc.id });
       }
       case "Like": {
         const s = this.byIri(objectId);
         if (!s) return reply(422, { error: "that note is not held here \u2014 like what the timeline holds" });
-        const updated = await favourite(agent2, s);
-        return reply(
-          201,
-          { id: updated.likeActivity?.id, object: s.noteId },
-          updated.likeActivity?.id ? { location: updated.likeActivity.id } : {}
-        );
+        const updated = await favourite(agent2, s, { serial });
+        return made(updated.likeActivity?.id, { object: s.noteId });
       }
       case "Announce": {
         const s = this.byIri(objectId);
         if (!s) return reply(422, { error: "that note is not held here \u2014 boost what the timeline holds" });
-        const updated = await reblog(agent2, s);
-        return reply(
-          201,
-          { id: updated.announceActivity?.id, object: s.noteId },
-          updated.announceActivity?.id ? { location: updated.announceActivity.id } : {}
-        );
+        const updated = await reblog(agent2, s, { serial });
+        return made(updated.announceActivity?.id, { object: s.noteId });
       }
       case "Undo": {
         const inner = object;
         const innerId = idOf2(activity.object);
+        const undone = `${this.urls.actor}#undo-${serial}`;
         if (inner?.type === "Block") {
           const target = idOf2(inner.object);
           if (!target) return reply(400, { error: "unblock whom?" });
-          await unblockActor(agent2, target);
-          return reply(200, { ok: true, object: target });
+          await unblockActor(agent2, target, { serial });
+          if (this.store.getConfig()?.kind !== "group") {
+            kept("Undo", { object: { type: "Block", actor: this.urls.actor, object: target } });
+          }
+          return made(undone, { object: target });
         }
         const statuses = this.store.getStatuses();
         let s = innerId ? statuses.find((x) => x.likeActivity?.id === innerId) : null;
         if (!s && inner?.type === "Like") s = this.byIri(idOf2(inner.object));
         if (s?.favourited) {
-          const updated = await unfavourite(agent2, s);
-          return reply(200, { ok: true, object: updated.noteId });
+          const updated = await unfavourite(agent2, s, { serial });
+          return made(undone, { object: updated.noteId });
         }
         s = innerId ? statuses.find((x) => x.announceActivity?.id === innerId) : null;
         if (!s && inner?.type === "Announce") s = this.byIri(idOf2(inner.object));
         if (s?.reblogged) {
-          const updated = await unreblog(agent2, s);
-          return reply(200, { ok: true, object: updated.noteId });
+          const updated = await unreblog(agent2, s, { serial });
+          return made(undone, { object: updated.noteId });
         }
         const following = this.store.getContacts().following;
         const rec = following.find((f) => f.followActivity?.id === innerId) || (inner?.type === "Follow" ? following.find((f) => f.actor === idOf2(inner.object)) : null);
         if (rec) {
-          await unfollowActor(agent2, rec.actor);
-          return reply(200, { ok: true, object: rec.actor });
+          await unfollowActor(agent2, rec.actor, { serial });
+          return made(undone, { object: rec.actor });
         }
         return reply(422, { error: "nothing here matches what that Undo names" });
       }
       case "Block": {
         if (!objectId) return reply(400, { error: "block whom? object must name an actor" });
-        await blockActor(agent2, objectId);
-        return reply(200, { ok: true, object: objectId });
+        await blockActor(agent2, objectId, { serial });
+        const id = this.store.getConfig()?.kind === "group" ? `${this.urls.actor}#block-${serial}` : kept("Block", { object: objectId });
+        return made(id, { object: objectId });
       }
       case "Add":
       case "Remove": {
@@ -65431,15 +65607,18 @@ var C2S = class {
         const s = this.byIri(objectId);
         if (!s) return reply(404, { error: "no such note here" });
         const updated = await pinStatus(agent2, s, activity.type === "Add");
-        return reply(200, { ok: true, object: updated.noteId, pinned: !!updated.pinned });
+        return made(
+          kept(activity.type, { object: updated.noteId, target: this.urls.featured }),
+          { object: updated.noteId, pinned: !!updated.pinned }
+        );
       }
       case "Accept":
       case "Reject": {
         const requester = object?.actor ? idOf2(object.actor) : objectId;
         if (!requester) return reply(400, { error: "whose request? object must name the Follow or its actor" });
-        const r = activity.type === "Accept" ? await admitRequest(agent2, requester).catch((e) => ({ error: e.message })) : await refuseRequest(agent2, requester).catch((e) => ({ error: e.message }));
+        const r = activity.type === "Accept" ? await admitRequest(agent2, requester, { serial }).catch((e) => ({ error: e.message })) : await refuseRequest(agent2, requester, { serial }).catch((e) => ({ error: e.message }));
         if (r.error) return reply(404, { error: r.error });
-        return reply(200, { ok: true, object: requester });
+        return made(`${this.urls.actor}#${activity.type.toLowerCase()}-${serial}`, { object: requester });
       }
       case "Move":
         return reply(422, { error: "moving the account is done on the admin surface, where it asks twice" });
@@ -69369,7 +69548,17 @@ var Deliverer = class {
     }
     return out;
   }
+  // A fresh activity of this actor's, for the outbox its owner reads. Never
+  // allowed to stop a delivery; a retry from the queue is not fresh.
+  _sent(activity) {
+    try {
+      this.onSent?.(activity);
+    } catch (e) {
+      this.log(`owner's outbox record: ${e.message}`);
+    }
+  }
   async deliver(inbox, activity) {
+    this._sent(activity);
     const signed = await this.proofed(activity);
     if (this._queueIfCooling(inbox, signed)) return;
     const [result] = await this.deliverManyNow([{ inbox, activity: signed }]);
@@ -69438,6 +69627,7 @@ var Deliverer = class {
     this.store.setQueue(q);
   }
   async deliverToAll(inboxes, activity) {
+    this._sent(activity);
     const signed = await this.proofed(activity);
     const targets = [...new Set(inboxes)].map((inbox) => ({ inbox, activity: signed }));
     for (let i = 0; i < targets.length; i += this.batchSize) {
@@ -71930,6 +72120,11 @@ var BrowserAgent = class _BrowserAgent {
       await this.store.load({ force: !!this._watched }).catch((e) => this.log(`re-reading state: ${e.message}`));
       this._watched = false;
       await this.publisher.healStatuses().catch((e) => this.log(`healing the timeline index: ${e.message}`));
+      try {
+        this.publisher.backfillLiked();
+      } catch (e) {
+        this.log(`liked list: ${e.message}`);
+      }
       await this.publisher.publishProfilePage().catch((e) => this.log(`profile page: ${e.message}`));
       this.deliverer?.startQueue?.();
       await this.publisher.publishProfile();

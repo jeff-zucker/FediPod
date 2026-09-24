@@ -71,6 +71,12 @@ an alias, so a Move from it lands here.
 client-to-server, dokieli for one, can post as you. It sends to the outbox
 address in your actor document, which your WebID profile also names, signed in
 at your pod. The post goes out the next time you open fedipod.net.
+<!-- CLAUDE 2026-09-24 — refusals and the signed-in outbox (1.37.0); delete these markers when done -->
+If your account turns a post down when it runs, you get a direct message from
+yourself saying what was refused and why. Signed in, your outbox shows you
+everything you've done, likes and follows included; everyone else sees only
+your public posts.
+<!-- /CLAUDE -->
 
 **The manage page.** `manage`, in the bar's account group, opens it: your profile,
 aliases, the gateway, key rotation, recovering posts, parking, moving to

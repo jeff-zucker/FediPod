@@ -552,6 +552,8 @@ export class Agent {
     // Own posts the outbox names and the timeline index lacks come back here,
     // before anything acts on the index.
     await this.publisher.healStatuses().catch(e => this.log(`healing the timeline index: ${e.message}`));
+    // Likes made before the liked list existed become its first entries.
+    try { this.publisher.backfillLiked(); } catch (e) { this.log(`liked list: ${e.message}`); }
     this.lease.onLost = () => this.demote();
     this.lease.startRenewal();
     this.deliverer.startQueue();

@@ -575,6 +575,128 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     'webfingerHost: host-root pod yes, path pod no');
 }
 
+// --- 5b9. what takes an entry out of the outbox goes in its place ---
+{
+  const collections = await import(path.join(root, 'lib/core/publisher/collections.mjs'));
+  const social = await import(path.join(root, 'lib/core/social.mjs'));
+  const N = 'https://pod.example/ap/notes/';
+  const mem = { 'outbox.json': [N + 'b', N + 'a'] };
+  const published = [];
+  const pubStub = { store: { read: (n, d) => mem[n] ?? d, write: (n, v) => { mem[n] = v; } },
+    publishOutbox: async (o) => { published.push([...o]); } };
+  const gone = await collections.unrecordOutbox(pubStub, i => i === N + 'a', { record: () => ({ id: N + 'a#delete', type: 'Delete' }) });
+  check(gone.length === 1 && mem['outbox.json'][0]?.type === 'Delete' && !mem['outbox.json'].includes(N + 'a')
+    && published.length === 1 && published[0][0]?.type === 'Delete',
+    'a withdrawn entry is replaced by what withdrew it, in the one publish');
+  await collections.unrecordOutbox(pubStub, i => i === N + 'nothing', { record: () => ({ id: 'x', type: 'Delete' }) });
+  check(!mem['outbox.json'].some(i => i?.id === 'x'), 'nothing withdrawn, nothing recorded');
+
+  // deleteNote: a post the outbox listed leaves its Delete; a private one leaves nothing.
+  const recorded = [];
+  const agentFor = (listed) => ({
+    publisher: { urls: { actor: 'https://pod.example/ap/actor' },
+      unrecordOutbox: async (m, { record }) => { const g = listed.filter(m); const r = record?.(g); if (r) recorded.push(r); return g; } },
+    deliverer: { deliverToAll: async () => {} },
+    remote: { delete: async () => true, putJson: async () => {}, setAcl: async () => {} },
+    store: { getContacts: () => ({ followers: [], following: [] }), removeStatus: () => {} },
+    log: () => {},
+  });
+  await social.deleteNote(agentFor([N + 'pub']), { noteId: N + 'pub' });
+  check(recorded.length === 1 && recorded[0].type === 'Delete' && recorded[0].object.id === N + 'pub',
+    'deleting a listed post records its Delete in the outbox');
+  await social.deleteNote(agentFor([]), { noteId: 'https://pod.example/ap/private/p' });
+  check(recorded.length === 1, 'deleting a private post records nothing: it was never listed');
+}
+
+// --- 5b10. the outbox its owner reads: every message, and the liked list ---
+{
+  const { Publisher } = await import(path.join(root, 'lib/core/publisher/index.mjs'));
+  const { Deliverer } = await import(path.join(root, 'lib/core/deliver.mjs'));
+  const mem = {};
+  const puts = {};
+  const acls = [];
+  const store = { read: (n, d) => mem[n] ?? d, write: (n, v) => { mem[n] = v; },
+    getContacts: () => ({ followers: [], following: [] }), getQueue: () => [], setQueue: () => {} };
+  const dl = new Deliverer({ store, keyId: 'k', rsaPrivate: null, passive: true, log: () => {} });
+  dl.proofed = async (a) => a;
+  dl.deliverManyNow = async (targets) => targets.map(() => ({ ok: true }));
+  const pub = new Publisher({ config: { remotePod: 'https://pod.example/' }, store, deliverer: dl, publicKeyPem: 'x',
+    remote: { putJson: async (u, d) => { puts[u] = d; }, setAcl: async (u) => { acls.push(u); }, delete: async () => true }, log: () => {} });
+  const A = pub.urls.actor;
+  const like = { id: A + '#like-1', type: 'Like', actor: A, object: 'https://m.example/n/1' };
+  await dl.deliver('https://m.example/inbox', like);
+  await dl.deliver('https://m.example/inbox', like);                          // a second send of the same
+  await dl.deliverToAll([], { id: A + '#follow-2', type: 'Follow', actor: A, object: 'https://m.example/u/z' });
+  await dl.deliverToAll([], { id: pub.urls.privateNotes + 'p1-create', type: 'Create', actor: A,
+    object: { id: pub.urls.privateNotes + 'p1', type: 'Note' } });
+  await dl.deliverToAll([], { id: 'https://elsewhere.example/a', type: 'Announce', actor: 'https://elsewhere.example/u' });
+  await pub.ownSettled();
+  const own = mem['outbox-own.json'] || [];
+  check(own.length === 3 && own[0] === pub.urls.privateNotes + 'p1' && own[1]?.type === 'Follow' && own[2]?.type === 'Like',
+    'everything the actor sends goes on its owner\'s outbox once — a like, a follow, a followers-only post — and nobody else\'s activity does');
+  check(puts[pub.urls.ownOutbox]?.totalItems === 3 && puts[pub.urls.ownOutbox + '-1']?.orderedItems?.[0] === pub.urls.privateNotes + 'p1-create',
+    'published in the private container, a post listed by its Create');
+  check(!acls.some(u => u.startsWith(pub.urls.ownOutbox) || u.startsWith(pub.urls.liked)),
+    'and given no rule of its own: the private container\'s owner-only rule is inherited');
+  check(puts[pub.urls.liked]?.totalItems === 1 && puts[pub.urls.liked + '-1']?.orderedItems?.[0] === 'https://m.example/n/1',
+    'the liked list holds what was liked');
+  await dl.deliver('https://m.example/inbox', { id: A + '#undo-3', type: 'Undo', actor: A, object: like });
+  await pub.ownSettled();
+  check(puts[pub.urls.liked]?.totalItems === 0 && mem['outbox-own.json'][0]?.type === 'Undo',
+    'an unlike takes it off the liked list, and the Undo goes on the owner\'s outbox');
+}
+
+// --- 5b10b. likes made before the liked list existed become its first entries ---
+{
+  const { Publisher } = await import(path.join(root, 'lib/core/publisher/index.mjs'));
+  const make = (seed) => {
+    const mem = { ...seed };
+    const puts = {};
+    const rows = [
+      { noteId: 'https://m.example/n/old', favourited: true, published: '2026-08-01T00:00:00Z' },
+      { noteId: 'https://m.example/n/new', favourited: true, published: '2026-09-01T00:00:00Z' },
+      { noteId: 'https://m.example/n/not', published: '2026-09-02T00:00:00Z' },
+    ];
+    const store = { read: (n, d) => (n in mem ? mem[n] : d), write: (n, v) => { mem[n] = v; }, getStatuses: () => rows };
+    const pub = new Publisher({ config: { remotePod: 'https://pod.example/' }, store, publicKeyPem: 'x',
+      remote: { putJson: async (u, d) => { puts[u] = d; }, setAcl: async () => {}, delete: async () => true }, log: () => {} });
+    return { pub, mem, puts };
+  };
+  const a = make({});
+  const n = a.pub.backfillLiked();
+  await a.pub.ownSettled();
+  check(n === 2 && JSON.stringify(a.mem['liked.json']) === JSON.stringify(['https://m.example/n/new', 'https://m.example/n/old'])
+    && a.puts[a.pub.urls.liked]?.totalItems === 2,
+    'the likes an account already holds become its liked list, newest first, and are published');
+  check(a.pub.backfillLiked() === 0 && a.mem['liked.json'].length === 2, 'once only');
+  const b = make({ 'liked.json': [] });
+  check(b.pub.backfillLiked() === 0 && b.mem['liked.json'].length === 0,
+    'a list that exists, even empty, is the record from then on');
+}
+
+// --- 5b11. a post the door accepted and the account refused is told to its owner ---
+{
+  const { Intake } = await import(path.join(root, 'lib/core/intake/index.mjs'));
+  const notesM = await import(path.join(root, 'lib/core/publisher/notes.mjs'));
+  const wireM = await import(path.join(root, 'lib/core/wire.mjs'));
+  const urls = wireM.apUrls('https://pod.example/');
+  const statuses = []; const notes = []; const written = {};
+  const publisher = { urls, log: () => {},
+    remote: { putJson: async (u, d) => { written[u] = d; } },
+    store: { addStatus: (x) => statuses.push(x), addNotification: (n) => notes.push(n) } };
+  publisher.noteToSelf = (t) => notesM.noteToSelf(publisher, t);
+  const fake = { publisher, log: () => {},
+    ownerPost: async () => ({ status: 422, body: { error: 'the note has no content' } }) };
+  const why = await Intake.prototype.ownerPostFrom.call(fake, { type: 'Note' }, '{}', { slug: null });
+  const s0 = statuses[0];
+  check(/refused/.test(why || '') && s0?.visibility === 'direct' && s0.actor === urls.actor
+    && /refused it: the note has no content/.test(s0.text) && s0.noteId.startsWith(urls.privateNotes),
+    'a refused door post leaves its owner a direct message from their own account, saying why');
+  check(notes[0]?.type === 'mention' && notes[0].noteId === s0.noteId
+    && written[s0.noteId]?.to?.[0] === urls.actor && written[s0.noteId].to.length === 1,
+    'shown as a mention, and kept on the pod addressed to the owner alone');
+}
+
 // --- 5c. the private trees are re-checked and repaired on every start ---
 {
   const { Publisher } = await import(path.join(root, 'lib/core/publisher/index.mjs'));
@@ -1395,11 +1517,12 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   const putDocs = {};
   const statuses = [];
   const sent = [];
+  const mem5b2 = {};
   const pub = new Publisher({
     config: { remotePod: 'https://pod.example/', handle: 'you', name: 'You' },
     remote: { putJson: async (id, doc) => { putDocs[id] = doc; }, setAcl: async () => {}, delete: async () => true },
     store: {
-      getStatuses: () => statuses, read: () => [], write: () => {},
+      getStatuses: () => statuses, read: (n, d) => mem5b2[n] ?? d, write: (n, v) => { mem5b2[n] = v; },
       addStatus: (s) => statuses.unshift(s),
       updateStatus: (noteId, patch) => {
         const i = statuses.findIndex(x => x.noteId === noteId);
@@ -1430,6 +1553,9 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     'the pod note document is overwritten in place');
   check(String(putDocs[note.id + '-create']?.object?.content || '').includes('second words'),
     'and the Create document resolves to the edited text');
+  const ob5b2 = mem5b2['outbox.json'] || [];
+  check(ob5b2[0]?.type === 'Update' && ob5b2[0].id === up.id && ob5b2.includes(note.id),
+    'the edit is recorded in the outbox as the Update, beside the post it changed');
 
   // followers-only and direct: addressing, container, outbox, delivery, gate
   pub.probeFetch = async () => ({ status: 403 });
@@ -5263,8 +5389,11 @@ const fakeAgent = {
   publisher: {
     urls: urls2, ensureMediaContainer: async () => {}, publishCollections: async () => {},
     recordOutbox: async (i) => { outbox2.unshift(i); },
-    unrecordOutbox: async (m) => {
+    unrecordOutbox: async (m, { record = null } = {}) => {
+      const gone = outbox2.filter(m).map(i => (typeof i === 'string' ? i : i?.id));
       for (let k = outbox2.length - 1; k >= 0; k--) if (m(outbox2[k])) outbox2.splice(k, 1);
+      for (const r of [].concat((gone.length && record ? record(gone) : null) || [])) outbox2.unshift(r);
+      return gone;
     },
   },
   deliverer: {
@@ -5380,6 +5509,8 @@ check(outbox2.some(i => i?.type === 'Announce' && i.object === REPLY),
 const unboost = await call(`/api/v1/statuses/${store2.idFor(REPLY)}/unreblog`, { method: 'POST' });
 check(unboost.json.reblogged === false && !outbox2.some(i => i?.type === 'Announce' && i.object === REPLY),
   'unreblog takes it back out again');
+check(outbox2[0]?.type === 'Undo' && outbox2[0].object?.type === 'Announce' && outbox2[0].object.object === REPLY,
+  'and records the Undo in its place, so a reader catching up learns the boost was withdrawn');
 
 const fol = await call(`/api/v1/accounts/${store2.idFor('https://m.example/u/carol')}/follow`, { method: 'POST' });
 check(fol.status === 200 && fol.json.requested === true
@@ -10678,6 +10809,8 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
       publishCollections: async () => {},
       recordOutbox: async () => {},
       unrecordOutbox: async () => {},
+      // The owner's outbox, where what is never sent is recorded.
+      recordOwn: (a) => { st24.write('outbox-own.json', [a, ...st24.read('outbox-own.json', [])]); },
     },
     log: () => {},
   };
@@ -10718,10 +10851,10 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
   const badTok = await ask24(apiAuth, blockBody, { headers: { authorization: 'DPoP junk', dpop: 'proof' } });
   check(badTok.status === 401, `an unverifiable token → 401 (got ${badTok.status})`);
   const asOwner = await ask24(apiAuth, blockBody, { headers: { authorization: 'DPoP good', dpop: 'proof' } });
-  check(asOwner.status === 200, `the owner's own WebID → acts (got ${asOwner.status})`);
+  check(asOwner.status === 201, `the owner's own WebID → acts (got ${asOwner.status})`);
   const asBearer = await ask24(apiAuth, { type: 'Block', object: 'https://bad.example/u/troll2' },
     { headers: { authorization: 'Bearer smoke-ok' } });
-  check(asBearer.status === 200, `the facade bearer drives C2S too (got ${asBearer.status})`);
+  check(asBearer.status === 201, `the facade bearer drives C2S too (got ${asBearer.status})`);
   const b24 = st24.getBlocklist();
   check(b24.actors.includes('https://bad.example/u/troll') && b24.actors.includes('https://bad.example/u/troll2'),
     'both blocks landed in the blocklist');
@@ -10779,9 +10912,11 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
     'the object reaches the publisher as sent, public by default, with its slug');
   // dispatch answers values, so the drain can hand it an activity with no request in sight.
   const direct = await api24.dispatch({ type: 'Block', object: 'https://bad.example/u/troll3' });
-  check(direct.status === 200 && direct.body?.object === 'https://bad.example/u/troll3'
+  check(direct.status === 201 && direct.body?.object === 'https://bad.example/u/troll3'
+    && /#block-\d+$/.test(direct.headers?.location || '')
+    && st24.read('outbox-own.json', []).some(i => i?.id === direct.headers.location && i.type === 'Block')
     && st24.getBlocklist().actors.includes('https://bad.example/u/troll3'),
-    'dispatch works with an activity alone — no request, no response');
+    'dispatch works with an activity alone — no request, no response — and a block, sent nowhere, is on the owner\'s outbox under the id it answered');
 
   // Someone else's note is not ours to edit or delete.
   const foreignEdit = await ask24(api24, { type: 'Update', object: { id: THEIRS, content: 'hijack' } });
@@ -10789,7 +10924,8 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
   const foreignDel = await ask24(api24, { type: 'Delete', object: THEIRS });
   check(foreignDel.status === 403, `deleting someone else's note → 403 (got ${foreignDel.status})`);
   const ownEdit = await ask24(api24, { type: 'Update', object: { id: OURS, content: 'edited' } });
-  check(ownEdit.status === 200, `editing our own → 200 (got ${ownEdit.status})`);
+  check(ownEdit.status === 201 && /#update-\d{8}T\d{6,9}Z$/.test(ownEdit.headers.location || ''),
+    `editing our own → 201 naming the Update (got ${ownEdit.status} ${ownEdit.headers.location})`);
 
   // Like, then Undo by the stored activity's id.
   const like = await ask24(api24, { type: 'Like', object: THEIRS });
@@ -10798,15 +10934,16 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
     `Like → 201 naming the like activity (got ${like.status} ${likeId})`);
   check(st24.getStatuses().find(s => s.noteId === THEIRS)?.favourited === true, 'the status is favourited');
   const unlike = await ask24(api24, { type: 'Undo', object: likeId });
-  check(unlike.status === 200 && st24.getStatuses().find(s => s.noteId === THEIRS)?.favourited === false,
-    'Undo by the like id unfavourites');
+  check(unlike.status === 201 && /#undo-/.test(unlike.headers.location || '')
+    && st24.getStatuses().find(s => s.noteId === THEIRS)?.favourited === false,
+    'Undo by the like id unfavourites, and answers 201 naming the Undo');
 
   // Announce, then Undo by re-stating the inner activity instead of its id.
   const boost = await ask24(api24, { type: 'Announce', object: THEIRS });
   check(boost.status === 201 && st24.getStatuses().find(s => s.noteId === THEIRS)?.reblogged === true,
     `Announce → 201 and the status is boosted (got ${boost.status})`);
   const unboost = await ask24(api24, { type: 'Undo', object: { type: 'Announce', object: THEIRS } });
-  check(unboost.status === 200 && st24.getStatuses().find(s => s.noteId === THEIRS)?.reblogged === false,
+  check(unboost.status === 201 && st24.getStatuses().find(s => s.noteId === THEIRS)?.reblogged === false,
     'Undo restating Announce+object unboosts');
 
   // Follow an actor by IRI; the response names the Follow a later Undo needs.
@@ -10816,15 +10953,50 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
   check(st24.getContacts().following.some(f => f.actor === 'https://m.example/u/zed'),
     'the following record exists');
   const unfollow = await ask24(api24, { type: 'Undo', object: { type: 'Follow', object: 'https://m.example/u/zed' } });
-  check(unfollow.status === 200 && !st24.getContacts().following.some(f => f.actor === 'https://m.example/u/zed'),
+  check(unfollow.status === 201 && !st24.getContacts().following.some(f => f.actor === 'https://m.example/u/zed'),
     'Undo of the Follow unfollows');
 
   // Pinning is Add/Remove on the featured collection, and only that collection.
   const pin = await ask24(api24, { type: 'Add', object: OURS, target: urls24.featured });
-  check(pin.status === 200 && pin.json?.pinned === true && featured24 > 0,
+  check(pin.status === 201 && pin.json?.pinned === true && featured24 > 0 && /#add-/.test(pin.headers.location || ''),
     `Add to featured pins and republishes the collection (got ${pin.status})`);
   const unpin = await ask24(api24, { type: 'Remove', object: OURS, target: urls24.featured });
-  check(unpin.status === 200 && unpin.json?.pinned === false, 'Remove unpins');
+  check(unpin.status === 201 && unpin.json?.pinned === false, 'Remove unpins');
+
+  // The outbox answers its signed-in owner with every message; anyone else
+  // with the public record.
+  st24.write('outbox.json', [OURS]);
+  const readOwn = async (headers) => {
+    const head = await ask24(api24, null, { method: 'GET', headers });
+    const page = await ask24(api24, null, { method: 'GET', headers, query: '?page=1' });
+    return { head: head.json, items: page.json?.orderedItems || [] };
+  };
+  const signedIn = await readOwn({ authorization: 'Bearer smoke-ok' });
+  const stranger = await readOwn({});
+  check(signedIn.items.some(i => i?.type === 'Block') && !stranger.items.some(i => i?.type === 'Block')
+    && stranger.items.length === 1,
+    `the outbox shows its signed-in owner every message, a stranger only the public ones (${signedIn.items.length} vs ${stranger.items.length})`);
+
+  // What the outbox door named is what the agent makes: the door hands its
+  // serial and time over in the receipt, and dispatch uses them.
+  const { handleOwnerPost: door24 } = await import(path.join(root, 'lib/gateway/gateway-core.mjs'));
+  const receipts24 = [];
+  const doorSays = async (body) => {
+    const r = await door24(new Request('https://front.example/u/jeff/ap/outbox', { method: 'POST', body: JSON.stringify(body) }),
+      { hmacSecret: 's', actorUrl: urls24.actor, notesPrefix: urls24.notes, inboxUrl: 'https://pod.example/ap/inbox/' },
+      { podPut: async (u, b) => { if (/receipt|\.meta|rcpt/.test(u) || /"method":"c2s"/.test(String(b))) receipts24.push(JSON.parse(b)); return true; } });
+    return r;
+  };
+  const doorLike = await doorSays({ type: 'Like', object: THEIRS });
+  const rc = receipts24.at(-1)?.payload || receipts24.at(-1);
+  const agentLike = await api24.dispatch({ type: 'Like', object: THEIRS }, { serial: rc?.serial, at: rc?.at });
+  check(doorLike.location && doorLike.location === agentLike.headers.location,
+    `a Like posted at the door is made under the id the door answered (${doorLike.location} / ${agentLike.headers.location})`);
+  const doorEdit = await doorSays({ type: 'Update', object: { id: OURS, content: 'again' } });
+  const rc2 = receipts24.at(-1)?.payload || receipts24.at(-1);
+  const agentEdit = await api24.dispatch({ type: 'Update', object: { id: OURS, content: 'again' } }, { serial: rc2?.serial, at: rc2?.at });
+  check(doorEdit.location && doorEdit.location === agentEdit.headers.location,
+    `and so is an edit (${doorEdit.location} / ${agentEdit.headers.location})`);
   const wrongTarget = await ask24(api24, { type: 'Add', object: OURS, target: urls24.outbox });
   check(wrongTarget.status === 422, `Add to any OTHER collection → 422 (got ${wrongTarget.status})`);
 

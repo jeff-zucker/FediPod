@@ -472,9 +472,10 @@ try {
     const before = count();
     const ok = await post({ authorization: 'Bearer path-owner', dpop: 'proof' });
     const okBody = await ok.json().catch(() => ({}));
-    check(ok.status === 201 && ok.headers.get('location') === `${ORIGIN}/u/pwren/ap/notes/anno-42`
+    check(ok.status === 201 && ok.headers.get('location') === `${ORIGIN}/u/pwren/ap/notes/anno-42-create`
+      && okBody.id === `${ORIGIN}/u/pwren/ap/notes/anno-42-create`
       && okBody.object === `${ORIGIN}/u/pwren/ap/notes/anno-42`,
-      `the owner's post is accepted with the address it will have (${ok.status} ${ok.headers.get('location')})`);
+      `the owner's post is accepted with the address its Create will have (${ok.status} ${ok.headers.get('location')})`);
     check(ok.headers.get('access-control-allow-origin') === '*', 'and the answer carries CORS, so the client can read it');
     const item = inboxWrites.filter(w => w.url.includes('/pods/wren/fedipod/ap/inbox/') && !w.url.endsWith('.receipt.json')).at(-1);
     check(count() === before + 1 && item && item.body === annotation, 'the bytes as sent land in the pod inbox');
@@ -487,6 +488,41 @@ try {
     check((await post({ authorization: 'Bearer path-owner', dpop: 'proof' }, 'not json')).status === 400, 'a body that is not JSON → 400');
     check((await post({ authorization: 'Bearer path-owner', dpop: 'proof', slug: '../up' })).status === 201
       && !inboxWrites.at(-1).body.includes('../'), 'an unsafe Slug is dropped, and the post still lands');
+    // No name asked for: the door names it, tells the client, and hands the
+    // name to the agent in the receipt.
+    const unnamed = await post({ authorization: 'Bearer path-owner', dpop: 'proof', slug: '' });
+    const minted = unnamed.headers.get('location') || '';
+    const m = minted.match(/\/ap\/notes\/(\d{4}-\d{2}-\d{2}-[0-9a-f]{8})-create$/u);
+    const mintedRcpt = JSON.parse(inboxWrites.at(-1).body);
+    check(unnamed.status === 201 && m && mintedRcpt.slug === m[1],
+      `a post with no Slug is named by the door, and the receipt carries that name (${minted})`);
+    const followersOnly = await post({ authorization: 'Bearer path-owner', dpop: 'proof', slug: 'fo-1' },
+      JSON.stringify({ type: 'Note', content: 'hi', to: [`${ORIGIN}/u/pwren/ap/followers`] }));
+    check(followersOnly.headers.get('location') === `${ORIGIN}/u/pwren/ap/private/fo-1-create`,
+      `a followers-only post is addressed where the agent keeps it (${followersOnly.headers.get('location')})`);
+    const like = await post({ authorization: 'Bearer path-owner', dpop: 'proof', slug: '' },
+      JSON.stringify({ type: 'Like', object: 'https://elsewhere.example/n/1' }));
+    check(like.status === 201 && /\/u\/pwren\/ap\/actor#like-\d+$/.test(like.headers.get('location') || ''),
+      `a Like is named by the door the way the agent names it (${like.headers.get('location')})`);
+    const edit = await post({ authorization: 'Bearer path-owner', dpop: 'proof', slug: '' },
+      JSON.stringify({ type: 'Update', object: { id: `${ORIGIN}/u/pwren/ap/notes/anno-42`, content: 'again' } }));
+    check(/\/ap\/notes\/anno-42#update-\d{8}T\d{6,9}Z$/.test(edit.headers.get('location') || ''),
+      `an edit is named by its note and its time (${edit.headers.get('location')})`);
+    const del = await post({ authorization: 'Bearer path-owner', dpop: 'proof', slug: '' },
+      JSON.stringify({ type: 'Delete', object: `${ORIGIN}/u/pwren/ap/notes/anno-42` }));
+    check(del.headers.get('location') === `${ORIGIN}/u/pwren/ap/notes/anno-42#delete`, 'a deletion by its note');
+    // Reading: the owner, signed in, is sent to every message; others read the public copy.
+    const ownerRead = await get(outbox, { headers: { authorization: 'Bearer path-owner', dpop: 'proof' }, redirect: 'manual' });
+    check(ownerRead.status === 303 && /ap\/private\/outbox$/.test(ownerRead.headers.get('location') || '')
+      && ownerRead.headers.get('cache-control') === 'no-store',
+      `the signed-in owner reading the outbox is sent to every message, on the pod, never held at the edge (${ownerRead.status} ${ownerRead.headers.get('location')})`);
+    const otherRead = await get(outbox, { headers: { authorization: 'Bearer someone-else', dpop: 'proof' }, redirect: 'manual' });
+    check(otherRead.status !== 303 || !/ap\/private\//.test(otherRead.headers.get('location') || ''),
+      'anyone else signed in is not');
+    const priv = await get(outbox.replace(/ap\/outbox$/, 'ap/private/liked'), { redirect: 'manual' });
+    check(priv.status === 303 && /ap\/private\/liked$/.test(priv.headers.get('location') || '')
+      && priv.headers.get('cache-control') === 'no-store',
+      'an owner-only document is read at the pod, which decides, and is not held at the edge');
     const doorRead = await fetch(`${ORIGIN}/u/alice/ap/outbox`, { redirect: 'manual' });
     check(doorRead.status === 303 && doorRead.headers.get('location') === POD + 'ap/outbox',
       "a read of a mail-door account's outbox is sent to the pod document");

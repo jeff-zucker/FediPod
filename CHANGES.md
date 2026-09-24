@@ -1,5 +1,27 @@
 # Changes
 
+## 2026-09-24 (the outbox, filtered by who reads it — version 1.37.0)
+
+**Signed in, your outbox shows everything you've done**: likes, follows,
+undos, followers-only and direct posts, blocks, pins and follower decisions.
+Everyone else still sees only your public posts and boosts. You also get a
+`liked` list only you can read, seeded with the posts you'd already liked.
+This works for accounts on fedipod.net and on the Server.
+
+**The public outbox now says when something was withdrawn.** A deleted post
+leaves a Delete, an edit an Update, a withdrawn boost an Undo, so a server
+catching up from your outbox stops showing what you took back.
+
+**An app posting through your outbox always learns the address of what it
+made**, for every kind of action, not only new posts. When your account
+refuses something an app sent through fedipod.net, you get a direct message
+from yourself saying what and why.
+
+**The forum says when its pod is down** instead of saying there is no forum.
+
+`fediverse-account` reads an outbox given in object form as well as by
+address (still 0.2.0, which is not yet on npm).
+
 ## 2026-09-24 (a WebID with no Fediverse account can post to the forum — version 1.36.7)
 
 **Signing into the forum now also accepts a bare WebID**, not just a
