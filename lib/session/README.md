@@ -18,6 +18,9 @@ Once signed in, the account gives you:
 - **`post`** — publishes a post as them, public, unlisted or followers-only.
 - **`reply`** — answers a post.
 - **`timeline`** — their home timeline, newest first.
+- **`outbox`** — their own posts, newest first. Pass `rdf: true` to also get
+  the real thing as RDF, for an app that wants to work with it as linked
+  data rather than as this library's own shape.
 - **`follow`** — follows someone by handle.
 - **`favourite`**, **`boost`** — as they say.
 - **`profile`** — who they are as their server or pod shows them: name,
@@ -37,6 +40,8 @@ DeviceAgent or Server account, and when fedipod.net is next open for a
 browser-based one.
 
 Three files, no dependencies. It runs in a page and in a service worker.
+The one exception: `outbox({ rdf: true })` needs the `jsonld` package, and
+only loads it when that flag is actually used.
 
 [The demo](https://jeff-zucker.github.io/FediPod/) shows the sign-in and
 the profile that comes back.
@@ -73,6 +78,7 @@ const me = await accounts.current();                       // null when nobody i
 if (me?.notice) show(me.notice);
 await me.post({ text: 'Hello from my app' });
 for (const p of await me.timeline({ limit: 20 })) render(p);
+for (const p of await me.outbox({ limit: 20 })) render(p);
 await me.follow('@aisha@her.server');
 await me.reply(p.url, 'Well said');
 await me.signOut();
@@ -93,6 +99,14 @@ await me.signOut();
 - **`reply(post, text)`** — the post is named by its address or its id.
 - **`timeline({ limit })`** — each post as `{ id, url, author: { id, handle,
   name }, html, published, inReplyTo }`.
+- **`outbox({ limit, rdf })`** — the same shape as `timeline`, but only this
+  account's own posts. With `rdf: true`, the returned array also carries
+  `.rdf`: the real outbox parsed into an RDF/JS quad array — for a Mastodon
+  account too, since a Mastodon server is itself an ActivityPub server with
+  a real actor and outbox, same as a pod's. It comes back empty on a server
+  that requires a signed request just to read that document, which some
+  do. Reading it needs the `jsonld` package available to your app; without
+  `rdf: true` nothing changes and nothing extra loads.
 - **`fetch`** — the raw authenticated fetch, for anything the above does not
   cover.
 - **`actor`** — the account's ActivityPub id.

@@ -1,5 +1,16 @@
 # Changes
 
+## 2026-09-24 (an app can read an account's own posts as RDF — version 1.36.6, fediverse-account 0.2.0)
+
+**`fediverse-account` gets an `outbox` call**, beside `timeline`: an
+account's own posts, newest first, in the same shape as before. Passed
+`rdf: true`, it also hands back the real outbox as RDF — genuine linked
+data, for an app that wants to work with AP data directly rather than
+through this library's own shape, for a Mastodon account as well as a pod
+account. Nothing extra loads unless that flag is used, and it comes back
+empty on a server that will not hand over its actor document without a
+signed request.
+
 ## 2026-09-24 (the outbox door answers as the spec expects — version 1.36.5)
 
 **A post through the Gateway's outbox door gets a 201 Created**, with the
