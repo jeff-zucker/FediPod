@@ -1,5 +1,14 @@
 # Changes
 
+## 2026-09-24 (a WebID with no Fediverse account can post to the forum — version 1.36.7)
+
+**Signing into the forum now also accepts a bare WebID**, not just a
+Fediverse handle. Someone with a Solid pod and no Fediverse account can
+post, reply, join a category and vote — visible on the forum's own page,
+though it never reaches anyone's Mastodon feed, since nothing vouches for
+who wrote it there. The sign-in box says so before anyone types anything,
+and names a FediPod account as the way to get both.
+
 ## 2026-09-24 (an app can read an account's own posts as RDF — version 1.36.6, fediverse-account 0.2.0)
 
 **`fediverse-account` gets an `outbox` call**, beside `timeline`: an

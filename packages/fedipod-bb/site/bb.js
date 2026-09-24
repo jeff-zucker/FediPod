@@ -721,8 +721,24 @@ function replyBox(ctx) {
 
 // From a handle to a way in. A server that speaks the Mastodon API signs the
 // reader in here; a Lemmy server takes part by its own community address; any
-// other account posts from where it is, naming the category.
+// other account posts from where it is, naming the category. A bare WebID —
+// typed, not a handle — signs in with no Fediverse account at all: the post
+// shows on this site, but reaches nobody's Mastodon feed, because nothing
+// vouches for its author out there. Nobody is signed up for a Fediverse
+// account behind their back to avoid that; it is the deliberate trade of
+// posting from a WebID alone.
 async function signIn(handleInput, noteId = 'fedi-note') {
+  const typed = String(handleInput || '').trim();
+  if (/^https?:\/\//u.test(typed)) {
+    $(noteId).textContent = 'Asking your pod…';
+    try {
+      const { authorizationUrl, storageRoot } = await pod.signInWithWebId(typed, location.origin + location.pathname);
+      sessionStorage.setItem('bb:return', location.hash);
+      sessionStorage.setItem('bb:pod', JSON.stringify({ handle: authorLabel(typed), actor: typed, podHome: storageRoot }));
+      location.href = authorizationUrl;
+    } catch (e) { $(noteId).textContent = e.message; }
+    return;
+  }
   const host = hostOfHandle(handleInput);
   if (!host) throw new Error('a handle looks like @you@your.server');
   const at = replyCtx?.cat ? handleOf(replyCtx.cat) : 'the category';

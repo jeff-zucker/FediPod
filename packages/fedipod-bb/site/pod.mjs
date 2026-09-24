@@ -28,30 +28,40 @@ export async function upload({ actor, podHome, file }) {
   if (!s) throw new Error('sign in to your pod first');
   if (!/^image\//u.test(file.type)) throw new Error('that is not an image');
   if (file.size > 5 * 1024 * 1024) throw new Error('images are limited to 5 MB');
-  const home = (podHome || actor.replace(/ap\/actor$/u, '')).replace(/\/?$/u, '/');
+  const home = homeOf(actor, podHome);
   const ext = (file.name.match(/\.[a-z0-9]{1,5}$/iu) || [''])[0].toLowerCase() || '.img';
   const at = `${home}ap/media/${stamp()}-${crypto.randomUUID().slice(0, 8)}${ext}`;
   const put = await s.fetch(at, { method: 'PUT', headers: { 'content-type': file.type }, body: file });
   if (!put.ok) throw new Error(`your pod refused the image (HTTP ${put.status})`);
   // Published under the address the account answers at, like its posts.
-  return actor.replace(/ap\/actor$/u, '') + at.slice(home.length);
+  return faceOf(actor, podHome) + at.slice(home.length);
 }
 
 export const placeOf = (actor, podHome) => ({
   actor,
-  id: (name) => actor.replace(/ap\/actor$/u, 'ap/notes/') + name,
-  at: (name) => (podHome ? podHome.replace(/\/?$/u, '/') + 'ap/notes/' + name
-    : actor.replace(/ap\/actor$/u, 'ap/notes/') + name),
+  id: (name) => faceOf(actor, podHome) + 'ap/notes/' + name,
+  at: (name) => homeOf(actor, podHome) + 'ap/notes/' + name,
 });
 
 // The face an account publishes under, and the pod it is actually written on.
 // A post in a private category does not live in `ap/notes/`, so the address it
 // is written at is worked out from the whole id rather than from its last
 // segment: the two differ by the container, not only by the name.
-const faceOf = (actor) => actor.replace(/ap\/actor$/u, '');
+//
+// `actor` is a real FediPod actor (…/ap/actor) for an account that has one —
+// the face is that URL with the suffix stripped, which may differ from where
+// the pod actually holds things (a Gateway-fronted account). A reader who
+// signed in from a bare WebID, with no FediPod account at all, HAS no such
+// front: their face and their pod are the same address, `podHome` — resolved
+// at sign-in from their pod's own storage root (see `resolveWebId`).
+const faceOf = (actor, podHome = null) => {
+  if (/ap\/actor$/u.test(actor)) return actor.replace(/ap\/actor$/u, '');
+  if (podHome) return podHome.replace(/\/?$/u, '/');
+  throw new Error('no address to publish under — pass podHome for an account with no ap/actor');
+};
 const homeOf = (actor, podHome) => (podHome ? podHome.replace(/\/?$/u, '/') : faceOf(actor));
 export const podUrlOf = (actor, podHome, id) => {
-  const face = faceOf(actor);
+  const face = faceOf(actor, podHome);
   return String(id).startsWith(face) ? homeOf(actor, podHome) + String(id).slice(face.length) : String(id);
 };
 
@@ -105,6 +115,39 @@ export async function complete(currentUrl) {
   return getSession();
 }
 
+const STORAGE = 'http://www.w3.org/ns/pim/space#storage';
+const OIDC_ISSUER = 'http://www.w3.org/ns/solid/terms#oidcIssuer';
+const jsonld = (url, f) => f(url, { headers: { accept: 'application/ld+json' } })
+  .then(r => (r.ok ? r.json() : null)).catch(() => null);
+const nodesOf = (doc) => (Array.isArray(doc) ? doc : (doc?.['@graph'] || (doc ? [doc] : [])));
+const firstOf = (v) => [].concat(v || []).map(x => (typeof x === 'string' ? x : x?.['@id'])).find(Boolean) || null;
+
+// A bare WebID, read for its own login provider and its own storage root —
+// no Fediverse actor anywhere in this. A pod names both on the WebID profile
+// itself (Solid's own vocabulary, not FediPod's): `solid:oidcIssuer` says
+// where to sign in, `pim:storage` says where the account keeps things. A pod
+// that names no storage falls back to its own origin — every Solid server
+// lets its owner write under their own root, so this is never wrong, only
+// sometimes less tidy than a pod's chosen container.
+export async function resolveWebId(webId, f = globalThis.fetch.bind(globalThis)) {
+  const doc = await jsonld(webId, f);
+  const nodes = nodesOf(doc);
+  const me = nodes.find(n => n?.['@id'] === webId) || {};
+  const issuer = firstOf(me[OIDC_ISSUER]);
+  if (!issuer) throw new Error(`${webId} names no Solid login provider (solid:oidcIssuer)`);
+  const storage = firstOf(me[STORAGE]);
+  return { issuer, storageRoot: storage || new URL('/', webId).href };
+}
+
+// The no-fedi-account door: typed a WebID, not a Fediverse handle. Nothing
+// here asks the Gateway or WebFinger — a WebID proves itself, or it does not
+// sign in at all.
+export async function signInWithWebId(webId, redirectUri) {
+  const { issuer, storageRoot } = await resolveWebId(webId);
+  const { authorizationUrl } = await beginLogin({ issuer, redirectUri });
+  return { authorizationUrl, storageRoot };
+}
+
 // The post itself: a document in their pod, then a Create appended to the
 // forum's inbox. A post has no title of its own; when it opens a topic, the
 // activity that opens it carries the TOPIC's name, which is a different
@@ -115,7 +158,7 @@ export async function post({ actor, podHome, category, categoryBase = null, cate
   if (!s) throw new Error('sign in to your pod first');
   const { where, to } = await placeAndAudience(s, { actor, podHome, category, categoryBase, isPrivate });
   const name = `${stamp()}-${slug(title) || slug(topic) || 'post'}-${crypto.randomUUID().slice(0, 8)}`;
-  const id = faceOf(actor) + where + name;
+  const id = faceOf(actor, podHome) + where + name;
   const now = new Date().toISOString();
   const body = htmlOf(text);
   const note = {
