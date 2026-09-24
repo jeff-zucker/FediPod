@@ -285,6 +285,16 @@ Item-by-item answers to the Solid/ActivityPub interop checklist.
   post the account then refuses leaves its owner a direct message from their
   own account saying why; the app that posted it was already told 201.
 <!-- /CLAUDE -->
+<!-- CLAUDE 2026-09-24 — the outbox review's fixes (1.38.0); delete these markers when done -->
+- **What a post through the outbox does** — an Update changes only the
+  fields it sends, and a field sent as null is removed (§6.3). An object that
+  is not a Note is merged in place, and never becomes a Note. Blind copies
+  alone make a post direct. Followers named in `cc` make a followers post.
+  `audience` is delivered to. A deletion is addressed as the post was, and
+  goes to everyone who had it. Blocking someone ends their following. The
+  door refuses a Move, a change to the account itself, and an Add or Remove
+  on anything but the pins, before it answers.
+<!-- /CLAUDE -->
 - **Outbox processing / sending** — yes, decoupled: the agent builds the
   activity, writes the outbox (a static paged collection on the pod), and fans
   deliveries out to follower inboxes itself. Nothing watches the outbox
@@ -304,6 +314,10 @@ Item-by-item answers to the Solid/ActivityPub interop checklist.
   posts. A `liked` collection (§5.5) is published for the owner alone.
   Serving it at the outbox address works through the Gateway and on the
   Server; a DeviceAgent with no Gateway has only its public document.
+  Followers, following and liked list their newest first. Through the
+  Gateway a deleted post answers 410 Gone, a document a stranger may not
+  read answers 404, and a deletion drops the edge's copies of the account's
+  documents.
 <!-- /CLAUDE -->
   The
   inbox is never public: the pod's container takes deliveries append-only and
@@ -311,6 +325,13 @@ Item-by-item answers to the Solid/ActivityPub interop checklist.
   the agent, authenticated as themselves.
 - **Relation to endpoints and LDP containers** — collections are plain pod
   resources; the inbox is the one container other servers write to.
+<!-- CLAUDE 2026-09-24 — found live while reviewing the outbox; delete these markers when done -->
+- **The profile form of the media type** — partly. §3.2 says a server must
+  answer `application/ld+json; profile="https://www.w3.org/ns/activitystreams"`.
+  Through the Gateway any Accept is answered. A client reading a pod's
+  documents directly — the Server, a path pod — gets 501 from CSS for that
+  form (checked on solidcommunity.net), and 200 for `application/activity+json`.
+<!-- /CLAUDE -->
 - **Conformance with activity+json** — yes; the ActivityStreams documents are
   stored and served as `application/activity+json`, and the agent sends and
   accepts the standard AP content types.

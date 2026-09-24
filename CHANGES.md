@@ -1,5 +1,31 @@
 # Changes
 
+## 2026-09-24 (the outbox review's fixes — version 1.38.0)
+
+**Private things stay private.** A private forum category no longer lists
+its members' posts in its public outbox, and a category turned private takes
+back what it carried. Blocking someone, or a whole domain, stops your posts
+reaching them. A post an app sends only to blind copies is a direct message,
+not a public post. Deleting a post you had edited takes its old words off
+your public outbox. Deleting a followers-only or direct post tells only the
+people who had it. Your full outbox and liked list are published only once
+your pod has shown it keeps them private.
+
+**Nothing goes out twice.** A post an app sent through fedipod.net is
+published once, even if your pod is slow to clear it or the request is
+replayed. A refused post is reported to you once. A server sending the same
+follow over and over no longer makes your pod write each time.
+
+**Apps are understood as the spec means.** An app's edit changes only what it
+sends, so editing a poll or an annotation keeps it what it is. "To alice,
+copied to my followers" reaches your followers. fedipod.net refuses up front
+what your account would refuse, instead of saying "created".
+
+**Smaller things.** Followers, following and liked list their newest first.
+A deleted post answers "gone", and fedipod.net stops showing it within
+moments, not up to fifty minutes. Mentioning yourself no longer delivers to
+your own inbox.
+
 ## 2026-09-24 (the outbox, filtered by who reads it — version 1.37.0)
 
 **Signed in, your outbox shows everything you've done**: likes, follows,
