@@ -272,7 +272,7 @@ Item-by-item answers to the Solid/ActivityPub interop checklist.
   an alias. The published document is unchanged: loopback in a world-readable
   actor would send clients nowhere. Behind a Gateway (a
   BrowserAgent or DeviceAgent account), the actor document and the WebID
-  profile (`as:outbox`) name the Gateway's door, which answers 202 with the
+  profile (`as:outbox`) name the Gateway's door, which answers 201 with the
   object's future address in Location, and the post goes out when the agent
   next runs. The door answers a CORS preflight and `Accept-Post`, so a browser
   client on another origin can use it. The advertised pod outbox document is

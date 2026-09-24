@@ -1,5 +1,12 @@
 # Changes
 
+## 2026-09-24 (the outbox door answers as the spec expects — version 1.36.5)
+
+**A post through the Gateway's outbox door gets a 201 Created**, with the
+post's future address in Location, matching what the ActivityPub spec
+requires and what a client such as dokieli expects — not the 202 it answered
+before.
+
 ## 2026-09-23 (the queue shows what a moderator can act on — version 1.36.4)
 
 **The Queue lists only what needs a moderator:** a report, a held post, a

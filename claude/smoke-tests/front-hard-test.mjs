@@ -472,7 +472,7 @@ try {
     const before = count();
     const ok = await post({ authorization: 'Bearer path-owner', dpop: 'proof' });
     const okBody = await ok.json().catch(() => ({}));
-    check(ok.status === 202 && ok.headers.get('location') === `${ORIGIN}/u/pwren/ap/notes/anno-42`
+    check(ok.status === 201 && ok.headers.get('location') === `${ORIGIN}/u/pwren/ap/notes/anno-42`
       && okBody.object === `${ORIGIN}/u/pwren/ap/notes/anno-42`,
       `the owner's post is accepted with the address it will have (${ok.status} ${ok.headers.get('location')})`);
     check(ok.headers.get('access-control-allow-origin') === '*', 'and the answer carries CORS, so the client can read it');
@@ -485,7 +485,7 @@ try {
       && rcpt.keyId === POD + 'pods/wren/profile/card#me' && !!secret && verifyReceipt(rcpt, secret),
       'with a receipt beside it stamped c2s for this actor under the account secret, carrying the slug');
     check((await post({ authorization: 'Bearer path-owner', dpop: 'proof' }, 'not json')).status === 400, 'a body that is not JSON → 400');
-    check((await post({ authorization: 'Bearer path-owner', dpop: 'proof', slug: '../up' })).status === 202
+    check((await post({ authorization: 'Bearer path-owner', dpop: 'proof', slug: '../up' })).status === 201
       && !inboxWrites.at(-1).body.includes('../'), 'an unsafe Slug is dropped, and the post still lands');
     const doorRead = await fetch(`${ORIGIN}/u/alice/ap/outbox`, { redirect: 'manual' });
     check(doorRead.status === 303 && doorRead.headers.get('location') === POD + 'ap/outbox',
