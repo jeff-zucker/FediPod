@@ -50,6 +50,11 @@ const pod = http.createServer((req, res) => {
       icon: { type: 'Image', url: PP + 'ap/media/face.png' },
     }));
   }
+  if (url === '/pods/wren/fedipod/ap/outbox') {
+    res.writeHead(200, { 'content-type': 'application/activity+json' });
+    return res.end(JSON.stringify({ '@context': 'https://www.w3.org/ns/activitystreams',
+      id: PP + 'ap/outbox', type: 'OrderedCollection', totalItems: 0, orderedItems: [] }));
+  }
   if (url === '/pods/wren/fedipod/ap/media/face.png') {
     res.writeHead(200, { 'content-type': 'image/png' });
     return res.end(Buffer.from([0x89, 0x50, 0x4e, 0x47]));
@@ -141,6 +146,7 @@ const front = http.createServer(async (req, res) => {
     pauseItems: 3, closeDays: 30,
     // Mirrors the adapter: only attach-created rows can go; seeds survive.
     removeDirectory: async (h) => { delete attached[h]; return !directory[h]; },
+    purge: async (tags) => { purged.push(...tags); },
     podPut: async (_h, url, b, ct) => {
       const r = await fetch(url, { method: 'PUT', headers: { 'content-type': ct }, body: b })
         .catch(() => null);
@@ -162,6 +168,7 @@ const front = http.createServer(async (req, res) => {
 await new Promise(r => front.listen(FRONT_PORT, '127.0.0.1', r));
 
 const get = (p, opts) => fetch(ORIGIN + p, opts);
+const purged = [];
 
 try {
   // ---- the pages a person lands on -----------------------------------------
@@ -525,6 +532,29 @@ try {
     const otherRead = await get(outbox, { headers: { authorization: jwt('https://elsewhere.example/card#me'), dpop: 'proof' }, redirect: 'manual' });
     check(otherRead.status !== 303 || !/ap\/private\//.test(otherRead.headers.get('location') || ''),
       'anyone else signed in is not');
+    // The door refuses up front what the account would refuse.
+    const own = (body) => post({ authorization: 'Bearer path-owner', dpop: 'proof', slug: '' }, JSON.stringify(body));
+    const pwrenActor = `${ORIGIN}/u/pwren/ap/actor`;
+    check((await own({ type: 'Move', object: pwrenActor, target: 'https://new.example/u/p' })).status === 422
+      && (await own({ type: 'Update', object: { id: pwrenActor, name: 'x' } })).status === 422
+      && (await own({ type: 'Add', object: `${ORIGIN}/u/pwren/ap/notes/n`, target: `${ORIGIN}/u/pwren/ap/other` })).status === 422
+      && (await own({ type: 'Add', object: `${ORIGIN}/u/pwren/ap/notes/n`, target: `${ORIGIN}/u/pwren/ap/featured` })).status === 201,
+      'a move, a change to the account itself, or an Add to anything but the pins is refused at the door');
+    // The public outbox is tagged for purging, and varies on the credential.
+    const pub = await get(outbox);
+    check(pub.headers.get('netlify-cache-tag') === 'u-pwren' && /Authorization/.test(pub.headers.get('vary') || ''),
+      `the public outbox carries its account's cache tag and varies on Authorization (${pub.headers.get('netlify-cache-tag')})`);
+    // A Delete relayed for the account purges the edge's copies of it.
+    const relayed = (body) => get('/api/relay', { method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: 'Bearer path-owner', dpop: 'proof' },
+      body: JSON.stringify({ handle: 'pwren', requests: [body] }) });
+    const actorId = (await (await get('/api/handle?handle=pwren')).json().catch(() => ({})))?.actorUrl;
+    for (const a of [pwrenActor, actorId, POD + 'pods/wren/fedipod/ap/actor'].filter(Boolean)) {
+      await relayed({ url: 'https://nowhere.invalid/inbox', method: 'POST',
+        headers: { signature: `keyId="${a}#main-key",signature="x"` },
+        body: JSON.stringify({ type: 'Delete', actor: a, object: a.replace(/actor$/, 'notes/n') }) });
+    }
+    check(purged.includes('u-pwren'), `a relayed Delete purges the account's cached documents (${purged.join(',') || 'none'})`);
     const priv = await get(outbox.replace(/ap\/outbox$/, 'ap/private/liked'), { redirect: 'manual' });
     check(priv.status === 303 && /ap\/private\/liked$/.test(priv.headers.get('location') || '')
       && priv.headers.get('cache-control') === 'no-store',

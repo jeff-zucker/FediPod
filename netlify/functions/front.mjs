@@ -172,6 +172,15 @@ function route(request) {
     gatewayWebId: process.env.FEDIPOD_GATEWAY_WEBID || null,
     adminWebId: process.env.FEDIPOD_ADMIN_WEBID || null,
     lookup: rowFor,
+    // Drops the edge's copies carrying these tags. Netlify gives a function the
+    // token for its own site's purge API; with none, there is nothing to purge.
+    purge: async (tags) => {
+      const token = process.env.NETLIFY_PURGE_API_TOKEN;
+      if (!token || !process.env.SITE_ID) return;
+      await fetch('https://api.netlify.com/api/v1/purge', { method: 'POST',
+        headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+        body: JSON.stringify({ site_id: process.env.SITE_ID, cache_tags: tags }) });
+    },
     listDirectory: directory,
     // Drops the blob row; a handle that survives in the env seed stays.
     removeDirectory: async (handle) => {

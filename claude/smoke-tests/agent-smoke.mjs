@@ -827,6 +827,29 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     'a publish that changes nothing writes no head');
 }
 
+// --- 5b14. an app's edit of an object merges, and keeps what may not change ---
+{
+  const notesM = await import(path.join(root, 'lib/core/publisher/notes.mjs'));
+  const wireM = await import(path.join(root, 'lib/core/wire.mjs'));
+  const urls = wireM.apUrls('https://pod.example/');
+  const ID = urls.notes + 'anno';
+  const docs = { [ID]: { id: ID, type: 'Annotation', attributedTo: urls.actor, published: '2026-01-01T00:00:00Z',
+    to: ['https://www.w3.org/ns/activitystreams#Public'], bodyValue: 'old', motivation: 'commenting', target: 'https://doc.example/p' } };
+  const sent = [];
+  const pub = { urls, log: () => {},
+    remote: { getJson: async (u) => docs[u], putJson: async (u, d) => { docs[u] = d; } },
+    store: { updateStatus: () => {}, getContacts: () => ({ followers: [] }), read: () => [] },
+    deliverer: { deliverToAll: async (i, a) => sent.push(a) }, recordOutbox: async () => {} };
+  await notesM.updateObject(pub, { noteId: ID, visibility: 'public' },
+    { bodyValue: 'new', motivation: null, type: 'Note', id: 'https://evil.example/x', attributedTo: 'https://evil.example/u' });
+  const d = docs[ID];
+  check(d.bodyValue === 'new' && !('motivation' in d) && d.target === 'https://doc.example/p',
+    'an object edit changes what was sent, removes what was sent as null, and keeps the rest');
+  check(d.type === 'Annotation' && d.id === ID && d.attributedTo === urls.actor && d.published === '2026-01-01T00:00:00Z',
+    'and cannot change what the object is, its address, its author or when it was made');
+  check(sent[0]?.type === 'Update' && sent[0].object.bodyValue === 'new', 'the Update carries the merged object');
+}
+
 // --- 5c. the private trees are re-checked and repaired on every start ---
 {
   const { Publisher } = await import(path.join(root, 'lib/core/publisher/index.mjs'));
@@ -2738,11 +2761,12 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   const mkActors = (n) => Array.from({ length: n }, (_, i) => `https://a.example/u/${i}`);
   const fHead = wireM.followersHead(FB, 45, 3);
   check(fHead.type === 'OrderedCollection' && fHead.totalItems === 45
-    && fHead.first === `${FB}-1` && fHead.last === `${FB}-3`,
-    'a followers head carries the count and points at its first and last page');
-  check(wireM.followersPage(FB, 1, [], 3).next === `${FB}-2`
-    && !wireM.followersPage(FB, 3, [], 3).next,
-    '`next` walks forward and the last page has none');
+    && fHead.first === `${FB}-3` && fHead.last === `${FB}-1`,
+    'a followers head carries the count, and `first` is the newest page (§5: newest first)');
+  check(wireM.followersPage(FB, 3, [], 3).next === `${FB}-2`
+    && !wireM.followersPage(FB, 1, [], 3).next
+    && JSON.stringify(wireM.followersPage(FB, 1, ['a', 'b'], 3).orderedItems) === JSON.stringify(['b', 'a']),
+    '`next` walks back in time, the oldest page has none, and each page lists its newest first');
 
   const fp = wireM.followersPaging(mkActors(45));
   check(fp.pages.length === 3 && fp.pages[0].length === 20 && fp.pages[2].length === 5
@@ -9865,15 +9889,19 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
     atproto: bsky20,
     log: () => {},
   };
+  const X20 = pub20.urls.notes + 'x';
   const del = await social20.deleteNote(agent20, {
-    noteId: 'https://pod.example/ap/notes/x', atproto: { uri: 'at://did:plc:m2/app.bsky.feed.post/rkey1' },
+    noteId: X20, atproto: { uri: 'at://did:plc:m2/app.bsky.feed.post/rkey1' },
   });
   check(del.ok && deletes.length === 1 && deletes[0].rkey === 'rkey1',
     'deleting the post deletes its Bluesky mirror too');
-  const tomb20 = tombs.find(([u]) => u === 'https://pod.example/ap/notes/x')?.[1];
+  const tomb20 = tombs.find(([u]) => u === X20)?.[1];
   check(tomb20?.type === 'Tombstone' && tomb20.formerType === 'Note'
-    && tomb20.id === 'https://pod.example/ap/notes/x' && !!tomb20.deleted,
+    && tomb20.id === X20 && !!tomb20.deleted,
     'a deleted note is left as a Tombstone at its own url, not a bare 404 (§7.4)');
+  tombs.length = 0;
+  await social20.deleteNote(agent20, { noteId: 'https://pod.example/profile/card' });
+  check(!tombs.length, 'a deleted object that lives outside the posts folders is never overwritten with a Tombstone');
 
   srv20.close();
   fs.rmSync(BDIR20, { recursive: true, force: true });
@@ -11092,6 +11120,41 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
     `Add to featured pins and republishes the collection (got ${pin.status})`);
   const unpin = await ask24(api24, { type: 'Remove', object: OURS, target: urls24.featured });
   check(unpin.status === 201 && unpin.json?.pinned === false, 'Remove unpins');
+
+  // §6.3: an app's edit changes only what it sends.
+  const edits24 = [];
+  agent24.publisher.updateNote = async (s, opts) => { edits24.push(opts); return s; };
+  const withCw = st24.getStatuses().find(x => x.noteId === OURS);
+  st24.updateStatus(OURS, { spoiler: 'cw kept', text: 'the words' });
+  await api24.dispatch({ type: 'Update', object: { id: OURS, content: 'new words' } },
+    { raw: { type: 'Update', object: { id: OURS, content: 'new words' } } });
+  check(edits24.at(-1)?.spoilerText === 'cw kept' && edits24.at(-1).content === 'new words',
+    'an edit that sends no content warning keeps the one there');
+  await api24.dispatch({ type: 'Update', object: { id: OURS, summary: null } },
+    { raw: { type: 'Update', object: { id: OURS, summary: null } } });
+  check(edits24.at(-1)?.spoilerText === null && edits24.at(-1).content === 'the words',
+    'one that sends it as null removes it, and keeps the words');
+  void withCw;
+  agent24.remote.getJson = async () => ({ id: OURS, type: 'Annotation', bodyValue: 'old' });
+  const objEdits = [];
+  agent24.publisher.updateObject = async (s, patch) => { objEdits.push(patch); };
+  await api24.dispatch({ type: 'Update', object: { id: OURS, bodyValue: 'new' } },
+    { raw: { type: 'Update', object: { id: OURS, bodyValue: 'new' } } });
+  check(objEdits.at(-1)?.bodyValue === 'new' && edits24.length === 2,
+    'an edit of something that is not a Note merges into it, and never turns it into a Note');
+  delete agent24.remote.getJson;
+
+  // Addressing is read as the spec means it.
+  check(api24.visibilityOf({ to: [ALICE24], cc: [urls24.followers] }, {}) === 'private',
+    '"to alice, cc my followers" is a followers post that also reaches alice, not a direct message');
+  check(JSON.stringify(api24.addressedActors({ audience: 'https://g.example/c/x' }, {}).also) === JSON.stringify(['https://g.example/c/x']),
+    'audience is delivered to');
+  // A bare object is wrapped with every audience field it carried (§6.2.1).
+  await api24.dispatch({ type: 'Note', content: 'psst', bto: ['https://m.example/u/b'], audience: 'https://g.example/c/x' });
+  const last24 = published24.at(-1);
+  check(last24?.visibility === 'direct' && (last24.deliverTo || []).includes('https://m.example/u/b')
+    && (last24.also || []).includes('https://g.example/c/x'),
+    'a bare object keeps its blind copies and audience when wrapped, and blind copies alone make it direct');
 
   // The outbox answers its signed-in owner with every message; anyone else
   // with the public record.

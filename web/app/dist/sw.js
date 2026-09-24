@@ -10046,8 +10046,8 @@ function followersHead(id, total, pageCount = followersPageCount(total)) {
     id,
     type: "OrderedCollection",
     totalItems: total,
-    first: followersPageId(id, 1),
-    last: followersPageId(id, pages)
+    first: followersPageId(id, pages),
+    last: followersPageId(id, 1)
   };
 }
 function followersPage(id, n, items, pageCount) {
@@ -10056,8 +10056,8 @@ function followersPage(id, n, items, pageCount) {
     id: followersPageId(id, n),
     type: "OrderedCollectionPage",
     partOf: id,
-    orderedItems: items,
-    ...n < pageCount ? { next: followersPageId(id, n + 1) } : {}
+    orderedItems: [...items].reverse(),
+    ...n > 1 ? { next: followersPageId(id, n - 1) } : {}
   };
 }
 function followersPaging(actors, index = []) {
@@ -45789,7 +45789,8 @@ async function publishCollections(publisher, which = ALL_COLLECTIONS) {
     await write5(
       publisher.remote,
       urls,
-      orderedCollection(urls.following, contacts.following.filter((f) => f.accepted).map((f) => f.actor)),
+      // newest first (§5): contacts append as follows are made
+      orderedCollection(urls.following, contacts.following.filter((f) => f.accepted).map((f) => f.actor).reverse()),
       { publicRead: which.acls }
     );
   }
@@ -56460,6 +56461,48 @@ async function noteToSelf(publisher, text) {
   publisher.store.addNotification({ type: "mention", actor: urls.actor, noteId: id });
   return id;
 }
+var FIXED = /* @__PURE__ */ new Set([
+  "@context",
+  "id",
+  "type",
+  "attributedTo",
+  "published",
+  "to",
+  "cc",
+  "bto",
+  "bcc",
+  "audience",
+  "oneOf",
+  "anyOf",
+  "endTime",
+  "closed",
+  "votersCount",
+  "replies"
+]);
+async function updateObject(publisher, s, patch, { updated = (/* @__PURE__ */ new Date()).toISOString() } = {}) {
+  const { urls } = publisher;
+  const doc = await read(publisher.remote, s.noteId);
+  if (!doc?.id) throw new Error("the object is not on the pod to change");
+  const next = { ...doc };
+  for (const [k, v] of Object.entries(patch || {})) {
+    if (FIXED.has(k)) continue;
+    if (v === null) delete next[k];
+    else next[k] = v;
+  }
+  if (typeof next.content === "string") next.content = sanitizeHtml(next.content);
+  next.updated = updated;
+  await write4(publisher.remote, doc.id, next);
+  await writeCreate(publisher.remote, createActivityId(doc.id), createActivity(next, urls));
+  publisher.store.updateStatus(s.noteId, { content: rowContent(next), editedAt: updated });
+  const update = updateActivity(next, urls);
+  const inboxes = [...new Set([
+    ...s.visibility === "direct" ? [] : publisher.store.getContacts().followers.map((f) => f.sharedInbox || f.inbox),
+    ...await inboxesFor(publisher, [...s.addressed || [], ...s.replyActor ? [s.replyActor] : []])
+  ].filter(Boolean))];
+  await publisher.deliverer.deliverToAll(inboxes, update);
+  if (publisher.store.read("outbox.json", []).includes(s.noteId)) await publisher.recordOutbox(update);
+  return update;
+}
 function rowContent(obj) {
   if (typeof obj?.content === "string" && obj.content.trim()) return sanitizeHtml(obj.content);
   const plain = [obj?.bodyValue, obj?.name, obj?.summary].find((v) => typeof v === "string" && v.trim());
@@ -56477,7 +56520,7 @@ async function publishNote(publisher, content, { inReplyTo, attachments, visibil
   const published = (/* @__PURE__ */ new Date()).toISOString();
   const slug = await slugFor(publisher, priv ? urls.privateNotes : urls.notes, wanted, published);
   const mentions = await publisher._mentionsFor(content, inReplyTo);
-  if (visibility === "direct") assertDirectAddressed(content, mentions);
+  if (visibility === "direct" && !also.length && !deliverTo.length) assertDirectAddressed(content, mentions);
   const reply = await replyTarget(publisher, inReplyTo, mentions, visibility);
   const selfQuote = quote?.id && quote.actor === urls.actor;
   const quoted = quote?.id ? {
@@ -56520,8 +56563,10 @@ async function publishNote(publisher, content, { inReplyTo, attachments, visibil
     text: content,
     visibility,
     // Everyone a client named, blind copies included: an edit or a deletion
-    // must reach them too. Kept here only, never published.
+    // must reach them too. Kept here only, never published. `named` is the
+    // visible part, which an edit addresses again.
     ...also.length || deliverTo.length ? { addressed: [.../* @__PURE__ */ new Set([...also, ...deliverTo])] } : {},
+    ...also.length ? { named: [...also] } : {},
     ...spoilerText ? { spoiler: spoilerText } : {},
     ...note.sensitive ? { sensitive: true } : {},
     ...attachments?.length ? { attachments } : {},
@@ -56598,7 +56643,8 @@ async function publishObject(publisher, object, { visibility = "public", slug: w
     kind: "post",
     slug: name,
     visibility,
-    ...also.length || deliverTo.length ? { addressed: [.../* @__PURE__ */ new Set([...also, ...deliverTo])] } : {}
+    ...also.length || deliverTo.length ? { addressed: [.../* @__PURE__ */ new Set([...also, ...deliverTo])] } : {},
+    ...also.length ? { named: [...also] } : {}
   });
   if (await publisher.store.commit?.() === false) publisher.log(`object published but its timeline row was refused: ${id}`);
   const createId = doc ? createActivityId(id) : createActivityId(container + name);
@@ -56658,7 +56704,7 @@ async function updateNote(publisher, s, { content, spoilerText = null, sensitive
     sensitive: sensitive ?? !!s.sensitive,
     updated,
     container,
-    also: reply ? [reply.actor] : [],
+    also: [.../* @__PURE__ */ new Set([...s.named || [], ...reply ? [reply.actor] : []])],
     quote: rowQuote(s)
   });
   await write4(publisher.remote, note.id, note);
@@ -56678,7 +56724,9 @@ async function updateNote(publisher, s, { content, spoilerText = null, sensitive
   const inboxes = [...new Set([
     ...s.visibility === "direct" ? [] : contacts.followers.map((f) => f.sharedInbox || f.inbox),
     ...mentions.map((m) => m.inbox),
-    reply?.inbox
+    reply?.inbox,
+    // everyone a client named or blind-copied, and a quoted author
+    ...await inboxesFor(publisher, [...s.addressed || [], ...s.quoteRequest?.actor ? [s.quoteRequest.actor] : []])
   ].filter(Boolean))];
   await publisher.deliverer.deliverToAll(inboxes, update);
   if (publisher.store.read("outbox.json", []).includes(s.noteId)) await publisher.recordOutbox(update);
@@ -57257,7 +57305,7 @@ async function publishOwn(publisher) {
   })));
   const ownHead = await writeHead4(remote, seen.ownHead, urls.ownOutbox, outboxHead(urls.ownOutbox, own.length, out.pages.length));
   const liked = store.read(LIKED, []);
-  const lk = followersPaging(liked, seen.likedIndex || []);
+  const lk = followersPaging([...liked].reverse(), seen.likedIndex || []);
   const likedPages = await writePages(remote, seen.likedPages, lk.pages.map((items, i) => ({
     id: followersPageId(urls.liked, i + 1),
     doc: followersPage(urls.liked, i + 1, items, lk.pages.length)
@@ -57724,6 +57772,9 @@ var Publisher = class {
   }
   noteToSelf(...a) {
     return noteToSelf(this, ...a);
+  }
+  updateObject(...a) {
+    return updateObject(this, ...a);
   }
   unrecordOwn(...a) {
     return unrecordOwn(this, ...a);
@@ -65078,8 +65129,9 @@ async function deleteNote(agent2, s) {
   await agent2.deliverer.deliverToAll(inboxes, del);
   const stuck = [];
   const deletedAt = (/* @__PURE__ */ new Date()).toISOString();
+  const ours = [urls.notes, urls.privateNotes].some((c) => String(s.noteId).startsWith(c));
   try {
-    await writeTombstone2(agent2.remote, s.noteId, noteTombstone(s.noteId, deletedAt));
+    if (ours) await writeTombstone2(agent2.remote, s.noteId, noteTombstone(s.noteId, deletedAt));
   } catch {
     stuck.push(s.noteId);
   }
@@ -65474,7 +65526,7 @@ var C2S = class {
     if (!to.length && !cc.length) return blind ? "direct" : "public";
     if (to.includes(PUBLIC)) return "public";
     if (cc.includes(PUBLIC)) return "unlisted";
-    if (to.includes(this.urls.followers)) return "private";
+    if (to.includes(this.urls.followers) || cc.includes(this.urls.followers)) return "private";
     return "direct";
   }
   // `serial` and `at` name what this activity will make: the outbox door
@@ -65486,7 +65538,8 @@ var C2S = class {
       return reply(400, { error: "a typed ActivityStreams object is required" });
     }
     if (!ACTIVITY_TYPES.has(activity.type)) {
-      activity = { type: "Create", object: activity, to: activity.to, cc: activity.cc };
+      const { to, cc, bto, bcc, audience } = activity;
+      activity = { type: "Create", object: activity, to, cc, bto, bcc, audience };
     }
     try {
       return await this._dispatch(activity, { slug, raw, reply, serial, at });
@@ -65500,7 +65553,7 @@ var C2S = class {
   // to and never listed (§6).
   addressedActors(activity, object) {
     const pick = (...fields) => [...new Set(fields.flatMap((f) => arr(activity[f] ?? object?.[f]).map(idOf2)))].filter((a) => typeof a === "string" && /^https?:\/\//u.test(a) && a !== PUBLIC && a !== this.urls.followers && a !== this.urls.actor);
-    return { also: pick("to", "cc"), deliverTo: pick("bto", "bcc") };
+    return { also: pick("to", "cc", "audience"), deliverTo: pick("bto", "bcc") };
   }
   async _dispatch(activity, { slug, raw, reply, serial, at }) {
     const agent2 = this.agent;
@@ -65579,17 +65632,24 @@ var C2S = class {
         if (s.actor !== this.urls.actor || s.kind !== "post") {
           return reply(403, { error: "not your note" });
         }
-        const text = String(object?.source?.content ?? object?.content ?? "");
-        if (!text.trim()) return reply(422, { error: "the edit has no content" });
-        const attachments = object?.attachment !== void 0 ? arr(object.attachment).map((a) => ({
+        const sent = raw?.type === "Update" && raw.object && typeof raw.object === "object" ? raw.object : object || {};
+        const has = (k) => Object.prototype.hasOwnProperty.call(sent, k);
+        const stored = await Promise.resolve().then(() => read(agent2.remote, s.noteId)).catch(() => null);
+        if (stored?.type && stored.type !== "Note") {
+          await agent2.publisher.updateObject(s, sent, { updated: at });
+          return made(updateActivityId(s.noteId, at), { object: s.noteId });
+        }
+        const text = has("content") || sent.source?.content !== void 0 ? String(object?.source?.content ?? object?.content ?? "") : String(s.text ?? "");
+        if (!text.trim()) return reply(422, { error: "the edit leaves the note with no content" });
+        const attachments = has("attachment") ? arr(object.attachment).map((a) => ({
           url: a?.url,
           mediaType: a?.mediaType,
           ...a?.name ? { description: a.name } : {}
         })).filter((a) => a.url) : null;
         await agent2.publisher.updateNote(s, {
           content: text,
-          spoilerText: object?.summary || null,
-          sensitive: object?.sensitive === void 0 ? null : object.sensitive === true,
+          spoilerText: has("summary") ? object?.summary || null : s.spoiler || null,
+          sensitive: has("sensitive") ? object?.sensitive === true : null,
           attachments,
           updated: at
         });
