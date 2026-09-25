@@ -16,14 +16,18 @@ import * as podState from '../../lib/pod/state.mjs';
 import { resourceExists } from '../../lib/pod/root.mjs';
 import { podBaseOfWebId } from '../../lib/pod/urls.mjs';
 import { cacheOpenedKeys } from './keys-browser.mjs';
+import { chosenRoot, findAccount, recordPlace, hasPublicIndex } from '../../lib/core/place.mjs';
 
-// The container everything the agent publishes hangs under. New pods made here
-// use `fedipod/`; new installs default to `fedipod/` too, and older ones keep
-// that predate this, so those pods are untouched. The name is stored on the
-// config, so the agent reads it rather than guessing.
-export const AP_ROOT = 'fedipod/';
-const actorUrlFor = (pod) => `${pod}${AP_ROOT}ap/actor`;
-const keysDocFor = (pod) => `${pod}${AP_ROOT}ap-state/keys.json`;
+// Everything the agent publishes hangs under a container named `fedipod`, in
+// the container its owner chose (lib/core/place.mjs). The root is stored on the
+// config, so the agent reads it rather than guessing, and the place is recorded
+// in the owner's public type index, which is how the account is found again.
+const actorUrlFor = (pod, root) => `${pod}${root}ap/actor`;
+const keysDocFor = (pod, root) => `${pod}${root}ap-state/keys.json`;
+const stateOf = (pod, root) => `${pod}${root}ap-state/`;
+
+/** The account's config as it sits under `root`, read as its owner. */
+const readConfigAt = (remote, pod) => (root) => podState.readConfig(remote, { state: stateOf(pod, root) });
 
 const HANDLE_RE = /^[a-z0-9-]{2,30}$/;
 
@@ -42,7 +46,7 @@ export function handleProblem(handle) {
 // identity being built, so changing the handle on the form starts a clean
 // attempt.
 const PROGRESS = new Map();
-const progressKey = (webId, a) => [webId, a.handle, a.shape || 'pod'].join('|');
+const progressKey = (webId, a) => [webId, a.handle, a.shape || 'pod', a.container || ''].join('|');
 
 /** A fronted name is one per gateway; a taken one is refused before anything is made. */
 async function assertFrontNameFree(frontOrigin, handle) {
@@ -58,7 +62,12 @@ async function assertFrontNameFree(frontOrigin, handle) {
  * note) so a page can draw the same tick list the CLI setup shows. Resumable:
  * see PROGRESS above.
  *
- * answers: { handle, shape?: 'pod'|'front', gateway? }
+ * answers: { handle, shape?: 'pod'|'front', gateway?, container?, createIndex? }
+ *   container    the path of the container that holds `fedipod/` (the pod root
+ *                when empty)
+ *   createIndex  the person's yes to making a public type index when their
+ *                profile names none; without it, sign-up stops before writing
+ *                anything and says so (error code 'needs-index')
  * session: { webId, issuer, fetch } — the Solid-OIDC session from the pod's
  *          own login (oidc-session.mjs). The pod is where the WebID lives.
  *
@@ -91,11 +100,27 @@ export async function signUp(answers, { session, onStep = () => {}, frontOrigin 
     skip: (note) => onStep(key, 'skipped', note),
   });
 
+  const place = chosenRoot(pod, answers.container);
+  if (place.problem) throw new Error(`Where to store it: ${place.problem}.`);
+  const root = place.root;
+  const remote = new BrowserRemotePod(session, { webId, role: 'signup', log: () => {} });
+
   // --- the pod --- (the session came from it; what is checked is that it has no account yet)
   const podStep = step('pod');
   if (!prog.pod) {
     podStep.running('checking your pod');
-    if (await resourceExists(session.fetch, actorUrlFor(pod))) throw new Error('The pod already hosts a FediPod account. If you want a second account, put it on a different pod.');
+    if (await findAccount(remote, pod, readConfigAt(remote, pod))
+      || await resourceExists(session.fetch, actorUrlFor(pod, root))) {
+      throw new Error('The pod already hosts a FediPod account. If you want a second account, put it on a different pod.');
+    }
+    if (await resourceExists(session.fetch, `${pod}${root}`)) {
+      throw new Error(`${new URL(pod + root).pathname} is already there and is not a FediPod account — choose another container.`);
+    }
+    // Where the account lives is recorded in the public type index. With none,
+    // the person is asked first; nothing is written before they have said yes.
+    if (!answers.createIndex && !await hasPublicIndex(remote, pod)) {
+      throw Object.assign(new Error('Your profile names no public type index.'), { code: 'needs-index' });
+    }
     prog.pod = pod;
     podStep.ok(pod);
   } else {
@@ -112,7 +137,7 @@ export async function signUp(answers, { session, onStep = () => {}, frontOrigin 
   }
   if (pathPod && !wantsFront) await assertFrontNameFree(frontOrigin, handle);
 
-  const actorUrl = actorUrlFor(pod);                              // where the documents live, always
+  const actorUrl = actorUrlFor(pod, root);                        // where the documents live, always
   const frontActor = fronted ? `${frontOrigin.replace(/\/$/, '')}/u/${handle}/ap/actor` : null;
 
   // Connect the gateway (fedipod.net) before the key is made, because a
@@ -133,7 +158,7 @@ export async function signUp(answers, { session, onStep = () => {}, frontOrigin 
       // bare pod root sends this identity's mail to <pod>/ap/inbox/ — outside
       // the container the agent drains, where nothing would ever read it. The
       // manage surface has always sent `urls.home`; this is the same value.
-      body: JSON.stringify({ handle, podHome: `${pod}${AP_ROOT}`, actorUrl, kind: 'person', fronted }),
+      body: JSON.stringify({ handle, podHome: `${pod}${root}`, actorUrl, kind: 'person', fronted }),
     });
     const d = await res.json().catch(() => ({}));
     if (res.status !== 201 || !d.hmacSecret) {
@@ -163,7 +188,6 @@ export async function signUp(answers, { session, onStep = () => {}, frontOrigin 
   // The opened copy is kept in this browser (IndexedDB) so the worker can boot
   // itself after an idle kill with no read. A browser that has no copy reads
   // the pod's with its session — see keys-browser.mjs.
-  const remote = new BrowserRemotePod(session, { webId, role: 'signup', log: () => {} });
   const keysStep = step('keys');
   let keys;
   if (!prog.keysStored) {
@@ -177,13 +201,13 @@ export async function signUp(answers, { session, onStep = () => {}, frontOrigin 
     // pod this key may sit on.
     try {
       await podState.provisionKey(remote, {
-        stateUrl: `${pod}${AP_ROOT}ap-state/`,
-        keysUrl: keysDocFor(pod),
+        stateUrl: stateOf(pod, root),
+        keysUrl: keysDocFor(pod, root),
         keys,
       });
     } catch (e) {
       throw new Error(`could not store the signing key on the pod (${e.message}). `
-        + `You are signed in as ${webId} — that WebID must own ${pod} and its ${AP_ROOT} must be writable by it.`);
+        + `You are signed in as ${webId} — that WebID must own ${pod} and ${root} in it must be writable by it.`);
     }
     // This browser's own opened copy, so the boot that follows needs no read.
     // Best effort: a browser that refuses IndexedDB (private mode) reads the
@@ -197,7 +221,7 @@ export async function signUp(answers, { session, onStep = () => {}, frontOrigin 
   }
 
   const config = {
-    remotePod: pod, root: AP_ROOT, handle, name: handle, issuer: String(session.issuer || '').replace(/\/+$/, ''),
+    remotePod: pod, root, handle, name: handle, issuer: String(session.issuer || '').replace(/\/+$/, ''),
     createdAt: new Date().toISOString(),
     ...(gateway ? { gateway } : {}),
   };
@@ -205,9 +229,22 @@ export async function signUp(answers, { session, onStep = () => {}, frontOrigin 
   // sign-in — which arrives with only an OIDC session — can read the account's
   // config and key from the pod and boot.
   try {
-    await podState.writeConfig(remote, { state: `${pod}${AP_ROOT}ap-state/` }, config);
+    await podState.writeConfig(remote, { state: stateOf(pod, root) }, config);
   } catch (e) {
     throw new Error(`could not store the config on the pod (${e.message})`);
+  }
+
+  // --- where it lives, in the public type index ---
+  if (!prog.placed) {
+    const placeStep = step('place');
+    placeStep.running('recording where your account lives');
+    try {
+      await recordPlace(remote, pod, actorUrl, { create: !!answers.createIndex });
+    } catch (e) {
+      throw new Error(`could not record where your account lives in your type index (${e.message})`);
+    }
+    prog.placed = true;
+    placeStep.ok();
   }
 
   PROGRESS.delete(key);                                          // finished — nothing left to resume
@@ -232,14 +269,16 @@ export async function signUp(answers, { session, onStep = () => {}, frontOrigin 
 export async function readAccount(session) {
   const pod = podBaseOfWebId(session.webId);
   const remote = new BrowserRemotePod(session, { webId: session.webId, role: 'signup', log: () => {} });
-  const config = await podState.readConfig(remote, { state: `${pod}${AP_ROOT}ap-state/` }).catch(() => null);
-  if (!config) return null;
+  // A person account: the browser build is persons only.
+  const found = await findAccount(remote, pod, readConfigAt(remote, pod), (c) => (c.kind || 'person') === 'person');
+  if (!found) return null;
+  const { root, config } = found;
   const frontActor = config.gateway?.frontActor || null;
   let frontHost = null;
   try { frontHost = frontActor ? new URL(frontActor).host : null; } catch { frontHost = null; }
   let podHost = '';
   try { podHost = new URL(config.remotePod || pod).host; } catch { podHost = ''; }
-  return { pod, config, frontActor, frontHost, address: `@${config.handle}@${frontHost || podHost}` };
+  return { pod, root, config, frontActor, frontHost, address: `@${config.handle}@${frontHost || podHost}` };
 }
 
 /**
@@ -268,9 +307,9 @@ export async function moveIn(answers, { session, onStep = () => {}, frontOrigin 
   const here = await readAccount(session);
   if (!here?.frontActor) throw new Error('this pod holds no account at another gateway to move here');
   if (here.frontHost === new URL(origin).host) throw new Error('this account already lives at this gateway');
-  const { pod, config: old } = here;
+  const { pod, root, config: old } = here;
   const remote = new BrowserRemotePod(session, { webId: session.webId, role: 'signup', log: () => {} });
-  const urls = { state: `${pod}${AP_ROOT}ap-state/` };
+  const urls = { state: stateOf(pod, root) };
   const keys = await podState.readKeys(remote, urls);
   if (!keys?.rsa) throw new Error('could not read this account\'s signing key on the pod');
   if (isKeyEnvelope(keys)) throw new Error(`this account's key is still under a password from an earlier version — sign in once at ${here.frontHost} first, then come back`);
@@ -282,7 +321,7 @@ export async function moveIn(answers, { session, onStep = () => {}, frontOrigin 
   await assertFrontNameFree(origin, handle);
   const res = await session.fetch(`${origin}/api/attach`, {
     method: 'POST', headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ handle, podHome: `${pod}${AP_ROOT}`, actorUrl: actorUrlFor(pod), kind: old.kind || 'person', fronted: true }),
+    body: JSON.stringify({ handle, podHome: `${pod}${root}`, actorUrl: actorUrlFor(pod, root), kind: old.kind || 'person', fronted: true }),
   });
   const d = await res.json().catch(() => ({}));
   if (res.status !== 201 || !d.hmacSecret) throw new Error(`could not attach to this gateway (HTTP ${res.status}): ${d.error || ''}`);
@@ -311,7 +350,7 @@ export async function moveIn(answers, { session, onStep = () => {}, frontOrigin 
   } catch (e) {
     throw new Error(`could not update your account on the pod (${e.message})`);
   }
-  await cacheOpenedKeys(actorUrlFor(pod), keys);
+  await cacheOpenedKeys(actorUrlFor(pod, root), keys);
   keysStep.ok();
 
   return { config, address: `@${handle}@${new URL(origin).host}`, movedFrom: config.movedFrom };

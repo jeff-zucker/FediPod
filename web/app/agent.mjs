@@ -6,7 +6,8 @@
 // the relay (deliver-relay). Everything between — wire, the store, the
 // publisher, intake, the Mastodon facade — is lib/, unchanged.
 import { kvGet, kvPut } from './idb-kv.mjs';
-import { apUrls } from '../../lib/core/wire.mjs';
+import { apUrls, DEFAULT_ROOT } from '../../lib/core/wire.mjs';
+import { findAccount } from '../../lib/core/place.mjs';
 import * as containers from '../../lib/pod/containers.mjs';
 import * as podState from '../../lib/pod/state.mjs';
 import { PodStore } from '../../lib/core/store.mjs';
@@ -291,8 +292,14 @@ export class BrowserAgent {
     // The pod session's own fetch, for the gateway APIs that take it as
     // proof of the pod (attach, move) — the transport below is for the pod.
     this.sessionFetch = session.fetch;
-    const root = (config && config.root) || 'fedipod/';
     this.remote = new BrowserRemotePod(session, { webId, log: this.log });
+    // Where the account lives: handed in on sign-up, else what its owner's type
+    // index records, else `fedipod/` for an account older than the choice.
+    const root = (config && config.root)
+      || (await findAccount(this.remote, remotePod,
+        (r) => podState.readConfig(this.remote, { state: `${remotePod}${r}ap-state/` }),
+        (c) => (c.kind || 'person') === 'person').catch(() => null))?.root
+      || DEFAULT_ROOT;
     // Pod-native for now: the state store below is read with these, and only
     // the config it holds says whether this identity is fronted.
     this.urls = apUrls(remotePod, root);

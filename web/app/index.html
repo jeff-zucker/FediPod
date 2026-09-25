@@ -191,6 +191,13 @@ a { color: var(--accent); }
         <span id="signed-pod-label" class="grouplabel">Your pod</span>
         <p id="signed-pod" role="status" aria-labelledby="signed-pod-label"></p>
 
+        <div id="container-field">
+          <label for="container">Store your data in a container named fedipod, inside this container</label>
+          <input type="text" id="container" name="container" autocomplete="off" spellcheck="false"
+            aria-describedby="container-hint">
+          <p class="hint" id="container-hint">Your data will be at <span id="place">…</span>. This is permanent.</p>
+        </div>
+
         <!-- Shown when the pod's account lives at another gateway: this is a
              move, not a new account. -->
         <p id="movein-note" hidden>Moving <strong id="movein-from"></strong> to this site.
@@ -217,6 +224,15 @@ a { color: var(--accent); }
       <p class="hint">The handle and the pod cannot be changed afterwards. Everything else — display
         name, bio, pictures — you set later in the client.</p>
       <p class="err" id="form-error" role="alert"></p>
+      <div id="index-ask" role="alertdialog" aria-labelledby="index-ask-text" hidden>
+        <p id="index-ask-text">Your pod has no public type index, the list Solid apps use to find your
+          things. FediPod needs one to record where your account lives. Create it? It will be readable
+          by anyone, like your profile.</p>
+        <p>
+          <button type="button" id="index-no">No, stop</button>
+          <button type="button" class="primary" id="index-yes">Create it and continue</button>
+        </p>
+      </div>
       <p>
         <button type="button" id="back-1">Back</button>
         <button type="submit" class="primary" id="submit">Create your Fediverse account</button>

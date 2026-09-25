@@ -27615,7 +27615,7 @@ var require_fromRdf = __commonJS({
       RDF_FIRST: RDF_FIRST2,
       RDF_REST: RDF_REST2,
       RDF_NIL: RDF_NIL2,
-      RDF_TYPE: RDF_TYPE2,
+      RDF_TYPE: RDF_TYPE3,
       // RDF_PLAIN_LITERAL,
       // RDF_XML_LITERAL,
       RDF_JSON_LITERAL,
@@ -27674,7 +27674,7 @@ var require_fromRdf = __commonJS({
         if (objectIsNode && !(objectNodeId in nodeMap)) {
           nodeMap[objectNodeId] = { "@id": objectNodeId };
         }
-        if (p === RDF_TYPE2 && !useRdfType && objectIsNode) {
+        if (p === RDF_TYPE3 && !useRdfType && objectIsNode) {
           _addValue(node, "@type", objectNodeId, { propertyIsArray: true });
           continue;
         }
@@ -27923,7 +27923,7 @@ var require_toRdf = __commonJS({
       RDF_FIRST: RDF_FIRST2,
       RDF_REST: RDF_REST2,
       RDF_NIL: RDF_NIL2,
-      RDF_TYPE: RDF_TYPE2,
+      RDF_TYPE: RDF_TYPE3,
       // RDF_PLAIN_LITERAL,
       // RDF_XML_LITERAL,
       RDF_JSON_LITERAL,
@@ -27981,7 +27981,7 @@ var require_toRdf = __commonJS({
         for (let property of properties) {
           const items = node[property];
           if (property === "@type") {
-            property = RDF_TYPE2;
+            property = RDF_TYPE3;
           } else if (isKeyword(property)) {
             continue;
           }
@@ -34298,6 +34298,103 @@ async function kvDel(key) {
 // web/app/agent.mjs
 init_wire();
 
+// lib/pod/type-index.mjs
+var SOLID = "http://www.w3.org/ns/solid/terms#";
+var RDF_TYPE = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type";
+var AS_ACTOR = "https://www.w3.org/ns/activitystreams#Actor";
+var PUBLIC_READ = ["Read"];
+var newIndexUrl = (podBase) => `${podBase}settings/publicTypeIndex.ttl`;
+async function findPublicIndex(pod, podBase) {
+  const docs = await pod.profileDocs(podBase);
+  return pod.webIdValues(docs, SOLID + "publicTypeIndex")[0] || null;
+}
+async function actorsIn(pod, indexUrl) {
+  const g = await pod.readRdf(indexUrl).catch(() => null);
+  if (!g) return [];
+  const out = [];
+  for (const reg of g.each(null, pod.sym(SOLID + "forClass"), pod.sym(AS_ACTOR))) {
+    for (const inst of g.each(reg, pod.sym(SOLID + "instance"), null)) out.push(inst.value);
+  }
+  return [...new Set(out)];
+}
+function regFor(indexUrl, actorUrl) {
+  let h = 0;
+  for (const c of actorUrl) h = h * 31 + c.charCodeAt(0) >>> 0;
+  return `${indexUrl}#actor-${h.toString(36)}`;
+}
+async function register(pod, indexUrl, actorUrl) {
+  const g = await pod.readRdf(indexUrl);
+  if (!g) throw new Error(`no type index at ${indexUrl}`);
+  if ((await actorsIn(pod, indexUrl)).includes(actorUrl)) return false;
+  const reg = pod.sym(regFor(indexUrl, actorUrl));
+  const status2 = await pod.writeRdfChecked(indexUrl, g, {
+    inserts: [
+      [reg, pod.sym(RDF_TYPE), pod.sym(SOLID + "TypeRegistration")],
+      [reg, pod.sym(SOLID + "forClass"), pod.sym(AS_ACTOR)],
+      [reg, pod.sym(SOLID + "instance"), pod.sym(actorUrl)]
+    ],
+    mustDescribe: indexUrl
+  });
+  if (status2 >= 300) throw new Error(`the type index at ${indexUrl} did not take the registration (${status2})`);
+  return true;
+}
+async function createPublicIndex(pod, podBase) {
+  const url = newIndexUrl(podBase);
+  const doc = pod.sym(url);
+  const existing = await pod.readRdf(url).catch(() => null);
+  if (!existing) {
+    const status2 = await pod.writeRdfChecked(url, null, {
+      inserts: [
+        [doc, pod.sym(RDF_TYPE), pod.sym(SOLID + "TypeIndex")],
+        [doc, pod.sym(RDF_TYPE), pod.sym(SOLID + "ListedDocument")]
+      ],
+      mustDescribe: url
+    });
+    if (status2 >= 300) throw new Error(`could not make a type index at ${url} (${status2})`);
+  }
+  await pod.setAcl(url, PUBLIC_READ);
+  await pod.writeAboutWebId(podBase, {
+    inserts: [[pod.sym(pod.webId), pod.sym(SOLID + "publicTypeIndex"), doc]]
+  });
+  return url;
+}
+async function registeredActors(pod, podBase) {
+  const index = await findPublicIndex(pod, podBase).catch(() => null);
+  if (!index) return [];
+  return (await actorsIn(pod, index)).filter((a) => a.startsWith(podBase) && a.endsWith("ap/actor"));
+}
+
+// lib/pod/location.mjs
+function rootOfActor(podBase, actorUrl) {
+  const a = String(actorUrl || "");
+  if (!a.startsWith(podBase) || !a.endsWith("ap/actor")) return null;
+  const root = a.slice(podBase.length, -"ap/actor".length);
+  return root.endsWith("/") ? root : null;
+}
+
+// lib/core/place.mjs
+init_wire();
+async function candidateRoots(pod, podBase) {
+  const recorded = await registeredActors(pod, podBase).catch(() => []);
+  const roots = recorded.map((a) => rootOfActor(podBase, a)).filter(Boolean);
+  return [.../* @__PURE__ */ new Set([...roots, DEFAULT_ROOT])];
+}
+async function findAccount(pod, podBase, read2, accept = () => true) {
+  for (const root of await candidateRoots(pod, podBase)) {
+    const config = await read2(root).catch(() => null);
+    if (config && accept(config)) return { root, config };
+  }
+  return null;
+}
+async function recordPlace(pod, podBase, actorAtPod, { create = false } = {}) {
+  let index = await findPublicIndex(pod, podBase);
+  if (!index) {
+    if (!create) return "no-index";
+    index = await createPublicIndex(pod, podBase);
+  }
+  return await register(pod, index, actorAtPod) ? "registered" : "already";
+}
+
 // lib/pod/containers.mjs
 var KEEP = { keep: true };
 var KEEP_CT = "application/json";
@@ -34361,6 +34458,7 @@ async function probePrivateEnforcement(probe, podKeepUrl) {
 
 // lib/pod/state.mjs
 var readKeys = (pod, urls) => pod.getJson(urls.state + "keys.json");
+var readConfig = (pod, urls) => pod.getJson(urls.state + "config.json");
 var writeKeys = (pod, urls, keys) => pod.putJson(urls.state + "keys.json", keys, "application/json");
 
 // lib/core/store.mjs
@@ -45503,43 +45601,43 @@ var USER_AGENT = `fedipod/${version} (+https://github.com/jeff-zucker/FediPod)`;
 init_safefetch();
 
 // lib/pod/discovery.mjs
-var PUBLIC_READ = ["Read"];
+var PUBLIC_READ2 = ["Read"];
 async function writeWebfinger(pod, urls, jrd2) {
   await pod.putJson(urls.webfinger, jrd2, "application/jrd+json");
-  await pod.setAcl(urls.webfinger, PUBLIC_READ);
+  await pod.setAcl(urls.webfinger, PUBLIC_READ2);
 }
 async function writeHostMeta(pod, urls, xml) {
   const url = urls.base + ".well-known/host-meta";
   await pod.put(url, xml, "application/xrd+xml");
-  await pod.setAcl(url, PUBLIC_READ);
+  await pod.setAcl(url, PUBLIC_READ2);
 }
 async function writeNodeinfo(pod, urls, { pointer, doc }) {
   const pointerUrl = urls.base + ".well-known/nodeinfo";
   const docUrl = urls.home + "ap/nodeinfo-2.0";
   await pod.putJson(pointerUrl, pointer, "application/json");
-  await pod.setAcl(pointerUrl, PUBLIC_READ);
+  await pod.setAcl(pointerUrl, PUBLIC_READ2);
   await pod.putJson(docUrl, doc, "application/json");
-  await pod.setAcl(docUrl, PUBLIC_READ);
+  await pod.setAcl(docUrl, PUBLIC_READ2);
   return docUrl;
 }
 
 // lib/pod/actor.mjs
-var PUBLIC_READ2 = ["Read"];
+var PUBLIC_READ3 = ["Read"];
 async function write(pod, urls, doc) {
   await pod.putJson(urls.actor, doc);
-  await pod.setAcl(urls.actor, PUBLIC_READ2);
+  await pod.setAcl(urls.actor, PUBLIC_READ3);
 }
 async function writeTombstone(pod, urls, doc) {
   await pod.putJson(urls.actor, doc);
-  await pod.setAcl(urls.actor, PUBLIC_READ2);
+  await pod.setAcl(urls.actor, PUBLIC_READ3);
 }
 async function writeMoved(pod, urls, doc) {
   await pod.putJson(urls.actor, doc);
-  await pod.setAcl(urls.actor, PUBLIC_READ2);
+  await pod.setAcl(urls.actor, PUBLIC_READ3);
 }
 async function writeProfilePage(pod, urls, html) {
   await pod.put(urls.profileHtml, html, "text/html");
-  await pod.setAcl(urls.profileHtml, PUBLIC_READ2);
+  await pod.setAcl(urls.profileHtml, PUBLIC_READ3);
 }
 function linkInWebIdProfile(pod, { actorUrl, accountName, kind = "person", outbox = null }) {
   return pod.linkAccountInProfile({ actorUrl, accountName, kind, outbox });
@@ -45576,14 +45674,14 @@ var orphanReceipts = (pod, urls) => pod.orphanReceipts?.(urls.inbox) ?? [];
 var dropStrayReceipt = (pod, url) => pod.delete(url).catch(() => false);
 
 // lib/pod/collection.mjs
-var PUBLIC_READ3 = ["Read"];
+var PUBLIC_READ4 = ["Read"];
 async function writePage(pod, pageUrl, doc, { publicRead = false } = {}) {
   await pod.putJson(pageUrl, doc);
-  if (publicRead) await pod.setAcl(pageUrl, PUBLIC_READ3);
+  if (publicRead) await pod.setAcl(pageUrl, PUBLIC_READ4);
 }
 async function writeHead(pod, url, doc, { publicRead = false } = {}) {
   await pod.putJson(url, doc);
-  if (publicRead) await pod.setAcl(url, PUBLIC_READ3);
+  if (publicRead) await pod.setAcl(url, PUBLIC_READ4);
 }
 async function dropPage(pod, pageUrl) {
   await pod.delete(pageUrl).catch(() => {
@@ -45591,7 +45689,7 @@ async function dropPage(pod, pageUrl) {
 }
 async function writeFlat(pod, url, doc, { publicRead = false } = {}) {
   await pod.putJson(url, doc);
-  if (publicRead) await pod.setAcl(url, PUBLIC_READ3);
+  if (publicRead) await pod.setAcl(url, PUBLIC_READ4);
 }
 async function readPaged(pod, headUrl, { max = 1e4, alsoItems = false } = {}) {
   const head = await pod.getJson(headUrl).catch(() => null);
@@ -45658,10 +45756,10 @@ async function write3(pod, urls, doc) {
 }
 
 // lib/pod/notes.mjs
-var PUBLIC_READ4 = ["Read"];
+var PUBLIC_READ5 = ["Read"];
 async function provisionContainer(pod, urls) {
   await pod.putJson(urls.notes + ".keep", { keep: true }, "application/json");
-  await pod.setAcl(urls.notes, PUBLIC_READ4);
+  await pod.setAcl(urls.notes, PUBLIC_READ5);
 }
 var write4 = (pod, noteId, doc) => pod.putJson(noteId, doc);
 var writeCreate = (pod, createId, doc) => pod.putJson(createId, doc);
@@ -45671,7 +45769,7 @@ var writeReplies = (pod, repliesId2, doc) => pod.putJson(repliesId2, doc);
 var read = (pod, noteId) => pod.getJson(noteId);
 async function writeTombstone2(pod, noteId, doc) {
   await pod.putJson(noteId, doc);
-  await pod.setAcl(noteId, PUBLIC_READ4);
+  await pod.setAcl(noteId, PUBLIC_READ5);
 }
 var dropReplies = (pod, repliesId2) => pod.delete(repliesId2).catch(() => {
 });
@@ -56061,7 +56159,7 @@ var CONTEXTS = {
 
 // lib/core/graphview.mjs
 init_wire();
-var RDF_TYPE = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type";
+var RDF_TYPE2 = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type";
 var RDF_FIRST = "http://www.w3.org/1999/02/22-rdf-syntax-ns#first";
 var RDF_REST = "http://www.w3.org/1999/02/22-rdf-syntax-ns#rest";
 var RDF_NIL = "http://www.w3.org/1999/02/22-rdf-syntax-ns#nil";
@@ -56156,8 +56254,8 @@ function findRoot({ bySubject, objects, blanks }) {
   const freeNamed = free.find((s) => !blanks.has(s));
   if (freeNamed) return freeNamed;
   if (free.length) return free[0];
-  for (const s of named) if (bySubject.get(s).has(RDF_TYPE)) return s;
-  for (const s of all) if (bySubject.get(s).has(RDF_TYPE)) return s;
+  for (const s of named) if (bySubject.get(s).has(RDF_TYPE2)) return s;
+  for (const s of all) if (bySubject.get(s).has(RDF_TYPE2)) return s;
   return named[0] ?? all[0] ?? null;
 }
 function readList(head, ctx, depth, path) {
@@ -56225,7 +56323,7 @@ function readProperty(subject, name, ctx, depth = 0, path = /* @__PURE__ */ new 
   if (!preds) return void 0;
   if (name === "id") return ctx.blanks.has(subject) ? void 0 : subject;
   if (name === "type") {
-    const types = (preds.get(RDF_TYPE) ?? []).map((t) => BY_IRI.get(t.value) ?? t.value);
+    const types = (preds.get(RDF_TYPE2) ?? []).map((t) => BY_IRI.get(t.value) ?? t.value);
     if (!types.length) return void 0;
     return types.length === 1 ? types[0] : types;
   }
@@ -56256,7 +56354,7 @@ function makeView(subject, ctx, depth = 0, seen = /* @__PURE__ */ new Set()) {
   const type = readProperty(subject, "type", ctx, depth, path);
   if (type !== void 0) out.type = type;
   for (const predicate of preds.keys()) {
-    if (predicate === RDF_TYPE || predicate === RDF_FIRST || predicate === RDF_REST) continue;
+    if (predicate === RDF_TYPE2 || predicate === RDF_FIRST || predicate === RDF_REST) continue;
     for (const name of NAMES_BY_IRI.get(predicate) ?? []) {
       if (name === "id" || name === "type") continue;
       const value = readProperty(subject, name, ctx, depth, path);
@@ -57572,6 +57670,11 @@ var Publisher = class {
       if (wrote) this.log("WebID profile now lists the actor as a foaf:account");
     } catch (e) {
       this.log(`WebID profile not updated with the actor link: ${e.message}`);
+    }
+    if (!this.config.forum) {
+      await recordPlace(this.remote, urls.base, urls.home + "ap/actor").then((r) => {
+        if (r === "registered") this.log("the public type index now records where the account lives");
+      }).catch((e) => this.log(`type index not updated with the account's place: ${e.message}`));
     }
     await writeKeep(this.remote, urls);
     await setPosture(this.remote, urls, this.config.quiescedAt ? "closed" : "open");
@@ -72574,8 +72677,13 @@ var BrowserAgent = class _BrowserAgent {
     }
     this.webId = webId;
     this.sessionFetch = session.fetch;
-    const root = config && config.root || "fedipod/";
     this.remote = new BrowserRemotePod(session, { webId, log: this.log });
+    const root = config && config.root || (await findAccount(
+      this.remote,
+      remotePod,
+      (r) => readConfig(this.remote, { state: `${remotePod}${r}ap-state/` }),
+      (c) => (c.kind || "person") === "person"
+    ).catch(() => null))?.root || DEFAULT_ROOT;
     this.urls = apUrls2(remotePod, root);
     const podFetch = (u, i) => this.remote.fetch(u, i);
     this.store = new PodStore({ storage: new HttpStorage(this.urls.state, podFetch), log: this.log });

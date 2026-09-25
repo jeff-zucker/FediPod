@@ -14,7 +14,8 @@
 //                 fedipodMoveIn(answers) brings the address here.
 //   Returning:    fedipodSignin({ address }) — redirect to the pod's login.
 //   On every load: fedipodOnLoad() — finish a redirect, or restore, then boot.
-import { signUp, moveIn, readAccount, handleProblem, AP_ROOT } from './signup.mjs';
+import { signUp, moveIn, readAccount, handleProblem } from './signup.mjs';
+import { podRootPath, chosenRoot } from '../../lib/core/place.mjs';
 import * as podActor from '../../lib/pod/actor.mjs';
 import * as podState from '../../lib/pod/state.mjs';
 import { podBaseOfWebId } from '../../lib/pod/urls.mjs';
@@ -76,16 +77,15 @@ async function bootWorker({ reset = false } = {}) {
 async function readAccountState() {
   const session = await getSession();
   if (!session) throw new Error('Sign in first.');
-  const podFromWebId = podBaseOfWebId(session.webId);   // a suffix-based host, or its own host
-  const state = `${podFromWebId}${AP_ROOT}ap-state/`;
+  // Wherever its owner put it: the type index says, or it is an older account
+  // at `fedipod/` (signup.mjs readAccount).
+  const here = await readAccount(session);
+  if (!here) throw new Error(`could not find a FediPod account on ${podBaseOfWebId(session.webId)}`);
   const remote = new BrowserRemotePod(session, { webId: session.webId, role: 'signup', log: () => {} });
-  const urls = { state };
-  const [cfg, doc] = await Promise.all([
-    podState.readConfig(remote, urls), podState.readKeys(remote, urls),
-  ]);
-  if (!cfg) throw new Error(`could not read this account's config under ${state}`);
-  const actorUrl = `${cfg.remotePod}${cfg.root || AP_ROOT}ap/actor`;
-  return { remote, urls, cfg, doc, actorUrl };
+  const urls = { state: `${here.pod}${here.root}ap-state/` };
+  const doc = await podState.readKeys(remote, urls);
+  const actorUrl = `${here.config.remotePod || here.pod}${here.config.root || here.root}ap/actor`;
+  return { remote, urls, cfg: here.config, doc, actorUrl };
 }
 
 window.fedipodUnlock = async (password) => {
@@ -161,22 +161,33 @@ export function parseAddress(input) {
   if (!handle || !host || !host.includes('.')) return null;
   return { handle, host };
 }
-async function issuerForPod(pod) {
+async function issuerForActor(actorUrl) {
   // The pod's actor says where a client signs in (oauthAuthorizationEndpoint's
-  // origin); failing that, the account provider is the pod host's parent
-  // domain for a subdomain pod, and the host itself for a pod on a path.
+  // origin). Failing that: a host that answers OpenID discovery itself is the
+  // provider (a pod on a path of a shared host), and otherwise the provider is
+  // the pod host's parent domain (a subdomain pod).
   try {
-    const authz = await podActor.readIssuer(`${pod}${AP_ROOT}ap/actor`);
+    const authz = await podActor.readIssuer(actorUrl);
     if (authz) return new URL(authz).origin;
   } catch { /* fall through */ }
-  const u = new URL(pod);
-  if (u.pathname !== '/') return u.origin;
+  const u = new URL(actorUrl);
+  const own = await fetch(`${u.origin}/.well-known/openid-configuration`, { headers: { accept: 'application/json' } }).catch(() => null);
+  if (own?.ok) return u.origin;
   const parent = u.host.split('.').slice(1).join('.');
   return `https://${parent || u.host}`;
 }
+// An address on a pod names its actor through the pod host's own WebFinger;
+// an older pod that does not answer is taken to keep it at `fedipod/`.
+async function actorForPodAddress(handle, host) {
+  const res = await fetch(`https://${host}/.well-known/webfinger?resource=${encodeURIComponent(`acct:${handle}@${host}`)}`,
+    { headers: { accept: 'application/jrd+json, application/json' } }).catch(() => null);
+  const doc = res?.ok ? await res.json().catch(() => ({})) : {};
+  const self = (doc.links || []).find((l) => l.rel === 'self' && /activity\+json|ld\+json/u.test(l.type || ''));
+  return self?.href || `https://${host}/fedipod/ap/actor`;
+}
 // An address at this site names a fronted identity. Its documents live on a
 // pod this site's WebFinger names as an alias — the pod's own actor id.
-async function podForFrontedAddress(handle) {
+async function actorForFrontedAddress(handle) {
   const res = await fetch(`/.well-known/webfinger?resource=${encodeURIComponent(`acct:${handle}@${location.host}`)}`,
     { headers: { accept: 'application/jrd+json, application/json' } }).catch(() => null);
   if (res?.status === 410) throw new Error(`@${handle}@${location.host} is closed: nothing on the pod behind it was touched, but the address is gone for good.`);
@@ -184,19 +195,17 @@ async function podForFrontedAddress(handle) {
   const doc = await res.json().catch(() => ({}));
   const podActorId = (doc.aliases || []).find((a) => /\/ap\/actor$/u.test(String(a)));
   if (!podActorId) throw new Error(`@${handle}@${location.host} lives here but names no pod to sign in to`);
-  const tail = `${AP_ROOT}ap/actor`;
-  if (!podActorId.endsWith(tail)) throw new Error(`the pod actor ${podActorId} is not where a FediPod pod keeps one`);
-  return podActorId.slice(0, -tail.length);
+  return podActorId;
 }
 window.fedipodSignin = async ({ address }) => {
   const parsed = parseAddress(address);
   if (!parsed) throw new Error('Enter your address as @you@yourpod (for example @alice@alice.solidcommunity.net).');
   const bad = handleProblem(parsed.handle);
   if (bad) throw new Error(bad);
-  const pod = parsed.host === location.host.toLowerCase()
-    ? await podForFrontedAddress(parsed.handle)
-    : `https://${parsed.host}/`;
-  const issuer = await issuerForPod(pod);
+  const actor = parsed.host === location.host.toLowerCase()
+    ? await actorForFrontedAddress(parsed.handle)
+    : await actorForPodAddress(parsed.handle, parsed.host);
+  const issuer = await issuerForActor(actor);
   const { authorizationUrl } = await beginLogin({ issuer, redirectUri: REDIRECT });
   location.href = authorizationUrl;
 };
@@ -445,6 +454,10 @@ if (typeof document !== 'undefined') (async () => {
     $('loading').hidden = true; $('hero').hidden = true; $('landing').hidden = true; $('running').hidden = true;
     $('brand').hidden = false; $('pane-form').hidden = false;
     $('signed-pod').textContent = signedPod;
+    // The container that holds `fedipod/`: the pod's own root unless they say
+    // otherwise. A move keeps the place the account already has.
+    $('container').placeholder = podRootPath(signedPod);
+    $('container-field').hidden = !!moveFrom;
     $('movein-note').hidden = !moveFrom;
     if (moveFrom) {
       $('movein-from').textContent = moveFrom.address;
@@ -484,7 +497,13 @@ if (typeof document !== 'undefined') (async () => {
   const pathPod = () => { try { return new URL(signedPod).pathname !== '/'; } catch { return false; } };
   // A move between gateways is an address at a gateway: no choice either.
   const shape = () => ((pathPod() || moveFrom) ? 'front' : f().shape.value);
-  const answers = () => ({ handle: f().handle.value.trim().toLowerCase(), shape: shape() });
+  const answers = () => ({ handle: f().handle.value.trim().toLowerCase(), shape: shape(), container: f().container.value.trim() });
+  // Where the data will be, in full, as the person types.
+  const previewPlace = () => {
+    if (!signedPod) return;
+    const r = chosenRoot(signedPod, f().container.value);
+    $('place').textContent = r.problem ? '…' : signedPod + r.root;
+  };
   const previewAddr = () => {
     const handle = f().handle.value.trim().toLowerCase();
     let host = '';
@@ -507,7 +526,7 @@ if (typeof document !== 'undefined') (async () => {
     $('register-link').href = url || '#';
     $('register-link').textContent = providerHost() ? `Create your pod at ${providerHost()}` : 'Create your pod at your provider';
   };
-  for (const el of $('form').elements) for (const evt of ['input', 'change']) el.addEventListener(evt, () => { applyMode(); applyShape(); previewAddr(); });
+  for (const el of $('form').elements) for (const evt of ['input', 'change']) el.addEventListener(evt, () => { applyMode(); applyShape(); previewAddr(); previewPlace(); });
   applyMode();
 
   // Step machine: one screen at a time, each gated by its own validation.
@@ -516,7 +535,7 @@ if (typeof document !== 'undefined') (async () => {
   const goStep = (n) => {
     STEP_IDS.forEach((id, i) => { $(id).hidden = i !== n - 1; });
     $('err-1').textContent = ''; $('form-error').textContent = '';
-    if (n === 2) { applyShape(); previewAddr(); }
+    if (n === 2) { applyShape(); previewAddr(); previewPlace(); $('index-ask').hidden = true; }
     if (FOCUS[n]) $(FOCUS[n]).focus();
   };
   const validateStep1 = () => {
@@ -526,6 +545,10 @@ if (typeof document !== 'undefined') (async () => {
   const validateStep2 = () => {
     const hp = window.fedipodHandleProblem(f().handle.value.trim().toLowerCase());
     if (hp) return `Fediverse handle: ${hp}`;
+    if (!moveFrom) {
+      const where = chosenRoot(signedPod, f().container.value).problem;
+      if (where) return `Where to store it: ${where}`;
+    }
     return null;
   };
   $('create').addEventListener('click', showForm);
@@ -549,12 +572,12 @@ if (typeof document !== 'undefined') (async () => {
   $('run-retry').addEventListener('click', () => backToForm($('run-error').textContent));
   $('run-back').addEventListener('click', () => { showLanding(); goStep(1); });
 
-  const LABELS = { pod: 'Checking your pod', keys: 'Making your signing key', gateway: 'Connecting your mail door' };
+  const LABELS = { pod: 'Checking your pod', keys: 'Making your signing key', gateway: 'Connecting your mail door',
+    place: 'Recording where your account lives' };
   const MOVE_LABELS = { pod: 'Reading your account on your pod', gateway: 'Taking your address here', keys: 'Moving your key and account record' };
-  $('form').addEventListener('submit', async (e) => {
-    e.preventDefault(); $('form-error').textContent = '';
-    const e2 = validateStep2(); if (e2) { $('form-error').textContent = e2; goStep(2); return; }
-    const a = answers();
+  // Run the setup. `createIndex` is the person's yes to a new public type index.
+  const run = async (createIndex = false) => {
+    const a = { ...answers(), ...(createIndex ? { createIndex: true } : {}) };
     $('pane-form').hidden = true; $('running').hidden = false;
     $('running-title').textContent = 'Setting up…'; $('run-error').textContent = ''; $('run-actions').hidden = true;
     const steps = $('steps'); steps.textContent = ''; const mark = {};
@@ -566,10 +589,27 @@ if (typeof document !== 'undefined') (async () => {
       location.href = '/admin/client/';
     }
     catch (err) {
+      // No type index: nothing has been written. Ask, on the form.
+      if (err?.code === 'needs-index') {
+        backToForm();
+        $('index-ask').hidden = false;
+        $('index-yes').focus();
+        return;
+      }
       $('running-title').textContent = 'Setup did not finish';
       $('run-error').textContent = err.message || String(err);
       $('run-actions').hidden = false;                // the way out of the failure screen
     }
+  };
+  $('form').addEventListener('submit', async (e) => {
+    e.preventDefault(); $('form-error').textContent = '';
+    const e2 = validateStep2(); if (e2) { $('form-error').textContent = e2; goStep(2); return; }
+    await run();
+  });
+  $('index-yes').addEventListener('click', () => { $('index-ask').hidden = true; run(true); });
+  $('index-no').addEventListener('click', () => {
+    $('index-ask').hidden = true;
+    $('form-error').textContent = 'Sign-up stopped. Nothing was written to your pod.';
   });
 
   if (pendingIdentity) await showIdentity();

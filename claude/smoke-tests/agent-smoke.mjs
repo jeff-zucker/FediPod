@@ -1025,6 +1025,34 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   check(g.holds($rdf.sym(me), $rdf.sym('http://www.w3.org/ns/solid/terms#oidcIssuer'), $rdf.sym('https://idp.example/'))
     && g.holds($rdf.sym(me), $rdf.sym('http://www.w3.org/ns/solid/terms#publicTypeIndex'), $rdf.sym(host + 'settings/publicTypeIndex.ttl')),
     'where the pod cannot patch, the whole profile is rewritten from the checked document, nothing of it lost');
+
+  // Finding the account: the type index first, then the older place.
+  const place = await import(path.join(root, 'lib/core/place.mjs'));
+  const f = makePod({ [card]: profile });
+  const cfgs = { 'apps/fedipod/': { handle: 'jz', kind: 'person' }, 'fedipod/': { handle: 'old', kind: 'person' } };
+  const read = async (r) => cfgs[r] || null;
+  check((await place.findAccount(f.pod, host, read))?.root === 'fedipod/',
+    'with nothing recorded, an account is found where older ones live');
+  check(await place.recordPlace(f.pod, host, host + 'apps/fedipod/ap/actor') === 'no-index' && !f.writes.length,
+    'recording with no index and no yes writes nothing');
+  check(await place.recordPlace(f.pod, host, host + 'apps/fedipod/ap/actor', { create: true }) === 'registered',
+    'with a yes, the index is made and the place recorded');
+  check((await place.findAccount(f.pod, host, read))?.root === 'apps/fedipod/'
+    && (await place.findAccount(f.pod, host, read, (c) => c.handle === 'old'))?.root === 'fedipod/',
+    'the recorded place is found first, and a caller can pass over one that is not theirs');
+
+  // Sign-up with no index stops before anything is written.
+  const { signUp } = await import(path.join(root, 'web/app/signup.mjs'));
+  const g2 = makePod({ [card]: profile });
+  const fetchG = (u, i) => g2.pod.session.fetch(u, i);
+  let stopped = null;
+  try { await signUp({ handle: 'jz', container: '/apps/' }, { session: { webId: me, fetch: fetchG, issuer: 'https://idp.example' } }); }
+  catch (e) { stopped = e; }
+  check(stopped?.code === 'needs-index' && !g2.writes.length,
+    'sign-up on a profile with no type index stops with the question, and nothing has been written');
+  let bad = null;
+  try { await signUp({ handle: 'jz', container: '/profile/' }, { session: { webId: me, fetch: fetchG } }); } catch (e) { bad = e.message; }
+  check(/belongs to your pod itself/.test(bad || '') && !g2.writes.length, 'and a container that is not allowed is refused before anything');
 }
 
 // --- 5c. the private trees are re-checked and repaired on every start ---
@@ -3317,8 +3345,8 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   check(JSON.stringify(wireK.jrd({ handle: 'me', host: 'fedipod.net', actor: 'https://fedipod.net/u/me/ap/actor', aliases: ['https://alice.pod/fedipod/ap/actor'] }).aliases)
     === '["https://alice.pod/fedipod/ap/actor"]' && !('aliases' in wireK.jrd({ handle: 'me', host: 'h', actor: 'a' })),
     'a JRD carries aliases only when given some');
-  check(/podForFrontedAddress\(parsed\.handle\)/.test(read('web/app/boot.mjs')),
-    'sign-in by an address at this site resolves the pod through the WebFinger alias');
+  check(/actorForFrontedAddress\(parsed\.handle\)/.test(read('web/app/boot.mjs')),
+    "sign-in by an address at this site resolves the pod's actor through the WebFinger alias, wherever on the pod it lives");
   // Where a provider puts new pods is asked of the provider: a CSS on
   // subdomains answers 501 to the root storage description, one on paths
   // answers 200 with the root as a storage (probed 2026-09-14: teamid.live,
