@@ -1,5 +1,28 @@
 # Changes
 
+## 2026-09-25 (your pod is asked far less while FediPod is open — version 1.39.1)
+
+**Your pod is asked about fifty times less while FediPod sits open in a tab.**
+A browser stops FediPod's background worker whenever it is idle, and a client
+open in a background tab wakes it about once a minute. Each wake used to start
+from scratch against your pod. Now a wake a few minutes after the last one
+carries on from a copy of your account's state kept in this browser, and asks
+your pod about twice instead of about fifty times. Signing out deletes that
+copy.
+
+**New mail in a background tab can take up to two minutes to appear**, instead
+of about one.
+
+**The hashtag feed and the Bluesky and connected-account mirrors refresh at
+their set interval**, instead of on every wake.
+
+**fedipod.net pages check for a new version every ten minutes**, instead of
+every minute, and tell fedipod.net you are still around once an hour instead
+of every minute.
+
+**On the forum, a member signed in with only a WebID has their posts kept in a
+`fedipod-bb` container on their pod**, instead of loose at its root.
+
 ## 2026-09-25 (choose where on your pod your account lives — version 1.39.0)
 
 **You choose where on your pod your data goes.** Sign-up asks "Store your

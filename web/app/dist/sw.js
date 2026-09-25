@@ -6614,7 +6614,7 @@ var require_parser = __commonJS({
         let prev;
         let shift;
         let last = false;
-        let open2 = false;
+        let open3 = false;
         let params = [];
         let brackets = [];
         while (!this.tokenizer.endOfFile()) {
@@ -6634,7 +6634,7 @@ var require_parser = __commonJS({
               this.semicolon = true;
               break;
             } else if (type === "{") {
-              open2 = true;
+              open3 = true;
               break;
             } else if (type === "}") {
               if (params.length > 0) {
@@ -6676,7 +6676,7 @@ var require_parser = __commonJS({
           node.raws.afterName = "";
           node.params = "";
         }
-        if (open2) {
+        if (open3) {
           node.nodes = [];
           this.current = node;
         }
@@ -7155,11 +7155,11 @@ var require_warning = __commonJS({
           if (!opts.node[my]) {
             Container.rebuild(opts.node);
           }
-          let range = opts.node.rangeBy(opts);
-          this.line = range.start.line;
-          this.column = range.start.column;
-          this.endLine = range.end.line;
-          this.endColumn = range.end.column;
+          let range2 = opts.node.rangeBy(opts);
+          this.line = range2.start.line;
+          this.column = range2.start.column;
+          this.endLine = range2.end.line;
+          this.endColumn = range2.end.column;
         }
         for (let opt in opts) this[opt] = opts[opt];
       }
@@ -10176,8 +10176,8 @@ function addressing(urls, visibility, who = []) {
   }[visibility] || { to: [PUBLIC], cc: [urls.followers, ...who] };
 }
 function quotePolicy(visibility) {
-  const open2 = visibility === "public" || visibility === "unlisted";
-  return { canQuote: { automaticApproval: open2 ? [PUBLIC] : [], manualApproval: [] } };
+  const open3 = visibility === "public" || visibility === "unlisted";
+  return { canQuote: { automaticApproval: open3 ? [PUBLIC] : [], manualApproval: [] } };
 }
 function noteDoc({
   urls,
@@ -31671,7 +31671,7 @@ var require_buffer = __commonJS({
     );
     E(
       "ERR_OUT_OF_RANGE",
-      function(str, range, input) {
+      function(str, range2, input) {
         let msg = `The value of "${str}" is out of range.`;
         let received = input;
         if (Number.isInteger(input) && Math.abs(input) > 2 ** 32) {
@@ -31683,7 +31683,7 @@ var require_buffer = __commonJS({
           }
           received += "n";
         }
-        msg += ` It must be ${range}. Received ${received}`;
+        msg += ` It must be ${range2}. Received ${received}`;
         return msg;
       },
       RangeError
@@ -31706,17 +31706,17 @@ var require_buffer = __commonJS({
     function checkIntBI(value, min, max, buf, offset, byteLength2) {
       if (value > max || value < min) {
         const n = typeof min === "bigint" ? "n" : "";
-        let range;
+        let range2;
         if (byteLength2 > 3) {
           if (min === 0 || min === BigInt(0)) {
-            range = `>= 0${n} and < 2${n} ** ${(byteLength2 + 1) * 8}${n}`;
+            range2 = `>= 0${n} and < 2${n} ** ${(byteLength2 + 1) * 8}${n}`;
           } else {
-            range = `>= -(2${n} ** ${(byteLength2 + 1) * 8 - 1}${n}) and < 2 ** ${(byteLength2 + 1) * 8 - 1}${n}`;
+            range2 = `>= -(2${n} ** ${(byteLength2 + 1) * 8 - 1}${n}) and < 2 ** ${(byteLength2 + 1) * 8 - 1}${n}`;
           }
         } else {
-          range = `>= ${min}${n} and <= ${max}${n}`;
+          range2 = `>= ${min}${n} and <= ${max}${n}`;
         }
-        throw new errors.ERR_OUT_OF_RANGE("value", range, value);
+        throw new errors.ERR_OUT_OF_RANGE("value", range2, value);
       }
       checkBounds(buf, offset, byteLength2);
     }
@@ -34279,20 +34279,103 @@ async function kvAll() {
 async function kvPut(key, val) {
   const db = await open();
   return new Promise((res, rej) => {
-    const tx = db.transaction("kv", "readwrite");
-    tx.objectStore("kv").put(val, key);
-    tx.oncomplete = () => res();
-    tx.onerror = () => rej(tx.error);
+    const tx2 = db.transaction("kv", "readwrite");
+    tx2.objectStore("kv").put(val, key);
+    tx2.oncomplete = () => res();
+    tx2.onerror = () => rej(tx2.error);
   });
 }
 async function kvDel(key) {
   const db = await open();
   return new Promise((res, rej) => {
-    const tx = db.transaction("kv", "readwrite");
-    tx.objectStore("kv").delete(key);
-    tx.oncomplete = () => res();
-    tx.onerror = () => rej(tx.error);
+    const tx2 = db.transaction("kv", "readwrite");
+    tx2.objectStore("kv").delete(key);
+    tx2.oncomplete = () => res();
+    tx2.onerror = () => rej(tx2.error);
   });
+}
+
+// web/app/warm-start.mjs
+var DB2 = "fedipod-warm";
+var WARM_GAP_MS = 5 * 6e4;
+var FULL_EVERY_MS = 60 * 6e4;
+var DRAIN_EVERY_MS = 2 * 6e4;
+var isWarm = (meta, now = Date.now()) => !!meta && now - meta.wakeAt < WARM_GAP_MS && now - meta.fullAt < FULL_EVERY_MS;
+function open2() {
+  return new Promise((res, rej) => {
+    const r = indexedDB.open(DB2, 1);
+    r.onupgradeneeded = () => {
+      r.result.createObjectStore("meta");
+      r.result.createObjectStore("docs");
+    };
+    r.onsuccess = () => res(r.result);
+    r.onerror = () => rej(r.error);
+  });
+}
+async function tx(stores, mode, work) {
+  const db = await open2();
+  try {
+    return await new Promise((res, rej) => {
+      const t = db.transaction(stores, mode);
+      let out;
+      Promise.resolve(work(t)).then((v) => {
+        out = v;
+      });
+      t.oncomplete = () => res(out);
+      t.onerror = () => rej(t.error);
+      t.onabort = () => rej(t.error);
+    });
+  } finally {
+    db.close();
+  }
+}
+var docKey = (webId, name) => `${webId}
+${name}`;
+var range = (webId) => IDBKeyRange.bound(`${webId}
+`, `${webId}
+\uFFFF`);
+var ask = (rq) => new Promise((res, rej) => {
+  rq.onsuccess = () => res(rq.result);
+  rq.onerror = () => rej(rq.error);
+});
+var warmMeta = (webId) => tx("meta", "readonly", (t) => ask(t.objectStore("meta").get(webId)).then((m) => m || null));
+var saveMeta = (webId, patch) => tx("meta", "readwrite", async (t) => {
+  const s = t.objectStore("meta");
+  const had = await ask(s.get(webId)) || {};
+  s.put({ ...had, ...patch }, webId);
+});
+var saveDoc = (webId, name, doc) => tx("docs", "readwrite", (t) => {
+  t.objectStore("docs").put({ name, ...doc }, docKey(webId, name));
+});
+var dropDoc = (webId, name) => tx("docs", "readwrite", (t) => {
+  t.objectStore("docs").delete(docKey(webId, name));
+});
+var loadDocs = (webId) => tx("docs", "readonly", (t) => ask(t.objectStore("docs").getAll(range(webId))));
+var replaceDocs = (webId, docs, listingEtag) => tx(["docs", "meta"], "readwrite", async (t) => {
+  const d = t.objectStore("docs");
+  d.delete(range(webId));
+  for (const doc of docs) d.put({ ...doc, pending: false }, docKey(webId, doc.name));
+  const m = t.objectStore("meta");
+  const had = await ask(m.get(webId)) || {};
+  m.put({ ...had, listingEtag: listingEtag || null }, webId);
+});
+function keepInStep(store, webId, log2 = () => {
+}) {
+  const fail3 = (e) => log2(`warm copy: ${e?.message || e}`);
+  store.onWriting = (name) => saveDoc(webId, name, { text: null, etag: null, pending: true }).catch(fail3);
+  store.onSettled = (name) => {
+    const text = store.lastText.get(name);
+    (text == null ? dropDoc(webId, name) : saveDoc(webId, name, { text, etag: store.etags.get(name) || null, pending: false })).catch(fail3);
+  };
+  store.onLoaded = () => {
+    const docs = [...store.lastText].map(([name, text]) => ({ name, text, etag: store.etags.get(name) || null }));
+    replaceDocs(webId, docs, store.etags.get("")).catch(fail3);
+  };
+}
+function takeUp(store, docs, listingEtag) {
+  const pending = docs.filter((d) => d.pending).map((d) => d.name);
+  store.restore({ docs: docs.filter((d) => !d.pending && d.text != null), listingEtag: pending.length ? null : listingEtag });
+  return pending;
 }
 
 // web/app/agent.mjs
@@ -36942,7 +37025,7 @@ var Formula = class _Formula extends Node3 {
    */
   findTypesNT(subject) {
     let domain;
-    let range;
+    let range2;
     let rdftype;
     let ref;
     let ref1;
@@ -36960,8 +37043,8 @@ var Formula = class _Formula extends Node3 {
       } else {
         ref1 = this.each(st2.predicate, this.rdfFactory.namedNode("http://www.w3.org/2000/01/rdf-schema#domain"));
         for (let l = 0, len1 = ref1.length; l < len1; l++) {
-          range = ref1[l];
-          types[range.toNT()] = st2;
+          range2 = ref1[l];
+          types[range2.toNT()] = st2;
         }
       }
     }
@@ -45561,6 +45644,9 @@ var PodStore = class {
     this._held = 0;
     this.chain = Promise.resolve();
     this.verdicts = /* @__PURE__ */ new Map();
+    this.onLoaded = null;
+    this.onWriting = null;
+    this.onSettled = null;
   }
   get base() {
     return this.storage?.base || null;
@@ -45619,6 +45705,42 @@ var PodStore = class {
     this.lastSkipped = skipped;
     if (skipped.length) this.log(`state load skipped ${skipped.length}: ${skipped.join(", ")}`);
     this.log(`state loaded: ${this.cache.size} doc(s) from ${this.base} (${fetched} re-fetched)`);
+    this.onLoaded?.();
+  }
+  // Take up a copy kept from an earlier load, as the pod held it: each
+  // document's bytes and ETag, and the container's ETag. The next load() then
+  // revalidates instead of downloading.
+  restore({ docs, listingEtag }) {
+    for (const { name, text, etag } of docs) {
+      try {
+        this.cache.set(name, JSON.parse(text));
+      } catch {
+        continue;
+      }
+      this.lastText.set(name, text);
+      if (etag) this.etags.set(name, etag);
+    }
+    if (listingEtag) this.etags.set("", listingEtag);
+  }
+  // Read these documents again, whatever is held: a kept copy caught them
+  // mid-write, so the pod's copy is the one to hold. Throws when one cannot be
+  // read, so the caller can fall back to a full load rather than act without it.
+  async refresh(names) {
+    for (const name of names) {
+      const r = await this.storage.read(name);
+      if (r.status === 404) {
+        this.cache.delete(name);
+        this.lastText.delete(name);
+        this.etags.delete(name);
+      } else if (!r.ok) {
+        throw new Error(`state doc ${name} unreadable (HTTP ${r.status})`);
+      } else {
+        this.cache.set(name, JSON.parse(r.body));
+        this.lastText.set(name, r.body);
+        this.etags.set(name, r.etag);
+      }
+      this.onSettled?.(name);
+    }
   }
   has(name) {
     return this.cache.has(name);
@@ -45684,10 +45806,13 @@ var PodStore = class {
   _put(name) {
     const done = this.chain.then(async () => {
       const body = serialise(this.cache.get(name));
+      await Promise.resolve(this.onWriting?.(name, body)).catch(() => {
+      });
       for (let attempt = 1; attempt <= PUT_RETRIES; attempt++) {
         const r = await this.storage.write(name, body, "application/json").catch((e) => ({ ok: false, retry: false, why: e.message }));
         if (r.ok) {
           this.lastText.set(name, body);
+          this.onSettled?.(name);
           return true;
         }
         if (!r.retry) {
@@ -45720,7 +45845,11 @@ var PodStore = class {
     clearTimeout(this.timers.get(name));
     this.timers.delete(name);
     if (!this.storage) return true;
-    return this.storage.remove(name);
+    await Promise.resolve(this.onWriting?.(name, null)).catch(() => {
+    });
+    const gone = await this.storage.remove(name);
+    this.onSettled?.(name);
+    return gone;
   }
   // Force every pending write out NOW and say whether they all landed.
   // The caller that needs this is the inbox drain: taking an item out of the
@@ -59553,8 +59682,8 @@ async function onQuoteRequest(intake, activity, actor) {
   const inbox = doc?.endpoints?.sharedInbox || doc?.inbox;
   if (!inbox) return `quote request: no inbox for ${actor}`;
   const { quoteAnswerActivity: quoteAnswerActivity2 } = await Promise.resolve().then(() => (init_wire_quotes(), wire_quotes_exports));
-  const open2 = !s.visibility || s.visibility === "public" || s.visibility === "unlisted";
-  if (!open2) {
+  const open3 = !s.visibility || s.visibility === "public" || s.visibility === "unlisted";
+  if (!open3) {
     await intake.deliverer.deliver(
       inbox,
       quoteAnswerActivity2({ urls: intake.urls, type: "Reject", request: activity, to: actor, serial: intake.serial++ })
@@ -64930,9 +65059,11 @@ var Intake = class {
     if (this.pollSeconds) return this.pollSeconds * 1e3;
     return this.wsState === "open" || this.wsState === "in-process" ? POLL_PUSH_OK_MS : POLL_MS;
   }
-  async start() {
+  // `drainNow: false` and `subscribe: false` are for a browser worker the
+  // browser restarted: it drained moments ago, and a socket would die with it.
+  async start({ drainNow = true, subscribe: subscribe2 = true } = {}) {
     this.stopped = false;
-    await this.drain().catch((e) => this.log(`drain: ${e.message}`));
+    if (drainNow) await this.drain().catch((e) => this.log(`drain: ${e.message}`));
     const tick = () => {
       this.pollTimer = setTimeout(() => {
         this.drain().catch((e) => this.log(`drain: ${e.message}`)).finally(() => {
@@ -64942,8 +65073,8 @@ var Intake = class {
       this.pollTimer.unref?.();
     };
     tick();
-    if (this.push) this.subscribe().catch((e) => this.log(`subscribe: ${e.message}`));
-    else this.wsState = "in-process";
+    if (!this.push) this.wsState = "in-process";
+    else if (subscribe2) this.subscribe().catch((e) => this.log(`subscribe: ${e.message}`));
   }
   stop() {
     this.stopped = true;
@@ -66618,6 +66749,19 @@ var Lease = class {
     this.heldUntil = doc.expiresAt;
     return true;
   }
+  // A restarted browser worker that held the lease a moment ago: one read.
+  // Still ours answers { renewDue }, and when no renewal is due yet the lease
+  // is taken up as it stands, with no write. Not ours, or unreadable, is null.
+  async resume() {
+    const cur = await this.readFresh();
+    if (cur === UNREADABLE || !cur || cur.holder !== this.id || Date.now() >= cur.expiresAt) return null;
+    const renewDue = cur.expiresAt - Date.now() <= TTL_MS - RENEW_MS;
+    if (!renewDue) {
+      this.heldUntil = cur.expiresAt;
+      this.denied = null;
+    }
+    return { renewDue };
+  }
   // Self-scheduling rather than setInterval, so each agent's renewals drift
   // apart instead of several beating in lockstep against one pod.
   // Idempotent, like Deliverer.startQueue: startActive reaches this twice on the
@@ -67459,18 +67603,27 @@ var BskyFeed = class {
     this.start();
     return this.config();
   }
-  start() {
+  // `lastSweptAt` and `onSwept`: see TagFeed.start — a restarted browser
+  // worker sweeps only when the interval is due.
+  start({ lastSweptAt = 0, onSwept = null } = {}) {
     this.stopped = false;
-    this.sweep().catch((e) => this.log(`bskyfeed: ${e.message}`));
-    const tick = () => {
+    const sweep = () => this.sweep().catch((e) => this.log(`bskyfeed: ${e.message}`)).finally(() => onSwept?.(Date.now()));
+    const every = () => Math.round(this.config().intervalMin * 6e4 * (0.85 + Math.random() * 0.3));
+    const tick = (ms) => {
       this.timer = setTimeout(() => {
-        this.sweep().catch((e) => this.log(`bskyfeed: ${e.message}`)).finally(() => {
-          if (!this.stopped) tick();
+        sweep().finally(() => {
+          if (!this.stopped) tick(every());
         });
-      }, Math.round(this.config().intervalMin * 6e4 * (0.85 + Math.random() * 0.3)));
+      }, ms);
       this.timer.unref?.();
     };
-    tick();
+    const due = lastSweptAt + this.config().intervalMin * 6e4 - Date.now();
+    if (due > 0) {
+      tick(due);
+      return;
+    }
+    sweep();
+    tick(every());
   }
   stop() {
     this.stopped = true;
@@ -67841,8 +67994,8 @@ function quoteJson(api, s, { all, depth = 0 } = {}) {
 }
 function quoteApproval(api, s) {
   if (s.actor === api.urls?.actor) {
-    const open2 = !s.visibility || s.visibility === "public" || s.visibility === "unlisted";
-    return { automatic: open2 ? ["public"] : [], manual: [], current_user: open2 ? "automatic" : "denied" };
+    const open3 = !s.visibility || s.visibility === "public" || s.visibility === "unlisted";
+    return { automatic: open3 ? ["public"] : [], manual: [], current_user: open3 ? "automatic" : "denied" };
   }
   const p = s.quotePolicy;
   if (!p) return { automatic: [], manual: [], current_user: "unknown" };
@@ -69494,18 +69647,28 @@ var TagFeed = class {
     this.start();
     return this.config();
   }
-  start() {
+  // `lastSweptAt` and `onSwept` are for a browser worker the browser stops and
+  // restarts: it keeps the time of its last sweep, so a restart sweeps only
+  // when the interval is due rather than on every wake.
+  start({ lastSweptAt = 0, onSwept = null } = {}) {
     this.stopped = false;
-    this.sweep().catch((e) => this.log(`tagfeed: ${e.message}`));
-    const tick = () => {
+    const sweep = () => this.sweep().catch((e) => this.log(`tagfeed: ${e.message}`)).finally(() => onSwept?.(Date.now()));
+    const every = () => Math.round(this.config().intervalMin * 6e4 * (0.85 + Math.random() * 0.3));
+    const tick = (ms) => {
       this.timer = setTimeout(() => {
-        this.sweep().catch((e) => this.log(`tagfeed: ${e.message}`)).finally(() => {
-          if (!this.stopped) tick();
+        sweep().finally(() => {
+          if (!this.stopped) tick(every());
         });
-      }, Math.round(this.config().intervalMin * 6e4 * (0.85 + Math.random() * 0.3)));
+      }, ms);
       this.timer.unref?.();
     };
-    tick();
+    const due = lastSweptAt + this.config().intervalMin * 6e4 - Date.now();
+    if (due > 0) {
+      tick(due);
+      return;
+    }
+    sweep();
+    tick(every());
   }
   // The flag is what makes this stick. Clearing the timer only cancels a sweep
   // that has not started: one already in flight re-arms itself in `finally`,
@@ -72249,18 +72412,27 @@ var AcctFeed = class {
       accounts: { ...cfg.accounts || {}, [id]: { ...cfg.accounts?.[id] || {}, ...patch } }
     });
   }
-  start() {
+  // `lastSweptAt` and `onSwept`: see TagFeed.start — a restarted browser
+  // worker sweeps only when the interval is due.
+  start({ lastSweptAt = 0, onSwept = null } = {}) {
     this.stopped = false;
-    this.sweep().catch((e) => this.log(`acctfeed: ${e.message}`));
-    const tick = () => {
+    const sweep = () => this.sweep().catch((e) => this.log(`acctfeed: ${e.message}`)).finally(() => onSwept?.(Date.now()));
+    const every = () => Math.round(this.config().intervalMin * 6e4 * (0.85 + Math.random() * 0.3));
+    const tick = (ms) => {
       this.timer = setTimeout(() => {
-        this.sweep().catch((e) => this.log(`acctfeed: ${e.message}`)).finally(() => {
-          if (!this.stopped) tick();
+        sweep().finally(() => {
+          if (!this.stopped) tick(every());
         });
-      }, Math.round(this.config().intervalMin * 6e4 * (0.85 + Math.random() * 0.3)));
+      }, ms);
       this.timer.unref?.();
     };
-    tick();
+    const due = lastSweptAt + this.config().intervalMin * 6e4 - Date.now();
+    if (due > 0) {
+      tick(due);
+      return;
+    }
+    sweep();
+    tick(every());
   }
   stop() {
     this.stopped = true;
@@ -72552,35 +72724,65 @@ var BrowserAgent = class _BrowserAgent {
     return this.tellGateway("close", { handle: this.doorKey, confirm: true });
   }
   static OPEN_EVERY_MS = 60 * 6e4;
+  // The hourly "still here". A worker the browser killed and restarted is the
+  // same person, not a new sign-in: within the hour it answers from the last
+  // check-in, kept in this browser, instead of telling the gateway again.
+  async checkInAtGateway({ always = true } = {}) {
+    if (!this.gatewayApi) return null;
+    const key = `gateway-open:${this.gatewayApi}:${this.doorKey}`;
+    if (!always) {
+      const last = await kvGet(key).catch(() => null);
+      if (last?.standing && Date.now() - last.at < _BrowserAgent.OPEN_EVERY_MS) {
+        this.gatewayStanding = last.standing;
+        return last.standing;
+      }
+    }
+    const standing = await this.openAtGateway();
+    if (standing?.status === 200 || standing?.status === 410) {
+      await kvPut(key, { at: Date.now(), standing }).catch(() => {
+      });
+    }
+    return standing;
+  }
   // Become the active agent: renew the lease, then start what a viewer skips —
-  // publish the face, drain the inbox, run the mirrors.
-  async goActive() {
+  // publish the face, drain the inbox, run the mirrors. `warm` is a worker the
+  // browser restarted moments ago (warm-start.mjs): what a full start does once
+  // was done then, and the inbox is drained only when its cadence is due.
+  async goActive({ warm = null } = {}) {
     this.viewer = false;
     clearInterval(this._openTimer);
     this._openTimer = setInterval(() => {
-      this.openAtGateway();
+      this.checkInAtGateway();
     }, _BrowserAgent.OPEN_EVERY_MS);
     this.lease.onLost = () => this.demote();
     this.lease.startRenewal();
     try {
-      await this.store.load({ force: !!this._watched }).catch((e) => this.log(`re-reading state: ${e.message}`));
-      this._watched = false;
-      await this.publisher.healStatuses().catch((e) => this.log(`healing the timeline index: ${e.message}`));
-      try {
-        this.publisher.backfillLiked();
-      } catch (e) {
-        this.log(`liked list: ${e.message}`);
+      if (!warm) {
+        await this.store.load({ force: !!this._watched }).catch((e) => this.log(`re-reading state: ${e.message}`));
+        this._watched = false;
+        await this.publisher.healStatuses().catch((e) => this.log(`healing the timeline index: ${e.message}`));
+        try {
+          this.publisher.backfillLiked();
+        } catch (e) {
+          this.log(`liked list: ${e.message}`);
+        }
+        await this.publisher.publishProfilePage().catch((e) => this.log(`profile page: ${e.message}`));
       }
-      await this.publisher.publishProfilePage().catch((e) => this.log(`profile page: ${e.message}`));
       this.deliverer?.startQueue?.();
-      await this.publisher.publishProfile();
-      await this.store.flush?.();
-      await completeGatewayMove(this).catch((e) => this.log(`gateway move: ${e.message}`));
-      await this.intake.start();
+      if (!warm) {
+        await this.publisher.publishProfile();
+        await this.store.flush?.();
+        await completeGatewayMove(this).catch((e) => this.log(`gateway move: ${e.message}`));
+      }
+      const now = Date.now();
+      const drainNow = !warm || now - (warm.drainedAt || 0) >= DRAIN_EVERY_MS;
+      await this.intake.start({ drainNow, subscribe: !warm });
       this.startBsky();
       this.startAccts();
-      this.tagfeed?.start();
+      this.tagfeed?.start(this.mirrorStart("tags"));
       this.importer?.start();
+      saveMeta(this.webId, warm ? { wakeAt: now, ...drainNow ? { drainedAt: now } : {} } : { root: this.store.getConfig()?.root || null, fullAt: now, wakeAt: now, drainedAt: now }).catch(() => {
+      });
     } catch (e) {
       this.log(`going active: ${e.message}`);
     }
@@ -72661,7 +72863,7 @@ var BrowserAgent = class _BrowserAgent {
       return null;
     }
   }
-  async boot({ oidc, credential, keysRecord, config, frontOrigin }) {
+  async boot({ oidc, credential, keysRecord, config, frontOrigin, restart = false }) {
     let session;
     let webId;
     let remotePod;
@@ -72678,7 +72880,10 @@ var BrowserAgent = class _BrowserAgent {
     this.webId = webId;
     this.sessionFetch = session.fetch;
     this.remote = new BrowserRemotePod(session, { webId, log: this.log });
-    const root = config && config.root || (await findAccount(
+    const warmFrom = restart ? await warmMeta(webId).catch(() => null) : null;
+    const warmRoot = isWarm(warmFrom) ? warmFrom.root : null;
+    this._sweptAt = { ...warmFrom?.sweptAt || {} };
+    const root = config && config.root || warmRoot || (await findAccount(
       this.remote,
       remotePod,
       (r) => readConfig(this.remote, { state: `${remotePod}${r}ap-state/` }),
@@ -72687,10 +72892,32 @@ var BrowserAgent = class _BrowserAgent {
     this.urls = apUrls2(remotePod, root);
     const podFetch = (u, i) => this.remote.fetch(u, i);
     this.store = new PodStore({ storage: new HttpStorage(this.urls.state, podFetch), log: this.log });
+    keepInStep(this.store, webId, this.log);
+    this.lease = new Lease({
+      url: this.urls.state + "lease.json",
+      fetchImpl: podFetch,
+      log: this.log,
+      // Kept on this origin, so THIS browser is one holder however many times
+      // its worker is killed and restarted. Without it every restart was a new
+      // holder: the old lease still had minutes to run, so the browser found
+      // its own account "active on another device" and asked to take it over.
+      // Switching between the clients did it every time, being a navigation.
+      id: await this.deviceId()
+    });
+    this._warm = null;
+    if (warmRoot && warmRoot === root) {
+      const held = await this.lease.resume().catch(() => null);
+      if (held) {
+        const pending = takeUp(this.store, await loadDocs(webId).catch(() => []), warmFrom.listingEtag);
+        this._warm = { ...warmFrom, renewDue: held.renewDue, pending };
+      }
+    }
     let unread = null;
-    await this.store.load().catch((e) => {
+    const fullLoad = () => this.store.load().catch((e) => {
       unread = e;
     });
+    if (this._warm) await this.store.refresh(this._warm.pending).catch(fullLoad);
+    else await fullLoad();
     const cfg = config || this.store.getConfig();
     if (!cfg) throw await accountNotRead({ unread, podBase: remotePod, state: this.urls.state, webId, actorUrl: this.urls.actor });
     this.store.setConfig({ ...this.store.getConfig() || {}, ...cfg, root });
@@ -72716,7 +72943,7 @@ var BrowserAgent = class _BrowserAgent {
     this.gatewayApi = config.gateway?.url ? `${frontOrigin.replace(/\/$/, "")}/api` : null;
     this.doorKey = doorKeyOf(config.gateway?.url) || config.handle;
     this.gatewayStanding = null;
-    const standing = await this.openAtGateway();
+    const standing = await this.checkInAtGateway({ always: !restart });
     if (standing?.status === 410) {
       const host = (() => {
         try {
@@ -72748,17 +72975,6 @@ var BrowserAgent = class _BrowserAgent {
     this.atproto = new BrowserAtproto({ store: this.store, actorId: this.urls.actor, log: this.log });
     this.publisher.atproto = this.atproto;
     this.fediaccts = new BrowserFediAccounts({ store: this.store, actorId: this.urls.actor, log: this.log });
-    this.lease = new Lease({
-      url: this.urls.state + "lease.json",
-      fetchImpl: podFetch,
-      log: this.log,
-      // Kept on this origin, so THIS browser is one holder however many times
-      // its worker is killed and restarted. Without it every restart was a new
-      // holder: the old lease still had minutes to run, so the browser found
-      // its own account "active on another device" and asked to take it over.
-      // Switching between the clients did it every time, being a navigation.
-      id: await this.deviceId()
-    });
     this.c2s = new C2S({ agent: this, log: this.log });
     this.intake = new Intake({
       config: this.store.getConfig(),
@@ -72786,18 +73002,18 @@ var BrowserAgent = class _BrowserAgent {
     const relayGet = (u, i = {}) => this.deliverer.signedFetch(u, { ...i, method: "GET" });
     this.tagfeed = new TagFeed({ store: this.store, intake: this.intake, log: this.log, fetcher: relayGet });
     this.provisioning = (async () => {
-      await provisionPrivate(this.remote, this.urls);
+      if (!this._warm) await provisionPrivate(this.remote, this.urls);
       await this.atproto.load();
       await this.fediaccts.load();
-      this.viewer = !await this.lease.acquire();
+      this.viewer = !(this._warm && !this._warm.renewDue ? true : await this.lease.acquire());
       if (this.viewer) {
         this._watched = true;
         this.log(`read-only viewer: another device is active on @${config.handle}`);
         this.startViewerPoll();
         return;
       }
-      await this.goActive();
-      this.log(`browser agent fully provisioned (active): @${config.handle}`);
+      await this.goActive({ warm: this._warm });
+      this.log(`browser agent ${this._warm ? "resumed" : "fully provisioned"} (active): @${config.handle}`);
     })().catch((e) => {
       this.log(`background provisioning: ${e.message}`);
       throw e;
@@ -72859,7 +73075,7 @@ var BrowserAgent = class _BrowserAgent {
     if (!this.atproto?.feedActive()) return;
     if (this.store.getConfig()?.quiescedAt) return;
     this.bskyfeed ||= new BskyFeed({ store: this.store, atproto: this.atproto, log: this.log });
-    this.bskyfeed.start();
+    this.bskyfeed.start(this.mirrorStart("bsky"));
   }
   stopBsky() {
     this.bskyfeed?.stop();
@@ -72879,7 +73095,19 @@ var BrowserAgent = class _BrowserAgent {
     if (!this.fediaccts?.connected()) return;
     if (this.store.getConfig()?.quiescedAt) return;
     this.acctfeed ||= new AcctFeed({ store: this.store, accounts: this.fediaccts, log: this.log });
-    this.acctfeed.start();
+    this.acctfeed.start(this.mirrorStart("accts"));
+  }
+  // When each mirror last swept, kept in this browser (warm-start.mjs), so a
+  // worker restart does not sweep it again before its interval is up.
+  mirrorStart(name) {
+    return {
+      lastSweptAt: this._sweptAt?.[name] || 0,
+      onSwept: (at) => {
+        this._sweptAt = { ...this._sweptAt, [name]: at };
+        saveMeta(this.webId, { sweptAt: this._sweptAt }).catch(() => {
+        });
+      }
+    };
   }
   stopAccts() {
     this.acctfeed?.stop();
@@ -73248,17 +73476,17 @@ function notAllowed(request, url) {
 }
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", (e) => e.waitUntil(self.clients.claim()));
-async function bootFromSession(frontOrigin) {
+async function bootFromSession(frontOrigin, restart) {
   const oidc = await getSession();
   if (!oidc) throw new Error("no session \u2014 sign in first");
   const a = new BrowserAgent({ log: (m) => console.log("[sw-agent]", m) });
-  await a.boot({ oidc, frontOrigin: frontOrigin || self.location.origin });
+  await a.boot({ oidc, frontOrigin: frontOrigin || self.location.origin, restart });
   agent = a;
   return a;
 }
-function ensureBooting(frontOrigin) {
+function ensureBooting(frontOrigin, { restart = false } = {}) {
   if (agent) return Promise.resolve(agent);
-  if (!booting) booting = bootFromSession(frontOrigin).catch((err) => {
+  if (!booting) booting = bootFromSession(frontOrigin, restart).catch((err) => {
     booting = null;
     throw err;
   });
@@ -73293,7 +73521,7 @@ async function serve(request, url) {
   }
   if (!agent) {
     try {
-      await ensureBooting();
+      await ensureBooting(void 0, { restart: true });
     } catch {
     }
   }

@@ -105,17 +105,19 @@ self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()));
 // browsers kill an idle service worker and restart it fresh, and the client at
 // /app/ never posts 'boot' — so without on-demand boot every request after a
 // restart 503s. On a boot failure `booting` is cleared so the next request retries.
-async function bootFromSession(frontOrigin) {
+async function bootFromSession(frontOrigin, restart) {
   const oidc = await getSession();
   if (!oidc) throw new Error('no session — sign in first');
   const a = new BrowserAgent({ log: (m) => console.log('[sw-agent]', m) });
-  await a.boot({ oidc, frontOrigin: frontOrigin || self.location.origin });
+  await a.boot({ oidc, frontOrigin: frontOrigin || self.location.origin, restart });
   agent = a;
   return a;
 }
-function ensureBooting(frontOrigin) {
+// `restart`: booting on demand after the browser killed the worker, not
+// because the owner just signed in.
+function ensureBooting(frontOrigin, { restart = false } = {}) {
   if (agent) return Promise.resolve(agent);
-  if (!booting) booting = bootFromSession(frontOrigin).catch((err) => { booting = null; throw err; });
+  if (!booting) booting = bootFromSession(frontOrigin, restart).catch((err) => { booting = null; throw err; });
   return booting;
 }
 
@@ -156,7 +158,7 @@ async function serve(request, url) {
   }
   // Boot on demand from the stored session, so the client works even when the
   // worker was restarted (idle-killed) and nobody posted 'boot' this time.
-  if (!agent) { try { await ensureBooting(); } catch { /* no session → 503 below */ } }
+  if (!agent) { try { await ensureBooting(undefined, { restart: true }); } catch { /* no session → 503 below */ } }
   if (!agent) return json(503, { error: 'not signed in on this browser — sign in at the front page' });
   // Bytes, not text. A multipart upload is binary — read as text it comes back
   // through a UTF-8 round trip that replaces every byte that is not valid UTF-8,

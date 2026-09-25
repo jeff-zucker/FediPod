@@ -6,6 +6,7 @@
 // the relay (deliver-relay). Everything between — wire, the store, the
 // publisher, intake, the Mastodon facade — is lib/, unchanged.
 import { kvGet, kvPut } from './idb-kv.mjs';
+import { warmMeta, saveMeta, loadDocs, keepInStep, takeUp, isWarm, DRAIN_EVERY_MS } from './warm-start.mjs';
 import { apUrls, DEFAULT_ROOT } from '../../lib/core/wire.mjs';
 import { findAccount } from '../../lib/core/place.mjs';
 import * as containers from '../../lib/pod/containers.mjs';
@@ -160,13 +161,35 @@ export class BrowserAgent {
   closeAtGateway() { return this.tellGateway('close', { handle: this.doorKey, confirm: true }); }
   static OPEN_EVERY_MS = 60 * 60_000;
 
+  // The hourly "still here". A worker the browser killed and restarted is the
+  // same person, not a new sign-in: within the hour it answers from the last
+  // check-in, kept in this browser, instead of telling the gateway again.
+  async checkInAtGateway({ always = true } = {}) {
+    if (!this.gatewayApi) return null;
+    const key = `gateway-open:${this.gatewayApi}:${this.doorKey}`;
+    if (!always) {
+      const last = await kvGet(key).catch(() => null);
+      if (last?.standing && Date.now() - last.at < BrowserAgent.OPEN_EVERY_MS) {
+        this.gatewayStanding = last.standing;
+        return last.standing;
+      }
+    }
+    const standing = await this.openAtGateway();
+    if (standing?.status === 200 || standing?.status === 410) {
+      await kvPut(key, { at: Date.now(), standing }).catch(() => {});
+    }
+    return standing;
+  }
+
   // Become the active agent: renew the lease, then start what a viewer skips —
-  // publish the face, drain the inbox, run the mirrors.
-  async goActive() {
+  // publish the face, drain the inbox, run the mirrors. `warm` is a worker the
+  // browser restarted moments ago (warm-start.mjs): what a full start does once
+  // was done then, and the inbox is drained only when its cadence is due.
+  async goActive({ warm = null } = {}) {
     this.viewer = false;
     // Reading here is being here: the gateway hears so once an hour.
     clearInterval(this._openTimer);
-    this._openTimer = setInterval(() => { this.openAtGateway(); }, BrowserAgent.OPEN_EVERY_MS);
+    this._openTimer = setInterval(() => { this.checkInAtGateway(); }, BrowserAgent.OPEN_EVERY_MS);
     this.lease.onLost = () => this.demote();
     this.lease.startRenewal();
     try {
@@ -176,29 +199,40 @@ export class BrowserAgent {
       // would push a whole document back over newer state. A device that
       // booted straight into acting read everything a moment ago; asking
       // again is one revalidation, not a second download of every document.
-      await this.store.load({ force: !!this._watched }).catch((e) => this.log(`re-reading state: ${e.message}`));
-      this._watched = false;
-      // Own posts the outbox names and the timeline index lacks come back
-      // here, before anything acts on the index.
-      await this.publisher.healStatuses().catch((e) => this.log(`healing the timeline index: ${e.message}`));
-      // Likes made before the liked list existed become its first entries.
-      try { this.publisher.backfillLiked(); } catch (e) { this.log(`liked list: ${e.message}`); }
-      await this.publisher.publishProfilePage().catch((e) => this.log(`profile page: ${e.message}`));
+      if (!warm) {
+        await this.store.load({ force: !!this._watched }).catch((e) => this.log(`re-reading state: ${e.message}`));
+        this._watched = false;
+        // Own posts the outbox names and the timeline index lacks come back
+        // here, before anything acts on the index.
+        await this.publisher.healStatuses().catch((e) => this.log(`healing the timeline index: ${e.message}`));
+        // Likes made before the liked list existed become its first entries.
+        try { this.publisher.backfillLiked(); } catch (e) { this.log(`liked list: ${e.message}`); }
+        await this.publisher.publishProfilePage().catch((e) => this.log(`profile page: ${e.message}`));
+      }
       // And start delivering again, since demote() stopped it. startQueue() is
       // idempotent, so a goActive() that was already active costs nothing.
       this.deliverer?.startQueue?.();
-      await this.publisher.publishProfile();
-      await this.store.flush?.();
-      // An address that just moved here from another gateway: the new
-      // actor is published, so the old gateway and the followers can be told.
-      await completeGatewayMove(this).catch((e) => this.log(`gateway move: ${e.message}`));
-      await this.intake.start();
+      if (!warm) {
+        await this.publisher.publishProfile();
+        await this.store.flush?.();
+        // An address that just moved here from another gateway: the new
+        // actor is published, so the old gateway and the followers can be told.
+        await completeGatewayMove(this).catch((e) => this.log(`gateway move: ${e.message}`));
+      }
+      const now = Date.now();
+      const drainNow = !warm || now - (warm.drainedAt || 0) >= DRAIN_EVERY_MS;
+      await this.intake.start({ drainNow, subscribe: !warm });
       this.startBsky();
       this.startAccts();
-      this.tagfeed?.start();
+      this.tagfeed?.start(this.mirrorStart('tags'));
       // Resumes a run that was staged on another device, or here before a
       // restart — the state lives on the pod, not in this process.
       this.importer?.start();
+      // What the next restart may take up.
+      saveMeta(this.webId, warm
+        ? { wakeAt: now, ...(drainNow ? { drainedAt: now } : {}) }
+        : { root: this.store.getConfig()?.root || null, fullAt: now, wakeAt: now, drainedAt: now })
+        .catch(() => {});
     } catch (e) { this.log(`going active: ${e.message}`); }
   }
 
@@ -276,7 +310,7 @@ export class BrowserAgent {
     }
   }
 
-  async boot({ oidc, credential, keysRecord, config, frontOrigin }) {
+  async boot({ oidc, credential, keysRecord, config, frontOrigin, restart = false }) {
     let session; let webId; let remotePod;
     if (oidc) {
       session = { fetch: (u, i) => oidc.fetch(u, i) };
@@ -295,7 +329,12 @@ export class BrowserAgent {
     this.remote = new BrowserRemotePod(session, { webId, log: this.log });
     // Where the account lives: handed in on sign-up, else what its owner's type
     // index records, else `fedipod/` for an account older than the choice.
-    const root = (config && config.root)
+    // A worker the browser restarted moments ago may take up what its last
+    // start read (warm-start.mjs) instead of reading the pod again.
+    const warmFrom = restart ? await warmMeta(webId).catch(() => null) : null;
+    const warmRoot = isWarm(warmFrom) ? warmFrom.root : null;
+    this._sweptAt = { ...(warmFrom?.sweptAt || {}) };
+    const root = (config && config.root) || warmRoot
       || (await findAccount(this.remote, remotePod,
         (r) => podState.readConfig(this.remote, { state: `${remotePod}${r}ap-state/` }),
         (c) => (c.kind || 'person') === 'person').catch(() => null))?.root
@@ -311,6 +350,29 @@ export class BrowserAgent {
     // The Node agent has always passed remote.fetch here.
     const podFetch = (u, i) => this.remote.fetch(u, i);
     this.store = new PodStore({ storage: new HttpStorage(this.urls.state, podFetch), log: this.log });
+    keepInStep(this.store, webId, this.log);
+    // Single-active-agent lease (lib/lease.mjs): the inbox drain is a
+    // destructive read and the state store is write-through-cached, so exactly
+    // one browser/device may ACT on a pod at a time — a later arrival runs
+    // read-only until the owner acts on it and it takes over. Written with fresh
+    // fetches, never the cached store.
+    this.lease = new Lease({ url: this.urls.state + 'lease.json', fetchImpl: podFetch, log: this.log,
+      // Kept on this origin, so THIS browser is one holder however many times
+      // its worker is killed and restarted. Without it every restart was a new
+      // holder: the old lease still had minutes to run, so the browser found
+      // its own account "active on another device" and asked to take it over.
+      // Switching between the clients did it every time, being a navigation.
+      id: await this.deviceId() });
+    // What was kept is used only while the lease is still this browser's:
+    // nobody else can have written the state in between.
+    this._warm = null;
+    if (warmRoot && warmRoot === root) {
+      const held = await this.lease.resume().catch(() => null);
+      if (held) {
+        const pending = takeUp(this.store, await loadDocs(webId).catch(() => []), warmFrom.listingEtag);
+        this._warm = { ...warmFrom, renewDue: held.renewDue, pending };
+      }
+    }
     // A read that FAILED is not an account that is not there. load() already
     // tells those apart — a missing container, a refused token, a pod saying
     // "too many requests" each come back with their own reason — and throwing
@@ -319,7 +381,10 @@ export class BrowserAgent {
     // unread. Keep it: below is the only place that can tell whether it
     // mattered, because a sign-up hands its config in and needs no read at all.
     let unread = null;
-    await this.store.load().catch((e) => { unread = e; });
+    const fullLoad = () => this.store.load().catch((e) => { unread = e; });
+    // Warm: only documents caught mid-write are read again, else a full load.
+    if (this._warm) await this.store.refresh(this._warm.pending).catch(fullLoad);
+    else await fullLoad();
     // Config: handed in on sign-up, or read from the pod on a returning sign-in.
     const cfg = config || this.store.getConfig();
     if (!cfg) throw await accountNotRead({ unread, podBase: remotePod, state: this.urls.state, webId, actorUrl: this.urls.actor });
@@ -364,15 +429,16 @@ export class BrowserAgent {
     // standing there — paused, closed, how much arrived unread (front-core:
     // accounts that go quiet). The gateway is told on every sign-in and
     // hourly while this device is active: that is what keeps an account
-    // somebody reads from counting as a quiet one. Only a closed address
-    // stops the boot; a gateway that cannot be reached is no reason to
-    // refuse a sign-in.
+    // somebody reads from counting as a quiet one. A worker restart is not a
+    // sign-in and tells it only when the last check-in is an hour old. Only a
+    // closed address stops the boot; a gateway that cannot be reached is no
+    // reason to refuse a sign-in.
     // At the page's own origin, as the relay is: a page on the test alias
     // asked the real site instead and could not get past its preflight.
     this.gatewayApi = config.gateway?.url ? `${frontOrigin.replace(/\/$/, '')}/api` : null;
     this.doorKey = doorKeyOf(config.gateway?.url) || config.handle;
     this.gatewayStanding = null;
-    const standing = await this.openAtGateway();
+    const standing = await this.checkInAtGateway({ always: !restart });
     if (standing?.status === 410) {
       const host = (() => { try { return new URL(this.gatewayApi).host; } catch { return 'the gateway'; } })();
       const address = this.doorKey.includes('@') ? `@${this.doorKey}` : `@${this.doorKey}@${host}`;
@@ -414,18 +480,8 @@ export class BrowserAgent {
     // throttled request hangs the whole sign-in. So it runs in the background,
     // where per-request retry rides out the throttling; `this.provisioning`
     // resolves when it is done (a test, or a later call, can await it).
-    // Single-active-agent lease (lib/lease.mjs): the inbox drain is a
-    // destructive read and the state store is write-through-cached, so exactly
-    // one browser/device may ACT on a pod at a time — a later arrival runs
-    // read-only until the owner acts on it and it takes over. Written with fresh
-    // fetches, never the cached store. Passed into Intake so the drain checks it.
-    this.lease = new Lease({ url: this.urls.state + 'lease.json', fetchImpl: podFetch, log: this.log,
-      // Kept on this origin, so THIS browser is one holder however many times
-      // its worker is killed and restarted. Without it every restart was a new
-      // holder: the old lease still had minutes to run, so the browser found
-      // its own account "active on another device" and asked to take it over.
-      // Switching between the clients did it every time, being a navigation.
-      id: await this.deviceId() });
+    // The lease (made above, before the first state read) goes into Intake so
+    // the drain checks it.
     // The client-to-server dispatcher, here only for what the Gateway's
     // outbox door takes on the owner's behalf: the browser answers no
     // /ap/outbox of its own.
@@ -481,21 +537,23 @@ export class BrowserAgent {
     this.provisioning = (async () => {
       // Owner-only containers first; idempotent, so a second device provisioning
       // them too is harmless. Each public document sets its own Read ACL inside
-      // publishProfile. Mirrors run-agent bootstrap.
-      await containers.provisionPrivate(this.remote, this.urls);
+      // publishProfile. Mirrors run-agent bootstrap. A warm restart did this at
+      // its last full start.
+      if (!this._warm) await containers.provisionPrivate(this.remote, this.urls);
       // Connected-account records are reads — safe whether we act or view.
       await this.atproto.load();      // the Bluesky credential, if it is browser-stored
       await this.fediaccts.load();    // connected fediverse accounts, from both backends
       // The lease decides: this device ACTS on the pod, or reads it read-only.
-      this.viewer = !(await this.lease.acquire());
+      // A warm restart already holds it, and writes it only when renewal is due.
+      this.viewer = !(this._warm && !this._warm.renewDue ? true : await this.lease.acquire());
       if (this.viewer) {
         this._watched = true;
         this.log(`read-only viewer: another device is active on @${config.handle}`);
         this.startViewerPoll();       // reload the feed, and promote if the lease frees
         return;
       }
-      await this.goActive();
-      this.log(`browser agent fully provisioned (active): @${config.handle}`);
+      await this.goActive({ warm: this._warm });
+      this.log(`browser agent ${this._warm ? 'resumed' : 'fully provisioned'} (active): @${config.handle}`);
     })().catch((e) => { this.log(`background provisioning: ${e.message}`); throw e; });
     // Never let an unhandled rejection escape when nobody awaits it.
     this.provisioning.catch(() => {});
@@ -560,7 +618,7 @@ export class BrowserAgent {
     if (!this.atproto?.feedActive()) return;   // connected AND not paused
     if (this.store.getConfig()?.quiescedAt) return;
     this.bskyfeed ||= new BskyFeed({ store: this.store, atproto: this.atproto, log: this.log });
-    this.bskyfeed.start();
+    this.bskyfeed.start(this.mirrorStart('bsky'));
   }
 
   stopBsky() { this.bskyfeed?.stop(); }
@@ -577,7 +635,19 @@ export class BrowserAgent {
     if (!this.fediaccts?.connected()) return;
     if (this.store.getConfig()?.quiescedAt) return;
     this.acctfeed ||= new AcctFeed({ store: this.store, accounts: this.fediaccts, log: this.log });
-    this.acctfeed.start();
+    this.acctfeed.start(this.mirrorStart('accts'));
+  }
+
+  // When each mirror last swept, kept in this browser (warm-start.mjs), so a
+  // worker restart does not sweep it again before its interval is up.
+  mirrorStart(name) {
+    return {
+      lastSweptAt: this._sweptAt?.[name] || 0,
+      onSwept: (at) => {
+        this._sweptAt = { ...this._sweptAt, [name]: at };
+        saveMeta(this.webId, { sweptAt: this._sweptAt }).catch(() => {});
+      },
+    };
   }
 
   stopAccts() { this.acctfeed?.stop(); }

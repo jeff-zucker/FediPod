@@ -64,7 +64,8 @@
       setTimeout(go, 4000);   // a pages-only change: no new worker will take over
     } catch { /* offline, or the site did not answer: try again later */ }
   };
-  // Often enough that a reader watching a page being worked on sees it.
+  // Every ten minutes: a deploy reaches an open page soon enough, and each
+  // open tab asks the site 144 times a day rather than 1,440.
   setTimeout(check, 5000);
-  setInterval(check, 60 * 1000);
+  setInterval(check, 10 * 60 * 1000);
 })();

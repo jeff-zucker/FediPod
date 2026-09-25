@@ -22,6 +22,7 @@ import { podBaseOfWebId } from '../../lib/pod/urls.mjs';
 import { resourceExists } from '../../lib/pod/root.mjs';
 import { BrowserRemotePod } from './pod-remote.mjs';
 import { beginLogin, completeLogin, getSession, signOut } from './oidc-session.mjs';
+import { deleteWarm } from './warm-start.mjs';
 import { generateKeys, unwrapKeys, isKeyEnvelope } from './keystore.mjs';
 import { cacheOpenedKeys } from './keys-browser.mjs';
 
@@ -247,6 +248,8 @@ window.fedipodSignOut = async () => {
     let req; try { req = indexedDB.deleteDatabase('fedipod-accounts'); } catch { res(); return; }
     req.onsuccess = req.onerror = req.onblocked = () => res();
   });
+  // The copy of the account's state kept for worker restarts goes with it.
+  await deleteWarm();
 };
 window.fedipodHandleProblem = handleProblem;
 

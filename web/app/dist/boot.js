@@ -33875,6 +33875,24 @@ function solidOidcSession({ dbName = "solid-oidc-session", clientName = "Solid a
 // web/app/oidc-session.mjs
 var { beginLogin, completeLogin, getSession, signOut } = solidOidcSession({ dbName: "fedipod-oidc", clientName: "FediPod" });
 
+// web/app/warm-start.mjs
+var DB2 = "fedipod-warm";
+var WARM_GAP_MS = 5 * 6e4;
+var FULL_EVERY_MS = 60 * 6e4;
+var DRAIN_EVERY_MS = 2 * 6e4;
+function deleteWarm() {
+  return new Promise((res) => {
+    let rq;
+    try {
+      rq = indexedDB.deleteDatabase(DB2);
+    } catch {
+      res();
+      return;
+    }
+    rq.onsuccess = rq.onerror = rq.onblocked = () => res();
+  });
+}
+
 // web/app/boot.mjs
 var REDIRECT = `${location.origin}/`;
 async function bootWorker({ reset = false } = {}) {
@@ -34062,6 +34080,7 @@ window.fedipodSignOut = async () => {
     }
     req.onsuccess = req.onerror = req.onblocked = () => res();
   });
+  await deleteWarm();
 };
 window.fedipodHandleProblem = handleProblem;
 if (typeof document !== "undefined") (async () => {
