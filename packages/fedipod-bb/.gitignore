@@ -1,2 +1,4 @@
 .next/
 public/bb/
+.vercel
+.env*
