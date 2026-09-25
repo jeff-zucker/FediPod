@@ -923,6 +923,110 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     'and names nothing where the private folder is not proved private');
 }
 
+// --- 5b18. the account's place: chosen, checked, and recorded in the type index ---
+{
+  const loc = await import(path.join(root, 'lib/pod/location.mjs'));
+  const ti = await import(path.join(root, 'lib/pod/type-index.mjs'));
+  const { PodTransport } = await import(path.join(root, 'lib/pod/transport.mjs'));
+  const $rdf = (await import('rdflib')).default || await import('rdflib');
+
+  // Where it goes: inside the person's own pod, plain names, not the pod's own furniture.
+  const host = 'https://jeff.pod.example/';
+  const pathPod = 'https://shared.example/jeff/';
+  check(loc.rootFromContainer(host, '/', 'fedipod/').root === 'fedipod/'
+    && loc.rootFromContainer(host, '/apps/social', 'fedipod/').root === 'apps/social/fedipod/'
+    && loc.rootFromContainer(pathPod, '/jeff/', 'fedipod/').root === 'fedipod/'
+    && loc.rootFromContainer(pathPod, '', 'fedipod/').root === 'fedipod/',
+    'the chosen container becomes the root: the pod root, or any container inside it');
+  check(/not in your pod/.test(loc.rootFromContainer(pathPod, '/mei/', 'fedipod/').problem || '')
+    && /cannot go up/.test(loc.rootFromContainer(host, '/a/../b/', 'fedipod/').problem || '')
+    && /belongs to your pod itself/.test(loc.rootFromContainer(host, '/profile/', 'fedipod/').problem || '')
+    && /letters, digits/.test(loc.rootFromContainer(host, '/a b/', 'fedipod/').problem || ''),
+    "another person's path, climbing out, the profile's container and odd names are all refused");
+  check(loc.rootOfActor(host, host + 'apps/fedipod/ap/actor') === 'apps/fedipod/' && loc.rootOfActor(host, 'https://x.example/ap/actor') === null,
+    "the root reads back off a registered actor, and only one in this pod");
+
+  // A pod in memory: Turtle documents, some the owner may not write.
+  const makePod = (docs, { readOnly = [], patch = true } = {}) => {
+    const writes = [];
+    const fetchImpl = async (url, init = {}) => {
+      const method = (init.method || 'GET').toUpperCase();
+      const u = String(url).split('#')[0];
+      const reply = (status, body = '') => new Response(body, { status, headers: { 'content-type': 'text/turtle' } });
+      if (method === 'GET') return docs[u] === undefined ? reply(404) : reply(200, docs[u]);
+      if (readOnly.includes(u)) { writes.push([method, u, 403]); return reply(403); }
+      if (method === 'PUT') { docs[u] = String(init.body); writes.push([method, u, 201]); return reply(201); }
+      if (method === 'PATCH') {
+        if (!patch) return reply(405);
+        const g = $rdf.graph();
+        if (docs[u]) $rdf.parse(docs[u], g, u, 'text/turtle');
+        const body = String(init.body);
+        const block = (k) => (new RegExp(`solid:${k} \\{([^}]*)\\}`).exec(body) || [])[1] || '';
+        const apply = (text, fn) => { const t = $rdf.graph(); $rdf.parse(text, t, u, 'text/turtle'); for (const st of t.statements) fn(st); };
+        apply(block('deletes'), (st) => g.removeMatches(st.subject, st.predicate, st.object));
+        apply(block('inserts'), (st) => g.add(st.subject, st.predicate, st.object, $rdf.sym(u)));
+        docs[u] = $rdf.serialize($rdf.sym(u), g, u, 'text/turtle');
+        writes.push([method, u, 205]);
+        return reply(205);
+      }
+      return reply(405);
+    };
+    const pod = new PodTransport({ fetch: fetchImpl }, { webId: host + 'profile/card#me' });
+    pod.setAcl = async () => {};
+    return { pod, docs, writes };
+  };
+  const card = host + 'profile/card';
+  const me = card + '#me';
+  const profile = `@prefix solid: <http://www.w3.org/ns/solid/terms#>.\n<#me> a <http://xmlns.com/foaf/0.1/Person>; solid:oidcIssuer <https://idp.example/>.\n`;
+
+  // No index: nothing found. Created on request, named from the profile, and registered into.
+  const a = makePod({ [card]: profile });
+  check(await ti.findPublicIndex(a.pod, host) === null, 'a profile with no type index has none to find');
+  const idx = await ti.createPublicIndex(a.pod, host);
+  check(idx === host + 'settings/publicTypeIndex.ttl' && /TypeIndex/.test(a.docs[idx]) && /ListedDocument/.test(a.docs[idx])
+    && await ti.findPublicIndex(a.pod, host) === idx && /oidcIssuer/.test(a.docs[card]),
+    'a new public type index is made, named from the profile, and the rest of the profile is kept');
+  const actor = host + 'apps/fedipod/ap/actor';
+  check(await ti.register(a.pod, idx, actor) === true && (await ti.actorsIn(a.pod, idx)).includes(actor),
+    'the account is registered as an instance of as:Actor');
+  const before = a.docs[idx];
+  check(await ti.register(a.pod, idx, actor) === false && a.docs[idx] === before, 'registering again changes nothing');
+  await ti.register(a.pod, idx, host + 'other/fedipod/ap/actor');
+  check((await ti.registeredActors(a.pod, host)).length === 2, 'several accounts registered are all found');
+
+  // Valid or not written.
+  const b = makePod({ [card]: profile });
+  let refused = null;
+  try { await b.pod.writeAboutWebId(host, { inserts: [[b.pod.sym(me), b.pod.sym('http://www.w3.org/ns/solid/terms#publicTypeIndex'), b.pod.sym('not a url')]] }); }
+  catch (e) { refused = e.message; }
+  let refused2 = null;
+  try { await b.pod.writeAboutWebId(host, { inserts: [[b.pod.sym(me), b.pod.sym('http://www.w3.org/ns/solid/terms#publicTypeIndex'), b.pod.sym('urn:x')]] }); }
+  catch (e) { refused2 = e.message; }
+  check(/not written/.test(refused || '') && /not written/.test(refused2 || '') && !b.writes.length && b.docs[card] === profile,
+    'a change that would leave the profile invalid is refused, and nothing is sent');
+
+  // An unwritable profile: the first writable seeAlso document takes it; readers find it there.
+  const extended = host + 'settings/extended.ttl';
+  const withSeeAlso = profile + `<#me> <http://www.w3.org/2000/01/rdf-schema#seeAlso> <../settings/extended.ttl>.\n`;
+  const c = makePod({ [card]: withSeeAlso, [extended]: '' }, { readOnly: [card] });
+  const idx2 = await ti.createPublicIndex(c.pod, host);
+  check(c.docs[card] === withSeeAlso && /publicTypeIndex/.test(c.docs[extended]) && await ti.findPublicIndex(c.pod, host) === idx2,
+    'a profile that refuses the write sends it to its seeAlso document, and the index is found there');
+  const d = makePod({ [card]: profile }, { readOnly: [card] });
+  let none = null;
+  try { await ti.createPublicIndex(d.pod, host); } catch (e) { none = e.message; }
+  check(/neither the profile nor a document it names/.test(none || '') && d.docs[card] === profile,
+    'with nowhere writable, nothing is written to the profile, and it says so');
+
+  // A pod that cannot patch gets the whole checked document.
+  const e = makePod({ [card]: profile }, { patch: false });
+  await ti.createPublicIndex(e.pod, host);
+  const g = $rdf.graph(); $rdf.parse(e.docs[card], g, card, 'text/turtle');
+  check(g.holds($rdf.sym(me), $rdf.sym('http://www.w3.org/ns/solid/terms#oidcIssuer'), $rdf.sym('https://idp.example/'))
+    && g.holds($rdf.sym(me), $rdf.sym('http://www.w3.org/ns/solid/terms#publicTypeIndex'), $rdf.sym(host + 'settings/publicTypeIndex.ttl')),
+    'where the pod cannot patch, the whole profile is rewritten from the checked document, nothing of it lost');
+}
+
 // --- 5c. the private trees are re-checked and repaired on every start ---
 {
   const { Publisher } = await import(path.join(root, 'lib/core/publisher/index.mjs'));

@@ -32543,6 +32543,15 @@ var REL = {
   owner: "http://www.w3.org/ns/solid/terms#owner"
 };
 
+// lib/pod/urls.mjs
+function podBaseOfWebId(webId) {
+  const u = new URL(webId);
+  u.hash = "";
+  u.search = "";
+  const dir = u.pathname.replace(/profile\/card$/u, "").replace(/[^/]*$/u, "");
+  return `${u.origin}${dir.endsWith("/") ? dir : dir + "/"}`;
+}
+
 // lib/pod/transport.mjs
 var LDP = Namespace("http://www.w3.org/ns/ldp#");
 var DC = Namespace("http://purl.org/dc/terms/");
@@ -32551,6 +32560,16 @@ var RDF3 = Namespace("http://www.w3.org/1999/02/22-rdf-syntax-ns#");
 var ACL = Namespace("http://www.w3.org/ns/auth/acl#");
 var FOAF = Namespace("http://xmlns.com/foaf/0.1/");
 var AS = Namespace("https://www.w3.org/ns/activitystreams#");
+var RDFS = Namespace("http://www.w3.org/2000/01/rdf-schema#");
+function termProblem(t) {
+  if (t?.termType === "Literal") return null;
+  if (t?.termType !== "NamedNode") return `${t?.value ?? t} is not an IRI or a literal`;
+  try {
+    return /^https?:$/.test(new URL(t.value).protocol) ? null : `${t.value} is not an http(s) IRI`;
+  } catch {
+    return `${t.value} is not an absolute IRI`;
+  }
+}
 var ACP_NS = "http://www.w3.org/ns/solid/acp#";
 var LISTING_MAX_BYTES = 10 * 1024 * 1024;
 var COOLDOWN_DEFAULT_MS = 6e4;
@@ -32903,16 +32922,10 @@ var PodTransport = class {
    * written back — an empty or foreign body must never become the new profile.
    */
   async linkAccountInProfile({ actorUrl, accountName, kind = "person", outbox = null }) {
-    const docUrl = this.webId.split("#")[0];
-    const res = await this.fetch(docUrl, { headers: { accept: "text/turtle" } });
-    if (res.status >= 400) throw new Error(`[${this.label}] GET ${docUrl} \u2192 ${res.status}`);
-    const g = graph();
-    parse2(await res.text(), g, docUrl, "text/turtle");
-    const doc = namedNode2(docUrl);
     const me = namedNode2(this.webId);
-    if (!g.statementsMatching(me, null, null, doc).length) {
-      throw new Error(`profile at ${docUrl} does not mention ${this.webId} \u2014 not rewriting it`);
-    }
+    const podBase = podBaseOfWebId(this.webId);
+    const docs = await this.profileDocs(podBase);
+    const says = (s, p, o) => docs.some(({ g }) => g?.holds(s, p, o));
     const actor = namedNode2(actorUrl);
     const wanted = [
       [me, FOAF("account"), actor],
@@ -32923,17 +32936,20 @@ var PodTransport = class {
       // WebID is what dokieli reads); only where a door exists to take it.
       ...outbox ? [[me, AS("outbox"), namedNode2(outbox)]] : []
     ];
-    const missing = wanted.filter(([s, p, o]) => !g.holds(s, p, o, doc));
-    const stale = [
-      ...g.statementsMatching(actor, FOAF("accountName"), null, doc).filter((st2) => st2.object.value !== accountName),
-      ...outbox ? g.statementsMatching(me, AS("outbox"), null, doc).filter((st2) => st2.object.value !== outbox) : []
-    ];
+    const missing = wanted.filter(([s, p, o]) => !says(s, p, o));
+    const stale = [];
+    for (const { g } of docs) {
+      for (const st2 of g?.statementsMatching(actor, FOAF("accountName"), null) || []) {
+        if (st2.object.value !== accountName) stale.push([st2.subject, st2.predicate, st2.object]);
+      }
+      if (outbox) {
+        for (const st2 of g?.statementsMatching(me, AS("outbox"), null) || []) {
+          if (st2.object.value !== outbox) stale.push([st2.subject, st2.predicate, st2.object]);
+        }
+      }
+    }
     if (!missing.length && !stale.length) return false;
-    const deletes = stale.map((st2) => [st2.subject, st2.predicate, st2.object]);
-    if (await this.patchDocument(docUrl, missing, deletes)) return true;
-    for (const st2 of stale) g.remove(st2);
-    for (const [s, p, o] of missing) g.add(s, p, o, doc);
-    await this.put(docUrl, serialize(doc, g, docUrl, "text/turtle"), "text/turtle");
+    await this.writeAboutWebId(podBase, { inserts: missing, deletes: stale });
     return true;
   }
   /**
@@ -32971,6 +32987,151 @@ ${clauses.join(";\n")}.
     if (res.status < 300) return true;
     if (res.status === 405 || res.status === 415 || res.status === 501) return false;
     throw new Error(`[${this.label}] PATCH ${docUrl} \u2192 ${res.status}`);
+  }
+  // ---- writing a profile or a type index: valid RDF, or nothing ----
+  //
+  // Two rules. A change is written only if the document it leaves behind is
+  // valid RDF: the graph as it would be afterwards is serialised and parsed
+  // back, and the subject that must stay described still is. And a profile
+  // that will not take a write is not the end: the statements go to the first
+  // document its rdfs:seeAlso names, inside the same pod, that takes them —
+  // under the same check. A profile is what every Solid app signs in through;
+  // one left broken breaks them all. Reading follows the same links.
+  /** An IRI or a literal as a term, for the operations that pass plain values. */
+  sym(iri) {
+    try {
+      return namedNode2(iri);
+    } catch {
+      throw new Error(`not written: ${iri} is not an absolute IRI`);
+    }
+  }
+  literal(value) {
+    return literal2(value);
+  }
+  /** A document as a graph, or null when it is not there. */
+  async readRdf(docUrl) {
+    const res = await this.fetch(docUrl, { headers: { accept: "text/turtle" } });
+    if (res.status === 404 || res.status === 410) return null;
+    if (res.status >= 400) throw new Error(`[${this.label}] GET ${docUrl} \u2192 ${res.status}`);
+    const g = graph();
+    parse2(await res.text(), g, docUrl, "text/turtle");
+    return g;
+  }
+  /**
+   * The document as it would be after the change, checked. Returns the Turtle
+   * to write, or throws saying why nothing may be written.
+   */
+  checkedRdf(g, docUrl, { inserts = [], deletes = [], mustDescribe = null }) {
+    const doc = namedNode2(docUrl);
+    for (const [s, p, o] of inserts) {
+      const bad = termProblem(s) || termProblem(p) || termProblem(o) || (s?.termType === "Literal" || p?.termType !== "NamedNode" ? "a literal subject or predicate" : null);
+      if (bad) throw new Error(`not written: ${bad}`);
+    }
+    const after = graph();
+    for (const st2 of g.statementsMatching(null, null, null, doc)) after.add(st2.subject, st2.predicate, st2.object, doc);
+    for (const [s, p, o] of deletes) for (const st2 of after.statementsMatching(s, p, o, doc)) after.remove(st2);
+    for (const [s, p, o] of inserts) if (!after.holds(s, p, o, doc)) after.add(s, p, o, doc);
+    let text;
+    try {
+      text = serialize(doc, after, docUrl, "text/turtle");
+    } catch (e) {
+      throw new Error(`not written: ${docUrl} would not serialise (${e.message})`);
+    }
+    const back = graph();
+    try {
+      parse2(text, back, docUrl, "text/turtle");
+    } catch (e) {
+      throw new Error(`not written: ${docUrl} would not parse back (${e.message})`);
+    }
+    if (back.statementsMatching(null, null, null, doc).length !== after.statementsMatching(null, null, null, doc).length) {
+      throw new Error(`not written: ${docUrl} would not read back as written`);
+    }
+    if (mustDescribe && !back.statementsMatching(namedNode2(mustDescribe), null, null, doc).length) {
+      throw new Error(`not written: ${docUrl} would no longer describe ${mustDescribe}`);
+    }
+    return text;
+  }
+  /**
+   * Change one document, or refuse. `g` is the document as read (null for a
+   * new one). A PATCH carries only these statements; where the pod cannot
+   * patch, the whole checked document is written. Returns the write's status.
+   */
+  async writeRdfChecked(docUrl, g, { inserts = [], deletes = [], mustDescribe = null }) {
+    const current = g || graph();
+    const doc = namedNode2(docUrl);
+    const todo = inserts.filter(([s, p, o]) => !current.holds(s, p, o, doc));
+    const gone = deletes.filter(([s, p, o]) => current.holds(s, p, o, doc));
+    if (!todo.length && !gone.length) return 200;
+    const text = this.checkedRdf(current, docUrl, { inserts: todo, deletes: gone, mustDescribe });
+    if (g) {
+      let res = null;
+      try {
+        res = await this.fetch(docUrl, {
+          method: "PATCH",
+          headers: { "content-type": "text/n3" },
+          body: this.n3Patch(docUrl, todo, gone)
+        });
+      } catch {
+        res = null;
+      }
+      if (res && res.status < 300) return res.status;
+      if (res && ![405, 415, 501].includes(res.status)) return res.status;
+    }
+    const put = await this.fetch(docUrl, { method: "PUT", headers: { "content-type": "text/turtle" }, body: text });
+    return put.status;
+  }
+  /**
+   * The profile and the documents its rdfs:seeAlso names inside this pod,
+   * each with its graph, the profile first. What any of them says about the
+   * WebID is what the profile says.
+   */
+  async profileDocs(podBase) {
+    const profileUrl = this.webId.split("#")[0];
+    const g = await this.readRdf(profileUrl);
+    if (!g) throw new Error(`no profile at ${profileUrl}`);
+    const out = [{ url: profileUrl, g, profile: true }];
+    const seen = /* @__PURE__ */ new Set([profileUrl]);
+    for (const st2 of g.statementsMatching(null, RDFS("seeAlso"), null)) {
+      const url = st2.object.value.split("#")[0];
+      if (seen.has(url) || !url.startsWith(podBase)) continue;
+      seen.add(url);
+      out.push({ url, g: await this.readRdf(url).catch(() => null), profile: false });
+    }
+    return out;
+  }
+  /** Every value the WebID has for `predicate`, across the profile and its seeAlso documents. */
+  webIdValues(docs, predicate) {
+    const me = namedNode2(this.webId);
+    const p = namedNode2(predicate);
+    const out = [];
+    for (const { g } of docs) for (const st2 of g?.statementsMatching(me, p, null) || []) out.push(st2.object.value);
+    return [...new Set(out)];
+  }
+  /**
+   * Write statements about the WebID: to the profile, or — if the profile will
+   * not take them — to the first of its seeAlso documents that will. Every
+   * write checked. Returns the document written to, or null when nothing
+   * needed writing; throws when none would take it.
+   */
+  async writeAboutWebId(podBase, { inserts = [], deletes = [] }) {
+    const docs = await this.profileDocs(podBase);
+    const holds = ([s, p, o]) => docs.some(({ g }) => g?.holds(s, p, o));
+    const todo = inserts.filter((t) => !holds(t));
+    const gone = deletes.filter(holds);
+    if (!todo.length && !gone.length) return null;
+    const refusals = [];
+    for (const d of docs) {
+      const here = gone.filter(([s, p, o]) => d.g?.holds(s, p, o));
+      const status = await this.writeRdfChecked(d.url, d.g, {
+        inserts: todo,
+        deletes: here,
+        mustDescribe: d.profile ? this.webId : null
+      });
+      if (status < 300) return d.url;
+      refusals.push(`${d.url} \u2192 ${status}`);
+      if (status !== 401 && status !== 403) break;
+    }
+    throw new Error(`not written: neither the profile nor a document it names would take it (${refusals.join("; ")})`);
   }
 };
 
@@ -33055,15 +33216,6 @@ async function resourceExists(fetchImpl, url, { timeoutMs = OWNER_LOOKUP_MS } = 
   } catch {
     return false;
   }
-}
-
-// lib/pod/urls.mjs
-function podBaseOfWebId(webId) {
-  const u = new URL(webId);
-  u.hash = "";
-  u.search = "";
-  const dir = u.pathname.replace(/profile\/card$/u, "").replace(/[^/]*$/u, "");
-  return `${u.origin}${dir.endsWith("/") ? dir : dir + "/"}`;
 }
 
 // web/app/idb-kv.mjs
