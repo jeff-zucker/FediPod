@@ -188,6 +188,22 @@ Item-by-item answers to the Solid/ActivityPub interop checklist.
   `as:Person` or `as:Group`, with the handle as `foaf:accountName`), and the
   actor doc names the WebID in `alsoKnownAs`. Retiring the account leaves
   the profile's link in place.
+<!-- CLAUDE 2026-09-25 — the type index record and the checked profile writes; delete these markers when done -->
+- **Type index** — yes: the account's place is registered in the owner's
+  public type index as a `solid:TypeRegistration` with `solid:forClass
+  as:Actor` and `solid:instance` the actor at the pod. It is how an account is
+  found again, wherever in the pod its `fedipod/` container was put. A
+  profile with no public type index gets one (`settings/publicTypeIndex.ttl`,
+  a `solid:TypeIndex` and `solid:ListedDocument`, named by
+  `solid:publicTypeIndex`) only on its owner's yes.
+- **Writing the profile and the type index** — N3 Patch of just the
+  statements where the server can patch, a whole-document PUT only where it
+  cannot. Either way, the document as it would be afterwards is checked to
+  parse as RDF and still describe the WebID, or nothing is written. A
+  profile that refuses the write has the statements written to the first
+  document its `rdfs:seeAlso` names inside the pod that accepts them, and
+  readers look there too.
+<!-- /CLAUDE -->
 
 ### Authentication and authorisation
 

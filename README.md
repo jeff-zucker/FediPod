@@ -23,6 +23,13 @@ This README is about the `FediPod BrowserAgent`. There are also a number of [oth
 2. Choose your pod provider. You'll be redirected to your provider to login if you have a pod or sign up if you need to create one.
 3. Back on fedipod.net, choose your handle and where your address lives:
    on your pod, `@handle@yourpod`, or at this site, `@handle@fedipod.net`.
+<!-- CLAUDE 2026-09-25 — choosing where on the pod (the variable-location build); delete these markers when done -->
+   Choose where on your pod your data goes: a container named `fedipod`,
+   inside whichever container you name (your pod's root if you leave it
+   empty). If your pod has no public type index yet, you're asked whether
+   to create one; FediPod records there where your account lives, and
+   nothing is set up without it.
+<!-- /CLAUDE -->
 4. You see your Fediverse timeline.
 
 From now on, anyone can open your profile at `https://fedipod.net/@handle@provider`, signed in or not.
@@ -104,7 +111,12 @@ For these, see [Other ways to run FediPod](#other-ways-to-run-fedipod).
 
 Everything you publish and everything you read is stored on your pod. Your
 signing key is stored there too, in a container only you can read through
-your pod's login. fedipod.net holds no key: it verifies incoming mail, drops
+your pod's login.
+<!-- CLAUDE 2026-09-25 — where on the pod, and how it is found again; delete these markers when done -->
+It all lives in the `fedipod` container you chose at sign-up. Your pod's
+public type index records it, as an ActivityStreams actor, which is how
+FediPod and other Solid apps find your account again.
+<!-- /CLAUDE --> fedipod.net holds no key: it verifies incoming mail, drops
 the junk, forwards the rest to your pod, and hands your browser the app.
 With an address on your pod, `@handle@yourpod`, you can detach from it at
 any time and attach to a gateway of your own; your address and your data do
