@@ -70,6 +70,26 @@ a collection.
 
 ## The website
 
+The Next.js App Router application in this package server-renders the public
+forum index and topic pages. Start it from this directory with `npm install`
+and `npm run dev`, or build and run it with `npm run build` and `npm start`.
+Point it at a forum with `/bb/?forum=<handle>` or
+`/bb/?pod=https://…/fedipod-bb/`; on a `bb.<domain>` host the first path
+segment names the forum. Direct `/bb/c/<slug>` and
+`/bb/t/<slug>/<topic-id>` requests also render on the server. Running it
+requires a Node.js server; a static export cannot provide SSR. In local
+development, HTTP pod URLs on localhost are accepted for testing.
+
+React handles navigation, search, bookmarks, voting, posting, account sign-in,
+and moderator controls after hydration. The public index, categories, and
+topic threads render from the forum's pod on the server. The forum host and
+CLI stay in `src/`. The parent
+repository's `scripts/stage-site.mjs` still deploys that static page; serving
+this Next.js app in production requires a Node.js host for it.
+Agentation's feedback toolbar is available in development builds only.
+
+### Previous static website
+
 `site/` is a static page. Staged by `scripts/stage-site.mjs` under `/bb/`
 on the fedipod.net site, it opens a forum attached there at
 `/bb/?forum=<handle>`, reading everything through that site's own

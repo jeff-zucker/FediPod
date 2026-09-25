@@ -6,8 +6,20 @@
   "license": "MIT",
   "type": "module",
   "main": "src/index.mjs",
-  "bin": { "fedipod-bb": "bin/fedipod-bb.mjs" },
+  "bin": {
+    "fedipod-bb": "bin/fedipod-bb.mjs"
+  },
   "scripts": {
-    "test": "node --test test/*.test.mjs"
+    "test": "node --test test/*.test.mjs",
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start"
+  },
+  "dependencies": {
+    "agentation": "^3.1.2",
+    "next": "^16.3.6",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "sanitize-html": "^2.17.7"
   }
 }

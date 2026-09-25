@@ -38,6 +38,14 @@ const params = new URLSearchParams(location.search);
 const place = placeOf({ origin: location.origin, pathname: location.pathname, search: location.search });
 const { front, base } = place;
 const frontHost = new URL(front).host;
+// A server-rendered Next.js deep link has a path rather than a hash. Keep the
+// established hash router for browser navigation and OAuth return state.
+if (!location.hash) {
+  const segments = location.pathname.split('/').filter(Boolean);
+  const route = /^bb\./u.test(location.host) ? segments.slice(1) : segments[0] === 'bb' ? segments.slice(1) : segments;
+  if (route[0] === 't' && route[1] && route[2]) location.hash = `#/t/${route.slice(1).map(encodeURIComponent).join('/')}`;
+  else if (route[0] === 'c' && route[1]) location.hash = `#/c/${encodeURIComponent(route[1])}`;
+}
 // The reader asks anonymously first; where a category is members-only it
 // asks again with the pod session, if there is one.
 let read = reader();
