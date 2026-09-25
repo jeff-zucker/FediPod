@@ -55,8 +55,10 @@ migration, and two things it does not do yet shape this component (see
   branch does not compile; the `master` branch does. How this component's
   spike built one is in the FediPod repository under
   `claude/plans/css-nextgraph-spike.md`.
-- Pods on subdomains (the shipped config) or on paths (one wallet for the
+<!-- CLAUDE 2026-09-25 — suffixed or subdomained, not path/shared-host wording; delete these markers when done -->
+- Subdomained pods (the shipped config) or suffixed pods (one wallet for the
   whole server, since one root is one wallet).
+<!-- /CLAUDE -->
 
 ## Install and run
 

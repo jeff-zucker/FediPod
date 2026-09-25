@@ -32,10 +32,12 @@ password is typed anywhere:
    restarts the agent itself to publish under it.
 
 In the BrowserAgent the same choice is made once, at sign-up, and cannot be
-changed afterwards. A pod on a suffix-based host, like
+<!-- CLAUDE 2026-09-25 — suffixed or subdomained, not path/shared-host wording; delete these markers when done -->
+changed afterwards. A suffixed pod, like
 `https://server.example/alice/`, always takes the gateway-based name: nothing
 at that host answers for the handle, so the gateway does. Its posts, key and
 data stay on the pod.
+<!-- /CLAUDE -->
 
 The same attach from the command line, against the running agent:
 

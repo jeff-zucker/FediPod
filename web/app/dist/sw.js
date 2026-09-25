@@ -58300,7 +58300,7 @@ var Publisher = class {
     }
     const pubName = publicHandle(this.config);
     const pubHost = this.config.gateway?.frontActor ? new URL(this.config.gateway.frontActor).host : host;
-    this.log(this.config.gateway?.frontActor || webfingerHost(urls.base) ? `profile published: @${pubName}@${pubHost} \u2192 ${urls.actor}` : `profile published \u2192 ${urls.actor} \u2014 NOT discoverable as @${pubName}@${pubHost}: this pod is a suffix-based host, and WebFinger is only answered at a host root`);
+    this.log(this.config.gateway?.frontActor || webfingerHost(urls.base) ? `profile published: @${pubName}@${pubHost} \u2192 ${urls.actor}` : `profile published \u2192 ${urls.actor} \u2014 NOT discoverable as @${pubName}@${pubHost}: this pod is suffixed, and WebFinger is only answered for a subdomained pod`);
     return { unreachable, updated };
   }
   // Fires when the document differs from the one last published — including
@@ -71041,7 +71041,7 @@ var AdminFacade = class {
         const aliases = [...cfg.aliases || []];
         if (body.add) {
           if (!webfingerHost(urls.base) && !cfg.gateway?.frontActor) {
-            return json2(400, { error: "this pod is a suffix-based host, so other servers could never resolve it as a Move target" });
+            return json2(400, { error: "this pod is suffixed, so other servers could never resolve it as a Move target" });
           }
           const id = await this.resolveActor(body.add);
           if (!id) return json2(400, { error: `could not fetch the old account (${body.add}) \u2014 enter its URL or @user@host, and it must answer` });

@@ -133,7 +133,7 @@ export async function signUp(answers, { session, onStep = () => {}, frontOrigin 
   const pathPod = new URL(pod).pathname !== '/';
   const fronted = pathPod || wantsFront;
   if (fronted && !frontOrigin) {
-    throw new Error(`${pod} is a suffix-based host, so its address must live at a gateway, and this page has none.`);
+    throw new Error(`${pod} is a suffixed pod, so its address must live at a gateway, and this page has none.`);
   }
   if (pathPod && !wantsFront) await assertFrontNameFree(frontOrigin, handle);
 

@@ -239,7 +239,7 @@ export class FediPodServerHandler extends HttpHandler implements Initializable, 
       for (const c of this.claimed.values()) {
         if (c.host !== host) continue;
         if (pathContains(c.mount, mount) || pathContains(mount, c.mount)) {
-          throw new Error(`${podBase} nests with the identity already at ${c.podBase} — a path pod owns only its own subtree`);
+          throw new Error(`${podBase} nests with the identity already at ${c.podBase} — a suffixed pod owns only its own subtree`);
         }
       }
     }

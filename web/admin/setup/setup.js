@@ -119,13 +119,13 @@ function answers() {
 // account?", in the same words, as you type.
 const NOTES = {
   'pod-is-a-path': (a) =>
-    `This pod is a path on ${host(a.pod)}, not the root of its own host. WebFinger is `
-    + 'answered only at a host root, which this pod cannot write to, so other servers '
+    `This pod is suffixed (on ${host(a.pod)}), not subdomained. WebFinger is `
+    + 'answered only for a subdomained pod, so other servers '
     + 'will not find this address. Posting and reading still work; being discovered does not.',
 };
 const REFUSALS = {
   'group-needs-host-root': () =>
-    'A group needs a pod at the root of its own host, or nobody could ever find it. '
+    'A group needs a subdomained pod, or nobody could ever find it. '
     + 'Give the group a pod of its own, or set this up as a person.',
 };
 const host = (u) => { try { return new URL(u).host; } catch { return u; } };
@@ -173,7 +173,7 @@ async function preview() {
     if (note) {
       note.hidden = !forced;
       note.textContent = forced
-        ? 'Your pod is on a suffix-based host, so its address lives at the gateway. Your posts, key and data stay on your pod.'
+        ? 'Your pod is suffixed, so its address lives at the gateway. Your posts, key and data stay on your pod.'
         : '';
     }
   }
@@ -313,7 +313,7 @@ function paneDone(result) {
   $('done-address').textContent = result?.address || `@${result?.handle} — no resolvable address`;
   const notes = [];
   if (!result?.resolvable) {
-    notes.push(`${result?.pod} is not the root of its own host, so this address cannot be `
+    notes.push(`${result?.pod} is a suffixed pod, so this address cannot be `
       + 'discovered by other servers. Posting and reading still work.');
   }
   if (result?.unreachable?.length) {

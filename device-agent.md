@@ -12,9 +12,11 @@ connect to it; and it can host a [group](groups.md).
 - Node 20 or newer.
 - A Solid pod, such as `https://alice.solidcommunity.net/` or
   `https://server.example/alice/`. The address is `@handle@yourpod`, or
-  `@handle@fedipod.net` when the pod is on a path of a shared host, since
-  the shared host cannot answer for the handle; the posts, key and data
-  stay on the pod either way.
+<!-- CLAUDE 2026-09-25 — suffixed or subdomained, not path/shared-host wording; delete these markers when done -->
+  `@handle@fedipod.net` when the pod is suffixed, since a suffixed pod
+  cannot answer for the handle; the posts, key and data stay on the pod
+  either way.
+<!-- /CLAUDE -->
 - Followers-only and direct posts need a pod that enforces WAC access control;
   on one that does not, the composer refuses those two and says why.
 - While the agent is off, your mail waits on your pod's host. Run it as a

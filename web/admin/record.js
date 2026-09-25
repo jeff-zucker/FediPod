@@ -365,7 +365,7 @@ function render() {
   if (!config.address) {
     const p = document.createElement('p');
     p.className = 'warn';
-    p.textContent = `${config.remotePod} is not the root of its own host, so this actor cannot be `
+    p.textContent = `${config.remotePod} is a suffixed pod, so this actor cannot be `
       + 'discovered as a handle by other servers. Posting and reading still work.';
     $('pane-identity').appendChild(p);
   }

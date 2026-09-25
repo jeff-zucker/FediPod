@@ -398,6 +398,8 @@ Item-by-item answers to the Solid/ActivityPub interop checklist.
   beside them. The Gateway provides the outbox door for every account
   attached to it.
 - **Server support** — none required; runs against a stock Community Solid
-  Server pod with no server-side modifications, on a subdomain or on a
-  suffix-based host (a path pod is fronted: its address lives at the Gateway,
+<!-- CLAUDE 2026-09-25 — suffixed or subdomained, not path/shared-host wording; delete these markers when done -->
+  Server pod with no server-side modifications, subdomained or suffixed (a
+  suffixed pod is fronted: its address lives at the Gateway,
   `@handle@fedipod.net`).
+<!-- /CLAUDE -->
