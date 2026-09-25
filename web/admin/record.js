@@ -269,6 +269,9 @@ function render() {
     ['Fediverse identity', config.address || `@${config.handle} — no resolvable address`,
       config.accountId && config.address ? { href: `/admin/client/#/a/${config.accountId}` } : null],
     ['Solid identity', config.webId, config.remotePod ? { href: config.remotePod, blank: true } : null],
+    // Where on the pod the account's data lives: the container its owner chose.
+    ['stored at', config.remotePod && config.root ? config.remotePod + config.root : null,
+      config.remotePod && config.root ? { href: config.remotePod + config.root, blank: true } : null],
     ['Other identities', 'ctl'],
     ['local store', config.home],
     // The address you actually open, not the bare number — the named origin when
