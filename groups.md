@@ -61,9 +61,7 @@ A group that withdraws a post it carried to you takes it off your timeline too.
 
 A group has a page anyone can open, at `ap/profile.html` under its pod's
 app container — `<pod>/fedipod/ap/profile.html`
-<!-- CLAUDE 2026-09-25 — the container can be anywhere in the pod now; delete these markers when done -->
-by default, or under the `fedipod` container wherever it was put at setup
-<!-- /CLAUDE -->. It
+by default, or under the `fedipod` container wherever it was put at setup. It
 carries the group's address and a Follow box that sends a visitor to their
 own server's follow screen, so it is the link to put where people will find
 it. Posts the group carries appear in members' timelines as the group

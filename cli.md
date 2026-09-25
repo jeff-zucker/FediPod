@@ -32,11 +32,15 @@ prompt. `--profile NAME` names the new identity when you have more than one.
 `--address pod` (the default) puts your address on your pod, `@you@yourpod`;
 `--address front` puts it at a gateway, `@you@the-gateway`, with your posts,
 key and data still on your pod. `--gateway <url>` names the gateway
-<!-- CLAUDE 2026-09-25 — suffixed or subdomained, not path/shared-host wording; delete these markers when done -->
 (`https://fedipod.net` by default). A suffixed pod cannot
 answer WebFinger for a handle, so it always takes a gateway address, whichever
 `--address` you gave.
-<!-- /CLAUDE -->
+
+Your data goes in a container named `fedipod`, inside the container you name
+with `--in <path>` (asked when you leave it out; empty is your pod's root). Where
+it lives is recorded in your pod's public type index. If your pod has none,
+setup asks before making one, and `--create-type-index` says yes in advance;
+without a yes, setup stops before anything is written.
 
 ## Which identity a command acts on
 

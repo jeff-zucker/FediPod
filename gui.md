@@ -47,10 +47,8 @@ its own port.
 
 Each identity has a page anyone can open, at `ap/profile.html` under its pod
 — for example `https://your-pod.example/fedipod/ap/profile.html`
-<!-- CLAUDE 2026-09-25 — the container can be anywhere in the pod now; delete these markers when done -->
 (the `fedipod` container is wherever you put it at setup; the manage page's
-"stored at" row says where)
-<!-- /CLAUDE -->. It
+"stored at" row says where). It
 shows the name, bio and address, and offers a Follow box: a visitor types
 their own server and lands on that server's follow screen. Hand out that
 link, or the `@name@host` address itself, which works in the search box of

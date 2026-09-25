@@ -188,7 +188,6 @@ Item-by-item answers to the Solid/ActivityPub interop checklist.
   `as:Person` or `as:Group`, with the handle as `foaf:accountName`), and the
   actor doc names the WebID in `alsoKnownAs`. Retiring the account leaves
   the profile's link in place.
-<!-- CLAUDE 2026-09-25 — the type index record and the checked profile writes; delete these markers when done -->
 - **Type index** — yes: the account's place is registered in the owner's
   public type index as a `solid:TypeRegistration` with `solid:forClass
   as:Actor` and `solid:instance` the actor at the pod. It is how an account is
@@ -203,7 +202,6 @@ Item-by-item answers to the Solid/ActivityPub interop checklist.
   profile that refuses the write has the statements written to the first
   document its `rdfs:seeAlso` names inside the pod that accepts them, and
   readers look there too.
-<!-- /CLAUDE -->
 
 ### Authentication and authorisation
 
@@ -293,15 +291,12 @@ Item-by-item answers to the Solid/ActivityPub interop checklist.
   next runs. The door answers a CORS preflight and `Accept-Post`, so a browser
   client on another origin can use it. The advertised pod outbox document is
   the read collection.
-<!-- CLAUDE 2026-09-24 — every C2S reply now names what it made (1.37.0); delete these markers when done -->
   Every kind of activity now answers 201 with the new activity's id in
   Location, not only a new post: an edit, a deletion, a like, a follow, an
   undo, a block, a pin, a follower decision. The door names the activity
   itself when the client did not, and the agent makes it under that name. A
   post the account then refuses leaves its owner a direct message from their
   own account saying why; the app that posted it was already told 201.
-<!-- /CLAUDE -->
-<!-- CLAUDE 2026-09-24 — the outbox review's fixes (1.38.0); delete these markers when done -->
 - **What a post through the outbox does** — an Update changes only the
   fields it sends, and a field sent as null is removed (§6.3). An object that
   is not a Note is merged in place, and never becomes a Note. Blind copies
@@ -310,7 +305,6 @@ Item-by-item answers to the Solid/ActivityPub interop checklist.
   goes to everyone who had it. Blocking someone ends their following. The
   door refuses a Move, a change to the account itself, and an Add or Remove
   on anything but the pins, before it answers.
-<!-- /CLAUDE -->
 - **Outbox processing / sending** — yes, decoupled: the agent builds the
   activity, writes the outbox (a static paged collection on the pod), and fans
   deliveries out to follower inboxes itself. Nothing watches the outbox
@@ -322,7 +316,6 @@ Item-by-item answers to the Solid/ActivityPub interop checklist.
 - **Inbox and outbox collections** — outbox and followers served as paged
   AS2 collections; following, featured and the private collections as flat
   ones. The outbox lists the Create of each post and every Announce. The
-<!-- CLAUDE 2026-09-24 — outbox filtered by who reads it (1.37.0); delete these markers when done -->
   The public outbox also carries the Delete of a deleted post, the Update of
   an edited one and the Undo of a withdrawn boost. Its owner, signed in, is
   answered with every message the account produced instead (§5.1): likes,
@@ -340,21 +333,18 @@ Item-by-item answers to the Solid/ActivityPub interop checklist.
   Gateway a deleted post answers 410 Gone, a document a stranger may not
   read answers 404, and a deletion drops the edge's copies of the account's
   documents.
-<!-- /CLAUDE -->
   The
   inbox is never public: the pod's container takes deliveries append-only and
   the agent drains it, and the owner reads what arrived at `GET /ap/inbox` on
   the agent, authenticated as themselves.
 - **Relation to endpoints and LDP containers** — collections are plain pod
   resources; the inbox is the one container other servers write to.
-<!-- CLAUDE 2026-09-24 — found live while reviewing the outbox; delete these markers when done -->
 - **The profile form of the media type** — yes on the Server and through the
   Gateway; not on a pod host FediPod does not run. §3.2 says a server must
   answer `application/ld+json; profile="https://www.w3.org/ns/activitystreams"`.
   The Server's pod configuration reads every ActivityStreams document as
   either type. A pod on a stock CSS host answers that form with 501 (checked
   on solidcommunity.net) until its host adds the same setting.
-<!-- /CLAUDE -->
 - **Conformance with activity+json** — yes; the ActivityStreams documents are
   stored and served as `application/activity+json`, and the agent sends and
   accepts the standard AP content types.
@@ -389,17 +379,13 @@ Item-by-item answers to the Solid/ActivityPub interop checklist.
   canonical documents on the Server, where those are reachable; standalone
   the agent answers both itself, because the published actor names no address
   a local client could write to.
-<!-- CLAUDE 2026-09-24 — the door answers reads now; the old sentence said it did not; delete these markers when done -->
   A fronted account's outbox address is the Gateway's door, which answers
   reads as well as posts: the public copy to anyone, every message to the
   signed-in owner.
-<!-- /CLAUDE -->
   The Mastodon API and the setup pages sit
   beside them. The Gateway provides the outbox door for every account
   attached to it.
 - **Server support** — none required; runs against a stock Community Solid
-<!-- CLAUDE 2026-09-25 — suffixed or subdomained, not path/shared-host wording; delete these markers when done -->
   Server pod with no server-side modifications, subdomained or suffixed (a
   suffixed pod is fronted: its address lives at the Gateway,
   `@handle@fedipod.net`).
-<!-- /CLAUDE -->

@@ -30,14 +30,12 @@ before installing: a server that does not meet them cannot offer accounts, and
 sign-up refuses rather than half-working.
 
 - **Community Solid Server 7.**
-<!-- CLAUDE 2026-09-25 — suffixed or subdomained, not path/shared-host wording; delete these markers when done -->
 - **Subdomained or suffixed pods.** A subdomained pod answers on its own
   address (`@mei@mei.example.org`); a suffixed pod answers under its path, and
   the server fronts it so its address is the server's host
   (`@aisha@server.example`, for a pod at `https://server.example/aisha/`).
   Either works — a suffixed pod cannot resolve its own handle, so it is
   followable only through the server's apex, which the server also runs.
-<!-- /CLAUDE -->
 - **A single worker.** Run the server as one copy of itself — `--workers 1`,
   which is the default. With more, it still serves pods normally, but no pod
   can be an account: sign-up is refused, and an account set up earlier goes on
@@ -71,10 +69,8 @@ Add the package context to your CSS config and import the shipped snippet:
 
 Then set what you need on the `urn:fedipod:server:Handler` node and restart
 the server.
-<!-- CLAUDE 2026-09-25 — suffixed or subdomained, not path/shared-host wording; delete these markers when done -->
 A CSS config with subdomained pods gives each identity an origin of its own;
 one with suffixed pods hosts each under its own path. Both opt in.
-<!-- /CLAUDE -->
  The snippet places the component in the routing waterfall ahead of
 the LDP catch-all, on the initializer and finalizer lists so identities start
 and stop with the server, and on the websocket handler list for the live feed.
@@ -90,12 +86,10 @@ and stop with the server, and on the websocket handler list for the live feed.
 }
 ```
 
-<!-- CLAUDE 2026-09-25 — suffixed or subdomained, not path/shared-host wording; delete these markers when done -->
 An identity is provisioned when its owner opts in: its name is the pod's
 subdomain label, or its last path segment on a suffixed pod, and it publishes an
 actor and a signing key on the pod itself. Its handle resolves on the pod for a
-subdomained pod, and through the server's apex for a suffixed pod.
-<!-- /CLAUDE --> Everything it is made of lives on its pod — its state, its private
+subdomained pod, and through the server's apex for a suffixed pod. Everything it is made of lives on its pod — its state, its private
 signing key, the secret guarding its own pages, and the credentials for any
 accounts its owner connects on other servers. Each identity has its own
 secret; one owner's opens nobody else's door. The opt-in reply is where the
@@ -113,7 +107,7 @@ naming the pod the identity runs on. Nothing private is in it.
 |---|---|
 | `agentRuntimeOptIn` | Whether pod owners can sign up. With it off, nothing runs. |
 | `agentDataDir` | Where each identity keeps the file naming its pod; its log lines go to the server's own log. Required whenever sign-up is on. |
-| `agentUiPath` | Where the owner's pages live on the pod's origin. `/fp/` by default; empty serves no pages. On a suffixed pod it is under the pod's path, e.g. `/aisha/fp/`. <!-- CLAUDE 2026-09-25 — was "suffix pod"; delete this marker when done --> |
+| `agentUiPath` | Where the owner's pages live on the pod's origin. `/fp/` by default; empty serves no pages. On a suffixed pod it is under the pod's path, e.g. `/aisha/fp/`. |
 | `agentRegistryContainer` | The internal container holding the sign-up rows. |
 | `runPage` | The HTML of the page where a pod owner opts in or out. The package's own `web/front/run.html` is served unless you set this. |
 | `runPath` | Where that page answers. `/.fediverse-account` unless you set it. The path it takes is one the pod no longer serves, so it is yours to name; the dot keeps it out of the way of anybody's data. |
@@ -160,14 +154,12 @@ that document's address and registers nothing here. Once in, it posts to the
 outbox the actor names, and reads what the identity received at `/ap/inbox`,
 which nobody but the owner may read.
 
-<!-- CLAUDE 2026-09-25 — suffixed or subdomained, not path/shared-host wording; delete these markers when done -->
 A subdomained pod gets an origin of its own and answers at its root; a
 suffixed pod answers under its own path (`/aisha/ap/actor`, `/aisha/api/…`,
 `/aisha/oauth/…`, its door at `/aisha/fp/`). So a host carries at most one
 root identity, but any number of suffixed pods beside it; a second root
 identity on a host, or a suffixed pod nesting under another, is refused at
 opt-in rather than half-working.
-<!-- /CLAUDE -->
 
 ### Before you turn it on
 
@@ -179,7 +171,6 @@ for anyone hosting other people, it is a promise being made to them.
 `/oauth/authorize` refuses until the identity has one. Set it once through the
 owner's door, with that identity's own door secret:
 
-<!-- CLAUDE 2026-09-25 — suffixed or subdomained, not path/shared-host wording; delete these markers when done -->
 ```
 # subdomained pod:
 curl -X POST https://mei.example.org/fp/config \
@@ -199,7 +190,6 @@ belong to the identity, so pod resources at those names — a container called
 On a suffixed pod the same names are taken under the pod's own path
 (`/aisha/api/…`, `/aisha/ap/actor`, `/aisha/fp/`, and so on); the rest of the
 path, and every other pod on the host, is untouched.
-<!-- /CLAUDE -->
 They stay in the pod and in its listings. Every other path is the pod, exactly
 as before.
 
@@ -250,7 +240,6 @@ about CSS.
 
 TypeScript, built the way CSS builds its own components.
 
-<!-- CLAUDE 2026-09-25 — suffixed or subdomained, not path/shared-host wording; delete these markers when done -->
 ```
 npm install
 npm run build       # tsc → dist, then componentsjs-generator → dist/components
@@ -258,7 +247,6 @@ npm test            # unit tests, plus the transport against a real CSS store
 npm run test:e2e    # boots a real server (subdomained pods) and uses it as a client would
 npm run test:e2e:suffix   # the same, for suffixed pods (mode d)
 ```
-<!-- /CLAUDE -->
 
 `npm test` drives a genuine CSS store stack — ETags, conditional writes,
 container listings — through the transport an identity uses, and checks the
@@ -270,13 +258,11 @@ lease protocol and the deletion deny-list still hold across it.
 become identities up front; the third opts in and out at runtime), then signs in as a phone app does, posts,
 receives a follow from another server, and watches the live feed. It takes
 about a minute. `FEDIPOD_E2E_LOG=info` shows the server's log while it runs.
-<!-- CLAUDE 2026-09-25 — suffixed or subdomained, not path/shared-host wording; delete these markers when done -->
 `npm run test:e2e:suffix` does the same on a server whose pods are suffixed
 (`@aisha@server`): it proves the apex WebFinger resolves straight to the pod
 actor, that the actor, inbox, client API, OAuth and door all answer under the
 pod's path, that two suffixed pods on one origin stay separate, and that a
 signed delivery is verified at the pod's own door.
-<!-- /CLAUDE -->
 
 `dist/` and `node_modules/` are gitignored; `src/`, `config/` and this file are
 the sources.
