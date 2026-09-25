@@ -47,6 +47,7 @@ const pod = http.createServer((req, res) => {
       '@context': 'https://www.w3.org/ns/activitystreams',
       id: PP + 'ap/actor', type: 'Person', preferredUsername: 'wren',
       inbox: PP + 'ap/inbox/', outbox: PP + 'ap/outbox',
+      liked: PP + 'ap/private/liked', ownerOutbox: PP + 'ap/private/outbox',
       icon: { type: 'Image', url: PP + 'ap/media/face.png' },
     }));
   }
@@ -416,8 +417,10 @@ try {
   const pathActor = pathActorRes.status === 200 ? await pathActorRes.json() : {};
   check(pathActorRes.status === 200 && pathActor.id === `${ORIGIN}/u/pwren/ap/actor`
     && pathActor.inbox === `${ORIGIN}/u/pwren/ap/inbox/` && pathActor.preferredUsername === 'pwren'
-    && !JSON.stringify(pathActor).includes(pathHome),
-    'the actor is served from the path with every id rewritten onto the front');
+    && !JSON.stringify({ ...pathActor, liked: null, ownerOutbox: null }).includes(pathHome),
+    "the actor is served from the path with every id rewritten onto the front, but the owner's own two");
+  check(pathActor.ownerOutbox === pathHome + 'ap/private/outbox' && pathActor.liked === pathHome + 'ap/private/liked',
+    "the owner's own documents keep the pod's address in the fronted actor, where the owner's credential reaches them");
   const pathMedia = await fetch(`${ORIGIN}/u/pwren/ap/media/face.png`, { redirect: 'manual' });
   check(pathMedia.status === 302 && pathMedia.headers.get('location') === pathHome + 'ap/media/face.png'
     && /s-maxage=86400/u.test(pathMedia.headers.get('netlify-cdn-cache-control') || ''),

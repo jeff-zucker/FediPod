@@ -128,9 +128,11 @@ function apUrls(remotePod, root, { publicBase = null } = {}) {
     pendingFollowing: face + "ap/private/pending-following",
     blocked: face + "ap/private/blocked",
     // The outbox as its owner reads it (every message, §5.1) and what the
-    // owner has liked (§5.5): the owner's alone, so they sit here too.
-    ownOutbox: face + "ap/private/outbox",
-    liked: face + "ap/private/liked",
+    // owner has liked (§5.5): the owner's alone, so they sit here too — and
+    // at the pod's own address even for a fronted identity, because the owner
+    // reads them there, with a credential the pod checks.
+    ownOutbox: home + "ap/private/outbox",
+    liked: home + "ap/private/liked",
     profileHtml: face + "ap/profile.html",
     // Media stays on the pod even when fronted: attachment urls are not
     // identity-checked by remotes, and proxying blobs would be pure cost.
@@ -9818,6 +9820,7 @@ function actorDoc({
   pendingFollowers = null,
   pendingFollowing = null,
   liked = null,
+  ownerOutbox = null,
   blocked = null,
   inbox = null,
   outbox = null,
@@ -9843,6 +9846,12 @@ function actorDoc({
     context.push({
       bl: "https://purl.archive.org/socialweb/blocked#",
       blocked: { "@id": "bl:blocked", "@type": "@id" }
+    });
+  }
+  if (ownerOutbox) {
+    context.push({
+      fedipod: "https://fedipod.net/ns#",
+      ownerOutbox: { "@id": "fedipod:ownerOutbox", "@type": "@id" }
     });
   }
   if (webId || aliases.length) context.push({ alsoKnownAs: { "@id": "as:alsoKnownAs", "@type": "@id" } });
@@ -9919,6 +9928,9 @@ function actorDoc({
     // What this actor has liked (§5.5). Its owner's to read, like the pending
     // lists below.
     ...liked ? { liked } : {},
+    // Every message this actor produced, as its owner reads it (§5.1), at an
+    // address the owner's own credential reaches.
+    ...ownerOutbox ? { ownerOutbox } : {},
     // FEP-1b12: attributedTo names the moderators collection; recipients
     // validate a group's announced moderation against it.
     ...moderators ? { attributedTo: moderators } : {},
@@ -57455,6 +57467,7 @@ var Publisher = class {
       pendingFollowers: priv ? urls.pendingFollowers : null,
       // Named only where the private folder is proved to keep it private.
       liked: priv ? urls.liked : null,
+      ownerOutbox: priv ? urls.ownOutbox : null,
       pendingFollowing: priv ? urls.pendingFollowing : null,
       blocked: priv ? urls.blocked : null,
       inbox,

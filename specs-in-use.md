@@ -313,8 +313,9 @@ Item-by-item answers to the Solid/ActivityPub interop checklist.
   follows, undos, follower decisions, blocks, pins, followers-only and direct
   posts. A `liked` collection (§5.5) is published for the owner alone.
   On the Server the signed-in owner is answered with it at the outbox
-  address. Through the Gateway the owner is sent to the pod for it, which a
-  browser app cannot follow with its credential.
+  address. Everywhere, the actor names where it lives on the pod
+  (`fedipod:ownerOutbox`, beside `liked`), so an app reads it there with the
+  owner's own credential.
   Boosts, edits, deletions and undos on the public record are documents of
   their own, fetchable at their ids. A like is addressed to its author and an
   undo to whoever had what it takes back; a forwarded activity carries no

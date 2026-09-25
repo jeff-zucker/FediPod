@@ -905,6 +905,24 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   check(listed.length === 1 && listed[0].url === urls.notes + 'p', 'the posts folder listing still holds only posts');
 }
 
+// --- 5b17. the actor names where its owner reads every message ---
+{
+  const wireM = await import(path.join(root, 'lib/core/wire.mjs'));
+  const fronted = wireM.apUrls('https://pod.example/', undefined, { publicBase: 'https://front.example/u/p/' });
+  check(fronted.ownOutbox.startsWith('https://pod.example/') && fronted.liked.startsWith('https://pod.example/')
+    && fronted.actor.startsWith('https://front.example/'),
+    "a fronted identity's full outbox and liked list are addressed at its pod, where its owner reads them");
+  const base = { urls: fronted, handle: 'p', name: 'P', publicKeyPem: 'x' };
+  const withIt = wireM.actorDoc({ ...base, ownerOutbox: fronted.ownOutbox, liked: fronted.liked });
+  const ctx = withIt['@context'].find(c => c && typeof c === 'object' && c.ownerOutbox);
+  check(withIt.ownerOutbox === fronted.ownOutbox && ctx?.fedipod === 'https://fedipod.net/ns#'
+    && ctx.ownerOutbox['@id'] === 'fedipod:ownerOutbox',
+    'the actor names it as fedipod:ownerOutbox, declared in its own context');
+  const without = wireM.actorDoc(base);
+  check(!('ownerOutbox' in without) && !without['@context'].some(c => c && typeof c === 'object' && c.ownerOutbox),
+    'and names nothing where the private folder is not proved private');
+}
+
 // --- 5c. the private trees are re-checked and repaired on every start ---
 {
   const { Publisher } = await import(path.join(root, 'lib/core/publisher/index.mjs'));

@@ -1,5 +1,11 @@
 # Changes
 
+## 2026-09-25 (apps can read your full outbox — version 1.38.2)
+
+**An app signed in as you can read everything your account has done**, on
+fedipod.net too. Your profile names where your full outbox and your liked list
+live on your pod, and the app reads them there with your own sign-in.
+
 ## 2026-09-24 (the last outbox gaps — version 1.38.1)
 
 **The Server answers the spec's own media type**, `application/ld+json` with
