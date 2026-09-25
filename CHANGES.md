@@ -1,5 +1,30 @@
 # Changes
 
+## 2026-09-25 (choose where on your pod your account lives — version 1.39.0)
+
+**You choose where on your pod your data goes.** Sign-up asks "Store your
+data in a container named fedipod, inside this container", prefilled with
+your pod's root, on fedipod.net, the DeviceAgent (its setup page, the new
+actor form and the command line), and the Server's opt-in page. Anything
+outside your own pod, or in its profile or settings, is refused.
+
+**Where it lives is recorded in your public type index**, as an
+ActivityStreams actor, which is how FediPod and other Solid apps find your
+account again. If your pod has no public type index, you're asked whether to
+create one, and saying no stops the sign-up before anything is written.
+Accounts made before this are found where they always were, and gain the
+record when your pod has an index.
+
+**Changes to your profile and type index are checked first**, and never leave
+either of them broken: an N3 Patch of just the statements where the server
+can patch, and nothing written at all if the result wouldn't be valid RDF. A
+profile that can't be written to has the statements written to the document
+its `rdfs:seeAlso` names. The Server now patches RDF in-process instead of
+rewriting it.
+
+**On a server that keeps pods on paths, only you can attach a place inside
+your pod.**
+
 ## 2026-09-25 (apps can read your full outbox — version 1.38.2)
 
 **An app signed in as you can read everything your account has done**, on

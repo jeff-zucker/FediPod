@@ -10488,240 +10488,6 @@ var init_wire = __esm({
   }
 });
 
-// web/app/shims/node-crypto.mjs
-var node_crypto_exports = {};
-__export(node_crypto_exports, {
-  createHash: () => createHash,
-  createHmac: () => createHmac,
-  createPrivateKey: () => createPrivateKey,
-  createPublicKey: () => createPublicKey,
-  default: () => node_crypto_default,
-  generateKeyPairSync: () => generateKeyPairSync,
-  randomBytes: () => randomBytes,
-  randomUUID: () => randomUUID,
-  scryptSync: () => scryptSync,
-  timingSafeEqual: () => timingSafeEqual,
-  webcrypto: () => webcrypto
-});
-function sha256(bytes) {
-  const l = bytes.length;
-  const withOne = l + 1;
-  const k = (56 - withOne % 64 + 64) % 64;
-  const total = withOne + k + 8;
-  const m = new Uint8Array(total);
-  m.set(bytes);
-  m[l] = 128;
-  const bits = l * 8;
-  const dv = new DataView(m.buffer);
-  dv.setUint32(total - 4, bits >>> 0);
-  dv.setUint32(total - 8, Math.floor(bits / 4294967296));
-  const H = new Uint32Array([1779033703, 3144134277, 1013904242, 2773480762, 1359893119, 2600822924, 528734635, 1541459225]);
-  const w = new Uint32Array(64);
-  for (let i = 0; i < total; i += 64) {
-    for (let t = 0; t < 16; t++) w[t] = dv.getUint32(i + t * 4);
-    for (let t = 16; t < 64; t++) {
-      const s0 = rotr(w[t - 15], 7) ^ rotr(w[t - 15], 18) ^ w[t - 15] >>> 3;
-      const s1 = rotr(w[t - 2], 17) ^ rotr(w[t - 2], 19) ^ w[t - 2] >>> 10;
-      w[t] = w[t - 16] + s0 + w[t - 7] + s1 >>> 0;
-    }
-    let [a, b, c, d, e, f, g, h] = H;
-    for (let t = 0; t < 64; t++) {
-      const S1 = rotr(e, 6) ^ rotr(e, 11) ^ rotr(e, 25);
-      const ch = e & f ^ ~e & g;
-      const t1 = h + S1 + ch + K[t] + w[t] >>> 0;
-      const S0 = rotr(a, 2) ^ rotr(a, 13) ^ rotr(a, 22);
-      const maj = a & b ^ a & c ^ b & c;
-      const t2 = S0 + maj >>> 0;
-      h = g;
-      g = f;
-      f = e;
-      e = d + t1 >>> 0;
-      d = c;
-      c = b;
-      b = a;
-      a = t1 + t2 >>> 0;
-    }
-    H[0] = H[0] + a >>> 0;
-    H[1] = H[1] + b >>> 0;
-    H[2] = H[2] + c >>> 0;
-    H[3] = H[3] + d >>> 0;
-    H[4] = H[4] + e >>> 0;
-    H[5] = H[5] + f >>> 0;
-    H[6] = H[6] + g >>> 0;
-    H[7] = H[7] + h >>> 0;
-  }
-  const out = new Uint8Array(32);
-  new DataView(out.buffer).setUint32(0, H[0]);
-  new DataView(out.buffer).setUint32(4, H[1]);
-  new DataView(out.buffer).setUint32(8, H[2]);
-  new DataView(out.buffer).setUint32(12, H[3]);
-  new DataView(out.buffer).setUint32(16, H[4]);
-  new DataView(out.buffer).setUint32(20, H[5]);
-  new DataView(out.buffer).setUint32(24, H[6]);
-  new DataView(out.buffer).setUint32(28, H[7]);
-  return out;
-}
-function hmacSha256(key, msg) {
-  if (key.length > 64) key = sha256(key);
-  const pad = new Uint8Array(64);
-  pad.set(key);
-  const ipad = new Uint8Array(64);
-  const opad = new Uint8Array(64);
-  for (let i = 0; i < 64; i++) {
-    ipad[i] = pad[i] ^ 54;
-    opad[i] = pad[i] ^ 92;
-  }
-  const inner = sha256(concat(ipad, msg));
-  return sha256(concat(opad, inner));
-}
-function createHash(alg) {
-  if (alg !== "sha256") throw new Error(`node-crypto shim: only sha256 is implemented (got ${alg})`);
-  let acc = new Uint8Array(0);
-  return { update(d, e) {
-    acc = concat(acc, toBytes(d, e));
-    return this;
-  }, digest(enc4) {
-    return encode(sha256(acc), enc4);
-  } };
-}
-function createHmac(alg, key) {
-  if (alg !== "sha256") throw new Error(`node-crypto shim: only hmac-sha256 is implemented (got ${alg})`);
-  const k = toBytes(key);
-  let acc = new Uint8Array(0);
-  return { update(d, e) {
-    acc = concat(acc, toBytes(d, e));
-    return this;
-  }, digest(enc4) {
-    return encode(hmacSha256(k, acc), enc4);
-  } };
-}
-function randomBytes(n) {
-  const b = new Uint8Array(n);
-  crypto.getRandomValues(b);
-  return globalThis.Buffer ? globalThis.Buffer.from(b) : b;
-}
-function timingSafeEqual(a, b) {
-  if (a.length !== b.length) return false;
-  let out = 0;
-  for (let i = 0; i < a.length; i++) out |= a[i] ^ b[i];
-  return out === 0;
-}
-var K, rotr, concat, toBytes, encode, webcrypto, randomUUID, unavailable, generateKeyPairSync, createPrivateKey, createPublicKey, scryptSync, node_crypto_default;
-var init_node_crypto = __esm({
-  "web/app/shims/node-crypto.mjs"() {
-    K = new Uint32Array([
-      1116352408,
-      1899447441,
-      3049323471,
-      3921009573,
-      961987163,
-      1508970993,
-      2453635748,
-      2870763221,
-      3624381080,
-      310598401,
-      607225278,
-      1426881987,
-      1925078388,
-      2162078206,
-      2614888103,
-      3248222580,
-      3835390401,
-      4022224774,
-      264347078,
-      604807628,
-      770255983,
-      1249150122,
-      1555081692,
-      1996064986,
-      2554220882,
-      2821834349,
-      2952996808,
-      3210313671,
-      3336571891,
-      3584528711,
-      113926993,
-      338241895,
-      666307205,
-      773529912,
-      1294757372,
-      1396182291,
-      1695183700,
-      1986661051,
-      2177026350,
-      2456956037,
-      2730485921,
-      2820302411,
-      3259730800,
-      3345764771,
-      3516065817,
-      3600352804,
-      4094571909,
-      275423344,
-      430227734,
-      506948616,
-      659060556,
-      883997877,
-      958139571,
-      1322822218,
-      1537002063,
-      1747873779,
-      1955562222,
-      2024104815,
-      2227730452,
-      2361852424,
-      2428436474,
-      2756734187,
-      3204031479,
-      3329325298
-    ]);
-    rotr = (x, n) => x >>> n | x << 32 - n;
-    concat = (a, b) => {
-      const o = new Uint8Array(a.length + b.length);
-      o.set(a);
-      o.set(b, a.length);
-      return o;
-    };
-    toBytes = (data, enc4) => {
-      if (data == null) return new Uint8Array(0);
-      if (typeof data === "string") {
-        if (enc4 === "hex") return Uint8Array.from(data.match(/.{1,2}/g) || [], (h) => parseInt(h, 16));
-        if (enc4 === "base64") return Uint8Array.from(atob(data), (c) => c.charCodeAt(0));
-        return new TextEncoder().encode(data);
-      }
-      return data instanceof Uint8Array ? data : new Uint8Array(data);
-    };
-    encode = (bytes, enc4) => {
-      if (!enc4 || enc4 === "buffer") return bytes;
-      if (enc4 === "hex") return [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
-      const b642 = btoa(String.fromCharCode(...bytes));
-      if (enc4 === "base64url") return b642.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-      return b642;
-    };
-    webcrypto = globalThis.crypto;
-    randomUUID = () => globalThis.crypto.randomUUID();
-    unavailable = (name) => () => {
-      throw new Error(`node:crypto ${name} is not available in the browser agent`);
-    };
-    generateKeyPairSync = unavailable("generateKeyPairSync");
-    createPrivateKey = unavailable("createPrivateKey");
-    createPublicKey = unavailable("createPublicKey");
-    scryptSync = unavailable("scryptSync");
-    node_crypto_default = {
-      createHash,
-      createHmac,
-      randomBytes,
-      webcrypto,
-      randomUUID,
-      timingSafeEqual,
-      generateKeyPairSync,
-      createPrivateKey,
-      createPublicKey,
-      scryptSync
-    };
-  }
-});
-
 // node_modules/@frogcat/ttl2jsonld/ttl2jsonld.js
 var require_ttl2jsonld = __commonJS({
   "node_modules/@frogcat/ttl2jsonld/ttl2jsonld.js"(exports, module2) {
@@ -32655,6 +32421,240 @@ var require_browser_ponyfill = __commonJS({
   }
 });
 
+// web/app/shims/node-crypto.mjs
+var node_crypto_exports = {};
+__export(node_crypto_exports, {
+  createHash: () => createHash,
+  createHmac: () => createHmac,
+  createPrivateKey: () => createPrivateKey,
+  createPublicKey: () => createPublicKey,
+  default: () => node_crypto_default,
+  generateKeyPairSync: () => generateKeyPairSync,
+  randomBytes: () => randomBytes,
+  randomUUID: () => randomUUID,
+  scryptSync: () => scryptSync,
+  timingSafeEqual: () => timingSafeEqual,
+  webcrypto: () => webcrypto
+});
+function sha256(bytes) {
+  const l = bytes.length;
+  const withOne = l + 1;
+  const k = (56 - withOne % 64 + 64) % 64;
+  const total = withOne + k + 8;
+  const m = new Uint8Array(total);
+  m.set(bytes);
+  m[l] = 128;
+  const bits = l * 8;
+  const dv = new DataView(m.buffer);
+  dv.setUint32(total - 4, bits >>> 0);
+  dv.setUint32(total - 8, Math.floor(bits / 4294967296));
+  const H = new Uint32Array([1779033703, 3144134277, 1013904242, 2773480762, 1359893119, 2600822924, 528734635, 1541459225]);
+  const w = new Uint32Array(64);
+  for (let i = 0; i < total; i += 64) {
+    for (let t = 0; t < 16; t++) w[t] = dv.getUint32(i + t * 4);
+    for (let t = 16; t < 64; t++) {
+      const s0 = rotr(w[t - 15], 7) ^ rotr(w[t - 15], 18) ^ w[t - 15] >>> 3;
+      const s1 = rotr(w[t - 2], 17) ^ rotr(w[t - 2], 19) ^ w[t - 2] >>> 10;
+      w[t] = w[t - 16] + s0 + w[t - 7] + s1 >>> 0;
+    }
+    let [a, b, c, d, e, f, g, h] = H;
+    for (let t = 0; t < 64; t++) {
+      const S1 = rotr(e, 6) ^ rotr(e, 11) ^ rotr(e, 25);
+      const ch = e & f ^ ~e & g;
+      const t1 = h + S1 + ch + K[t] + w[t] >>> 0;
+      const S0 = rotr(a, 2) ^ rotr(a, 13) ^ rotr(a, 22);
+      const maj = a & b ^ a & c ^ b & c;
+      const t2 = S0 + maj >>> 0;
+      h = g;
+      g = f;
+      f = e;
+      e = d + t1 >>> 0;
+      d = c;
+      c = b;
+      b = a;
+      a = t1 + t2 >>> 0;
+    }
+    H[0] = H[0] + a >>> 0;
+    H[1] = H[1] + b >>> 0;
+    H[2] = H[2] + c >>> 0;
+    H[3] = H[3] + d >>> 0;
+    H[4] = H[4] + e >>> 0;
+    H[5] = H[5] + f >>> 0;
+    H[6] = H[6] + g >>> 0;
+    H[7] = H[7] + h >>> 0;
+  }
+  const out = new Uint8Array(32);
+  new DataView(out.buffer).setUint32(0, H[0]);
+  new DataView(out.buffer).setUint32(4, H[1]);
+  new DataView(out.buffer).setUint32(8, H[2]);
+  new DataView(out.buffer).setUint32(12, H[3]);
+  new DataView(out.buffer).setUint32(16, H[4]);
+  new DataView(out.buffer).setUint32(20, H[5]);
+  new DataView(out.buffer).setUint32(24, H[6]);
+  new DataView(out.buffer).setUint32(28, H[7]);
+  return out;
+}
+function hmacSha256(key, msg) {
+  if (key.length > 64) key = sha256(key);
+  const pad = new Uint8Array(64);
+  pad.set(key);
+  const ipad = new Uint8Array(64);
+  const opad = new Uint8Array(64);
+  for (let i = 0; i < 64; i++) {
+    ipad[i] = pad[i] ^ 54;
+    opad[i] = pad[i] ^ 92;
+  }
+  const inner = sha256(concat(ipad, msg));
+  return sha256(concat(opad, inner));
+}
+function createHash(alg) {
+  if (alg !== "sha256") throw new Error(`node-crypto shim: only sha256 is implemented (got ${alg})`);
+  let acc = new Uint8Array(0);
+  return { update(d, e) {
+    acc = concat(acc, toBytes(d, e));
+    return this;
+  }, digest(enc4) {
+    return encode(sha256(acc), enc4);
+  } };
+}
+function createHmac(alg, key) {
+  if (alg !== "sha256") throw new Error(`node-crypto shim: only hmac-sha256 is implemented (got ${alg})`);
+  const k = toBytes(key);
+  let acc = new Uint8Array(0);
+  return { update(d, e) {
+    acc = concat(acc, toBytes(d, e));
+    return this;
+  }, digest(enc4) {
+    return encode(hmacSha256(k, acc), enc4);
+  } };
+}
+function randomBytes(n) {
+  const b = new Uint8Array(n);
+  crypto.getRandomValues(b);
+  return globalThis.Buffer ? globalThis.Buffer.from(b) : b;
+}
+function timingSafeEqual(a, b) {
+  if (a.length !== b.length) return false;
+  let out = 0;
+  for (let i = 0; i < a.length; i++) out |= a[i] ^ b[i];
+  return out === 0;
+}
+var K, rotr, concat, toBytes, encode, webcrypto, randomUUID, unavailable, generateKeyPairSync, createPrivateKey, createPublicKey, scryptSync, node_crypto_default;
+var init_node_crypto = __esm({
+  "web/app/shims/node-crypto.mjs"() {
+    K = new Uint32Array([
+      1116352408,
+      1899447441,
+      3049323471,
+      3921009573,
+      961987163,
+      1508970993,
+      2453635748,
+      2870763221,
+      3624381080,
+      310598401,
+      607225278,
+      1426881987,
+      1925078388,
+      2162078206,
+      2614888103,
+      3248222580,
+      3835390401,
+      4022224774,
+      264347078,
+      604807628,
+      770255983,
+      1249150122,
+      1555081692,
+      1996064986,
+      2554220882,
+      2821834349,
+      2952996808,
+      3210313671,
+      3336571891,
+      3584528711,
+      113926993,
+      338241895,
+      666307205,
+      773529912,
+      1294757372,
+      1396182291,
+      1695183700,
+      1986661051,
+      2177026350,
+      2456956037,
+      2730485921,
+      2820302411,
+      3259730800,
+      3345764771,
+      3516065817,
+      3600352804,
+      4094571909,
+      275423344,
+      430227734,
+      506948616,
+      659060556,
+      883997877,
+      958139571,
+      1322822218,
+      1537002063,
+      1747873779,
+      1955562222,
+      2024104815,
+      2227730452,
+      2361852424,
+      2428436474,
+      2756734187,
+      3204031479,
+      3329325298
+    ]);
+    rotr = (x, n) => x >>> n | x << 32 - n;
+    concat = (a, b) => {
+      const o = new Uint8Array(a.length + b.length);
+      o.set(a);
+      o.set(b, a.length);
+      return o;
+    };
+    toBytes = (data, enc4) => {
+      if (data == null) return new Uint8Array(0);
+      if (typeof data === "string") {
+        if (enc4 === "hex") return Uint8Array.from(data.match(/.{1,2}/g) || [], (h) => parseInt(h, 16));
+        if (enc4 === "base64") return Uint8Array.from(atob(data), (c) => c.charCodeAt(0));
+        return new TextEncoder().encode(data);
+      }
+      return data instanceof Uint8Array ? data : new Uint8Array(data);
+    };
+    encode = (bytes, enc4) => {
+      if (!enc4 || enc4 === "buffer") return bytes;
+      if (enc4 === "hex") return [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
+      const b642 = btoa(String.fromCharCode(...bytes));
+      if (enc4 === "base64url") return b642.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+      return b642;
+    };
+    webcrypto = globalThis.crypto;
+    randomUUID = () => globalThis.crypto.randomUUID();
+    unavailable = (name) => () => {
+      throw new Error(`node:crypto ${name} is not available in the browser agent`);
+    };
+    generateKeyPairSync = unavailable("generateKeyPairSync");
+    createPrivateKey = unavailable("createPrivateKey");
+    createPublicKey = unavailable("createPublicKey");
+    scryptSync = unavailable("scryptSync");
+    node_crypto_default = {
+      createHash,
+      createHmac,
+      randomBytes,
+      webcrypto,
+      randomUUID,
+      timingSafeEqual,
+      generateKeyPairSync,
+      createPrivateKey,
+      createPublicKey,
+      scryptSync
+    };
+  }
+});
+
 // web/app/shims/safefetch.mjs
 var safefetch_exports = {};
 __export(safefetch_exports, {
@@ -32664,11 +32664,11 @@ __export(safefetch_exports, {
   isLoopbackHost: () => isLoopbackHost,
   isPrivateAddress: () => isPrivateAddress,
   pinnedFor: () => pinnedFor,
-  readCapped: () => readCapped,
-  retryAfterMs: () => retryAfterMs,
+  readCapped: () => readCapped2,
+  retryAfterMs: () => retryAfterMs2,
   safeFetch: () => safeFetch
 });
-function retryAfterMs(res, max = 30 * 6e4) {
+function retryAfterMs2(res, max = 30 * 6e4) {
   const h = res?.headers?.get?.("retry-after");
   if (!h) return null;
   const secs = /^\d+$/.test(h.trim()) ? Number(h) * 1e3 : Date.parse(h) - Date.now();
@@ -32696,7 +32696,7 @@ async function assertPublicUrl() {
 async function pinnedFor() {
   return void 0;
 }
-async function readCapped(res, max = MAX_BYTES) {
+async function readCapped2(res, max = MAX_BYTES2) {
   const len = Number(res.headers?.get?.("content-length") || 0);
   if (len > max) throw new Error(`response too large (${len} bytes)`);
   if (!res.body) return res.text();
@@ -32719,11 +32719,11 @@ async function readCapped(res, max = MAX_BYTES) {
 async function safeFetch(url, init = {}, fetchImpl = fetch) {
   return fetchImpl(url, { ...init, signal: init.signal || AbortSignal.timeout(HTTP_TIMEOUT_MS) });
 }
-var HTTP_TIMEOUT_MS, MAX_BYTES;
+var HTTP_TIMEOUT_MS, MAX_BYTES2;
 var init_safefetch = __esm({
   "web/app/shims/safefetch.mjs"() {
     HTTP_TIMEOUT_MS = 2e4;
-    MAX_BYTES = 5 * 1024 * 1024;
+    MAX_BYTES2 = 5 * 1024 * 1024;
   }
 });
 
@@ -32857,7 +32857,7 @@ function makeSafeLoader({ getActors = null, fetchImpl = fetch } = {}) {
       headers: { accept: "application/activity+json, application/ld+json" }
     }, fetchImpl);
     if (res.status >= 400) throw new Error(`key fetch ${url} \u2192 ${res.status}`);
-    const document3 = JSON.parse(await readCapped(res));
+    const document3 = JSON.parse(await readCapped2(res));
     return { document: document3, documentUrl: url, contextUrl: null };
   };
 }
@@ -34364,713 +34364,6 @@ async function registeredActors(pod, podBase) {
   return (await actorsIn(pod, index)).filter((a) => a.startsWith(podBase) && a.endsWith("ap/actor"));
 }
 
-// lib/pod/location.mjs
-function rootOfActor(podBase, actorUrl) {
-  const a = String(actorUrl || "");
-  if (!a.startsWith(podBase) || !a.endsWith("ap/actor")) return null;
-  const root = a.slice(podBase.length, -"ap/actor".length);
-  return root.endsWith("/") ? root : null;
-}
-
-// lib/core/place.mjs
-init_wire();
-async function candidateRoots(pod, podBase) {
-  const recorded = await registeredActors(pod, podBase).catch(() => []);
-  const roots = recorded.map((a) => rootOfActor(podBase, a)).filter(Boolean);
-  return [.../* @__PURE__ */ new Set([...roots, DEFAULT_ROOT])];
-}
-async function findAccount(pod, podBase, read2, accept = () => true) {
-  for (const root of await candidateRoots(pod, podBase)) {
-    const config = await read2(root).catch(() => null);
-    if (config && accept(config)) return { root, config };
-  }
-  return null;
-}
-async function recordPlace(pod, podBase, actorAtPod, { create = false } = {}) {
-  let index = await findPublicIndex(pod, podBase);
-  if (!index) {
-    if (!create) return "no-index";
-    index = await createPublicIndex(pod, podBase);
-  }
-  return await register(pod, index, actorAtPod) ? "registered" : "already";
-}
-
-// lib/pod/containers.mjs
-var KEEP = { keep: true };
-var KEEP_CT = "application/json";
-var keepUrl = (base) => `${base}.keep`;
-async function exists(pod, base) {
-  try {
-    const r = await pod.fetch(keepUrl(base), { method: "HEAD" });
-    return r?.status >= 200 && r.status < 300;
-  } catch {
-    return false;
-  }
-}
-async function provisionOwnerOnly(pod, base) {
-  await pod.putJson(keepUrl(base), KEEP, KEEP_CT);
-  await pod.setAcl(base, []);
-}
-async function provisionPublic(pod, base) {
-  await pod.putJson(keepUrl(base), KEEP, KEEP_CT);
-  await pod.setAcl(base, ["Read"]);
-}
-async function provisionPrivate(pod, urls) {
-  if (await exists(pod, urls.state)) return false;
-  await pod.putJson(keepUrl(urls.state), KEEP, KEEP_CT);
-  await pod.setAcl(urls.state, []);
-  await pod.setAcl(urls.home, []);
-  return true;
-}
-async function repairPrivateAcls(pod, trees, { isPublic } = {}) {
-  const findings = [];
-  for (const url of trees) {
-    if (!await isPublic(url)) continue;
-    const finding = { url, rewritten: false, stillPublic: false, error: null };
-    findings.push(finding);
-    try {
-      await pod.setAcl(url, []);
-      finding.rewritten = true;
-    } catch (e) {
-      finding.error = e.message;
-      continue;
-    }
-    finding.stillPublic = await isPublic(url);
-  }
-  return findings;
-}
-async function probePublicReadability(probe, url, { headers = {}, timeoutMs = 2e4 } = {}) {
-  try {
-    const res = await probe(url, {
-      headers: { accept: "*/*", ...headers },
-      signal: AbortSignal.timeout(timeoutMs)
-    });
-    return res.status < 400;
-  } catch {
-    return false;
-  }
-}
-async function probePrivateEnforcement(probe, podKeepUrl) {
-  const r = await probe(podKeepUrl, { redirect: "manual" });
-  if (r.status === 401 || r.status === 403) return true;
-  return `this pod serves private documents to strangers (HTTP ${r.status})`;
-}
-
-// lib/pod/state.mjs
-var readKeys = (pod, urls) => pod.getJson(urls.state + "keys.json");
-var readConfig = (pod, urls) => pod.getJson(urls.state + "config.json");
-var writeKeys = (pod, urls, keys) => pod.putJson(urls.state + "keys.json", keys, "application/json");
-
-// lib/core/store.mjs
-init_node_crypto();
-init_wire();
-var plainText = (s) => sanitizeHtml(String(s || "")).replace(/<[^>]*>/g, "").trim();
-var safeUrl = (u) => {
-  if (!u) return u;
-  try {
-    const parsed = new URL(String(u));
-    return parsed.protocol === "https:" || parsed.protocol === "http:" ? String(u) : null;
-  } catch {
-    return null;
-  }
-};
-var MAX_NAME = 500;
-var MAX_SUMMARY = 5e3;
-var MAX_CONTENT = 1e5;
-var clamp = (s, n) => typeof s === "string" && s.length > n ? s.slice(0, n) : s;
-var PUT_DEBOUNCE_MS = 300;
-var PUT_RETRIES = 5;
-var ACTOR_CACHE_MAX = 2e3;
-var NOTIFICATIONS_MAX = 500;
-function prune(actors, max, contacts) {
-  const urls = Object.keys(actors);
-  if (urls.length <= max) return actors;
-  const keep = /* @__PURE__ */ new Set([
-    ...contacts.followers.map((f) => f.actor),
-    ...contacts.following.map((f) => f.actor)
-  ]);
-  const droppable = urls.filter((u) => !keep.has(u)).sort((a, b) => String(actors[a].fetchedAt || "").localeCompare(String(actors[b].fetchedAt || "")));
-  for (const u of droppable.slice(0, urls.length - max)) delete actors[u];
-  return actors;
-}
-function dropFollower(contacts, actor, why) {
-  contacts.followers = contacts.followers.filter((f) => f.actor !== actor);
-  const gone = (contacts.removedFollowers || []).filter((r) => r.actor !== actor);
-  gone.push({ actor, why, at: (/* @__PURE__ */ new Date()).toISOString() });
-  contacts.removedFollowers = gone.slice(-500);
-  return contacts;
-}
-var serialise = (obj) => JSON.stringify(obj, null, 2) + "\n";
-var sameButWhen = (a, b) => JSON.stringify({ ...a, fetchedAt: null }) === JSON.stringify({ ...b, fetchedAt: null });
-var PodStore = class {
-  constructor({ storage = null, log: log2 = console.log } = {}) {
-    this.lastSkipped = [];
-    this.storage = storage;
-    this.log = log2;
-    this.cache = /* @__PURE__ */ new Map();
-    this.etags = /* @__PURE__ */ new Map();
-    this.lastText = /* @__PURE__ */ new Map();
-    this.timers = /* @__PURE__ */ new Map();
-    this.dirty = /* @__PURE__ */ new Set();
-    this._held = 0;
-    this.chain = Promise.resolve();
-    this.verdicts = /* @__PURE__ */ new Map();
-  }
-  get base() {
-    return this.storage?.base || null;
-  }
-  attach(storage) {
-    if (this.storage && this.storage.base !== storage.base) {
-      this.cache.clear();
-      this.etags.clear();
-      this.lastText.clear();
-    }
-    this.storage = storage;
-  }
-  // Load every state doc in the container into the cache. Missing container
-  // (first run) is fine — the cache just starts empty.
-  //
-  // `force` skips the container short-circuit below. A container's ETag says
-  // its CHILDREN have not changed; it does not vouch for their contents, and a
-  // peer agent rewriting a document it already had changes no containment
-  // triple. That is a fine trade for a viewer refreshing a display, and a bad
-  // one at the moment a viewer is promoted and starts acting on what it holds.
-  // Throws when the container cannot be read. An empty cache MUST mean "no
-  // state yet", never "the pod was unreachable" — the caller treats the
-  // former as a fresh install, and silently conflating them would look like
-  // an un-set-up agent every time the pod hiccups.
-  async load({ force = false } = {}) {
-    if (!this.storage) return;
-    const listing = await this.storage.list("", { etag: force ? null : this.etags.get("") });
-    if (listing.notModified) return;
-    if (listing.missing && this.storage.kind === "pod") {
-      throw new Error(`state container missing (HTTP 404) at ${this.base} \u2014 pod unreachable or state gone`);
-    }
-    this.etags.set("", listing.etag);
-    const names = listing.names.filter((n) => n.endsWith(".json"));
-    let fetched = 0;
-    const skipped = [];
-    for (const name of names) {
-      const etag = force ? null : this.etags.get(name);
-      const r = await this.storage.read(name, { etag: etag && this.cache.has(name) ? etag : null });
-      if (r.notModified) continue;
-      if (!r.ok) {
-        if (name === "config.json" && !this.cache.has(name)) {
-          throw new Error(`state doc ${name} unreadable (HTTP ${r.status})`);
-        }
-        skipped.push(`${name} (HTTP ${r.status})`);
-        continue;
-      }
-      fetched++;
-      this.etags.set(name, r.etag);
-      try {
-        this.cache.set(name, JSON.parse(r.body));
-        this.lastText.set(name, r.body);
-      } catch (e) {
-        this.log(`state load ${name}: unparsable (${e.message})`);
-      }
-    }
-    this.lastSkipped = skipped;
-    if (skipped.length) this.log(`state load skipped ${skipped.length}: ${skipped.join(", ")}`);
-    this.log(`state loaded: ${this.cache.size} doc(s) from ${this.base} (${fetched} re-fetched)`);
-  }
-  has(name) {
-    return this.cache.has(name);
-  }
-  // The documents held here. Callers that keep one document per thing — a
-  // connected account, say — list them with this rather than a fixed name.
-  names() {
-    return [...this.cache.keys()];
-  }
-  read(name, fallback) {
-    return this.cache.has(name) ? structuredClone(this.cache.get(name)) : fallback;
-  }
-  write(name, obj) {
-    this.cache.set(name, structuredClone(obj));
-    if (!this.storage) return;
-    if (this.lastText.get(name) === serialise(obj)) {
-      clearTimeout(this.timers.get(name));
-      this.timers.delete(name);
-      this.dirty.delete(name);
-      return;
-    }
-    if (this._held) {
-      this.dirty.add(name);
-      return;
-    }
-    this._arm(name);
-  }
-  _arm(name) {
-    clearTimeout(this.timers.get(name));
-    this.timers.set(name, setTimeout(() => {
-      this.timers.delete(name);
-      this._put(name);
-    }, PUT_DEBOUNCE_MS));
-    this.timers.get(name).unref?.();
-  }
-  // Suspend the debounce for the length of a sweep.
-  //
-  // 300ms coalesces writes that arrive together, and the inbox drain's never
-  // do: every handler awaits a signed fetch to somebody else's server first, so
-  // each item's timer fires before the next item is even read. statuses.json,
-  // actors.json and notifications.json were therefore serialized and written
-  // WHOLE once per item — fifty times in a fifty-item sweep, where the drain
-  // already commits every ten.
-  //
-  // Nested, because a drain can run a handler that starts another. release()
-  // re-arms anything still dirty rather than dropping it, so a write made by
-  // something else while the drain held the store is never stranded.
-  hold() {
-    this._held = (this._held || 0) + 1;
-  }
-  release() {
-    if (this._held) this._held -= 1;
-    if (this._held) return;
-    for (const name of [...this.dirty]) {
-      this.dirty.delete(name);
-      this._arm(name);
-    }
-  }
-  // Resolves true when the document is on the pod, false when it is not — a
-  // caller that is about to destroy the only other copy of something needs to
-  // be able to tell. `chain` stays the bare serializer; the boolean rides on
-  // the returned promise so one failure cannot poison the queue.
-  _put(name) {
-    const done = this.chain.then(async () => {
-      const body = serialise(this.cache.get(name));
-      for (let attempt = 1; attempt <= PUT_RETRIES; attempt++) {
-        const r = await this.storage.write(name, body, "application/json").catch((e) => ({ ok: false, retry: false, why: e.message }));
-        if (r.ok) {
-          this.lastText.set(name, body);
-          return true;
-        }
-        if (!r.retry) {
-          this.log(`state write ${name} refused (${r.why}) \u2014 not retrying`);
-          return false;
-        }
-        if (attempt === PUT_RETRIES) {
-          this.log(`state write ${name} gave up: ${r.why}`);
-          return false;
-        }
-        const ladder = Math.min(attempt * 2e3, 3e4);
-        await new Promise((res) => setTimeout(res, r.retryAfterMs || Math.round(ladder * (0.8 + Math.random() * 0.4))));
-      }
-      return false;
-    });
-    const tracked = done.then((ok) => {
-      this.verdicts.set(name, ok);
-      return ok;
-    });
-    this.chain = tracked.then(() => {
-    }, () => {
-    });
-    return tracked;
-  }
-  // Remove a state doc from the cache AND the pod (used when key material
-  // migrates to the local machine — leaving the copy behind would defeat it).
-  async remove(name) {
-    this.cache.delete(name);
-    this.lastText.delete(name);
-    clearTimeout(this.timers.get(name));
-    this.timers.delete(name);
-    if (!this.storage) return true;
-    return this.storage.remove(name);
-  }
-  // Force every pending write out NOW and say whether they all landed.
-  // The caller that needs this is the inbox drain: taking an item out of the
-  // pod's inbox is a destructive read, so it must not happen until the result
-  // of handling it is written down. With no storage the store is pure memory
-  // and there is nothing to land, so that counts as written.
-  async commit() {
-    const pending = [];
-    for (const name of /* @__PURE__ */ new Set([...this.timers.keys(), ...this.dirty])) {
-      const t = this.timers.get(name);
-      if (t) {
-        clearTimeout(t);
-        this.timers.delete(name);
-      }
-      this.dirty.delete(name);
-      pending.push(this._put(name));
-    }
-    await this.chain;
-    await Promise.all(pending);
-    const landed = [...this.verdicts.values()].every(Boolean);
-    this.verdicts.clear();
-    return landed;
-  }
-  // Flush pending debounced writes (shutdown path). Same work, result ignored.
-  async flush() {
-    await this.commit();
-  }
-  // ---- the domain helpers, unchanged from dk's Store ----
-  // config: { remotePod, handle, name, issuer }  (credential lives ONLY in
-  // the local credential file, never in pod state)
-  getConfig() {
-    return this.read("config.json", null);
-  }
-  setConfig(cfg) {
-    this.write("config.json", cfg);
-  }
-  // queue: [{ inbox, activity, attempts, nextAt }]
-  getQueue() {
-    return this.read("queue.json", []);
-  }
-  setQueue(q) {
-    this.write("queue.json", q);
-  }
-  // blocklist: { domains: ["spam.example", ...], actors: ["https://host/actor", ...] }
-  // Two granularities because a whole instance is usually the wrong unit: one
-  // bad neighbour should not cost you everyone else on their server.
-  getBlocklist() {
-    const b = this.read("blocklist.json", {});
-    return { domains: b.domains || [], actors: b.actors || [] };
-  }
-  // Blocking someone ends their following as well: a blocked actor, or anyone
-  // on a blocked domain, is no longer delivered to. The mark dropFollower leaves
-  // keeps a reconcile from bringing them back.
-  setBlocklist(b) {
-    this.write("blocklist.json", b);
-    const c = this.getContacts();
-    const gone = c.followers.filter((f) => f.actor && this.isBlocked(f.actor)).map((f) => f.actor);
-    if (!gone.length) return;
-    for (const actor of gone) dropFollower(c, actor, "blocked");
-    this.setContacts(c);
-  }
-  // Takes an actor URL or an object URL: the actor list only ever matches the
-  // former, the domain list matches either.
-  isBlocked(url) {
-    let host;
-    try {
-      host = new URL(url).hostname;
-    } catch {
-      return true;
-    }
-    const { domains, actors } = this.getBlocklist();
-    if (actors.includes(url)) return true;
-    return domains.some((d) => host === d || host.endsWith("." + d));
-  }
-  // contacts: { followers: [{actor, inbox, sharedInbox}], following: [{actor, inbox, accepted}] }
-  getContacts() {
-    return this.read("contacts.json", { followers: [], following: [] });
-  }
-  setContacts(c) {
-    this.write("contacts.json", c);
-  }
-  // muted: { actors: [...] } — members whose posts a group declines to carry.
-  // A group cannot force an unfollow, so declining to amplify is the only
-  // lever it actually holds.
-  getMuted() {
-    return this.read("muted.json", { actors: [] });
-  }
-  setMuted(m) {
-    this.write("muted.json", m);
-  }
-  // The client's own reading arrangements — lists, keyword filters, posts
-  // waiting to be published. None of it federates.
-  getLists() {
-    return this.read("lists.json", []);
-  }
-  setLists(l) {
-    this.write("lists.json", l);
-  }
-  getFilters() {
-    return this.read("filters.json", []);
-  }
-  setFilters(f) {
-    this.write("filters.json", f);
-  }
-  getScheduled() {
-    return this.read("scheduled.json", []);
-  }
-  setScheduled(s) {
-    this.write("scheduled.json", s);
-  }
-  // pending: [{ noteId, actor, at }] — posts a reviewed group has ingested but
-  // not carried, awaiting the operator.
-  getPending() {
-    return this.read("pending.json", []);
-  }
-  setPending(p) {
-    this.write("pending.json", p);
-  }
-  // requests: [{ actor, inbox, sharedInbox, activity, at }] — Follows a group
-  // with approveJoins has neither accepted nor rejected. The whole Follow is
-  // kept because the Accept or Reject has to name it.
-  getRequests() {
-    return this.read("requests.json", []);
-  }
-  setRequests(r) {
-    this.write("requests.json", r);
-  }
-  // dead letters: inbox items that failed verification or exhausted retries —
-  // kept for inspection (GET /deadletter) instead of being destroyed.
-  getDeadLetters() {
-    return this.read("deadletter.json", []);
-  }
-  addDeadLetter(entry) {
-    const dl = this.getDeadLetters();
-    dl.unshift({ at: (/* @__PURE__ */ new Date()).toISOString(), ...entry });
-    this.write("deadletter.json", dl.slice(0, 200));
-  }
-  // statuses index: operational mirror of what lives in the pod as RDF, in
-  // arrival order — the Mastodon-API facade serves timelines from this.
-  // [{ noteId, actor, content, published, inReplyTo, kind: 'timeline'|'post'|'tag' }]
-  getStatuses() {
-    return this.read("statuses.json", []);
-  }
-  // A count must not pay for a clone: nodeinfo and the instance document are
-  // public and answer strangers, so they read the cache directly.
-  countStatuses(kind = null) {
-    const all = this.cache.get("statuses.json") || [];
-    return kind === null ? all.length : all.reduce((n, s) => n + (s.kind === kind ? 1 : 0), 0);
-  }
-  addStatus(s) {
-    const all = this.getStatuses();
-    const at = all.findIndex((x) => x.noteId === s.noteId);
-    if (at >= 0) return this._mergeStatus(all, at, s);
-    if (typeof s.content === "string" && s.content.length > MAX_CONTENT) {
-      s = { ...s, content: clamp(s.content, MAX_CONTENT), truncated: true };
-    }
-    all.unshift(s);
-    this.write("statuses.json", all.slice(0, 1e3));
-    this.onEvent?.("status", s);
-    return { added: true, merged: false, status: s };
-  }
-  // The same post arrives twice when two of the owner's accounts follow its
-  // author, and the second arrival is the only record that the other one saw
-  // it. Merged in place — the per-kind prune tails take the tail to be the
-  // oldest — and with no stream event, which would show the post twice.
-  _mergeStatus(all, at, s) {
-    const row = all[at];
-    const known2 = new Set((row.sourceAccts || []).map((v) => v.acct));
-    const fresh = (s.sourceAccts || []).filter((v) => v && !known2.has(v.acct));
-    const first = (k) => k === "post" || k === "timeline";
-    const raise = first(s.kind) && !first(row.kind);
-    if (!fresh.length && !raise) return { added: false, merged: false, status: row };
-    all[at] = {
-      ...row,
-      ...fresh.length ? { sourceAccts: [...row.sourceAccts || [], ...fresh] } : {},
-      ...raise ? { kind: s.kind, ...s.slug ? { slug: s.slug } : {} } : {}
-    };
-    this.write("statuses.json", all);
-    return { added: false, merged: true, status: all[at] };
-  }
-  updateStatus(noteId, patch) {
-    const all = this.getStatuses();
-    const i = all.findIndex((x) => x.noteId === noteId);
-    if (i < 0) return null;
-    all[i] = { ...all[i], ...patch };
-    this.write("statuses.json", all);
-    return all[i];
-  }
-  removeStatus(noteId) {
-    this.write("statuses.json", this.getStatuses().filter((x) => x.noteId !== noteId));
-  }
-  // notifications: what other actors did to us — the facade serves
-  // /api/v1/notifications from this. [{ id, type, actor, noteId?, at }]
-  // The id is a content hash, so a re-delivered activity dedupes.
-  getNotifications() {
-    return this.read("notifications.json", []);
-  }
-  // `unverified` marks one whose actor nothing vouched for — a Like or Announce
-  // arrives with no signature and, unlike a Create, has no object at the
-  // sender's origin to re-read, so the actor is whatever the body claimed.
-  //
-  // It decides what the cap evicts. The id is a content hash, so changing one
-  // character of the actor gives a fresh entry: ~500 appends into the pod's
-  // public-append inbox used to push out every real favourite, boost, mention
-  // and follow request, and notifications are the one thing nothing can rebuild
-  // — not from the pod, not from the RDF. Unverified entries are dropped first
-  // now, so a flood can only ever evict itself, and a stranger's genuine
-  // favourite still shows up, which is what recording them at all is for.
-  // What an Undo unsays: the favourite or boost it names, matched by a
-  // predicate on what was recorded. Returns how many went.
-  removeNotifications(pred) {
-    const all = this.getNotifications();
-    const kept = all.filter((n) => !pred(n));
-    if (kept.length !== all.length) this.write("notifications.json", kept);
-    return all.length - kept.length;
-  }
-  addNotification(n) {
-    const all = this.getNotifications();
-    const id = node_crypto_default.createHash("sha256").update(JSON.stringify(n)).digest("hex").slice(0, 16);
-    if (all.some((x) => x.id === id)) return;
-    const entry = { id, at: (/* @__PURE__ */ new Date()).toISOString(), ...n };
-    all.unshift(entry);
-    let kept = all;
-    if (kept.length > NOTIFICATIONS_MAX) {
-      const solid = kept.filter((x) => !x.unverified);
-      const loose = kept.filter((x) => x.unverified);
-      kept = solid.length >= NOTIFICATIONS_MAX ? solid.slice(0, NOTIFICATIONS_MAX) : [...solid, ...loose.slice(0, NOTIFICATIONS_MAX - solid.length)].sort((a, b) => String(b.at).localeCompare(String(a.at)));
-    }
-    this.write("notifications.json", kept);
-    this.onEvent?.("notification", entry);
-  }
-  // uploaded media registry: opaque id → { url, mediaType, description }
-  getMedia() {
-    return this.read("media.json", {});
-  }
-  setMedia(id, entry) {
-    const m = this.getMedia();
-    m[id] = entry;
-    this.write("media.json", m);
-  }
-  // actor-doc cache for account rendering (display name, avatar).
-  //
-  // Everything here comes from a document at someone else's origin, and the
-  // facade serves `summary` back to the client as a status account's `note`,
-  // which every Mastodon client renders as HTML. Note CONTENT was sanitized at
-  // all four of its entry points and this, the other thing a remote party
-  // writes, was not — so looking anyone up handed their markup to the client.
-  // Sanitized at the boundary where it enters our store, so nothing downstream
-  // has to remember. Names are plain text and are stripped outright.
-  getActors() {
-    return this.read("actors.json", {});
-  }
-  cacheActor(url, doc) {
-    const a = this.getActors();
-    const known2 = a[url];
-    a[url] = {
-      name: clamp(plainText(doc.name || doc.preferredUsername || ""), MAX_NAME),
-      preferredUsername: clamp(plainText(doc.preferredUsername || ""), MAX_NAME),
-      icon: safeUrl(typeof doc.icon === "object" ? doc.icon?.url : doc.icon),
-      image: safeUrl(typeof doc.image === "object" ? doc.image?.url : doc.image),
-      summary: clamp(sanitizeHtml(doc.summary || ""), MAX_SUMMARY),
-      // A Group is an actor too, and a client that cannot tell shows it as a
-      // person. The counts are NOT in this document — they are the collections'
-      // totalItems, filled in only when someone asks about this actor by name.
-      type: doc.type || "Person",
-      followers: doc.followers || null,
-      following: doc.following || null,
-      ...known2?.counts ? { counts: known2.counts } : {},
-      fetchedAt: (/* @__PURE__ */ new Date()).toISOString()
-    };
-    if (known2 && sameButWhen(known2, a[url])) {
-      a[url] = known2;
-      return;
-    }
-    this.write("actors.json", prune(a, ACTOR_CACHE_MAX, this.getContacts()));
-  }
-  // @user@host for an actor we have cached. Null when we have not, rather than
-  // a last-segment guess off the URL: that guess is what rendered a group as
-  // @actor@host, because our own actors all end in /actor.
-  handleOf(actorUrl) {
-    const user = this.getActors()[actorUrl]?.preferredUsername;
-    if (!user) return null;
-    try {
-      return `@${user}@${new URL(actorUrl).host}`;
-    } catch {
-      return null;
-    }
-  }
-  // Mastodon-API opaque ids ↔ URLs (snac-style: hashes are fine for clients).
-  getIds() {
-    return this.read("ids.json", {});
-  }
-  // The id is a hash OF the url, so the mapping is computable — the scan was
-  // only ever finding what the hash already tells us. It ran on the status
-  // render path, once per rendered status, over a map that never shrinks.
-  //
-  // The map is still kept, because urlFor has to answer for ids a client is
-  // still holding, and it is still consulted first so an entry written under
-  // some older scheme keeps resolving.
-  idFor(url) {
-    const id = node_crypto_default.createHash("sha256").update(url).digest("hex").slice(0, 16);
-    const ids = this.getIds();
-    if (ids[id] === url) return id;
-    const legacy = Object.entries(ids).find(([, u]) => u === url);
-    if (legacy) return legacy[0];
-    ids[id] = url;
-    this.cache.set("ids.json", ids);
-    return id;
-  }
-  // The map first, for ids minted under an older scheme. Then, because the
-  // id IS the hash of the url, whatever this store knows is scanned for the
-  // url that hashes to it — actors, posts, contacts, requests, media. The
-  // browser build's worker is stopped whenever it idles, and the in-memory
-  // map went with it: a client clicking an account it had just been shown
-  // reached a fresh worker that held the actor and could not name it.
-  urlFor(id) {
-    const ids = this.getIds();
-    if (ids[id]) return ids[id];
-    if (!/^[a-f0-9]{16}$/u.test(String(id))) return null;
-    const hash = (u) => node_crypto_default.createHash("sha256").update(u).digest("hex").slice(0, 16);
-    const seen = /* @__PURE__ */ new Set();
-    const candidates = function* (store) {
-      for (const u of Object.keys(store.getActors())) yield u;
-      for (const st2 of store.getStatuses()) {
-        yield st2.noteId;
-        yield st2.actor;
-        for (const a of st2.attachments || []) if (a?.url) yield a.url;
-      }
-      const c = store.getContacts();
-      for (const f of [...c.followers, ...c.following]) if (f?.actor) yield f.actor;
-      for (const r of store.getRequests()) if (r?.actor) yield r.actor;
-      for (const u of Object.keys(store.getMedia())) yield u;
-    };
-    for (const u of candidates(this)) {
-      if (typeof u !== "string" || seen.has(u)) continue;
-      seen.add(u);
-      if (hash(u) === id) {
-        ids[id] = u;
-        this.cache.set("ids.json", ids);
-        return u;
-      }
-    }
-    return null;
-  }
-};
-
-// stub:node:fs/promises
-var fail = () => {
-  throw new Error("node:fs/promises is not available in the browser agent");
-};
-var promises_default = new Proxy({}, { get: () => fail });
-
-// web/app/shims/node-path.mjs
-var normalize = (p) => {
-  const up = p.startsWith("/");
-  const parts = [];
-  for (const seg2 of p.split("/")) {
-    if (!seg2 || seg2 === ".") continue;
-    if (seg2 === "..") {
-      if (parts.length && parts[parts.length - 1] !== "..") parts.pop();
-      else if (!up) parts.push("..");
-    } else parts.push(seg2);
-  }
-  return (up ? "/" : "") + parts.join("/") || (up ? "/" : ".");
-};
-var join = (...segs) => normalize(segs.filter((s) => s != null && s !== "").join("/"));
-var dirname = (p) => {
-  const i = p.replace(/\/$/, "").lastIndexOf("/");
-  return i <= 0 ? i === 0 ? "/" : "." : p.slice(0, i);
-};
-var basename = (p, ext) => {
-  let b = p.slice(p.lastIndexOf("/") + 1);
-  if (ext && b.endsWith(ext)) b = b.slice(0, -ext.length);
-  return b;
-};
-var extname = (p) => {
-  const b = basename(p);
-  const i = b.lastIndexOf(".");
-  return i > 0 ? b.slice(i) : "";
-};
-var resolve = (...segs) => join(...segs);
-var posix = { join, dirname, basename, extname, resolve, normalize, sep: "/" };
-var node_path_default = { join, dirname, basename, extname, resolve, normalize, posix, sep: "/" };
-
-// web/app/shims/_globals.mjs
-var URL2 = globalThis.URL;
-var URLSearchParams2 = globalThis.URLSearchParams;
-
-// web/app/shims/node-url.mjs
-var fileURLToPath = (u) => {
-  const s = typeof u === "string" ? u : u.href;
-  return s.replace(/^file:\/\//, "");
-};
-var pathToFileURL = (p) => new URL("file://" + (p.startsWith("/") ? p : "/" + p));
-var node_url_default = { URL: globalThis.URL, URLSearchParams: globalThis.URLSearchParams, fileURLToPath, pathToFileURL };
-
 // node_modules/@babel/runtime/helpers/esm/typeof.js
 function _typeof(o) {
   "@babel/helpers - typeof";
@@ -35773,7 +35066,7 @@ __export(uri_exports, {
   docpart: () => docpart,
   document: () => document2,
   hostpart: () => hostpart,
-  join: () => join2,
+  join: () => join,
   protocol: () => protocol,
   refTo: () => refTo
 });
@@ -35798,7 +35091,7 @@ function hostpart(u) {
     return "";
   }
 }
-function join2(given, base) {
+function join(given, base) {
   var baseColon, baseScheme, baseSingle;
   var colon, lastSlash, path;
   var baseHash = base.indexOf("#");
@@ -35950,7 +35243,7 @@ var Variable = class _Variable extends Node3 {
     _defineProperty(this, "isVar", 1);
     _defineProperty(this, "uri", void 0);
     this.base = "varid:";
-    this.uri = join2(name, this.base);
+    this.uri = join(name, this.base);
   }
   equals(other) {
     if (!other) {
@@ -39448,7 +38741,7 @@ String.prototype.decode = function(encoding) {
   return this;
 };
 var uripath_join = function(base, given) {
-  return join2(given, base);
+  return join(given, base);
 };
 var becauseSubexpression = null;
 var diag_tracking = 0;
@@ -42735,7 +42028,7 @@ var RDFaProcessor = class _RDFaProcessor {
       if (values[i][values[i].length - 1] === ":") {
         prefix = values[i].substring(0, values[i].length - 1);
       } else if (prefix) {
-        target[prefix] = this.options.base ? join2(values[i], this.options.base) : values[i];
+        target[prefix] = this.options.base ? join(values[i], this.options.base) : values[i];
         prefix = null;
       }
     }
@@ -42920,7 +42213,7 @@ var RDFaProcessor = class _RDFaProcessor {
           }
           var prefix = att.nodeName.substring(6);
           var ref = _RDFaProcessor.trim(att.value);
-          prefixes[prefix] = this.options.base ? join2(ref, this.options.base) : ref;
+          prefixes[prefix] = this.options.base ? join(ref, this.options.base) : ref;
         }
       }
       var prefixAtt = current.getAttributeNode("prefix");
@@ -43328,7 +42621,7 @@ var RDFaProcessor = class _RDFaProcessor {
     };
   }
   resolveAndNormalize(base, uri) {
-    return join2(uri, base);
+    return join(uri, base);
   }
   setContext(node) {
     if (node.localName === "html" && node.getAttribute("version") === "XHTML+RDFa 1.1") {
@@ -43536,7 +42829,7 @@ var RDFParser = class _RDFParser {
       },
       /** Add a symbol of a certain type to the this frame */
       "addSymbol": function(type, uri) {
-        uri = join2(uri, this.base);
+        uri = join(uri, this.base);
         this.node = this.store.sym(uri);
         this.nodeType = type;
       },
@@ -43548,7 +42841,7 @@ var RDFParser = class _RDFParser {
           this.store.add(this.parent.parent.node, this.parent.node, this.node, this.parser.why);
         }
         if (this.parent.rdfid != null) {
-          var triple2 = this.store.sym(join2("#" + this.parent.rdfid, this.base));
+          var triple2 = this.store.sym(join("#" + this.parent.rdfid, this.base));
           this.store.add(triple2, this.store.sym(_RDFParser.ns.RDF + "type"), this.store.sym(_RDFParser.ns.RDF + "Statement"), this.parser.why);
           this.store.add(triple2, this.store.sym(_RDFParser.ns.RDF + "subject"), this.parent.parent.node, this.parser.why);
           this.store.add(triple2, this.store.sym(_RDFParser.ns.RDF + "predicate"), this.parent.node, this.parser.why);
@@ -43730,7 +43023,7 @@ var RDFParser = class _RDFParser {
             };
           }
           if (rdftype != null) {
-            this.store.add(frame.node, this.store.sym(_RDFParser.ns.RDF + "type"), this.store.sym(join2(rdftype.nodeValue, frame.base)), this.why);
+            this.store.add(frame.node, this.store.sym(_RDFParser.ns.RDF + "type"), this.store.sym(join(rdftype.nodeValue, frame.base)), this.why);
             if (rdftype.nodeName) {
               dom.removeAttributeNode(rdftype);
             }
@@ -43861,7 +43154,7 @@ var RDFParser = class _RDFParser {
       if (attrs[x].nodeName.substr(0, 3) === "xml") {
         if (attrs[x].name.slice(0, 6) === "xmlns:") {
           var uri = attrs[x].nodeValue;
-          if (this.base) uri = join2(uri, this.base);
+          if (this.base) uri = join(uri, this.base);
           this.store.setPrefixForURI(attrs[x].name.slice(6), uri);
         }
         element.removeAttributeNode(attrs[x]);
@@ -44797,7 +44090,7 @@ var Fetcher = class _Fetcher {
   linkData(originalUri, rel, uri, why, reverse) {
     if (!uri) return;
     let kb = this.store;
-    let obj = kb.rdfFactory.namedNode(join2(uri, originalUri.value));
+    let obj = kb.rdfFactory.namedNode(join(uri, originalUri.value));
     let predicates;
     if (rel === "alternate" || rel === "seeAlso" || rel === "meta" || rel === "describedby") {
       if (obj.value === originalUri.value) {
@@ -44812,7 +44105,7 @@ var Fetcher = class _Fetcher {
     kb.addAll(predicates.map((predicate) => reverse ? kb.rdfFactory.quad(obj, predicate, originalUri, why) : kb.rdfFactory.quad(originalUri, predicate, obj, why)));
   }
   ianaLinkRelation(rel) {
-    return join2(encodeURIComponent(rel), "http://www.iana.org/assignments/link-relations/");
+    return join(encodeURIComponent(rel), "http://www.iana.org/assignments/link-relations/");
   }
   parseLinkHeader(linkHeader, originalUri, reqNode) {
     if (!linkHeader) {
@@ -45273,7 +44566,7 @@ var Fetcher = class _Fetcher {
     var diffLocation = null;
     var absContentLocation = null;
     if (contentLocation) {
-      absContentLocation = join2(contentLocation, docuri);
+      absContentLocation = join(contentLocation, docuri);
       if (absContentLocation !== docuri) {
         diffLocation = absContentLocation;
       }
@@ -45476,8 +44769,1356 @@ var formula = new Formula();
 var term = node_default.fromValue;
 var NextId = BlankNode.nextId;
 
-// lib/core/storage.mjs
+// lib/pod/http.mjs
+var MAX_BYTES = 5 * 1024 * 1024;
+var COOLDOWN_MAX_MS = 30 * 6e4;
+function retryAfterMs(res, max = COOLDOWN_MAX_MS) {
+  const raw = res?.headers?.get?.("retry-after");
+  if (!raw) return null;
+  const secs = Number(raw);
+  if (Number.isFinite(secs)) return Math.min(Math.max(secs, 1) * 1e3, max);
+  const when = Date.parse(raw);
+  if (Number.isFinite(when)) return Math.min(Math.max(when - Date.now(), 1e3), max);
+  return null;
+}
+async function readCapped(res, max = MAX_BYTES) {
+  const len = Number(res.headers?.get?.("content-length") || 0);
+  if (len > max) throw new Error(`response too large (${len} bytes)`);
+  if (!res.body) return res.text();
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder("utf-8");
+  let out = "";
+  let total = 0;
+  for (; ; ) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.length;
+    if (total > max) {
+      await reader.cancel();
+      throw new Error(`response exceeded ${max} bytes`);
+    }
+    out += decoder.decode(value, { stream: true });
+  }
+  return out + decoder.decode();
+}
+
+// lib/pod/links.mjs
+function linkTargets(headerValue, rel, baseUrl) {
+  if (!headerValue) return [];
+  const wanted = String(rel).toLowerCase();
+  const out = [];
+  for (const part of String(headerValue).split(/,(?![^<]*>)/u)) {
+    const link = /^\s*<([^>]*)>\s*(.*)$/u.exec(part);
+    if (!link) continue;
+    const relParam = /(?:^|;)\s*rel\s*=\s*(?:"([^"]*)"|([^;"\s]+))/iu.exec(link[2]);
+    const names = (relParam?.[1] ?? relParam?.[2] ?? "").toLowerCase().split(/\s+/u);
+    if (!names.includes(wanted)) continue;
+    try {
+      out.push(new URL(link[1], baseUrl).href);
+    } catch {
+    }
+  }
+  return out;
+}
+var REL = {
+  acl: "acl",
+  storageDescription: "http://www.w3.org/ns/solid/terms#storageDescription",
+  owner: "http://www.w3.org/ns/solid/terms#owner"
+};
+
+// lib/pod/transport.mjs
+init_urls();
 var LDP = Namespace("http://www.w3.org/ns/ldp#");
+var DC = Namespace("http://purl.org/dc/terms/");
+var POSIX = Namespace("http://www.w3.org/ns/posix/stat#");
+var RDF3 = Namespace("http://www.w3.org/1999/02/22-rdf-syntax-ns#");
+var ACL = Namespace("http://www.w3.org/ns/auth/acl#");
+var FOAF = Namespace("http://xmlns.com/foaf/0.1/");
+var AS = Namespace("https://www.w3.org/ns/activitystreams#");
+var RDFS = Namespace("http://www.w3.org/2000/01/rdf-schema#");
+function termProblem(t) {
+  if (t?.termType === "Literal") return null;
+  if (t?.termType !== "NamedNode") return `${t?.value ?? t} is not an IRI or a literal`;
+  try {
+    return /^https?:$/.test(new URL(t.value).protocol) ? null : `${t.value} is not an http(s) IRI`;
+  } catch {
+    return `${t.value} is not an absolute IRI`;
+  }
+}
+var ACP_NS = "http://www.w3.org/ns/solid/acp#";
+var LISTING_MAX_BYTES = 10 * 1024 * 1024;
+var COOLDOWN_DEFAULT_MS = 6e4;
+var sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+var PROTECTED = [
+  [/\/profile(\/|$)/, "the WebID document \u2014 nothing could authenticate as this pod again"],
+  [/\/settings(\/|$)/, "the pod's own settings"],
+  [/\/\.well-known(\/|$)/, "discovery \u2014 the handle would stop resolving"],
+  [/\.acl$/, "an access-control document \u2014 what it governs becomes unreachable"],
+  [/\.meta$/, "a resource description the server itself reads"],
+  // The single-active-agent lock. It is on the pod precisely because the
+  // private half need not be — a lease only one machine can reach coordinates
+  // nothing — so it survives moving the state off, and nothing ever deletes it:
+  // release() writes an expiry, it does not remove the document. Two agents
+  // both believing they hold it is silent, destructive, duplicated inbox
+  // draining.
+  [/\/lease\.json$/, "the lease \u2014 two agents would drain the same inbox"]
+];
+function protectedFromDeletion(url) {
+  let p;
+  try {
+    p = new URL(url).pathname;
+  } catch {
+    throw new Error(`refusing to DELETE an unparsable URL: ${url}`);
+  }
+  if (p === "/" || p === "") throw new Error(`refusing to DELETE the pod root: ${url}`);
+  for (const [re, why] of PROTECTED) {
+    if (re.test(p)) {
+      throw new Error(`refusing to DELETE ${url} \u2014 ${why}. Deny-list: lib/pod/transport.mjs.`);
+    }
+  }
+}
+var PodTransport = class {
+  /**
+   * @param {object} session          `{ fetch(url, init) }` — injected, never built here
+   * @param {object} opts
+   * @param {string} opts.webId       who this transport acts as; the ACL owner
+   * @param {string} [opts.role]      'agent' | 'gateway' | 'signup' — what is talking
+   * @param {string} [opts.runtime]   'node' | 'browser' — where it is talking from
+   * @param {string} [opts.cooldownMode] 'refuse' fails fast for the window;
+   *                                  'wait' sleeps it out and continues
+   * @param {number} [opts.maxCooldownMs] ceiling on a Retry-After we will honour
+   */
+  constructor(session, {
+    webId,
+    log: log2 = () => {
+    },
+    role = "agent",
+    runtime = "node",
+    cooldownMode = "refuse",
+    maxCooldownMs = 30 * 6e4
+  } = {}) {
+    this.session = session;
+    this.webId = webId;
+    this.log = log2;
+    this.role = role;
+    this.runtime = runtime;
+    this.cooldownMode = cooldownMode;
+    this.maxCooldownMs = maxCooldownMs;
+    this.pausedUntil = 0;
+    this.probeCount = 0;
+    this.aclUrls = /* @__PURE__ */ new Map();
+    this.aclFlavour = null;
+    this._listCache = /* @__PURE__ */ new Map();
+    this.toPod = null;
+  }
+  /** Who is talking, and from where — the prefix on every log line and error. */
+  get label() {
+    return `${this.role}/${this.runtime}`;
+  }
+  /** One line for a boot log: what this transport is and what it points at. */
+  describe() {
+    return `${this.role} over a ${this.runtime} session \u2192 ${this.webId?.split("#")[0] || "unknown"}`;
+  }
+  /** Install the advertised→pod url map for a fronted identity (urls.toPod). */
+  setUrlMap(fn) {
+    this.toPod = typeof fn === "function" ? fn : null;
+  }
+  async warmup() {
+    return this.session.warmup?.();
+  }
+  /** What we have asked of this pod, for a status page or an operator. */
+  stats() {
+    return {
+      role: this.role,
+      runtime: this.runtime,
+      probes: this.probeCount,
+      pausedFor: Math.max(0, Math.round((this.pausedUntil - Date.now()) / 1e3))
+    };
+  }
+  /**
+   * Observe a throttling answer and arm the pod-wide cooldown.
+   *
+   * One pause for the whole pod, not one per request: without it every
+   * in-flight call rides its own ladder into a server that has already said it
+   * is overloaded, which is how a throttle becomes a stampede. A 429 or 503
+   * with NO Retry-After still arms the window — the browser copy used to arm
+   * nothing at all in that case, which is most cases.
+   */
+  _observe(res) {
+    if (res.status !== 429 && res.status !== 503) return res;
+    const asked = retryAfterMs(res, this.maxCooldownMs);
+    const ms = asked ?? (this.cooldownMode === "refuse" ? COOLDOWN_DEFAULT_MS : 0);
+    if (!ms) return res;
+    this.pausedUntil = Date.now() + ms;
+    this.log(`[${this.label}] pod returned ${res.status}${asked ? ", Retry-After" : ""} \u2014 holding all requests for ${Math.round(ms / 1e3)}s`);
+    return res;
+  }
+  /** Honour an armed cooldown: fail fast, or wait it out, as configured. */
+  async _cooldownGate() {
+    const left = this.pausedUntil - Date.now();
+    if (left <= 0) return;
+    if (this.cooldownMode === "wait") {
+      await sleep(Math.min(left, this.maxCooldownMs));
+      return;
+    }
+    throw new Error(`[${this.label}] pod asked us to back off \u2014 ${Math.ceil(left / 1e3)}s left of its Retry-After`);
+  }
+  /**
+   * The seam a subclass overrides to add transport behaviour — the browser's
+   * retry ladder lives here. Overriding THIS rather than `fetch` is deliberate:
+   * an override cannot skip the url map, the cooldown accounting or the
+   * deletion deny-list, because those are in `fetch` above it.
+   */
+  async _send(url, init) {
+    return this.session.fetch(url, init);
+  }
+  /**
+   * A deliberately CREDENTIAL-FREE request: it asks what a stranger would see,
+   * so it cannot go through the session without answering a different question.
+   * It still belongs to this pod, though — it opens a socket to it and takes
+   * one of its workers — so it observes the same cooldown and is counted.
+   *
+   * No url map: a probe asks about the ADVERTISED face, which is the whole
+   * point of asking.
+   */
+  async probe(url, init = {}) {
+    await this._cooldownGate();
+    this.probeCount++;
+    return this._observe(await fetch(url, init));
+  }
+  /**
+   * Every authenticated request. Nothing below this reaches the session
+   * directly: this is the only place the cooldown is both OBSERVED and ARMED,
+   * the url map applied, and the deny-list enforced.
+   */
+  async fetch(url, init) {
+    await this._cooldownGate();
+    if (this.toPod) url = this.toPod(url);
+    if (String(init?.method || "").toUpperCase() === "DELETE") this._guardDelete(url);
+    return this._observe(await this._send(url, init));
+  }
+  /** Both refusals a DELETE must pass, wherever it was issued from. */
+  _guardDelete(url) {
+    protectedFromDeletion(url);
+    for (const acl of this.aclUrls?.values() ?? []) {
+      if (acl === url) throw new Error(`refusing to DELETE an access-control document: ${url}`);
+    }
+  }
+  async put(url, body, contentType) {
+    const res = await this.fetch(url, {
+      method: "PUT",
+      headers: { "content-type": contentType },
+      body
+    });
+    if (res.status >= 400) throw new Error(`[${this.label}] PUT ${url} \u2192 ${res.status}`);
+    this.noteAclLink(url, res);
+    return res;
+  }
+  async putJson(url, obj, contentType = "application/activity+json") {
+    return this.put(url, JSON.stringify(obj), contentType);
+  }
+  // A read that FAILED is not a document that is ABSENT. Returning null for
+  // both let a 429 read as "no replies yet", and the caller then rewrote the
+  // collection from empty — erasing every reply already recorded. Only a real
+  // 404/410 is absence; anything else throws and the caller retries later.
+  async getJson(url) {
+    const res = await this.fetch(url, { headers: { accept: "*/*" } });
+    if (res.status === 404 || res.status === 410) return null;
+    if (res.status >= 400) throw new Error(`[${this.label}] GET ${url} \u2192 ${res.status}`);
+    return res.json().catch(() => null);
+  }
+  async delete(url) {
+    const res = await this.fetch(url, { method: "DELETE" });
+    return res.status < 400 || res.status === 404;
+  }
+  /** Remember an access-control location the pod volunteered on a response. */
+  noteAclLink(url, res) {
+    if (this.aclUrls.has(url)) return;
+    const [acl] = linkTargets(res?.headers?.get?.("link"), REL.acl, url);
+    if (acl) this.aclUrls.set(url, acl);
+  }
+  /**
+   * Where this resource's access control lives. The pod says so on any
+   * response about the resource; a pod that says nothing is taken to keep it
+   * at the usual suffix, which is what every server this runs against does.
+   */
+  async aclUrlFor(targetUrl) {
+    const known2 = this.aclUrls.get(targetUrl);
+    if (known2) return known2;
+    try {
+      const res = await this.fetch(targetUrl, { method: "HEAD" });
+      this.noteAclLink(targetUrl, res);
+    } catch {
+    }
+    const resolved = this.aclUrls.get(targetUrl) || targetUrl + ".acl";
+    this.aclUrls.set(targetUrl, resolved);
+    return resolved;
+  }
+  /**
+   * Whether writing a WAC document here is meaningful. Asked once per pod, on
+   * the first access-control write. A pod that answers with ACP policies is
+   * left alone: replacing them with authorizations it does not read would take
+   * away the rules actually protecting it.
+   */
+  async aclWritable(aclUrl) {
+    if (this.aclFlavour !== null) return this.aclFlavour;
+    this.aclFlavour = true;
+    try {
+      const res = await this.fetch(aclUrl, { headers: { accept: "text/turtle" } });
+      if (res.status < 300) {
+        const g = graph();
+        parse2(await res.text(), g, aclUrl, "text/turtle");
+        const acp = g.statements.some((st2) => st2.predicate.value.startsWith(ACP_NS) || st2.object.value.startsWith(ACP_NS));
+        if (acp) {
+          this.aclFlavour = false;
+          this.log(`[${this.label}] this pod states access as ACP policies, which this library does not write \u2014 its access rules are left exactly as they are, and nothing here is published private`);
+        }
+      }
+    } catch {
+    }
+    return this.aclFlavour;
+  }
+  // WAC doc granting the public `publicModes` on target, owner full control.
+  // An empty publicModes list yields an owner-only document.
+  //
+  // Built and serialised by rdflib, like every other document written here.
+  // This is the highest-consequence RDF in the project: an ACL that comes out
+  // malformed, or naming the wrong subject, either locks the owner out or
+  // leaves the private trees world-readable. $rdf.sym() also throws on an
+  // illegal IRI, so a pod URL with something odd in it fails here rather than
+  // silently producing a document that means something else.
+  aclDoc(targetUrl, publicModes, { appendAgents = [], readAgents = [], aclUrl = null } = {}) {
+    const url = aclUrl || targetUrl + ".acl";
+    const doc = namedNode2(url);
+    const target = namedNode2(targetUrl);
+    const g = graph();
+    const authorize = (subject, agentPred, agent2, modes) => {
+      g.add(subject, RDF3("type"), ACL("Authorization"), doc);
+      g.add(subject, agentPred, agent2, doc);
+      g.add(subject, ACL("accessTo"), target, doc);
+      g.add(subject, ACL("default"), target, doc);
+      for (const m of modes) g.add(subject, ACL("mode"), ACL(m), doc);
+    };
+    if (publicModes.length) {
+      authorize(namedNode2(url + "#public"), ACL("agentClass"), FOAF("Agent"), publicModes);
+    }
+    appendAgents.forEach((webId, i) => authorize(namedNode2(url + `#gw${i}`), ACL("agent"), namedNode2(webId), ["Append"]));
+    readAgents.forEach((webId, i) => authorize(namedNode2(url + `#r${i}`), ACL("agent"), namedNode2(webId), ["Read"]));
+    authorize(
+      namedNode2(url + "#owner"),
+      ACL("agent"),
+      namedNode2(this.webId),
+      ["Read", "Write", "Control"]
+    );
+    return serialize(doc, g, url, "text/turtle");
+  }
+  async setAcl(targetUrl, publicModes, opts = {}) {
+    const podTarget = this.toPod ? this.toPod(targetUrl) : targetUrl;
+    const url = await this.aclUrlFor(podTarget);
+    if (!await this.aclWritable(url)) return null;
+    const doc = this.aclDoc(podTarget, publicModes, { ...opts, aclUrl: url });
+    if (opts.ifChanged && await this.aclSame(url, doc)) return { status: 304, unchanged: true };
+    return this.put(url, doc, "text/turtle");
+  }
+  // Whether the pod's rule at `aclUrl` states exactly what `doc` states.
+  // Compared as graphs, not bytes: the pod serialises what it holds its own
+  // way. Every rule this file writes names its subjects, so triple sets are
+  // enough; anything unreadable or with blank nodes reads as different.
+  async aclSame(aclUrl, doc) {
+    try {
+      const res = await this.fetch(aclUrl, { headers: { accept: "text/turtle" } });
+      if (res.status !== 200) return false;
+      const triples = (text) => {
+        const g = graph();
+        parse2(text, g, aclUrl, "text/turtle");
+        if (g.statements.some((st2) => st2.subject.termType === "BlankNode" || st2.object.termType === "BlankNode")) return null;
+        return g.statements.map((st2) => `${st2.subject.value} ${st2.predicate.value} ${st2.object.value}`).sort().join("\n");
+      };
+      const theirs = triples(await res.text());
+      return theirs !== null && theirs === triples(doc);
+    } catch {
+      return false;
+    }
+  }
+  // Child documents of an LDP container (URLs under it, excluding aux docs).
+  // Revalidated: the inbox is polled every couple of minutes and is usually
+  // unchanged, so ask conditionally and let the server answer 304.
+  async listContainer(url) {
+    this._listCache ||= /* @__PURE__ */ new Map();
+    const known2 = this._listCache.get(url);
+    const res = await this.fetch(url, {
+      headers: { accept: "text/turtle", ...known2?.etag ? { "if-none-match": known2.etag } : {} }
+    });
+    if (res.status === 304 && known2) return known2.children;
+    if (res.status >= 400) return [];
+    let body;
+    try {
+      body = await readCapped(res, LISTING_MAX_BYTES);
+    } catch (e) {
+      this.log(`[${this.label}] listing at ${url}: ${e.message} \u2014 using the last known listing`);
+      return known2?.children ?? [];
+    }
+    const g = graph();
+    parse2(body, g, url, "text/turtle");
+    const here = namedNode2(url);
+    const seen = /* @__PURE__ */ new Set();
+    const receipts = /* @__PURE__ */ new Set();
+    const list3 = [];
+    for (const child of g.each(here, LDP("contains"), null, here)) {
+      const u = child.value;
+      if (u.endsWith(".receipt.json")) {
+        receipts.add(u);
+        continue;
+      }
+      if (!u.startsWith(url) || u === url || /\.(acl|meta)$/.test(u) || seen.has(u)) continue;
+      seen.add(u);
+      list3.push({
+        url: u,
+        size: Number(g.any(child, POSIX("size"), null, here)?.value || 0),
+        modified: g.any(child, DC("modified"), null, here)?.value || null
+      });
+    }
+    for (const item of list3) item.receipt = receipts.has(item.url + ".receipt.json");
+    const orphans = [...receipts].filter((r) => !seen.has(r.slice(0, -".receipt.json".length)));
+    list3.sort((a, b) => String(a.modified || "").localeCompare(String(b.modified || "")));
+    this._listCache.set(url, { etag: res.headers.get("etag"), children: list3, orphans });
+    return list3;
+  }
+  /** Receipts in the last listing of `url` whose item is gone. */
+  orphanReceipts(url) {
+    return this._listCache?.get(url)?.orphans ?? [];
+  }
+  /**
+   * The WebID profile advertises the actor as an account:
+   *   <webId> foaf:account <actor> .
+   *   <actor> a foaf:OnlineAccount, as:Person|as:Group ; foaf:accountName "@handle@host" .
+   * Read–check–write through rdflib. Returns false when the profile already
+   * says all of it. The parsed graph must mention the WebID before anything is
+   * written back — an empty or foreign body must never become the new profile.
+   */
+  async linkAccountInProfile({ actorUrl, accountName, kind = "person", outbox = null }) {
+    const me = namedNode2(this.webId);
+    const podBase = podBaseOfWebId(this.webId);
+    const docs = await this.profileDocs(podBase);
+    const says = (s, p, o) => docs.some(({ g }) => g?.holds(s, p, o));
+    const actor = namedNode2(actorUrl);
+    const wanted = [
+      [me, FOAF("account"), actor],
+      [actor, RDF3("type"), FOAF("OnlineAccount")],
+      [actor, RDF3("type"), kind === "group" ? AS("Group") : AS("Person")],
+      [actor, FOAF("accountName"), literal2(accountName)],
+      // Where a Solid client posts on this person's behalf (`as:outbox` on the
+      // WebID is what dokieli reads); only where a door exists to take it.
+      ...outbox ? [[me, AS("outbox"), namedNode2(outbox)]] : []
+    ];
+    const missing = wanted.filter(([s, p, o]) => !says(s, p, o));
+    const stale = [];
+    for (const { g } of docs) {
+      for (const st2 of g?.statementsMatching(actor, FOAF("accountName"), null) || []) {
+        if (st2.object.value !== accountName) stale.push([st2.subject, st2.predicate, st2.object]);
+      }
+      if (outbox) {
+        for (const st2 of g?.statementsMatching(me, AS("outbox"), null) || []) {
+          if (st2.object.value !== outbox) stale.push([st2.subject, st2.predicate, st2.object]);
+        }
+      }
+    }
+    if (!missing.length && !stale.length) return false;
+    await this.writeAboutWebId(podBase, { inserts: missing, deletes: stale });
+    return true;
+  }
+  /**
+   * An N3 Patch of exactly these statements, or false when the pod will not
+   * take one and the caller should write the document instead.
+   *
+   * The statements are serialised by rdflib; only the wrapper naming what is
+   * being patched is assembled here, because N3's braces have no rdflib form.
+   */
+  n3Patch(docUrl, inserts, deletes) {
+    const block = (triples) => {
+      const g = graph();
+      for (const [s, p, o] of triples) g.add(s, p, o);
+      return serialize(null, g, docUrl, "application/n-triples").trim();
+    };
+    const clauses = [];
+    if (deletes.length) clauses.push(`  solid:deletes { ${block(deletes)} }`);
+    if (inserts.length) clauses.push(`  solid:inserts { ${block(inserts)} }`);
+    return `@prefix solid: <http://www.w3.org/ns/solid/terms#>.
+<> a solid:InsertDeletePatch;
+${clauses.join(";\n")}.
+`;
+  }
+  async patchDocument(docUrl, inserts, deletes) {
+    let res;
+    try {
+      res = await this.fetch(docUrl, {
+        method: "PATCH",
+        headers: { "content-type": "text/n3" },
+        body: this.n3Patch(docUrl, inserts, deletes)
+      });
+    } catch {
+      return false;
+    }
+    if (res.status < 300) return true;
+    if (res.status === 405 || res.status === 415 || res.status === 501) return false;
+    throw new Error(`[${this.label}] PATCH ${docUrl} \u2192 ${res.status}`);
+  }
+  // ---- writing a profile or a type index: valid RDF, or nothing ----
+  //
+  // Two rules. A change is written only if the document it leaves behind is
+  // valid RDF: the graph as it would be afterwards is serialised and parsed
+  // back, and the subject that must stay described still is. And a profile
+  // that will not take a write is not the end: the statements go to the first
+  // document its rdfs:seeAlso names, inside the same pod, that takes them —
+  // under the same check. A profile is what every Solid app signs in through;
+  // one left broken breaks them all. Reading follows the same links.
+  /** An IRI or a literal as a term, for the operations that pass plain values. */
+  sym(iri) {
+    try {
+      return namedNode2(iri);
+    } catch {
+      throw new Error(`not written: ${iri} is not an absolute IRI`);
+    }
+  }
+  literal(value) {
+    return literal2(value);
+  }
+  /** A document as a graph, or null when it is not there. */
+  async readRdf(docUrl) {
+    const res = await this.fetch(docUrl, { headers: { accept: "text/turtle" } });
+    if (res.status === 404 || res.status === 410) return null;
+    if (res.status >= 400) throw new Error(`[${this.label}] GET ${docUrl} \u2192 ${res.status}`);
+    const g = graph();
+    parse2(await res.text(), g, docUrl, "text/turtle");
+    return g;
+  }
+  /**
+   * The document as it would be after the change, checked. Returns the Turtle
+   * to write, or throws saying why nothing may be written.
+   */
+  checkedRdf(g, docUrl, { inserts = [], deletes = [], mustDescribe = null }) {
+    const doc = namedNode2(docUrl);
+    for (const [s, p, o] of inserts) {
+      const bad = termProblem(s) || termProblem(p) || termProblem(o) || (s?.termType === "Literal" || p?.termType !== "NamedNode" ? "a literal subject or predicate" : null);
+      if (bad) throw new Error(`not written: ${bad}`);
+    }
+    const after = graph();
+    for (const st2 of g.statementsMatching(null, null, null, doc)) after.add(st2.subject, st2.predicate, st2.object, doc);
+    for (const [s, p, o] of deletes) for (const st2 of after.statementsMatching(s, p, o, doc)) after.remove(st2);
+    for (const [s, p, o] of inserts) if (!after.holds(s, p, o, doc)) after.add(s, p, o, doc);
+    let text;
+    try {
+      text = serialize(doc, after, docUrl, "text/turtle");
+    } catch (e) {
+      throw new Error(`not written: ${docUrl} would not serialise (${e.message})`);
+    }
+    const back = graph();
+    try {
+      parse2(text, back, docUrl, "text/turtle");
+    } catch (e) {
+      throw new Error(`not written: ${docUrl} would not parse back (${e.message})`);
+    }
+    if (back.statementsMatching(null, null, null, doc).length !== after.statementsMatching(null, null, null, doc).length) {
+      throw new Error(`not written: ${docUrl} would not read back as written`);
+    }
+    if (mustDescribe && !back.statementsMatching(namedNode2(mustDescribe), null, null, doc).length) {
+      throw new Error(`not written: ${docUrl} would no longer describe ${mustDescribe}`);
+    }
+    return text;
+  }
+  /**
+   * Change one document, or refuse. `g` is the document as read (null for a
+   * new one). A PATCH carries only these statements; where the pod cannot
+   * patch, the whole checked document is written. Returns the write's status.
+   */
+  async writeRdfChecked(docUrl, g, { inserts = [], deletes = [], mustDescribe = null }) {
+    const current = g || graph();
+    const doc = namedNode2(docUrl);
+    const todo = inserts.filter(([s, p, o]) => !current.holds(s, p, o, doc));
+    const gone = deletes.filter(([s, p, o]) => current.holds(s, p, o, doc));
+    if (!todo.length && !gone.length) return 200;
+    const text = this.checkedRdf(current, docUrl, { inserts: todo, deletes: gone, mustDescribe });
+    if (g) {
+      let res = null;
+      try {
+        res = await this.fetch(docUrl, {
+          method: "PATCH",
+          headers: { "content-type": "text/n3" },
+          body: this.n3Patch(docUrl, todo, gone)
+        });
+      } catch {
+        res = null;
+      }
+      if (res && res.status < 300) return res.status;
+      if (res && ![405, 415, 501].includes(res.status)) return res.status;
+    }
+    const put = await this.fetch(docUrl, { method: "PUT", headers: { "content-type": "text/turtle" }, body: text });
+    return put.status;
+  }
+  /**
+   * The profile and the documents its rdfs:seeAlso names inside this pod,
+   * each with its graph, the profile first. What any of them says about the
+   * WebID is what the profile says.
+   */
+  async profileDocs(podBase) {
+    const profileUrl2 = this.webId.split("#")[0];
+    const g = await this.readRdf(profileUrl2);
+    if (!g) throw new Error(`no profile at ${profileUrl2}`);
+    const out = [{ url: profileUrl2, g, profile: true }];
+    const seen = /* @__PURE__ */ new Set([profileUrl2]);
+    for (const st2 of g.statementsMatching(null, RDFS("seeAlso"), null)) {
+      const url = st2.object.value.split("#")[0];
+      if (seen.has(url) || !url.startsWith(podBase)) continue;
+      seen.add(url);
+      out.push({ url, g: await this.readRdf(url).catch(() => null), profile: false });
+    }
+    return out;
+  }
+  /** Every value the WebID has for `predicate`, across the profile and its seeAlso documents. */
+  webIdValues(docs, predicate) {
+    const me = namedNode2(this.webId);
+    const p = namedNode2(predicate);
+    const out = [];
+    for (const { g } of docs) for (const st2 of g?.statementsMatching(me, p, null) || []) out.push(st2.object.value);
+    return [...new Set(out)];
+  }
+  /**
+   * Write statements about the WebID: to the profile, or — if the profile will
+   * not take them — to the first of its seeAlso documents that will. Every
+   * write checked. Returns the document written to, or null when nothing
+   * needed writing; throws when none would take it.
+   */
+  async writeAboutWebId(podBase, { inserts = [], deletes = [] }) {
+    const docs = await this.profileDocs(podBase);
+    const holds = ([s, p, o]) => docs.some(({ g }) => g?.holds(s, p, o));
+    const todo = inserts.filter((t) => !holds(t));
+    const gone = deletes.filter(holds);
+    if (!todo.length && !gone.length) return null;
+    const refusals = [];
+    for (const d of docs) {
+      const here = gone.filter(([s, p, o]) => d.g?.holds(s, p, o));
+      const status2 = await this.writeRdfChecked(d.url, d.g, {
+        inserts: todo,
+        deletes: here,
+        mustDescribe: d.profile ? this.webId : null
+      });
+      if (status2 < 300) return d.url;
+      refusals.push(`${d.url} \u2192 ${status2}`);
+      if (status2 !== 401 && status2 !== 403) break;
+    }
+    throw new Error(`not written: neither the profile nor a document it names would take it (${refusals.join("; ")})`);
+  }
+};
+
+// lib/pod/location.mjs
+function rootOfActor(podBase, actorUrl) {
+  const a = String(actorUrl || "");
+  if (!a.startsWith(podBase) || !a.endsWith("ap/actor")) return null;
+  const root = a.slice(podBase.length, -"ap/actor".length);
+  return root.endsWith("/") ? root : null;
+}
+
+// lib/core/place.mjs
+init_wire();
+async function candidateRoots(pod, podBase) {
+  const recorded = await registeredActors(pod, podBase).catch(() => []);
+  const roots = recorded.map((a) => rootOfActor(podBase, a)).filter(Boolean);
+  return [.../* @__PURE__ */ new Set([...roots, DEFAULT_ROOT])];
+}
+async function findAccount(pod, podBase, read2, accept = () => true) {
+  for (const root of await candidateRoots(pod, podBase)) {
+    const config = await read2(root).catch(() => null);
+    if (config && accept(config)) return { root, config };
+  }
+  return null;
+}
+async function recordPlace(pod, podBase, actorAtPod, { create = false } = {}) {
+  let index = await findPublicIndex(pod, podBase);
+  if (!index) {
+    if (!create) return "no-index";
+    index = await createPublicIndex(pod, podBase);
+  }
+  return await register(pod, index, actorAtPod) ? "registered" : "already";
+}
+
+// lib/pod/containers.mjs
+var KEEP = { keep: true };
+var KEEP_CT = "application/json";
+var keepUrl = (base) => `${base}.keep`;
+async function exists(pod, base) {
+  try {
+    const r = await pod.fetch(keepUrl(base), { method: "HEAD" });
+    return r?.status >= 200 && r.status < 300;
+  } catch {
+    return false;
+  }
+}
+async function provisionOwnerOnly(pod, base) {
+  await pod.putJson(keepUrl(base), KEEP, KEEP_CT);
+  await pod.setAcl(base, []);
+}
+async function provisionPublic(pod, base) {
+  await pod.putJson(keepUrl(base), KEEP, KEEP_CT);
+  await pod.setAcl(base, ["Read"]);
+}
+async function provisionPrivate(pod, urls) {
+  if (await exists(pod, urls.state)) return false;
+  await pod.putJson(keepUrl(urls.state), KEEP, KEEP_CT);
+  await pod.setAcl(urls.state, []);
+  await pod.setAcl(urls.home, []);
+  return true;
+}
+async function repairPrivateAcls(pod, trees, { isPublic } = {}) {
+  const findings = [];
+  for (const url of trees) {
+    if (!await isPublic(url)) continue;
+    const finding = { url, rewritten: false, stillPublic: false, error: null };
+    findings.push(finding);
+    try {
+      await pod.setAcl(url, []);
+      finding.rewritten = true;
+    } catch (e) {
+      finding.error = e.message;
+      continue;
+    }
+    finding.stillPublic = await isPublic(url);
+  }
+  return findings;
+}
+async function probePublicReadability(probe, url, { headers = {}, timeoutMs = 2e4 } = {}) {
+  try {
+    const res = await probe(url, {
+      headers: { accept: "*/*", ...headers },
+      signal: AbortSignal.timeout(timeoutMs)
+    });
+    return res.status < 400;
+  } catch {
+    return false;
+  }
+}
+async function probePrivateEnforcement(probe, podKeepUrl) {
+  const r = await probe(podKeepUrl, { redirect: "manual" });
+  if (r.status === 401 || r.status === 403) return true;
+  return `this pod serves private documents to strangers (HTTP ${r.status})`;
+}
+
+// lib/pod/state.mjs
+var readKeys = (pod, urls) => pod.getJson(urls.state + "keys.json");
+var readConfig = (pod, urls) => pod.getJson(urls.state + "config.json");
+var writeKeys = (pod, urls, keys) => pod.putJson(urls.state + "keys.json", keys, "application/json");
+
+// lib/core/store.mjs
+init_node_crypto();
+init_wire();
+var plainText = (s) => sanitizeHtml(String(s || "")).replace(/<[^>]*>/g, "").trim();
+var safeUrl = (u) => {
+  if (!u) return u;
+  try {
+    const parsed = new URL(String(u));
+    return parsed.protocol === "https:" || parsed.protocol === "http:" ? String(u) : null;
+  } catch {
+    return null;
+  }
+};
+var MAX_NAME = 500;
+var MAX_SUMMARY = 5e3;
+var MAX_CONTENT = 1e5;
+var clamp = (s, n) => typeof s === "string" && s.length > n ? s.slice(0, n) : s;
+var PUT_DEBOUNCE_MS = 300;
+var PUT_RETRIES = 5;
+var ACTOR_CACHE_MAX = 2e3;
+var NOTIFICATIONS_MAX = 500;
+function prune(actors, max, contacts) {
+  const urls = Object.keys(actors);
+  if (urls.length <= max) return actors;
+  const keep = /* @__PURE__ */ new Set([
+    ...contacts.followers.map((f) => f.actor),
+    ...contacts.following.map((f) => f.actor)
+  ]);
+  const droppable = urls.filter((u) => !keep.has(u)).sort((a, b) => String(actors[a].fetchedAt || "").localeCompare(String(actors[b].fetchedAt || "")));
+  for (const u of droppable.slice(0, urls.length - max)) delete actors[u];
+  return actors;
+}
+function dropFollower(contacts, actor, why) {
+  contacts.followers = contacts.followers.filter((f) => f.actor !== actor);
+  const gone = (contacts.removedFollowers || []).filter((r) => r.actor !== actor);
+  gone.push({ actor, why, at: (/* @__PURE__ */ new Date()).toISOString() });
+  contacts.removedFollowers = gone.slice(-500);
+  return contacts;
+}
+var serialise = (obj) => JSON.stringify(obj, null, 2) + "\n";
+var sameButWhen = (a, b) => JSON.stringify({ ...a, fetchedAt: null }) === JSON.stringify({ ...b, fetchedAt: null });
+var PodStore = class {
+  constructor({ storage = null, log: log2 = console.log } = {}) {
+    this.lastSkipped = [];
+    this.storage = storage;
+    this.log = log2;
+    this.cache = /* @__PURE__ */ new Map();
+    this.etags = /* @__PURE__ */ new Map();
+    this.lastText = /* @__PURE__ */ new Map();
+    this.timers = /* @__PURE__ */ new Map();
+    this.dirty = /* @__PURE__ */ new Set();
+    this._held = 0;
+    this.chain = Promise.resolve();
+    this.verdicts = /* @__PURE__ */ new Map();
+  }
+  get base() {
+    return this.storage?.base || null;
+  }
+  attach(storage) {
+    if (this.storage && this.storage.base !== storage.base) {
+      this.cache.clear();
+      this.etags.clear();
+      this.lastText.clear();
+    }
+    this.storage = storage;
+  }
+  // Load every state doc in the container into the cache. Missing container
+  // (first run) is fine — the cache just starts empty.
+  //
+  // `force` skips the container short-circuit below. A container's ETag says
+  // its CHILDREN have not changed; it does not vouch for their contents, and a
+  // peer agent rewriting a document it already had changes no containment
+  // triple. That is a fine trade for a viewer refreshing a display, and a bad
+  // one at the moment a viewer is promoted and starts acting on what it holds.
+  // Throws when the container cannot be read. An empty cache MUST mean "no
+  // state yet", never "the pod was unreachable" — the caller treats the
+  // former as a fresh install, and silently conflating them would look like
+  // an un-set-up agent every time the pod hiccups.
+  async load({ force = false } = {}) {
+    if (!this.storage) return;
+    const listing = await this.storage.list("", { etag: force ? null : this.etags.get("") });
+    if (listing.notModified) return;
+    if (listing.missing && this.storage.kind === "pod") {
+      throw new Error(`state container missing (HTTP 404) at ${this.base} \u2014 pod unreachable or state gone`);
+    }
+    this.etags.set("", listing.etag);
+    const names = listing.names.filter((n) => n.endsWith(".json"));
+    let fetched = 0;
+    const skipped = [];
+    for (const name of names) {
+      const etag = force ? null : this.etags.get(name);
+      const r = await this.storage.read(name, { etag: etag && this.cache.has(name) ? etag : null });
+      if (r.notModified) continue;
+      if (!r.ok) {
+        if (name === "config.json" && !this.cache.has(name)) {
+          throw new Error(`state doc ${name} unreadable (HTTP ${r.status})`);
+        }
+        skipped.push(`${name} (HTTP ${r.status})`);
+        continue;
+      }
+      fetched++;
+      this.etags.set(name, r.etag);
+      try {
+        this.cache.set(name, JSON.parse(r.body));
+        this.lastText.set(name, r.body);
+      } catch (e) {
+        this.log(`state load ${name}: unparsable (${e.message})`);
+      }
+    }
+    this.lastSkipped = skipped;
+    if (skipped.length) this.log(`state load skipped ${skipped.length}: ${skipped.join(", ")}`);
+    this.log(`state loaded: ${this.cache.size} doc(s) from ${this.base} (${fetched} re-fetched)`);
+  }
+  has(name) {
+    return this.cache.has(name);
+  }
+  // The documents held here. Callers that keep one document per thing — a
+  // connected account, say — list them with this rather than a fixed name.
+  names() {
+    return [...this.cache.keys()];
+  }
+  read(name, fallback) {
+    return this.cache.has(name) ? structuredClone(this.cache.get(name)) : fallback;
+  }
+  write(name, obj) {
+    this.cache.set(name, structuredClone(obj));
+    if (!this.storage) return;
+    if (this.lastText.get(name) === serialise(obj)) {
+      clearTimeout(this.timers.get(name));
+      this.timers.delete(name);
+      this.dirty.delete(name);
+      return;
+    }
+    if (this._held) {
+      this.dirty.add(name);
+      return;
+    }
+    this._arm(name);
+  }
+  _arm(name) {
+    clearTimeout(this.timers.get(name));
+    this.timers.set(name, setTimeout(() => {
+      this.timers.delete(name);
+      this._put(name);
+    }, PUT_DEBOUNCE_MS));
+    this.timers.get(name).unref?.();
+  }
+  // Suspend the debounce for the length of a sweep.
+  //
+  // 300ms coalesces writes that arrive together, and the inbox drain's never
+  // do: every handler awaits a signed fetch to somebody else's server first, so
+  // each item's timer fires before the next item is even read. statuses.json,
+  // actors.json and notifications.json were therefore serialized and written
+  // WHOLE once per item — fifty times in a fifty-item sweep, where the drain
+  // already commits every ten.
+  //
+  // Nested, because a drain can run a handler that starts another. release()
+  // re-arms anything still dirty rather than dropping it, so a write made by
+  // something else while the drain held the store is never stranded.
+  hold() {
+    this._held = (this._held || 0) + 1;
+  }
+  release() {
+    if (this._held) this._held -= 1;
+    if (this._held) return;
+    for (const name of [...this.dirty]) {
+      this.dirty.delete(name);
+      this._arm(name);
+    }
+  }
+  // Resolves true when the document is on the pod, false when it is not — a
+  // caller that is about to destroy the only other copy of something needs to
+  // be able to tell. `chain` stays the bare serializer; the boolean rides on
+  // the returned promise so one failure cannot poison the queue.
+  _put(name) {
+    const done = this.chain.then(async () => {
+      const body = serialise(this.cache.get(name));
+      for (let attempt = 1; attempt <= PUT_RETRIES; attempt++) {
+        const r = await this.storage.write(name, body, "application/json").catch((e) => ({ ok: false, retry: false, why: e.message }));
+        if (r.ok) {
+          this.lastText.set(name, body);
+          return true;
+        }
+        if (!r.retry) {
+          this.log(`state write ${name} refused (${r.why}) \u2014 not retrying`);
+          return false;
+        }
+        if (attempt === PUT_RETRIES) {
+          this.log(`state write ${name} gave up: ${r.why}`);
+          return false;
+        }
+        const ladder = Math.min(attempt * 2e3, 3e4);
+        await new Promise((res) => setTimeout(res, r.retryAfterMs || Math.round(ladder * (0.8 + Math.random() * 0.4))));
+      }
+      return false;
+    });
+    const tracked = done.then((ok) => {
+      this.verdicts.set(name, ok);
+      return ok;
+    });
+    this.chain = tracked.then(() => {
+    }, () => {
+    });
+    return tracked;
+  }
+  // Remove a state doc from the cache AND the pod (used when key material
+  // migrates to the local machine — leaving the copy behind would defeat it).
+  async remove(name) {
+    this.cache.delete(name);
+    this.lastText.delete(name);
+    clearTimeout(this.timers.get(name));
+    this.timers.delete(name);
+    if (!this.storage) return true;
+    return this.storage.remove(name);
+  }
+  // Force every pending write out NOW and say whether they all landed.
+  // The caller that needs this is the inbox drain: taking an item out of the
+  // pod's inbox is a destructive read, so it must not happen until the result
+  // of handling it is written down. With no storage the store is pure memory
+  // and there is nothing to land, so that counts as written.
+  async commit() {
+    const pending = [];
+    for (const name of /* @__PURE__ */ new Set([...this.timers.keys(), ...this.dirty])) {
+      const t = this.timers.get(name);
+      if (t) {
+        clearTimeout(t);
+        this.timers.delete(name);
+      }
+      this.dirty.delete(name);
+      pending.push(this._put(name));
+    }
+    await this.chain;
+    await Promise.all(pending);
+    const landed = [...this.verdicts.values()].every(Boolean);
+    this.verdicts.clear();
+    return landed;
+  }
+  // Flush pending debounced writes (shutdown path). Same work, result ignored.
+  async flush() {
+    await this.commit();
+  }
+  // ---- the domain helpers, unchanged from dk's Store ----
+  // config: { remotePod, handle, name, issuer }  (credential lives ONLY in
+  // the local credential file, never in pod state)
+  getConfig() {
+    return this.read("config.json", null);
+  }
+  setConfig(cfg) {
+    this.write("config.json", cfg);
+  }
+  // queue: [{ inbox, activity, attempts, nextAt }]
+  getQueue() {
+    return this.read("queue.json", []);
+  }
+  setQueue(q) {
+    this.write("queue.json", q);
+  }
+  // blocklist: { domains: ["spam.example", ...], actors: ["https://host/actor", ...] }
+  // Two granularities because a whole instance is usually the wrong unit: one
+  // bad neighbour should not cost you everyone else on their server.
+  getBlocklist() {
+    const b = this.read("blocklist.json", {});
+    return { domains: b.domains || [], actors: b.actors || [] };
+  }
+  // Blocking someone ends their following as well: a blocked actor, or anyone
+  // on a blocked domain, is no longer delivered to. The mark dropFollower leaves
+  // keeps a reconcile from bringing them back.
+  setBlocklist(b) {
+    this.write("blocklist.json", b);
+    const c = this.getContacts();
+    const gone = c.followers.filter((f) => f.actor && this.isBlocked(f.actor)).map((f) => f.actor);
+    if (!gone.length) return;
+    for (const actor of gone) dropFollower(c, actor, "blocked");
+    this.setContacts(c);
+  }
+  // Takes an actor URL or an object URL: the actor list only ever matches the
+  // former, the domain list matches either.
+  isBlocked(url) {
+    let host;
+    try {
+      host = new URL(url).hostname;
+    } catch {
+      return true;
+    }
+    const { domains, actors } = this.getBlocklist();
+    if (actors.includes(url)) return true;
+    return domains.some((d) => host === d || host.endsWith("." + d));
+  }
+  // contacts: { followers: [{actor, inbox, sharedInbox}], following: [{actor, inbox, accepted}] }
+  getContacts() {
+    return this.read("contacts.json", { followers: [], following: [] });
+  }
+  setContacts(c) {
+    this.write("contacts.json", c);
+  }
+  // muted: { actors: [...] } — members whose posts a group declines to carry.
+  // A group cannot force an unfollow, so declining to amplify is the only
+  // lever it actually holds.
+  getMuted() {
+    return this.read("muted.json", { actors: [] });
+  }
+  setMuted(m) {
+    this.write("muted.json", m);
+  }
+  // The client's own reading arrangements — lists, keyword filters, posts
+  // waiting to be published. None of it federates.
+  getLists() {
+    return this.read("lists.json", []);
+  }
+  setLists(l) {
+    this.write("lists.json", l);
+  }
+  getFilters() {
+    return this.read("filters.json", []);
+  }
+  setFilters(f) {
+    this.write("filters.json", f);
+  }
+  getScheduled() {
+    return this.read("scheduled.json", []);
+  }
+  setScheduled(s) {
+    this.write("scheduled.json", s);
+  }
+  // pending: [{ noteId, actor, at }] — posts a reviewed group has ingested but
+  // not carried, awaiting the operator.
+  getPending() {
+    return this.read("pending.json", []);
+  }
+  setPending(p) {
+    this.write("pending.json", p);
+  }
+  // requests: [{ actor, inbox, sharedInbox, activity, at }] — Follows a group
+  // with approveJoins has neither accepted nor rejected. The whole Follow is
+  // kept because the Accept or Reject has to name it.
+  getRequests() {
+    return this.read("requests.json", []);
+  }
+  setRequests(r) {
+    this.write("requests.json", r);
+  }
+  // dead letters: inbox items that failed verification or exhausted retries —
+  // kept for inspection (GET /deadletter) instead of being destroyed.
+  getDeadLetters() {
+    return this.read("deadletter.json", []);
+  }
+  addDeadLetter(entry) {
+    const dl = this.getDeadLetters();
+    dl.unshift({ at: (/* @__PURE__ */ new Date()).toISOString(), ...entry });
+    this.write("deadletter.json", dl.slice(0, 200));
+  }
+  // statuses index: operational mirror of what lives in the pod as RDF, in
+  // arrival order — the Mastodon-API facade serves timelines from this.
+  // [{ noteId, actor, content, published, inReplyTo, kind: 'timeline'|'post'|'tag' }]
+  getStatuses() {
+    return this.read("statuses.json", []);
+  }
+  // A count must not pay for a clone: nodeinfo and the instance document are
+  // public and answer strangers, so they read the cache directly.
+  countStatuses(kind = null) {
+    const all = this.cache.get("statuses.json") || [];
+    return kind === null ? all.length : all.reduce((n, s) => n + (s.kind === kind ? 1 : 0), 0);
+  }
+  addStatus(s) {
+    const all = this.getStatuses();
+    const at = all.findIndex((x) => x.noteId === s.noteId);
+    if (at >= 0) return this._mergeStatus(all, at, s);
+    if (typeof s.content === "string" && s.content.length > MAX_CONTENT) {
+      s = { ...s, content: clamp(s.content, MAX_CONTENT), truncated: true };
+    }
+    all.unshift(s);
+    this.write("statuses.json", all.slice(0, 1e3));
+    this.onEvent?.("status", s);
+    return { added: true, merged: false, status: s };
+  }
+  // The same post arrives twice when two of the owner's accounts follow its
+  // author, and the second arrival is the only record that the other one saw
+  // it. Merged in place — the per-kind prune tails take the tail to be the
+  // oldest — and with no stream event, which would show the post twice.
+  _mergeStatus(all, at, s) {
+    const row = all[at];
+    const known2 = new Set((row.sourceAccts || []).map((v) => v.acct));
+    const fresh = (s.sourceAccts || []).filter((v) => v && !known2.has(v.acct));
+    const first = (k) => k === "post" || k === "timeline";
+    const raise = first(s.kind) && !first(row.kind);
+    if (!fresh.length && !raise) return { added: false, merged: false, status: row };
+    all[at] = {
+      ...row,
+      ...fresh.length ? { sourceAccts: [...row.sourceAccts || [], ...fresh] } : {},
+      ...raise ? { kind: s.kind, ...s.slug ? { slug: s.slug } : {} } : {}
+    };
+    this.write("statuses.json", all);
+    return { added: false, merged: true, status: all[at] };
+  }
+  updateStatus(noteId, patch) {
+    const all = this.getStatuses();
+    const i = all.findIndex((x) => x.noteId === noteId);
+    if (i < 0) return null;
+    all[i] = { ...all[i], ...patch };
+    this.write("statuses.json", all);
+    return all[i];
+  }
+  removeStatus(noteId) {
+    this.write("statuses.json", this.getStatuses().filter((x) => x.noteId !== noteId));
+  }
+  // notifications: what other actors did to us — the facade serves
+  // /api/v1/notifications from this. [{ id, type, actor, noteId?, at }]
+  // The id is a content hash, so a re-delivered activity dedupes.
+  getNotifications() {
+    return this.read("notifications.json", []);
+  }
+  // `unverified` marks one whose actor nothing vouched for — a Like or Announce
+  // arrives with no signature and, unlike a Create, has no object at the
+  // sender's origin to re-read, so the actor is whatever the body claimed.
+  //
+  // It decides what the cap evicts. The id is a content hash, so changing one
+  // character of the actor gives a fresh entry: ~500 appends into the pod's
+  // public-append inbox used to push out every real favourite, boost, mention
+  // and follow request, and notifications are the one thing nothing can rebuild
+  // — not from the pod, not from the RDF. Unverified entries are dropped first
+  // now, so a flood can only ever evict itself, and a stranger's genuine
+  // favourite still shows up, which is what recording them at all is for.
+  // What an Undo unsays: the favourite or boost it names, matched by a
+  // predicate on what was recorded. Returns how many went.
+  removeNotifications(pred) {
+    const all = this.getNotifications();
+    const kept = all.filter((n) => !pred(n));
+    if (kept.length !== all.length) this.write("notifications.json", kept);
+    return all.length - kept.length;
+  }
+  addNotification(n) {
+    const all = this.getNotifications();
+    const id = node_crypto_default.createHash("sha256").update(JSON.stringify(n)).digest("hex").slice(0, 16);
+    if (all.some((x) => x.id === id)) return;
+    const entry = { id, at: (/* @__PURE__ */ new Date()).toISOString(), ...n };
+    all.unshift(entry);
+    let kept = all;
+    if (kept.length > NOTIFICATIONS_MAX) {
+      const solid = kept.filter((x) => !x.unverified);
+      const loose = kept.filter((x) => x.unverified);
+      kept = solid.length >= NOTIFICATIONS_MAX ? solid.slice(0, NOTIFICATIONS_MAX) : [...solid, ...loose.slice(0, NOTIFICATIONS_MAX - solid.length)].sort((a, b) => String(b.at).localeCompare(String(a.at)));
+    }
+    this.write("notifications.json", kept);
+    this.onEvent?.("notification", entry);
+  }
+  // uploaded media registry: opaque id → { url, mediaType, description }
+  getMedia() {
+    return this.read("media.json", {});
+  }
+  setMedia(id, entry) {
+    const m = this.getMedia();
+    m[id] = entry;
+    this.write("media.json", m);
+  }
+  // actor-doc cache for account rendering (display name, avatar).
+  //
+  // Everything here comes from a document at someone else's origin, and the
+  // facade serves `summary` back to the client as a status account's `note`,
+  // which every Mastodon client renders as HTML. Note CONTENT was sanitized at
+  // all four of its entry points and this, the other thing a remote party
+  // writes, was not — so looking anyone up handed their markup to the client.
+  // Sanitized at the boundary where it enters our store, so nothing downstream
+  // has to remember. Names are plain text and are stripped outright.
+  getActors() {
+    return this.read("actors.json", {});
+  }
+  cacheActor(url, doc) {
+    const a = this.getActors();
+    const known2 = a[url];
+    a[url] = {
+      name: clamp(plainText(doc.name || doc.preferredUsername || ""), MAX_NAME),
+      preferredUsername: clamp(plainText(doc.preferredUsername || ""), MAX_NAME),
+      icon: safeUrl(typeof doc.icon === "object" ? doc.icon?.url : doc.icon),
+      image: safeUrl(typeof doc.image === "object" ? doc.image?.url : doc.image),
+      summary: clamp(sanitizeHtml(doc.summary || ""), MAX_SUMMARY),
+      // A Group is an actor too, and a client that cannot tell shows it as a
+      // person. The counts are NOT in this document — they are the collections'
+      // totalItems, filled in only when someone asks about this actor by name.
+      type: doc.type || "Person",
+      followers: doc.followers || null,
+      following: doc.following || null,
+      ...known2?.counts ? { counts: known2.counts } : {},
+      fetchedAt: (/* @__PURE__ */ new Date()).toISOString()
+    };
+    if (known2 && sameButWhen(known2, a[url])) {
+      a[url] = known2;
+      return;
+    }
+    this.write("actors.json", prune(a, ACTOR_CACHE_MAX, this.getContacts()));
+  }
+  // @user@host for an actor we have cached. Null when we have not, rather than
+  // a last-segment guess off the URL: that guess is what rendered a group as
+  // @actor@host, because our own actors all end in /actor.
+  handleOf(actorUrl) {
+    const user = this.getActors()[actorUrl]?.preferredUsername;
+    if (!user) return null;
+    try {
+      return `@${user}@${new URL(actorUrl).host}`;
+    } catch {
+      return null;
+    }
+  }
+  // Mastodon-API opaque ids ↔ URLs (snac-style: hashes are fine for clients).
+  getIds() {
+    return this.read("ids.json", {});
+  }
+  // The id is a hash OF the url, so the mapping is computable — the scan was
+  // only ever finding what the hash already tells us. It ran on the status
+  // render path, once per rendered status, over a map that never shrinks.
+  //
+  // The map is still kept, because urlFor has to answer for ids a client is
+  // still holding, and it is still consulted first so an entry written under
+  // some older scheme keeps resolving.
+  idFor(url) {
+    const id = node_crypto_default.createHash("sha256").update(url).digest("hex").slice(0, 16);
+    const ids = this.getIds();
+    if (ids[id] === url) return id;
+    const legacy = Object.entries(ids).find(([, u]) => u === url);
+    if (legacy) return legacy[0];
+    ids[id] = url;
+    this.cache.set("ids.json", ids);
+    return id;
+  }
+  // The map first, for ids minted under an older scheme. Then, because the
+  // id IS the hash of the url, whatever this store knows is scanned for the
+  // url that hashes to it — actors, posts, contacts, requests, media. The
+  // browser build's worker is stopped whenever it idles, and the in-memory
+  // map went with it: a client clicking an account it had just been shown
+  // reached a fresh worker that held the actor and could not name it.
+  urlFor(id) {
+    const ids = this.getIds();
+    if (ids[id]) return ids[id];
+    if (!/^[a-f0-9]{16}$/u.test(String(id))) return null;
+    const hash = (u) => node_crypto_default.createHash("sha256").update(u).digest("hex").slice(0, 16);
+    const seen = /* @__PURE__ */ new Set();
+    const candidates = function* (store) {
+      for (const u of Object.keys(store.getActors())) yield u;
+      for (const st2 of store.getStatuses()) {
+        yield st2.noteId;
+        yield st2.actor;
+        for (const a of st2.attachments || []) if (a?.url) yield a.url;
+      }
+      const c = store.getContacts();
+      for (const f of [...c.followers, ...c.following]) if (f?.actor) yield f.actor;
+      for (const r of store.getRequests()) if (r?.actor) yield r.actor;
+      for (const u of Object.keys(store.getMedia())) yield u;
+    };
+    for (const u of candidates(this)) {
+      if (typeof u !== "string" || seen.has(u)) continue;
+      seen.add(u);
+      if (hash(u) === id) {
+        ids[id] = u;
+        this.cache.set("ids.json", ids);
+        return u;
+      }
+    }
+    return null;
+  }
+};
+
+// stub:node:fs/promises
+var fail = () => {
+  throw new Error("node:fs/promises is not available in the browser agent");
+};
+var promises_default = new Proxy({}, { get: () => fail });
+
+// web/app/shims/node-path.mjs
+var normalize = (p) => {
+  const up = p.startsWith("/");
+  const parts = [];
+  for (const seg2 of p.split("/")) {
+    if (!seg2 || seg2 === ".") continue;
+    if (seg2 === "..") {
+      if (parts.length && parts[parts.length - 1] !== "..") parts.pop();
+      else if (!up) parts.push("..");
+    } else parts.push(seg2);
+  }
+  return (up ? "/" : "") + parts.join("/") || (up ? "/" : ".");
+};
+var join2 = (...segs) => normalize(segs.filter((s) => s != null && s !== "").join("/"));
+var dirname = (p) => {
+  const i = p.replace(/\/$/, "").lastIndexOf("/");
+  return i <= 0 ? i === 0 ? "/" : "." : p.slice(0, i);
+};
+var basename = (p, ext) => {
+  let b = p.slice(p.lastIndexOf("/") + 1);
+  if (ext && b.endsWith(ext)) b = b.slice(0, -ext.length);
+  return b;
+};
+var extname = (p) => {
+  const b = basename(p);
+  const i = b.lastIndexOf(".");
+  return i > 0 ? b.slice(i) : "";
+};
+var resolve = (...segs) => join2(...segs);
+var posix = { join: join2, dirname, basename, extname, resolve, normalize, sep: "/" };
+var node_path_default = { join: join2, dirname, basename, extname, resolve, normalize, posix, sep: "/" };
+
+// web/app/shims/_globals.mjs
+var URL2 = globalThis.URL;
+var URLSearchParams2 = globalThis.URLSearchParams;
+
+// web/app/shims/node-url.mjs
+var fileURLToPath = (u) => {
+  const s = typeof u === "string" ? u : u.href;
+  return s.replace(/^file:\/\//, "");
+};
+var pathToFileURL = (p) => new URL("file://" + (p.startsWith("/") ? p : "/" + p));
+var node_url_default = { URL: globalThis.URL, URLSearchParams: globalThis.URLSearchParams, fileURLToPath, pathToFileURL };
+
+// lib/core/storage.mjs
+var LDP2 = Namespace("http://www.w3.org/ns/ldp#");
 var slash = (u) => u.endsWith("/") ? u : u + "/";
 var HttpStorage = class {
   constructor(base, fetchImpl) {
@@ -45508,7 +46149,7 @@ var HttpStorage = class {
     const g = graph();
     parse2(await res.text(), g, url, "text/turtle");
     const here = namedNode2(url);
-    const names = g.each(here, LDP("contains"), null, here).map((n) => n.value).filter((u) => u.startsWith(url) && u !== url).map((u) => decodeURIComponent(u.slice(url.length)));
+    const names = g.each(here, LDP2("contains"), null, here).map((n) => n.value).filter((u) => u.startsWith(url) && u !== url).map((u) => decodeURIComponent(u.slice(url.length)));
     return { notModified: false, names, etag: res.headers.get("etag") };
   }
   // `accept` is for callers reading something that is RDF but is wanted as it
@@ -45712,39 +46353,6 @@ async function readPaged(pod, headUrl, { max = 1e4, alsoItems = false } = {}) {
 // lib/pod/featured.mjs
 var write2 = (pod, urls, doc) => writeFlat(pod, urls.featured, doc, { publicRead: true });
 var writeModerators = (pod, urls, doc) => writeFlat(pod, urls.moderators, doc, { publicRead: true });
-
-// lib/pod/http.mjs
-var MAX_BYTES2 = 5 * 1024 * 1024;
-var COOLDOWN_MAX_MS = 30 * 6e4;
-function retryAfterMs2(res, max = COOLDOWN_MAX_MS) {
-  const raw = res?.headers?.get?.("retry-after");
-  if (!raw) return null;
-  const secs = Number(raw);
-  if (Number.isFinite(secs)) return Math.min(Math.max(secs, 1) * 1e3, max);
-  const when = Date.parse(raw);
-  if (Number.isFinite(when)) return Math.min(Math.max(when - Date.now(), 1e3), max);
-  return null;
-}
-async function readCapped2(res, max = MAX_BYTES2) {
-  const len = Number(res.headers?.get?.("content-length") || 0);
-  if (len > max) throw new Error(`response too large (${len} bytes)`);
-  if (!res.body) return res.text();
-  const reader = res.body.getReader();
-  const decoder = new TextDecoder("utf-8");
-  let out = "";
-  let total = 0;
-  for (; ; ) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    total += value.length;
-    if (total > max) {
-      await reader.cancel();
-      throw new Error(`response exceeded ${max} bytes`);
-    }
-    out += decoder.decode(value, { stream: true });
-  }
-  return out + decoder.decode();
-}
 
 // lib/pod/policy.mjs
 var POLICY_TTL_MS = 5 * 6e4;
@@ -58157,32 +58765,8 @@ function quotePolicyOf(note, author) {
   return { automatic: list3(can.automaticApproval), manual: list3(can.manualApproval) };
 }
 
-// lib/pod/links.mjs
-function linkTargets(headerValue, rel, baseUrl) {
-  if (!headerValue) return [];
-  const wanted = String(rel).toLowerCase();
-  const out = [];
-  for (const part of String(headerValue).split(/,(?![^<]*>)/u)) {
-    const link = /^\s*<([^>]*)>\s*(.*)$/u.exec(part);
-    if (!link) continue;
-    const relParam = /(?:^|;)\s*rel\s*=\s*(?:"([^"]*)"|([^;"\s]+))/iu.exec(link[2]);
-    const names = (relParam?.[1] ?? relParam?.[2] ?? "").toLowerCase().split(/\s+/u);
-    if (!names.includes(wanted)) continue;
-    try {
-      out.push(new URL(link[1], baseUrl).href);
-    } catch {
-    }
-  }
-  return out;
-}
-var REL = {
-  acl: "acl",
-  storageDescription: "http://www.w3.org/ns/solid/terms#storageDescription",
-  owner: "http://www.w3.org/ns/solid/terms#owner"
-};
-
 // lib/pod/notifications.mjs
-var RDF3 = Namespace("http://www.w3.org/1999/02/22-rdf-syntax-ns#");
+var RDF4 = Namespace("http://www.w3.org/1999/02/22-rdf-syntax-ns#");
 var NOTIFY = Namespace("http://www.w3.org/ns/solid/notifications#");
 var WS_CHANNEL = "WebSocketChannel2023";
 async function storageDescriptionUrl(podBase, { fetchImpl = fetch, headers = {}, timeoutMs = 2e4 } = {}) {
@@ -58205,11 +58789,11 @@ async function readWebSocketChannel(descUrl, { fetchImpl = fetch, headers = {}, 
   });
   const g = graph();
   try {
-    parse2(await readCapped2(res), g, descUrl, "text/turtle");
+    parse2(await readCapped(res), g, descUrl, "text/turtle");
   } catch (e) {
     return { channel: null, error: `service description unparsable (${e.message})` };
   }
-  const channel = g.each(null, RDF3("type"), NOTIFY(WS_CHANNEL), null).map((n) => n.value).find(Boolean) || g.each(null, NOTIFY("channelType"), NOTIFY(WS_CHANNEL), null).map((n) => n.value).find(Boolean);
+  const channel = g.each(null, RDF4("type"), NOTIFY(WS_CHANNEL), null).map((n) => n.value).find(Boolean) || g.each(null, NOTIFY("channelType"), NOTIFY(WS_CHANNEL), null).map((n) => n.value).find(Boolean);
   return { channel: channel || null, error: channel ? null : `no ${WS_CHANNEL} service` };
 }
 async function subscribeToInbox(pod, { channelUrl, podTopicUrl, ...rest }) {
@@ -58278,7 +58862,7 @@ async function subscribeOnce(intake) {
     intake.remote,
     { channelUrl: channel, podTopicUrl: topic }
   );
-  const body = await readCapped(sub).then(JSON.parse).catch(() => null);
+  const body = await readCapped2(sub).then(JSON.parse).catch(() => null);
   if (!body?.receiveFrom) {
     intake.wsState = `subscribe-failed-${sub.status}`;
     const wait = intake._reconnectDelay();
@@ -64455,7 +65039,7 @@ var Intake = class {
           await dropHandledItem(this.remote, item.url);
           out.discarded++;
         } else {
-          const got = await readItem(this.remote, item.url, { maxBytes: MAX_ITEM_BYTES, readCapped });
+          const got = await readItem(this.remote, item.url, { maxBytes: MAX_ITEM_BYTES, readCapped: readCapped2 });
           const read2 = got.raw === null ? null : await readLenient(got.raw);
           if (read2?.degraded) this.log(`inbox item ${item.url} grounded to read: ${read2.degraded}`);
           const activity = read2?.view ?? read2?.doc ?? null;
@@ -64599,7 +65183,7 @@ var Intake = class {
       }
       let activity = null;
       try {
-        const got = await readItem(this.remote, url, { maxBytes: MAX_ITEM_BYTES, readCapped });
+        const got = await readItem(this.remote, url, { maxBytes: MAX_ITEM_BYTES, readCapped: readCapped2 });
         const raw = got.raw;
         const read2 = raw ? await readLenient(raw) : null;
         if (read2?.degraded) this.log(`inbox item ${url} grounded to read: ${read2.degraded}`);
@@ -66539,7 +67123,7 @@ async function resolveClientDocument(api, clientId) {
       api.log(`client document ${clientId} \u2192 ${res.status}`);
       return remember(null);
     }
-    doc = JSON.parse(await readCapped(res, CLIENT_DOC_MAX));
+    doc = JSON.parse(await readCapped2(res, CLIENT_DOC_MAX));
   } catch (e) {
     api.log(`client document ${clientId} could not be read: ${e.message}`);
     return remember(null);
@@ -69060,590 +69644,6 @@ async function makeDpopSession({ clientId, secret, tokenEndpoint }) {
   return { fetch: authFetch, refresh };
 }
 
-// lib/pod/transport.mjs
-init_urls();
-var LDP2 = Namespace("http://www.w3.org/ns/ldp#");
-var DC = Namespace("http://purl.org/dc/terms/");
-var POSIX = Namespace("http://www.w3.org/ns/posix/stat#");
-var RDF4 = Namespace("http://www.w3.org/1999/02/22-rdf-syntax-ns#");
-var ACL = Namespace("http://www.w3.org/ns/auth/acl#");
-var FOAF = Namespace("http://xmlns.com/foaf/0.1/");
-var AS = Namespace("https://www.w3.org/ns/activitystreams#");
-var RDFS = Namespace("http://www.w3.org/2000/01/rdf-schema#");
-function termProblem(t) {
-  if (t?.termType === "Literal") return null;
-  if (t?.termType !== "NamedNode") return `${t?.value ?? t} is not an IRI or a literal`;
-  try {
-    return /^https?:$/.test(new URL(t.value).protocol) ? null : `${t.value} is not an http(s) IRI`;
-  } catch {
-    return `${t.value} is not an absolute IRI`;
-  }
-}
-var ACP_NS = "http://www.w3.org/ns/solid/acp#";
-var LISTING_MAX_BYTES = 10 * 1024 * 1024;
-var COOLDOWN_DEFAULT_MS = 6e4;
-var sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-var PROTECTED = [
-  [/\/profile(\/|$)/, "the WebID document \u2014 nothing could authenticate as this pod again"],
-  [/\/settings(\/|$)/, "the pod's own settings"],
-  [/\/\.well-known(\/|$)/, "discovery \u2014 the handle would stop resolving"],
-  [/\.acl$/, "an access-control document \u2014 what it governs becomes unreachable"],
-  [/\.meta$/, "a resource description the server itself reads"],
-  // The single-active-agent lock. It is on the pod precisely because the
-  // private half need not be — a lease only one machine can reach coordinates
-  // nothing — so it survives moving the state off, and nothing ever deletes it:
-  // release() writes an expiry, it does not remove the document. Two agents
-  // both believing they hold it is silent, destructive, duplicated inbox
-  // draining.
-  [/\/lease\.json$/, "the lease \u2014 two agents would drain the same inbox"]
-];
-function protectedFromDeletion(url) {
-  let p;
-  try {
-    p = new URL(url).pathname;
-  } catch {
-    throw new Error(`refusing to DELETE an unparsable URL: ${url}`);
-  }
-  if (p === "/" || p === "") throw new Error(`refusing to DELETE the pod root: ${url}`);
-  for (const [re, why] of PROTECTED) {
-    if (re.test(p)) {
-      throw new Error(`refusing to DELETE ${url} \u2014 ${why}. Deny-list: lib/pod/transport.mjs.`);
-    }
-  }
-}
-var PodTransport = class {
-  /**
-   * @param {object} session          `{ fetch(url, init) }` — injected, never built here
-   * @param {object} opts
-   * @param {string} opts.webId       who this transport acts as; the ACL owner
-   * @param {string} [opts.role]      'agent' | 'gateway' | 'signup' — what is talking
-   * @param {string} [opts.runtime]   'node' | 'browser' — where it is talking from
-   * @param {string} [opts.cooldownMode] 'refuse' fails fast for the window;
-   *                                  'wait' sleeps it out and continues
-   * @param {number} [opts.maxCooldownMs] ceiling on a Retry-After we will honour
-   */
-  constructor(session, {
-    webId,
-    log: log2 = () => {
-    },
-    role = "agent",
-    runtime = "node",
-    cooldownMode = "refuse",
-    maxCooldownMs = 30 * 6e4
-  } = {}) {
-    this.session = session;
-    this.webId = webId;
-    this.log = log2;
-    this.role = role;
-    this.runtime = runtime;
-    this.cooldownMode = cooldownMode;
-    this.maxCooldownMs = maxCooldownMs;
-    this.pausedUntil = 0;
-    this.probeCount = 0;
-    this.aclUrls = /* @__PURE__ */ new Map();
-    this.aclFlavour = null;
-    this._listCache = /* @__PURE__ */ new Map();
-    this.toPod = null;
-  }
-  /** Who is talking, and from where — the prefix on every log line and error. */
-  get label() {
-    return `${this.role}/${this.runtime}`;
-  }
-  /** One line for a boot log: what this transport is and what it points at. */
-  describe() {
-    return `${this.role} over a ${this.runtime} session \u2192 ${this.webId?.split("#")[0] || "unknown"}`;
-  }
-  /** Install the advertised→pod url map for a fronted identity (urls.toPod). */
-  setUrlMap(fn) {
-    this.toPod = typeof fn === "function" ? fn : null;
-  }
-  async warmup() {
-    return this.session.warmup?.();
-  }
-  /** What we have asked of this pod, for a status page or an operator. */
-  stats() {
-    return {
-      role: this.role,
-      runtime: this.runtime,
-      probes: this.probeCount,
-      pausedFor: Math.max(0, Math.round((this.pausedUntil - Date.now()) / 1e3))
-    };
-  }
-  /**
-   * Observe a throttling answer and arm the pod-wide cooldown.
-   *
-   * One pause for the whole pod, not one per request: without it every
-   * in-flight call rides its own ladder into a server that has already said it
-   * is overloaded, which is how a throttle becomes a stampede. A 429 or 503
-   * with NO Retry-After still arms the window — the browser copy used to arm
-   * nothing at all in that case, which is most cases.
-   */
-  _observe(res) {
-    if (res.status !== 429 && res.status !== 503) return res;
-    const asked = retryAfterMs2(res, this.maxCooldownMs);
-    const ms = asked ?? (this.cooldownMode === "refuse" ? COOLDOWN_DEFAULT_MS : 0);
-    if (!ms) return res;
-    this.pausedUntil = Date.now() + ms;
-    this.log(`[${this.label}] pod returned ${res.status}${asked ? ", Retry-After" : ""} \u2014 holding all requests for ${Math.round(ms / 1e3)}s`);
-    return res;
-  }
-  /** Honour an armed cooldown: fail fast, or wait it out, as configured. */
-  async _cooldownGate() {
-    const left = this.pausedUntil - Date.now();
-    if (left <= 0) return;
-    if (this.cooldownMode === "wait") {
-      await sleep(Math.min(left, this.maxCooldownMs));
-      return;
-    }
-    throw new Error(`[${this.label}] pod asked us to back off \u2014 ${Math.ceil(left / 1e3)}s left of its Retry-After`);
-  }
-  /**
-   * The seam a subclass overrides to add transport behaviour — the browser's
-   * retry ladder lives here. Overriding THIS rather than `fetch` is deliberate:
-   * an override cannot skip the url map, the cooldown accounting or the
-   * deletion deny-list, because those are in `fetch` above it.
-   */
-  async _send(url, init) {
-    return this.session.fetch(url, init);
-  }
-  /**
-   * A deliberately CREDENTIAL-FREE request: it asks what a stranger would see,
-   * so it cannot go through the session without answering a different question.
-   * It still belongs to this pod, though — it opens a socket to it and takes
-   * one of its workers — so it observes the same cooldown and is counted.
-   *
-   * No url map: a probe asks about the ADVERTISED face, which is the whole
-   * point of asking.
-   */
-  async probe(url, init = {}) {
-    await this._cooldownGate();
-    this.probeCount++;
-    return this._observe(await fetch(url, init));
-  }
-  /**
-   * Every authenticated request. Nothing below this reaches the session
-   * directly: this is the only place the cooldown is both OBSERVED and ARMED,
-   * the url map applied, and the deny-list enforced.
-   */
-  async fetch(url, init) {
-    await this._cooldownGate();
-    if (this.toPod) url = this.toPod(url);
-    if (String(init?.method || "").toUpperCase() === "DELETE") this._guardDelete(url);
-    return this._observe(await this._send(url, init));
-  }
-  /** Both refusals a DELETE must pass, wherever it was issued from. */
-  _guardDelete(url) {
-    protectedFromDeletion(url);
-    for (const acl of this.aclUrls?.values() ?? []) {
-      if (acl === url) throw new Error(`refusing to DELETE an access-control document: ${url}`);
-    }
-  }
-  async put(url, body, contentType) {
-    const res = await this.fetch(url, {
-      method: "PUT",
-      headers: { "content-type": contentType },
-      body
-    });
-    if (res.status >= 400) throw new Error(`[${this.label}] PUT ${url} \u2192 ${res.status}`);
-    this.noteAclLink(url, res);
-    return res;
-  }
-  async putJson(url, obj, contentType = "application/activity+json") {
-    return this.put(url, JSON.stringify(obj), contentType);
-  }
-  // A read that FAILED is not a document that is ABSENT. Returning null for
-  // both let a 429 read as "no replies yet", and the caller then rewrote the
-  // collection from empty — erasing every reply already recorded. Only a real
-  // 404/410 is absence; anything else throws and the caller retries later.
-  async getJson(url) {
-    const res = await this.fetch(url, { headers: { accept: "*/*" } });
-    if (res.status === 404 || res.status === 410) return null;
-    if (res.status >= 400) throw new Error(`[${this.label}] GET ${url} \u2192 ${res.status}`);
-    return res.json().catch(() => null);
-  }
-  async delete(url) {
-    const res = await this.fetch(url, { method: "DELETE" });
-    return res.status < 400 || res.status === 404;
-  }
-  /** Remember an access-control location the pod volunteered on a response. */
-  noteAclLink(url, res) {
-    if (this.aclUrls.has(url)) return;
-    const [acl] = linkTargets(res?.headers?.get?.("link"), REL.acl, url);
-    if (acl) this.aclUrls.set(url, acl);
-  }
-  /**
-   * Where this resource's access control lives. The pod says so on any
-   * response about the resource; a pod that says nothing is taken to keep it
-   * at the usual suffix, which is what every server this runs against does.
-   */
-  async aclUrlFor(targetUrl) {
-    const known2 = this.aclUrls.get(targetUrl);
-    if (known2) return known2;
-    try {
-      const res = await this.fetch(targetUrl, { method: "HEAD" });
-      this.noteAclLink(targetUrl, res);
-    } catch {
-    }
-    const resolved = this.aclUrls.get(targetUrl) || targetUrl + ".acl";
-    this.aclUrls.set(targetUrl, resolved);
-    return resolved;
-  }
-  /**
-   * Whether writing a WAC document here is meaningful. Asked once per pod, on
-   * the first access-control write. A pod that answers with ACP policies is
-   * left alone: replacing them with authorizations it does not read would take
-   * away the rules actually protecting it.
-   */
-  async aclWritable(aclUrl) {
-    if (this.aclFlavour !== null) return this.aclFlavour;
-    this.aclFlavour = true;
-    try {
-      const res = await this.fetch(aclUrl, { headers: { accept: "text/turtle" } });
-      if (res.status < 300) {
-        const g = graph();
-        parse2(await res.text(), g, aclUrl, "text/turtle");
-        const acp = g.statements.some((st2) => st2.predicate.value.startsWith(ACP_NS) || st2.object.value.startsWith(ACP_NS));
-        if (acp) {
-          this.aclFlavour = false;
-          this.log(`[${this.label}] this pod states access as ACP policies, which this library does not write \u2014 its access rules are left exactly as they are, and nothing here is published private`);
-        }
-      }
-    } catch {
-    }
-    return this.aclFlavour;
-  }
-  // WAC doc granting the public `publicModes` on target, owner full control.
-  // An empty publicModes list yields an owner-only document.
-  //
-  // Built and serialised by rdflib, like every other document written here.
-  // This is the highest-consequence RDF in the project: an ACL that comes out
-  // malformed, or naming the wrong subject, either locks the owner out or
-  // leaves the private trees world-readable. $rdf.sym() also throws on an
-  // illegal IRI, so a pod URL with something odd in it fails here rather than
-  // silently producing a document that means something else.
-  aclDoc(targetUrl, publicModes, { appendAgents = [], readAgents = [], aclUrl = null } = {}) {
-    const url = aclUrl || targetUrl + ".acl";
-    const doc = namedNode2(url);
-    const target = namedNode2(targetUrl);
-    const g = graph();
-    const authorize = (subject, agentPred, agent2, modes) => {
-      g.add(subject, RDF4("type"), ACL("Authorization"), doc);
-      g.add(subject, agentPred, agent2, doc);
-      g.add(subject, ACL("accessTo"), target, doc);
-      g.add(subject, ACL("default"), target, doc);
-      for (const m of modes) g.add(subject, ACL("mode"), ACL(m), doc);
-    };
-    if (publicModes.length) {
-      authorize(namedNode2(url + "#public"), ACL("agentClass"), FOAF("Agent"), publicModes);
-    }
-    appendAgents.forEach((webId, i) => authorize(namedNode2(url + `#gw${i}`), ACL("agent"), namedNode2(webId), ["Append"]));
-    readAgents.forEach((webId, i) => authorize(namedNode2(url + `#r${i}`), ACL("agent"), namedNode2(webId), ["Read"]));
-    authorize(
-      namedNode2(url + "#owner"),
-      ACL("agent"),
-      namedNode2(this.webId),
-      ["Read", "Write", "Control"]
-    );
-    return serialize(doc, g, url, "text/turtle");
-  }
-  async setAcl(targetUrl, publicModes, opts = {}) {
-    const podTarget = this.toPod ? this.toPod(targetUrl) : targetUrl;
-    const url = await this.aclUrlFor(podTarget);
-    if (!await this.aclWritable(url)) return null;
-    const doc = this.aclDoc(podTarget, publicModes, { ...opts, aclUrl: url });
-    if (opts.ifChanged && await this.aclSame(url, doc)) return { status: 304, unchanged: true };
-    return this.put(url, doc, "text/turtle");
-  }
-  // Whether the pod's rule at `aclUrl` states exactly what `doc` states.
-  // Compared as graphs, not bytes: the pod serialises what it holds its own
-  // way. Every rule this file writes names its subjects, so triple sets are
-  // enough; anything unreadable or with blank nodes reads as different.
-  async aclSame(aclUrl, doc) {
-    try {
-      const res = await this.fetch(aclUrl, { headers: { accept: "text/turtle" } });
-      if (res.status !== 200) return false;
-      const triples = (text) => {
-        const g = graph();
-        parse2(text, g, aclUrl, "text/turtle");
-        if (g.statements.some((st2) => st2.subject.termType === "BlankNode" || st2.object.termType === "BlankNode")) return null;
-        return g.statements.map((st2) => `${st2.subject.value} ${st2.predicate.value} ${st2.object.value}`).sort().join("\n");
-      };
-      const theirs = triples(await res.text());
-      return theirs !== null && theirs === triples(doc);
-    } catch {
-      return false;
-    }
-  }
-  // Child documents of an LDP container (URLs under it, excluding aux docs).
-  // Revalidated: the inbox is polled every couple of minutes and is usually
-  // unchanged, so ask conditionally and let the server answer 304.
-  async listContainer(url) {
-    this._listCache ||= /* @__PURE__ */ new Map();
-    const known2 = this._listCache.get(url);
-    const res = await this.fetch(url, {
-      headers: { accept: "text/turtle", ...known2?.etag ? { "if-none-match": known2.etag } : {} }
-    });
-    if (res.status === 304 && known2) return known2.children;
-    if (res.status >= 400) return [];
-    let body;
-    try {
-      body = await readCapped2(res, LISTING_MAX_BYTES);
-    } catch (e) {
-      this.log(`[${this.label}] listing at ${url}: ${e.message} \u2014 using the last known listing`);
-      return known2?.children ?? [];
-    }
-    const g = graph();
-    parse2(body, g, url, "text/turtle");
-    const here = namedNode2(url);
-    const seen = /* @__PURE__ */ new Set();
-    const receipts = /* @__PURE__ */ new Set();
-    const list3 = [];
-    for (const child of g.each(here, LDP2("contains"), null, here)) {
-      const u = child.value;
-      if (u.endsWith(".receipt.json")) {
-        receipts.add(u);
-        continue;
-      }
-      if (!u.startsWith(url) || u === url || /\.(acl|meta)$/.test(u) || seen.has(u)) continue;
-      seen.add(u);
-      list3.push({
-        url: u,
-        size: Number(g.any(child, POSIX("size"), null, here)?.value || 0),
-        modified: g.any(child, DC("modified"), null, here)?.value || null
-      });
-    }
-    for (const item of list3) item.receipt = receipts.has(item.url + ".receipt.json");
-    const orphans = [...receipts].filter((r) => !seen.has(r.slice(0, -".receipt.json".length)));
-    list3.sort((a, b) => String(a.modified || "").localeCompare(String(b.modified || "")));
-    this._listCache.set(url, { etag: res.headers.get("etag"), children: list3, orphans });
-    return list3;
-  }
-  /** Receipts in the last listing of `url` whose item is gone. */
-  orphanReceipts(url) {
-    return this._listCache?.get(url)?.orphans ?? [];
-  }
-  /**
-   * The WebID profile advertises the actor as an account:
-   *   <webId> foaf:account <actor> .
-   *   <actor> a foaf:OnlineAccount, as:Person|as:Group ; foaf:accountName "@handle@host" .
-   * Read–check–write through rdflib. Returns false when the profile already
-   * says all of it. The parsed graph must mention the WebID before anything is
-   * written back — an empty or foreign body must never become the new profile.
-   */
-  async linkAccountInProfile({ actorUrl, accountName, kind = "person", outbox = null }) {
-    const me = namedNode2(this.webId);
-    const podBase = podBaseOfWebId(this.webId);
-    const docs = await this.profileDocs(podBase);
-    const says = (s, p, o) => docs.some(({ g }) => g?.holds(s, p, o));
-    const actor = namedNode2(actorUrl);
-    const wanted = [
-      [me, FOAF("account"), actor],
-      [actor, RDF4("type"), FOAF("OnlineAccount")],
-      [actor, RDF4("type"), kind === "group" ? AS("Group") : AS("Person")],
-      [actor, FOAF("accountName"), literal2(accountName)],
-      // Where a Solid client posts on this person's behalf (`as:outbox` on the
-      // WebID is what dokieli reads); only where a door exists to take it.
-      ...outbox ? [[me, AS("outbox"), namedNode2(outbox)]] : []
-    ];
-    const missing = wanted.filter(([s, p, o]) => !says(s, p, o));
-    const stale = [];
-    for (const { g } of docs) {
-      for (const st2 of g?.statementsMatching(actor, FOAF("accountName"), null) || []) {
-        if (st2.object.value !== accountName) stale.push([st2.subject, st2.predicate, st2.object]);
-      }
-      if (outbox) {
-        for (const st2 of g?.statementsMatching(me, AS("outbox"), null) || []) {
-          if (st2.object.value !== outbox) stale.push([st2.subject, st2.predicate, st2.object]);
-        }
-      }
-    }
-    if (!missing.length && !stale.length) return false;
-    await this.writeAboutWebId(podBase, { inserts: missing, deletes: stale });
-    return true;
-  }
-  /**
-   * An N3 Patch of exactly these statements, or false when the pod will not
-   * take one and the caller should write the document instead.
-   *
-   * The statements are serialised by rdflib; only the wrapper naming what is
-   * being patched is assembled here, because N3's braces have no rdflib form.
-   */
-  n3Patch(docUrl, inserts, deletes) {
-    const block = (triples) => {
-      const g = graph();
-      for (const [s, p, o] of triples) g.add(s, p, o);
-      return serialize(null, g, docUrl, "application/n-triples").trim();
-    };
-    const clauses = [];
-    if (deletes.length) clauses.push(`  solid:deletes { ${block(deletes)} }`);
-    if (inserts.length) clauses.push(`  solid:inserts { ${block(inserts)} }`);
-    return `@prefix solid: <http://www.w3.org/ns/solid/terms#>.
-<> a solid:InsertDeletePatch;
-${clauses.join(";\n")}.
-`;
-  }
-  async patchDocument(docUrl, inserts, deletes) {
-    let res;
-    try {
-      res = await this.fetch(docUrl, {
-        method: "PATCH",
-        headers: { "content-type": "text/n3" },
-        body: this.n3Patch(docUrl, inserts, deletes)
-      });
-    } catch {
-      return false;
-    }
-    if (res.status < 300) return true;
-    if (res.status === 405 || res.status === 415 || res.status === 501) return false;
-    throw new Error(`[${this.label}] PATCH ${docUrl} \u2192 ${res.status}`);
-  }
-  // ---- writing a profile or a type index: valid RDF, or nothing ----
-  //
-  // Two rules. A change is written only if the document it leaves behind is
-  // valid RDF: the graph as it would be afterwards is serialised and parsed
-  // back, and the subject that must stay described still is. And a profile
-  // that will not take a write is not the end: the statements go to the first
-  // document its rdfs:seeAlso names, inside the same pod, that takes them —
-  // under the same check. A profile is what every Solid app signs in through;
-  // one left broken breaks them all. Reading follows the same links.
-  /** An IRI or a literal as a term, for the operations that pass plain values. */
-  sym(iri) {
-    try {
-      return namedNode2(iri);
-    } catch {
-      throw new Error(`not written: ${iri} is not an absolute IRI`);
-    }
-  }
-  literal(value) {
-    return literal2(value);
-  }
-  /** A document as a graph, or null when it is not there. */
-  async readRdf(docUrl) {
-    const res = await this.fetch(docUrl, { headers: { accept: "text/turtle" } });
-    if (res.status === 404 || res.status === 410) return null;
-    if (res.status >= 400) throw new Error(`[${this.label}] GET ${docUrl} \u2192 ${res.status}`);
-    const g = graph();
-    parse2(await res.text(), g, docUrl, "text/turtle");
-    return g;
-  }
-  /**
-   * The document as it would be after the change, checked. Returns the Turtle
-   * to write, or throws saying why nothing may be written.
-   */
-  checkedRdf(g, docUrl, { inserts = [], deletes = [], mustDescribe = null }) {
-    const doc = namedNode2(docUrl);
-    for (const [s, p, o] of inserts) {
-      const bad = termProblem(s) || termProblem(p) || termProblem(o) || (s?.termType === "Literal" || p?.termType !== "NamedNode" ? "a literal subject or predicate" : null);
-      if (bad) throw new Error(`not written: ${bad}`);
-    }
-    const after = graph();
-    for (const st2 of g.statementsMatching(null, null, null, doc)) after.add(st2.subject, st2.predicate, st2.object, doc);
-    for (const [s, p, o] of deletes) for (const st2 of after.statementsMatching(s, p, o, doc)) after.remove(st2);
-    for (const [s, p, o] of inserts) if (!after.holds(s, p, o, doc)) after.add(s, p, o, doc);
-    let text;
-    try {
-      text = serialize(doc, after, docUrl, "text/turtle");
-    } catch (e) {
-      throw new Error(`not written: ${docUrl} would not serialise (${e.message})`);
-    }
-    const back = graph();
-    try {
-      parse2(text, back, docUrl, "text/turtle");
-    } catch (e) {
-      throw new Error(`not written: ${docUrl} would not parse back (${e.message})`);
-    }
-    if (back.statementsMatching(null, null, null, doc).length !== after.statementsMatching(null, null, null, doc).length) {
-      throw new Error(`not written: ${docUrl} would not read back as written`);
-    }
-    if (mustDescribe && !back.statementsMatching(namedNode2(mustDescribe), null, null, doc).length) {
-      throw new Error(`not written: ${docUrl} would no longer describe ${mustDescribe}`);
-    }
-    return text;
-  }
-  /**
-   * Change one document, or refuse. `g` is the document as read (null for a
-   * new one). A PATCH carries only these statements; where the pod cannot
-   * patch, the whole checked document is written. Returns the write's status.
-   */
-  async writeRdfChecked(docUrl, g, { inserts = [], deletes = [], mustDescribe = null }) {
-    const current = g || graph();
-    const doc = namedNode2(docUrl);
-    const todo = inserts.filter(([s, p, o]) => !current.holds(s, p, o, doc));
-    const gone = deletes.filter(([s, p, o]) => current.holds(s, p, o, doc));
-    if (!todo.length && !gone.length) return 200;
-    const text = this.checkedRdf(current, docUrl, { inserts: todo, deletes: gone, mustDescribe });
-    if (g) {
-      let res = null;
-      try {
-        res = await this.fetch(docUrl, {
-          method: "PATCH",
-          headers: { "content-type": "text/n3" },
-          body: this.n3Patch(docUrl, todo, gone)
-        });
-      } catch {
-        res = null;
-      }
-      if (res && res.status < 300) return res.status;
-      if (res && ![405, 415, 501].includes(res.status)) return res.status;
-    }
-    const put = await this.fetch(docUrl, { method: "PUT", headers: { "content-type": "text/turtle" }, body: text });
-    return put.status;
-  }
-  /**
-   * The profile and the documents its rdfs:seeAlso names inside this pod,
-   * each with its graph, the profile first. What any of them says about the
-   * WebID is what the profile says.
-   */
-  async profileDocs(podBase) {
-    const profileUrl2 = this.webId.split("#")[0];
-    const g = await this.readRdf(profileUrl2);
-    if (!g) throw new Error(`no profile at ${profileUrl2}`);
-    const out = [{ url: profileUrl2, g, profile: true }];
-    const seen = /* @__PURE__ */ new Set([profileUrl2]);
-    for (const st2 of g.statementsMatching(null, RDFS("seeAlso"), null)) {
-      const url = st2.object.value.split("#")[0];
-      if (seen.has(url) || !url.startsWith(podBase)) continue;
-      seen.add(url);
-      out.push({ url, g: await this.readRdf(url).catch(() => null), profile: false });
-    }
-    return out;
-  }
-  /** Every value the WebID has for `predicate`, across the profile and its seeAlso documents. */
-  webIdValues(docs, predicate) {
-    const me = namedNode2(this.webId);
-    const p = namedNode2(predicate);
-    const out = [];
-    for (const { g } of docs) for (const st2 of g?.statementsMatching(me, p, null) || []) out.push(st2.object.value);
-    return [...new Set(out)];
-  }
-  /**
-   * Write statements about the WebID: to the profile, or — if the profile will
-   * not take them — to the first of its seeAlso documents that will. Every
-   * write checked. Returns the document written to, or null when nothing
-   * needed writing; throws when none would take it.
-   */
-  async writeAboutWebId(podBase, { inserts = [], deletes = [] }) {
-    const docs = await this.profileDocs(podBase);
-    const holds = ([s, p, o]) => docs.some(({ g }) => g?.holds(s, p, o));
-    const todo = inserts.filter((t) => !holds(t));
-    const gone = deletes.filter(holds);
-    if (!todo.length && !gone.length) return null;
-    const refusals = [];
-    for (const d of docs) {
-      const here = gone.filter(([s, p, o]) => d.g?.holds(s, p, o));
-      const status2 = await this.writeRdfChecked(d.url, d.g, {
-        inserts: todo,
-        deletes: here,
-        mustDescribe: d.profile ? this.webId : null
-      });
-      if (status2 < 300) return d.url;
-      refusals.push(`${d.url} \u2192 ${status2}`);
-      if (status2 !== 401 && status2 !== 403) break;
-    }
-    throw new Error(`not written: neither the profile nor a document it names would take it (${refusals.join("; ")})`);
-  }
-};
-
 // web/app/pod-remote.mjs
 var RETRY_MAX = 5;
 var sleep2 = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -69942,7 +69942,7 @@ var Deliverer = class {
     if (res.status >= 400) {
       const err = new Error(`POST ${inbox} \u2192 ${res.status}`);
       err.status = res.status;
-      const ra = retryAfterMs(res, 24 * 60 * 6e4);
+      const ra = retryAfterMs2(res, 24 * 60 * 6e4);
       if (ra != null) err.retryAfterMs = ra;
       throw err;
     }
@@ -71504,7 +71504,7 @@ var Atproto = class {
     if (left > 0) throw new Error(`bluesky asked us to back off \u2014 ${Math.ceil(left / 1e3)}s left`);
     const res = await this.fetcher(url, init);
     if (res.status === 429 || res.status === 503) {
-      const ms = retryAfterMs(res) ?? 6e4;
+      const ms = retryAfterMs2(res) ?? 6e4;
       this.pausedUntil = Date.now() + ms;
       this.log(`bluesky answered ${res.status} \u2014 pausing for ${Math.round(ms / 1e3)}s`);
     }
@@ -71898,7 +71898,7 @@ var FediAccounts = class {
     if (left > 0) throw new Error(`${host} asked us to back off \u2014 ${Math.ceil(left / 1e3)}s left`);
     const res = await this.fetcher(url, init);
     if (res.status === 429 || res.status === 503) {
-      const ms = retryAfterMs(res) ?? 6e4;
+      const ms = retryAfterMs2(res) ?? 6e4;
       this.pausedUntil.set(host, Date.now() + ms);
       this.log(`${host} answered ${res.status} \u2014 pausing for ${Math.round(ms / 1e3)}s`);
     }
