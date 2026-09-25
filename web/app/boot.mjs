@@ -164,7 +164,7 @@ export function parseAddress(input) {
 async function issuerForActor(actorUrl) {
   // The pod's actor says where a client signs in (oauthAuthorizationEndpoint's
   // origin). Failing that: a host that answers OpenID discovery itself is the
-  // provider (a pod on a path of a shared host), and otherwise the provider is
+  // provider (a suffixed pod), and otherwise the provider is
   // the pod host's parent domain (a subdomain pod).
   try {
     const authz = await podActor.readIssuer(actorUrl);

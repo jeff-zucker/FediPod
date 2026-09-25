@@ -12320,7 +12320,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
   const coTenant = await attach({ handle: 'alice', podHome: 'https://alice.pod/solid/', kind: 'group' },
     'https://alice.pod/mallory/profile/card#me');
   // Refused before the name is even looked at: a WebID in /mallory/ does not
-  // own a place in /solid/ of a pod on a shared host.
+  // own a place in /solid/ of a suffixed pod.
   check(coTenant.status === 403,
     `somebody else on the same pod cannot re-attach that name (${coTenant.status})`);
   const stillMine = await attach({ handle: 'alice', podHome: 'https://alice.pod/solid/' },

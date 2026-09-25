@@ -409,7 +409,7 @@ try {
     body: JSON.stringify({ handle: 'meiinwren', podHome: pathHome, actorUrl: pathHome + 'ap/actor', fronted: true }),
   });
   check(neighbour.status === 403,
-    `on a host that keeps pods on paths, a WebID cannot attach a place inside another person's pod (${neighbour.status})`);
+    `where pods are suffixed, a WebID cannot attach a place inside another person's pod (${neighbour.status})`);
   const pathAtt = await get('/api/attach', {
     method: 'POST',
     headers: { 'content-type': 'application/json', authorization: 'Bearer path-owner', dpop: 'proof' },

@@ -22,7 +22,7 @@ profile that can't be written to has the statements written to the document
 its `rdfs:seeAlso` names. The Server now patches RDF in-process instead of
 rewriting it.
 
-**On a server that keeps pods on paths, only you can attach a place inside
+**On a server whose pods are suffixed, only you can attach a place inside
 your pod.**
 
 ## 2026-09-25 (apps can read your full outbox — version 1.38.2)
