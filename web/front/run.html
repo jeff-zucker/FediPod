@@ -46,12 +46,18 @@ Fediverse services straight from your pod.</p>
   <label for="run-issuer">Your identity provider</label>
   <input type="url" id="run-issuer" autocomplete="off" placeholder="https://this.server">
   </p>
+  <p class="field">
+  <label for="run-container">Store your data in a container named fedipod, inside this container</label>
+  <input type="text" id="run-container" autocomplete="off" spellcheck="false" placeholder="/"
+    aria-describedby="run-container-hint">
+  </p>
+  <p class="hint" id="run-container-hint">Leave it empty for your pod's root. This is permanent.</p>
   <p class="actions">
     <button type="button" id="run-continue" class="primary" disabled>Sign in with your pod &amp; opt in</button>
     <button type="button" id="run-leave">Stop running it here</button>
   </p>
 </form>
-<p class="hint" id="run-note" hidden></p>
+<div class="hint" id="run-note" hidden></div>
 
 <script type="module" src="/run.js"></script>
 </body>

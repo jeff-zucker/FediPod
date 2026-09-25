@@ -73,6 +73,8 @@ export function makeDirectory(io: IO, containerUrl: string): Directory {
 /** A pod whose owner opted in at runtime. The door secret is never in the row. */
 export interface AgentRegistryRecord {
   podBase: string; handle: string; host: string; webId: string; optedInAt: string;
+  /** Where on the pod the account lives, relative to it; absent on older rows, which are at fedipod/. */
+  root?: string;
 }
 
 /**

@@ -108,6 +108,8 @@ interface EmbeddedIdentity {
 const LIB_ROOT = existsSync(join(__dirname, '../lib/server/embed.mjs')) ? '../lib' : '../../../lib';
 const FRONT_CORE = `${LIB_ROOT}/gateway/front-core.mjs`;
 const EMBED = `${LIB_ROOT}/server/embed.mjs`;
+const PLACE = `${LIB_ROOT}/core/place.mjs`;
+const TRANSPORT = `${LIB_ROOT}/pod/transport.mjs`;
 const esmImport = new Function('s', 'return import(s)') as (s: string) => Promise<Record<string, Function>>;
 
 // The front's pages and the files they load, carried in the same two layouts
@@ -157,6 +159,7 @@ export class FediPodServerHandler extends HttpHandler implements Initializable, 
   // request is matched to an identity by host AND mount, never host alone.
   private readonly claimed = new Map<string, AgentClaim>();    // pod base → claim
   private readonly agentHandles = new Map<string, string>();   // handle → pod base
+  private readonly roots = new Map<string, string>();          // pod base → where on it the account lives
   private readonly frontHost: string;
   private readonly uiPath: string;
   private readonly identities = new Map<string, EmbeddedIdentity>();
@@ -321,6 +324,7 @@ export class FediPodServerHandler extends HttpHandler implements Initializable, 
         }
         this.claimed.set(row.podBase, claim);
         this.agentHandles.set(row.handle, row.podBase);
+        this.roots.set(row.podBase, row.root || 'fedipod/');
         pods.push(row.podBase);
       }
     } catch (e: unknown) {
@@ -369,6 +373,7 @@ export class FediPodServerHandler extends HttpHandler implements Initializable, 
     };
     return ensureDoorSecret(session ?? makeStoreSession(this.args.resourceStore, podBase), podBase, {
       ...opts,
+      root: this.roots.get(podBase) ?? 'fedipod/',
       dataDir: this.args.agentDataDir,
       handle: deriveHandle(podBase),
       log: (message: string): void => { this.logger.info(`@${deriveHandle(podBase)}: ${message}`); },
@@ -395,6 +400,7 @@ export class FediPodServerHandler extends HttpHandler implements Initializable, 
           }
           const identity = await startEmbeddedAgent({
             podBase,
+            root: this.roots.get(podBase) ?? 'fedipod/',
             dataDir: this.args.agentDataDir,
             session,
             resourceStore: this.args.resourceStore,
@@ -544,7 +550,8 @@ export class FediPodServerHandler extends HttpHandler implements Initializable, 
     }
   }
 
-  public async optInPod({ podBase, webId }: { podBase: string; webId: string }):
+  public async optInPod({ podBase, webId, container = '', createIndex = false }:
+  { podBase: string; webId: string; container?: string; createIndex?: boolean }):
   Promise<Record<string, unknown> & { httpStatus: number }> {
     if (!this.registry) return { httpStatus: 501, error: 'this server does not offer runtime opt-in' };
     if (this.args.clusterManager && !this.args.clusterManager.isSingleThreaded()) {
@@ -568,8 +575,35 @@ export class FediPodServerHandler extends HttpHandler implements Initializable, 
       return { httpStatus: 409, error: (e as Error).message };
     }
     const { host } = claim;
+    // Where on the pod: the container its owner named holds `fedipod/`. The
+    // place is recorded in their public type index — made only on their yes —
+    // before anything else is written, and read here with the server's own
+    // access to the pod.
+    const place = await esmImport(PLACE) as {
+      chosenRoot: (base: string, typed: string) => { root?: string; problem?: string };
+      hasPublicIndex: (pod: unknown, base: string) => Promise<boolean>;
+      recordPlace: (pod: unknown, base: string, actor: string, o: { create: boolean }) => Promise<string>;
+    };
+    const chosen = place.chosenRoot(base, container);
+    if (chosen.problem || !chosen.root) return { httpStatus: 400, error: `Where to store it: ${chosen.problem}.` };
+    const root = chosen.root;
+    const { PodTransport } = await esmImport(TRANSPORT) as unknown as {
+      PodTransport: new (session: unknown, o: { webId: string }) => unknown;
+    };
+    const pod = new PodTransport(makeStoreSession(this.args.resourceStore, base), { webId });
+    if (!createIndex && !await place.hasPublicIndex(pod, base)) {
+      return { httpStatus: 409, code: 'needs-index',
+        error: 'Your pod has no public type index, the list Solid apps use to find your things. '
+          + 'FediPod needs one to record where your account lives.' };
+    }
     try {
-      await this.registry.add({ podBase: base, handle, host, webId, optedInAt: new Date().toISOString() });
+      await place.recordPlace(pod, base, `${base}${root}ap/actor`, { create: createIndex });
+    } catch (e: unknown) {
+      return { httpStatus: 500, error: `could not record where the account lives in your type index (${(e as Error).message})` };
+    }
+    this.roots.set(base, root);
+    try {
+      await this.registry.add({ podBase: base, handle, host, webId, root, optedInAt: new Date().toISOString() });
     } catch (e: unknown) {
       this.logger.error(`opt-in row for ${base} could not be written: ${(e as Error).message}`);
       return { httpStatus: 500, error: 'could not record the opt-in' };
@@ -767,7 +801,7 @@ export class FediPodServerHandler extends HttpHandler implements Initializable, 
       },
       agentControl: this.registry
         ? {
-          optIn: (a: { podBase: string; webId: string }) => this.optInPod(a),
+          optIn: (a: { podBase: string; webId: string; container?: string; createIndex?: boolean }) => this.optInPod(a),
           optOut: (a: { podBase: string }) => this.optOutPod(a),
           describe: (a: { podBase: string }) => this.describePod(a),
         }

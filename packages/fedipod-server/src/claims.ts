@@ -50,11 +50,12 @@ const AGENT_PATHS = new Set([
 const AGENT_PREFIXES = [ '/api/', '/oauth/', '/@' ];   // /@handle: the short profile address
 
 // An identity's inbox is the container `/<root>/ap/inbox/`, matched by shape
-// rather than a fixed root. A POST here is a delivery, verified at the door
+// rather than a fixed root — and the root may be nested, wherever its owner put
+// the `fedipod/` container. A POST here is a delivery, verified at the door
 // before it is written; the handler checks the exact path per identity. The
 // path is relative to the identity's mount (see agentClaims), so a suffix pod's
 // `/aisha/fedipod/ap/inbox/` arrives here already stripped to `/fedipod/ap/inbox/`.
-export const isInboxPath = (pathname: string): boolean => /^\/[^/]+\/ap\/inbox\/$/u.test(pathname);
+export const isInboxPath = (pathname: string): boolean => /^\/(?:[^/]+\/)+ap\/inbox\/$/u.test(pathname);
 
 /**
  * True when this path belongs to an identity's client surface.

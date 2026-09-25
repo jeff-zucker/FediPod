@@ -12,9 +12,11 @@
 // confines the transport to that pod's own subtree — the store serves every
 // pod on the server, and an identity's reach must not.
 
+import { Readable } from 'node:stream';
 import {
   BasicRepresentation, BasicConditions, BasicETagHandler, readableToString,
   NotFoundHttpError, PreconditionFailedHttpError, NotImplementedHttpError,
+  N3PatchBodyParser, RepresentationMetadata, guardStream, HttpError,
 } from '@solid/community-server';
 import type { ResourceStore, Representation, RepresentationPreferences } from '@solid/community-server';
 
@@ -140,6 +142,39 @@ export function makeStoreFetch(resourceStore: ResourceStore, podBase?: string): 
       // slower but just as correct.
       const written = changes?.get?.(identifier);
       return respond(205, null, written && etags.getETag(written));
+    }
+
+    // An N3 Patch of an RDF document — a profile, a type index — read by the
+    // parser a Solid server reads one with, and applied by the store's own
+    // patching. Only the statements change; the document is never rewritten
+    // around them. A store that cannot patch answers 501, which is the one
+    // answer that sends a caller to writing the whole document instead.
+    if (method === 'PATCH') {
+      stats.writes++;
+      if (!/^text\/n3\b/u.test(header('content-type') ?? '')) return respond(415, 'an N3 Patch is the patch this takes');
+      let patch;
+      try {
+        patch = await new N3PatchBodyParser().handle({
+          metadata: new RepresentationMetadata(identifier, 'text/n3'),
+          request: guardStream(Readable.from([ String(init.body ?? '') ])) as never,
+        });
+      } catch (e: unknown) {
+        return respond(400, `not a patch this can read: ${(e as Error).message}`);
+      }
+      const ifMatch = header('if-match');
+      const conditions = ifMatch
+        ? new BasicConditions(etags, { matchesETag: ifMatch.split(',').map((t) => t.trim()) })
+        : undefined;
+      try {
+        await resourceStore.modifyResource(identifier, patch, conditions);
+      } catch (e: unknown) {
+        // What the store said, as the status it said it with: 409 for a
+        // deletion of something not there, 412 for a stale If-Match, 501
+        // for a store with no patching at all.
+        if (HttpError.isInstance(e)) return respond(e.statusCode, e.message);
+        throw e;
+      }
+      return respond(205, null);
     }
 
     if (method === 'DELETE') {

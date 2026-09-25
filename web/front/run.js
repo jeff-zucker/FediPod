@@ -88,8 +88,19 @@ function showPods(pods) {
       stop.onclick = () => runStart('opt-out', pod.podBase);
       actions.append(stop);
     } else {
+      // Where on the pod the account goes: a container named fedipod, inside
+      // the one named here (empty: the pod's own root).
+      const field = document.createElement('p'); field.className = 'field';
+      const id = `container-${k.children.length}`;
+      const label = say('label', 'Store your data in a container named fedipod, inside this container');
+      label.htmlFor = id;
+      const input = document.createElement('input');
+      input.type = 'text'; input.id = id; input.autocomplete = 'off'; input.spellcheck = false;
+      try { input.placeholder = new URL(pod.podBase).pathname; } catch { input.placeholder = '/'; }
+      field.append(label, input);
+      box.append(field);
       const go = say('button', 'Create a Fediverse account'); go.type = 'button'; go.className = 'primary';
-      go.onclick = () => runStart('opt-in', pod.podBase);
+      go.onclick = () => runStart('opt-in', pod.podBase, input.value.trim());
       actions.append(go);
     }
     box.append(actions);
@@ -121,13 +132,15 @@ $('run-issuer').addEventListener('input', runFormCheck);
 // a filled-in form, with nothing to say why.
 runFormCheck();
 
-const runStart = async (action, podBase = null) => {
+const runStart = async (action, podBase = null, container = null, createIndex = false) => {
   const n = $('run-note');
   const u = new URL(podBase || $('run-pod-url').value.trim());
   if (u.pathname === '') u.pathname = '/';
   if (!u.pathname.endsWith('/')) u.pathname += '/';
   u.search = ''; u.hash = '';
-  const p = { podBase: u.href, action };
+  const p = { podBase: u.href, action,
+    container: container ?? ($('run-container') ? $('run-container').value.trim() : ''),
+    ...(createIndex ? { createIndex: true } : {}) };
 
   // A pod server issued the session this page is being read with, so ask it
   // first: where it knows who you are, there is nothing to sign in to again.
@@ -156,6 +169,18 @@ async function showReply(res, p) {
   const n = $('run-note');
   n.hidden = false;
   const d = res ? await res.json().catch(() => ({})) : {};
+  // No public type index: nothing has been written. Ask.
+  if (res && res.status === 409 && d.code === 'needs-index') {
+    n.replaceChildren(say('p', `${d.error} Create it? It will be readable by anyone, like your profile.`));
+    const yes = say('button', 'Create it and continue'); yes.type = 'button'; yes.className = 'primary';
+    const no = say('button', 'No, stop'); no.type = 'button';
+    yes.onclick = () => runStart(p.action, p.podBase, p.container || '', true);
+    no.onclick = () => { n.textContent = 'Stopped. Nothing was written to your pod.'; };
+    const row = document.createElement('p'); row.className = 'actions'; row.append(no, yes);
+    n.append(row);
+    yes.focus();
+    return;
+  }
   if (res && res.status === 201 && d.doorSecret) {
     // Built as nodes, not as a string of HTML. Three of the pieces below come
     // back from the server and one comes from sessionStorage, and pasting any
@@ -189,7 +214,8 @@ async function showReply(res, p) {
   // The signed fetch builds a DPoP proof from the URL, so it must be absolute.
   const res = await session.authFetch(location.origin + '/api/agent', {
     method: 'POST', headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ action: p.action, podBase: p.podBase }),
+    body: JSON.stringify({ action: p.action, podBase: p.podBase, container: p.container || '',
+      ...(p.createIndex ? { createIndex: true } : {}) }),
   }).catch(() => null);
   await showReply(res, p);
 })();

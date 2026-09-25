@@ -10,9 +10,10 @@ import * as $rdf from 'rdflib';
 import {
   N3PatchBodyParser, guardStream,
   BasicRepresentation, readableToString, NotFoundHttpError,
-  DataAccessorBasedStore, InMemoryDataAccessor, SingleRootIdentifierStrategy,
+  DataAccessorBasedStore, InMemoryDataAccessor, SingleRootIdentifierStrategy, SubdomainIdentifierStrategy,
   ComposedAuxiliaryStrategy, SuffixAuxiliaryIdentifierStrategy, MonitoringStore,
   RepresentationConvertingStore, ChainedConverter, RdfToQuadConverter, QuadToRdfConverter,
+  PatchingStore, RepresentationPatchHandler, ConvertingPatcher, RdfPatcher, N3Patcher,
 } from '@solid/community-server';
 import { FediPodServerHandler } from '../dist/index.js';
 import { makeStoreSession } from '../dist/store-pod.js';
@@ -138,15 +139,22 @@ check(built({ agentRuntimeOptIn: true, agentDataDir: '/tmp/x' }) === null,
 // instead of the network.
 // ---------------------------------------------------------------------------
 const podBase = 'http://alice.localhost:4000/';
-const idStrategy = new SingleRootIdentifierStrategy(podBase);
+// Every subdomain of the server is a pod, as on a server that gives each pod
+// its own host: alice here, and dana, who opts in below.
+const idStrategy = new SubdomainIdentifierStrategy('http://localhost:4000/');
 const metaStrategy = new ComposedAuxiliaryStrategy(
   new SuffixAuxiliaryIdentifierStrategy('.meta'), undefined, undefined, false, true);
 const auxStrategy = new ComposedAuxiliaryStrategy(
   new SuffixAuxiliaryIdentifierStrategy('.dummy'), undefined, undefined, false, false);
 const rdfConverter = new ChainedConverter([ new RdfToQuadConverter(), new QuadToRdfConverter() ]);
-const realStore = new MonitoringStore(new RepresentationConvertingStore(
-  new DataAccessorBasedStore(new InMemoryDataAccessor(idStrategy), idStrategy, auxStrategy, metaStrategy),
-  metaStrategy, { outConverter: rdfConverter, inConverter: rdfConverter },
+// With the patching a server has: an N3 Patch of an RDF document is applied
+// by the store, as CSS's default configuration does it.
+const realStore = new MonitoringStore(new PatchingStore(
+  new RepresentationConvertingStore(
+    new DataAccessorBasedStore(new InMemoryDataAccessor(idStrategy), idStrategy, auxStrategy, metaStrategy),
+    metaStrategy, { outConverter: rdfConverter, inConverter: rdfConverter },
+  ),
+  new RepresentationPatchHandler(new ConvertingPatcher(new RdfPatcher(new N3Patcher()), rdfConverter, 'internal/quads', 'text/turtle')),
 ));
 
 const session = makeStoreSession(realStore);
@@ -164,6 +172,20 @@ check(r.status === 200 && (await r.json()).n === 1, 'and the document reads back
 check(Boolean(firstEtag), 'a read carries an ETag');
 check((await sf(podBase + 'doc.json', { headers: { 'if-none-match': firstEtag }})).status === 304,
   'a conditional read of the unchanged document answers 304');
+
+// An RDF document is patched, not rewritten: only the statements change.
+await sf(podBase + 'card.ttl', { method: 'PUT', headers: { 'content-type': 'text/turtle' },
+  body: '<#me> <http://xmlns.com/foaf/0.1/name> "Alice".' });
+r = await sf(podBase + 'card.ttl', { method: 'PATCH', headers: { 'content-type': 'text/n3' },
+  body: '@prefix solid: <http://www.w3.org/ns/solid/terms#>.\n<> a solid:InsertDeletePatch; solid:inserts { <#me> <http://xmlns.com/foaf/0.1/nick> "al". }.' });
+const patched = await (await sf(podBase + 'card.ttl', { headers: { accept: 'text/turtle' } })).text();
+check(r.status < 300 && /"al"/.test(patched) && /"Alice"/.test(patched),
+  `an N3 Patch of an RDF document is applied by the store, the rest of it kept (${r.status})`);
+r = await sf(podBase + 'card.ttl', { method: 'PATCH', headers: { 'content-type': 'text/n3' },
+  body: '@prefix solid: <http://www.w3.org/ns/solid/terms#>.\n<> a solid:InsertDeletePatch; solid:deletes { <#me> <http://xmlns.com/foaf/0.1/nick> "nope". }.' });
+check(r.status === 409, `deleting what is not there is the store's own 409, not a rewrite (${r.status})`);
+check((await sf(podBase + 'doc.json', { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: '{}' })).status === 415,
+  'anything but an N3 Patch is refused as such');
 
 // The lease's protocol, against the real store's own condition checking.
 check((await sf(podBase + 'doc.json', {
@@ -245,7 +267,26 @@ const claimsFor = async (host, path_) =>
 
 check(await claimsFor('dana.localhost:4000', '/api/v1/instance') === false,
   'before opt-in a pod origin is not claimed');
-const optReply = await optHandler.optInPod({ podBase: OPT_POD, webId: OPT_POD + 'profile/card#me' });
+// A pod has a profile. Dana's names no type index yet.
+const danaFetch = makeStoreSession(realStore, OPT_POD).fetch;
+const DANA_PROFILE = '@prefix solid: <http://www.w3.org/ns/solid/terms#>.\n'
+  + '<#me> a <http://xmlns.com/foaf/0.1/Person>; solid:oidcIssuer <http://localhost:4000/>.\n';
+await danaFetch(OPT_POD + 'profile/card', { method: 'PUT', headers: { 'content-type': 'text/turtle' }, body: DANA_PROFILE });
+const asked = await optHandler.optInPod({ podBase: OPT_POD, webId: OPT_POD + 'profile/card#me' });
+check(asked.httpStatus === 409 && asked.code === 'needs-index' && await claimsFor('dana.localhost:4000', '/api/v1/instance') === false,
+  'with no public type index and no yes, opt-in stops with the question and claims nothing');
+const optReply = await optHandler.optInPod({ podBase: OPT_POD, webId: OPT_POD + 'profile/card#me', createIndex: true });
+{
+  // The pod's profile now names a public type index, which records the account.
+  const { PodTransport } = await import('../../../lib/pod/transport.mjs');
+  const ti = await import('../../../lib/pod/type-index.mjs');
+  const danaPod = new PodTransport({ fetch: danaFetch }, { webId: OPT_POD + 'profile/card#me' });
+  const idx = await ti.findPublicIndex(danaPod, OPT_POD).catch(() => null);
+  const actors = idx ? await ti.actorsIn(danaPod, idx) : [];
+  const card = await (await danaFetch(OPT_POD + 'profile/card', { headers: { accept: 'text/turtle' } })).text();
+  check(idx === OPT_POD + 'settings/publicTypeIndex.ttl' && actors.includes(OPT_POD + 'fedipod/ap/actor') && /oidcIssuer/.test(card),
+    `with a yes, the pod gets a public type index recording the account, and its profile keeps the rest (${idx} → ${actors.join(', ')})`);
+}
 check(optReply.httpStatus === 201 && optReply.status === 'starting' && Boolean(optReply.doorSecret),
   'opt-in answers 201 with a door secret, once');
 check(await claimsFor('dana.localhost:4000', '/api/v1/instance') === true,
@@ -253,11 +294,8 @@ check(await claimsFor('dana.localhost:4000', '/api/v1/instance') === true,
 const optRes = { s: 0, writeHead(st) { this.s = st; return this; }, end() {} };
 await optHandler.handle({ request: { headers: { host: 'dana.localhost:4000' }, url: '/api/v1/instance' }, response: optRes });
 check(optRes.s === 503, 'the surface answers 503 while the identity is still coming up');
-// The secret belongs in the identity's own pod. This store is a bare
-// DataAccessorBasedStore over memory and will not create the containers on
-// the way to it, so what this harness can show is the other half: an opt-in
-// is NOT refused because the pod would not take it. The pod-side placement is
-// proven against a real CSS in test/e2e/live-agent.mjs.
+// The secret belongs in the identity's own pod, and this store — every
+// subdomain a pod — takes it there.
 const secretUrl = `${OPT_POD}fedipod/ap-state/door-secret.json`;
 const secretOnPod = await realStore.getRepresentation({ path: secretUrl }, {})
   .then(async (r) => JSON.parse(await readableToString(r.data)))
@@ -269,8 +307,7 @@ const secretOnHost = (() => {
 check(!!(secretOnPod || secretOnHost), 'the secret is written down somewhere, pod for choice');
 check((secretOnPod ?? secretOnHost)?.secret === optReply.doorSecret,
   'and is exactly the secret the reply carried');
-check(!secretOnPod && !!secretOnHost,
-  'a pod that will not take it does not cost the owner their opt-in — it falls back to the host');
+check(!!secretOnPod && !secretOnHost, 'on a pod that takes it, the secret lives in the pod and nowhere on the host');
 
 const again = await optHandler.optInPod({ podBase: OPT_POD, webId: OPT_POD + 'profile/card#me' });
 check(again.httpStatus === 201 && again.status === 'rotated' && again.doorSecret !== optReply.doorSecret,
