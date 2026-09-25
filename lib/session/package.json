@@ -1,6 +1,6 @@
 {
   "name": "fediverse-account",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Type a Fediverse handle or a WebID and get back an account you can act with: post, read its timeline, follow, reply, favourite, boost. Works out whether the account lives on a Mastodon-family server or on a Solid pod through FediPod, sends the person to sign in there, brings them back to where they were, and speaks to whichever it is.",
   "type": "module",
   "license": "MIT",
