@@ -166,6 +166,10 @@ const front = http.createServer(async (req, res) => {
         ? 'https://eve.example/profile/card#me'
         : authz === 'Bearer path-owner'
           ? POD + 'pods/wren/profile/card#me'
+          : authz === 'Bearer path-neighbour'
+          ? POD + 'pods/mei/profile/card#me'
+          : authz === 'Bearer root-owner'
+          ? POD + 'profile/card#me'
           : 'https://wren.example/profile/card#me',
     }),
   }).catch(e => ({ status: 500, headers: {}, body: String(e && e.stack || e) }));
@@ -398,6 +402,14 @@ try {
   // here: attach fronted, and the front answers the name, serves the actor with
   // every id rewritten onto itself, and sends media back to the pod.
   const pathHome = POD + 'pods/wren/fedipod/';
+  // Someone else on the same host cannot put an account inside wren's pod.
+  const neighbour = await get('/api/attach', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', authorization: 'Bearer path-neighbour', dpop: 'proof' },
+    body: JSON.stringify({ handle: 'meiinwren', podHome: pathHome, actorUrl: pathHome + 'ap/actor', fronted: true }),
+  });
+  check(neighbour.status === 403,
+    `on a host that keeps pods on paths, a WebID cannot attach a place inside another person's pod (${neighbour.status})`);
   const pathAtt = await get('/api/attach', {
     method: 'POST',
     headers: { 'content-type': 'application/json', authorization: 'Bearer path-owner', dpop: 'proof' },
@@ -586,7 +598,8 @@ try {
   {
     const attachRow = (body) => get('/api/attach', {
       method: 'POST',
-      headers: { 'content-type': 'application/json', authorization: 'Bearer path-owner', dpop: 'proof' },
+      // The forum lives at the root pod, so its owner is the root pod's WebID.
+      headers: { 'content-type': 'application/json', authorization: 'Bearer root-owner', dpop: 'proof' },
       body: JSON.stringify({ ...body, fronted: true, inboxUrl: POD + 'fedipod-bb/ap/inbox/' }),
     });
     const site = await attachRow({ handle: 'forum', podHome: POD + 'fedipod-bb/', actorUrl: POD + 'fedipod-bb/ap/actor', kind: 'application' });
@@ -598,7 +611,7 @@ try {
       && attached.gardening.podHome === POD + 'fedipod-bb/c/gardening/',
       'a category row names its own tree and the forum\'s inbox');
     const badInbox = await get('/api/attach', {
-      method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer path-owner', dpop: 'proof' },
+      method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer root-owner', dpop: 'proof' },
       body: JSON.stringify({ handle: 'weeds', podHome: POD + 'fedipod-bb/c/weeds/', fronted: true, inboxUrl: 'https://elsewhere.example/inbox/' }),
     });
     check(badInbox.status === 400, 'an inbox on another host is refused');
@@ -685,7 +698,8 @@ try {
   // address answers 410 everywhere and stays taken; an address nobody opens
   // for the window is closed by time.
   {
-    const asOwner = { 'content-type': 'application/json', authorization: 'Bearer path-owner', dpop: 'proof' };
+    // robin lives at the root pod, so its owner is the root pod's WebID.
+    const asOwner = { 'content-type': 'application/json', authorization: 'Bearer root-owner', dpop: 'proof' };
     const post = (p, body, headers = asOwner) => get(p, { method: 'POST', headers, body: JSON.stringify(body) });
     const att = await post('/api/attach', { handle: 'robin', podHome: POD, fronted: true });
     check(att.status === 201 && attached.robin?.actorUrl === `${ORIGIN}/u/robin/ap/actor`,
