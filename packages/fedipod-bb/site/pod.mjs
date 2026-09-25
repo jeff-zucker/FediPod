@@ -129,6 +129,15 @@ const firstOf = (v) => [].concat(v || []).map(x => (typeof x === 'string' ? x : 
 // that names no storage falls back to its own origin — every Solid server
 // lets its owner write under their own root, so this is never wrong, only
 // sometimes less tidy than a pod's chosen container.
+//
+// What is written there lives under `fedipod-bb/`, not loose at the storage
+// root — its OWN container, named for the one app that wrote it, since there
+// is no FediPod account here to own a `fedipod/` of its own. Everything
+// under it keeps the exact shape a real account's `fedipod/` would have
+// (`ap/notes/`, `ap/private/<host>-<category>/`, from `placeOf`/`placeFor`
+// unchanged) — on purpose, so if this reader later gets a full FediPod
+// account, moving to it is copying `fedipod-bb/*` to `fedipod/*` unchanged,
+// not re-mapping anything.
 export async function resolveWebId(webId, f = globalThis.fetch.bind(globalThis)) {
   const doc = await jsonld(webId, f);
   const nodes = nodesOf(doc);
@@ -136,7 +145,8 @@ export async function resolveWebId(webId, f = globalThis.fetch.bind(globalThis))
   const issuer = firstOf(me[OIDC_ISSUER]);
   if (!issuer) throw new Error(`${webId} names no Solid login provider (solid:oidcIssuer)`);
   const storage = firstOf(me[STORAGE]);
-  return { issuer, storageRoot: storage || new URL('/', webId).href };
+  const base = (storage || new URL('/', webId).href).replace(/\/?$/u, '/');
+  return { issuer, storageRoot: `${base}fedipod-bb/` };
 }
 
 // The no-fedi-account door: typed a WebID, not a Fediverse handle. Nothing
