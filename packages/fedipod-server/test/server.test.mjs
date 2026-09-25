@@ -213,3 +213,14 @@ test("the door's record of an identity this server runs names the identity's own
   const elsewhere = { ...stale, podHome: 'https://someone-else.example/' };
   assert.equal(frontRow(elsewhere, next, POD), null, "another pod's record is not ours to rewrite");
 });
+
+test('the pod answers the ActivityStreams profile form too: activity+json and ld+json read the same document', async () => {
+  const { readFileSync } = await import('node:fs');
+  const cfg = JSON.parse(readFileSync(new URL('../config/server.json', import.meta.url), 'utf8'));
+  const replacer = cfg['@graph'].find((n) => n['@id'] === 'urn:fedipod:server:ActivityStreamsReplacer');
+  const pairs = (replacer?.replacements || []).map((r) => [r['ContentTypeReplacer:_replacements_key'], r['ContentTypeReplacer:_replacements_value']]);
+  assert.deepEqual(pairs, [['application/activity+json', 'application/ld+json'], ['application/ld+json', 'application/activity+json']]);
+  const inserted = cfg['@graph'].some((n) => n.overrideInstance?.['@id'] === 'urn:solid-server:default:ChainedConverter'
+    && n.overrideSteps?.[0]?.overrideValue?.['@id'] === 'urn:fedipod:server:ActivityStreamsReplacer');
+  assert.ok(inserted, 'the replacer is placed in the converter chain');
+});

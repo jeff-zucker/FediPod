@@ -61,6 +61,28 @@
       ]
     },
     {
+      "comment": "ActivityStreams documents are stored as application/activity+json. The spec asks a server to answer application/ld+json with the ActivityStreams profile for them too, and CSS alone refuses that form with 501. This relabels the one type as the other, both ways, without touching the bytes, so either Accept reads the same document.",
+      "@id": "urn:fedipod:server:ActivityStreamsReplacer",
+      "@type": "ContentTypeReplacer",
+      "replacements": [
+        { "ContentTypeReplacer:_replacements_key": "application/activity+json", "ContentTypeReplacer:_replacements_value": "application/ld+json" },
+        { "ContentTypeReplacer:_replacements_key": "application/ld+json", "ContentTypeReplacer:_replacements_value": "application/activity+json" }
+      ]
+    },
+    {
+      "comment": "The replacer goes first in the converter chain, before CSS's own ContentTypeReplacer.",
+      "@type": "Override",
+      "overrideInstance": { "@id": "urn:solid-server:default:ChainedConverter" },
+      "overrideSteps": [
+        {
+          "@type": "OverrideListInsertBefore",
+          "overrideParameter": { "@id": "https://linkedsoftwaredependencies.org/bundles/npm/@solid/community-server/^7.0.0/dist/storage/conversion/ChainedConverter.jsonld#ChainedConverter_converters" },
+          "overrideTarget": { "@id": "urn:solid-server:default:ContentTypeReplacer" },
+          "overrideValue": { "@id": "urn:fedipod:server:ActivityStreamsReplacer" }
+        }
+      ]
+    },
+    {
       "comment": "Insert the handler into the routing waterfall just before the LDP catch-all, so it claims only the front routes and everything else stays normal CSS. OverrideListInsertBefore is available in componentsjs 5.x (which CSS 7 uses).",
       "@type": "Override",
       "overrideInstance": { "@id": "urn:solid-server:default:BaseHttpHandler" },

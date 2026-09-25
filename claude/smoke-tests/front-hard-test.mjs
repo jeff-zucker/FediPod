@@ -523,11 +523,15 @@ try {
       `a Like is named by the door the way the agent names it (${like.headers.get('location')})`);
     const edit = await post({ authorization: 'Bearer path-owner', dpop: 'proof', slug: '' },
       JSON.stringify({ type: 'Update', object: { id: `${ORIGIN}/u/pwren/ap/notes/anno-42`, content: 'again' } }));
-    check(/\/ap\/notes\/anno-42#update-\d{8}T\d{6,9}Z$/.test(edit.headers.get('location') || ''),
+    check(/\/ap\/notes\/anno-42-update-\d{8}T\d{6,9}Z$/.test(edit.headers.get('location') || ''),
       `an edit is named by its note and its time (${edit.headers.get('location')})`);
     const del = await post({ authorization: 'Bearer path-owner', dpop: 'proof', slug: '' },
       JSON.stringify({ type: 'Delete', object: `${ORIGIN}/u/pwren/ap/notes/anno-42` }));
-    check(del.headers.get('location') === `${ORIGIN}/u/pwren/ap/notes/anno-42#delete`, 'a deletion by its note');
+    check(del.headers.get('location') === `${ORIGIN}/u/pwren/ap/notes/anno-42-delete`, 'a deletion by its note');
+    const boost = await post({ authorization: 'Bearer path-owner', dpop: 'proof', slug: '' },
+      JSON.stringify({ type: 'Announce', object: 'https://elsewhere.example/n/1' }));
+    check(/\/u\/pwren\/ap\/notes\/announce-\d+$/.test(boost.headers.get('location') || ''),
+      `a boost is named as a document of its own in the posts folder (${boost.headers.get('location')})`);
     // Reading: the owner, signed in, is sent to every message; others read the public copy.
     // A token read, not verified: the claim chooses the address, the pod checks.
     const jwt = (webid) => `DPoP e30.${Buffer.from(JSON.stringify({ webid })).toString('base64url')}.sig`;

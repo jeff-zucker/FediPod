@@ -9716,6 +9716,7 @@ __export(wire_exports, {
   addRemoveActivity: () => addRemoveActivity,
   addressing: () => addressing,
   announceActivity: () => announceActivity,
+  announceActivityId: () => announceActivityId,
   apUrls: () => apUrls2,
   assertionKeyId: () => assertionKeyId,
   attachmentsOf: () => attachmentsOf,
@@ -9766,6 +9767,7 @@ __export(wire_exports, {
   titledContent: () => titledContent,
   tombstoneDoc: () => tombstoneDoc,
   undoActivity: () => undoActivity,
+  undoActivityId: () => undoActivityId,
   updateActivity: () => updateActivity,
   updateActivityId: () => updateActivityId,
   updateActorActivity: () => updateActorActivity,
@@ -9956,12 +9958,12 @@ function tombstoneDoc(urls, deletedAt, kind = "person") {
     deleted: deletedAt
   };
 }
-function noteTombstone(noteId, deletedAt) {
+function noteTombstone(noteId, deletedAt, formerType = "Note") {
   return {
     "@context": AS_CTX,
     id: noteId,
     type: "Tombstone",
-    formerType: "Note",
+    formerType,
     deleted: deletedAt
   };
 }
@@ -10298,12 +10300,13 @@ function followActivity({ urls, targetActor, serial }) {
     object: targetActor
   };
 }
-function likeActivity({ urls, noteId, serial }) {
+function likeActivity({ urls, noteId, serial, to = null }) {
   return {
     "@context": AS_CTX,
     id: urls.actor + "#like-" + serial,
     type: "Like",
     actor: urls.actor,
+    ...to ? { to: [to] } : {},
     object: noteId
   };
 }
@@ -10316,7 +10319,7 @@ function announceActivity({
 }) {
   return {
     "@context": AS_CTX,
-    id: urls.actor + "#announce-" + serial,
+    id: announceActivityId(urls, serial),
     type: "Announce",
     actor: urls.actor,
     published,
@@ -10343,7 +10346,7 @@ function updateActorActivity({ urls, actor, serial, published = (/* @__PURE__ */
 function updateActivity(note, urls, { serial = null } = {}) {
   return {
     "@context": AS_CTX,
-    id: note.updated ? updateActivityId(note.id, note.updated) : note.id + "#update-q" + (serial ?? Date.now()),
+    id: note.updated ? updateActivityId(note.id, note.updated) : note.id + "-update-q" + (serial ?? Date.now()),
     type: "Update",
     actor: urls.actor,
     to: note.to,
@@ -10363,11 +10366,14 @@ function deleteActivity({ urls, noteId, to = [PUBLIC], cc = null }) {
   };
 }
 function undoActivity({ urls, activity, serial }) {
+  const to = activity?.to ?? (activity?.type === "Follow" && typeof activity.object === "string" ? [activity.object] : null);
   return {
     "@context": AS_CTX,
-    id: urls.actor + "#undo-" + serial,
+    id: undoActivityId(urls, serial),
     type: "Undo",
     actor: urls.actor,
+    ...to ? { to } : {},
+    ...activity?.cc ? { cc: activity.cc } : {},
     object: activity
   };
 }
@@ -10390,7 +10396,7 @@ function addRemoveActivity({ urls, type, object, target, serial }) {
     target
   };
 }
-var import_sanitize_html, AS_CTX, LEMMY_CTX, SEC_CTX, PUBLIC, DEFAULT_ROOT, assertionKeyId, OUTBOX_PAGE_SIZE, outboxPageId, outboxPageCount, outboxItemId, outboxWireItem, outboxLocalItem, FOLLOWERS_PAGE_SIZE, followersPageId, followersPageCount, ALLOWED_TAGS, ALLOWED_ATTRS, MAX_ATTACHMENTS, MAX_ATTACHMENT_URL, attachmentUrl, HTML_ESCAPES2, MENTION_RE, HASHTAG_RE, QUOTE_CTX, POLICY_CTX, updateActivityId, deleteActivityId;
+var import_sanitize_html, AS_CTX, LEMMY_CTX, SEC_CTX, PUBLIC, DEFAULT_ROOT, assertionKeyId, OUTBOX_PAGE_SIZE, outboxPageId, outboxPageCount, outboxItemId, outboxWireItem, outboxLocalItem, FOLLOWERS_PAGE_SIZE, followersPageId, followersPageCount, ALLOWED_TAGS, ALLOWED_ATTRS, MAX_ATTACHMENTS, MAX_ATTACHMENT_URL, attachmentUrl, HTML_ESCAPES2, MENTION_RE, HASHTAG_RE, QUOTE_CTX, POLICY_CTX, updateActivityId, deleteActivityId, announceActivityId, undoActivityId;
 var init_wire = __esm({
   "lib/core/wire.mjs"() {
     init_urls();
@@ -10463,8 +10469,10 @@ var init_wire = __esm({
       automaticApproval: { "@id": "gts:automaticApproval", "@type": "@id" },
       manualApproval: { "@id": "gts:manualApproval", "@type": "@id" }
     };
-    updateActivityId = (noteId, updated) => noteId + "#update-" + String(updated).replace(/[^0-9TZ]/g, "");
-    deleteActivityId = (noteId) => noteId + "#delete";
+    updateActivityId = (noteId, updated) => noteId + "-update-" + String(updated).replace(/[^0-9TZ]/g, "");
+    deleteActivityId = (noteId) => noteId + "-delete";
+    announceActivityId = (urls, serial) => urls.notes + "announce-" + serial;
+    undoActivityId = (urls, serial) => urls.notes + "undo-" + serial;
   }
 });
 
@@ -45653,12 +45661,11 @@ async function writeTombstone2(pod, noteId, doc) {
   await pod.putJson(noteId, doc);
   await pod.setAcl(noteId, PUBLIC_READ4);
 }
-var dropCreate = (pod, createId) => pod.delete(createId).catch(() => false);
 var dropReplies = (pod, repliesId2) => pod.delete(repliesId2).catch(() => {
 });
 async function list2(pod, urls) {
   const children = await pod.listContainer(urls.notes);
-  return children.filter((c) => !/(-create|-replies)$/.test(c.url) && !c.url.endsWith(".keep")).map((c) => ({ ...c }));
+  return children.filter((c) => !/(-create|-replies|-delete|-update-[^/]+)$/.test(c.url) && !/\/(announce|undo)-\d+$/.test(c.url) && !c.url.endsWith(".keep")).map((c) => ({ ...c }));
 }
 
 // lib/core/publisher/collections.mjs
@@ -45833,7 +45840,13 @@ async function recordOutbox(publisher, item) {
   const outbox = publisher.store.read("outbox.json", []);
   outbox.unshift(item);
   publisher.store.write("outbox.json", outbox);
+  await writeEntry(publisher, item);
   await publisher.publishOutbox(outbox);
+}
+async function writeEntry(publisher, item) {
+  const notes = publisher.urls?.notes;
+  if (!notes || !item || typeof item !== "object" || typeof item.id !== "string" || !item.id.startsWith(notes)) return;
+  await writeCreate(publisher.remote, item.id, { "@context": AS_CTX, ...item }).catch((e) => publisher.log?.(`${item.type} ${item.id} not written as its own document: ${e.message}`));
 }
 async function unrecordOutbox(publisher, matches, { record = null } = {}) {
   const before = publisher.store.read("outbox.json", []);
@@ -45848,7 +45861,10 @@ async function unrecordOutbox(publisher, matches, { record = null } = {}) {
     );
   }
   const reasons = [].concat((gone.length && record ? record(gone) : null) || []);
-  for (const r of reasons) outbox.unshift(r);
+  for (const r of reasons) {
+    outbox.unshift(r);
+    await writeEntry(publisher, r);
+  }
   publisher.store.write("outbox.json", outbox);
   await publisher.publishOutbox(outbox);
   publisher.unrecordOwn?.(matches);
@@ -58913,7 +58929,13 @@ async function maybeForward(intake, activity) {
     const inboxes = [...new Set(intake.store.getContacts().followers.filter((f) => !f.bsky).map((f) => f.sharedInbox || f.inbox).filter(Boolean))];
     if (!inboxes.length) return;
     intake._forwardBudget -= 1;
-    await intake.deliverer.deliverToAll(inboxes, activity);
+    const strip = (o) => {
+      if (!o || typeof o !== "object") return o;
+      const { bto, bcc, ...rest } = o;
+      return rest;
+    };
+    const onward = { ...strip(activity), ...activity.object && typeof activity.object === "object" ? { object: strip(activity.object) } : {} };
+    await intake.deliverer.deliverToAll(inboxes, onward);
     intake.store.write("forwarded.json", [...forwarded, id].slice(-MAX_FORWARDED));
     intake.log(`forwarded ${activity.type} ${id} to ${inboxes.length} follower inbox(es)`);
   } catch (e) {
@@ -64953,7 +64975,7 @@ async function favourite(agent2, s, { serial = Date.now() } = {}) {
   if (s.favourited) return s;
   const doc = await agent2.intake.fetchAP(s.actor);
   if (!doc?.inbox) throw new Error("author inbox unavailable");
-  const act = likeActivity({ urls: agent2.publisher.urls, noteId: s.noteId, serial });
+  const act = likeActivity({ urls: agent2.publisher.urls, noteId: s.noteId, serial, to: s.actor });
   await agent2.deliverer.deliver(doc.endpoints?.sharedInbox || doc.inbox, act);
   return agent2.store.updateStatus(s.noteId, { favourited: true, likeActivity: act });
 }
@@ -65141,8 +65163,11 @@ async function deleteNote(agent2, s) {
   } catch {
     stuck.push(s.noteId);
   }
-  if (!await dropCreate(agent2.remote, createActivityId(s.noteId))) {
-    stuck.push(createActivityId(s.noteId));
+  const createId = ours ? createActivityId(s.noteId) : s.slug ? createActivityId(urls.notes + s.slug) : null;
+  try {
+    if (createId) await writeTombstone2(agent2.remote, createId, noteTombstone(createId, deletedAt, "Create"));
+  } catch {
+    stuck.push(createId);
   }
   if (stuck.length) {
     agent2.log?.(`delete ${s.noteId}: the pod kept ${stuck.length} document(s) \u2014 the post is STILL PUBLISHED`);
@@ -65485,8 +65510,10 @@ var C2S = class {
       const local = this.agent.publisher?.clientOrigin ? null : this.localOrigin(req);
       if (local && pathname === "/ap/actor") return this.sendLocalActor(req, res, local);
       if (local && pathname === "/ap/outbox") return this.sendLocalOutbox(res, url, local, { owner });
-      const onPod = (u) => this.urls.toPod ? this.urls.toPod(u) : u;
-      const target = pathname === "/ap/actor" ? this.urls.actor : owner ? onPod(this.urls.ownOutbox) : this.urls.outbox;
+      if (owner && pathname === "/ap/outbox") {
+        return this.sendLocalOutbox(res, url, this.agent.publisher.clientOrigin, { owner });
+      }
+      const target = pathname === "/ap/actor" ? this.urls.actor : this.urls.outbox;
       res.writeHead(303, { location: target, "cache-control": "no-store" });
       res.end();
       return true;
@@ -65565,7 +65592,8 @@ var C2S = class {
     const agent2 = this.agent;
     const made = (id, body = {}) => reply(201, { id, ...body }, { location: id });
     const kept = (type, extra) => {
-      const act = { id: `${this.urls.actor}#${type.toLowerCase()}-${serial}`, type, actor: this.urls.actor, published: at, ...extra };
+      const id = type === "Undo" ? undoActivityId(this.urls, serial) : `${this.urls.actor}#${type.toLowerCase()}-${serial}`;
+      const act = { id, type, actor: this.urls.actor, published: at, ...extra };
       agent2.publisher.recordOwn?.(act);
       return act.id;
     };
@@ -65700,7 +65728,7 @@ var C2S = class {
       case "Undo": {
         const inner = object;
         const innerId = idOf2(activity.object);
-        const undone = `${this.urls.actor}#undo-${serial}`;
+        const undone = undoActivityId(this.urls, serial);
         if (inner?.type === "Block") {
           const target = idOf2(inner.object);
           if (!target) return reply(400, { error: "unblock whom?" });

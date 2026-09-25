@@ -1,5 +1,14 @@
 # Changes
 
+## 2026-09-24 (the last outbox gaps — version 1.38.1)
+
+**The Server answers the spec's own media type**, `application/ld+json` with
+the ActivityStreams profile, as well as `application/activity+json`. On the
+Server, your full outbox is answered at your outbox address when you're
+signed in. Boosts, edits, deletions and undos on your public outbox can each
+be fetched on their own. A deleted post's Create answers "gone". Likes and
+undos say who they're for, and forwarded posts drop their blind copies.
+
 ## 2026-09-24 (the outbox review's fixes — version 1.38.0)
 
 **Private things stay private.** A private forum category no longer lists

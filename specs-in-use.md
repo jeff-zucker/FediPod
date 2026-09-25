@@ -312,8 +312,13 @@ Item-by-item answers to the Solid/ActivityPub interop checklist.
   answered with every message the account produced instead (§5.1): likes,
   follows, undos, follower decisions, blocks, pins, followers-only and direct
   posts. A `liked` collection (§5.5) is published for the owner alone.
-  Serving it at the outbox address works through the Gateway and on the
-  Server; a DeviceAgent with no Gateway has only its public document.
+  On the Server the signed-in owner is answered with it at the outbox
+  address. Through the Gateway the owner is sent to the pod for it, which a
+  browser app cannot follow with its credential.
+  Boosts, edits, deletions and undos on the public record are documents of
+  their own, fetchable at their ids. A like is addressed to its author and an
+  undo to whoever had what it takes back; a forwarded activity carries no
+  blind copies. A deleted post's Create becomes a Tombstone as well.
   Followers, following and liked list their newest first. Through the
   Gateway a deleted post answers 410 Gone, a document a stranger may not
   read answers 404, and a deletion drops the edge's copies of the account's
@@ -326,11 +331,12 @@ Item-by-item answers to the Solid/ActivityPub interop checklist.
 - **Relation to endpoints and LDP containers** — collections are plain pod
   resources; the inbox is the one container other servers write to.
 <!-- CLAUDE 2026-09-24 — found live while reviewing the outbox; delete these markers when done -->
-- **The profile form of the media type** — partly. §3.2 says a server must
+- **The profile form of the media type** — yes on the Server and through the
+  Gateway; not on a pod host FediPod does not run. §3.2 says a server must
   answer `application/ld+json; profile="https://www.w3.org/ns/activitystreams"`.
-  Through the Gateway any Accept is answered. A client reading a pod's
-  documents directly — the Server, a path pod — gets 501 from CSS for that
-  form (checked on solidcommunity.net), and 200 for `application/activity+json`.
+  The Server's pod configuration reads every ActivityStreams document as
+  either type. A pod on a stock CSS host answers that form with 501 (checked
+  on solidcommunity.net) until its host adds the same setting.
 <!-- /CLAUDE -->
 - **Conformance with activity+json** — yes; the ActivityStreams documents are
   stored and served as `application/activity+json`, and the agent sends and

@@ -864,6 +864,47 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     'mentioning yourself still tags you, and nothing is delivered to your own inbox (§7.1)');
 }
 
+// --- 5b16. the last outbox gaps: addressing, forwarding, fetchable entries, a Create's Tombstone ---
+{
+  const wireM = await import(path.join(root, 'lib/core/wire.mjs'));
+  const collections = await import(path.join(root, 'lib/core/publisher/collections.mjs'));
+  const notesPod = await import(path.join(root, 'lib/pod/notes.mjs'));
+  const inNotes = await import(path.join(root, 'lib/core/intake/notes.mjs'));
+  const urls = wireM.apUrls('https://pod.example/');
+
+  const like = wireM.likeActivity({ urls, noteId: 'https://m.example/n/1', serial: 1, to: 'https://m.example/u/a' });
+  const undo = wireM.undoActivity({ urls, activity: like, serial: 2 });
+  const unfollow = wireM.undoActivity({ urls, activity: wireM.followActivity({ urls, targetActor: 'https://m.example/u/b', serial: 3 }), serial: 4 });
+  check(like.to?.[0] === 'https://m.example/u/a' && undo.to?.[0] === 'https://m.example/u/a' && unfollow.to?.[0] === 'https://m.example/u/b',
+    'a like is addressed to its author, and an undo to whoever had what it takes back');
+
+  // A forward drops blind copies from the activity and its object.
+  const sent = [];
+  const intake = { urls, log: () => {}, _forwardBudget: 5, known: () => true, _referencesOurObject: () => true,
+    store: { read: () => [], write: () => {}, getContacts: () => ({ followers: [{ actor: 'f', inbox: 'https://f.example/inbox' }] }) },
+    deliverer: { deliverToAll: async (i, a) => sent.push(a) } };
+  await inNotes.maybeForward(intake, { id: 'https://m.example/a/1', type: 'Create', actor: 'https://m.example/u/c',
+    to: [urls.followers], bcc: ['https://m.example/u/hidden'], object: { id: 'https://m.example/n/2', type: 'Note', bto: ['https://m.example/u/x'] } });
+  check(sent[0] && !('bcc' in sent[0]) && !('bto' in sent[0].object), 'a forwarded activity carries no blind copies');
+
+  // An entry of the public record is written as its own document at its id.
+  const mem = {}; const docs = {};
+  const pub = { urls, log: () => {}, remote: { putJson: async (u, d) => { docs[u] = d; } },
+    store: { read: (n, d) => mem[n] ?? d, write: (n, v) => { mem[n] = v; } }, publishOutbox: async () => {} };
+  const boost = wireM.announceActivity({ urls, object: 'https://m.example/n/3', serial: 9 });
+  await collections.recordOutbox(pub, boost);
+  check(boost.id === urls.notes + 'announce-9' && docs[boost.id]?.type === 'Announce',
+    'a boost on the public record is a document of its own, fetchable at its id');
+  await collections.recordOutbox(pub, urls.notes + 'plain-post');
+  check(!docs[urls.notes + 'plain-post'], 'a post, listed by its Create, is not written again');
+  check(wireM.updateActivityId(urls.notes + 'p', '2026-09-24T01:02:03.456Z') === urls.notes + 'p-update-20260924T010203456Z'
+    && wireM.deleteActivityId(urls.notes + 'p') === urls.notes + 'p-delete',
+    "an edit's and a deletion's ids are documents beside the post, not fragments of it");
+  const listed = await notesPod.list({ listContainer: async () => ['p', 'p-create', 'p-update-20260924T010203Z', 'p-delete', 'announce-9', 'undo-10']
+    .map(n => ({ url: urls.notes + n })) }, urls);
+  check(listed.length === 1 && listed[0].url === urls.notes + 'p', 'the posts folder listing still holds only posts');
+}
+
 // --- 5c. the private trees are re-checked and repaired on every start ---
 {
   const { Publisher } = await import(path.join(root, 'lib/core/publisher/index.mjs'));
@@ -5827,13 +5868,14 @@ check(del.status === 200 && delivered.some(d => d.a?.type === 'Delete' && d.a.ob
     'and the post is kept here, because otherwise there is nothing to try again with');
   fakeAgent.remote.putJson = wasPut;
 
-  // The -create embeds the whole note, so a -create that will not delete keeps
-  // the post too.
+  // The -create embeds the whole note, so a -create the pod will not replace
+  // with its Tombstone keeps the post too.
   const tried = [];
-  fakeAgent.remote.delete = async (u) => { tried.push(u); return !u.endsWith('-create'); };
+  fakeAgent.remote.putJson = async (u, d) => { tried.push(u); if (u.endsWith('-create')) throw new Error('refused'); return wasPut(u, d); };
   const refusedCreate = await call(`/api/v1/statuses/${store2.idFor(OWN)}`, { method: 'DELETE' });
   check(refusedCreate.status === 502 && tried.includes(OWN + '-create'),
     'the -create is checked too: it embeds the whole note, so leaving it behind republishes the post');
+  fakeAgent.remote.putJson = wasPut;
 
   // An empty replies collection that will not go is not a reason to keep the post.
   fakeAgent.remote.delete = async (u) => !u.endsWith('-replies');
@@ -9913,6 +9955,9 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
   check(tomb20?.type === 'Tombstone' && tomb20.formerType === 'Note'
     && tomb20.id === X20 && !!tomb20.deleted,
     'a deleted note is left as a Tombstone at its own url, not a bare 404 (§7.4)');
+  const ctomb = tombs.find(([u]) => u === X20 + '-create')?.[1];
+  check(ctomb?.type === 'Tombstone' && ctomb.formerType === 'Create' && !JSON.stringify(ctomb).includes('content'),
+    'and its Create is a Tombstone too, so it answers gone and no longer holds the words');
   tombs.length = 0;
   await social20.deleteNote(agent20, { noteId: 'https://pod.example/profile/card' });
   check(!tombs.length, 'a deleted object that lives outside the posts folders is never overwritten with a Tombstone');
@@ -11096,7 +11141,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
   const foreignDel = await ask24(api24, { type: 'Delete', object: THEIRS });
   check(foreignDel.status === 403, `deleting someone else's note → 403 (got ${foreignDel.status})`);
   const ownEdit = await ask24(api24, { type: 'Update', object: { id: OURS, content: 'edited' } });
-  check(ownEdit.status === 201 && /#update-\d{8}T\d{6,9}Z$/.test(ownEdit.headers.location || ''),
+  check(ownEdit.status === 201 && /-update-\d{8}T\d{6,9}Z$/.test(ownEdit.headers.location || ''),
     `editing our own → 201 naming the Update (got ${ownEdit.status} ${ownEdit.headers.location})`);
 
   // Like, then Undo by the stored activity's id.
@@ -11106,7 +11151,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
     `Like → 201 naming the like activity (got ${like.status} ${likeId})`);
   check(st24.getStatuses().find(s => s.noteId === THEIRS)?.favourited === true, 'the status is favourited');
   const unlike = await ask24(api24, { type: 'Undo', object: likeId });
-  check(unlike.status === 201 && /#undo-/.test(unlike.headers.location || '')
+  check(unlike.status === 201 && /\/undo-\d+$/.test(unlike.headers.location || '')
     && st24.getStatuses().find(s => s.noteId === THEIRS)?.favourited === false,
     'Undo by the like id unfavourites, and answers 201 naming the Undo');
 
@@ -11178,6 +11223,11 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
     const page = await ask24(api24, null, { method: 'GET', headers, query: '?page=1' });
     return { head: head.json, items: page.json?.orderedItems || [] };
   };
+  agent24.publisher.clientOrigin = 'https://pod.example/';
+  const served = await ask24(api24, null, { method: 'GET', headers: { authorization: 'Bearer smoke-ok' } });
+  check(served.status === 200 && served.json?.type === 'OrderedCollection',
+    `on the Server the signed-in owner is answered with every message here, not sent on to lose the credential (${served.status})`);
+  agent24.publisher.clientOrigin = null;
   const signedIn = await readOwn({ authorization: 'Bearer smoke-ok' });
   const stranger = await readOwn({});
   check(signedIn.items.some(i => i?.type === 'Block') && !stranger.items.some(i => i?.type === 'Block')
