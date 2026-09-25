@@ -136,6 +136,8 @@ $('new-actor-form').addEventListener('submit', async (ev) => {
   };
   if (answers.mode === 'new') answers.podName = $('new-podname').value.trim() || handle;
   else answers.pod = $('new-pod').value.trim();
+  answers.container = $('new-container').value.trim();
+  answers.createIndex = $('new-createIndex').checked;
   $('new-actor-go').disabled = true;
   say(`setting up ${handle || 'the new actor'} — this takes a while`);
   const r = await write('/new-actor', answers, `setting up ${handle}`);

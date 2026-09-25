@@ -272,6 +272,15 @@ pre { overflow-x: auto; background: #0001; padding: .6rem; border-radius: .3rem;
         <label for="new-pod">Pod address</label>
         <input type="url" id="new-pod" autocomplete="url" placeholder="https://you.solidcommunity.net/">
       </div>
+      <label for="new-container">Store your data in a container named fedipod, inside this container</label>
+      <input type="text" id="new-container" autocomplete="off" spellcheck="false" placeholder="/"
+        aria-describedby="new-container-hint">
+      <p class="hint" id="new-container-hint">Leave it empty for your pod's root. This is permanent.</p>
+      <p id="new-typeindex-text">FediPod records where the account lives in your pod's public type index,
+        the list Solid apps use to find your things. A new pod has none; setup stops if yours has none
+        and you have not said yes here. It will be readable by anyone, like your profile.</p>
+      <label class="choice"><input type="checkbox" id="new-createIndex" aria-describedby="new-typeindex-text">
+        If my pod has no public type index, create one</label>
     </fieldset>
 
     <p>

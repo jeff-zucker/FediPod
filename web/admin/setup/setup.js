@@ -108,6 +108,9 @@ function answers() {
   };
   if (mode === 'new') a.podName = f.podName.value.trim() || a.handle;
   else a.pod = f.pod.value.trim();
+  // The container that holds fedipod/, and the yes to a new public type index.
+  a.container = f.container.value.trim();
+  a.createIndex = f.createIndex.checked;
   if (!state.resumable && !state.passwordSupplied) a.password = f.password.value;
   return a;
 }
@@ -149,6 +152,11 @@ async function preview() {
   const { json } = await postJson('/setup/check', a);
   if (!json) return;
   $('preview').textContent = json.address || '…';
+  // Where the data will go, and the type index question when the pod has
+  // none (a new pod never does).
+  $('place').textContent = json.placeProblem ? json.placeProblem : (json.place ? `Your data will be at ${json.place}.` : '');
+  $('row-typeindex').hidden = json.typeIndex === true;
+  try { $('container').placeholder = a.mode === 'existing' && a.pod ? new URL(a.pod).pathname : '/'; } catch { /* not a URL yet */ }
   // The address-shape choice: hidden for a group (a group cannot front yet),
   // locked to the gateway for a pod on a suffix-based host, an open choice
   // for a pod at its own host.
@@ -188,6 +196,11 @@ async function preview() {
 async function onSubmit(ev) {
   ev.preventDefault();
   $('form-error').textContent = '';
+  // No type index and no yes: stop here, before anything is sent.
+  if (!$('row-typeindex').hidden && !$('createIndex').checked) {
+    $('form-error').textContent = 'Setup stopped. Nothing was written to your pod. FediPod needs a public type index to record where your account lives.';
+    return;
+  }
   $('submit').disabled = true;
   const { status, json } = await postJson('/setup', answers());
   if (status !== 202) {

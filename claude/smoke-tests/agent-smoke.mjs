@@ -7670,8 +7670,8 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
   const r1 = newRun();
   await runSetup({
     home: H1, agent: a1, run: r1,
-    answers: { mode: 'existing', pod: 'https://gone.example/', handle: 'you', issuer: 'https://gone.example', email: 'e@x', password: 'pw' },
-    deps: {
+    answers: { createIndex: true,  mode: 'existing', pod: 'https://gone.example/', handle: 'you', issuer: 'https://gone.example', email: 'e@x', password: 'pw' },
+    deps: { recordPlace: async () => 'registered', publicIndexKnown: async () => true, 
       checkPodUsable: async () => ({ ok: false, error: 'the pod is not reachable (test)' }),
       mintCredential: async () => { minted = true; return {}; },
     },
@@ -7691,8 +7691,8 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
   const r2 = newRun();
   await runSetup({
     home: H2, agent: a2, run: r2,
-    answers: { handle: 'you', kind: 'person' },
-    deps: { checkPodUsable: async () => ({ ok: false, error: 'the WebID document declares no OIDC issuer (test)' }) },
+    answers: { createIndex: true,  handle: 'you', kind: 'person' },
+    deps: { recordPlace: async () => 'registered', publicIndexKnown: async () => true,  checkPodUsable: async () => ({ ok: false, error: 'the WebID document declares no OIDC issuer (test)' }) },
   });
   check(r2.phase === 'error' && /no OIDC issuer/.test(r2.error || ''),
     'a resuming run on an issuer-less pod fails with the reason');
@@ -7743,8 +7743,8 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
     const rF = newRun();
     await runSetup({
       home: HF, agent, run: rF,
-      answers: { mode: 'existing', pod: 'https://prov.example/me/', handle: 'me', issuer: 'https://prov.example', email: 'e@x', password: 'pw', shape: 'pod' },
-      deps: {
+      answers: { createIndex: true,  mode: 'existing', pod: 'https://prov.example/me/', handle: 'me', issuer: 'https://prov.example', email: 'e@x', password: 'pw', shape: 'pod' },
+      deps: { recordPlace: async () => 'registered', publicIndexKnown: async () => true, 
         checkPodUsable: async () => ({ ok: true }),
         attachGateway: async (a) => { attachArgs = a; return { url: 'https://fedipod.net/u/me/ap/inbox/', frontActor: 'https://fedipod.net/u/me/ap/actor', hmacSecret: 'S', mode: 'trust' }; },
       },
@@ -7775,11 +7775,37 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
       store: { attach() {}, load: async () => {}, getConfig: () => null, setConfig() {}, flush: async () => {} } };
     const rR = newRun();
     await runSetup({ home: HR, agent, run: rR,
-      answers: { mode: 'existing', pod: 'https://taken.example/', handle: 'you', issuer: 'https://taken.example', email: 'e@x', password: 'pw' },
-      deps: { checkPodUsable: async () => ({ ok: true }), resourceExists: async () => true, mintCredential: async () => ({}) } });
+      answers: { createIndex: true,  mode: 'existing', pod: 'https://taken.example/', handle: 'you', issuer: 'https://taken.example', email: 'e@x', password: 'pw' },
+      deps: { recordPlace: async () => 'registered', publicIndexKnown: async () => true,  checkPodUsable: async () => ({ ok: true }), resourceExists: async () => true, mintCredential: async () => ({}) } });
     check(rR.phase === 'error' && /already hosts a FediPod account/.test(rR.error || '') && bootstrapped === false,
       'setup on a pod that already has an account refuses it, and mints nothing');
     fs.rmSync(HR, { recursive: true, force: true });
+  }
+
+  // --- 12g2. no public type index and no yes: nothing is minted; the container chosen is the root ---
+  {
+    const { runSetup, newRun } = await import(path.join(root, 'lib/device/setup.mjs'));
+    const HI = fs.mkdtempSync(path.join(os.tmpdir(), 'fedipod-idx-'));
+    let minted = false; let booted = null;
+    const agent = { home: HI, store: { getConfig: () => ({}), flush: async () => {} },
+      bootstrap: async (o) => { booted = o; }, connect: async () => true,
+      publisher: { publishProfile: async () => ({ unreachable: [] }) } };
+    const rI = newRun();
+    await runSetup({ home: HI, agent, run: rI,
+      answers: { mode: 'existing', pod: 'https://me.example/', handle: 'me', issuer: 'https://me.example', email: 'e@x', password: 'pw', container: '/apps/' },
+      deps: { checkPodUsable: async () => ({ ok: true }), resourceExists: async () => false, publicIndexKnown: async () => false,
+        mintCredential: async () => { minted = true; return {}; } } });
+    check(rI.phase === 'error' && /no public type index/.test(rI.error || '') && !minted && booted === null,
+      'with no public type index and no yes, setup stops before anything is minted or written');
+    const rJ = newRun(); let placed = null;
+    await runSetup({ home: HI, agent, run: rJ,
+      answers: { mode: 'existing', pod: 'https://me.example/', handle: 'me', issuer: 'https://me.example', email: 'e@x', password: 'pw', container: '/apps/', createIndex: true },
+      deps: { checkPodUsable: async () => ({ ok: true }), resourceExists: async () => false, publicIndexKnown: async () => false,
+        mintCredential: async () => ({ webId: 'https://me.example/profile/card#me' }),
+        recordPlace: async (_pod, base, actor, o) => { placed = { base, actor, ...o }; return 'registered'; } } });
+    check(rJ.phase === 'done' && booted?.root === 'apps/fedipod/' && placed?.actor === 'https://me.example/apps/fedipod/ap/actor' && placed.create === true,
+      `with a yes, the account is made in the chosen container and its place recorded, making the index (${rJ.error || 'ok'})`);
+    fs.rmSync(HI, { recursive: true, force: true });
   }
 
   // --- 12h. ...but with an address at THIS gateway, an account held at another gateway moves in ---
@@ -7801,9 +7827,9 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
     const rM = newRun();
     let completed = 0;
     await runSetup({ home: HM, agent, run: rM,
-      answers: { mode: 'existing', pod: 'https://taken.example/', handle: 'new', shape: 'front', gatewayOrigin: 'https://b.example',
+      answers: { createIndex: true,  mode: 'existing', pod: 'https://taken.example/', handle: 'new', shape: 'front', gatewayOrigin: 'https://b.example',
         issuer: 'https://taken.example', email: 'e@x', password: 'pw' },
-      deps: { checkPodUsable: async () => ({ ok: true }), resourceExists: async () => true,
+      deps: { recordPlace: async () => 'registered', publicIndexKnown: async () => true,  checkPodUsable: async () => ({ ok: true }), resourceExists: async () => true,
         mintCredential: async () => ({ webId: 'https://taken.example/profile/card#me', issuerOrigin: 'https://taken.example', clientId: 'c', secret: 's' }),
         readPodAccount: async () => ({ config: cfg, keys: podDocs['keys.json'] }),
         attachGateway: async (o) => { calls.push(['attach', o.handle]); return { url: 'https://b.example/u/new/ap/inbox/', frontActor: 'https://b.example/u/new/ap/actor', hmacSecret: 't', mode: 'trust' }; },
@@ -7826,8 +7852,8 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
     const HP = fs.mkdtempSync('/tmp/fedipod-movein2-');
     const rP = newRun();
     await runSetup({ home: HP, agent: { ...agent, home: HP }, run: rP,
-      answers: { mode: 'existing', pod: 'https://taken.example/', handle: 'new', shape: 'pod', issuer: 'https://taken.example', email: 'e@x', password: 'pw' },
-      deps: { checkPodUsable: async () => ({ ok: true }), resourceExists: async () => true, mintCredential: async () => ({}) } });
+      answers: { createIndex: true,  mode: 'existing', pod: 'https://taken.example/', handle: 'new', shape: 'pod', issuer: 'https://taken.example', email: 'e@x', password: 'pw' },
+      deps: { recordPlace: async () => 'registered', publicIndexKnown: async () => true,  checkPodUsable: async () => ({ ok: true }), resourceExists: async () => true, mintCredential: async () => ({}) } });
     check(rP.phase === 'error' && /ask for an address at this gateway/.test(rP.error || ''), 'with an address on the pod asked for, it is refused and told how to move instead');
     fs.rmSync(HM, { recursive: true, force: true }); fs.rmSync(HP, { recursive: true, force: true });
   }
@@ -7946,7 +7972,27 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
           issuer: cred.issuerOrigin, ...(o.kind ? { kind: o.kind } : {}),
         });
       },
-      async connect() { cfgd = true; this.urls = wire.apUrls(store.getConfig().remotePod); return true; },
+      async connect() {
+        cfgd = true; this.urls = wire.apUrls(store.getConfig().remotePod);
+        // The pod as its owner sees it, in memory: a profile naming a public
+        // type index, so the account's place is recorded there.
+        const { PodTransport: PT } = await import(path.join(root, 'lib/pod/transport.mjs'));
+        const base = store.getConfig().remotePod;
+        const card = base + 'profile/card';
+        const idx = base + 'settings/publicTypeIndex.ttl';
+        this.podDocs = {
+          [card]: `<#me> <http://www.w3.org/ns/solid/terms#publicTypeIndex> <${idx}>.\n`,
+          [idx]: `<> a <http://www.w3.org/ns/solid/terms#TypeIndex>.\n`,
+        };
+        const docs = this.podDocs;
+        this.remote = new PT({ fetch: async (u, i = {}) => {
+          const m = (i.method || 'GET').toUpperCase(); const d = String(u).split('#')[0];
+          if (m === 'GET') return new Response(docs[d] ?? '', { status: docs[d] === undefined ? 404 : 200, headers: { 'content-type': 'text/turtle' } });
+          if (m === 'PATCH') { docs[d] = (docs[d] || '') + '\n# patched\n' + String(i.body); return new Response(null, { status: 205 }); }
+          return new Response('', { status: 405 });
+        } }, { webId: card + '#me' });
+        return true;
+      },
       publisher: { config: {}, publishProfile: async () => ({ unreachable: [] }) },
     };
   };
@@ -7981,7 +8027,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
 
   const answers13 = {
     mode: 'new', kind: 'person', issuer: CSS_ORIGIN, email: 'wren@example.org',
-    password: PASSWORD, handle: 'wren', name: 'Wren', podName: 'wrenpod',
+    password: PASSWORD, handle: 'wren', name: 'Wren', podName: 'wrenpod', createIndex: true,
   };
 
   const unnamed = await rawHost(SPORT, `wren.localhost:${SPORT}`);
@@ -8008,7 +8054,15 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
     `only one setup at a time (${second.status})`);
   const done = await settle();
   check(done?.phase === 'done' && done.result?.address === `@wren@wrenpod.127.0.0.1.nip.io:${CSS}`,
-    `setup completes with the address it promised (${done?.result?.address})`);
+    `setup completes with the address it promised (${done?.result?.address || done?.error})`);
+  {
+    // The account's place went into the pod's public type index, as an
+    // instance of as:Actor at the pod.
+    const podBase13 = sagent.readCredential().remotePod;
+    const idxDoc = sagent.podDocs[podBase13 + 'settings/publicTypeIndex.ttl'] || '';
+    check(/solid:inserts/.test(idxDoc) && idxDoc.includes('#Actor') && idxDoc.includes(podBase13 + 'fedipod/ap/actor'),
+      "setup records where the account lives in the pod's public type index");
+  }
   check(done.steps.map(s => s.key).join() === 'account,credential,bootstrap,connect,publish,verify',
     'the credential is written before anything is published, not after');
 
@@ -8382,9 +8436,9 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
     };
     const run = await runSetup({
       home: shome, agent: fake, run: newRun(), log: () => {},
-      answers: { mode: 'new', issuer: 'https://i.example', email: 'a@b.c', password: 'pw',
+      answers: { createIndex: true,  mode: 'new', issuer: 'https://i.example', email: 'a@b.c', password: 'pw',
         handle: 'nobody', kind: 'person' },
-      deps: {
+      deps: { recordPlace: async () => 'registered', publicIndexKnown: async () => true, 
         createAccountWithPod: async () => ({ pod: 'https://nobody.i.example/' }),
         mintCredential: async () => ({ clientId: 'C', secret: 'S', webId: 'https://w.example/#me' }),
       },
@@ -8637,9 +8691,9 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
     };
     await runSetup({
       home: whome, agent: fakeAgent, run: newRun(), log: () => {},
-      answers: { mode: 'new', issuer: 'https://i.example', email: 'a@b.c', password: 'pw',
+      answers: { createIndex: true,  mode: 'new', issuer: 'https://i.example', email: 'a@b.c', password: 'pw',
         handle: 'group', podName: 'activitypub', kind: 'person' },
-      deps: {
+      deps: { recordPlace: async () => 'registered', publicIndexKnown: async () => true, 
         createAccountWithPod: async () => ({
           pod: 'https://activitypub.i.example/',
           webId: 'https://activitypub.i.example/profile/card#me',
@@ -8717,9 +8771,9 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
     const gateway = { url: 'https://front.example/u/mei/ap/inbox/', mode: 'trust', hmacSecret: 'S' };
     await runSetup({
       home: ghome, agent: fakeAgent, run: newRun(), log: () => {},
-      answers: { mode: 'existing', issuer: 'https://i.example', email: 'a@b.c', password: 'pw',
+      answers: { createIndex: true,  mode: 'existing', issuer: 'https://i.example', email: 'a@b.c', password: 'pw',
         handle: 'mei', pod: 'https://mei.i.example/', kind: 'person', gateway },
-      deps: { mintCredential: async () => ({ clientId: 'C', secret: 'S',
+      deps: { recordPlace: async () => 'registered', publicIndexKnown: async () => true,  mintCredential: async () => ({ clientId: 'C', secret: 'S',
         webId: 'https://mei.i.example/profile/card#me' }),
         checkPodUsable: async () => ({ ok: true }) },   // the pod check has its own tests (§12c/d)
     });

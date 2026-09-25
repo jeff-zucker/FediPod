@@ -184,6 +184,22 @@ button:disabled { opacity: .5; cursor: default; }
         <label for="pod">Pod address</label>
         <input type="url" id="pod" name="pod" autocomplete="url" placeholder="https://you.solidcommunity.net/">
       </div>
+
+      <div id="row-container">
+        <label for="container">Store your data in a container named fedipod, inside this container</label>
+        <input type="text" id="container" name="container" autocomplete="off" spellcheck="false"
+          placeholder="/" aria-describedby="container-hint">
+        <p class="hint" id="container-hint">Leave it empty for your pod's root. This is permanent.
+          <span id="place"></span></p>
+      </div>
+
+      <div id="row-typeindex" hidden>
+        <p id="typeindex-text">Your pod has no public type index, the list Solid apps use to find your
+          things. FediPod needs one to record where your account lives. It will be readable by anyone,
+          like your profile.</p>
+        <label class="choice"><input type="checkbox" id="createIndex" name="createIndex"
+          aria-describedby="typeindex-text"> Create a public type index on my pod</label>
+      </div>
     </fieldset>
 
     <p id="row-reenter" class="warn" hidden>Finishing a setup that already has an account credential.

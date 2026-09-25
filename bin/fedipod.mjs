@@ -25,6 +25,12 @@
 //     --pod-name, --group, --summary, --icon, --root, --keys) keeps setup
 //     entirely on the command line, as does a non-TTY stdin. --cli forces it.
 //
+//     --in <container>  the container on the pod that holds `fedipod/`
+//                       (asked when not given; empty is the pod's root)
+//     --create-type-index  make a public type index when the pod has none;
+//                       where the account lives is recorded there, and
+//                       without one and without this, setup stops
+//
 //     The password is prompted (or AP_PASSWORD) — used once to create the
 //     account and/or mint a revocable CSS client-credential, never stored.
 //     Keys live in AP_HOME by default (the pod host cannot read them);
