@@ -580,6 +580,22 @@ try {
         body: JSON.stringify({ type: 'Delete', actor: a, object: a.replace(/actor$/, 'notes/n') }) });
     }
     check(purged.includes('u-pwren'), `a relayed Delete purges the account's cached documents (${purged.join(',') || 'none'})`);
+    // Any activity of its own clears them, not only a withdrawal: a browser
+    // account announces every change through the relay.
+    purged.length = 0;
+    for (const a of [pwrenActor, actorId, POD + 'pods/wren/fedipod/ap/actor'].filter(Boolean)) {
+      await relayed({ url: 'https://nowhere.invalid/inbox', method: 'POST',
+        headers: { signature: `keyId="${a}#main-key",signature="x"` },
+        body: JSON.stringify({ type: 'Create', actor: a, object: { type: 'Note', content: 'hello' } }) });
+    }
+    check(purged.includes('u-pwren'), `a relayed post purges the account's cached documents too (${purged.join(',') || 'none'})`);
+    purged.length = 0;
+    await relayed({ url: 'https://nowhere.invalid/actor', method: 'GET', headers: {} });
+    check(!purged.length, 'a relayed read purges nothing');
+    // So a browser account's documents are held an hour at the edge.
+    const heldHour = await get(outbox);
+    check(/s-maxage=3600/u.test(heldHour.headers.get('netlify-cdn-cache-control') || ''),
+      `a browser account's public documents are held an hour (${heldHour.headers.get('netlify-cdn-cache-control')})`);
     const gone = await get('/u/pwren/ap/notes/gone');
     const goneBody = await gone.json().catch(() => ({}));
     check(gone.status === 410 && goneBody.type === 'Tombstone', `a deleted post answers 410 Gone and says what it was (${gone.status})`);
@@ -627,6 +643,8 @@ try {
       && face.inbox === `${ORIGIN}/u/gardening/ap/inbox/` && face.attributedTo === `${ORIGIN}/u/gardening/ap/moderators`,
       'the category actor is served under its front id, with its door and roster on the front');
     const faceRes = await get('/u/gardening/ap/actor');
+    check(/s-maxage=600\b/u.test(faceRes.headers.get('netlify-cdn-cache-control') || ''),
+      `an account that never signs in from a browser keeps the ten-minute hold (${faceRes.headers.get('netlify-cdn-cache-control')})`);
     const pre = await get('/u/gardening/ap/actor', { method: 'OPTIONS', headers: { origin: 'https://bb.example', 'access-control-request-method': 'GET' } });
     check(faceRes.headers.get('access-control-allow-origin') === '*' && pre.status === 204
       && pre.headers.get('access-control-allow-origin') === '*',
