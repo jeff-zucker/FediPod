@@ -8,6 +8,7 @@
 
 [functions]
   node_bundler = "esbuild"
-  # front.mjs serves the signup page from the repo at cold start; the bundler
-  # only ships what is named here.
-  included_files = ["web/front/**"]
+  # front.mjs serves the signup page from the repo at cold start, and the
+  # shapes the intake checks against are read from a file; the bundler only
+  # ships what is named here.
+  included_files = ["web/front/**", "lib/core/shapes/activitystreams.ttl"]

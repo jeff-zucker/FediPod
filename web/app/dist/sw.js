@@ -46490,6 +46490,10 @@ var StateApiStorage = class {
   }
 };
 
+// lib/core/publisher/index.mjs
+init_node_crypto();
+init_wire();
+
 // web/app/shims/node-fs.mjs
 var PKG = JSON.stringify({ version: "0.18.0", name: "fedipod" });
 var readFileSync = (p) => {
@@ -46508,10 +46512,6 @@ var unlinkSync = nope("unlinkSync");
 var rmSync = nope("rmSync");
 var node_fs_default = { readFileSync, existsSync, writeFileSync, mkdirSync, readdirSync, statSync, unlinkSync, rmSync };
 
-// lib/core/publisher/index.mjs
-init_node_crypto();
-init_wire();
-
 // lib/shared/ua.mjs
 var version = "0";
 try {
@@ -46529,6 +46529,7 @@ try {
   }
 }
 var USER_AGENT = `fedipod/${version} (+https://github.com/jeff-zucker/FediPod)`;
+var AGENT_VERSION = version;
 
 // lib/core/publisher/index.mjs
 init_safefetch();
@@ -58372,10 +58373,6 @@ async function writePages(remote, before = {}, pages) {
 }
 
 // lib/core/publisher/index.mjs
-var AGENT_VERSION = JSON.parse(node_fs_default.readFileSync(
-  node_path_default.join(node_path_default.dirname(fileURLToPath(import.meta.url)), "../../../package.json"),
-  "utf8"
-)).version;
 var Publisher = class {
   constructor({
     config,

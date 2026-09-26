@@ -22,7 +22,12 @@
 
 const crypto = require('node:crypto');
 const fs = require('node:fs');
-const { generateKeyPair, exportJWK, SignJWT } = require('jose');
+// jose ships only as an ES module, so it is loaded with import(), which every
+// Node version takes and a bundler follows. A require() of it was left out of
+// the Netlify function bundle and took the whole gateway down on load
+// (2026-09-26): nothing here may require it.
+let joseLoaded = null;
+const jose = () => (joseLoaded ||= import('jose'));
 const { jfetch } = require('./jfetch.cjs');
 
 // The HTTP URI for a DPoP proof's `htu` is the request URL without query/fragment.
@@ -31,6 +36,7 @@ function htuOf(url) { const u = new URL(url); return u.origin + u.pathname; }
 // Build a DPoP proof JWT bound to (htm, htu), optionally carrying a server nonce
 // and the access-token hash (`ath`, required on resource requests).
 async function dpopProof({ keyPair, htm, htu, nonce, accessToken }) {
+  const { exportJWK, SignJWT } = await jose();
   const jwk = await exportJWK(keyPair.publicKey);
   const payload = { htu, htm, jti: crypto.randomUUID() };
   if (nonce) payload.nonce = nonce;
@@ -178,7 +184,7 @@ function readSavedToken(file) {
 }
 
 async function importSavedKey(saved) {
-  const { importJWK } = require('jose');
+  const { importJWK } = await jose();
   const privateKey = await importJWK(saved.privateJwk, 'ES256');
   const publicKey = await importJWK(saved.publicJwk, 'ES256');
   return { privateKey, publicKey };
@@ -187,7 +193,7 @@ async function importSavedKey(saved) {
 async function saveToken(file, keyPair, accessToken, expiresAt) {
   if (!file) return;
   try {
-    const { exportJWK } = require('jose');
+    const { exportJWK } = await jose();
     fs.writeFileSync(file, JSON.stringify({
       accessToken, expiresAt,
       privateJwk: await exportJWK(keyPair.privateKey),
@@ -223,8 +229,8 @@ function createGrantSession(rec, { gateToken, gatedOrigin, backoffFile = null, t
     // restart resumes the same session instead of minting a fresh grant. jose 6
     // makes generated keys non-extractable by default, which turns both of
     // those into "non-extractable CryptoKey cannot be exported as a JWK".
-    ? importSavedKey(saved).catch(() => generateKeyPair('ES256', { extractable: true }))
-    : generateKeyPair('ES256', { extractable: true });
+    ? importSavedKey(saved).catch(() => jose().then((j) => j.generateKeyPair('ES256', { extractable: true })))
+    : jose().then((j) => j.generateKeyPair('ES256', { extractable: true }));
   let accessToken = saved?.accessToken || null;
   let expiresAt = saved?.expiresAt || 0;
   let rsNonce = null;

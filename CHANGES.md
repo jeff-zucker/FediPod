@@ -1,5 +1,12 @@
 # Changes
 
+## 2026-09-26 (fedipod.net answers again — version 1.40.1)
+
+**fedipod.net was down after the 1.40.0 deploy**: every address, the forum
+and the mail door answered with an error, because a library the gateway loads
+was left out of what Netlify ships. It is shipped now, and the parts of the
+gateway that keep accounts running start as they should.
+
 ## 2026-09-26 (your account keeps running, and any Mastodon app can use it — version 1.40.0)
 
 **Mail sent to a browser account waits at fedipod.net while FediPod is
