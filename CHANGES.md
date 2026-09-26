@@ -1,5 +1,20 @@
 # Changes
 
+## 2026-09-26 (no more asking every minute while an account cannot be opened — version 1.40.5)
+
+**FediPod in the browser stops asking every minute.** When fedipod.net could
+not open your account's copy, your browser asked again every time FediPod
+restarted in the background, about once a minute. It now waits a quarter of an
+hour and works from your pod meanwhile. Signing in, or turning on keeping your
+account running, asks at once.
+
+**While fedipod.net cannot sign in to its own pod account, it stops trying for
+a quarter of an hour**, instead of failing again for every account that asks.
+A new credential put in by the operator is tried at once.
+
+**fedipod.net signs in to its pod provider once and keeps using that**, instead
+of signing in again for every request that reaches a pod.
+
 ## 2026-09-26 (why a Mastodon app cannot open your account, and a WebID to sign in with — version 1.40.4)
 
 **When fedipod.net cannot read your pod, it says so.** An app signing in to

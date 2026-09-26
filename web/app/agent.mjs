@@ -34,7 +34,7 @@ import { AcctFeed } from '../../lib/connections/acctfeed.mjs';
 import { followActor, unfollowActor, resolveHandle } from '../../lib/core/social.mjs';
 import { podBaseOfWebId } from '../../lib/pod/urls.mjs';
 import { ImportWorker } from '../../lib/connections/import.mjs';
-import { openCopy, copyStorage, copyLeaseOf, moveIntoCopy, leaveCopy, renewCopyToken, standDown, ensureCopyLease, handOverCopy } from './copy-mode.mjs';
+import { openCopy, copyStorage, copyLeaseOf, moveIntoCopy, leaveCopy, renewCopyToken, standDown, ensureCopyLease, handOverCopy, forgetFailedOpen } from './copy-mode.mjs';
 
 // The authorities this identity answers on: exactly one, this origin. The Node
 // agent gets this from lib/guard.mjs, which is not in the browser bundle and
@@ -191,6 +191,8 @@ export class BrowserAgent {
     if (!on) return { status: 200, ok: true, kept: false };
     const said = await this.tellGateway('keeper', { handle: this.doorKey, on: true });
     if (said?.status === 200) {
+      // A copy that could not be had while the account was not kept may be now.
+      await forgetFailedOpen(this, this.frontOrigin);
       this._keeper.kept = true;
       if (this.masto) this.masto.scheduling = true;
       this.log('the gateway keeps this account running while the app is closed');
@@ -420,7 +422,7 @@ export class BrowserAgent {
     // is read, since it decides where the state is read from.
     this.holderId = await this.deviceId();
     this.frontOrigin = frontOrigin || null;
-    this.copy = await openCopy(this, this.frontOrigin, { kept: isWarm(warmFrom) ? warmFrom.copy : null });
+    this.copy = await openCopy(this, this.frontOrigin, { kept: isWarm(warmFrom) ? warmFrom.copy : null, askAnyway: !restart });
     const warmRoot = isWarm(warmFrom) && !!warmFrom.copy === !!this.copy ? warmFrom.root : null;
     const copyRoot = this.copy?.podHome?.startsWith(remotePod) ? this.copy.podHome.slice(remotePod.length) : null;
     this._sweptAt = { ...(warmFrom?.sweptAt || {}) };

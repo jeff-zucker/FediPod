@@ -8,6 +8,7 @@ import { memoryKv, kvDocFetch, CopyStorage, copyLease, holds, lockCopy, fillCopy
   renewPodLease, safeName } from '../../lib/gateway/copy.mjs';
 import { FileStorage } from '../../lib/core/storage.mjs';
 import { PodStore } from '../../lib/core/store.mjs';
+import { keeperSession } from '../../lib/gateway/keeper-session.mjs';
 
 let fails = 0;
 const check = (ok, msg) => { console.log(`${ok ? 'PASS' : 'FAIL'}  ${msg}`); if (!ok) fails++; };
@@ -176,6 +177,11 @@ try {
   check(!(await kv.list('mei/')).length && JSON.parse((await podKv.get('lease')).text).expiresAt === 0,
     'then frees the pod lease and deletes the copy');
   check(fs.readFileSync(path.join(dir, 'keys.json'), 'utf8').includes('secret'), 'the key never left the pod');
+
+  // ---- the gateway's own sign-in, made once and used until it runs out ----
+  const cred = () => ({ webId: 'https://keeper.example/#me', issuerOrigin: 'https://idp.example', clientId: 'gw_1', secret: 'aa', tokenEndpoint: 'https://idp.example/token' });
+  check(keeperSession(cred()) === keeperSession(cred()), 'the same credential read afresh is the same session, not a new sign-in');
+  check(keeperSession({ ...cred(), secret: 'bb' }) !== keeperSession(cred()), 'and a changed credential is a new one');
 } catch (e) { console.log('ERROR', e.stack || e.message); fails++; }
 
 fs.rmSync(dir, { recursive: true, force: true });

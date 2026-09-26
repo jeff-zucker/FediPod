@@ -278,6 +278,13 @@ export function gatewayCtx() {
     stateSecret: process.env.FEDIPOD_KEEPER_CLIENT_SECRET
       ? crypto.createHash('sha256').update(`fedipod-state:${process.env.FEDIPOD_KEEPER_CLIENT_SECRET}`).digest()
       : null,
+    // Names the keeper's credential without holding it, so a refused sign-in
+    // recorded under one credential is not held against its replacement
+    // (state-api.mjs).
+    keeperMark: process.env.FEDIPOD_KEEPER_CLIENT_ID && process.env.FEDIPOD_KEEPER_CLIENT_SECRET
+      ? crypto.createHash('sha256')
+        .update(`fedipod-keeper:${process.env.FEDIPOD_KEEPER_CLIENT_ID}:${process.env.FEDIPOD_KEEPER_CLIENT_SECRET}`).digest('hex').slice(0, 16)
+      : null,
     // The keeper's pod fetch, for making, writing back and giving up copies.
     keeperFetch: async () => {
       const cred = await keeperCredential();

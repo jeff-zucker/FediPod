@@ -14,10 +14,13 @@ const check = (ok, msg) => { console.log(`${ok ? 'PASS' : 'FAIL'}  ${msg}`); if 
 const ORIGIN = 'https://gw.example';
 const WEBID = 'https://mei.pod.example/profile/card#me';
 const copyKv = memoryKv();
+let podAsks = 0;
 const mastoKv = memoryKv();
 const rows = {
   mei: { handle: 'mei', webId: WEBID, podHome: 'https://mei.pod.example/fedipod/', openedAt: new Date().toISOString(), keeper: { webId: 'https://keeper.example/#me' } },
   kit: { handle: 'kit', webId: 'https://kit.pod.example/profile/card#me', podHome: 'https://kit.pod.example/fedipod/', openedAt: new Date().toISOString() },
+  // Kept, with no copy yet: Bo's pod is where the gateway's own sign-in is refused.
+  bo: { handle: 'bo', webId: 'https://bo.pod.example/profile/card#me', podHome: 'https://bo.pod.example/fedipod/', openedAt: new Date().toISOString(), keeper: { webId: 'https://keeper.example/#me' } },
   // Kept, with no copy yet, on a pod that refuses the gateway.
   ana: { handle: 'ana', webId: 'https://ana.pod.example/profile/card#me', podHome: 'https://ana.pod.example/fedipod/', openedAt: new Date().toISOString(), keeper: { webId: 'https://keeper.example/#me' } },
 };
@@ -35,9 +38,13 @@ const ctx = {
   lookup: async (h) => rows[h] || null,
   listDirectory: async () => rows,
   keeperWebId: 'https://keeper.example/#me',
+  keeperMark: 'first-credential',
   keeperCredential: { webId: 'https://keeper.example/#me', clientId: 'x', secret: 'y', tokenEndpoint: 'https://keeper.example/token', issuerOrigin: 'https://keeper.example' },
-  // Only Ana's pod is reached, and it refuses the gateway.
+  // Only Ana's and Bo's pods are reached: Ana's refuses the gateway, and at
+  // Bo's the gateway's own sign-in is refused.
   keeperFetch: async () => async (u) => {
+    podAsks++;
+    if (String(u).startsWith('https://bo.pod.example/')) throw new Error('token request failed (HTTP 401): {"error":"invalid_client"}');
     if (!String(u).startsWith('https://ana.pod.example/')) throw new Error('the pod is not reached in this test');
     return new Response('', { status: 403 });
   },
@@ -134,6 +141,17 @@ try {
   rows.mei.webId = was;
   await call('POST', '/oauth/revoke', { body: { token: tok.json.access_token } });
   check((await call('GET', '/api/v1/timelines/home', { headers: bearer })).status === 401, 'a revoked token reads nothing');
+  // ---- the gateway's own sign-in refused: no account is tried for a while ----
+  const boFirst = await ensureCopy(ctx, 'bo', rows.bo, () => {}, { owner: true });
+  check(boFirst.status === 502 && /token request failed \(HTTP 401\)/.test(boFirst.why), 'a refused sign-in by the gateway itself is named');
+  const asked = podAsks;
+  const anaHeld = await ensureCopy(ctx, 'ana', rows.ana, () => {}, { owner: true });
+  check(anaHeld.status === 503 && /token request failed/.test(anaHeld.why) && podAsks === asked,
+    'then no account is tried, the owner\'s included, and no pod is asked');
+  ctx.keeperMark = 'second-credential';           // the operator put a new credential in
+  const anaTried = await ensureCopy(ctx, 'ana', rows.ana, () => {}, { owner: true });
+  check(podAsks > asked && /HTTP 403/.test(anaTried.why), 'a new credential is tried at once');
+
   const pre = await call('OPTIONS', '/api/v1/statuses');
   check(pre.status === 204 && pre.headers['access-control-allow-origin'] === '*', 'an app in a browser may ask from its own page');
 } catch (e) { console.log('ERROR', e.stack || e.message); fails++; }

@@ -8,9 +8,22 @@
 // gateway writes the copy to the pod every fifteen minutes.
 import { HttpStorage, StateApiStorage, podOnly } from '../../lib/core/storage.mjs';
 import { Lease } from '../../lib/core/lease.mjs';
+import { kvGet, kvPut, kvDel } from './idb-kv.mjs';
 
 // A token this much short of its end is renewed before it is used again.
 const RENEW_BEFORE_MS = 2 * 3600_000;
+
+// After the gateway could not find or make the copy, this browser does not
+// ask again for this long: its worker is restarted whenever a client checks
+// for posts, about once a minute, and every ask cost the gateway a try at the
+// pod. The account works from its pod meanwhile, as after any failed ask. A
+// sign-in, as against a restart, asks anyway, and turning keeping on forgets
+// the failure (agent.mjs setKeeper). A network failure or a refused sign-in is
+// not remembered: those are this browser's to put right.
+const ASK_AGAIN_MS = 15 * 60_000;
+const REMEMBERED = [404, 409, 501, 502, 503];
+const failedKey = (agent, frontOrigin) => `copy-open-failed:${frontOrigin}:${agent.webId}`;
+export const forgetFailedOpen = (agent, frontOrigin) => kvDel(failedKey(agent, frontOrigin)).catch(() => {});
 
 /**
  * Ask the gateway for this account's copy, making it if there is none yet.
@@ -18,9 +31,12 @@ const RENEW_BEFORE_MS = 2 * 3600_000;
  * ({ handle, base, token, expiresAt }) or null, in which case the account
  * works from its pod.
  */
-export async function openCopy(agent, frontOrigin, { handle = null, kept = null } = {}) {
+export async function openCopy(agent, frontOrigin, { handle = null, kept = null, askAnyway = false } = {}) {
   if (kept && kept.expiresAt - Date.now() > RENEW_BEFORE_MS) return kept;
   if (!agent.sessionFetch || !frontOrigin) return null;
+  const key = failedKey(agent, frontOrigin);
+  const failed = await kvGet(key).catch(() => null);
+  if (!askAnyway && failed && Date.now() - failed.at < ASK_AGAIN_MS) return null;
   let res;
   try {
     res = await agent.sessionFetch(`${frontOrigin.replace(/\/$/u, '')}/api/state/open`, {
@@ -34,8 +50,10 @@ export async function openCopy(agent, frontOrigin, { handle = null, kept = null 
       const why = (await res.json().catch(() => null))?.error;
       agent.log(`the account's copy: the gateway answered ${res.status}${why ? ` (${why})` : ''}`);
     }
+    if (REMEMBERED.includes(res.status)) await kvPut(key, { at: Date.now(), status: res.status }).catch(() => {});
     return null;
   }
+  if (failed) await kvDel(key).catch(() => {});
   const copy = await res.json().catch(() => null);
   return copy?.base && copy?.token
     ? { handle: copy.handle, base: copy.base, token: copy.token, expiresAt: copy.expiresAt, podHome: copy.podHome || null }
