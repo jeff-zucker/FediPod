@@ -92,10 +92,12 @@ try {
   const notKept = await call('GET', '/api/authorize?address=kit');
   check(notKept.status === 409 && /Keep my account running/.test(notKept.json.error), 'an account the gateway does not keep running is told how to allow apps');
   const fresh = await call('GET', '/api/authorize?address=new1');
-  check(fresh.status === 409 && /finished starting/.test(fresh.json.error) && !/no account/.test(fresh.json.error),
-    'an account signed up a moment ago is told to let FediPod finish starting, not that there is no account');
+  check(fresh.status === 409 && /set up moments ago/.test(fresh.json.error) && /under a minute/.test(fresh.json.error) && !/no account/.test(fresh.json.error),
+    'an account signed up a moment ago is told it is being got ready and how long that takes, not that there is no account');
   const byNewWebId = await call('GET', `/api/authorize?address=${encodeURIComponent(rows.new1.webId)}`);
-  check(byNewWebId.status === 409 && /finished starting/.test(byNewWebId.json.error), 'and so is its WebID');
+  check(byNewWebId.status === 409 && /set up moments ago/.test(byNewWebId.json.error), 'and so is its WebID');
+  check(/last few minutes/.test(notKept.json.error) && /Keep my account running while I'm away/.test(notKept.json.error),
+    'an opened account not kept running is told both: wait if it is new, else turn keeping on');
   check((await call('GET', '/api/authorize?address=nobody')).status === 404, 'an address with no account here is still told there is none');
 
   // ---- the proved sign-in ----
