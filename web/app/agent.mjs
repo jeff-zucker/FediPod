@@ -34,6 +34,7 @@ import { AcctFeed } from '../../lib/connections/acctfeed.mjs';
 import { followActor, unfollowActor, resolveHandle } from '../../lib/core/social.mjs';
 import { podBaseOfWebId } from '../../lib/pod/urls.mjs';
 import { ImportWorker } from '../../lib/connections/import.mjs';
+import { openCopy, copyStorage, copyLeaseOf, moveIntoCopy, leaveCopy, renewCopyToken } from './copy-mode.mjs';
 
 // The authorities this identity answers on: exactly one, this origin. The Node
 // agent gets this from lib/guard.mjs, which is not in the browser bundle and
@@ -132,6 +133,12 @@ export class BrowserAgent {
   // the lease, proceed. If we are a viewer, the owner acting HERE outranks the
   // idle active device: claim the lease outright and become active.
   async requestTakeover() {
+    // Working from the copy, an app at the gateway may have taken the lease
+    // since this browser last looked: asked now, before acting (copy-mode.mjs).
+    if (!this.viewer && this.copy) {
+      const cur = await this.lease.readFresh().catch(() => null);
+      if (cur && typeof cur === 'object' && cur.holder !== this.lease.id && Date.now() < cur.expiresAt) this.demote();
+    }
     if (!this.viewer) return true;
     if (!(await this.lease.takeover())) return false;
     clearTimeout(this._viewerTimer); this._viewerTimer = null;
@@ -172,6 +179,9 @@ export class BrowserAgent {
     if (!webId || !this.gatewayApi) return { status: 501, error: 'this gateway cannot act for accounts' };
     this.store.setConfig({ ...this.store.getConfig(), keeperOff: !on });
     if (!on) {
+      // The account's copy goes back to the pod first (copy-mode.mjs).
+      const left = await leaveCopy(this);
+      if (!left.ok) return { status: 502, error: left.why };
       const said = await this.tellGateway('keeper', { handle: this.doorKey, on: false });
       if (said?.status !== 200) return said || { status: 502 };
       this._keeper.kept = false;
@@ -222,6 +232,7 @@ export class BrowserAgent {
     if (standing?.status === 200 || standing?.status === 410) {
       await kvPut(key, { at: Date.now(), standing }).catch(() => {});
     }
+    await renewCopyToken(this, this.frontOrigin).catch(() => {});
     return standing;
   }
 
@@ -267,6 +278,11 @@ export class BrowserAgent {
         if (this._keeper && !this._keeper.kept && !this.store.getConfig()?.keeperOff) {
           await this.setKeeper(true).catch((e) => this.log(`keeping the account while away: ${e.message}`));
         }
+        // Kept: from here on the account works from its copy at the gateway.
+        if (this._keeper?.kept && !this.copy && !this.store.getConfig()?.keeperOff) {
+          await moveIntoCopy(this, this.frontOrigin).catch((e) => this.log(`the account's copy: ${e.message}`));
+          if (this.viewer) return;              // another agent holds the copy: reading only
+        }
       }
       const now = Date.now();
       // Said before the drain starts, so held mail is in the inbox to be read.
@@ -290,8 +306,8 @@ export class BrowserAgent {
       this.importer?.start();
       // What the next restart may take up.
       saveMeta(this.webId, warm
-        ? { wakeAt: now, ...(drainNow ? { drainedAt: now } : {}) }
-        : { root: this.store.getConfig()?.root || null, fullAt: now, wakeAt: now, drainedAt: now })
+        ? { wakeAt: now, copy: this.copy || null, ...(drainNow ? { drainedAt: now } : {}) }
+        : { root: this.store.getConfig()?.root || null, copy: this.copy || null, fullAt: now, wakeAt: now, drainedAt: now })
         .catch(() => {});
     } catch (e) { this.log(`going active: ${e.message}`); }
   }
@@ -394,9 +410,16 @@ export class BrowserAgent {
     // A worker the browser restarted moments ago may take up what its last
     // start read (warm-start.mjs) instead of reading the pod again.
     const warmFrom = restart ? await warmMeta(webId).catch(() => null) : null;
-    const warmRoot = isWarm(warmFrom) ? warmFrom.root : null;
+    // This browser's lease id, and the account's copy at the gateway when the
+    // gateway keeps the account running (copy-mode.mjs): asked before any state
+    // is read, since it decides where the state is read from.
+    this.holderId = await this.deviceId();
+    this.frontOrigin = frontOrigin || null;
+    this.copy = await openCopy(this, this.frontOrigin, { kept: isWarm(warmFrom) ? warmFrom.copy : null });
+    const warmRoot = isWarm(warmFrom) && !!warmFrom.copy === !!this.copy ? warmFrom.root : null;
+    const copyRoot = this.copy?.podHome?.startsWith(remotePod) ? this.copy.podHome.slice(remotePod.length) : null;
     this._sweptAt = { ...(warmFrom?.sweptAt || {}) };
-    const root = (config && config.root) || warmRoot
+    const root = (config && config.root) || warmRoot || copyRoot
       || (await findAccount(this.remote, remotePod,
         (r) => podState.readConfig(this.remote, { state: `${remotePod}${r}ap-state/` }),
         (c) => (c.kind || 'person') === 'person').catch(() => null))?.root
@@ -411,20 +434,22 @@ export class BrowserAgent {
     // the deletion deny-list that every other write on this agent observes.
     // The Node agent has always passed remote.fetch here.
     const podFetch = (u, i) => this.remote.fetch(u, i);
-    this.store = new PodStore({ storage: new HttpStorage(this.urls.state, podFetch), log: this.log });
+    const podStateStorage = new HttpStorage(this.urls.state, podFetch);
+    this.store = new PodStore({ storage: this.copy ? copyStorage(this, podStateStorage) : podStateStorage, log: this.log });
     keepInStep(this.store, webId, this.log);
     // Single-active-agent lease (lib/lease.mjs): the inbox drain is a
     // destructive read and the state store is write-through-cached, so exactly
     // one browser/device may ACT on a pod at a time — a later arrival runs
     // read-only until the owner acts on it and it takes over. Written with fresh
     // fetches, never the cached store.
-    this.lease = new Lease({ url: this.urls.state + 'lease.json', fetchImpl: podFetch, log: this.log,
-      // Kept on this origin, so THIS browser is one holder however many times
-      // its worker is killed and restarted. Without it every restart was a new
-      // holder: the old lease still had minutes to run, so the browser found
-      // its own account "active on another device" and asked to take it over.
-      // Switching between the clients did it every time, being a navigation.
-      id: await this.deviceId() });
+    // The holder id is kept on this origin, so THIS browser is one holder
+    // however many times its worker is killed and restarted. Without it every
+    // restart was a new holder: the old lease still had minutes to run, so the
+    // browser found its own account "active on another device" and asked to
+    // take it over. Switching between the clients did it every time, being a
+    // navigation. Working from the copy, the lease is the copy's.
+    this.lease = this.copy ? copyLeaseOf(this)
+      : new Lease({ url: this.urls.state + 'lease.json', fetchImpl: podFetch, log: this.log, id: this.holderId });
     // What was kept is used only while the lease is still this browser's:
     // nobody else can have written the state in between.
     this._warm = null;

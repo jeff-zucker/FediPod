@@ -4,11 +4,14 @@
 // follow held at the door, a failed delivery's next try, a scheduled post, a
 // poll's end) is handed to its keeper instead (keeper-background.mjs), which
 // delivers the mail and reads it. Mail alone does not start a run. An app that
-// opens takes its own mail sooner.
+// opens takes its own mail sooner. Last, each kept account's working copy at
+// the gateway is written to its pod (lib/gateway/copy.mjs).
 import { gatewayCtx } from './front.mjs';
 import { signRun } from './keeper-background.mjs';
 import { flushAll, isPresent } from '../../lib/gateway/held-mail.mjs';
 import { closedState } from '../../lib/gateway/quiet.mjs';
+import { listCopies, copyMeta, flushCopy } from '../../lib/gateway/copy.mjs';
+import { HttpStorage } from '../../lib/core/storage.mjs';
 
 export default async function handler() {
   const ctx = gatewayCtx();
@@ -37,6 +40,16 @@ export default async function handler() {
     if (started.has(handle)) continue;
     const rec = await ctx.lookup(handle);
     if (kept(rec) && !await isPresent(ctx, handle)) await start(handle);
+  }
+  // The working copies of kept accounts, written to their pods (copy.mjs).
+  if (ctx.copyKv) {
+    const podFetch = await ctx.keeperFetch();
+    for (const handle of podFetch ? await listCopies(ctx.copyKv) : []) {
+      const meta = await copyMeta(ctx.copyKv, handle);
+      if (!meta?.stateUrl) continue;
+      await flushCopy(ctx.copyKv, handle, { pod: new HttpStorage(meta.stateUrl, podFetch), log: console.log })
+        .catch((e) => console.log(`copy @${handle}: not written to the pod: ${e?.message || e}`));
+    }
   }
   return new Response(null, { status: 204 });
 }

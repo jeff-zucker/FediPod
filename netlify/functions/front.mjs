@@ -26,11 +26,13 @@
 //   FEDIPOD_PAUSE_ITEMS    content deliveries since a sign-in before an account pauses (5000)
 //   FEDIPOD_CLOSE_DAYS     days without a sign-in before an address closes (183)
 
+import crypto from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { getStore } from '@netlify/blobs';
 import { routeFront } from '../../lib/gateway/front-core.mjs';
 import { keeperBook } from '../../lib/gateway/keeper-due.mjs';
+import { keeperSession } from '../../lib/gateway/keeper-session.mjs';
 import * as podInbox from '../../lib/pod/inbox.mjs';
 import grant from '../../vendor/idp-grant.cjs';
 
@@ -245,12 +247,45 @@ export function gatewayCtx() {
     // The gateway's own pod identity, which an owner may let act for them while
     // their app is closed (lib/gateway/keeper.mjs), and what its last run left.
     keeperWebId: process.env.FEDIPOD_KEEPER_WEBID || null,
+    // The working copies of kept accounts (lib/gateway/copy.mjs), in a store
+    // read and written with strong consistency: two functions working on one
+    // account must see each other's writes at once.
+    copyKv: blobsKv('state'),
+    // Signs the tokens the state API hands the owner's browser. Derived from
+    // the keeper's own secret, which a deploy that keeps copies already has.
+    stateSecret: process.env.FEDIPOD_KEEPER_CLIENT_SECRET
+      ? crypto.createHash('sha256').update(`fedipod-state:${process.env.FEDIPOD_KEEPER_CLIENT_SECRET}`).digest()
+      : null,
+    // The keeper's pod fetch, for making, writing back and giving up copies.
+    keeperFetch: async () => {
+      const cred = await keeperCredential();
+      if (!cred) return null;
+      const session = keeperSession(cred);
+      return (u, i) => session.fetch(u, i);
+    },
     // When each kept account's keeper next has work (keeper-due.mjs).
     ...keeperBook({
       get: (k) => getStore('keeper').get(k, { type: 'json' }),
       set: (k, v) => getStore('keeper').setJSON(k, v),
       keys: async () => (await getStore('keeper').list()).blobs.map((b) => b.key),
     }),
+  };
+}
+
+// A Netlify Blobs store as the copy's key-value store (lib/gateway/copy.mjs).
+function blobsKv(name) {
+  const store = () => getStore({ name, consistency: 'strong' });
+  return {
+    async get(key) {
+      const r = await store().getWithMetadata(key, { type: 'text' });
+      return r ? { text: r.data, etag: r.etag } : null;
+    },
+    async set(key, text, { ifMatch = null, ifNew = false } = {}) {
+      const r = await store().set(key, text, ifMatch ? { onlyIfMatch: ifMatch } : ifNew ? { onlyIfNew: true } : {});
+      return { ok: r.modified !== false, etag: r.etag };
+    },
+    async delete(key) { await store().delete(key); },
+    async list(prefix) { return (await store().list({ prefix })).blobs.map((b) => ({ key: b.key, etag: b.etag })); },
   };
 }
 
@@ -266,4 +301,7 @@ export async function keeperCredential() {
   return { webId, issuerOrigin, clientId, secret, tokenEndpoint };
 }
 
-export const config = { path: '/*', preferStatic: true };
+// The account routes are the account function's (account.mjs): it carries
+// the pieces that act for an account, which a delivery never needs.
+export const ACCOUNT_PATHS = ['/api/state/*', '/api/v1/*', '/api/v2/*', '/oauth/*', '/api/authorize'];
+export const config = { path: '/*', excludedPath: ACCOUNT_PATHS, preferStatic: true };

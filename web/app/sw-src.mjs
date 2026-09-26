@@ -146,6 +146,10 @@ self.addEventListener('message', (e) => {
 self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
   if (url.origin !== self.location.origin || !(isFacade(url.pathname) || isAdmin(url.pathname))) return;   // static → network
+  // A Mastodon app somewhere else signing in at this address, or the pod
+  // sending its owner back to that sign-in: the gateway's, not this browser's
+  // agent, whose own client signs in from a page on this origin.
+  if (url.pathname.startsWith('/oauth/') && !sameOriginReferrer(e.request)) return;
   e.respondWith(serve(e.request, url));
 });
 

@@ -46325,6 +46325,9 @@ var fileURLToPath = (u) => {
 var pathToFileURL = (p) => new URL("file://" + (p.startsWith("/") ? p : "/" + p));
 var node_url_default = { URL: globalThis.URL, URLSearchParams: globalThis.URLSearchParams, fileURLToPath, pathToFileURL };
 
+// lib/core/pod-only.mjs
+var podOnly = (name) => name === "keys.json" || name === "lease.json" || name.startsWith("conn-");
+
 // lib/core/storage.mjs
 var LDP2 = Namespace("http://www.w3.org/ns/ldp#");
 var slash = (u) => u.endsWith("/") ? u : u + "/";
@@ -46399,6 +46402,67 @@ var HttpStorage = class {
     const url = this._url(p);
     try {
       const res = await this.fetchImpl(url, { method: "DELETE" });
+      return res.status < 400 || res.status === 404;
+    } catch {
+      return false;
+    }
+  }
+};
+var StateApiStorage = class {
+  constructor(base, { fetchImpl = globalThis.fetch, token, holder, pod = null, onRefused = null }) {
+    this.base = slash(base);
+    this.fetchImpl = fetchImpl;
+    this.token = token;
+    this.holder = holder;
+    this.pod = pod;
+    this.onRefused = onRefused;
+  }
+  get kind() {
+    return "copy";
+  }
+  _ask(p, init = {}) {
+    return this.fetchImpl(this.base + encodeURIComponent(p), {
+      ...init,
+      headers: { authorization: `Bearer ${this.token}`, ...init.headers || {} }
+    });
+  }
+  async list(sub = "", { etag } = {}) {
+    if (sub) return { notModified: false, names: [], etag: null };
+    const res = await this._ask("", { headers: etag ? { "if-none-match": etag } : {} });
+    if (res.status === 304) return { notModified: true, names: null, etag };
+    if (res.status >= 400) throw new Error(`the account's copy at the gateway is unreadable (HTTP ${res.status})`);
+    const { names } = await res.json();
+    return { notModified: false, names, etag: res.headers.get("etag") };
+  }
+  async read(p, opts = {}) {
+    if (podOnly(p)) return this.pod ? this.pod.read(p, opts) : { ok: false, notModified: false, status: 404, body: null, etag: null };
+    const res = await this._ask(p, { headers: opts.etag ? { "if-none-match": opts.etag } : {} });
+    if (res.status === 304) return { ok: true, notModified: true, status: 304, body: null, etag: opts.etag };
+    if (res.status >= 400) return { ok: false, notModified: false, status: res.status, body: null, etag: null };
+    return { ok: true, notModified: false, status: res.status, body: await res.text(), etag: res.headers.get("etag") };
+  }
+  async write(p, body, contentType = "application/json") {
+    if (podOnly(p)) return this.pod ? this.pod.write(p, body, contentType) : { ok: false, retry: false, why: "no pod for this document" };
+    try {
+      const res = await this._ask(p, { method: "PUT", headers: { "content-type": contentType, "x-fedipod-holder": this.holder }, body });
+      if (res.status < 400) return { ok: true, retry: false, why: "" };
+      if (res.status === 409) {
+        this.onRefused?.();
+        return { ok: false, retry: false, why: "another agent holds this account now", lost: true };
+      }
+      return { ok: false, retry: res.status >= 500 || res.status === 429, why: `HTTP ${res.status}`, retryAfterMs: 0 };
+    } catch (e) {
+      return { ok: false, retry: true, why: e.message, retryAfterMs: 0 };
+    }
+  }
+  async remove(p) {
+    if (podOnly(p)) return this.pod ? this.pod.remove(p) : false;
+    try {
+      const res = await this._ask(p, { method: "DELETE", headers: { "x-fedipod-holder": this.holder } });
+      if (res.status === 409) {
+        this.onRefused?.();
+        return false;
+      }
       return res.status < 400 || res.status === 404;
     } catch {
       return false;
@@ -65555,6 +65619,46 @@ var Intake = class {
     }
     return { entries: batch.length, complete };
   }
+  /**
+   * Deliveries handed straight in rather than read from the pod's inbox: mail
+   * the gateway held for an account whose copy it keeps (lib/gateway/keeper.mjs).
+   * `entries` are { name, body, receipt }, each taken as if it had arrived
+   * alone. Returns the names that are done with — handled, or refused for good
+   * — once what they changed is written; one to be tried again is left out, so
+   * whoever holds it keeps it for next time.
+   */
+  async takeHeld(entries) {
+    const done = [];
+    this.store.hold?.();
+    try {
+      for (const e of entries) {
+        const key = `${this.urls.inbox}${e.name}`;
+        const body = typeof e.body === "string" ? e.body : null;
+        if (body !== null && Buffer.byteLength(body) > MAX_ITEM_BYTES) {
+          this.store.addDeadLetter({ inboxUrl: key, reason: `oversized (${Buffer.byteLength(body)} bytes)`, activity: null });
+          done.push(e.name);
+          continue;
+        }
+        const at = {};
+        try {
+          await this._take(key, body, () => this._checkReceipt(e.receipt), at);
+          this._clearAttempt(key);
+          done.push(e.name);
+        } catch (err) {
+          const n = this._bumpAttempt(key, err.message);
+          this.log(`held delivery ${key} attempt ${n}/${MAX_ITEM_ATTEMPTS}: ${err.message}`);
+          if (n >= MAX_ITEM_ATTEMPTS) {
+            this.store.addDeadLetter({ inboxUrl: key, reason: `failed ${n}x: ${err.message}`, activity: trimActivity(at.activity) });
+            done.push(e.name);
+          }
+        }
+      }
+      await this._publishPending();
+    } finally {
+      this.store.release?.();
+    }
+    return await this.store.commit() ? done : [];
+  }
   // The end of a sweep: publish whatever the follow graph did ONCE, then flush.
   //
   // publishCollections used to run per handled item — every Follow, Undo,
@@ -69664,7 +69768,7 @@ var MastoApi = class _MastoApi {
       return send(403, { error: `This action is outside the authorized scopes (needs ${need})` });
     }
     if (!this.agent.configured()) return send(503, { error: "agent not configured" });
-    if (this.agent.viewer && req.method !== "GET" && req.method !== "HEAD") {
+    if ((this.agent.viewer || this.agent.copy) && req.method !== "GET" && req.method !== "HEAD") {
       const took = await this.agent.requestTakeover?.();
       if (!took) return send(503, { error: "another agent is active for this pod \u2014 takeover failed, try again" });
     }
@@ -72816,6 +72920,108 @@ var AcctFeed = class {
 
 // web/app/agent.mjs
 init_urls();
+
+// web/app/copy-mode.mjs
+var RENEW_BEFORE_MS = 2 * 36e5;
+async function openCopy(agent2, frontOrigin, { handle: handle7 = null, kept = null } = {}) {
+  if (kept && kept.expiresAt - Date.now() > RENEW_BEFORE_MS) return kept;
+  if (!agent2.sessionFetch || !frontOrigin) return null;
+  let res;
+  try {
+    res = await agent2.sessionFetch(`${frontOrigin.replace(/\/$/u, "")}/api/state/open`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(handle7 ? { handle: handle7 } : {})
+    });
+  } catch (e) {
+    agent2.log(`the account's copy: ${e.message}`);
+    return null;
+  }
+  if (res.status !== 200) {
+    if (![404, 409, 501].includes(res.status)) agent2.log(`the account's copy: the gateway answered ${res.status}`);
+    return null;
+  }
+  const copy = await res.json().catch(() => null);
+  return copy?.base && copy?.token ? { handle: copy.handle, base: copy.base, token: copy.token, expiresAt: copy.expiresAt, podHome: copy.podHome || null } : null;
+}
+var tokenFetch = (agent2) => (u, i = {}) => fetch(u, {
+  ...i,
+  headers: { ...i.headers || {}, authorization: `Bearer ${agent2.copy.token}` }
+});
+function copyStorage(agent2, podState) {
+  const s = new StateApiStorage(agent2.copy.base, {
+    fetchImpl: (u, i) => fetch(u, i),
+    token: agent2.copy.token,
+    holder: agent2.holderId,
+    pod: podState,
+    // Refused: another agent (an app at the gateway, another browser) took
+    // the lease. This one stops acting at once rather than at its next renewal.
+    onRefused: () => {
+      if (!agent2.viewer) agent2.demote();
+    }
+  });
+  Object.defineProperty(s, "token", { get: () => agent2.copy.token, set() {
+  } });
+  return s;
+}
+function copyLeaseOf(agent2) {
+  return new Lease({ url: `${agent2.copy.base}lease.json`, fetchImpl: tokenFetch(agent2), log: agent2.log, id: agent2.holderId });
+}
+function useLease(agent2, lease) {
+  agent2.lease.stopRenewal();
+  agent2.lease = lease;
+  if (agent2.intake) agent2.intake.lease = lease;
+  lease.onLost = () => agent2.demote();
+}
+async function moveIntoCopy(agent2, frontOrigin) {
+  if (agent2.copy) return true;
+  await agent2.store.commit();
+  await agent2.lease.release();
+  const copy = await openCopy(agent2, frontOrigin, { handle: agent2.doorKey });
+  if (!copy) {
+    if (await agent2.lease.acquire()) agent2.lease.startRenewal();
+    return false;
+  }
+  agent2.copy = copy;
+  const lease = copyLeaseOf(agent2);
+  if (!await lease.acquire()) {
+    agent2.log("the account's copy is held by another agent; reading only");
+  }
+  agent2.store.attach(copyStorage(agent2, new HttpStorage(agent2.urls.state, (u, i) => agent2.remote.fetch(u, i))));
+  await agent2.store.load({ force: true });
+  useLease(agent2, lease);
+  if (lease.heldUntil) lease.startRenewal();
+  else agent2.demote();
+  agent2.log("working from the account's copy at the gateway");
+  return true;
+}
+async function leaveCopy(agent2) {
+  if (!agent2.copy) return { ok: true };
+  await agent2.store.commit();
+  await agent2.lease.release();
+  const res = await tokenFetch(agent2)(`${agent2.copy.base}leave`, { method: "POST" }).catch((e) => ({ status: 0, e }));
+  if (res.status !== 200) {
+    if (await agent2.lease.acquire()) agent2.lease.startRenewal();
+    return { ok: false, why: `the gateway could not write the copy to the pod (${res.status || res.e?.message})` };
+  }
+  agent2.copy = null;
+  const podFetch = (u, i) => agent2.remote.fetch(u, i);
+  const lease = new Lease({ url: `${agent2.urls.state}lease.json`, fetchImpl: podFetch, log: agent2.log, id: agent2.holderId });
+  agent2.store.attach(new HttpStorage(agent2.urls.state, podFetch));
+  await agent2.store.load({ force: true });
+  useLease(agent2, lease);
+  if (await lease.acquire()) lease.startRenewal();
+  else agent2.demote();
+  agent2.log("working from the pod again");
+  return { ok: true };
+}
+async function renewCopyToken(agent2, frontOrigin) {
+  if (!agent2.copy || agent2.copy.expiresAt - Date.now() > RENEW_BEFORE_MS) return;
+  const fresh = await openCopy(agent2, frontOrigin, { handle: agent2.copy.handle });
+  if (fresh) agent2.copy = fresh;
+}
+
+// web/app/agent.mjs
 var originAuthorities = (host) => ({
   set: /* @__PURE__ */ new Set([String(host || "").toLowerCase()]),
   has(authority) {
@@ -72889,6 +73095,10 @@ var BrowserAgent = class _BrowserAgent {
   // the lease, proceed. If we are a viewer, the owner acting HERE outranks the
   // idle active device: claim the lease outright and become active.
   async requestTakeover() {
+    if (!this.viewer && this.copy) {
+      const cur = await this.lease.readFresh().catch(() => null);
+      if (cur && typeof cur === "object" && cur.holder !== this.lease.id && Date.now() < cur.expiresAt) this.demote();
+    }
     if (!this.viewer) return true;
     if (!await this.lease.takeover()) return false;
     clearTimeout(this._viewerTimer);
@@ -72939,6 +73149,8 @@ var BrowserAgent = class _BrowserAgent {
     if (!webId || !this.gatewayApi) return { status: 501, error: "this gateway cannot act for accounts" };
     this.store.setConfig({ ...this.store.getConfig(), keeperOff: !on });
     if (!on) {
+      const left = await leaveCopy(this);
+      if (!left.ok) return { status: 502, error: left.why };
       const said2 = await this.tellGateway("keeper", { handle: this.doorKey, on: false });
       if (said2?.status !== 200) return said2 || { status: 502 };
       this._keeper.kept = false;
@@ -72991,6 +73203,8 @@ var BrowserAgent = class _BrowserAgent {
       await kvPut(key, { at: Date.now(), standing }).catch(() => {
       });
     }
+    await renewCopyToken(this, this.frontOrigin).catch(() => {
+    });
     return standing;
   }
   // Become the active agent: renew the lease, then start what a viewer skips —
@@ -73025,6 +73239,10 @@ var BrowserAgent = class _BrowserAgent {
         if (this._keeper && !this._keeper.kept && !this.store.getConfig()?.keeperOff) {
           await this.setKeeper(true).catch((e) => this.log(`keeping the account while away: ${e.message}`));
         }
+        if (this._keeper?.kept && !this.copy && !this.store.getConfig()?.keeperOff) {
+          await moveIntoCopy(this, this.frontOrigin).catch((e) => this.log(`the account's copy: ${e.message}`));
+          if (this.viewer) return;
+        }
       }
       const now = Date.now();
       const hereDue = !warm || now - (warm.hereAt || 0) >= _BrowserAgent.HERE_EVERY_MS;
@@ -73048,7 +73266,7 @@ var BrowserAgent = class _BrowserAgent {
       this.startAccts();
       this.tagfeed?.start(this.mirrorStart("tags"));
       this.importer?.start();
-      saveMeta(this.webId, warm ? { wakeAt: now, ...drainNow ? { drainedAt: now } : {} } : { root: this.store.getConfig()?.root || null, fullAt: now, wakeAt: now, drainedAt: now }).catch(() => {
+      saveMeta(this.webId, warm ? { wakeAt: now, copy: this.copy || null, ...drainNow ? { drainedAt: now } : {} } : { root: this.store.getConfig()?.root || null, copy: this.copy || null, fullAt: now, wakeAt: now, drainedAt: now }).catch(() => {
       });
     } catch (e) {
       this.log(`going active: ${e.message}`);
@@ -73152,9 +73370,13 @@ var BrowserAgent = class _BrowserAgent {
     this.sessionFetch = session.fetch;
     this.remote = new BrowserRemotePod(session, { webId, log: this.log });
     const warmFrom = restart ? await warmMeta(webId).catch(() => null) : null;
-    const warmRoot = isWarm(warmFrom) ? warmFrom.root : null;
+    this.holderId = await this.deviceId();
+    this.frontOrigin = frontOrigin || null;
+    this.copy = await openCopy(this, this.frontOrigin, { kept: isWarm(warmFrom) ? warmFrom.copy : null });
+    const warmRoot = isWarm(warmFrom) && !!warmFrom.copy === !!this.copy ? warmFrom.root : null;
+    const copyRoot = this.copy?.podHome?.startsWith(remotePod) ? this.copy.podHome.slice(remotePod.length) : null;
     this._sweptAt = { ...warmFrom?.sweptAt || {} };
-    const root = config && config.root || warmRoot || (await findAccount(
+    const root = config && config.root || warmRoot || copyRoot || (await findAccount(
       this.remote,
       remotePod,
       (r) => readConfig(this.remote, { state: `${remotePod}${r}ap-state/` }),
@@ -73162,19 +73384,10 @@ var BrowserAgent = class _BrowserAgent {
     ).catch(() => null))?.root || DEFAULT_ROOT;
     this.urls = apUrls2(remotePod, root);
     const podFetch = (u, i) => this.remote.fetch(u, i);
-    this.store = new PodStore({ storage: new HttpStorage(this.urls.state, podFetch), log: this.log });
+    const podStateStorage = new HttpStorage(this.urls.state, podFetch);
+    this.store = new PodStore({ storage: this.copy ? copyStorage(this, podStateStorage) : podStateStorage, log: this.log });
     keepInStep(this.store, webId, this.log);
-    this.lease = new Lease({
-      url: this.urls.state + "lease.json",
-      fetchImpl: podFetch,
-      log: this.log,
-      // Kept on this origin, so THIS browser is one holder however many times
-      // its worker is killed and restarted. Without it every restart was a new
-      // holder: the old lease still had minutes to run, so the browser found
-      // its own account "active on another device" and asked to take it over.
-      // Switching between the clients did it every time, being a navigation.
-      id: await this.deviceId()
-    });
+    this.lease = this.copy ? copyLeaseOf(this) : new Lease({ url: this.urls.state + "lease.json", fetchImpl: podFetch, log: this.log, id: this.holderId });
     this._warm = null;
     if (warmRoot && warmRoot === root) {
       const held = await this.lease.resume().catch(() => null);
@@ -73784,6 +73997,7 @@ self.addEventListener("message", (e) => {
 self.addEventListener("fetch", (e) => {
   const url = new URL(e.request.url);
   if (url.origin !== self.location.origin || !(isFacade(url.pathname) || isAdmin(url.pathname))) return;
+  if (url.pathname.startsWith("/oauth/") && !sameOriginReferrer(e.request)) return;
   e.respondWith(serve(e.request, url));
 });
 async function serve(request, url) {
