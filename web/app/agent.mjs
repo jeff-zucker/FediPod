@@ -296,7 +296,7 @@ export class BrowserAgent {
       clearInterval(this._schedTimer);
       this._schedTimer = setInterval(() => { publishDue(this.store, this.publisher, this.log).catch(() => {}); }, 30_000);
       const drainNow = !warm || now - (warm.drainedAt || 0) >= DRAIN_EVERY_MS || here?.flushed > 0;
-      await this.intake.start({ drainNow, subscribe: !warm });
+      await this.intake.start({ drainNow, subscribe: !warm || !!warm.resubscribe });
       this.startBsky();
       this.startAccts();
       this.tagfeed?.start(this.mirrorStart('tags'));

@@ -102,6 +102,16 @@ try {
   check(await gw.commit() && gw.getStatuses().some((s) => s.noteId === 'n2'), 'the gateway writes, over what the browser wrote');
   check((await browser.list('', { etag: listing1.etag })).notModified === false, 'and a reader sees the copy changed');
 
+  // ---- writes dropped after another agent acted are not a save ----
+  const sweep = new PodStore({ storage: new CopyStorage(kv, H, { holder: GATEWAY_HOLDER, pod }), log: () => {} });
+  await sweep.load();
+  sweep.hold();                                            // a drain in the middle of its sweep
+  sweep.write('muted.json', { actors: ['https://x.example/u/1'] });
+  await sweep.discardPending();
+  sweep.release();
+  check(await sweep.commit() === false, 'a sweep whose results were dropped is told they were not written, so it deletes nothing');
+  check(await sweep.commit() === true, 'and the next save counts again');
+
   // ---- the gateway's writers take turns ----
   const release = await lockCopy(kv, H);
   const second = await lockCopy(kv, H, { waitMs: 300 });

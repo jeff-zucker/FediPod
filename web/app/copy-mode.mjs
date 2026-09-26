@@ -117,7 +117,11 @@ export function standDown(agent) {
         if (cur && typeof cur === 'object' && cur.holder !== 'gateway' && Date.now() < cur.expiresAt) return;
         if (await agent.lease.acquire()) {
           clearTimeout(agent._viewerTimer); agent._viewerTimer = null;
-          await agent.goActive();
+          // Read what the app wrote, then carry on as a restart moments later
+          // would: no republishing, one drain, the inbox watched again.
+          await agent.store.load({ force: true });
+          const now = Date.now();
+          await agent.goActive({ warm: { hereAt: now, drainedAt: 0, wakeAt: now, resubscribe: true } });
           agent.log('took the account back from the gateway');
           return;
         }

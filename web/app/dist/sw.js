@@ -45961,12 +45961,17 @@ var PodStore = class {
   // copy's lease coming back after an app acted, web/app/copy-mode.mjs): the
   // next load reads what the other agent wrote, and sending these first would
   // write over it.
+  // Recorded as a write that did not land, so a sweep that was going on — the
+  // inbox drain above all — is told its results were not written down, and
+  // deletes nothing on the strength of them.
   async discardPending() {
+    const dropped = this.timers.size + this.dirty.size;
     for (const t of this.timers.values()) clearTimeout(t);
     this.timers.clear();
     this.dirty.clear();
     await this.chain.catch(() => {
     });
+    if (dropped) this.verdicts.set("\0discarded", false);
   }
   // ---- the domain helpers, unchanged from dk's Store ----
   // config: { remotePod, handle, name, issuer }  (credential lives ONLY in
@@ -73023,7 +73028,9 @@ function standDown(agent2) {
         if (await agent2.lease.acquire()) {
           clearTimeout(agent2._viewerTimer);
           agent2._viewerTimer = null;
-          await agent2.goActive();
+          await agent2.store.load({ force: true });
+          const now = Date.now();
+          await agent2.goActive({ warm: { hereAt: now, drainedAt: 0, wakeAt: now, resubscribe: true } });
           agent2.log("took the account back from the gateway");
           return;
         }
@@ -73318,7 +73325,7 @@ var BrowserAgent = class _BrowserAgent {
         });
       }, 3e4);
       const drainNow = !warm || now - (warm.drainedAt || 0) >= DRAIN_EVERY_MS || here?.flushed > 0;
-      await this.intake.start({ drainNow, subscribe: !warm });
+      await this.intake.start({ drainNow, subscribe: !warm || !!warm.resubscribe });
       this.startBsky();
       this.startAccts();
       this.tagfeed?.start(this.mirrorStart("tags"));

@@ -304,7 +304,9 @@ function blobsKv(name) {
     },
     async set(key, text, { ifMatch = null, ifNew = false } = {}) {
       const r = await store().set(key, text, ifMatch ? { onlyIfMatch: ifMatch } : ifNew ? { onlyIfNew: true } : {});
-      return { ok: r.modified !== false, etag: r.etag };
+      // The library answers any conditional failure but a 412 as a write made
+      // with an empty ETag; that is not a write this code can count on.
+      return { ok: r.modified !== false && !!r.etag, etag: r.etag };
     },
     async delete(key) { await store().delete(key); },
     async list(prefix) { return (await store().list({ prefix })).blobs.map((b) => ({ key: b.key, etag: b.etag })); },
