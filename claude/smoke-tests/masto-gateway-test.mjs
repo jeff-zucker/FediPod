@@ -20,7 +20,11 @@ const rows = {
   mei: { handle: 'mei', webId: WEBID, podHome: 'https://mei.pod.example/fedipod/', openedAt: new Date().toISOString(), keeper: { webId: 'https://keeper.example/#me' } },
   kit: { handle: 'kit', webId: 'https://kit.pod.example/profile/card#me', podHome: 'https://kit.pod.example/fedipod/', openedAt: new Date().toISOString() },
   // Signed up a moment ago: FediPod has not finished its first start.
-  new1: { handle: 'new1', webId: 'https://new1.pod.example/profile/card#me', podHome: 'https://new1.pod.example/fedipod/' },
+  new1: { handle: 'new1', webId: 'https://new1.pod.example/profile/card#me', podHome: 'https://new1.pod.example/fedipod/', attachedAt: new Date().toISOString() },
+  // Set up long ago and never opened in a browser; and a forum, run by a server.
+  old1: { handle: 'old1', webId: 'https://old1.pod.example/profile/card#me', podHome: 'https://old1.pod.example/fedipod/' },
+  old2: { handle: 'old2', webId: 'https://old2.pod.example/profile/card#me', podHome: 'https://old2.pod.example/fedipod/', attachedAt: '2026-01-01T00:00:00.000Z' },
+  hall: { handle: 'hall', kind: 'application', webId: 'https://hall.pod.example/profile/card#me', podHome: 'https://hall.pod.example/forum/', inboxUrl: 'https://hall.pod.example/forum/ap/inbox/' },
   // Kept, with no copy yet: Bo's pod is where the gateway's own sign-in is refused.
   bo: { handle: 'bo', webId: 'https://bo.pod.example/profile/card#me', podHome: 'https://bo.pod.example/fedipod/', openedAt: new Date().toISOString(), keeper: { webId: 'https://keeper.example/#me' } },
   // Kept, with no copy yet, on a pod that refuses the gateway.
@@ -99,6 +103,13 @@ try {
   check(/last few minutes/.test(notKept.json.error) && /Keep my account running while I'm away/.test(notKept.json.error),
     'an opened account not kept running is told both: wait if it is new, else turn keeping on');
   check((await call('GET', '/api/authorize?address=nobody')).status === 404, 'an address with no account here is still told there is none');
+  const old1 = await call('GET', '/api/authorize?address=old1');
+  const old2 = await call('GET', '/api/authorize?address=old2');
+  check(old1.status === 409 && /open it in FediPod first/.test(old1.json.error) && !/moments ago/.test(old1.json.error)
+    && /open it in FediPod first/.test(old2.json.error),
+    'an account never opened in a browser, and not new, is told to open it in FediPod first, not that it was just set up');
+  const hall = await call('GET', '/api/authorize?address=hall');
+  check(hall.status === 409 && /run by a server/.test(hall.json.error), 'a forum is told apps cannot sign in to it here');
 
   // ---- the proved sign-in ----
   const verifier = crypto.randomBytes(32).toString('base64url');

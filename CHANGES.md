@@ -1,5 +1,14 @@
 # Changes
 
+## 2026-09-26 (the right answer for accounts an app cannot sign in to — version 1.40.8)
+
+**An app signing in to an account it cannot use is told why.** 1.40.7 told
+every account not yet opened in FediPod that it had been set up moments ago,
+which was false for older accounts and for the forum. Now only an account set
+up in the last few minutes hears that. An older one is told to open it in
+FediPod first, and the forum and its categories are told they are run by a
+server, so apps cannot sign in to them here.
+
 ## 2026-09-26 (a new account can be used from an app as soon as FediPod has it ready — version 1.40.7)
 
 **Someone who has just signed up can use a Mastodon app within a minute.** When

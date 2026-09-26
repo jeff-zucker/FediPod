@@ -279,6 +279,7 @@ try {
     `and the command it hands over is one an DeviceAgent has (${(attBody.command || '').slice(0, 24)}…)`);
   check(attached['wren@wren.example']?.inboxOnly === true && attached['wren@wren.example'].actorUrl === 'https://wren.example/ap/actor',
     'the row it writes is keyed by full address and keeps the identity on their own pod');
+  check(Date.now() - Date.parse(attached['wren@wren.example'].attachedAt) < 60_000, 'and notes when the account was set up');
 
   // The same account on the same pod may correct where its tree lives: a
   // row made by an older sign-up named the pod root, and every delivery to
