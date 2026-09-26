@@ -16,6 +16,7 @@ runtime-agnostic Node:
 | `functions/inbox.mjs` | One person's door: verify a delivery, forward it to their pod. | `lib/gateway/gateway-core.mjs` |
 | `functions/front.mjs` | A door for many people: WebFinger, each public face, per-person delivery routing, and the signup and attach flow. | `lib/gateway/front-core.mjs` |
 | `functions/account.mjs` | The routes that act for an account: the owner's browser reaching the account's working copy (`/api/state/…`), and Mastodon apps signing in and working here (`/oauth/…`, `/api/v1/…`, `/api/v2/…`, `/api/authorize`). `front.mjs` leaves these paths to it. | `lib/gateway/state-api.mjs`, `lib/gateway/masto-gateway.mjs` |
+| `functions/push-background.mjs` | One kept account's held mail read into its copy, and each notification that makes pushed to the phones and browsers its owner signed up. Started by the door when it holds a delivery that becomes a notification. | `lib/gateway/masto-gateway.mjs` |
 | `functions/flush-mail.mjs` | Every fifteen minutes: mail held for browser accounts whose apps are closed goes to their pods in batches, and a kept account with work due (a follow, a delivery to try again, a scheduled post) is handed to the keeper. | `lib/gateway/held-mail.mjs` |
 | `functions/keeper-background.mjs` | One kept account's run: its mail delivered and read, its waiting deliveries sent, its scheduled posts published. Started only by `flush-mail`. | `lib/gateway/keeper.mjs` |
 
@@ -47,7 +48,8 @@ store named `directory`, and take precedence over the rows in
 store, when each app last said it was open in `present`, and what each kept
 account has waiting in `keeper`. A kept account's working copy is in `state`,
 and the apps signed in here, with their codes and tokens (as hashes), in
-`masto`; both are read with strong consistency. The round writes each copy to
+`masto`, with the one push key pair the gateway makes for all its accounts
+the first time an app asks; both are read with strong consistency. The round writes each copy to
 its pod. The page an app sends its person to is `/app-signin/`.
 
 To keep browser accounts running while their apps are closed, the front needs

@@ -199,6 +199,12 @@ An app checks for new posts every minute or so while it is open; there are no
 live updates. Accounts are made on the fedipod.net front page, with a pod, not
 from an app.
 
+**Notifications on your phone.** An app that offers notifications can sign up
+for them here. A mention, a reply, a direct message, a follow, or a like, boost
+or reaction to your own post then reaches your phone as it arrives, while
+FediPod and the app are closed. While FediPod is open in a browser, it reads
+your mail itself, and those arrivals are not pushed.
+
 ## Accounts that go quiet
 
 Every delivery the gateway accepts ends up in your pod inbox, and your agent

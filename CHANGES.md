@@ -22,6 +22,10 @@ sends you to, and the app reads, posts, boosts, likes and follows as you. No
 password is typed on fedipod.net. It works while fedipod.net keeps your
 account running.
 
+**Notifications reach your phone.** An app that offers notifications can
+sign up for them: a mention, reply, direct message, follow, like, boost or
+reaction reaches your phone as it arrives, with FediPod and the app closed.
+
 **Your account's working data is kept at fedipod.net** while it keeps your
 account running, and written to your pod every fifteen minutes. FediPod in
 your browser, the gateway and your apps all work from that one copy, so they
