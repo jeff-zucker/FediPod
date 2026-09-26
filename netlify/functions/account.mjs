@@ -3,7 +3,7 @@
 // and Mastodon apps signed in here (masto-gateway.mjs).
 // Kept apart from front.mjs, which answers every delivery, so the pieces that
 // act for an account are loaded only when an account is being worked on.
-import { gatewayCtx, keeperCredential, ACCOUNT_PATHS } from './front.mjs';
+import { gatewayCtx, keeperCredential } from './front.mjs';
 import { verifyPodToken } from '../../lib/gateway/front-core.mjs';
 import { routeStateApi } from '../../lib/gateway/state-api.mjs';
 import { routeMastoGateway } from '../../lib/gateway/masto-gateway.mjs';
@@ -27,4 +27,8 @@ export default async function handler(request, context) {
   return new Response(out.body ?? null, { status: out.status, headers: out.headers });
 }
 
-export const config = { path: ACCOUNT_PATHS };
+// Written out: Netlify reads this without running the code. The same list
+// front.mjs leaves out.
+export const config = {
+  path: ['/api/state/*', '/api/v1/*', '/api/v2/*', '/oauth/*', '/api/authorize', '/.well-known/oauth-authorization-server'],
+};

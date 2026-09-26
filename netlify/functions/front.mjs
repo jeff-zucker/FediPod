@@ -327,7 +327,12 @@ export async function keeperCredential() {
 }
 
 // The account routes are the account function's (account.mjs): it carries
-// the pieces that act for an account, which a delivery never needs.
-export const ACCOUNT_PATHS = ['/api/state/*', '/api/v1/*', '/api/v2/*', '/oauth/*', '/api/authorize',
-  '/.well-known/oauth-authorization-server'];
-export const config = { path: '/*', excludedPath: ACCOUNT_PATHS, preferStatic: true };
+// the pieces that act for an account, which a delivery never needs. Written
+// out, here and there: Netlify reads a function's config from its source
+// without running it, so a name standing for the list is read as no list at
+// all (2026-09-26). The two lists must stay the same.
+export const config = {
+  path: '/*',
+  excludedPath: ['/api/state/*', '/api/v1/*', '/api/v2/*', '/oauth/*', '/api/authorize', '/.well-known/oauth-authorization-server'],
+  preferStatic: true,
+};

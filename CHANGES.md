@@ -1,5 +1,12 @@
 # Changes
 
+## 2026-09-26 (Mastodon apps and the account copy reach fedipod.net — version 1.40.2)
+
+**Mastodon apps can reach fedipod.net, and FediPod in the browser can reach
+its account copy.** In 1.40.1 those addresses were still answered by the part
+of fedipod.net that does not handle them, so apps got "not found" and the
+browser went on working from the pod.
+
 ## 2026-09-26 (fedipod.net answers again — version 1.40.1)
 
 **fedipod.net was down after the 1.40.0 deploy**: every address, the forum
