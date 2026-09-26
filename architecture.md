@@ -16,6 +16,14 @@ and forwards the rest to the pod inbox with a receipt. It holds no key. The
 browser version always has one; the DeviceAgent may use one. Any
 lightweight host will do, Netlify included.
 
+A gateway can also keep a browser account running. It then acts as that
+account's agent whenever FediPod is closed, under a pod identity of its own
+that the owner's rules name, reading the signing key from the pod when it
+needs it. The account's state documents live in a working copy at the
+gateway, which FediPod in the browser, the gateway and any Mastodon app all
+work from, and which the gateway writes to the pod every fifteen minutes. See
+[the gateway](gateway.md).
+
 [FediPod Server](packages/fedipod-server/README.md) puts the agent inside a
 Community Solid Server, so anyone with a pod on that server can opt in to a
 Fediverse account fed by the server itself.
