@@ -1,6 +1,6 @@
 # Changes
 
-## 2026-09-25 (your account keeps running, and any Mastodon app can use it — not yet released)
+## 2026-09-26 (your account keeps running, and any Mastodon app can use it — version 1.40.0)
 
 **Mail sent to a browser account waits at fedipod.net while FediPod is
 closed**, and reaches your pod in batches of up to a hundred when you open it,
@@ -43,6 +43,10 @@ holding it is told, as a DeviceAgent's always did.
 **fedipod.net answers other servers' repeated requests for your account's
 public documents from its own cache for an hour**, and forgets them whenever
 your account sends anything out.
+
+**The forum package (`fedipod-bb`) can sign readers in to their pods when it
+is installed from npm.** It brings its own sign-in, using `fediverse-session`,
+so another project can build a forum page on it.
 
 ## 2026-09-25 (your pod is asked far less while FediPod is open — version 1.39.1)
 
