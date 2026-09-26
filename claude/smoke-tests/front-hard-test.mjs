@@ -131,6 +131,9 @@ const heldCtx = {
   keeperWebId: 'https://keeper.example/profile/card#me',
   woke: [],
   noteNext: async (h, at, opt) => { heldCtx.woke.push({ h, at, earliest: !!opt?.earliest }); },
+  pushes: [],
+  pushWanted: async () => true,
+  startPush: async (h) => { heldCtx.pushes.push(h); },
 };
 const front = http.createServer(async (req, res) => {
   const body = await new Promise((resolve) => {
@@ -886,6 +889,13 @@ try {
     check(heldCtx.woke.length === 1 && heldCtx.woke[0].h === 'wagtail' && heldCtx.woke[0].earliest
       && Math.abs(Date.parse(heldCtx.woke[0].at) - Date.now()) < 5000,
       `a follow held for a kept account makes its keeper due now (${JSON.stringify(heldCtx.woke)})`);
+    check(heldCtx.pushes.length === 2 && heldCtx.pushes.every((h) => h === 'wagtail'),
+      `a post addressed to a kept account, and a follow, each start a push run when held (${JSON.stringify(heldCtx.pushes)})`);
+    heldCtx.pushes.length = 0;
+    await toWagtail({ id: 'https://m.example/a/wag-plain', type: 'Create', to: ['https://www.w3.org/ns/activitystreams#Public'],
+      cc: ['https://m.example/u/friend/followers'], object: { id: 'https://m.example/n/wag-plain', type: 'Note', content: 'just posting',
+        to: ['https://www.w3.org/ns/activitystreams#Public'] } });
+    check(!heldCtx.pushes.length, 'a post from someone it follows, not naming it, starts none');
     await post('/api/keeper', { handle: 'wagtail', on: false });
     heldCtx.woke.length = 0;
     await toWagtail({ id: 'https://m.example/a/wag3', type: 'Follow', object: wagActor });

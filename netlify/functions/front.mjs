@@ -254,6 +254,18 @@ export function gatewayCtx() {
     // Mastodon apps signed in here: their registrations, codes and tokens
     // (lib/gateway/masto-gateway.mjs).
     mastoKv: blobsKv('masto'),
+    // Phone notifications (lib/gateway/masto-gateway.mjs): whether an account
+    // has any, and a run that reads its held mail in and pushes what it makes.
+    pushWanted: async (handle) => Number((await blobsKv('masto').get(`push/${handle}`))?.text || 0) > 0,
+    startPush: async (handle) => {
+      const secret = process.env.FEDIPOD_KEEPER_CLIENT_SECRET;
+      if (!secret || !process.env.URL) return;
+      const body = JSON.stringify({ handle, at: Date.now() });
+      const mac = crypto.createHmac('sha256', `fedipod-push:${secret}`).update(body).digest('hex');
+      await fetch(`${process.env.URL}/.netlify/functions/push-background`, {
+        method: 'POST', headers: { 'content-type': 'application/json', 'x-fedipod-push': mac }, body,
+      });
+    },
     // Signs the tokens the state API hands the owner's browser. Derived from
     // the keeper's own secret, which a deploy that keeps copies already has.
     stateSecret: process.env.FEDIPOD_KEEPER_CLIENT_SECRET
