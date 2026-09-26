@@ -76,10 +76,6 @@ const LIFECYCLE = {
   retire: { path: '/retire', title: 'Retire this identity', go: 'Retire it', danger: true, done: (r) => `retired ${r.deletedAt}: Delete delivered to ${r.inboxes} inbox(es)` },
   move: { path: '/move', title: 'Transfer this account away', go: 'Transfer it', focus: 'move-target',
     done: (r) => `transferred to ${r.target}: Move delivered to ${r.inboxes} inbox(es), unfollowed ${r.unfollowed}/${r.following}` },
-  // What it grants is the owner's to know before it is granted: the gateway
-  // can post as them.
-  'keep-running': { path: '/gateway/keep', title: 'Keep my account running while I\u2019m away', go: 'Keep it running',
-    done: () => 'kept running — follows, mail, what is waiting to go out and scheduled posts are handled while FediPod is closed' },
   // The address at the gateway, not the identity: the pod keeps everything.
   'close-address': { path: '/gateway/close', title: 'Close this address', go: 'Close it', danger: true, focus: 'confirm-handle-close',
     done: (r) => (r.closed ? 'closed — this address is gone for good; everything on your pod is untouched' : 'not closed') },
@@ -127,8 +123,7 @@ $('confirm-form').addEventListener('submit', async (ev) => {
   const body = what === 'retire' ? { confirm: $('confirm-handle').value.trim() }
     : what === 'move' ? { target: $('move-target').value.trim(), confirm: $('confirm-handle-move').value.trim() }
       : what === 'close-address' ? { confirm: $('confirm-handle-close').value.trim() }
-        : what === 'keep-running' ? { on: true }
-          : {};
+        : {};
   if (what === 'move' && !body.target) { say('name the account to transfer to', 'err'); return; }
   $('confirm-go').disabled = true;
   say(`${what} — this talks to the pod and to other servers, so it takes a moment`);

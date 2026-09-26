@@ -8,10 +8,10 @@ or every fifteen minutes otherwise. Your pod is written once a batch instead of
 twice a delivery. While FediPod is open, mail goes straight to your pod as
 before.
 
-**fedipod.net can keep your account running while FediPod is closed.** It
+**fedipod.net keeps your account running while FediPod is closed.** It
 accepts follows, reads your mail, sends what is waiting and publishes your
 scheduled posts. To do that it can read your signing key on your pod, so it can
-post as you. The manage page turns it on and off.
+post as you, as any Fediverse server can. The manage page turns it off.
 
 **Scheduled posts work in the browser version** while the gateway keeps your
 account running.

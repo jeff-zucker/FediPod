@@ -12,9 +12,9 @@ read your private things, or be you anywhere. The worst a broken one can do is
 push items into your inbox, and those still face your agent's own checks.
 With the outbox door below, a gateway can also hand your agent a post marked as
 yours, which your agent then signs and sends. It still holds no key, but what you
-trust it with grows by that much. A browser account can go further and let the
-gateway keep it running while its app is closed (below). That gives the gateway
-your key while it works, so it can post as you.
+trust it with grows by that much. A browser account is also kept running by
+the gateway while its app is closed (below). That gives the gateway your key
+while it works, so it can post as you, as any Fediverse server can.
 
 A FediPod install works without any gateway at all. Deliveries go straight to
 your pod inbox, which holds them whether your agent is running or not.
@@ -166,8 +166,8 @@ open FediPod, or every fifteen minutes otherwise. While FediPod is open, mail
 goes straight to your pod as before. A DeviceAgent's mail always goes straight
 to its pod.
 
-**The gateway can keep your account running.** If you let it, the gateway
-accepts your follows, reads your mail into your timeline and notifications,
+**The gateway keeps your account running.** Unless you turn it off, the
+gateway accepts your follows, reads your mail into your timeline and notifications,
 sends what is waiting to go out, and publishes the posts you scheduled, all
 while FediPod is closed. It works under its own pod identity, which your app
 names in the access rules on your FediPod folder. It reads your signing key
@@ -222,7 +222,7 @@ blocklist public, which is part of the bargain of running behind a door.
 
 Two things go further, both for browser accounts only. Mail that waits at the
 gateway while your app is closed, direct messages included, is stored there
-until it reaches your pod. And a gateway you let keep your account running can
+until it reaches your pod. And a gateway keeping your account running can
 read and write everything in your FediPod folder, your signing key included,
 while it works. Nothing else on your pod is open to it.
 

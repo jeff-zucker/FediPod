@@ -48,11 +48,14 @@ const setPausedAtGateway = async (paused) => {
 };
 $('gateway-pause').addEventListener('click', () => setPausedAtGateway(true));
 $('gateway-resume').addEventListener('click', () => setPausedAtGateway(false));
-// Turning it on goes through the warning first (upkeep.js, keep-running).
-$('gateway-keep-off').addEventListener('click', async () => {
-  const r = await write('/gateway/keep', { on: false }, 'stopped — your account acts only while FediPod is open');
+const setKept = async (on) => {
+  const r = await write('/gateway/keep', { on },
+    on ? 'kept running — follows, mail, what is waiting to go out and scheduled posts are handled while FediPod is closed'
+      : 'stopped — your account acts only while FediPod is open');
   if (r) refreshGateway();
-});
+};
+$('gateway-keep-on').addEventListener('click', () => setKept(true));
+$('gateway-keep-off').addEventListener('click', () => setKept(false));
 const gwShape = () => document.querySelector('input[name=gwShape]:checked')?.value || 'pod';
 function gwPreviews() {
   $('gw-pod-preview').textContent = config?.address || `@${config?.handle || 'you'}@your.pod`;

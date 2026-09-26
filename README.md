@@ -95,9 +95,9 @@ there it takes over; the first drops back to reading.
 - **Scheduled posts.** Nothing runs between now and the time you picked, so
   the composer refuses one rather than dropping it later.
 <!-- CLAUDE 2026-09-25 — the line above is now true only when the gateway is not keeping the account running; replace it with this; delete these markers when done -->
-- **Scheduled posts, unless fedipod.net keeps your account running.** With
-  that on (the manage page), fedipod.net publishes them while FediPod is
-  closed. With it off, nothing runs between now and the time you picked, so
+- **Scheduled posts, if you stop fedipod.net keeping your account running.**
+  It does by default, and publishes them while FediPod is closed. Turned off
+  on the manage page, nothing runs between now and the time you picked, so
   the composer refuses one rather than dropping it later.
 <!-- /CLAUDE -->
 - **Notifications while the client is closed.** There is no push service.
