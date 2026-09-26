@@ -48,6 +48,10 @@ try {
   check(inst.status === 200 && inst.json.domain === 'gw.example' && inst.json.registrations.enabled === false,
     'the instance is the gateway itself, and says accounts are not made through an app');
   check((await call('GET', '/api/v1/timelines/home')).status === 401, 'without a token nothing about an account is answered');
+  const keeper = ctx.keeperWebId; ctx.keeperWebId = null;
+  const noKeeper = await call('POST', '/api/v1/apps', { body: { client_name: 'x', redirect_uris: 'urn:ietf:wg:oauth:2.0:oob' } });
+  check(noKeeper.status === 501 && /cannot sign in/.test(noKeeper.json.error), 'a gateway that cannot keep accounts running says apps cannot sign in there');
+  ctx.keeperWebId = keeper;
 
   // ---- an app registers, as elk.zone does (a form) ----
   const reg = await call('POST', '/api/v1/apps', { body: 'client_name=Elk&redirect_uris=https%3A%2F%2Felk.zone%2Fapi%2Fgw.example%2Foauth&scopes=read+write+follow+push',
