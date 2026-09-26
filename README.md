@@ -111,6 +111,12 @@ there it takes over; the first drops back to reading.
 - **Hosting a group.** Joining one works.
 - **Other clients.** A phone app or desktop client has nothing on the network
   to connect to.
+<!-- CLAUDE 2026-09-25 — "Notifications while the client is closed" and "Other clients" above are no longer true while fedipod.net keeps the account running (the default); suggested replacements below; delete these markers when done -->
+- **Notifications, and other clients, if you stop fedipod.net keeping your
+  account running.** While it does (the default), any Mastodon app, phone or
+  desktop, can use your account with `fedipod.net` as its server, and an app
+  that offers notifications gets them on your phone with everything closed.
+<!-- /CLAUDE -->
 
 For these, see [Other ways to run FediPod](#other-ways-to-run-fedipod).
 
@@ -119,11 +125,19 @@ For these, see [Other ways to run FediPod](#other-ways-to-run-fedipod).
 Everything you publish and everything you read is stored on your pod. Your
 signing key is stored there too, in a container only you can read through
 your pod's login.
+<!-- CLAUDE 2026-09-25 — the sentence above is no longer true while fedipod.net keeps the account running (the default): its own pod identity can read the key too; suggested addition below; delete these markers when done -->
+While fedipod.net keeps your account running, its own pod identity can read
+that container too, so it can act for you while FediPod is closed, and it
+works from a copy of your account's data that it writes back to your pod every
+fifteen minutes. Your key stays on your pod only.
+<!-- /CLAUDE -->
 It all lives in the `fedipod` container you chose at sign-up. Your pod's
 public type index records it, as an ActivityStreams actor, which is how
 FediPod and other Solid apps find your account again.
  fedipod.net holds no key: it verifies incoming mail, drops
 the junk, forwards the rest to your pod, and hands your browser the app.
+<!-- CLAUDE 2026-09-25 — "holds no key" still holds (it keeps no copy), but it reads the key while it keeps the account running, and it keeps a copy of the account's data; see the addition above; delete these markers when done -->
+<!-- /CLAUDE -->
 With an address on your pod, `@handle@yourpod`, you can detach from it at
 any time and attach to a gateway of your own; your address and your data do
 not change.
