@@ -19,6 +19,8 @@ const mastoKv = memoryKv();
 const rows = {
   mei: { handle: 'mei', webId: WEBID, podHome: 'https://mei.pod.example/fedipod/', openedAt: new Date().toISOString(), keeper: { webId: 'https://keeper.example/#me' } },
   kit: { handle: 'kit', webId: 'https://kit.pod.example/profile/card#me', podHome: 'https://kit.pod.example/fedipod/', openedAt: new Date().toISOString() },
+  // Signed up a moment ago: FediPod has not finished its first start.
+  new1: { handle: 'new1', webId: 'https://new1.pod.example/profile/card#me', podHome: 'https://new1.pod.example/fedipod/' },
   // Kept, with no copy yet: Bo's pod is where the gateway's own sign-in is refused.
   bo: { handle: 'bo', webId: 'https://bo.pod.example/profile/card#me', podHome: 'https://bo.pod.example/fedipod/', openedAt: new Date().toISOString(), keeper: { webId: 'https://keeper.example/#me' } },
   // Kept, with no copy yet, on a pod that refuses the gateway.
@@ -89,6 +91,12 @@ try {
     'a WebID with no account here is told so');
   const notKept = await call('GET', '/api/authorize?address=kit');
   check(notKept.status === 409 && /Keep my account running/.test(notKept.json.error), 'an account the gateway does not keep running is told how to allow apps');
+  const fresh = await call('GET', '/api/authorize?address=new1');
+  check(fresh.status === 409 && /finished starting/.test(fresh.json.error) && !/no account/.test(fresh.json.error),
+    'an account signed up a moment ago is told to let FediPod finish starting, not that there is no account');
+  const byNewWebId = await call('GET', `/api/authorize?address=${encodeURIComponent(rows.new1.webId)}`);
+  check(byNewWebId.status === 409 && /finished starting/.test(byNewWebId.json.error), 'and so is its WebID');
+  check((await call('GET', '/api/authorize?address=nobody')).status === 404, 'an address with no account here is still told there is none');
 
   // ---- the proved sign-in ----
   const verifier = crypto.randomBytes(32).toString('base64url');
