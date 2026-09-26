@@ -103,6 +103,10 @@ try {
     'a client id with a path in it is not looked up');
   check((await call('GET', '/api/v1/timelines/home', { headers: { authorization: 'Bearer never-given', 'sec-fetch-site': 'same-origin' } })).status === 503,
     'FediPod\'s own client asking before its worker answers is told to try again, not signed out');
+  const keeperNow = ctx.keeperWebId; ctx.keeperWebId = 'https://keeper-two.example/#me';   // the operator changed the gateway's identity
+  const moving = await call('GET', '/api/v1/timelines/home', { headers: bearer });
+  check(moving.status === 503 && /open FediPod/.test(moving.json.error), 'an account kept under the former identity tells its apps to open FediPod once');
+  ctx.keeperWebId = keeperNow;
   const was = rows.mei.webId; rows.mei.webId = 'https://someone-new.example/profile/card#me';
   check((await call('GET', '/api/v1/timelines/home', { headers: bearer })).status === 401, 'a token is refused once its address belongs to somebody else');
   rows.mei.webId = was;

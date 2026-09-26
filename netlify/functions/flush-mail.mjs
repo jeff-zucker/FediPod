@@ -10,13 +10,13 @@ import { gatewayCtx } from './front.mjs';
 import { signRun } from './keeper-background.mjs';
 import { flushAll, isPresent } from '../../lib/gateway/held-mail.mjs';
 import { closedState } from '../../lib/gateway/quiet.mjs';
-import { listCopies, copyMeta, flushCopy, dropCopy, lockCopy, renewPodLease } from '../../lib/gateway/copy.mjs';
+import { listCopies, copyMeta, flushCopy, dropCopy, lockCopy, renewPodLease, keptBefore, keptNow } from '../../lib/gateway/copy.mjs';
 import { HttpStorage } from '../../lib/core/storage.mjs';
 
 export default async function handler() {
   const ctx = gatewayCtx();
   const secret = process.env.FEDIPOD_KEEPER_CLIENT_SECRET;
-  const kept = (rec) => !!(rec?.keeper && ctx.keeperWebId && secret && process.env.URL);
+  const kept = (rec) => !!(keptNow(ctx, rec) && secret && process.env.URL);
   const start = async (handle) => {
     const body = JSON.stringify({ handle });
     const res = await fetch(`${process.env.URL}/.netlify/functions/keeper-background`, {
@@ -53,6 +53,9 @@ export default async function handler() {
       // An account no longer kept here — closed, moved, gone, or its keeper
       // stopped — has its copy written to the pod and given up.
       const rec = await ctx.lookup(handle);
+      // Kept under the gateway's former identity: this one cannot write it
+      // back; the owner's FediPod hands it over on its next start.
+      if (keptBefore(ctx, rec)) return;
       const leaving = !rec || rec.movedTo || !rec.keeper || (await closedState(ctx, handle, rec)).closed;
       if (leaving) {
         const unlock = await lockCopy(ctx.copyKv, handle, { waitMs: 2000 });

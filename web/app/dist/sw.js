@@ -73090,6 +73090,28 @@ async function leaveCopy(agent2) {
   agent2.log("working from the pod again");
   return { ok: true };
 }
+async function handOverCopy(agent2) {
+  if (!agent2.copy) return { ok: true };
+  await agent2.store.commit();
+  const podFetch = (u, i) => agent2.remote.fetch(u, i);
+  const pod = new HttpStorage(agent2.urls.state, podFetch);
+  const docs = agent2.store.names().filter((n) => !podOnly(n)).map((n) => [n, agent2.store.read(n, null)]).filter(([, v]) => v !== null);
+  for (const [name, value] of docs) {
+    const w = await pod.write(name, JSON.stringify(value, null, 2) + "\n", "application/json");
+    if (!w.ok) return { ok: false, why: `${name} could not be written to the pod (${w.why})` };
+  }
+  const podLease = new Lease({ url: `${agent2.urls.state}lease.json`, fetchImpl: podFetch, log: agent2.log, id: agent2.holderId });
+  if (!await podLease.takeover()) return { ok: false, why: "the pod's lease could not be taken" };
+  const res = await tokenFetch(agent2)(`${agent2.copy.base}forget`, { method: "POST", headers: { "x-fedipod-holder": agent2.holderId } }).catch((e) => ({ status: 0, e }));
+  if (res.status !== 200) return { ok: false, why: `the gateway would not let the copy go (${res.status || res.e?.message})` };
+  agent2.copy = null;
+  agent2.store.attach(pod);
+  await agent2.store.load({ force: true });
+  useLease(agent2, podLease);
+  podLease.startRenewal();
+  agent2.log(`handed the account's copy over: ${docs.length} documents written to the pod`);
+  return { ok: true };
+}
 async function renewCopyToken(agent2, frontOrigin) {
   if (!agent2.copy || agent2.copy.expiresAt - Date.now() > RENEW_BEFORE_MS) return;
   const fresh = await openCopy(agent2, frontOrigin, { handle: agent2.copy.handle });
@@ -73308,7 +73330,11 @@ var BrowserAgent = class _BrowserAgent {
         await this.publisher.publishProfile();
         await this.store.flush?.();
         await completeGatewayMove(this).catch((e) => this.log(`gateway move: ${e.message}`));
-        if (this._keeper && !this._keeper.kept && !this.store.getConfig()?.keeperOff) {
+        if (this.copy && this._keeper?.keptBy && this._keeper.keptBy !== this._keeper.webId) {
+          const moved = await handOverCopy(this).catch((e) => ({ ok: false, why: e.message }));
+          if (!moved.ok) this.log(`handing the copy over to the gateway's new identity: ${moved.why}`);
+        }
+        if (this._keeper && !this._keeper.kept && !this.copy && !this.store.getConfig()?.keeperOff) {
           await this.setKeeper(true).catch((e) => this.log(`keeping the account while away: ${e.message}`));
         }
         if (this._keeper?.kept && !this.copy && !this.store.getConfig()?.keeperOff) {
@@ -73514,7 +73540,7 @@ var BrowserAgent = class _BrowserAgent {
       e.code = "address-closed";
       throw e;
     }
-    this._keeper = standing?.keeper ? { webId: standing.keeper, kept: !!standing.kept } : null;
+    this._keeper = standing?.keeper ? { webId: standing.keeper, kept: !!standing.kept, keptBy: standing.keptBy || null } : null;
     if (this._keeper && !this.store.getConfig()?.keeperOff) this.remote.keepers = [this._keeper.webId];
     this.publisher = new Publisher({
       config: this.store.getConfig(),

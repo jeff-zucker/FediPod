@@ -34,7 +34,7 @@ import { AcctFeed } from '../../lib/connections/acctfeed.mjs';
 import { followActor, unfollowActor, resolveHandle } from '../../lib/core/social.mjs';
 import { podBaseOfWebId } from '../../lib/pod/urls.mjs';
 import { ImportWorker } from '../../lib/connections/import.mjs';
-import { openCopy, copyStorage, copyLeaseOf, moveIntoCopy, leaveCopy, renewCopyToken, standDown, ensureCopyLease } from './copy-mode.mjs';
+import { openCopy, copyStorage, copyLeaseOf, moveIntoCopy, leaveCopy, renewCopyToken, standDown, ensureCopyLease, handOverCopy } from './copy-mode.mjs';
 
 // The authorities this identity answers on: exactly one, this origin. The Node
 // agent gets this from lib/guard.mjs, which is not in the browser bundle and
@@ -272,9 +272,15 @@ export class BrowserAgent {
         // An address that just moved here from another gateway: the new
         // actor is published, so the old gateway and the followers can be told.
         await completeGatewayMove(this).catch((e) => this.log(`gateway move: ${e.message}`));
+        // The gateway has a new identity since this account's copy was made:
+        // the copy goes to the pod from here, and the new one is named below.
+        if (this.copy && this._keeper?.keptBy && this._keeper.keptBy !== this._keeper.webId) {
+          const moved = await handOverCopy(this).catch((e) => ({ ok: false, why: e.message }));
+          if (!moved.ok) this.log(`handing the copy over to the gateway's new identity: ${moved.why}`);
+        }
         // The first start that can: the gateway may act for this account while
         // the app is closed, unless its owner said no (setKeeper).
-        if (this._keeper && !this._keeper.kept && !this.store.getConfig()?.keeperOff) {
+        if (this._keeper && !this._keeper.kept && !this.copy && !this.store.getConfig()?.keeperOff) {
           await this.setKeeper(true).catch((e) => this.log(`keeping the account while away: ${e.message}`));
         }
         // Kept: from here on the account works from its copy at the gateway.
@@ -537,7 +543,7 @@ export class BrowserAgent {
     // The gateway's own pod identity, when it can act for this account while
     // the app is closed (lib/gateway/keeper.mjs). Unless the owner turned that
     // off, every rule this agent writes names it beside the owner.
-    this._keeper = standing?.keeper ? { webId: standing.keeper, kept: !!standing.kept } : null;
+    this._keeper = standing?.keeper ? { webId: standing.keeper, kept: !!standing.kept, keptBy: standing.keptBy || null } : null;
     if (this._keeper && !this.store.getConfig()?.keeperOff) this.remote.keepers = [this._keeper.webId];
 
     this.publisher = new Publisher({

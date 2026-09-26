@@ -6,7 +6,7 @@
 // pod, and the lease that says which agent acts is the copy's. What stays on
 // the pod (the key, connected-account passwords) is still read there. The
 // gateway writes the copy to the pod every fifteen minutes.
-import { HttpStorage, StateApiStorage } from '../../lib/core/storage.mjs';
+import { HttpStorage, StateApiStorage, podOnly } from '../../lib/core/storage.mjs';
 import { Lease } from '../../lib/core/lease.mjs';
 
 // A token this much short of its end is renewed before it is used again.
@@ -178,6 +178,40 @@ export async function leaveCopy(agent) {
   useLease(agent, lease);
   if (await lease.acquire()) lease.startRenewal(); else agent.demote();
   agent.log('working from the pod again');
+  return { ok: true };
+}
+
+/**
+ * The gateway has a new identity, and this account's copy was kept under the
+ * old one, which the new one cannot write back for (the owner's rules name the
+ * old). The owner's own browser does it: every document in the copy written to
+ * the pod as the owner, the pod's lease taken, the gateway told to forget the
+ * copy, and the agent carried back onto the pod. Its rules then name the new
+ * identity as any first start does (setKeeper), and a new copy is made.
+ * Returns { ok } or { ok: false, why }; nothing is forgotten unless everything
+ * reached the pod.
+ */
+export async function handOverCopy(agent) {
+  if (!agent.copy) return { ok: true };
+  await agent.store.commit();
+  const podFetch = (u, i) => agent.remote.fetch(u, i);
+  const pod = new HttpStorage(agent.urls.state, podFetch);
+  const docs = agent.store.names().filter((n) => !podOnly(n)).map((n) => [n, agent.store.read(n, null)]).filter(([, v]) => v !== null);
+  for (const [name, value] of docs) {
+    const w = await pod.write(name, JSON.stringify(value, null, 2) + '\n', 'application/json');
+    if (!w.ok) return { ok: false, why: `${name} could not be written to the pod (${w.why})` };
+  }
+  const podLease = new Lease({ url: `${agent.urls.state}lease.json`, fetchImpl: podFetch, log: agent.log, id: agent.holderId });
+  if (!await podLease.takeover()) return { ok: false, why: 'the pod\'s lease could not be taken' };
+  const res = await tokenFetch(agent)(`${agent.copy.base}forget`, { method: 'POST', headers: { 'x-fedipod-holder': agent.holderId } })
+    .catch((e) => ({ status: 0, e }));
+  if (res.status !== 200) return { ok: false, why: `the gateway would not let the copy go (${res.status || res.e?.message})` };
+  agent.copy = null;
+  agent.store.attach(pod);
+  await agent.store.load({ force: true });
+  useLease(agent, podLease);
+  podLease.startRenewal();
+  agent.log(`handed the account's copy over: ${docs.length} documents written to the pod`);
   return { ok: true };
 }
 

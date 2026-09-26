@@ -102,6 +102,14 @@ try {
   check(await gw.commit() && gw.getStatuses().some((s) => s.noteId === 'n2'), 'the gateway writes, over what the browser wrote');
   check((await browser.list('', { etag: listing1.etag })).notModified === false, 'and a reader sees the copy changed');
 
+  // ---- the gateway's identity changes ----
+  const { keptNow, keptBefore } = await import('../../lib/gateway/copy.mjs');
+  const gwCtx = { keeperWebId: 'https://keeper-one.example/#me' };
+  const row = { keeper: { webId: 'https://keeper-one.example/#me' } };
+  check(keptNow(gwCtx, row) && !keptBefore(gwCtx, row), 'an account kept under the gateway\'s identity is kept now');
+  gwCtx.keeperWebId = 'https://keeper-two.example/#me';
+  check(!keptNow(gwCtx, row) && keptBefore(gwCtx, row), 'and, once the identity changes, kept under a former one until its owner moves it');
+
   // ---- writes dropped after another agent acted are not a save ----
   const sweep = new PodStore({ storage: new CopyStorage(kv, H, { holder: GATEWAY_HOLDER, pod }), log: () => {} });
   await sweep.load();

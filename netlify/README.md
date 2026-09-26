@@ -66,6 +66,13 @@ made for it:
 Without them the manage page does not offer it, and a client cannot schedule
 posts.
 
+To change to a different pod account, set the four variables to the new one's
+values. Each kept account moves over the next time its owner opens FediPod:
+their browser writes the account's working copy to their pod, names the new
+identity in its access rules instead of the old, and a new copy is made. Until
+then the gateway leaves that account alone, and an app using it is told to
+open FediPod once. The old account's login is not needed for the change.
+
 
 The `/roster` page lists every account the front answers for and can remove
 one: the row is dropped and the name stops resolving, with nothing on the
