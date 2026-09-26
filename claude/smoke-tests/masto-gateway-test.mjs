@@ -71,7 +71,7 @@ try {
   const auth = await call('GET', `/oauth/authorize?client_id=${app.client_id}&redirect_uri=${encodeURIComponent(app.redirect_uri)}&response_type=code&scope=read+write`);
   check(auth.status === 302 && auth.headers.location.startsWith('/app-signin/?client_id='), 'the app\'s sign-in goes to the sign-in page, with its request');
   const info = await call('GET', `/api/authorize?client_id=${app.client_id}&redirect_uri=${encodeURIComponent(app.redirect_uri)}`);
-  check(info.json?.name === 'Elk' && info.json.sendsTo === 'elk.zone', 'the page is told the app\'s name and where it will be sent back to');
+  check(info.json?.name === 'Elk' && info.json.sendsTo === 'elk.zone', 'the page is told the app\'s name and where you will be sent back to');
   check((await call('GET', `/api/authorize?client_id=${app.client_id}&redirect_uri=https%3A%2F%2Fevil.example%2F`)).status === 400,
     'and refuses an address the app did not register');
   const who = await call('GET', '/api/authorize?address=%40mei%40gw.example');

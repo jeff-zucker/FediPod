@@ -51,7 +51,7 @@ async function start() {
   const name = document.createElement('strong');
   name.textContent = app.name;
   asking.append(name, ' is asking to use your account');
-  if (app.sendsTo) { const where = document.createElement('code'); where.textContent = app.sendsTo; asking.append(', and will be sent back to ', where); }
+  if (app.sendsTo) { const where = document.createElement('code'); where.textContent = app.sendsTo; asking.append(', and you will be sent back to ', where); }
   asking.append('.');
   asking.hidden = false;
   const address = remembered();
