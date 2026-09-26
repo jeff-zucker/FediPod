@@ -63,7 +63,7 @@ async function start() {
 $('signin-form').addEventListener('submit', async (ev) => {
   ev.preventDefault();
   const address = $('address').value.trim();
-  if (!address) { say('Write your address here first.', true); return; }
+  if (!address) { say('Write your Fediverse address or WebID first.', true); return; }
   const r = await fetch(`/api/authorize?address=${encodeURIComponent(address)}`);
   const who = await r.json().catch(() => ({}));
   if (!r.ok) { say(who.error || `That address was not found (HTTP ${r.status}).`, true); return; }

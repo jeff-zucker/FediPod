@@ -29,9 +29,10 @@
 <h1>Let an app use your account</h1>
 <p id="asking" hidden></p>
 <form id="signin-form" hidden>
-  <label for="address">Your address here</label>
+  <label for="address">Your Fediverse address or WebID</label>
   <input type="text" id="address" name="address" autocomplete="username">
-  <p class="hint">You sign in at your own pod. No password is typed on this page.</p>
+  <p class="hint">For example <code>@you@fedipod.net</code>, or your WebID. You sign in at your own pod; no
+    password is typed on this page.</p>
   <p><button type="submit" id="signin">Sign in with your pod</button></p>
 </form>
 <p id="signin-status" role="status" aria-live="polite"></p>

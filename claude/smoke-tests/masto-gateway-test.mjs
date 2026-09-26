@@ -30,6 +30,7 @@ await copyKv.set('mei/meta', JSON.stringify({ filledAt: Date.now(), stateUrl: 'h
 const ctx = {
   host: 'gw.example', copyKv, mastoKv,
   lookup: async (h) => rows[h] || null,
+  listDirectory: async () => rows,
   keeperWebId: 'https://keeper.example/#me',
   keeperCredential: { webId: 'https://keeper.example/#me', clientId: 'x', secret: 'y', tokenEndpoint: 'https://keeper.example/token', issuerOrigin: 'https://keeper.example' },
   keeperFetch: async () => { throw new Error('the pod is not reached in this test'); },
@@ -67,6 +68,10 @@ try {
     'and refuses an address the app did not register');
   const who = await call('GET', '/api/authorize?address=%40mei%40gw.example');
   check(who.json?.webId === WEBID, 'an address here is the pod it belongs to');
+  const byWebId = await call('GET', `/api/authorize?address=${encodeURIComponent(WEBID)}`);
+  check(byWebId.json?.webId === WEBID, 'a WebID names the account here that belongs to it');
+  check((await call('GET', `/api/authorize?address=${encodeURIComponent('https://nobody.example/#me')}`)).status === 404,
+    'a WebID with no account here is told so');
   const notKept = await call('GET', '/api/authorize?address=kit');
   check(notKept.status === 409 && /Keep my account running/.test(notKept.json.error), 'an account the gateway does not keep running is told how to allow apps');
 
