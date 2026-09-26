@@ -127,8 +127,11 @@ Mastodon-format CSV exports
 ## Client side (talking to the user's app)
 
 - **Mastodon REST API** — the facade clients log into and post through
-  (`lib/client/masto/`), including OAuth for client sign-in. All four builds
-  except the Gateway.
+  (`lib/client/masto/`), including OAuth for client sign-in. All four builds.
+  The Gateway serves it for the browser accounts it keeps running, many
+  accounts at one address: an app registers once and its person signs in at
+  their own pod (`lib/gateway/masto-gateway.mjs`), with the OAuth
+  authorization-server metadata at `/.well-known/oauth-authorization-server`.
   The instance document claims `api_versions.mastodon: 7`: grouped
   notifications (`/api/v2/notifications`, one group per notification), the
   filter blur action, and quote posts (`quoted_status_id` on compose, `quote`
@@ -139,8 +142,9 @@ Mastodon-format CSV exports
   BrowserAgent has no socket to hold and says so in its instance document, so
   a client polls.
 - **Web Push** — notifications to the client (`lib/client/webpush.mjs`), on
-  the DeviceAgent and the Server; not on the BrowserAgent, declared the same
-  way.
+  the DeviceAgent and the Server, and from the Gateway for the browser
+  accounts it keeps running, signed with one VAPID key pair for the whole
+  Gateway. Not from the BrowserAgent itself, declared the same way.
 - **`toot:` namespace** — Mastodon's ActivityStreams extensions where clients
   expect them, e.g. `toot:featured` for pinned posts.
 
