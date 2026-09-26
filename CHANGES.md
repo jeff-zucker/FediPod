@@ -1,5 +1,19 @@
 # Changes
 
+## 2026-09-26 (a new account can be used from an app as soon as FediPod has it ready — version 1.40.7)
+
+**Someone who has just signed up can use a Mastodon app within a minute.** When
+FediPod turned on keeping the account running and asked for its copy at
+fedipod.net at once, fedipod.net could still be going by what it had read a
+moment before, refuse, and leave the account on its pod. Every app sign-in
+then said the account was active on another device.
+
+**Signing in from an app too early says what is happening.** Instead of
+"there is no account", someone who has just signed up is told FediPod is still
+getting the account ready and that this usually takes under a minute. An
+account that is not kept running is told to wait if it is new, or else to turn
+on "Keep my account running while I'm away".
+
 ## 2026-09-26 (after FediPod restarts in your browser, an app can sign in at once — version 1.40.6)
 
 **A Mastodon app can sign in right after FediPod restarts in your browser.**

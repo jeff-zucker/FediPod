@@ -7,7 +7,7 @@
 import crypto from 'node:crypto';
 import { routeMastoGateway } from '../../lib/gateway/masto-gateway.mjs';
 import { memoryKv } from '../../lib/gateway/copy.mjs';
-import { ensureCopy } from '../../lib/gateway/state-api.mjs';
+import { ensureCopy, routeStateApi } from '../../lib/gateway/state-api.mjs';
 
 let fails = 0;
 const check = (ok, msg) => { console.log(`${ok ? 'PASS' : 'FAIL'}  ${msg}`); if (!ok) fails++; };
@@ -161,6 +161,17 @@ try {
   ctx.keeperMark = 'second-credential';           // the operator put a new credential in
   const anaTried = await ensureCopy(ctx, 'ana', rows.ana, () => {}, { owner: true });
   check(podAsks > asked && /HTTP 403/.test(anaTried.why), 'a new credential is tried at once');
+
+  // ---- FediPod asking for the copy the moment it has turned keeping on ----
+  ctx.stateSecret = Buffer.from('state-secret-for-the-test');
+  const open = () => routeStateApi(new Request(`${ORIGIN}/api/state/open`, { method: 'POST', headers: { 'content-type': 'application/json', authorization: 'DPoP good', dpop: 'x' },
+    body: JSON.stringify({ handle: 'mei' }) }), '/api/state/open', ctx, deps);
+  const lookup = ctx.lookup;
+  ctx.lookup = async (h) => (h === 'mei' ? { ...rows.mei, keeper: undefined } : rows[h] || null);   // a row read before keeping was on
+  check((await open()).status === 409, 'a row read too early says the account is not kept');
+  ctx.lookupFresh = async (h) => rows[h] || null;
+  check((await open()).status === 200, 'read fresh, the account just turned on is kept, and FediPod gets its copy');
+  ctx.lookup = lookup; delete ctx.lookupFresh;
 
   const pre = await call('OPTIONS', '/api/v1/statuses');
   check(pre.status === 204 && pre.headers['access-control-allow-origin'] === '*', 'an app in a browser may ask from its own page');

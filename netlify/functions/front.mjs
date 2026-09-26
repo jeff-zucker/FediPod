@@ -103,6 +103,17 @@ async function rowFor(handle) {
   return rec;
 }
 
+// The same row read past this process's minute and past Netlify's lagging
+// copy: for an owner acting straight after changing it, as FediPod does when
+// it turns keeping on and asks for the account's copy in the same breath, and
+// a person signing an app in. Read once, it is what the minute holds too.
+async function freshRowFor(handle) {
+  const rec = (await getStore({ name: 'directory', consistency: 'strong' }).get(handle, { type: 'json' }))
+    || (await seedRows())[handle] || null;
+  rows.set(handle, { rec, at: Date.now() });
+  return rec;
+}
+
 async function blobRows() {
   try {
     const store = getStore('directory');
@@ -182,6 +193,7 @@ export function gatewayCtx() {
     gatewayWebId: process.env.FEDIPOD_GATEWAY_WEBID || null,
     adminWebId: process.env.FEDIPOD_ADMIN_WEBID || null,
     lookup: rowFor,
+    lookupFresh: freshRowFor,
     // Drops the edge's copies carrying these tags. Netlify gives a function the
     // token for its own site's purge API; with none, there is nothing to purge.
     purge: async (tags) => {
