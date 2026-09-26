@@ -245,12 +245,17 @@ export function gatewayCtx() {
     // their app is closed (lib/gateway/keeper.mjs), and what its last run left.
     keeperWebId: process.env.FEDIPOD_KEEPER_WEBID || null,
     noteKept: async (handle, out) => getStore('keeper').setJSON(handle,
-      { at: Date.now(), waiting: out?.waiting || 0, skipped: out?.skipped || null }),
-    keeperDue: async () => {
+      { at: Date.now(), waiting: out?.waiting || 0, skipped: out?.skipped || null, nextAt: out?.nextAt || null }),
+    noteNext: async (handle, nextAt) => {
+      const store = getStore('keeper');
+      await store.setJSON(handle, { ...((await store.get(handle, { type: 'json' })) || {}), nextAt });
+    },
+    keeperDue: async (now = Date.now()) => {
       const store = getStore('keeper');
       const due = [];
       for (const b of (await store.list()).blobs) {
-        if (((await store.get(b.key, { type: 'json' })) || {}).waiting > 0) due.push(b.key);
+        const k = (await store.get(b.key, { type: 'json' })) || {};
+        if (k.waiting > 0 || (k.nextAt && Date.parse(k.nextAt) <= now)) due.push(b.key);
       }
       return due;
     },

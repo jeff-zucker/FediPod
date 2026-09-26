@@ -48,6 +48,7 @@ import { AcctFeed } from './lib/connections/acctfeed.mjs';
 import { BskyFeed } from './lib/connections/bskyfeed.mjs';
 import { BskyGroup } from './lib/connections/bskygroup.mjs';
 import { Lease } from './lib/core/lease.mjs';
+import { publishDue } from './lib/core/scheduled.mjs';
 import { startAdmin } from './lib/device/admin/index.mjs';
 import { exposureProblem, hostLabel } from './lib/shared/guard.mjs';
 import { pendingSteps } from './lib/device/migrate.mjs';
@@ -575,24 +576,11 @@ export class Agent {
     this.tagfeed.start();
     this.startBsky();
     this.startAccts();
-    // Scheduled posts: a 30s sweep publishes what has come due. The entry is
-    // removed before publishing, so a slow publish cannot double-post; a
-    // failed one is dropped with its reason in the log.
+    // Scheduled posts and polls whose time is up: a 30s sweep does what has
+    // come due (lib/core/scheduled.mjs).
     clearInterval(this.schedTimer);
     this.schedTimer = setInterval(() => {
-      const due = this.store.getScheduled().filter(e => Date.parse(e.scheduledAt) <= Date.now());
-      for (const e of due) {
-        this.store.setScheduled(this.store.getScheduled().filter(x => x.id !== e.id));
-        this.publisher.publishNote(e.params.status, {
-          inReplyTo: e.params.inReplyTo, attachments: e.params.attachments,
-          visibility: e.params.visibility, spoilerText: e.params.spoilerText,
-        }).then(() => this.log(`scheduled post published (${e.id})`))
-          .catch(err => this.log(`scheduled post ${e.id} failed: ${err.message} — dropped`));
-      }
-      // A poll whose time is up is shut on the same sweep: it stops taking
-      // answers here, and everyone holding it is told once.
-      this.publisher.closeDuePolls()
-        .catch(err => this.log(`closing polls: ${err.message}`));
+      publishDue(this.store, this.publisher, this.log).catch(err => this.log(`scheduled: ${err.message}`));
     }, 30_000);
     this.schedTimer.unref();
     // A CSV import interrupted by a restart or a handoff picks back up here.

@@ -32849,6 +32849,49 @@ var PodTransport = class {
     if ((opts.ifChanged || this.aclIfChanged) && await this.aclSame(url, doc)) return { status: 304, unchanged: true };
     return this.put(url, doc, "text/turtle");
   }
+  /**
+   * A rule already on the pod, stated again with this transport's owner and
+   * keepers, keeping what it grants the public (#public), agents who may only
+   * append (#gw…) and agents who may only read (#r…). A resource with no rule
+   * of its own inherits one and is left alone; so is a rule with anything this
+   * file did not write, which it cannot restate faithfully.
+   */
+  async restateAcl(targetUrl) {
+    const podTarget = this.toPod ? this.toPod(targetUrl) : targetUrl;
+    const url = await this.aclUrlFor(podTarget);
+    if (!await this.aclWritable(url)) return null;
+    const res = await this.fetch(url, { headers: { accept: "text/turtle" } });
+    if (res.status !== 200) return null;
+    const g = graph();
+    try {
+      parse2(await res.text(), g, url, "text/turtle");
+    } catch {
+      return null;
+    }
+    const modes = (auth) => g.each(auth, ACL("mode"), null).map((m) => m.value.slice(ACL("").value.length));
+    let publicModes = [];
+    const appendAgents = [];
+    const readAgents = [];
+    for (const auth of g.each(null, RDF3("type"), ACL("Authorization"))) {
+      const frag = auth.value.includes("#") ? auth.value.slice(auth.value.lastIndexOf("#") + 1) : "";
+      if (frag === "owner" || /^keeper\d+$/u.test(frag)) continue;
+      if (frag === "public") {
+        publicModes = modes(auth);
+        continue;
+      }
+      const agent = g.any(auth, ACL("agent"), null)?.value;
+      if (/^gw\d+$/u.test(frag) && agent) {
+        appendAgents.push(agent);
+        continue;
+      }
+      if (/^r\d+$/u.test(frag) && agent) {
+        readAgents.push(agent);
+        continue;
+      }
+      return null;
+    }
+    return this.setAcl(targetUrl, publicModes, { appendAgents, readAgents, ifChanged: true });
+  }
   // Whether the pod's rule at `aclUrl` states exactly what `doc` states.
   // Compared as graphs, not bytes: the pod serialises what it holds its own
   // way. Every rule this file writes names its subjects, so triple sets are

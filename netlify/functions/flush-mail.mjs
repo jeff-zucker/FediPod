@@ -2,8 +2,9 @@
 // browser accounts whose apps are closed goes to their pods, in batches
 // (lib/gateway/held-mail.mjs). An account whose owner lets the gateway act for
 // them is handed to its keeper instead (keeper-background.mjs), which delivers
-// the mail and reads it; so is one whose last run left deliveries waiting. An
-// app that opens takes its own mail sooner.
+// the mail and reads it; so is one whose last run left deliveries waiting, or
+// whose scheduled post has fallen due. An app that opens takes its own mail
+// sooner.
 import { gatewayCtx } from './front.mjs';
 import { signRun } from './keeper-background.mjs';
 import { flushAll, isPresent } from '../../lib/gateway/held-mail.mjs';
@@ -30,7 +31,7 @@ export default async function handler() {
       return true;
     },
   });
-  // Deliveries left waiting by the last run, where no mail brought a run this round.
+  // Deliveries left waiting, or a scheduled post due, where no mail brought a run this round.
   for (const handle of await ctx.keeperDue()) {
     if (started.has(handle)) continue;
     const rec = await ctx.lookup(handle);

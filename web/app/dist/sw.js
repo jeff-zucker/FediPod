@@ -34378,6 +34378,30 @@ function takeUp(store, docs, listingEtag) {
   return pending;
 }
 
+// lib/core/scheduled.mjs
+async function publishDue(store, publisher, log2 = () => {
+}, now = Date.now()) {
+  const due = store.getScheduled().filter((e) => Date.parse(e.scheduledAt) <= now);
+  for (const e of due) {
+    store.setScheduled(store.getScheduled().filter((x) => x.id !== e.id));
+    await publisher.publishNote(e.params.status, {
+      inReplyTo: e.params.inReplyTo,
+      attachments: e.params.attachments,
+      visibility: e.params.visibility,
+      spoilerText: e.params.spoilerText
+    }).then(() => log2(`scheduled post published (${e.id})`)).catch((err) => log2(`scheduled post ${e.id} failed: ${err.message} \u2014 dropped`));
+  }
+  await publisher.closeDuePolls(now).catch((err) => log2(`closing polls: ${err.message}`));
+  return due.length;
+}
+function nextDue(store) {
+  const at = [
+    ...store.getScheduled().map((e) => Date.parse(e.scheduledAt)),
+    ...(store.getStatuses?.() || []).filter((s) => s.kind === "post" && s.poll && !s.poll.closed && s.poll.expiresAt).map((s) => Date.parse(s.poll.expiresAt))
+  ].filter(Number.isFinite);
+  return at.length ? new Date(Math.min(...at)).toISOString() : null;
+}
+
 // web/app/agent.mjs
 init_wire();
 
@@ -45207,6 +45231,49 @@ var PodTransport = class {
     if ((opts.ifChanged || this.aclIfChanged) && await this.aclSame(url, doc)) return { status: 304, unchanged: true };
     return this.put(url, doc, "text/turtle");
   }
+  /**
+   * A rule already on the pod, stated again with this transport's owner and
+   * keepers, keeping what it grants the public (#public), agents who may only
+   * append (#gw…) and agents who may only read (#r…). A resource with no rule
+   * of its own inherits one and is left alone; so is a rule with anything this
+   * file did not write, which it cannot restate faithfully.
+   */
+  async restateAcl(targetUrl) {
+    const podTarget = this.toPod ? this.toPod(targetUrl) : targetUrl;
+    const url = await this.aclUrlFor(podTarget);
+    if (!await this.aclWritable(url)) return null;
+    const res = await this.fetch(url, { headers: { accept: "text/turtle" } });
+    if (res.status !== 200) return null;
+    const g = graph();
+    try {
+      parse2(await res.text(), g, url, "text/turtle");
+    } catch {
+      return null;
+    }
+    const modes = (auth) => g.each(auth, ACL("mode"), null).map((m) => m.value.slice(ACL("").value.length));
+    let publicModes = [];
+    const appendAgents = [];
+    const readAgents = [];
+    for (const auth of g.each(null, RDF3("type"), ACL("Authorization"))) {
+      const frag = auth.value.includes("#") ? auth.value.slice(auth.value.lastIndexOf("#") + 1) : "";
+      if (frag === "owner" || /^keeper\d+$/u.test(frag)) continue;
+      if (frag === "public") {
+        publicModes = modes(auth);
+        continue;
+      }
+      const agent2 = g.any(auth, ACL("agent"), null)?.value;
+      if (/^gw\d+$/u.test(frag) && agent2) {
+        appendAgents.push(agent2);
+        continue;
+      }
+      if (/^r\d+$/u.test(frag) && agent2) {
+        readAgents.push(agent2);
+        continue;
+      }
+      return null;
+    }
+    return this.setAcl(targetUrl, publicModes, { appendAgents, readAgents, ifChanged: true });
+  }
   // Whether the pod's rule at `aclUrl` states exactly what `doc` states.
   // Compared as graphs, not bytes: the pod serialises what it holds its own
   // way. Every rule this file writes names its subjects, so triple sets are
@@ -45558,6 +45625,9 @@ async function provisionPrivate(pod, urls) {
 async function restateRules(pod, urls) {
   for (const url of [urls.home, urls.state, urls.home + "ap/private/"]) await pod.setAcl(url, [], { ifChanged: true });
   for (const url of [urls.notes, urls.media]) await pod.setAcl(url, ["Read"], { ifChanged: true });
+  for (const child of await pod.listContainer(urls.home + "ap/")) {
+    if (!child.url.endsWith("/")) await pod.restateAcl(child.url);
+  }
 }
 async function repairPrivateAcls(pod, trees, { isPublic } = {}) {
   const findings = [];
@@ -69218,6 +69288,7 @@ async function handle5(api, ctx) {
       };
       sched.push(entry);
       api.store.setScheduled(sched);
+      api.agent.onScheduled?.();
       return send(200, api.scheduledJson(entry));
     }
     let note;
@@ -72870,6 +72941,7 @@ var BrowserAgent = class _BrowserAgent {
       const said2 = await this.tellGateway("keeper", { handle: this.doorKey, on: false });
       if (said2?.status !== 200) return said2 || { status: 502 };
       this._keeper.kept = false;
+      if (this.masto) this.masto.scheduling = false;
     }
     this.remote.keepers = on ? [webId] : [];
     await restateRules(this.remote, this.urls);
@@ -72879,9 +72951,15 @@ var BrowserAgent = class _BrowserAgent {
     const said = await this.tellGateway("keeper", { handle: this.doorKey, on: true });
     if (said?.status === 200) {
       this._keeper.kept = true;
+      if (this.masto) this.masto.scheduling = true;
       this.log("the gateway keeps this account running while the app is closed");
     }
     return said || { status: 502 };
+  }
+  // A post just scheduled: the gateway hears when the next one falls due.
+  onScheduled() {
+    this.hereAtGateway().catch(() => {
+    });
   }
   // "The app is open", every five minutes while it is. While it is, the
   // gateway sends mail straight to the pod; while it is not, it holds the mail
@@ -72889,7 +72967,7 @@ var BrowserAgent = class _BrowserAgent {
   // (lib/gateway/held-mail.mjs).
   static HERE_EVERY_MS = 5 * 6e4;
   async hereAtGateway() {
-    const said = await this.tellGateway("here", { handle: this.doorKey });
+    const said = await this.tellGateway("here", { handle: this.doorKey, nextAt: this.store ? nextDue(this.store) : null });
     if (said?.status === 200) saveMeta(this.webId, { hereAt: Date.now() }).catch(() => {
     });
     return said;
@@ -72957,6 +73035,12 @@ var BrowserAgent = class _BrowserAgent {
           });
         });
       }, _BrowserAgent.HERE_EVERY_MS);
+      await publishDue(this.store, this.publisher, this.log).catch((e) => this.log(`scheduled posts: ${e.message}`));
+      clearInterval(this._schedTimer);
+      this._schedTimer = setInterval(() => {
+        publishDue(this.store, this.publisher, this.log).catch(() => {
+        });
+      }, 3e4);
       const drainNow = !warm || now - (warm.drainedAt || 0) >= DRAIN_EVERY_MS || here?.flushed > 0;
       await this.intake.start({ drainNow, subscribe: !warm });
       this.startBsky();
@@ -72981,6 +73065,8 @@ var BrowserAgent = class _BrowserAgent {
     this._openTimer = null;
     clearInterval(this._hereTimer);
     this._hereTimer = null;
+    clearInterval(this._schedTimer);
+    this._schedTimer = null;
     this.intake?.stop?.();
     this.deliverer?.stop?.();
     this.importer?.stop?.();
@@ -73180,7 +73266,7 @@ var BrowserAgent = class _BrowserAgent {
       scheme: "https",
       streaming: false,
       webPush: false,
-      scheduling: false,
+      scheduling: !!(this._keeper?.kept && !this.store.getConfig()?.keeperOff),
       allowed: originAuthorities(self.location.host)
     });
     this.admin = new AdminFacade({ agent: this, log: this.log });

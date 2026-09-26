@@ -7,6 +7,7 @@
 // publisher, intake, the Mastodon facade — is lib/, unchanged.
 import { kvGet, kvPut } from './idb-kv.mjs';
 import { warmMeta, saveMeta, loadDocs, keepInStep, takeUp, isWarm, DRAIN_EVERY_MS } from './warm-start.mjs';
+import { publishDue, nextDue } from '../../lib/core/scheduled.mjs';
 import { apUrls, DEFAULT_ROOT } from '../../lib/core/wire.mjs';
 import { findAccount } from '../../lib/core/place.mjs';
 import * as containers from '../../lib/pod/containers.mjs';
@@ -174,6 +175,7 @@ export class BrowserAgent {
       const said = await this.tellGateway('keeper', { handle: this.doorKey, on: false });
       if (said?.status !== 200) return said || { status: 502 };
       this._keeper.kept = false;
+      if (this.masto) this.masto.scheduling = false;
     }
     this.remote.keepers = on ? [webId] : [];
     await containers.restateRules(this.remote, this.urls);
@@ -183,10 +185,14 @@ export class BrowserAgent {
     const said = await this.tellGateway('keeper', { handle: this.doorKey, on: true });
     if (said?.status === 200) {
       this._keeper.kept = true;
+      if (this.masto) this.masto.scheduling = true;
       this.log('the gateway keeps this account running while the app is closed');
     }
     return said || { status: 502 };
   }
+
+  // A post just scheduled: the gateway hears when the next one falls due.
+  onScheduled() { this.hereAtGateway().catch(() => {}); }
 
   // "The app is open", every five minutes while it is. While it is, the
   // gateway sends mail straight to the pod; while it is not, it holds the mail
@@ -194,7 +200,7 @@ export class BrowserAgent {
   // (lib/gateway/held-mail.mjs).
   static HERE_EVERY_MS = 5 * 60_000;
   async hereAtGateway() {
-    const said = await this.tellGateway('here', { handle: this.doorKey });
+    const said = await this.tellGateway('here', { handle: this.doorKey, nextAt: this.store ? nextDue(this.store) : null });
     if (said?.status === 200) saveMeta(this.webId, { hereAt: Date.now() }).catch(() => {});
     return said;
   }
@@ -270,6 +276,10 @@ export class BrowserAgent {
       this._hereTimer = setInterval(() => {
         this.hereAtGateway().then((h) => { if (h?.flushed) this.intake?.drain().catch(() => {}); });
       }, BrowserAgent.HERE_EVERY_MS);
+      // Scheduled posts and polls whose time is up (lib/core/scheduled.mjs).
+      await publishDue(this.store, this.publisher, this.log).catch((e) => this.log(`scheduled posts: ${e.message}`));
+      clearInterval(this._schedTimer);
+      this._schedTimer = setInterval(() => { publishDue(this.store, this.publisher, this.log).catch(() => {}); }, 30_000);
       const drainNow = !warm || now - (warm.drainedAt || 0) >= DRAIN_EVERY_MS || here?.flushed > 0;
       await this.intake.start({ drainNow, subscribe: !warm });
       this.startBsky();
@@ -296,6 +306,7 @@ export class BrowserAgent {
     this.lease.stopRenewal();
     clearInterval(this._openTimer); this._openTimer = null;
     clearInterval(this._hereTimer); this._hereTimer = null;
+    clearInterval(this._schedTimer); this._schedTimer = null;
     this.intake?.stop?.();
     // The delivery queue as well. Its timer starts in the Deliverer's
     // constructor and nothing here ever switched it off, so a demoted device
@@ -554,15 +565,16 @@ export class BrowserAgent {
     // policy (lib/mastoapi.mjs:315). So any page could have a freshly minted
     // 90-day bearer delivered to an address of its own. One origin, ours, is
     // the whole of the policy here.
-    // Three capabilities this build does not have, declared rather than
+    // Capabilities this build has only in part, declared rather than
     // pretended: no streaming socket (a worker is fetch-only), no web push
-    // (shims/web-push.mjs is a no-op), and no scheduling (nothing here runs
-    // between now and the scheduled time to publish). Each is omitted from the
-    // instance document, so the client hides the control instead of offering
-    // one that quietly does nothing.
+    // (shims/web-push.mjs is a no-op), and scheduling only while the gateway
+    // keeps the account running, because then something is running when the
+    // time comes (setKeeper). Each is omitted from the instance document when
+    // off, so the client hides the control instead of offering one that
+    // quietly does nothing.
     this.masto = new MastoApi({
       agent: this, log: this.log, scheme: 'https',
-      streaming: false, webPush: false, scheduling: false,
+      streaming: false, webPush: false, scheduling: !!(this._keeper?.kept && !this.store.getConfig()?.keeperOff),
       allowed: originAuthorities(self.location.host),
     });
 

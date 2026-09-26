@@ -13659,6 +13659,37 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
       'while the count it closed on stays on the row');
   }
 
+  // --- what falls due: scheduled posts and polls, one sweep for every build ---
+  {
+    const { publishDue, nextDue } = await import(path.join(root, 'lib/core/scheduled.mjs'));
+    const now = Date.now();
+    const at = (ms) => new Date(now + ms).toISOString();
+    let sched = [
+      { id: 'due', scheduledAt: at(-60_000), params: { status: 'now', visibility: 'public' } },
+      { id: 'bad', scheduledAt: at(-30_000), params: { status: 'fails', visibility: 'public' } },
+      { id: 'later', scheduledAt: at(3_600_000), params: { status: 'later' } },
+    ];
+    const statuses = [{ kind: 'post', noteId: 'q', poll: { expiresAt: at(1_800_000) } }];
+    const store = { getScheduled: () => sched, setScheduled: (v) => { sched = v; }, getStatuses: () => statuses };
+    const published = [];
+    const listAtPublish = [];
+    let pollSweeps = 0;
+    const publisher = {
+      publishNote: async (text) => { listAtPublish.push(sched.map((e) => e.id)); if (text === 'fails') throw new Error('refused'); published.push(text); },
+      closeDuePolls: async () => { pollSweeps++; return 0; },
+    };
+    const logged = [];
+    const n = await publishDue(store, publisher, (m) => logged.push(m), now);
+    check(n === 2 && published.join() === 'now', 'the sweep publishes what has fallen due and leaves the rest');
+    check(!listAtPublish[0].includes('due'), 'a post is off the list before it is published, so a slow publish cannot post twice');
+    check(sched.map((e) => e.id).join() === 'later' && logged.some((m) => /bad failed: refused — dropped/.test(m)),
+      'one that fails is dropped, with its reason in the log');
+    check(pollSweeps === 1, 'and the same sweep shuts polls whose time is up');
+    check(nextDue(store) === at(1_800_000), 'the next thing to fall due counts a poll ending as well as a scheduled post');
+    sched = []; statuses[0].poll.closed = at(0);
+    check(nextDue(store) === null, 'and with nothing waiting there is no next time');
+  }
+
   // --- a vote is not a reply ---
   {
     const store = mkStore35();
