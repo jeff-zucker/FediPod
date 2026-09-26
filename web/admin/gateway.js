@@ -50,7 +50,7 @@ $('gateway-pause').addEventListener('click', () => setPausedAtGateway(true));
 $('gateway-resume').addEventListener('click', () => setPausedAtGateway(false));
 const setKept = async (on) => {
   const r = await write('/gateway/keep', { on },
-    on ? 'kept running — follows, mail, what is waiting to go out and scheduled posts are handled while FediPod is closed'
+    on ? 'kept running — follows, deliveries to try again and scheduled posts are handled while FediPod is closed'
       : 'stopped — your account acts only while FediPod is open');
   if (r) refreshGateway();
 };

@@ -34397,7 +34397,8 @@ async function publishDue(store, publisher, log2 = () => {
 function nextDue(store) {
   const at = [
     ...store.getScheduled().map((e) => Date.parse(e.scheduledAt)),
-    ...(store.getStatuses?.() || []).filter((s) => s.kind === "post" && s.poll && !s.poll.closed && s.poll.expiresAt).map((s) => Date.parse(s.poll.expiresAt))
+    ...(store.getStatuses?.() || []).filter((s) => s.kind === "post" && s.poll && !s.poll.closed && s.poll.expiresAt).map((s) => Date.parse(s.poll.expiresAt)),
+    ...(store.getQueue?.() || []).map((q) => Number(q.nextAt))
   ].filter(Number.isFinite);
   return at.length ? new Date(Math.min(...at)).toISOString() : null;
 }

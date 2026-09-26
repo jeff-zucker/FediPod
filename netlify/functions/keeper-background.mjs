@@ -21,8 +21,10 @@ export default async function handler(request) {
   const ctx = gatewayCtx();
   ctx.keeperCredential = await keeperCredential();
   const rec = await ctx.lookup(handle);
-  const out = await keepOnce(ctx, handle, rec).catch((e) => ({ skipped: `failed: ${e?.message || e}` }));
+  const started = Date.now();
+  // A run that failed tries again in an hour, not every round.
+  const out = await keepOnce(ctx, handle, rec).catch((e) => ({ skipped: `failed: ${e?.message || e}`, retry: 'later' }));
   if (out.skipped) console.log(`keeper @${handle}: ${out.skipped}`);
-  await ctx.noteKept(handle, out);
+  await ctx.noteKept(handle, out, started);
   return new Response(null, { status: 204 });
 }

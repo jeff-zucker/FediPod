@@ -1,10 +1,10 @@
 // netlify/functions/flush-mail.mjs — every fifteen minutes, the mail held for
 // browser accounts whose apps are closed goes to their pods, in batches
-// (lib/gateway/held-mail.mjs). An account whose owner lets the gateway act for
-// them is handed to its keeper instead (keeper-background.mjs), which delivers
-// the mail and reads it; so is one whose last run left deliveries waiting, or
-// whose scheduled post has fallen due. An app that opens takes its own mail
-// sooner.
+// (lib/gateway/held-mail.mjs). A kept account whose keeper has work due (a
+// follow held at the door, a failed delivery's next try, a scheduled post, a
+// poll's end) is handed to its keeper instead (keeper-background.mjs), which
+// delivers the mail and reads it. Mail alone does not start a run. An app that
+// opens takes its own mail sooner.
 import { gatewayCtx } from './front.mjs';
 import { signRun } from './keeper-background.mjs';
 import { flushAll, isPresent } from '../../lib/gateway/held-mail.mjs';
@@ -21,18 +21,19 @@ export default async function handler() {
     }).catch((e) => ({ status: 0, error: e }));
     console.log(`keeper @${handle}: run started (${res.status})`);
   };
+  const due = new Set(await ctx.keeperDue());
   const started = new Set();
   await flushAll(ctx, {
     isGone: async (handle, rec) => (await closedState(ctx, handle, rec)).closed,
     keep: async (handle, rec) => {
-      if (!kept(rec) || await isPresent(ctx, handle)) return false;
+      if (!due.has(handle) || !kept(rec) || await isPresent(ctx, handle)) return false;
       await start(handle);
       started.add(handle);
       return true;
     },
   });
-  // Deliveries left waiting, or a scheduled post due, where no mail brought a run this round.
-  for (const handle of await ctx.keeperDue()) {
+  // Work due where no mail was held this round.
+  for (const handle of due) {
     if (started.has(handle)) continue;
     const rec = await ctx.lookup(handle);
     if (kept(rec) && !await isPresent(ctx, handle)) await start(handle);

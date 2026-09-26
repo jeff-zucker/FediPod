@@ -15,7 +15,7 @@ runtime-agnostic Node:
 |---|---|---|
 | `functions/inbox.mjs` | One person's door: verify a delivery, forward it to their pod. | `lib/gateway/gateway-core.mjs` |
 | `functions/front.mjs` | A door for many people: WebFinger, each public face, per-person delivery routing, and the signup and attach flow. | `lib/gateway/front-core.mjs` |
-| `functions/flush-mail.mjs` | Every fifteen minutes: mail held for browser accounts whose apps are closed goes to their pods in batches, and kept accounts that have work waiting are handed to the keeper. | `lib/gateway/held-mail.mjs` |
+| `functions/flush-mail.mjs` | Every fifteen minutes: mail held for browser accounts whose apps are closed goes to their pods in batches, and a kept account with work due (a follow, a delivery to try again, a scheduled post) is handed to the keeper. | `lib/gateway/held-mail.mjs` |
 | `functions/keeper-background.mjs` | One kept account's run: its mail delivered and read, its waiting deliveries sent, its scheduled posts published. Started only by `flush-mail`. | `lib/gateway/keeper.mjs` |
 
 Another host needs only its own adapter calling the same `handleDelivery`. A

@@ -167,9 +167,9 @@ goes straight to your pod as before. A DeviceAgent's mail always goes straight
 to its pod.
 
 **The gateway keeps your account running.** Unless you turn it off, the
-gateway accepts your follows, reads your mail into your timeline and notifications,
-sends what is waiting to go out, and publishes the posts you scheduled, all
-while FediPod is closed. It works under its own pod identity, which your app
+gateway accepts your follows, tries again what failed to go out, and publishes
+the posts you scheduled, all while FediPod is closed. Other mail waits on your
+pod for FediPod to open, as before. It works under its own pod identity, which your app
 names in the access rules on your FediPod folder. It reads your signing key
 from your pod when it needs it, so it can post as you. It keeps no copy.
 **Stop keeping it running** on the manage page takes it out of the rules.

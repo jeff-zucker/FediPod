@@ -129,6 +129,8 @@ const heldCtx = {
   markPresent: async (h) => { present.set(h, Date.now()); },
   presentAt: async (h) => present.get(h) || 0,
   keeperWebId: 'https://keeper.example/profile/card#me',
+  woke: [],
+  noteNext: async (h, at, opt) => { heldCtx.woke.push({ h, at, earliest: !!opt?.earliest }); },
 };
 const front = http.createServer(async (req, res) => {
   const body = await new Promise((resolve) => {
@@ -867,6 +869,60 @@ try {
     check((await (await post('/api/open', { handle: 'thrush' })).json()).kept === true, 'and the next sign-in is told so');
     const keptOff = await (await post('/api/keeper', { handle: 'thrush', on: false })).json();
     check(keptOff.kept === false && !attached.thrush.keeper, 'and can stop it');
+    // Mail alone does not start the keeper; a follow does, so it is accepted
+    // while the owner is away.
+    await post('/api/attach', { handle: 'wagtail', podHome: POD, fronted: true });
+    await post('/api/open', { handle: 'wagtail' });
+    await post('/api/keeper', { handle: 'wagtail', on: true });
+    const wagActor = `${ORIGIN}/u/wagtail/ap/actor`;
+    const toWagtail = (a) => get('/u/wagtail/ap/inbox/', { method: 'POST', headers: { 'content-type': 'application/activity+json' },
+      body: JSON.stringify({ '@context': 'https://www.w3.org/ns/activitystreams', actor: 'https://m.example/u/friend', ...a }) });
+    heldCtx.woke.length = 0;
+    await toWagtail({ id: 'https://m.example/a/wag1', type: 'Create', to: [wagActor],
+      object: { id: 'https://m.example/n/wag1', type: 'Note', content: 'hi wagtail', to: [wagActor] } });
+    check((await heldCtx.listHeld('wagtail')).length > 0 && !heldCtx.woke.length,
+      'a post held for a kept account waits for the app, and does not start the keeper');
+    await toWagtail({ id: 'https://m.example/a/wag2', type: 'Follow', object: wagActor });
+    check(heldCtx.woke.length === 1 && heldCtx.woke[0].h === 'wagtail' && heldCtx.woke[0].earliest
+      && Math.abs(Date.parse(heldCtx.woke[0].at) - Date.now()) < 5000,
+      `a follow held for a kept account makes its keeper due now (${JSON.stringify(heldCtx.woke)})`);
+    await post('/api/keeper', { handle: 'wagtail', on: false });
+    heldCtx.woke.length = 0;
+    await toWagtail({ id: 'https://m.example/a/wag3', type: 'Follow', object: wagActor });
+    check(!heldCtx.woke.length, 'and not for an account whose owner stopped it');
+    for (const n of await heldCtx.listHeld('wagtail')) await heldCtx.dropHeld('wagtail', n);
+
+    // The keeper's schedule (keeper-due.mjs).
+    {
+      const { keeperBook, earliest } = await import(new URL('../../lib/gateway/keeper-due.mjs', import.meta.url));
+      const m = new Map();
+      const book = keeperBook({ get: async (k) => m.get(k) ?? null, set: async (k, v) => { m.set(k, v); }, keys: async () => [...m.keys()] });
+      const t = (ms) => new Date(Date.now() + ms).toISOString();
+      check(earliest(null, null) === null && earliest(t(0), null) !== null && earliest(t(9000), t(1000)) === earliest(t(1000), t(9000)),
+        'the sooner of two times, either of them missing');
+      await book.noteKept('a', { nextAt: t(3_600_000), waiting: 2 }, Date.now());
+      await book.noteKept('b', { nextAt: null }, Date.now());
+      check(!(await book.keeperDue()).length, 'nothing is due while every next time is ahead or absent');
+      check((await book.keeperDue(Date.now() + 3_700_000)).join() === 'a', 'and an account is due once its time comes');
+      await book.noteNext('a', t(0), { earliest: true });
+      check((await book.keeperDue()).join() === 'a', 'a follow makes it due now');
+      await book.noteNext('b', t(600_000));
+      await book.noteNext('b', t(1_200_000), { earliest: true });
+      check(Date.parse(m.get('b').nextAt) < Date.now() + 700_000,
+        'and a later time does not push back a sooner one');
+      const started = Date.now() - 1;
+      await book.noteNext('a', t(0), { earliest: true });        // a follow while the run is going
+      await book.noteKept('a', { nextAt: t(3_600_000) }, started);
+      check((await book.keeperDue()).join() === 'a', 'a follow that arrived while the run went is still due after it');
+      await book.noteKept('a', { nextAt: t(3_600_000) }, Date.now() + 1);
+      check(!(await book.keeperDue()).includes('a'), 'and the run after it clears it');
+      await book.noteNext('c', t(-1000));
+      await book.noteKept('c', { skipped: 'another device is acting on this account', retry: 'soon' }, Date.now() + 1);
+      check((await book.keeperDue()).includes('c'), 'a run that found the account busy tries again next round');
+      await book.noteKept('c', { skipped: 'failed: pod down', retry: 'later' }, Date.now() + 1);
+      check(!(await book.keeperDue()).includes('c') && (await book.keeperDue(Date.now() + 3_700_000)).includes('c'),
+        'and one that failed tries again in an hour, not every round');
+    }
     holding = false;
 
     const att2 = await post('/api/attach', { handle: 'lark', podHome: POD, fronted: true });

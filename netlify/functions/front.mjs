@@ -30,6 +30,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { getStore } from '@netlify/blobs';
 import { routeFront } from '../../lib/gateway/front-core.mjs';
+import { keeperBook } from '../../lib/gateway/keeper-due.mjs';
 import * as podInbox from '../../lib/pod/inbox.mjs';
 import grant from '../../vendor/idp-grant.cjs';
 
@@ -244,21 +245,12 @@ export function gatewayCtx() {
     // The gateway's own pod identity, which an owner may let act for them while
     // their app is closed (lib/gateway/keeper.mjs), and what its last run left.
     keeperWebId: process.env.FEDIPOD_KEEPER_WEBID || null,
-    noteKept: async (handle, out) => getStore('keeper').setJSON(handle,
-      { at: Date.now(), waiting: out?.waiting || 0, skipped: out?.skipped || null, nextAt: out?.nextAt || null }),
-    noteNext: async (handle, nextAt) => {
-      const store = getStore('keeper');
-      await store.setJSON(handle, { ...((await store.get(handle, { type: 'json' })) || {}), nextAt });
-    },
-    keeperDue: async (now = Date.now()) => {
-      const store = getStore('keeper');
-      const due = [];
-      for (const b of (await store.list()).blobs) {
-        const k = (await store.get(b.key, { type: 'json' })) || {};
-        if (k.waiting > 0 || (k.nextAt && Date.parse(k.nextAt) <= now)) due.push(b.key);
-      }
-      return due;
-    },
+    // When each kept account's keeper next has work (keeper-due.mjs).
+    ...keeperBook({
+      get: (k) => getStore('keeper').get(k, { type: 'json' }),
+      set: (k, v) => getStore('keeper').setJSON(k, v),
+      keys: async () => (await getStore('keeper').list()).blobs.map((b) => b.key),
+    }),
   };
 }
 

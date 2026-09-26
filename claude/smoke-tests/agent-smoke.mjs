@@ -13686,7 +13686,10 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
       'one that fails is dropped, with its reason in the log');
     check(pollSweeps === 1, 'and the same sweep shuts polls whose time is up');
     check(nextDue(store) === at(1_800_000), 'the next thing to fall due counts a poll ending as well as a scheduled post');
-    sched = []; statuses[0].poll.closed = at(0);
+    const queue = [{ inbox: 'https://down.example/inbox', nextAt: now + 600_000 }];
+    store.getQueue = () => queue;
+    check(nextDue(store) === at(600_000), 'and a failed delivery\u2019s next try');
+    sched = []; statuses[0].poll.closed = at(0); queue.length = 0;
     check(nextDue(store) === null, 'and with nothing waiting there is no next time');
   }
 
