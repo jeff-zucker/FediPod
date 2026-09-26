@@ -290,7 +290,7 @@ fs.writeFileSync(path.join(site, 'demo/index.html'),
   const stamp = (n) => createHash('sha256').update(fs.readFileSync(bb(n))).digest('hex').slice(0, 10);
   const sub = (n, pairs) => { let t = fs.readFileSync(bb(n), 'utf8');
     for (const [a, b] of pairs) t = t.split(a).join(b); fs.writeFileSync(bb(n), t); };
-  sub('oidc-session.mjs', [["'fediverse-account/oidc-session.mjs'", `'./solid-oidc-session.mjs?v=${stamp('solid-oidc-session.mjs')}'`]]);
+  sub('oidc-session.mjs', [["'fediverse-session/oidc-session.mjs'", `'./solid-oidc-session.mjs?v=${stamp('solid-oidc-session.mjs')}'`]]);
   sub('pod.mjs', [["'./oidc-session.mjs'", `'./oidc-session.mjs?v=${stamp('oidc-session.mjs')}'`],
     ["'./markdown.mjs'", `'./markdown.mjs?v=${stamp('markdown.mjs')}'`],
     ["'./private.mjs'", `'./private.mjs?v=${stamp('private.mjs')}'`],

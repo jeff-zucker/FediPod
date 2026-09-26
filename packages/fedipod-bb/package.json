@@ -10,6 +10,6 @@
     "test": "node --test test/*.test.mjs"
   },
   "dependencies": {
-    "fediverse-account": "^0.2.1"
+    "fediverse-session": "^0.2.1"
   }
 }

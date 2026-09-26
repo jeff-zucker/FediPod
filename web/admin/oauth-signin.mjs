@@ -1,5 +1,5 @@
 // oauth-signin.mjs — a client asked this account to sign its owner in. The
-// owner signs in at their own pod, with the fediverse-account library, and the
+// owner signs in at their own pod, with the fediverse-session library, and the
 // page proves that sign-in to the account with one signed request; the account
 // then hands the client its code. No password of ours anywhere.
 import { fediLogin } from './fedi-login.mjs';

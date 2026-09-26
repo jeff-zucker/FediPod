@@ -34,6 +34,9 @@ signing key and connected-account passwords stay on your pod only. Your pod is
 asked far less: a restart of FediPod in the browser, or a run of the gateway's
 keeper, reads the copy instead of the pod.
 
+**The sign-in library is renamed `fediverse-session`** (it was
+`fediverse-account` on npm). Nothing else about it changes.
+
 **A poll in the browser version shuts when its time is up**, and everyone
 holding it is told, as a DeviceAgent's always did.
 

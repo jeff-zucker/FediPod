@@ -145,6 +145,9 @@ not change.
 ## Other ways to use FediPod
 
 - [fediverse-account]() - an ESM library that supports both Solid-based and regular Fediverse accounts with methods to login, reply, boost, etc.
+<!-- CLAUDE 2026-09-26 — the library is renamed fediverse-session; replacement for the line above, with its link filled in; delete these markers when done -->
+- [fediverse-session](lib/session/README.md) - an ESM library that supports both Solid-based and regular Fediverse accounts with methods to login, reply, boost, etc.
+<!-- /CLAUDE -->
 - [FediPod Server](packages/fedipod-server/README.md): a full ActivityPub
   server as a Community Solid Server component, giving every pod on the server
   the option of a Fediverse account.

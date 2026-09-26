@@ -1,6 +1,6 @@
 // app-signin.mjs — a Mastodon app asked to use an account at this gateway
 // (lib/gateway/masto-gateway.mjs). The person gives their address here, signs
-// in at their own pod with the fediverse-account library, and the page proves
+// in at their own pod with the fediverse-session library, and the page proves
 // that sign-in to the gateway with one signed request; the gateway hands the
 // app its code. No password of ours anywhere.
 import { fediLogin } from './fedi-login.mjs';

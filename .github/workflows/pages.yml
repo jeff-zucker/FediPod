@@ -1,4 +1,4 @@
-# The fediverse-account library and its demo, served by GitHub Pages at
+# The fediverse-session library and its demo, served by GitHub Pages at
 # https://jeff-zucker.github.io/FediPod/ — the demo as the front page, the
 # three modules beside it so the page imports them as it does in the repo.
 name: pages

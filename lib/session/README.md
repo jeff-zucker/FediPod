@@ -1,4 +1,4 @@
-# fediverse-account
+# fediverse-session
 
 The library lets an app take a Fediverse handle or a WebID and act as that
 account.
@@ -51,23 +51,23 @@ the profile that comes back.
 From a CDN, with nothing to install:
 
 ```js
-import { fediAccount } from 'https://cdn.jsdelivr.net/npm/fediverse-account@0.1.0/fedi-account.mjs';
+import { fediAccount } from 'https://cdn.jsdelivr.net/npm/fediverse-session@0.2.1/fedi-account.mjs';
 ```
 
 Or from npm:
 
 ```bash
-npm install fediverse-account
+npm install fediverse-session
 ```
 
 ```js
-import { fediAccount } from 'fediverse-account';
+import { fediAccount } from 'fediverse-session';
 ```
 
 ## Use
 
 ```js
-import { fediAccount } from 'fediverse-account';
+import { fediAccount } from 'fediverse-session';
 const accounts = fediAccount({ dbName: 'my-app', clientName: 'My app' });
 
 await accounts.resume();                                   // on every page load
