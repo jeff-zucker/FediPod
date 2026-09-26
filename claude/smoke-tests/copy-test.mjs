@@ -105,12 +105,17 @@ try {
   // ---- writes dropped after another agent acted are not a save ----
   const sweep = new PodStore({ storage: new CopyStorage(kv, H, { holder: GATEWAY_HOLDER, pod }), log: () => {} });
   await sweep.load();
-  sweep.hold();                                            // a drain in the middle of its sweep
+  const began = sweep.generation;                         // a drain in the middle of its sweep
+  sweep.hold();
   sweep.write('muted.json', { actors: ['https://x.example/u/1'] });
-  await sweep.discardPending();
+  const dropping = sweep.discardPending();
   sweep.release();
-  check(await sweep.commit() === false, 'a sweep whose results were dropped is told they were not written, so it deletes nothing');
-  check(await sweep.commit() === true, 'and the next save counts again');
+  const racing = sweep.commit({ since: began });           // its commit, already under way as the drop begins
+  await dropping;
+  check(await racing === false, 'a sweep whose results were dropped is told they were not written, so it deletes nothing');
+  const after = sweep.generation;
+  sweep.write('muted.json', { actors: [] });
+  check(await sweep.commit({ since: after }) === true, 'while work begun after the drop saves as usual');
 
   // ---- the gateway's writers take turns ----
   const release = await lockCopy(kv, H);
@@ -132,7 +137,7 @@ try {
   // ---- written back ----
   const n = await flushCopy(kv, H, { pod, log: () => {} });
   const onPod = JSON.parse(fs.readFileSync(path.join(dir, 'statuses.json'), 'utf8'));
-  check(n === 1 && onPod.some((s) => s.noteId === 'n3'), `what changed is written to the pod (${n} document)`);
+  check(n >= 1 && onPod.some((s) => s.noteId === 'n3'), `what changed is written to the pod (${n} document(s))`);
   check((await flushCopy(kv, H, { pod })) === 0, 'and nothing is written twice');
   const same = (await kv.get('mei/d/statuses.json')).text;
   await new CopyStorage(kv, H, { holder: GATEWAY_HOLDER, pod }).write('statuses.json', same);

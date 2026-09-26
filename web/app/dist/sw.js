@@ -45723,6 +45723,7 @@ var PodStore = class {
     this._held = 0;
     this.chain = Promise.resolve();
     this.verdicts = /* @__PURE__ */ new Map();
+    this.generation = 0;
     this.onLoaded = null;
     this.onWriting = null;
     this.onSettled = null;
@@ -45935,7 +45936,9 @@ var PodStore = class {
   // pod's inbox is a destructive read, so it must not happen until the result
   // of handling it is written down. With no storage the store is pure memory
   // and there is nothing to land, so that counts as written.
-  async commit() {
+  // `since`: the generation the caller's work began in. Anything dropped since
+  // makes the answer false.
+  async commit({ since } = {}) {
     const pending = [];
     for (const name of /* @__PURE__ */ new Set([...this.timers.keys(), ...this.dirty])) {
       const t = this.timers.get(name);
@@ -45948,7 +45951,7 @@ var PodStore = class {
     }
     await this.chain;
     await Promise.all(pending);
-    const landed = [...this.verdicts.values()].every(Boolean);
+    const landed = [...this.verdicts.values()].every(Boolean) && (since === void 0 || since === this.generation);
     this.verdicts.clear();
     return landed;
   }
@@ -45961,17 +45964,17 @@ var PodStore = class {
   // copy's lease coming back after an app acted, web/app/copy-mode.mjs): the
   // next load reads what the other agent wrote, and sending these first would
   // write over it.
-  // Recorded as a write that did not land, so a sweep that was going on — the
-  // inbox drain above all — is told its results were not written down, and
-  // deletes nothing on the strength of them.
+  // The generation moves on first, before anything is awaited, so a sweep that
+  // began before — the inbox drain above all — finds at its next commit that
+  // its results were not all written down, and deletes nothing on the strength
+  // of them. Work that begins after is not affected.
   async discardPending() {
-    const dropped = this.timers.size + this.dirty.size;
+    this.generation += 1;
     for (const t of this.timers.values()) clearTimeout(t);
     this.timers.clear();
     this.dirty.clear();
     await this.chain.catch(() => {
     });
-    if (dropped) this.verdicts.set("\0discarded", false);
   }
   // ---- the domain helpers, unchanged from dk's Store ----
   // config: { remotePod, handle, name, issuer }  (credential lives ONLY in
@@ -65218,8 +65221,10 @@ var Intake = class {
   // either case every item drained since the last successful write is gone,
   // and what goes is the mentions, replies, join requests and dead-letter
   // records that nothing else can rebuild.
+  // Against the store's generation when this sweep began: results dropped
+  // since (another agent acted, web/app/copy-mode.mjs) are not written down.
   async _persisted() {
-    return this.store.commit();
+    return this.store.commit({ since: this._sweepGen });
   }
   _backOff(why) {
     this.drainFailures++;
@@ -65334,6 +65339,7 @@ var Intake = class {
   // us, a mention, a reply to ours, or from someone we follow — and drops the
   // rest.
   async prune({ before, keepConcerning = false } = {}) {
+    this._sweepGen = this.store.generation;
     const cutoff = Date.parse(before);
     if (!Number.isFinite(cutoff)) throw new Error(`"${before}" is not a date`);
     const all = await list(this.remote, this.urls);
@@ -65447,6 +65453,7 @@ var Intake = class {
     }
   }
   async _drainOnce() {
+    this._sweepGen = this.store.generation;
     const cooling = this.drainCooldownUntil - Date.now();
     if (cooling > 0) {
       this.log(`inbox sweep skipped \u2014 backing off for another ${Math.ceil(cooling / 1e3)}s`);
@@ -65645,6 +65652,7 @@ var Intake = class {
    * whoever holds it keeps it for next time.
    */
   async takeHeld(entries) {
+    const since = this.store.generation;
     const done = [];
     this.store.hold?.();
     try {
@@ -65674,7 +65682,7 @@ var Intake = class {
     } finally {
       this.store.release?.();
     }
-    return await this.store.commit() ? done : [];
+    return await this.store.commit({ since }) ? done : [];
   }
   // The end of a sweep: publish whatever the follow graph did ONCE, then flush.
   //
