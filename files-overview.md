@@ -13,7 +13,7 @@ that cleaned up the pod library.
 | The client face | `lib/client/`: `masto/` (index, oauth, render, instance, accounts, timelines, statuses, media, body), `streaming.mjs`, `webpush.mjs`, `c2s.mjs`, `oidc-auth.mjs`, `localapi.mjs` | the Mastodon API Phanpy talks to, streaming and push, the ActivityPub client-to-server endpoint and its Solid-OIDC check |
 | The vendored clients | `phanpy/dist`, `sengi/dist` | Phanpy exactly as upstream built it. Sengi is a FORK: `sengi/PATCHES.md` lists the nine changes and how to rebuild it, and an upgrade that drops them breaks two things silently |
 | Connections | `lib/connections/`: `atproto.mjs`, `bskyfeed.mjs`, `bskygroup.mjs`, `fediacct.mjs`, `acctfeed.mjs`, `tagfeed.mjs`, `import.mjs` | Bluesky, other Fediverse accounts, the hashtag feed, CSV import |
-| The gateway | `lib/gateway/`: `gateway-core.mjs`, `front-core.mjs`, `httpsig.mjs`, `directory.mjs` | the keyless door that verifies signatures, the front that serves fronted identities, the directory |
+| The gateway | `lib/gateway/`: `gateway-core.mjs`, `front-core.mjs`, `httpsig.mjs`, `directory.mjs`, `caches.mjs`, `headers.mjs`, `token-claims.mjs`, `relay-extras.mjs`, `quiet.mjs`, `notices.mjs`, `held-mail.mjs`, `keeper.mjs`, `keeper-due.mjs`, `keeper-session.mjs`, `account-agent.mjs`, `copy.mjs`, `state-api.mjs`, `masto-gateway.mjs` | the door that verifies signatures, the front that serves fronted identities, the directory, accounts that go quiet, notices, mail held while the app is closed, the keeper that keeps a browser account running, the account's working copy and the state API the browser reaches it through, and Mastodon apps and phone notifications at the gateway's address |
 | Shared | `lib/shared/`: `safefetch.mjs`, `guard.mjs`, `ua.mjs`, `links.mjs` | the fetch and request guards, the user agent, link headers; used by three or more parts |
 
 ## Implementation libraries
@@ -24,7 +24,7 @@ that cleaned up the pod library.
 | FediPod BrowserAgent | `web/app/` | the same core in a service worker: sign-up, the pod session, browser keys, the relay, the manage facade, the browser connections |
 | FediPod Server | `packages/fedipod-server/src/`, with `lib/server/embed.mjs` | the CSS component: the handler, the store shims, the directory, the streaming handler |
 | css-nextgraph | `packages/css-nextgraph/src/`: `accessor.ts`, `router.ts`, `wallets.ts`, `sdk.ts`, `sdk-store.ts`, `pod-store.ts`; `config/`, `bin/css-nextgraph.mjs` | the CSS storage component that keeps each pod in NextGraph under a wallet of its own: the accessor, the `.internal/`-or-pod router, the wallets, the SDK layer, the hand-over command; FediPod Server sits on top of it unchanged |
-| FediPod Gateway | `netlify/functions/`, `web/front/` | two thin functions over the edges, and the front's pages |
+| FediPod Gateway | `netlify/functions/` (`front`, `inbox`, `account`, `flush-mail`, `keeper-background`, `push-background`), `web/front/`, `web/app-signin/` | thin functions over the edges — deliveries and the front, the routes that act for an account, the fifteen-minute round, a keeper run, a push run — the front's pages, and the page a Mastodon app sends its person to |
 
 ## What the BrowserAgent takes from the shared libraries
 
