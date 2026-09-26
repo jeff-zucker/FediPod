@@ -15,6 +15,8 @@ runtime-agnostic Node:
 |---|---|---|
 | `functions/inbox.mjs` | One person's door: verify a delivery, forward it to their pod. | `lib/gateway/gateway-core.mjs` |
 | `functions/front.mjs` | A door for many people: WebFinger, each public face, per-person delivery routing, and the signup and attach flow. | `lib/gateway/front-core.mjs` |
+| `functions/flush-mail.mjs` | Every fifteen minutes: mail held for browser accounts whose apps are closed goes to their pods in batches, and kept accounts that have work waiting are handed to the keeper. | `lib/gateway/held-mail.mjs` |
+| `functions/keeper-background.mjs` | One kept account's run: its mail delivered and read, its waiting deliveries sent, its scheduled posts published. Started only by `flush-mail`. | `lib/gateway/keeper.mjs` |
 
 Another host needs only its own adapter calling the same `handleDelivery`. A
 Community Solid Server can run the same door as a component of itself instead
@@ -40,7 +42,23 @@ environment variables:
 
 Attachments people make through the signup page are kept in a Netlify Blobs
 store named `directory`, and take precedence over the rows in
-`FEDIPOD_DIRECTORY_JSON`.
+`FEDIPOD_DIRECTORY_JSON`. Mail held while an app is closed is in the `mail`
+store, when each app last said it was open in `present`, and what each kept
+account has waiting in `keeper`.
+
+To keep browser accounts running while their apps are closed, the front needs
+a pod account of its own, on a Community Solid Server, with a client credential
+made for it:
+
+| Variable | What it is |
+|---|---|
+| `FEDIPOD_KEEPER_WEBID` | The WebID of the gateway's own pod account. Owners' apps name it in the access rules on their FediPod folders. |
+| `FEDIPOD_KEEPER_ISSUER` | That account's identity provider. |
+| `FEDIPOD_KEEPER_CLIENT_ID` | The client credential's id. |
+| `FEDIPOD_KEEPER_CLIENT_SECRET` | Its secret. It also signs the runs `flush-mail` starts. |
+
+Without them the manage page does not offer it, and a client cannot schedule
+posts.
 
 
 The `/roster` page lists every account the front answers for and can remove

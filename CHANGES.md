@@ -1,5 +1,28 @@
 # Changes
 
+## 2026-09-25 (while your app is closed — not yet released)
+
+**Mail sent to a browser account waits at fedipod.net while FediPod is
+closed**, and reaches your pod in batches of up to a hundred when you open it,
+or every fifteen minutes otherwise. Your pod is written once a batch instead of
+twice a delivery. While FediPod is open, mail goes straight to your pod as
+before.
+
+**fedipod.net can keep your account running while FediPod is closed.** It
+accepts follows, reads your mail, sends what is waiting and publishes your
+scheduled posts. To do that it can read your signing key on your pod, so it can
+post as you. The manage page turns it on and off.
+
+**Scheduled posts work in the browser version** while the gateway keeps your
+account running.
+
+**A poll in the browser version shuts when its time is up**, and everyone
+holding it is told, as a DeviceAgent's always did.
+
+**fedipod.net answers other servers' repeated requests for your account's
+public documents from its own cache for an hour**, and forgets them whenever
+your account sends anything out.
+
 ## 2026-09-25 (your pod is asked far less while FediPod is open — version 1.39.1)
 
 **Your pod is asked about fifty times less while FediPod sits open in a tab.**

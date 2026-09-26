@@ -12,7 +12,9 @@ read your private things, or be you anywhere. The worst a broken one can do is
 push items into your inbox, and those still face your agent's own checks.
 With the outbox door below, a gateway can also hand your agent a post marked as
 yours, which your agent then signs and sends. It still holds no key, but what you
-trust it with grows by that much.
+trust it with grows by that much. A browser account can go further and let the
+gateway keep it running while its app is closed (below). That gives the gateway
+your key while it works, so it can post as you.
 
 A FediPod install works without any gateway at all. Deliveries go straight to
 your pod inbox, which holds them whether your agent is running or not.
@@ -153,10 +155,31 @@ on the setup page). Setup reads the account on the pod, keeps its state and
 key there, attaches at the new gateway, and completes the move when the
 agent first acts. See [the DeviceAgent](device-agent.md).
 
+## While your app is closed
+
+A browser account runs only while FediPod is open somewhere. While it is
+closed, fedipod.net does two things for it.
+
+**Your mail waits at the gateway.** Deliveries are kept there, not written to
+your pod one by one, and reach your pod in batches of up to a hundred: when you
+open FediPod, or every fifteen minutes otherwise. While FediPod is open, mail
+goes straight to your pod as before. A DeviceAgent's mail always goes straight
+to its pod.
+
+**The gateway can keep your account running.** If you let it, the gateway
+accepts your follows, reads your mail into your timeline and notifications,
+sends what is waiting to go out, and publishes the posts you scheduled, all
+while FediPod is closed. It works under its own pod identity, which your app
+names in the access rules on your FediPod folder. It reads your signing key
+from your pod when it needs it, so it can post as you. It keeps no copy.
+**Stop keeping it running** on the manage page takes it out of the rules.
+Scheduling a post is offered only while this is on, because otherwise nothing
+would be running when the time came.
+
 ## Accounts that go quiet
 
-A gateway holds no mail. Every delivery it accepts is written into your pod
-inbox, and your agent reads it from there. A BrowserAgent reads only while
+Every delivery the gateway accepts ends up in your pod inbox, and your agent
+reads it from there. A BrowserAgent reads only while
 its page is open, so an account nobody opens grows on its pod without limit
 and comes back to a drain of everything at once. fedipod.net keeps two facts
 about each browser account — when its owner last signed in or posted, and
@@ -194,9 +217,14 @@ web address becomes a link.
 
 It reads only public data to decide what concerns you: your published
 followers and following, and a small public policy document your agent writes
-with a mirror of your blocklist. Nothing private leaves your pod. Publishing
-that mirror does make your blocklist public, which is part of the bargain of
-running behind a door.
+with a mirror of your blocklist. Publishing that mirror does make your
+blocklist public, which is part of the bargain of running behind a door.
+
+Two things go further, both for browser accounts only. Mail that waits at the
+gateway while your app is closed, direct messages included, is stored there
+until it reaches your pod. And a gateway you let keep your account running can
+read and write everything in your FediPod folder, your signing key included,
+while it works. Nothing else on your pod is open to it.
 
 ## Running a gateway
 

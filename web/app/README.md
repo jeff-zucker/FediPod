@@ -76,6 +76,9 @@ See the `MastoApi` options in `agent.mjs`.
 | **Streaming** | a service worker answers fetches, not sockets. No streaming URL is advertised, so clients poll. |
 | **Web push** | `shims/web-push.mjs` is a no-op. `vapid` is omitted, and a client that subscribes anyway gets a 422 rather than a subscription nothing will push to. |
 | **Scheduled posts** | nothing runs between now and the scheduled time. A `scheduled_at` is refused with a 422 that says so — accepting one was silent loss. |
+<!-- CLAUDE 2026-09-25 — the row above now holds only while the gateway does not keep the account running; replace it with this; delete these markers when done -->
+| **Scheduled posts** | only while the gateway keeps the account running (`setKeeper`), because then something is running when the time comes: the app publishes what falls due while it is open, the gateway's keeper while it is closed. Otherwise a `scheduled_at` is refused with a 422 that says so — accepting one was silent loss. |
+<!-- /CLAUDE -->
 | **Groups** | sign-up makes personal identities only (`signup.mjs`), and the moderation surface is not here. Joining a group works; hosting one needs the DeviceAgent. See `groups.md`. |
 | **Changing where the address lives** | the shape is chosen at sign-up (`signup.mjs`): on the pod, `@you@yourpod` with the gateway as a mail door, or at the gateway, `@you@front` — and a suffixed pod is always fronted. `admin-facade.mjs` refuses changing it afterwards, because a rename needs a restart a browser does not have. |
 | **Moving the private half** | `/state-move` is about filesystem paths and `credential.json`. A browser has neither; its private half is always on the pod. |
