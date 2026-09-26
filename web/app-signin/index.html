@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Let an app use your account</title>
+<link rel="stylesheet" href="/app-signin/tokens.css">
+<style>
+  body { font-family: var(--font); background: var(--surface); color: var(--fg); margin: 0; line-height: 1.5; }
+  main { max-width: 30rem; margin: 8vh auto; padding: 1.5rem 1.75rem; background: var(--raised);
+    border: 1px solid var(--line); border-radius: 10px; }
+  h1 { color: var(--heading); font-size: 1.5rem; margin: 0 0 1rem; }
+  a { color: var(--link); text-decoration: underline; }
+  code { word-break: break-all; background: var(--field-bg); padding: .05em .35em; border-radius: 4px; }
+  label { display: block; margin: 1rem 0 .4rem; font-weight: bold; }
+  input { font: inherit; width: 100%; box-sizing: border-box; padding: .5rem .7rem; background: var(--field-bg);
+    color: var(--field-text); border: 1px solid var(--field-edge); border-radius: 6px; }
+  .hint { color: var(--sub); }
+  button { font: inherit; padding: .6rem 1.1rem; background: var(--btn); color: var(--btn-text); border: none;
+    border-radius: 9px; cursor: pointer; }
+  button:hover { background: var(--btn-hover); }
+  :focus-visible { outline: 3px solid var(--ring); outline-offset: 2px; }
+  #signin-status { margin-top: 1rem; padding: .6rem .8rem; border: 1px solid var(--line); border-radius: 8px; }
+  #signin-status:empty { display: none; }
+</style>
+</head>
+<body>
+<main>
+<h1>Let an app use your account</h1>
+<p id="asking" hidden></p>
+<form id="signin-form" hidden>
+  <label for="address">Your address here</label>
+  <input type="text" id="address" name="address" autocomplete="username">
+  <p class="hint">You sign in at your own pod. No password is typed on this page.</p>
+  <p><button type="submit" id="signin">Sign in with your pod</button></p>
+</form>
+<p id="signin-status" role="status" aria-live="polite"></p>
+</main>
+<script type="module" src="/app-signin/app-signin.mjs"></script>
+</body>
+</html>

@@ -9,6 +9,7 @@
 import { BrowserAgent } from './agent.mjs';
 import { getSession } from './oidc-session.mjs';
 import { ADMIN_PATHS } from './admin-facade.mjs';
+import { bridge } from '../../lib/client/masto/bridge.mjs';
 
 let agent = null;
 let booting = null;
@@ -164,61 +165,16 @@ async function serve(request, url) {
   // worker was restarted (idle-killed) and nobody posted 'boot' this time.
   if (!agent) { try { await ensureBooting(undefined, { restart: true }); } catch { /* no session → 503 below */ } }
   if (!agent) return json(503, { error: 'not signed in on this browser — sign in at the front page' });
-  // Bytes, not text. A multipart upload is binary — read as text it comes back
-  // through a UTF-8 round trip that replaces every byte that is not valid UTF-8,
-  // which is most of a JPEG, so the boundary search found nothing and every
-  // media and avatar upload answered "422 file required". readBody() does
-  // `data += chunk`, which decodes a Buffer the same way it always did, so the
-  // JSON and form paths are unchanged.
-  const bodyBytes = (request.method === 'GET' || request.method === 'HEAD')
-    ? null : Buffer.from(new Uint8Array(await request.arrayBuffer()));
-  // The admin facade is JSON-only (the gate above enforces the content type),
-  // and takes its body already decoded.
-  const bodyText = bodyBytes ? new TextDecoder().decode(bodyBytes) : '';
-  const reqHeaders = {}; for (const [k, v] of request.headers) reqHeaders[k.toLowerCase()] = v;
-  // `host` is a forbidden header name, so a fetch Request never carries one and
-  // the loop above cannot produce it — but it is a header every real request
-  // arrives with, and the agent reads it to say where it lives. Without it the
-  // notifications `Link` header named `https://undefined/`, so a client that
-  // paged by following it (which is how a client is meant to page) walked off
-  // the origin and saw nothing past the first screen.
-  reqHeaders.host = url.host;
-  const listeners = {};
-  // The body's events fire on the next microtask. A route that reads the body
-  // may only register for them after an await or two — the facade dispatches
-  // through its area modules first — so a listener that arrives after the
-  // events have fired is given them at once, in the order it asks.
-  let fired = false;
-  const req = { method: request.method, url: url.pathname + url.search, headers: reqHeaders,
-    // notAllowed() above let this through, so it came from this origin. Said
-    // out loud rather than left implicit: MastoApi asks (through the
-    // authorities object in agent.mjs) whether a request is the owner's own,
-    // and in a browser that question means exactly this.
+  const { req, res, bodyText, response } = await bridge(request, url, {
+    // notAllowed() above let this through, so it came from this origin.
     sameOrigin: true,
-    socket: { encrypted: url.protocol === 'https:' },
-    on(ev, cb) {
-      (listeners[ev] ||= []).push(cb);
-      if (fired) { if (ev === 'data' && bodyBytes?.length) cb(bodyBytes); else if (ev === 'end') cb(); }
-      return req;
-    },
-    destroy() {} };
-  queueMicrotask(() => {
-    fired = true;
-    if (bodyBytes?.length) (listeners.data || []).forEach((cb) => cb(bodyBytes));
-    (listeners.end || []).forEach((cb) => cb());
   });
-  let status = 200; const outHeaders = {}; const chunks = [];
-  const res = {
-    writeHead(s, h) { status = s; if (h) Object.assign(outHeaders, h); return res; },
-    setHeader(k, v) { outHeaders[k] = v; }, getHeader(k) { return outHeaders[k]; },
-    write(c) { chunks.push(c); }, end(c) { if (c) chunks.push(c); },
-  };
   try {
     const handled = isAdmin(url.pathname)
       ? await agent.admin.handle(req, res, url.pathname, url, bodyText)
       : await agent.masto.handle(req, res, url.pathname, url);
     if (!handled) return fetch(request);
-    return new Response(chunks.join(''), { status, headers: { 'content-type': 'application/json', ...outHeaders } });
+    return response();
   } catch (err) {
     return json(500, { error: err.message });
   }

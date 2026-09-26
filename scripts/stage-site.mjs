@@ -274,6 +274,12 @@ cp('lib/session/oidc-session.mjs', 'bb/solid-oidc-session.mjs');   // signing in
 fs.mkdirSync(path.join(site, 'demo'), { recursive: true });
 for (const f of ['fedi-account.mjs', 'fedi-login.mjs', 'oidc-session.mjs']) cp(`lib/session/${f}`, `demo/${f}`);
 cp('web/admin/tokens.css', 'demo/tokens.css');
+// The page a Mastodon app sends its person to (lib/gateway/masto-gateway.mjs),
+// with the pod sign-in library and the palette beside it, as the demo has.
+fs.mkdirSync(path.join(site, 'app-signin'), { recursive: true });
+for (const f of ['index.html', 'app-signin.mjs']) cp(`web/app-signin/${f}`, `app-signin/${f}`);
+for (const f of ['fedi-login.mjs', 'oidc-session.mjs']) cp(`lib/session/${f}`, `app-signin/${f}`);
+cp('web/admin/tokens.css', 'app-signin/tokens.css');
 fs.writeFileSync(path.join(site, 'demo/index.html'),
   fs.readFileSync(path.join(root, 'lib/session/demo.html'), 'utf8').replace('../../web/admin/tokens.css', './tokens.css'));
 // Each file the forum page loads is named with a hash of its content. A
@@ -332,6 +338,14 @@ fs.writeFileSync(path.join(site, '_headers'), [
   // page with fresh modules (or the reverse) is the failure this prevents.
   '  Cache-Control: no-cache',
   "  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https: data:; connect-src 'self' https:; object-src 'none'; base-uri 'none'; frame-ancestors 'self'; form-action 'self'",
+  '  X-Content-Type-Options: nosniff',
+  '  Referrer-Policy: same-origin',
+  '',
+  // The page a Mastodon app sends its person to signs them in at their pod,
+  // so it reaches the pod's identity provider.
+  '/app-signin/*',
+  '  Cache-Control: no-cache',
+  "  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'",
   '  X-Content-Type-Options: nosniff',
   '  Referrer-Policy: same-origin',
   '',

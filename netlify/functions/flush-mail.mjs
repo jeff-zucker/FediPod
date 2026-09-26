@@ -10,7 +10,7 @@ import { gatewayCtx } from './front.mjs';
 import { signRun } from './keeper-background.mjs';
 import { flushAll, isPresent } from '../../lib/gateway/held-mail.mjs';
 import { closedState } from '../../lib/gateway/quiet.mjs';
-import { listCopies, copyMeta, flushCopy } from '../../lib/gateway/copy.mjs';
+import { listCopies, copyMeta, flushCopy, dropCopy, lockCopy } from '../../lib/gateway/copy.mjs';
 import { HttpStorage } from '../../lib/core/storage.mjs';
 
 export default async function handler() {
@@ -47,7 +47,21 @@ export default async function handler() {
     for (const handle of podFetch ? await listCopies(ctx.copyKv) : []) {
       const meta = await copyMeta(ctx.copyKv, handle);
       if (!meta?.stateUrl) continue;
-      await flushCopy(ctx.copyKv, handle, { pod: new HttpStorage(meta.stateUrl, podFetch), log: console.log })
+      const pod = new HttpStorage(meta.stateUrl, podFetch);
+      // An account no longer kept here — closed, moved, gone, or its keeper
+      // stopped — has its copy written to the pod and given up.
+      const rec = await ctx.lookup(handle);
+      const leaving = !rec || rec.movedTo || !rec.keeper || (await closedState(ctx, handle, rec)).closed;
+      if (leaving) {
+        const unlock = await lockCopy(ctx.copyKv, handle, { waitMs: 2000 });
+        if (!unlock) continue;
+        try {
+          const left = await dropCopy(ctx.copyKv, handle, { pod, podFetch, stateUrl: meta.stateUrl, log: console.log });
+          if (!left.ok) console.log(`copy @${handle}: not given up: ${left.why}`);
+        } catch (e) { console.log(`copy @${handle}: not given up: ${e?.message || e}`); } finally { await unlock(); }
+        continue;
+      }
+      await flushCopy(ctx.copyKv, handle, { pod, log: console.log })
         .catch((e) => console.log(`copy @${handle}: not written to the pod: ${e?.message || e}`));
     }
   }

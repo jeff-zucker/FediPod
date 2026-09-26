@@ -3458,7 +3458,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   // one from the fetch it intercepted — and the facade reads it to say where it
   // lives. Without it the notifications `Link` header named `https://undefined/`,
   // and a client paging by following it walked off the origin.
-  check(/reqHeaders\.host = url\.host/.test(read('web/app/sw-src.mjs')),
+  check(/reqHeaders\.host = url\.host/.test(read('lib/client/masto/bridge.mjs')) && /bridge\(request, url/.test(read('web/app/sw-src.mjs')),
     'the worker stamps the host it was asked on, which no fetch Request carries');
 
   // The unlock pane is shown by an early return, so a handler registered after

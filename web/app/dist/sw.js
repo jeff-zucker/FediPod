@@ -73924,6 +73924,75 @@ function solidOidcSession({ dbName = "solid-oidc-session", clientName = "Solid a
 // web/app/oidc-session.mjs
 var { beginLogin, completeLogin, getSession, signOut } = solidOidcSession({ dbName: "fedipod-oidc", clientName: "FediPod" });
 
+// lib/client/masto/bridge.mjs
+async function bridge(request, url, { sameOrigin: sameOrigin2 = false } = {}) {
+  const bodyBytes = request.method === "GET" || request.method === "HEAD" ? null : Buffer.from(new Uint8Array(await request.arrayBuffer()));
+  const bodyText = bodyBytes ? new TextDecoder().decode(bodyBytes) : "";
+  const reqHeaders = {};
+  for (const [k, v] of request.headers) reqHeaders[k.toLowerCase()] = v;
+  reqHeaders.host = url.host;
+  const listeners = {};
+  let fired = false;
+  const req = {
+    method: request.method,
+    url: url.pathname + url.search,
+    headers: reqHeaders,
+    // Whether the caller is a page on the agent's own origin. The browser
+    // worker has established that before anything reaches the facade, and
+    // MastoApi asks (through its authorities) whether a request is the owner's
+    // own; a request at the gateway never is.
+    sameOrigin: sameOrigin2,
+    socket: { encrypted: url.protocol === "https:" },
+    on(ev, cb) {
+      (listeners[ev] ||= []).push(cb);
+      if (fired) {
+        if (ev === "data" && bodyBytes?.length) cb(bodyBytes);
+        else if (ev === "end") cb();
+      }
+      return req;
+    },
+    destroy() {
+    }
+  };
+  queueMicrotask(() => {
+    fired = true;
+    if (bodyBytes?.length) (listeners.data || []).forEach((cb) => cb(bodyBytes));
+    (listeners.end || []).forEach((cb) => cb());
+  });
+  let status2 = 200;
+  const outHeaders = {};
+  const chunks = [];
+  const res = {
+    writeHead(s, h) {
+      status2 = s;
+      if (h) Object.assign(outHeaders, h);
+      return res;
+    },
+    setHeader(k, v) {
+      outHeaders[k] = v;
+    },
+    getHeader(k) {
+      return outHeaders[k];
+    },
+    write(c) {
+      chunks.push(c);
+    },
+    end(c) {
+      if (c) chunks.push(c);
+    }
+  };
+  return {
+    req,
+    res,
+    bodyBytes,
+    bodyText,
+    get status() {
+      return status2;
+    },
+    response: () => new Response(chunks.join(""), { status: status2, headers: { "content-type": "application/json", ...outHeaders } })
+  };
+}
+
 // web/app/sw-src.mjs
 var agent = null;
 var booting = null;
@@ -74013,65 +74082,14 @@ async function serve(request, url) {
     }
   }
   if (!agent) return json(503, { error: "not signed in on this browser \u2014 sign in at the front page" });
-  const bodyBytes = request.method === "GET" || request.method === "HEAD" ? null : Buffer.from(new Uint8Array(await request.arrayBuffer()));
-  const bodyText = bodyBytes ? new TextDecoder().decode(bodyBytes) : "";
-  const reqHeaders = {};
-  for (const [k, v] of request.headers) reqHeaders[k.toLowerCase()] = v;
-  reqHeaders.host = url.host;
-  const listeners = {};
-  let fired = false;
-  const req = {
-    method: request.method,
-    url: url.pathname + url.search,
-    headers: reqHeaders,
-    // notAllowed() above let this through, so it came from this origin. Said
-    // out loud rather than left implicit: MastoApi asks (through the
-    // authorities object in agent.mjs) whether a request is the owner's own,
-    // and in a browser that question means exactly this.
-    sameOrigin: true,
-    socket: { encrypted: url.protocol === "https:" },
-    on(ev, cb) {
-      (listeners[ev] ||= []).push(cb);
-      if (fired) {
-        if (ev === "data" && bodyBytes?.length) cb(bodyBytes);
-        else if (ev === "end") cb();
-      }
-      return req;
-    },
-    destroy() {
-    }
-  };
-  queueMicrotask(() => {
-    fired = true;
-    if (bodyBytes?.length) (listeners.data || []).forEach((cb) => cb(bodyBytes));
-    (listeners.end || []).forEach((cb) => cb());
+  const { req, res, bodyText, response } = await bridge(request, url, {
+    // notAllowed() above let this through, so it came from this origin.
+    sameOrigin: true
   });
-  let status2 = 200;
-  const outHeaders = {};
-  const chunks = [];
-  const res = {
-    writeHead(s, h) {
-      status2 = s;
-      if (h) Object.assign(outHeaders, h);
-      return res;
-    },
-    setHeader(k, v) {
-      outHeaders[k] = v;
-    },
-    getHeader(k) {
-      return outHeaders[k];
-    },
-    write(c) {
-      chunks.push(c);
-    },
-    end(c) {
-      if (c) chunks.push(c);
-    }
-  };
   try {
     const handled = isAdmin(url.pathname) ? await agent.admin.handle(req, res, url.pathname, url, bodyText) : await agent.masto.handle(req, res, url.pathname, url);
     if (!handled) return fetch(request);
-    return new Response(chunks.join(""), { status: status2, headers: { "content-type": "application/json", ...outHeaders } });
+    return response();
   } catch (err) {
     return json(500, { error: err.message });
   }

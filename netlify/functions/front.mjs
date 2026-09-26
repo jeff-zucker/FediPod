@@ -251,6 +251,9 @@ export function gatewayCtx() {
     // read and written with strong consistency: two functions working on one
     // account must see each other's writes at once.
     copyKv: blobsKv('state'),
+    // Mastodon apps signed in here: their registrations, codes and tokens
+    // (lib/gateway/masto-gateway.mjs).
+    mastoKv: blobsKv('masto'),
     // Signs the tokens the state API hands the owner's browser. Derived from
     // the keeper's own secret, which a deploy that keeps copies already has.
     stateSecret: process.env.FEDIPOD_KEEPER_CLIENT_SECRET
@@ -303,5 +306,6 @@ export async function keeperCredential() {
 
 // The account routes are the account function's (account.mjs): it carries
 // the pieces that act for an account, which a delivery never needs.
-export const ACCOUNT_PATHS = ['/api/state/*', '/api/v1/*', '/api/v2/*', '/oauth/*', '/api/authorize'];
+export const ACCOUNT_PATHS = ['/api/state/*', '/api/v1/*', '/api/v2/*', '/oauth/*', '/api/authorize',
+  '/.well-known/oauth-authorization-server'];
 export const config = { path: '/*', excludedPath: ACCOUNT_PATHS, preferStatic: true };
