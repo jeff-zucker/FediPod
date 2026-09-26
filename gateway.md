@@ -174,6 +174,8 @@ pod for FediPod to open, as before. It works under its own pod identity, which y
 names in the access rules on your FediPod folder. It reads your signing key
 from your pod when it needs it, so it can post as you, and keeps no copy of the
 key. **Stop keeping it running** on the manage page takes it out of the rules.
+If fedipod.net ever changes its own pod identity, your FediPod moves your
+account over the next time you open it, with nothing for you to do.
 Scheduling a post is offered only while this is on, because otherwise nothing
 would be running when the time came.
 

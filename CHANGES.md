@@ -34,6 +34,10 @@ signing key and connected-account passwords stay on your pod only. Your pod is
 asked far less: a restart of FediPod in the browser, or a run of the gateway's
 keeper, reads the copy instead of the pod.
 
+**If fedipod.net changes its own pod account**, each account it keeps running
+moves over the next time its owner opens FediPod, with nothing to do; until
+then an app using that account asks its owner to open FediPod once.
+
 **The sign-in library is renamed `fediverse-session`** (it was
 `fediverse-account` on npm). Nothing else about it changes.
 
