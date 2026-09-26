@@ -38,6 +38,12 @@ try {
   const busy = await fillCopy(busyKv, H, { pod, podFetch: kvDocFetch(busyPod, 'lease'), stateUrl });
   check(!busy.ok && /active on another device/.test(busy.why) && !(await copyMeta(busyKv, H)),
     'no copy is made while a device is acting on the pod directly');
+  const podRefused = await fillCopy(memoryKv(), H, { pod, podFetch: async () => new Response('', { status: 403 }), stateUrl });
+  check(!podRefused.ok && /could not be read \(HTTP 403\)/.test(podRefused.why) && !/another device/.test(podRefused.why),
+    'a pod that refuses the gateway is named as the reason, not another device');
+  const noToken = await fillCopy(memoryKv(), H, { pod, podFetch: async () => { throw new Error('token request failed (HTTP 401)'); }, stateUrl });
+  check(!noToken.ok && /could not be read \(token request failed \(HTTP 401\)\)/.test(noToken.why),
+    'and so is the gateway\'s own sign-in failing');
   const filled = await fillCopy(kv, H, { pod, podFetch, stateUrl, webId: 'https://pod.example/profile/card#me' });
   check(filled.ok && (await kv.get('mei/d/statuses.json')) && !(await kv.get('mei/d/keys.json')) && !(await kv.get('mei/d/conn-bsky.json')),
     'the copy holds the state documents, and not the key or the passwords');

@@ -7,6 +7,7 @@
 import crypto from 'node:crypto';
 import { routeMastoGateway } from '../../lib/gateway/masto-gateway.mjs';
 import { memoryKv } from '../../lib/gateway/copy.mjs';
+import { ensureCopy } from '../../lib/gateway/state-api.mjs';
 
 let fails = 0;
 const check = (ok, msg) => { console.log(`${ok ? 'PASS' : 'FAIL'}  ${msg}`); if (!ok) fails++; };
@@ -17,6 +18,8 @@ const mastoKv = memoryKv();
 const rows = {
   mei: { handle: 'mei', webId: WEBID, podHome: 'https://mei.pod.example/fedipod/', openedAt: new Date().toISOString(), keeper: { webId: 'https://keeper.example/#me' } },
   kit: { handle: 'kit', webId: 'https://kit.pod.example/profile/card#me', podHome: 'https://kit.pod.example/fedipod/', openedAt: new Date().toISOString() },
+  // Kept, with no copy yet, on a pod that refuses the gateway.
+  ana: { handle: 'ana', webId: 'https://ana.pod.example/profile/card#me', podHome: 'https://ana.pod.example/fedipod/', openedAt: new Date().toISOString(), keeper: { webId: 'https://keeper.example/#me' } },
 };
 // Mei's copy, as the gateway would have made it from her pod.
 const put = (name, obj) => copyKv.set(`mei/d/${name}`, JSON.stringify(obj, null, 2) + '\n');
@@ -33,9 +36,14 @@ const ctx = {
   listDirectory: async () => rows,
   keeperWebId: 'https://keeper.example/#me',
   keeperCredential: { webId: 'https://keeper.example/#me', clientId: 'x', secret: 'y', tokenEndpoint: 'https://keeper.example/token', issuerOrigin: 'https://keeper.example' },
-  keeperFetch: async () => { throw new Error('the pod is not reached in this test'); },
+  // Only Ana's pod is reached, and it refuses the gateway.
+  keeperFetch: async () => async (u) => {
+    if (!String(u).startsWith('https://ana.pod.example/')) throw new Error('the pod is not reached in this test');
+    return new Response('', { status: 403 });
+  },
 };
-const deps = { verifyPodToken: async (request) => (request.headers.get('authorization') === 'DPoP good' ? WEBID : request.headers.get('authorization') === 'DPoP other' ? 'https://eve.example/#me' : null) };
+const signedAs = { 'DPoP good': WEBID, 'DPoP other': 'https://eve.example/#me', 'DPoP ana': rows.ana.webId };
+const deps = { verifyPodToken: async (request) => signedAs[request.headers.get('authorization')] || null };
 const call = async (method, p, { body = null, headers = {} } = {}) => {
   const request = new Request(ORIGIN + p, { method, headers: { ...(body && typeof body === 'object' ? { 'content-type': 'application/json' } : {}), ...headers },
     body: body == null ? undefined : typeof body === 'string' ? body : JSON.stringify(body) });
@@ -87,6 +95,15 @@ try {
   check(back?.origin === 'https://elk.zone' && back.searchParams.get('code') && back.searchParams.get('state') === 's1',
     'the owner\'s sign-in sends the app its code');
   const code = back.searchParams.get('code');
+  const anaAsk = { ...ask, address: 'ana' };
+  const refused = await call('POST', '/api/authorize', { body: anaAsk, headers: { authorization: 'DPoP ana', dpop: 'x' } });
+  check(refused.status === 502 && /could not be read \(HTTP 403\)/.test(refused.json?.error) && !/another device/.test(refused.json?.error),
+    `a pod that refuses the gateway is named as the reason, not another device (${refused.json?.error})`);
+  const appSees = await ensureCopy(ctx, 'ana', rows.ana, () => {});
+  check(appSees.status === 503 && /a moment ago: the pod could not be read \(HTTP 403\)/.test(appSees.why),
+    'an app checking in just after is told to wait, and why');
+  const again = await call('POST', '/api/authorize', { body: anaAsk, headers: { authorization: 'DPoP ana', dpop: 'x' } });
+  check(again.status === 502 && !/a moment ago/.test(again.json?.error), 'the owner signing in again is not made to wait');
   check((await call('POST', '/oauth/token', { body: { grant_type: 'authorization_code', code, client_id: app.client_id, redirect_uri: app.redirect_uri, code_verifier: 'wrong' } })).status === 400,
     'a code made with a challenge is not given up for a wrong answer');
   const tok = await call('POST', '/oauth/token', { body: { grant_type: 'authorization_code', code, client_id: app.client_id, redirect_uri: app.redirect_uri, code_verifier: verifier } });

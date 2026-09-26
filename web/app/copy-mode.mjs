@@ -30,7 +30,10 @@ export async function openCopy(agent, frontOrigin, { handle = null, kept = null 
   if (res.status !== 200) {
     // 404, 409 and 501 are answers (no copy for this account here); anything
     // else is worth saying.
-    if (![404, 409, 501].includes(res.status)) agent.log(`the account's copy: the gateway answered ${res.status}`);
+    if (![404, 409, 501].includes(res.status)) {
+      const why = (await res.json().catch(() => null))?.error;
+      agent.log(`the account's copy: the gateway answered ${res.status}${why ? ` (${why})` : ''}`);
+    }
     return null;
   }
   const copy = await res.json().catch(() => null);

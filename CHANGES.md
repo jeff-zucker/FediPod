@@ -1,5 +1,20 @@
 # Changes
 
+## 2026-09-26 (why a Mastodon app cannot open your account, and a WebID to sign in with — version 1.40.4)
+
+**When fedipod.net cannot read your pod, it says so.** An app signing in to
+an account whose copy could not be made was told the account was "active on
+another device", whatever had really gone wrong. Now it gives the reason: the
+pod refused fedipod.net (with the answer it gave), or fedipod.net could not
+sign in to its own pod account.
+
+**Signing in yourself is not made to wait.** After a failed attempt, apps
+checking in are asked to wait five minutes, so your pod is not asked every
+minute. Signing in yourself on the sign-in page now tries again at once.
+
+**The sign-in page takes your WebID as well as your Fediverse address.** It
+asks for "Your Fediverse address or WebID".
+
 ## 2026-09-26 (Mastodon apps, the account copy and the round work on fedipod.net — version 1.40.3)
 
 **The parts of fedipod.net that clean HTML now start on Netlify**: signing in

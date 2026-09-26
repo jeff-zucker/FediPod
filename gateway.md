@@ -193,8 +193,8 @@ you connected elsewhere are never in the copy; they stay on your pod only.
 While the gateway keeps your account running, any Mastodon app can use it:
 elk.zone, Ivory, Tusky, Phanpy and the rest. In the app, give `fedipod.net` as
 your server. The app sends you to a fedipod.net page that asks for your
-address here and signs you in at your own pod; no password is typed on
-fedipod.net. The app then reads your timeline and notifications from your
+Fediverse address or your WebID and signs you in at your own pod; no password
+is typed on fedipod.net. The app then reads your timeline and notifications from your
 account's copy at the gateway, and posts, boosts, likes and follows as you.
 
 An app checks for new posts every minute or so while it is open; there are no
