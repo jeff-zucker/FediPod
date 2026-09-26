@@ -4,12 +4,9 @@
 
 FediPod gives you a Fediverse account whose data lives on a Solid pod. You
 follow people on Mastodon, Bluesky, and other Fediverse or ATProto servers in
-one timeline. Your posts, followers and settings stay on your pod.
-<!-- CLAUDE 2026-09-25 — the sentence above is now true with a lag for accounts fedipod.net keeps running; suggested replacement below; delete these markers when done -->
-Your posts, followers and settings are kept on your pod. While fedipod.net
+one timeline. Your posts, followers and settings are kept on your pod. While fedipod.net
 keeps your account running, it works from a copy of them and writes it to your
 pod every fifteen minutes; your signing key never leaves your pod.
-<!-- /CLAUDE -->
 
 The easiest way to run FediPod is to use it in any browser at https://fedipod.net. Nothing to install. Sign-up points you to a pod provider if you need a pod, then attaches a Fediverse identity to the pod you sign in with.
 
@@ -97,26 +94,16 @@ there it takes over; the first drops back to reading.
 
 ## What the browser version does not do
 
-- **Scheduled posts.** Nothing runs between now and the time you picked, so
-  the composer refuses one rather than dropping it later.
-<!-- CLAUDE 2026-09-25 — the line above is now true only when the gateway is not keeping the account running; replace it with this; delete these markers when done -->
 - **Scheduled posts, if you stop fedipod.net keeping your account running.**
   It does by default, and publishes them while FediPod is closed. Turned off
   on the manage page, nothing runs between now and the time you picked, so
   the composer refuses one rather than dropping it later.
-<!-- /CLAUDE -->
-- **Notifications while the client is closed.** There is no push service.
-  Open the tab and they are there.
-- **Live updates.** The client refreshes by polling.
-- **Hosting a group.** Joining one works.
-- **Other clients.** A phone app or desktop client has nothing on the network
-  to connect to.
-<!-- CLAUDE 2026-09-25 — "Notifications while the client is closed" and "Other clients" above are no longer true while fedipod.net keeps the account running (the default); suggested replacements below; delete these markers when done -->
 - **Notifications, and other clients, if you stop fedipod.net keeping your
   account running.** While it does (the default), any Mastodon app, phone or
   desktop, can use your account with `fedipod.net` as its server, and an app
   that offers notifications gets them on your phone with everything closed.
-<!-- /CLAUDE -->
+- **Live updates.** The client refreshes by polling.
+- **Hosting a group.** Joining one works.
 
 For these, see [Other ways to run FediPod](#other-ways-to-run-fedipod).
 
@@ -125,29 +112,22 @@ For these, see [Other ways to run FediPod](#other-ways-to-run-fedipod).
 Everything you publish and everything you read is stored on your pod. Your
 signing key is stored there too, in a container only you can read through
 your pod's login.
-<!-- CLAUDE 2026-09-25 — the sentence above is no longer true while fedipod.net keeps the account running (the default): its own pod identity can read the key too; suggested addition below; delete these markers when done -->
 While fedipod.net keeps your account running, its own pod identity can read
 that container too, so it can act for you while FediPod is closed, and it
 works from a copy of your account's data that it writes back to your pod every
 fifteen minutes. Your key stays on your pod only.
-<!-- /CLAUDE -->
 It all lives in the `fedipod` container you chose at sign-up. Your pod's
 public type index records it, as an ActivityStreams actor, which is how
 FediPod and other Solid apps find your account again.
  fedipod.net holds no key: it verifies incoming mail, drops
 the junk, forwards the rest to your pod, and hands your browser the app.
-<!-- CLAUDE 2026-09-25 — "holds no key" still holds (it keeps no copy), but it reads the key while it keeps the account running, and it keeps a copy of the account's data; see the addition above; delete these markers when done -->
-<!-- /CLAUDE -->
 With an address on your pod, `@handle@yourpod`, you can detach from it at
 any time and attach to a gateway of your own; your address and your data do
 not change.
 
 ## Other ways to use FediPod
 
-- [fediverse-account]() - an ESM library that supports both Solid-based and regular Fediverse accounts with methods to login, reply, boost, etc.
-<!-- CLAUDE 2026-09-26 — the library is renamed fediverse-session; replacement for the line above, with its link filled in; delete these markers when done -->
 - [fediverse-session](lib/session/README.md) - an ESM library that supports both Solid-based and regular Fediverse accounts with methods to login, reply, boost, etc.
-<!-- /CLAUDE -->
 - [FediPod Server](packages/fedipod-server/README.md): a full ActivityPub
   server as a Community Solid Server component, giving every pod on the server
   the option of a Fediverse account.
