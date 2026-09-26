@@ -267,10 +267,9 @@ fs.writeFileSync(path.join(site, '_redirects'), [
 // own /u/<handle>/ or a pod named outright. Its script is a module file of
 // its own, so it is served under the same `script-src 'self'` as the app.
 fs.mkdirSync(path.join(site, 'bb'), { recursive: true });
-for (const f of ['index.html', 'bb.js', 'read.mjs', 'masto.mjs', 'pod.mjs', 'markdown.mjs', 'seen.mjs', 'mine.mjs', 'private.mjs']) cp(`packages/fedipod-bb/site/${f}`, `bb/${f}`);
+for (const f of ['index.html', 'bb.js', 'read.mjs', 'masto.mjs', 'pod.mjs', 'markdown.mjs', 'seen.mjs', 'mine.mjs', 'private.mjs', 'oidc-session.mjs']) cp(`packages/fedipod-bb/site/${f}`, `bb/${f}`);
 cp('web/admin/tokens.css', 'bb/tokens.css');   // the site's shared palette, size and family
-cp('lib/session/oidc-session.mjs', 'bb/solid-oidc-session.mjs');   // signing in to a pod: the library
-cp('web/app/oidc-session.mjs', 'bb/oidc-session.mjs');   // and the browser build's binding of it, same database as the app
+cp('lib/session/oidc-session.mjs', 'bb/solid-oidc-session.mjs');   // signing in to a pod: the library the forum's binding names
 // The account library's demo page, with the library beside it, under /demo/.
 fs.mkdirSync(path.join(site, 'demo'), { recursive: true });
 for (const f of ['fedi-account.mjs', 'fedi-login.mjs', 'oidc-session.mjs']) cp(`lib/session/${f}`, `demo/${f}`);
@@ -285,7 +284,7 @@ fs.writeFileSync(path.join(site, 'demo/index.html'),
   const stamp = (n) => createHash('sha256').update(fs.readFileSync(bb(n))).digest('hex').slice(0, 10);
   const sub = (n, pairs) => { let t = fs.readFileSync(bb(n), 'utf8');
     for (const [a, b] of pairs) t = t.split(a).join(b); fs.writeFileSync(bb(n), t); };
-  sub('oidc-session.mjs', [["'../../lib/session/oidc-session.mjs'", `'./solid-oidc-session.mjs?v=${stamp('solid-oidc-session.mjs')}'`]]);
+  sub('oidc-session.mjs', [["'fediverse-account/oidc-session.mjs'", `'./solid-oidc-session.mjs?v=${stamp('solid-oidc-session.mjs')}'`]]);
   sub('pod.mjs', [["'./oidc-session.mjs'", `'./oidc-session.mjs?v=${stamp('oidc-session.mjs')}'`],
     ["'./markdown.mjs'", `'./markdown.mjs?v=${stamp('markdown.mjs')}'`],
     ["'./private.mjs'", `'./private.mjs?v=${stamp('private.mjs')}'`],
