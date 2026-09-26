@@ -19,7 +19,9 @@ const RENEW_BEFORE_MS = 2 * 3600_000;
 // pod. The account works from its pod meanwhile, as after any failed ask. A
 // sign-in, as against a restart, asks anyway, and turning keeping on forgets
 // the failure (agent.mjs setKeeper). A network failure or a refused sign-in is
-// not remembered: those are this browser's to put right.
+// not remembered: those are this browser's to put right. Nor is "held by
+// another device" after this browser lets go of the pod (moveIntoCopy): what
+// the gateway found held may have been this browser's own lease.
 const ASK_AGAIN_MS = 15 * 60_000;
 const REMEMBERED = [404, 409, 501, 502, 503];
 const failedKey = (agent, frontOrigin) => `copy-open-failed:${frontOrigin}:${agent.webId}`;
@@ -31,12 +33,13 @@ export const forgetFailedOpen = (agent, frontOrigin) => kvDel(failedKey(agent, f
  * ({ handle, base, token, expiresAt }) or null, in which case the account
  * works from its pod.
  */
-export async function openCopy(agent, frontOrigin, { handle = null, kept = null, askAnyway = false } = {}) {
+export async function openCopy(agent, frontOrigin, { handle = null, kept = null, askAnyway = false, letGo = false } = {}) {
   if (kept && kept.expiresAt - Date.now() > RENEW_BEFORE_MS) return kept;
   if (!agent.sessionFetch || !frontOrigin) return null;
   const key = failedKey(agent, frontOrigin);
   const failed = await kvGet(key).catch(() => null);
-  if (!askAnyway && failed && Date.now() - failed.at < ASK_AGAIN_MS) return null;
+  const held = letGo && failed?.status === 409;
+  if (!askAnyway && !held && failed && Date.now() - failed.at < ASK_AGAIN_MS) return null;
   let res;
   try {
     res = await agent.sessionFetch(`${frontOrigin.replace(/\/$/u, '')}/api/state/open`, {
@@ -161,7 +164,7 @@ export async function moveIntoCopy(agent, frontOrigin) {
   if (agent.copy) return true;
   await agent.store.commit();
   await agent.lease.release();
-  const copy = await openCopy(agent, frontOrigin, { handle: agent.doorKey });
+  const copy = await openCopy(agent, frontOrigin, { handle: agent.doorKey, letGo: true });
   if (!copy) {
     if (await agent.lease.acquire()) agent.lease.startRenewal();
     return false;

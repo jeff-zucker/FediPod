@@ -67,6 +67,15 @@ try {
   const bo = agentAnswering('https://bo.example/#me', 404);
   await openCopy(bo, GW); await openCopy(bo, GW);
   check(bo.asks === 1, 'an account the gateway does not keep is not asked about again at every restart');
+  const lu = agentAnswering('https://lu.example/#me', 409);   // the pod's lease still this browser's own
+  await openCopy(lu, GW);
+  lu.answer = 200;
+  check(await openCopy(lu, GW) === null && lu.asks === 1, 'a restart does not ask again after "held by another device"');
+  check((await openCopy(lu, GW, { letGo: true }))?.base && lu.asks === 2,
+    'but having let go of the pod, the browser asks: the lease held may have been its own');
+  const mo = agentAnswering('https://mo.example/#me', 502);
+  await openCopy(mo, GW); await openCopy(mo, GW, { letGo: true });
+  check(mo.asks === 1, 'letting go of the pod changes nothing for any other failure');
   check(await openCopy(agentAnswering('https://kit.example/#me', 502), GW) === null && (await openCopy(ana, GW), ana.asks === 3),
     'one account\'s failure does not hold back another\'s');
 } catch (e) { console.log('ERROR', e.stack || e.message); fails++; }

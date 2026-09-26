@@ -1,5 +1,12 @@
 # Changes
 
+## 2026-09-26 (after FediPod restarts in your browser, an app can sign in at once — version 1.40.6)
+
+**A Mastodon app can sign in right after FediPod restarts in your browser.**
+With 1.40.5, a restart could leave your account working from your pod for up
+to a quarter of an hour, and an app signing in meanwhile was told the account
+was active on another device.
+
 ## 2026-09-26 (no more asking every minute while an account cannot be opened — version 1.40.5)
 
 **FediPod in the browser stops asking every minute.** When fedipod.net could
