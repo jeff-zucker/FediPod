@@ -5,6 +5,11 @@
 FediPod gives you a Fediverse account whose data lives on a Solid pod. You
 follow people on Mastodon, Bluesky, and other Fediverse or ATProto servers in
 one timeline. Your posts, followers and settings stay on your pod.
+<!-- CLAUDE 2026-09-25 — the sentence above is now true with a lag for accounts fedipod.net keeps running; suggested replacement below; delete these markers when done -->
+Your posts, followers and settings are kept on your pod. While fedipod.net
+keeps your account running, it works from a copy of them and writes it to your
+pod every fifteen minutes; your signing key never leaves your pod.
+<!-- /CLAUDE -->
 
 The easiest way to run FediPod is to use it in any browser at https://fedipod.net. Nothing to install. Sign-up points you to a pod provider if you need a pod, then attaches a Fediverse identity to the pod you sign in with.
 

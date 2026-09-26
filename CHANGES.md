@@ -1,6 +1,6 @@
 # Changes
 
-## 2026-09-25 (while your app is closed — not yet released)
+## 2026-09-25 (your account keeps running, and any Mastodon app can use it — not yet released)
 
 **Mail sent to a browser account waits at fedipod.net while FediPod is
 closed**, and reaches your pod in batches of up to a hundred when you open it,
@@ -15,6 +15,20 @@ post as you, as any Fediverse server can. The manage page turns it off.
 
 **Scheduled posts work in the browser version** while the gateway keeps your
 account running.
+
+**Any Mastodon app can use your account.** Give `fedipod.net` as the server in
+elk.zone, Ivory, Tusky or any other app, sign in at your own pod on the page it
+sends you to, and the app reads, posts, boosts, likes and follows as you. No
+password is typed on fedipod.net. It works while fedipod.net keeps your
+account running.
+
+**Your account's working data is kept at fedipod.net** while it keeps your
+account running, and written to your pod every fifteen minutes. FediPod in
+your browser, the gateway and your apps all work from that one copy, so they
+never disagree; whichever you act in takes over, as between two browsers. Your
+signing key and connected-account passwords stay on your pod only. Your pod is
+asked far less: a restart of FediPod in the browser, or a run of the gateway's
+keeper, reads the copy instead of the pod.
 
 **A poll in the browser version shuts when its time is up**, and everyone
 holding it is told, as a DeviceAgent's always did.
