@@ -1,5 +1,14 @@
 # Changes
 
+## 2026-09-26 (Mastodon apps, the account copy and the round work on fedipod.net — version 1.40.3)
+
+**The parts of fedipod.net that clean HTML now start on Netlify**: signing in
+from Mastodon apps, the account copy, the fifteen-minute round, keeping
+accounts running and phone notifications. In 1.40.2 they failed to start,
+because the HTML cleaner loads its parser in a way Netlify's Node refuses; the
+cleaner now ships with its parser in one file. What it keeps and removes is
+unchanged.
+
 ## 2026-09-26 (Mastodon apps and the account copy reach fedipod.net — version 1.40.2)
 
 **Mastodon apps can reach fedipod.net, and FediPod in the browser can reach

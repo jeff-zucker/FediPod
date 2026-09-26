@@ -32,6 +32,10 @@ const aliasPlugin = {
     build.onResolve({ filter: /^node:fs$/ }, () => ({ path: shim('node-fs.mjs') }));
     build.onResolve({ filter: /^web-push$/ }, () => ({ path: shim('web-push.mjs') }));
     build.onResolve({ filter: /\/safefetch\.mjs$/ }, () => ({ path: shim('safefetch.mjs') }));
+    // The packed sanitize-html is for Node (scripts/vendor-sanitize.mjs); the
+    // browser takes the package itself, whose browser build leaves out what a
+    // page has no use for.
+    build.onResolve({ filter: /vendor\/sanitize-html\.cjs$/ }, (args) => build.resolve('sanitize-html', { kind: args.kind, resolveDir: args.resolveDir }));
     // The shapes are one .ttl file for both agents; Node reads it, the browser
     // gets it through the text loader below.
     build.onResolve({ filter: /shapes-text\.mjs$/ }, () => ({ path: shim('shapes-text.mjs') }));

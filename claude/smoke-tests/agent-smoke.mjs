@@ -3460,6 +3460,13 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   // and a client paging by following it walked off the origin.
   check(/reqHeaders\.host = url\.host/.test(read('lib/client/masto/bridge.mjs')) && /bridge\(request, url/.test(read('web/app/sw-src.mjs')),
     'the worker stamps the host it was asked on, which no fetch Request carries');
+  {
+    // The packed sanitize-html (scripts/vendor-sanitize.mjs) is the one the
+    // Netlify functions clean HTML with; it must be the release installed.
+    const installed = JSON.parse(read('node_modules/sanitize-html/package.json')).version;
+    const packed = (/^\/\/ sanitize-html (\S+) /u.exec(read('vendor/sanitize-html.cjs')) || [])[1];
+    check(packed === installed, `the packed sanitize-html is the installed ${installed} (packed: ${packed}); run npm run vendor:sanitize`);
+  }
 
   // The unlock pane is shown by an early return, so a handler registered after
   // it never ran: the pane appeared with a dead button, in the one browser that
