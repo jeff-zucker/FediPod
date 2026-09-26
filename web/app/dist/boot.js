@@ -32635,6 +32635,9 @@ var PodTransport = class {
     this.aclFlavour = null;
     this._listCache = /* @__PURE__ */ new Map();
     this.toPod = null;
+    this.aclOwner = null;
+    this.keepers = [];
+    this.aclIfChanged = false;
   }
   /** Who is talking, and from where — the prefix on every log line and error. */
   get label() {
@@ -32832,9 +32835,10 @@ var PodTransport = class {
     authorize(
       namedNode2(url + "#owner"),
       ACL("agent"),
-      namedNode2(this.webId),
+      namedNode2(this.aclOwner || this.webId),
       ["Read", "Write", "Control"]
     );
+    (this.keepers || []).forEach((webId, i) => authorize(namedNode2(url + `#keeper${i}`), ACL("agent"), namedNode2(webId), ["Read", "Write", "Control"]));
     return serialize(doc, g, url, "text/turtle");
   }
   async setAcl(targetUrl, publicModes, opts = {}) {
@@ -32842,7 +32846,7 @@ var PodTransport = class {
     const url = await this.aclUrlFor(podTarget);
     if (!await this.aclWritable(url)) return null;
     const doc = this.aclDoc(podTarget, publicModes, { ...opts, aclUrl: url });
-    if (opts.ifChanged && await this.aclSame(url, doc)) return { status: 304, unchanged: true };
+    if ((opts.ifChanged || this.aclIfChanged) && await this.aclSame(url, doc)) return { status: 304, unchanged: true };
     return this.put(url, doc, "text/turtle");
   }
   // Whether the pod's rule at `aclUrl` states exactly what `doc` states.

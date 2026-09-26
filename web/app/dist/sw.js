@@ -44993,6 +44993,9 @@ var PodTransport = class {
     this.aclFlavour = null;
     this._listCache = /* @__PURE__ */ new Map();
     this.toPod = null;
+    this.aclOwner = null;
+    this.keepers = [];
+    this.aclIfChanged = false;
   }
   /** Who is talking, and from where — the prefix on every log line and error. */
   get label() {
@@ -45190,9 +45193,10 @@ var PodTransport = class {
     authorize(
       namedNode2(url + "#owner"),
       ACL("agent"),
-      namedNode2(this.webId),
+      namedNode2(this.aclOwner || this.webId),
       ["Read", "Write", "Control"]
     );
+    (this.keepers || []).forEach((webId, i) => authorize(namedNode2(url + `#keeper${i}`), ACL("agent"), namedNode2(webId), ["Read", "Write", "Control"]));
     return serialize(doc, g, url, "text/turtle");
   }
   async setAcl(targetUrl, publicModes, opts = {}) {
@@ -45200,7 +45204,7 @@ var PodTransport = class {
     const url = await this.aclUrlFor(podTarget);
     if (!await this.aclWritable(url)) return null;
     const doc = this.aclDoc(podTarget, publicModes, { ...opts, aclUrl: url });
-    if (opts.ifChanged && await this.aclSame(url, doc)) return { status: 304, unchanged: true };
+    if ((opts.ifChanged || this.aclIfChanged) && await this.aclSame(url, doc)) return { status: 304, unchanged: true };
     return this.put(url, doc, "text/turtle");
   }
   // Whether the pod's rule at `aclUrl` states exactly what `doc` states.
@@ -45550,6 +45554,10 @@ async function provisionPrivate(pod, urls) {
   await pod.setAcl(urls.state, []);
   await pod.setAcl(urls.home, []);
   return true;
+}
+async function restateRules(pod, urls) {
+  for (const url of [urls.home, urls.state, urls.home + "ap/private/"]) await pod.setAcl(url, [], { ifChanged: true });
+  for (const url of [urls.notes, urls.media]) await pod.setAcl(url, ["Read"], { ifChanged: true });
 }
 async function repairPrivateAcls(pod, trees, { isPublic } = {}) {
   const findings = [];
@@ -58364,7 +58372,9 @@ var Publisher = class {
       host,
       quiesced: !!this.config.quiescedAt,
       version: AGENT_VERSION,
-      moderators: this.config.moderators || []
+      moderators: this.config.moderators || [],
+      // Who else the rules name: granting or withdrawing a keeper rewrites them.
+      keepers: this.remote?.keepers || []
     })).digest("hex").slice(0, 32);
     await this.publishProfilePage({ force });
     if (!force && this.store.read("published.json", {}).surfaceDigest === surface) {
@@ -70983,6 +70993,7 @@ var ADMIN_PATHS = /* @__PURE__ */ new Set([
   "/revive",
   "/takeover",
   "/gateway/pause",
+  "/gateway/keep",
   "/gateway/close",
   "/fediacct/connect",
   "/fediacct/disconnect",
@@ -71092,7 +71103,10 @@ var AdminFacade = class {
             // The account's standing at the gateway — paused, closed — as the
             // gateway last said it (agent.mjs tellGateway). The record page
             // shows its pause and close controls only when this is here.
-            standing: a.gatewayStanding || null
+            standing: a.gatewayStanding || null,
+            // Whether the gateway may act for this account while the app is
+            // closed, and whether it does (agent.mjs setKeeper).
+            keeper: a._keeper ? { available: true, on: !!a._keeper.kept && !a.store.getConfig()?.keeperOff } : null
           });
         }
         case "/deadletter":
@@ -71245,6 +71259,13 @@ var AdminFacade = class {
         const r = await a.pauseAtGateway(body.paused);
         if (!r) return json2(502, { error: "the gateway could not be reached" });
         return json2(r.status === 200 ? 200 : r.status, r);
+      }
+      case "/gateway/keep": {
+        if (typeof body.on !== "boolean") return json2(400, { error: "on must be true or false" });
+        if (!a.setKeeper) return json2(501, { error: "this account is not at a gateway" });
+        if (!await a.requestTakeover?.()) return json2(503, { error: "another device is active for this pod \u2014 change it from there" });
+        const r = await a.setKeeper(body.on);
+        return json2(r?.status === 200 ? 200 : r?.status || 502, r || { error: "the gateway could not be reached" });
       }
       case "/gateway/close": {
         const handle7 = String(a.store.getConfig()?.handle || "").toLowerCase();
@@ -72836,6 +72857,32 @@ var BrowserAgent = class _BrowserAgent {
     return this.tellGateway("close", { handle: this.doorKey, confirm: true });
   }
   static OPEN_EVERY_MS = 60 * 6e4;
+  // The gateway acting for this account while the app is closed, or not. On:
+  // the rules on the account's folders name the gateway's pod identity, then
+  // the gateway is told. Off: the gateway is told first, so it stops, then the
+  // name comes out of the rules. Every public rule follows, because the
+  // published face's digest includes who the rules name.
+  async setKeeper(on) {
+    const webId = this._keeper?.webId;
+    if (!webId || !this.gatewayApi) return { status: 501, error: "this gateway cannot act for accounts" };
+    this.store.setConfig({ ...this.store.getConfig(), keeperOff: !on });
+    if (!on) {
+      const said2 = await this.tellGateway("keeper", { handle: this.doorKey, on: false });
+      if (said2?.status !== 200) return said2 || { status: 502 };
+      this._keeper.kept = false;
+    }
+    this.remote.keepers = on ? [webId] : [];
+    await restateRules(this.remote, this.urls);
+    await this.publisher.publishProfile();
+    await this.store.flush?.();
+    if (!on) return { status: 200, ok: true, kept: false };
+    const said = await this.tellGateway("keeper", { handle: this.doorKey, on: true });
+    if (said?.status === 200) {
+      this._keeper.kept = true;
+      this.log("the gateway keeps this account running while the app is closed");
+    }
+    return said || { status: 502 };
+  }
   // "The app is open", every five minutes while it is. While it is, the
   // gateway sends mail straight to the pod; while it is not, it holds the mail
   // and hands it over in batches, and the answer says how many it just did
@@ -72896,6 +72943,9 @@ var BrowserAgent = class _BrowserAgent {
         await this.publisher.publishProfile();
         await this.store.flush?.();
         await completeGatewayMove(this).catch((e) => this.log(`gateway move: ${e.message}`));
+        if (this._keeper && !this._keeper.kept && !this.store.getConfig()?.keeperOff) {
+          await this.setKeeper(true).catch((e) => this.log(`keeping the account while away: ${e.message}`));
+        }
       }
       const now = Date.now();
       const hereDue = !warm || now - (warm.hereAt || 0) >= _BrowserAgent.HERE_EVERY_MS;
@@ -73092,6 +73142,8 @@ var BrowserAgent = class _BrowserAgent {
       e.code = "address-closed";
       throw e;
     }
+    this._keeper = standing?.keeper ? { webId: standing.keeper, kept: !!standing.kept } : null;
+    if (this._keeper && !this.store.getConfig()?.keeperOff) this.remote.keepers = [this._keeper.webId];
     this.publisher = new Publisher({
       config: this.store.getConfig(),
       remote: this.remote,

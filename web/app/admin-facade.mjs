@@ -33,7 +33,7 @@ export const ADMIN_PATHS = new Set([
   '/deadletter', '/blocks', '/profiles', '/modqueue', '/log', '/fediacct', '/describe', '/follow',
   '/atproto', '/atproto/connect', '/atproto/disconnect',
   '/rebuild', '/move', '/retire', '/inbox/prune', '/park', '/revive', '/takeover',
-  '/gateway/pause', '/gateway/close',
+  '/gateway/pause', '/gateway/keep', '/gateway/close',
   '/fediacct/connect', '/fediacct/disconnect', '/fediacct/callback',
 ]);
 
@@ -143,6 +143,9 @@ export class AdminFacade {
             // gateway last said it (agent.mjs tellGateway). The record page
             // shows its pause and close controls only when this is here.
             standing: a.gatewayStanding || null,
+            // Whether the gateway may act for this account while the app is
+            // closed, and whether it does (agent.mjs setKeeper).
+            keeper: a._keeper ? { available: true, on: !!a._keeper.kept && !a.store.getConfig()?.keeperOff } : null,
           });
         }
         case '/deadletter': return json(200, { items: a.store.getDeadLetters() });
@@ -278,6 +281,13 @@ export class AdminFacade {
         const r = await a.pauseAtGateway(body.paused);
         if (!r) return json(502, { error: 'the gateway could not be reached' });
         return json(r.status === 200 ? 200 : r.status, r);
+      }
+      case '/gateway/keep': {
+        if (typeof body.on !== 'boolean') return json(400, { error: 'on must be true or false' });
+        if (!a.setKeeper) return json(501, { error: 'this account is not at a gateway' });
+        if (!await a.requestTakeover?.()) return json(503, { error: 'another device is active for this pod — change it from there' });
+        const r = await a.setKeeper(body.on);
+        return json(r?.status === 200 ? 200 : (r?.status || 502), r || { error: 'the gateway could not be reached' });
       }
       case '/gateway/close': {
         const handle = String(a.store.getConfig()?.handle || '').toLowerCase();

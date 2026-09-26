@@ -28,11 +28,16 @@ async function refreshGateway() {
     $('gateway-close').hidden = !known || !!st.closed;
     if (known && st.closed) GATEWAY_WORD.textContent += ' — this address is closed';
     else if (known && st.paused) GATEWAY_WORD.textContent += st.pausedBy === 'owner' ? ' — paused by you' : ' — paused';
+    // Whether the gateway keeps the account running while FediPod is closed.
+    const kp = g.keeper;
+    $('gateway-keep-on').hidden = !kp || !known || !!st.closed || kp.on;
+    $('gateway-keep-off').hidden = !kp || !known || !!st.closed || !kp.on;
+    if (kp?.on && known && !st.closed) GATEWAY_WORD.textContent += ' — kept running while you are away';
   } else {
     GATEWAY_WORD.textContent = '';
     GW_OPEN_ATTACH.hidden = false;
     GW_OPEN_DETACH.hidden = true;
-    for (const id of ['gateway-pause', 'gateway-resume', 'gateway-close']) $(id).hidden = true;
+    for (const id of ['gateway-pause', 'gateway-resume', 'gateway-keep-on', 'gateway-keep-off', 'gateway-close']) $(id).hidden = true;
   }
 }
 const setPausedAtGateway = async (paused) => {
@@ -43,6 +48,14 @@ const setPausedAtGateway = async (paused) => {
 };
 $('gateway-pause').addEventListener('click', () => setPausedAtGateway(true));
 $('gateway-resume').addEventListener('click', () => setPausedAtGateway(false));
+const setKept = async (on) => {
+  const r = await write('/gateway/keep', { on },
+    on ? 'kept running — follows, mail and what is waiting to go out are handled while FediPod is closed'
+      : 'stopped — your account acts only while FediPod is open');
+  if (r) refreshGateway();
+};
+$('gateway-keep-on').addEventListener('click', () => setKept(true));
+$('gateway-keep-off').addEventListener('click', () => setKept(false));
 const gwShape = () => document.querySelector('input[name=gwShape]:checked')?.value || 'pod';
 function gwPreviews() {
   $('gw-pod-preview').textContent = config?.address || `@${config?.handle || 'you'}@your.pod`;

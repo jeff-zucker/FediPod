@@ -31,6 +31,7 @@ import { fileURLToPath } from 'node:url';
 import { getStore } from '@netlify/blobs';
 import { routeFront } from '../../lib/gateway/front-core.mjs';
 import * as podInbox from '../../lib/pod/inbox.mjs';
+import grant from '../../vendor/idp-grant.cjs';
 
 // The new-account page and the vendored auth library, read once at cold start.
 let signupPage = '';
@@ -240,7 +241,32 @@ export function gatewayCtx() {
     heldAccounts: async () => [...new Set((await getStore('mail').list()).blobs.map((b) => b.key.split('/')[0]))],
     markPresent: async (handle) => getStore('present').setJSON(handle, { at: Date.now() }),
     presentAt: async (handle) => (await getStore('present').get(handle, { type: 'json' }))?.at || 0,
+    // The gateway's own pod identity, which an owner may let act for them while
+    // their app is closed (lib/gateway/keeper.mjs), and what its last run left.
+    keeperWebId: process.env.FEDIPOD_KEEPER_WEBID || null,
+    noteKept: async (handle, out) => getStore('keeper').setJSON(handle,
+      { at: Date.now(), waiting: out?.waiting || 0, skipped: out?.skipped || null }),
+    keeperDue: async () => {
+      const store = getStore('keeper');
+      const due = [];
+      for (const b of (await store.list()).blobs) {
+        if (((await store.get(b.key, { type: 'json' })) || {}).waiting > 0) due.push(b.key);
+      }
+      return due;
+    },
   };
+}
+
+// The keeper's pod credential: a client id and secret minted for its WebID
+// at its issuer, whose token endpoint is looked up once per running copy.
+let tokenEndpoint = null;
+export async function keeperCredential() {
+  const { FEDIPOD_KEEPER_WEBID: webId, FEDIPOD_KEEPER_ISSUER: issuer,
+    FEDIPOD_KEEPER_CLIENT_ID: clientId, FEDIPOD_KEEPER_CLIENT_SECRET: secret } = process.env;
+  if (!webId || !issuer || !clientId || !secret) return null;
+  const issuerOrigin = issuer.replace(/\/+$/u, '');
+  tokenEndpoint ||= await grant.discoverTokenEndpoint(issuerOrigin);
+  return { webId, issuerOrigin, clientId, secret, tokenEndpoint };
 }
 
 export const config = { path: '/*', preferStatic: true };

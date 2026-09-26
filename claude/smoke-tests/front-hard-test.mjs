@@ -128,6 +128,7 @@ const heldCtx = {
   heldAccounts: async () => [...new Set([...held.keys()].map((k) => k.split('/')[0]))],
   markPresent: async (h) => { present.set(h, Date.now()); },
   presentAt: async (h) => present.get(h) || 0,
+  keeperWebId: 'https://keeper.example/profile/card#me',
 };
 const front = http.createServer(async (req, res) => {
   const body = await new Promise((resolve) => {
@@ -854,6 +855,18 @@ try {
     { log: (m) => said.push(m) });
     check(inboxWrites.length === roundBefore + 1 && !held.size,
       `the timer delivers what an account's app left, and lets go of mail for an account that is gone (${said.join(' | ')})`);
+    // The owner letting the gateway act for them while the app is closed.
+    const opened2 = await (await post('/api/open', { handle: 'thrush' })).json();
+    check(opened2.keeper === heldCtx.keeperWebId && opened2.kept === false,
+      'a sign-in is told whom the app would name, and that it has not yet');
+    check((await post('/api/keeper', { handle: 'thrush', on: true }, { ...asOwner, authorization: 'Bearer someone-else' })).status === 403,
+      'only the owner can let the gateway act for them');
+    const keptOn = await (await post('/api/keeper', { handle: 'thrush', on: true })).json();
+    check(keptOn.kept === true && attached.thrush.keeper?.webId === heldCtx.keeperWebId,
+      'the owner lets it, and the row says so');
+    check((await (await post('/api/open', { handle: 'thrush' })).json()).kept === true, 'and the next sign-in is told so');
+    const keptOff = await (await post('/api/keeper', { handle: 'thrush', on: false })).json();
+    check(keptOff.kept === false && !attached.thrush.keeper, 'and can stop it');
     holding = false;
 
     const att2 = await post('/api/attach', { handle: 'lark', podHome: POD, fronted: true });

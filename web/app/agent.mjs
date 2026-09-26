@@ -161,6 +161,33 @@ export class BrowserAgent {
   closeAtGateway() { return this.tellGateway('close', { handle: this.doorKey, confirm: true }); }
   static OPEN_EVERY_MS = 60 * 60_000;
 
+  // The gateway acting for this account while the app is closed, or not. On:
+  // the rules on the account's folders name the gateway's pod identity, then
+  // the gateway is told. Off: the gateway is told first, so it stops, then the
+  // name comes out of the rules. Every public rule follows, because the
+  // published face's digest includes who the rules name.
+  async setKeeper(on) {
+    const webId = this._keeper?.webId;
+    if (!webId || !this.gatewayApi) return { status: 501, error: 'this gateway cannot act for accounts' };
+    this.store.setConfig({ ...this.store.getConfig(), keeperOff: !on });
+    if (!on) {
+      const said = await this.tellGateway('keeper', { handle: this.doorKey, on: false });
+      if (said?.status !== 200) return said || { status: 502 };
+      this._keeper.kept = false;
+    }
+    this.remote.keepers = on ? [webId] : [];
+    await containers.restateRules(this.remote, this.urls);
+    await this.publisher.publishProfile();
+    await this.store.flush?.();
+    if (!on) return { status: 200, ok: true, kept: false };
+    const said = await this.tellGateway('keeper', { handle: this.doorKey, on: true });
+    if (said?.status === 200) {
+      this._keeper.kept = true;
+      this.log('the gateway keeps this account running while the app is closed');
+    }
+    return said || { status: 502 };
+  }
+
   // "The app is open", every five minutes while it is. While it is, the
   // gateway sends mail straight to the pod; while it is not, it holds the mail
   // and hands it over in batches, and the answer says how many it just did
@@ -229,6 +256,11 @@ export class BrowserAgent {
         // An address that just moved here from another gateway: the new
         // actor is published, so the old gateway and the followers can be told.
         await completeGatewayMove(this).catch((e) => this.log(`gateway move: ${e.message}`));
+        // The first start that can: the gateway may act for this account while
+        // the app is closed, unless its owner said no (setKeeper).
+        if (this._keeper && !this._keeper.kept && !this.store.getConfig()?.keeperOff) {
+          await this.setKeeper(true).catch((e) => this.log(`keeping the account while away: ${e.message}`));
+        }
       }
       const now = Date.now();
       // Said before the drain starts, so held mail is in the inbox to be read.
@@ -467,6 +499,11 @@ export class BrowserAgent {
       e.code = 'address-closed';
       throw e;
     }
+    // The gateway's own pod identity, when it can act for this account while
+    // the app is closed (lib/gateway/keeper.mjs). Unless the owner turned that
+    // off, every rule this agent writes names it beside the owner.
+    this._keeper = standing?.keeper ? { webId: standing.keeper, kept: !!standing.kept } : null;
+    if (this._keeper && !this.store.getConfig()?.keeperOff) this.remote.keepers = [this._keeper.webId];
 
     this.publisher = new Publisher({
       config: this.store.getConfig(), remote: this.remote, store: this.store,
