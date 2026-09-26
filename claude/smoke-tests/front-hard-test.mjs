@@ -116,6 +116,19 @@ const attached = {};
 const received = new Map();
 // The operator's notices (lib/gateway/notices.mjs).
 const notices = {};
+// Held mail (lib/gateway/held-mail.mjs), switched on for its own block below.
+let holding = false;
+const held = new Map();                    // `${handle}/${name}` -> body
+const present = new Map();                 // handle -> ms
+const heldCtx = {
+  holdMail: async (h, name, body) => { held.set(`${h}/${name}`, body); },
+  listHeld: async (h) => [...held.keys()].filter((k) => k.startsWith(`${h}/`)).map((k) => k.slice(h.length + 1)),
+  readHeld: async (h, name) => held.get(`${h}/${name}`) ?? null,
+  dropHeld: async (h, name) => { held.delete(`${h}/${name}`); },
+  heldAccounts: async () => [...new Set([...held.keys()].map((k) => k.split('/')[0]))],
+  markPresent: async (h) => { present.set(h, Date.now()); },
+  presentAt: async (h) => present.get(h) || 0,
+};
 const front = http.createServer(async (req, res) => {
   const body = await new Promise((resolve) => {
     const chunks = [];
@@ -154,6 +167,7 @@ const front = http.createServer(async (req, res) => {
     // Mirrors the adapter: only attach-created rows can go; seeds survive.
     removeDirectory: async (h) => { delete attached[h]; return !directory[h]; },
     purge: async (tags) => { purged.push(...tags); },
+    ...(holding ? heldCtx : {}),
     podPut: async (_h, url, b, ct) => {
       const r = await fetch(url, { method: 'PUT', headers: { 'content-type': ct }, body: b })
         .catch(() => null);
@@ -792,6 +806,55 @@ try {
     check((await post('/api/pause', { handle: 'robin', paused: true })).headers.get('access-control-allow-origin') === '*',
       'and the answer to its call may be read there');
     check((await (await get('/api/handle?handle=robin')).json()).available === false, 'and the name stays taken');
+
+    // ---- a browser account's mail, held while its app is closed ----------
+    holding = true;
+    const att3 = await post('/api/attach', { handle: 'thrush', podHome: POD, fronted: true });
+    await post('/api/open', { handle: 'thrush' });
+    const thrushActor = `${ORIGIN}/u/thrush/ap/actor`;
+    const toThrush = (n) => get('/u/thrush/ap/inbox/', { method: 'POST', headers: { 'content-type': 'application/activity+json' },
+      body: JSON.stringify({ '@context': 'https://www.w3.org/ns/activitystreams', id: `https://m.example/a/t${n}`, type: 'Create',
+        actor: 'https://m.example/u/friend', to: [thrushActor],
+        object: { id: `https://m.example/n/t${n}`, type: 'Note', content: 'hi thrush', to: [thrushActor] } }) });
+    const writesBefore = inboxWrites.length;
+    for (let i = 1; i <= 3; i++) check((await toThrush(i)).status === 202, `delivery ${i} is taken while the app is closed`);
+    check(att3.status === 201 && inboxWrites.length === writesBefore && (await heldCtx.listHeld('thrush')).length === 6,
+      `while the app is closed, mail and its receipts wait at the gateway and the pod is not written (${(await heldCtx.listHeld('thrush')).length} held)`);
+    const here = await post('/api/here', { handle: 'thrush' });
+    const hereBody = await here.json();
+    const batchWrite = inboxWrites.slice(writesBefore).find((w) => /\/batch-[^/]+\.json$/.test(w.url));
+    const batch = batchWrite ? JSON.parse(batchWrite.body).batch : [];
+    check(here.status === 200 && hereBody.flushed === 3 && inboxWrites.length === writesBefore + 1 && batch.length === 3,
+      `the app saying it is open delivers them as one document in the pod inbox (${hereBody.flushed}, ${inboxWrites.length - writesBefore} write)`);
+    check(batch.every((e) => /hi thrush/.test(e.body) && e.receipt && typeof e.receipt === 'object'),
+      'each delivery in it carries its receipt');
+    check(!(await heldCtx.listHeld('thrush')).length, 'and nothing is held any more');
+    check((await post('/api/here', { handle: 'thrush' }, { ...asOwner, authorization: 'Bearer someone-else' })).status === 403,
+      'only the owner can say the app is open');
+    await post('/api/open', { handle: 'thrush' });        // the test's pause cap is three; a sign-in starts the count again
+    const direct = inboxWrites.length;
+    await toThrush(4);
+    check(inboxWrites.length === direct + 2 && !(await heldCtx.listHeld('thrush')).length,
+      'while the app is open, mail goes straight to the pod as before');
+    const catBefore = inboxWrites.length;
+    await get('/u/gardening/ap/inbox/', { method: 'POST', headers: { 'content-type': 'application/activity+json' },
+      body: JSON.stringify({ '@context': 'https://www.w3.org/ns/activitystreams', id: 'https://m.example/a/g1', type: 'Create',
+        actor: 'https://m.example/u/friend', to: [`${ORIGIN}/u/gardening/ap/actor`],
+        object: { id: 'https://m.example/n/g1', type: 'Note', content: 'hi', to: [`${ORIGIN}/u/gardening/ap/actor`] } }) });
+    check(!(await heldCtx.listHeld('gardening')).length,
+      `an account no browser signs in to is never held (${inboxWrites.length - catBefore} written)`);
+    // The timer's round, for an account whose app never came back.
+    const { flushAll } = await import(new URL('../../lib/gateway/held-mail.mjs', import.meta.url));
+    await heldCtx.holdMail('thrush', 'late', '{"type":"Create"}');
+    await heldCtx.holdMail('ghost', 'lost', '{"type":"Create"}');
+    const roundBefore = inboxWrites.length;
+    const said = [];
+    await flushAll({ ...heldCtx, lookup: (h) => attached[h] || null,
+      podPut: async (_h, url, b, ct) => (await fetch(url, { method: 'PUT', headers: { 'content-type': ct }, body: b })).status < 400 },
+    { log: (m) => said.push(m) });
+    check(inboxWrites.length === roundBefore + 1 && !held.size,
+      `the timer delivers what an account's app left, and lets go of mail for an account that is gone (${said.join(' | ')})`);
+    holding = false;
 
     const att2 = await post('/api/attach', { handle: 'lark', podHome: POD, fronted: true });
     const larkOpen = await post('/api/open', { handle: 'lark' });

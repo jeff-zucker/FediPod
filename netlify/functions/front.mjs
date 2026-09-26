@@ -157,7 +157,13 @@ export default async function handler(request) {
 }
 
 function route(request) {
-  return routeFront(request, {
+  return routeFront(request, gatewayCtx());
+}
+
+// Everything the front reads and keeps, as the core asks for it. Exported so
+// the held-mail timer (flush-mail.mjs) works on the same stores.
+export function gatewayCtx() {
+  return {
     host: process.env.FEDIPOD_FRONT_HOST,
     frontOrigin: process.env.FEDIPOD_FRONT_ORIGIN,
     signupPage,
@@ -225,7 +231,16 @@ function route(request) {
       return podInbox.appendWithToken(url, body, ct, { appendToken: rec.appendToken,
         report: (status) => { if (status >= 400 || status === 0) console.log(`door @${handle}: pod answered ${status || 'nothing'} to PUT ${url}${rec.appendToken ? ' (with token)' : ' (anonymous)'}`); } });
     },
-  });
+    // A browser account's mail while its app is closed, and when the app last
+    // said it was open (lib/gateway/held-mail.mjs).
+    holdMail: async (handle, name, body, ct) => getStore('mail').set(`${handle}/${name}`, body, { metadata: { ct } }),
+    listHeld: async (handle) => (await getStore('mail').list({ prefix: `${handle}/` })).blobs.map((b) => b.key.slice(handle.length + 1)),
+    readHeld: async (handle, name) => getStore('mail').get(`${handle}/${name}`),
+    dropHeld: async (handle, name) => getStore('mail').delete(`${handle}/${name}`),
+    heldAccounts: async () => [...new Set((await getStore('mail').list()).blobs.map((b) => b.key.split('/')[0]))],
+    markPresent: async (handle) => getStore('present').setJSON(handle, { at: Date.now() }),
+    presentAt: async (handle) => (await getStore('present').get(handle, { type: 'json' }))?.at || 0,
+  };
 }
 
 export const config = { path: '/*', preferStatic: true };

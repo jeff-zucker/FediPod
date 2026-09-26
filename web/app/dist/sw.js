@@ -59098,6 +59098,16 @@ async function readReceipt(intake, itemUrl) {
     return null;
   }
 }
+async function checkReceipt(intake, receipt) {
+  const secret = intake.gatewaySecret();
+  if (!secret || !receipt || typeof receipt !== "object") return null;
+  try {
+    const { verifyReceipt: verifyReceipt2 } = await Promise.resolve().then(() => (init_httpsig(), httpsig_exports));
+    return verifyReceipt2(receipt, secret) ? receipt : null;
+  } catch {
+    return null;
+  }
+}
 function receiptVouchesFor(intake, receipt, actor) {
   if (!receipt?.verified) return false;
   if (!receipt.actor || receipt.actor !== actor) return false;
@@ -65016,6 +65026,9 @@ var ATTEMPTS_DOC = "intake-attempts.json";
 var ATTEMPTS_TTL_MS = 7 * 24 * 60 * 6e4;
 var MAX_ITEM_ATTEMPTS = 5;
 var MAX_ITEMS_PER_DRAIN = 50;
+var MAX_BATCH_ENTRIES = 100;
+var MAX_BATCH_BYTES = 8 * 1024 * 1024;
+var isBatch = (url) => /\/batch-[^/]*\.json$/u.test(url);
 var Intake = class {
   // `ownerPost(activity, { raw, slug })` is the client-to-server dispatcher,
   // for an item the Gateway's outbox door took on the owner's behalf.
@@ -65166,7 +65179,28 @@ var Intake = class {
     const out = { considered: older.length, applied: 0, dropped: 0, discarded: 0, failed: 0 };
     for (const item of older) {
       try {
-        if (item.size > MAX_ITEM_BYTES) {
+        if (isBatch(item.url)) {
+          for (const e of await this._batchEntries(item.url) || []) {
+            const read2 = typeof e?.body === "string" ? await readLenient(e.body) : null;
+            const activity = read2?.view ?? read2?.doc ?? null;
+            const receipt = activity ? await this._checkReceipt(e?.receipt) : null;
+            if (keepConcerning) {
+              const rejection = activity ? await this.handle(activity, receipt) : "unparsable JSON";
+              if (rejection) out.dropped++;
+              else out.applied++;
+            } else if (activity && activity.type !== "Create") {
+              await this.handle(activity, receipt);
+              out.applied++;
+            } else {
+              out.dropped++;
+            }
+          }
+          if (!await this._persisted()) {
+            this.log("state not written \u2014 stopping the prune with a batch left");
+            break;
+          }
+          await dropHandledItem(this.remote, item.url);
+        } else if (item.size > MAX_ITEM_BYTES) {
           await dropHandledItem(this.remote, item.url);
           out.discarded++;
         } else {
@@ -65304,55 +65338,46 @@ var Intake = class {
       }
       return true;
     };
+    let spent = 0;
     for (const { url, size, receipt: hasReceipt } of items) {
       if (url.endsWith(".keep")) continue;
+      if (spent >= MAX_ITEMS_PER_DRAIN) {
+        this._drainAgain = handled > 0 || pending.length > 0;
+        break;
+      }
+      if (isBatch(url)) {
+        try {
+          const took = await this._takeBatch(url);
+          spent += took.entries;
+          if (took.complete) pending.push(url);
+        } catch (e) {
+          const n = this._bumpAttempt(url, e.message);
+          this.log(`inbox batch ${url} attempt ${n}/${MAX_ITEM_ATTEMPTS}: ${e.message}`);
+          if (n >= MAX_ITEM_ATTEMPTS) {
+            this.store.addDeadLetter({ inboxUrl: url, reason: `failed ${n}x: ${e.message}`, activity: null });
+            pending.push(url);
+          }
+        }
+        if (pending.length >= DELETE_BATCH && !await flush()) return;
+        continue;
+      }
+      spent++;
       if (hasReceipt) withReceipt.add(url);
       if (size > MAX_ITEM_BYTES) {
         this.store.addDeadLetter({ inboxUrl: url, reason: `oversized (${size} bytes)`, activity: null });
         pending.push(url);
         continue;
       }
-      let activity = null;
+      const at = {};
       try {
         const got = await readItem(this.remote, url, { maxBytes: MAX_ITEM_BYTES, readCapped: readCapped2 });
-        const raw = got.raw;
-        const read2 = raw ? await readLenient(raw) : null;
-        if (read2?.degraded) this.log(`inbox item ${url} grounded to read: ${read2.degraded}`);
-        activity = read2?.view ?? read2?.doc ?? null;
-        if (read2?.graph) {
-          const failure = await checkShapes(read2.graph);
-          if (failure) {
-            const said = describeShapeFailure(failure);
-            this.log(`inbox item ${url} does not fit its shape: ${said}`);
-            this.store.addDeadLetter({
-              inboxUrl: url,
-              reason: `shape: ${said}`,
-              shapeOnly: true,
-              activity: trimActivity(activity)
-            });
-          }
-        }
-        const receipt = activity && hasReceipt !== false ? await this._readReceipt(url) : null;
-        if (activity && this.gatewaySecret()) this._bumpGatewayStat(!!receipt?.verified);
-        const owned = activity && this.isOwnerPost(receipt);
-        const rejection = !activity ? "unparsable JSON" : owned ? await this.ownerPostFrom(activity, raw, receipt) : await this.handle(activity, receipt);
-        if (!rejection && raw && !owned) await this._archive(url, raw, activity);
-        if (!rejection && !owned) await this._maybeForward(activity);
-        if (rejection) {
-          this.store.addDeadLetter({
-            inboxUrl: url,
-            reason: rejection,
-            activity: trimActivity(activity),
-            ...activity ? {} : { raw: raw?.slice(0, 2e3) ?? null }
-          });
-          this.log(`rejected (${rejection}) \u2014 dead-lettered: ${url}`);
-        }
+        await this._take(url, got.raw, () => hasReceipt !== false ? this._readReceipt(url) : null, at);
         pending.push(url);
       } catch (e) {
         const n = this._bumpAttempt(url, e.message);
         this.log(`inbox item ${url} attempt ${n}/${MAX_ITEM_ATTEMPTS}: ${e.message}`);
         if (n >= MAX_ITEM_ATTEMPTS) {
-          this.store.addDeadLetter({ inboxUrl: url, reason: `failed ${n}x: ${e.message}`, activity: trimActivity(activity) });
+          this.store.addDeadLetter({ inboxUrl: url, reason: `failed ${n}x: ${e.message}`, activity: trimActivity(at.activity) });
           pending.push(url);
         }
       }
@@ -65364,6 +65389,90 @@ var Intake = class {
       await new Promise((r) => setTimeout(r, DELETE_GAP_MS));
     }
     if (handled > 0 && all.length > items.length && !this.stopped) this._drainAgain = true;
+  }
+  // One delivery, alone in the inbox or in a batch: read as JSON-LD, checked
+  // against its receipt, handled, and dead-lettered if refused. Throws when it
+  // could not be handled this time; `at.activity` then says what it was.
+  async _take(url, raw, receiptOf, at = {}) {
+    const read2 = raw ? await readLenient(raw) : null;
+    if (read2?.degraded) this.log(`inbox item ${url} grounded to read: ${read2.degraded}`);
+    const activity = at.activity = read2?.view ?? read2?.doc ?? null;
+    if (read2?.graph) {
+      const failure = await checkShapes(read2.graph);
+      if (failure) {
+        const said = describeShapeFailure(failure);
+        this.log(`inbox item ${url} does not fit its shape: ${said}`);
+        this.store.addDeadLetter({
+          inboxUrl: url,
+          reason: `shape: ${said}`,
+          shapeOnly: true,
+          activity: trimActivity(activity)
+        });
+      }
+    }
+    const receipt = activity ? await receiptOf() : null;
+    if (activity && this.gatewaySecret()) this._bumpGatewayStat(!!receipt?.verified);
+    const owned = activity && this.isOwnerPost(receipt);
+    const rejection = !activity ? "unparsable JSON" : owned ? await this.ownerPostFrom(activity, raw, receipt) : await this.handle(activity, receipt);
+    if (!rejection && raw && !owned) await this._archive(url, raw, activity);
+    if (!rejection && !owned) await this._maybeForward(activity);
+    if (rejection) {
+      this.store.addDeadLetter({
+        inboxUrl: url,
+        reason: rejection,
+        activity: trimActivity(activity),
+        ...activity ? {} : { raw: raw?.slice(0, 2e3) ?? null }
+      });
+      this.log(`rejected (${rejection}) \u2014 dead-lettered: ${url}`);
+    }
+  }
+  // The deliveries in a batch the gateway wrote while the owner's app was
+  // closed (lib/gateway/held-mail.mjs), or null when it holds none. Throws when
+  // the pod would not give it, like readItem.
+  async _batchEntries(url) {
+    const got = await readItem(this.remote, url, { maxBytes: MAX_BATCH_BYTES, readCapped: readCapped2 });
+    if (got.raw === null) return [];
+    let batch = null;
+    try {
+      batch = JSON.parse(got.raw)?.batch;
+    } catch {
+      batch = null;
+    }
+    return Array.isArray(batch) ? batch.slice(0, MAX_BATCH_ENTRIES) : null;
+  }
+  // Each delivery in a batch, taken as if it had arrived alone. `complete` is
+  // false while some entry is to be tried again: the batch then stays, and the
+  // entries already handled are handled again next time, harmlessly, as a
+  // re-delivered activity is.
+  async _takeBatch(url) {
+    const batch = await this._batchEntries(url);
+    if (!batch) {
+      this.store.addDeadLetter({ inboxUrl: url, reason: "unreadable batch", activity: null });
+      return { entries: 1, complete: true };
+    }
+    let complete = true;
+    for (const [i, e] of batch.entries()) {
+      const key = `${url}#${e?.name || i}`;
+      const body = typeof e?.body === "string" ? e.body : null;
+      if (body !== null && Buffer.byteLength(body) > MAX_ITEM_BYTES) {
+        this.store.addDeadLetter({ inboxUrl: key, reason: `oversized (${Buffer.byteLength(body)} bytes)`, activity: null });
+        continue;
+      }
+      const at = {};
+      try {
+        await this._take(key, body, () => this._checkReceipt(e?.receipt), at);
+        this._clearAttempt(key);
+      } catch (err) {
+        const n = this._bumpAttempt(key, err.message);
+        this.log(`inbox batch entry ${key} attempt ${n}/${MAX_ITEM_ATTEMPTS}: ${err.message}`);
+        if (n >= MAX_ITEM_ATTEMPTS) {
+          this.store.addDeadLetter({ inboxUrl: key, reason: `failed ${n}x: ${err.message}`, activity: trimActivity(at.activity) });
+        } else {
+          complete = false;
+        }
+      }
+    }
+    return { entries: batch.length, complete };
   }
   // The end of a sweep: publish whatever the follow graph did ONCE, then flush.
   //
@@ -65517,6 +65626,9 @@ var Intake = class {
   }
   _readReceipt(...a) {
     return readReceipt(this, ...a);
+  }
+  _checkReceipt(...a) {
+    return checkReceipt(this, ...a);
   }
   // A receipt the door stamped `c2s` for THIS actor, and only a receipt whose
   // HMAC verified (readReceipt returns nothing else). A stranger appending an
@@ -72724,6 +72836,17 @@ var BrowserAgent = class _BrowserAgent {
     return this.tellGateway("close", { handle: this.doorKey, confirm: true });
   }
   static OPEN_EVERY_MS = 60 * 6e4;
+  // "The app is open", every five minutes while it is. While it is, the
+  // gateway sends mail straight to the pod; while it is not, it holds the mail
+  // and hands it over in batches, and the answer says how many it just did
+  // (lib/gateway/held-mail.mjs).
+  static HERE_EVERY_MS = 5 * 6e4;
+  async hereAtGateway() {
+    const said = await this.tellGateway("here", { handle: this.doorKey });
+    if (said?.status === 200) saveMeta(this.webId, { hereAt: Date.now() }).catch(() => {
+    });
+    return said;
+  }
   // The hourly "still here". A worker the browser killed and restarted is the
   // same person, not a new sign-in: within the hour it answers from the last
   // check-in, kept in this browser, instead of telling the gateway again.
@@ -72775,7 +72898,16 @@ var BrowserAgent = class _BrowserAgent {
         await completeGatewayMove(this).catch((e) => this.log(`gateway move: ${e.message}`));
       }
       const now = Date.now();
-      const drainNow = !warm || now - (warm.drainedAt || 0) >= DRAIN_EVERY_MS;
+      const hereDue = !warm || now - (warm.hereAt || 0) >= _BrowserAgent.HERE_EVERY_MS;
+      const here = hereDue ? await this.hereAtGateway() : null;
+      clearInterval(this._hereTimer);
+      this._hereTimer = setInterval(() => {
+        this.hereAtGateway().then((h) => {
+          if (h?.flushed) this.intake?.drain().catch(() => {
+          });
+        });
+      }, _BrowserAgent.HERE_EVERY_MS);
+      const drainNow = !warm || now - (warm.drainedAt || 0) >= DRAIN_EVERY_MS || here?.flushed > 0;
       await this.intake.start({ drainNow, subscribe: !warm });
       this.startBsky();
       this.startAccts();
@@ -72797,6 +72929,8 @@ var BrowserAgent = class _BrowserAgent {
     this.lease.stopRenewal();
     clearInterval(this._openTimer);
     this._openTimer = null;
+    clearInterval(this._hereTimer);
+    this._hereTimer = null;
     this.intake?.stop?.();
     this.deliverer?.stop?.();
     this.importer?.stop?.();

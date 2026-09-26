@@ -2371,7 +2371,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   await podInbox.dropReceiptBeside(pod, box + 'one');
   check(deleted.join() === box + 'one.receipt.json', 'a receipt is deleted beside its item');
   const drain = fs.readFileSync(path.join(root, 'lib/core/intake/index.mjs'), 'utf8');
-  check(/hasReceipt !== false \? await this\._readReceipt\(url\)/.test(drain) && /withReceipt\.has\(url\)\) await podInbox\.dropReceiptBeside/.test(drain)
+  check(/hasReceipt !== false \? this\._readReceipt\(url\)/.test(drain) && /withReceipt\.has\(url\)\) await podInbox\.dropReceiptBeside/.test(drain)
     && /orphanReceipts\(this\.remote, this\.urls\)\.slice\(0, ORPHAN_RECEIPTS_PER_SWEEP\)/.test(drain),
   'the drain reads a receipt only where there is one, deletes it with the item, and sweeps strays');
   const bsky = fs.readFileSync(path.join(root, 'lib/connections/bskyfeed.mjs'), 'utf8');
@@ -2692,6 +2692,76 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   const gone = mk(404);
   await gone.intake.drain();
   check(gone.deleted.length === 1, 'a 404 still deletes — the item is already gone');
+}
+
+// --- 5k-ter. mail the gateway held while the app was closed arrives as a batch ---
+{
+  const { Intake } = await import(path.join(root, 'lib/core/intake/index.mjs'));
+  const httpsig = await import(path.join(root, 'lib/gateway/httpsig.mjs'));
+  const SECRET = 'batch-secret';
+  const box = 'https://p.example/in/';
+  const act = (id, actor = 'https://m.example/u/a') => ({ '@context': 'https://www.w3.org/ns/activitystreams',
+    id: `https://m.example/${id}`, type: 'Create', actor, object: { id: `https://m.example/n/${id}`, type: 'Note', content: 'hi' } });
+  const signed = (actor) => httpsig.signReceipt(httpsig.makeReceipt({ verified: true, keyId: actor + '#main-key', actor },
+    { gateway: 'https://gw.example/#me' }), SECRET);
+  const mk = (batch, { throwOn = null } = {}) => {
+    const deleted = [];
+    const state = {};
+    const handled = [];
+    const store = {
+      read: (n, d) => (n in state ? JSON.parse(JSON.stringify(state[n])) : d),
+      write: (n, v) => { state[n] = v; },
+      commit: async () => true,
+      addDeadLetter: (e) => { (state.dead ||= []).push(e); },
+      getDeadLetters: () => state.dead || [],
+      getConfig: () => ({ gateway: { hmacSecret: SECRET } }),
+    };
+    const reads = [];
+    const intake = new Intake({
+      config: {}, urls: { inbox: box, base: 'https://p.example/' },
+      remote: {
+        listContainer: async () => [{ url: box + 'batch-1-0-x.json', size: 900000, modified: '2026-01-01' }],
+        fetch: async (u) => { reads.push(u); return { status: 200, text: async () => JSON.stringify({ batch }), json: async () => ({ batch }) }; },
+        delete: async (u) => { deleted.push(u); return true; },
+      },
+      store, deliverer: {}, publisher: {}, log: () => {},
+    });
+    intake.handle = async (a, receipt) => {
+      if (a.id === throwOn) throw new Error('remote 503');
+      handled.push({ id: a.id, verified: !!receipt?.verified });
+      return a.id.endsWith('/refused') ? 'refused' : undefined;
+    };
+    intake._archive = async () => {};
+    intake._maybeForward = async () => {};
+    return { intake, deleted, state, handled, reads };
+  };
+
+  const a = act('one'), b = act('two', 'https://m.example/u/b'), c = act('refused');
+  const batch = [
+    { name: 'h1', body: JSON.stringify(a), receipt: signed(a.actor) },
+    { name: 'h2', body: JSON.stringify(b), receipt: { ...signed(b.actor), actor: 'https://evil.example/u/x' } },
+    { name: 'h3', body: JSON.stringify(c), receipt: null },
+  ];
+  const ok = mk(batch);
+  await ok.intake.drain();
+  check(ok.reads.length === 1, `a batch is one read of the pod, however many deliveries it holds (${ok.reads.length})`);
+  check(ok.handled.map((h) => h.id.split('/').pop()).join() === 'one,two,refused',
+    'each delivery in it is handled, in order');
+  check(ok.handled[0].verified && !ok.handled[1].verified && !ok.handled[2].verified,
+    'a receipt the gateway signed vouches; a tampered one and a missing one do not');
+  check((ok.state.dead || []).some((d) => d.reason === 'refused' && /#h3$/.test(d.inboxUrl)),
+    'a refused delivery is dead-lettered under its own name inside the batch');
+  check(ok.deleted.includes(box + 'batch-1-0-x.json'), 'and the batch goes once every delivery in it is done');
+
+  const stuck = mk(batch, { throwOn: 'https://m.example/two' });
+  await stuck.intake.drain();
+  check(!stuck.deleted.length, 'a delivery that cannot be handled yet keeps the whole batch for the next sweep');
+  check(stuck.state['intake-attempts.json']?.[box + 'batch-1-0-x.json#h2']?.n === 1,
+    'and counts one attempt against that delivery alone');
+  for (let i = 0; i < 4; i++) { stuck.handled.length = 0; await stuck.intake.drain(); }
+  check(stuck.deleted.includes(box + 'batch-1-0-x.json')
+    && (stuck.state.dead || []).some((d) => /#h2$/.test(d.inboxUrl) && /failed 5x/.test(d.reason)),
+  'after five tries it is dead-lettered and the batch goes');
 }
 
 // --- 5r. a restart reuses its token instead of asking for another ---

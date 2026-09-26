@@ -161,6 +161,17 @@ export class BrowserAgent {
   closeAtGateway() { return this.tellGateway('close', { handle: this.doorKey, confirm: true }); }
   static OPEN_EVERY_MS = 60 * 60_000;
 
+  // "The app is open", every five minutes while it is. While it is, the
+  // gateway sends mail straight to the pod; while it is not, it holds the mail
+  // and hands it over in batches, and the answer says how many it just did
+  // (lib/gateway/held-mail.mjs).
+  static HERE_EVERY_MS = 5 * 60_000;
+  async hereAtGateway() {
+    const said = await this.tellGateway('here', { handle: this.doorKey });
+    if (said?.status === 200) saveMeta(this.webId, { hereAt: Date.now() }).catch(() => {});
+    return said;
+  }
+
   // The hourly "still here". A worker the browser killed and restarted is the
   // same person, not a new sign-in: within the hour it answers from the last
   // check-in, kept in this browser, instead of telling the gateway again.
@@ -220,7 +231,14 @@ export class BrowserAgent {
         await completeGatewayMove(this).catch((e) => this.log(`gateway move: ${e.message}`));
       }
       const now = Date.now();
-      const drainNow = !warm || now - (warm.drainedAt || 0) >= DRAIN_EVERY_MS;
+      // Said before the drain starts, so held mail is in the inbox to be read.
+      const hereDue = !warm || now - (warm.hereAt || 0) >= BrowserAgent.HERE_EVERY_MS;
+      const here = hereDue ? await this.hereAtGateway() : null;
+      clearInterval(this._hereTimer);
+      this._hereTimer = setInterval(() => {
+        this.hereAtGateway().then((h) => { if (h?.flushed) this.intake?.drain().catch(() => {}); });
+      }, BrowserAgent.HERE_EVERY_MS);
+      const drainNow = !warm || now - (warm.drainedAt || 0) >= DRAIN_EVERY_MS || here?.flushed > 0;
       await this.intake.start({ drainNow, subscribe: !warm });
       this.startBsky();
       this.startAccts();
@@ -245,6 +263,7 @@ export class BrowserAgent {
     this.log('another device took over — read-only here');
     this.lease.stopRenewal();
     clearInterval(this._openTimer); this._openTimer = null;
+    clearInterval(this._hereTimer); this._hereTimer = null;
     this.intake?.stop?.();
     // The delivery queue as well. Its timer starts in the Deliverer's
     // constructor and nothing here ever switched it off, so a demoted device
