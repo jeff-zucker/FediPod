@@ -51,7 +51,7 @@ export function copyStorage(agent, podState) {
     fetchImpl: (u, i) => fetch(u, i), token: agent.copy.token, holder: agent.holderId, pod: podState,
     // Refused: another agent (an app at the gateway, another browser) took
     // the lease. This one stops acting at once rather than at its next renewal.
-    onRefused: () => { if (!agent.viewer) agent.demote(); },
+    onRefused: () => standDown(agent),
   });
   Object.defineProperty(s, 'token', { get: () => agent.copy.token, set() {} });
   return s;
@@ -67,6 +67,63 @@ function useLease(agent, lease) {
   agent.lease = lease;
   if (agent.intake) agent.intake.lease = lease;
   lease.onLost = () => agent.demote();
+}
+
+/**
+ * Before this browser acts: is the copy's lease still its own? An app at the
+ * gateway may have taken it and let it go since. Free again, it is taken back
+ * and the copy read afresh, so the action starts from what the app wrote.
+ * Held by somebody else, the browser stands down and the caller takes over as
+ * from any other device. True when this browser holds it now.
+ */
+export async function ensureCopyLease(agent) {
+  const cur = await agent.lease.readFresh().catch(() => null);
+  if (!cur || typeof cur !== 'object') return true;           // unreadable: the copy refuses if it is wrong
+  if (cur.holder === agent.lease.id && Date.now() < cur.expiresAt) return true;
+  // Held by another agent: this browser stands down, dropping what it had
+  // queued, and the caller takes over, reading the copy afresh.
+  if (Date.now() < cur.expiresAt) { agent.demote(); await agent.store.discardPending(); return false; }
+  // Free: an app acted and let it go. Writes queued here since are older than
+  // what the app wrote, so they are dropped, not sent.
+  agent._ensuring = true;
+  try {
+    await agent.store.discardPending();
+    if (!await agent.lease.acquire()) { agent.demote(); return false; }
+    await agent.store.load({ force: true });
+    agent.lease.startRenewal();
+    return true;
+  } finally { agent._ensuring = false; }
+}
+
+/**
+ * Another agent took the lease: an app acting at the gateway, which gives it
+ * back as soon as it is done. This browser stops acting at once, then takes
+ * the lease back when it is free, reading the copy afresh first (goActive), so
+ * it is not left watching for the viewer poll's five minutes. Another browser
+ * that took over keeps it, and the viewer poll carries on as before.
+ */
+export function standDown(agent) {
+  if (agent._retaking || agent._ensuring) return;
+  if (!agent.viewer) agent.demote();
+  agent._retaking = (async () => {
+    try {
+      // What was queued before the other agent acted is older than what it wrote.
+      await agent.store.discardPending();
+      for (const wait of [3000, 20_000]) {
+        await new Promise((r) => setTimeout(r, wait));
+        if (!agent.viewer) return;
+        const cur = await agent.lease.readFresh().catch(() => null);
+        // Held by anyone but the gateway (copy.mjs: GATEWAY_HOLDER) is another browser's.
+        if (cur && typeof cur === 'object' && cur.holder !== 'gateway' && Date.now() < cur.expiresAt) return;
+        if (await agent.lease.acquire()) {
+          clearTimeout(agent._viewerTimer); agent._viewerTimer = null;
+          await agent.goActive();
+          agent.log('took the account back from the gateway');
+          return;
+        }
+      }
+    } finally { agent._retaking = null; }
+  })();
 }
 
 /**

@@ -4,8 +4,8 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { memoryKv, kvDocFetch, CopyStorage, copyLease, holds, lockCopy, fillCopy, flushCopy, dropCopy, copyMeta, podOnly, GATEWAY_HOLDER }
-  from '../../lib/gateway/copy.mjs';
+import { memoryKv, kvDocFetch, CopyStorage, copyLease, holds, lockCopy, fillCopy, flushCopy, dropCopy, copyMeta, podOnly, GATEWAY_HOLDER,
+  renewPodLease, safeName } from '../../lib/gateway/copy.mjs';
 import { FileStorage } from '../../lib/core/storage.mjs';
 import { PodStore } from '../../lib/core/store.mjs';
 
@@ -42,8 +42,34 @@ try {
   check(filled.ok && (await kv.get('mei/d/statuses.json')) && !(await kv.get('mei/d/keys.json')) && !(await kv.get('mei/d/conn-bsky.json')),
     'the copy holds the state documents, and not the key or the passwords');
   const podLease = JSON.parse((await podKv.get('lease')).text);
-  check(podLease.holder === 'gateway-copy' && podLease.expiresAt > Date.now() + 365 * 86400_000,
-    'the pod lease is held for as long as the copy lives');
+  check(podLease.holder === 'gateway-copy' && podLease.expiresAt > Date.now() + 23 * 3600_000 && podLease.expiresAt < Date.now() + 25 * 3600_000,
+    'the pod lease is held a day at a time while the copy lives');
+  check(!(await renewPodLease(kv, H, { podFetch })), 'and is not renewed while it has hours left');
+  const meta0 = JSON.parse((await kv.get('mei/meta')).text);
+  await kv.set('mei/meta', JSON.stringify({ ...meta0, podLeaseUntil: Date.now() + 3600_000 }));
+  check(await renewPodLease(kv, H, { podFetch }) && JSON.parse((await podKv.get('lease')).text).expiresAt > Date.now() + 23 * 3600_000,
+    'the round holds it another day when it is running out');
+
+  // ---- names that are not plain are refused everywhere ----
+  const sneaky = new CopyStorage(kv, H, { holder: GATEWAY_HOLDER, pod });
+  check(!safeName('../../site:masto/token/x.json') && !safeName('a/b.json') && !safeName('..json') && safeName('statuses.json'),
+    'a document name with a path in it is not a state document');
+  check((await sneaky.write('..%2F..%2Fx.json'.replace(/%2F/g, '/'), '{}')).ok === false && (await sneaky.read('../meta')).ok === false,
+    'and the copy neither writes nor reads one');
+  let threw = false; try { new CopyStorage(kv, '../other', { holder: 'x' }); } catch { threw = true; }
+  check(threw, 'nor works for an account key with a path in it');
+
+  // ---- a copy half made is taken away again ----
+  const brokenDir = fs.mkdtempSync(path.join(os.tmpdir(), 'copy-broken-'));
+  fs.writeFileSync(path.join(brokenDir, 'config.json'), '{}');
+  const brokenPod = { list: async () => ({ names: ['config.json', 'statuses.json'], etag: null }),
+    read: async (n) => (n === 'config.json' ? { ok: true, body: '{}', etag: '"1"' } : { ok: false, status: 500 }) };
+  const brokenKv = memoryKv(); const brokenLease = memoryKv();
+  await brokenKv.set('zed/d/orphan.json', '{}');           // what an interrupted give-up could leave
+  const half = await fillCopy(brokenKv, 'zed', { pod: brokenPod, podFetch: kvDocFetch(brokenLease, 'lease'), stateUrl });
+  check(!half.ok && !(await brokenKv.list('zed/')).length && JSON.parse((await brokenLease.get('lease')).text).expiresAt === 0,
+    `a copy that could not be made is taken away and the pod's lease given back (${half.why})`);
+  fs.rmSync(brokenDir, { recursive: true, force: true });
   check((await fillCopy(kv, H, { pod, podFetch, stateUrl })).already, 'making it again changes nothing');
 
   // ---- worked on through a PodStore ----
@@ -84,6 +110,10 @@ try {
   const third = await lockCopy(kv, H, { waitMs: 300 });
   check(!!third, 'and gets its turn once the first is done');
   await third();
+  const held = await lockCopy(kv, H, { ms: 1200 });
+  await new Promise((r) => setTimeout(r, 1800));
+  check(!(await lockCopy(kv, H, { waitMs: 200 })), 'a lock is kept while its holder runs, past its first time');
+  await held();
   await kv.set('mei/lock', JSON.stringify({ by: 'dead', until: Date.now() - 1 }));
   const afterDeath = await lockCopy(kv, H, { waitMs: 300 });
   check(!!afterDeath, 'a lock whose holder died is taken over once its time is up');

@@ -99,6 +99,13 @@ try {
   const readOnly = await call('POST', '/oauth/token', { body: { grant_type: 'client_credentials', client_id: app.client_id, client_secret: app.client_secret } });
   check((await call('GET', '/api/v1/timelines/home', { headers: { authorization: `Bearer ${readOnly.json.access_token}` } })).status === 403,
     'an app\'s own token, naming no account, reads no account');
+  check((await call('GET', `/api/authorize?client_id=${encodeURIComponent('../../site:state/mei/d/config.json')}&redirect_uri=x`)).status === 404,
+    'a client id with a path in it is not looked up');
+  check((await call('GET', '/api/v1/timelines/home', { headers: { authorization: 'Bearer never-given', 'sec-fetch-site': 'same-origin' } })).status === 503,
+    'FediPod\'s own client asking before its worker answers is told to try again, not signed out');
+  const was = rows.mei.webId; rows.mei.webId = 'https://someone-new.example/profile/card#me';
+  check((await call('GET', '/api/v1/timelines/home', { headers: bearer })).status === 401, 'a token is refused once its address belongs to somebody else');
+  rows.mei.webId = was;
   await call('POST', '/oauth/revoke', { body: { token: tok.json.access_token } });
   check((await call('GET', '/api/v1/timelines/home', { headers: bearer })).status === 401, 'a revoked token reads nothing');
   const pre = await call('OPTIONS', '/api/v1/statuses');

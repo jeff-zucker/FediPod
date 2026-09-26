@@ -34,7 +34,7 @@ import { AcctFeed } from '../../lib/connections/acctfeed.mjs';
 import { followActor, unfollowActor, resolveHandle } from '../../lib/core/social.mjs';
 import { podBaseOfWebId } from '../../lib/pod/urls.mjs';
 import { ImportWorker } from '../../lib/connections/import.mjs';
-import { openCopy, copyStorage, copyLeaseOf, moveIntoCopy, leaveCopy, renewCopyToken } from './copy-mode.mjs';
+import { openCopy, copyStorage, copyLeaseOf, moveIntoCopy, leaveCopy, renewCopyToken, standDown, ensureCopyLease } from './copy-mode.mjs';
 
 // The authorities this identity answers on: exactly one, this origin. The Node
 // agent gets this from lib/guard.mjs, which is not in the browser bundle and
@@ -135,10 +135,7 @@ export class BrowserAgent {
   async requestTakeover() {
     // Working from the copy, an app at the gateway may have taken the lease
     // since this browser last looked: asked now, before acting (copy-mode.mjs).
-    if (!this.viewer && this.copy) {
-      const cur = await this.lease.readFresh().catch(() => null);
-      if (cur && typeof cur === 'object' && cur.holder !== this.lease.id && Date.now() < cur.expiresAt) this.demote();
-    }
+    if (!this.viewer && this.copy) await ensureCopyLease(this);
     if (!this.viewer) return true;
     if (!(await this.lease.takeover())) return false;
     clearTimeout(this._viewerTimer); this._viewerTimer = null;
@@ -245,7 +242,9 @@ export class BrowserAgent {
     // Reading here is being here: the gateway hears so once an hour.
     clearInterval(this._openTimer);
     this._openTimer = setInterval(() => { this.checkInAtGateway(); }, BrowserAgent.OPEN_EVERY_MS);
-    this.lease.onLost = () => this.demote();
+    // Working from the copy, an app at the gateway takes the lease only while
+    // it acts, and this browser takes it back (copy-mode.mjs).
+    this.lease.onLost = () => (this.copy ? standDown(this) : this.demote());
     this.lease.startRenewal();
     try {
       // Forced, not revalidated, when this device WATCHED first: the active

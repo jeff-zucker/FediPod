@@ -257,9 +257,16 @@ export function gatewayCtx() {
     // Phone notifications (lib/gateway/masto-gateway.mjs): whether an account
     // has any, and a run that reads its held mail in and pushes what it makes.
     pushWanted: async (handle) => Number((await blobsKv('masto').get(`push/${handle}`))?.text || 0) > 0,
+    // One run at a time per account: an arrival while one runs is noted, and
+    // the run goes round again for it (masto-gateway.mjs: pushHeld).
     startPush: async (handle) => {
       const secret = process.env.FEDIPOD_KEEPER_CLIENT_SECRET;
       if (!secret || !process.env.URL) return;
+      const kv = blobsKv('masto');
+      await kv.set(`pushwant/${handle}`, `${Date.now()}-${Math.random()}`);
+      const running = await kv.get(`pushrun/${handle}`);
+      if (running && Date.now() - Number(running.text) < 60_000) return;
+      await kv.set(`pushrun/${handle}`, String(Date.now()));
       const body = JSON.stringify({ handle, at: Date.now() });
       const mac = crypto.createHmac('sha256', `fedipod-push:${secret}`).update(body).digest('hex');
       await fetch(`${process.env.URL}/.netlify/functions/push-background`, {

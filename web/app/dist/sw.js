@@ -45956,6 +45956,18 @@ var PodStore = class {
   async flush() {
     await this.commit();
   }
+  // Forget the writes not yet made, and wait out any in flight. For an agent
+  // whose state another agent has written since those writes were queued (a
+  // copy's lease coming back after an app acted, web/app/copy-mode.mjs): the
+  // next load reads what the other agent wrote, and sending these first would
+  // write over it.
+  async discardPending() {
+    for (const t of this.timers.values()) clearTimeout(t);
+    this.timers.clear();
+    this.dirty.clear();
+    await this.chain.catch(() => {
+    });
+  }
   // ---- the domain helpers, unchanged from dk's Store ----
   // config: { remotePod, handle, name, issuer }  (credential lives ONLY in
   // the local credential file, never in pod state)
@@ -67107,9 +67119,12 @@ var Lease = class {
   stillHeld() {
     return !this.stopped && (!this.heldUntil || Date.now() < this.heldUntil);
   }
+  // Only while it is still ours: a release landing after another agent took
+  // the lease over would otherwise stand that agent down. Without an ETag to
+  // ask with, as before.
   async release() {
     this.stopRenewal();
-    await this.write({ holder: this.id, expiresAt: 0 }).catch(() => {
+    await this.write({ holder: this.id, expiresAt: 0 }, this.etag ? { ifMatch: this.etag } : {}).catch(() => {
     });
   }
 };
@@ -72956,9 +72971,7 @@ function copyStorage(agent2, podState) {
     pod: podState,
     // Refused: another agent (an app at the gateway, another browser) took
     // the lease. This one stops acting at once rather than at its next renewal.
-    onRefused: () => {
-      if (!agent2.viewer) agent2.demote();
-    }
+    onRefused: () => standDown(agent2)
   });
   Object.defineProperty(s, "token", { get: () => agent2.copy.token, set() {
   } });
@@ -72972,6 +72985,53 @@ function useLease(agent2, lease) {
   agent2.lease = lease;
   if (agent2.intake) agent2.intake.lease = lease;
   lease.onLost = () => agent2.demote();
+}
+async function ensureCopyLease(agent2) {
+  const cur = await agent2.lease.readFresh().catch(() => null);
+  if (!cur || typeof cur !== "object") return true;
+  if (cur.holder === agent2.lease.id && Date.now() < cur.expiresAt) return true;
+  if (Date.now() < cur.expiresAt) {
+    agent2.demote();
+    await agent2.store.discardPending();
+    return false;
+  }
+  agent2._ensuring = true;
+  try {
+    await agent2.store.discardPending();
+    if (!await agent2.lease.acquire()) {
+      agent2.demote();
+      return false;
+    }
+    await agent2.store.load({ force: true });
+    agent2.lease.startRenewal();
+    return true;
+  } finally {
+    agent2._ensuring = false;
+  }
+}
+function standDown(agent2) {
+  if (agent2._retaking || agent2._ensuring) return;
+  if (!agent2.viewer) agent2.demote();
+  agent2._retaking = (async () => {
+    try {
+      await agent2.store.discardPending();
+      for (const wait of [3e3, 2e4]) {
+        await new Promise((r) => setTimeout(r, wait));
+        if (!agent2.viewer) return;
+        const cur = await agent2.lease.readFresh().catch(() => null);
+        if (cur && typeof cur === "object" && cur.holder !== "gateway" && Date.now() < cur.expiresAt) return;
+        if (await agent2.lease.acquire()) {
+          clearTimeout(agent2._viewerTimer);
+          agent2._viewerTimer = null;
+          await agent2.goActive();
+          agent2.log("took the account back from the gateway");
+          return;
+        }
+      }
+    } finally {
+      agent2._retaking = null;
+    }
+  })();
 }
 async function moveIntoCopy(agent2, frontOrigin) {
   if (agent2.copy) return true;
@@ -73095,10 +73155,7 @@ var BrowserAgent = class _BrowserAgent {
   // the lease, proceed. If we are a viewer, the owner acting HERE outranks the
   // idle active device: claim the lease outright and become active.
   async requestTakeover() {
-    if (!this.viewer && this.copy) {
-      const cur = await this.lease.readFresh().catch(() => null);
-      if (cur && typeof cur === "object" && cur.holder !== this.lease.id && Date.now() < cur.expiresAt) this.demote();
-    }
+    if (!this.viewer && this.copy) await ensureCopyLease(this);
     if (!this.viewer) return true;
     if (!await this.lease.takeover()) return false;
     clearTimeout(this._viewerTimer);
@@ -73217,7 +73274,7 @@ var BrowserAgent = class _BrowserAgent {
     this._openTimer = setInterval(() => {
       this.checkInAtGateway();
     }, _BrowserAgent.OPEN_EVERY_MS);
-    this.lease.onLost = () => this.demote();
+    this.lease.onLost = () => this.copy ? standDown(this) : this.demote();
     this.lease.startRenewal();
     try {
       if (!warm) {

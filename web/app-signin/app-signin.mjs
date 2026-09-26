@@ -14,6 +14,13 @@ const KEY = 'fedipod-app-address';
 const remembered = () => { try { return sessionStorage.getItem(KEY) || localStorage.getItem(KEY) || ''; } catch { return ''; } };
 const remember = (a) => { try { sessionStorage.setItem(KEY, a); localStorage.setItem(KEY, a); } catch { /* keeps no site data */ } };
 const login = fediLogin({ dbName: 'fedipod-app-signin', clientName: 'Sign in to an app', redirectUri: here });
+// The person's own yes to this app, given by pressing the button in this tab.
+// It rides the trip to the pod and back, and nothing else stands for it: a
+// page that sends someone here, signed in before, gets nothing without it.
+const CONSENT = 'fedipod-app-consent';
+const request = `${params.get('client_id')}\n${params.get('redirect_uri') || ''}`;
+const consented = () => { try { return sessionStorage.getItem(CONSENT) === request; } catch { return false; } };
+const consent = (on) => { try { if (on) sessionStorage.setItem(CONSENT, request); else sessionStorage.removeItem(CONSENT); } catch { /* keeps no site data */ } };
 
 // Back from the pod: this finishes the sign-in and returns to the app's request.
 try { await login.resume(); } catch (e) { say(e.message, true); }
@@ -21,7 +28,8 @@ try { await login.resume(); } catch (e) { say(e.message, true); }
 // Proves the pod sign-in to the gateway. True when the app has its code.
 async function prove(address) {
   const s = await login.getSession();
-  if (!s) return false;
+  if (!s || !consented()) return false;
+  consent(false);
   say('Signing you in…');
   const res = await s.fetch(`${location.origin}/api/authorize`, {
     method: 'POST', headers: { 'content-type': 'application/json' },
@@ -48,7 +56,8 @@ async function start() {
   asking.hidden = false;
   const address = remembered();
   $('address').value = address;
-  if (!(address && await prove(address))) $('signin-form').hidden = false;
+  // Back from the pod after pressing the button: finish. Otherwise ask.
+  if (!(address && consented() && await prove(address))) $('signin-form').hidden = false;
 }
 
 $('signin-form').addEventListener('submit', async (ev) => {
@@ -59,6 +68,7 @@ $('signin-form').addEventListener('submit', async (ev) => {
   const who = await r.json().catch(() => ({}));
   if (!r.ok) { say(who.error || `That address was not found (HTTP ${r.status}).`, true); return; }
   remember(address);
+  consent(true);
   const s = await login.getSession();
   if (s && s.webId === who.webId) { await prove(address); return; }
   say('Taking you to your pod…');

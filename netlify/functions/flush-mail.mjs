@@ -10,7 +10,7 @@ import { gatewayCtx } from './front.mjs';
 import { signRun } from './keeper-background.mjs';
 import { flushAll, isPresent } from '../../lib/gateway/held-mail.mjs';
 import { closedState } from '../../lib/gateway/quiet.mjs';
-import { listCopies, copyMeta, flushCopy, dropCopy, lockCopy } from '../../lib/gateway/copy.mjs';
+import { listCopies, copyMeta, flushCopy, dropCopy, lockCopy, renewPodLease } from '../../lib/gateway/copy.mjs';
 import { HttpStorage } from '../../lib/core/storage.mjs';
 
 export default async function handler() {
@@ -41,12 +41,14 @@ export default async function handler() {
     const rec = await ctx.lookup(handle);
     if (kept(rec) && !await isPresent(ctx, handle)) await start(handle);
   }
-  // The working copies of kept accounts, written to their pods (copy.mjs).
+  // The working copies of kept accounts, written to their pods (copy.mjs),
+  // several at a time so a long list fits in the round.
   if (ctx.copyKv) {
     const podFetch = await ctx.keeperFetch();
-    for (const handle of podFetch ? await listCopies(ctx.copyKv) : []) {
+    const handles = podFetch ? await listCopies(ctx.copyKv) : [];
+    const one = async (handle) => {
       const meta = await copyMeta(ctx.copyKv, handle);
-      if (!meta?.stateUrl) continue;
+      if (!meta?.stateUrl) return;
       const pod = new HttpStorage(meta.stateUrl, podFetch);
       // An account no longer kept here — closed, moved, gone, or its keeper
       // stopped — has its copy written to the pod and given up.
@@ -54,15 +56,19 @@ export default async function handler() {
       const leaving = !rec || rec.movedTo || !rec.keeper || (await closedState(ctx, handle, rec)).closed;
       if (leaving) {
         const unlock = await lockCopy(ctx.copyKv, handle, { waitMs: 2000 });
-        if (!unlock) continue;
+        if (!unlock) return;
         try {
           const left = await dropCopy(ctx.copyKv, handle, { pod, podFetch, stateUrl: meta.stateUrl, log: console.log });
           if (!left.ok) console.log(`copy @${handle}: not given up: ${left.why}`);
-        } catch (e) { console.log(`copy @${handle}: not given up: ${e?.message || e}`); } finally { await unlock(); }
-        continue;
+        } finally { await unlock(); }
+        return;
       }
-      await flushCopy(ctx.copyKv, handle, { pod, log: console.log })
-        .catch((e) => console.log(`copy @${handle}: not written to the pod: ${e?.message || e}`));
+      await flushCopy(ctx.copyKv, handle, { pod, log: console.log });
+      await renewPodLease(ctx.copyKv, handle, { podFetch, log: console.log });
+    };
+    for (let i = 0; i < handles.length; i += 6) {
+      await Promise.all(handles.slice(i, i + 6).map((h) => one(h)
+        .catch((e) => console.log(`copy @${h}: not written to the pod: ${e?.message || e}`))));
     }
   }
   return new Response(null, { status: 204 });
