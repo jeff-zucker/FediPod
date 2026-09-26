@@ -13,7 +13,7 @@ checking in are asked to wait five minutes, so your pod is not asked every
 minute. Signing in yourself on the sign-in page now tries again at once.
 
 **The sign-in page takes your WebID as well as your Fediverse address.** It
-asks for "Your Fediverse address or WebID".
+asks for "Your Fediverse address or WebID", and fits a phone screen.
 
 ## 2026-09-26 (Mastodon apps, the account copy and the round work on fedipod.net — version 1.40.3)
 

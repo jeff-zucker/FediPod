@@ -31,8 +31,12 @@ a pod server — on Netlify the form's submit is refused.
 
 ## Deploying
 
-This repo, with `netlify.toml` as it stands. The functions read these
-environment variables:
+This repo, with `netlify.toml` as it stands. Before each deploy, run
+`node scripts/check-netlify-bundles.mjs`: it builds the functions the way
+Netlify ships them and sends requests through each one from its own bundle,
+under the rules Netlify's Node keeps. Deploy only when it ends "all green".
+
+The functions read these environment variables:
 
 | Variable                | What it is                                                                          |
 |-------------------------|-------------------------------------------------------------------------------------|
