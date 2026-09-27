@@ -1,13 +1,14 @@
 # Changes
 
-## Not yet released
+## 2026-09-27 (posts from other apps go out at once; dokieli comments go to nobody — version 1.41.0, fedipod-server 0.29.1)
 
 **A post from an ActivityPub app goes out in a moment while fedipod.net keeps
 your account running**, instead of waiting until you next open FediPod.
 
 **A comment from dokieli goes to nobody.** It names nobody to send it to, so it
 is kept at its own address, for the page it is on to point to, and listed only
-in your own outbox. Your timeline shows its text as a private post.
+in your own outbox. Your timeline shows its text as a private post. A Server
+account does the same.
 
 ## 2026-09-26 (the right answer for accounts an app cannot sign in to — version 1.40.8)
 
