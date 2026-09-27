@@ -1,8 +1,9 @@
 // netlify/functions/keeper-background.mjs — one account's keeper run
 // (lib/gateway/keeper.mjs), started by the fifteen-minute round in
-// flush-mail.mjs. A background function, so a slow pod has fifteen minutes
-// rather than ten seconds. Only the round may start it: the body is signed with
-// the keeper's own secret.
+// flush-mail.mjs, or by the outbox door for an owner's post while FediPod is
+// closed. A background function, so a slow pod has fifteen minutes rather than
+// ten seconds. Only those two may start it: the body is signed with the
+// keeper's own secret.
 import crypto from 'node:crypto';
 import { gatewayCtx, keeperCredential } from './front.mjs';
 import { keepOnce } from '../../lib/gateway/keeper.mjs';

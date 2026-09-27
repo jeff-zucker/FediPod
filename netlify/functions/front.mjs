@@ -285,6 +285,19 @@ export function gatewayCtx() {
         method: 'POST', headers: { 'content-type': 'application/json', 'x-fedipod-push': mac }, body,
       });
     },
+    // One keeper run for one account, now: an owner's post taken at the
+    // outbox door while FediPod is closed (lib/gateway/outbox-door.mjs).
+    // Signed as flush-mail.mjs signs the runs it starts.
+    startKeeper: async (handle) => {
+      const secret = process.env.FEDIPOD_KEEPER_CLIENT_SECRET;
+      if (!secret || !process.env.URL) throw new Error('no keeper here');
+      const body = JSON.stringify({ handle });
+      const mac = crypto.createHmac('sha256', secret).update(body).digest('hex');
+      const res = await fetch(`${process.env.URL}/.netlify/functions/keeper-background`, {
+        method: 'POST', headers: { 'content-type': 'application/json', 'x-fedipod-keeper': mac }, body,
+      });
+      console.log(`keeper @${handle}: run started from the outbox door (${res.status})`);
+    },
     // Signs the tokens the state API hands the owner's browser. Derived from
     // the keeper's own secret, which a deploy that keeps copies already has.
     stateSecret: process.env.FEDIPOD_KEEPER_CLIENT_SECRET

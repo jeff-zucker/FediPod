@@ -57535,6 +57535,8 @@ function rowContent(obj) {
   if (typeof obj?.content === "string" && obj.content.trim()) return sanitizeHtml(obj.content);
   const plain = [obj?.bodyValue, obj?.name, obj?.summary].find((v) => typeof v === "string" && v.trim());
   if (plain) return contentHtml(plain);
+  const bodies = [].concat(obj?.body || []).map((b) => b && typeof b === "object" && b.purpose !== "tagging" ? b.value && typeof b.value === "object" ? b.value["@value"] : b.value : null).filter((v) => typeof v === "string" && v.trim());
+  if (bodies.length) return bodies.map((v) => /<[a-z]/iu.test(v) ? sanitizeHtml(v) : contentHtml(v)).join("");
   const esc = (v) => String(v).replace(/[&<>"]/gu, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
   return `<p><a href="${esc(obj?.id || "")}">${esc(obj?.type || "object")}</a></p>`;
 }
@@ -57638,7 +57640,8 @@ async function publishNote(publisher, content, { inReplyTo, attachments, visibil
   }
   return note;
 }
-async function publishObject(publisher, object, { visibility = "public", slug: wanted = null, also = [], deliverTo = [] } = {}) {
+async function publishObject(publisher, object, { visibility = "public", slug: wanted = null, also = [], deliverTo = [], unaddressed = false } = {}) {
+  if (unaddressed) return publishUnaddressed(publisher, object, wanted);
   const { urls } = publisher;
   const priv = visibility === "private" || visibility === "direct";
   if (priv) {
@@ -57695,6 +57698,45 @@ async function publishObject(publisher, object, { visibility = "public", slug: w
   await publisher.deliverer.deliverToAll(inboxes, create);
   publisher.log(`${row.type || "object"} published: ${id} \u2192 ${inboxes.length} inbox(es)`);
   return { id, createId, copied: !ownId };
+}
+async function publishUnaddressed(publisher, object, wanted) {
+  const { urls } = publisher;
+  const published = (/* @__PURE__ */ new Date()).toISOString();
+  const pod = publisher.config?.remotePod || urls.base;
+  const ownId = typeof object.id === "string" && /^https?:\/\//u.test(object.id) && object.id.startsWith(pod) ? object.id : null;
+  const name = await slugFor(publisher, urls.notes, wanted, published);
+  const id = ownId || urls.notes + name;
+  let doc = null;
+  if (!ownId) {
+    const { bto, bcc, ...sent } = object;
+    doc = { ...sent, id, attributedTo: urls.actor, published: object.published || published };
+    if (!doc["@context"]) doc["@context"] = AS_CTX;
+    if (typeof doc.content === "string") doc.content = sanitizeHtml(doc.content);
+    await write4(publisher.remote, id, doc);
+  }
+  const row = doc || object;
+  publisher.store.addStatus({
+    noteId: id,
+    actor: urls.actor,
+    content: rowContent(row),
+    published: row.published || published,
+    kind: "post",
+    slug: name,
+    visibility: "direct"
+  });
+  if (await publisher.store.commit?.() === false) publisher.log(`object kept but its timeline row was refused: ${id}`);
+  const create = {
+    "@context": AS_CTX,
+    id: createActivityId(ownId ? urls.notes + name : id),
+    type: "Create",
+    actor: urls.actor,
+    published: row.published || published,
+    object: doc || id
+  };
+  await writeCreate(publisher.remote, create.id, create);
+  publisher.recordOwn?.(create);
+  publisher.log(`${row.type || "object"} kept, addressed to nobody: ${id}`);
+  return { id, createId: create.id, copied: !ownId };
 }
 function rowTags(note) {
   const tags = [].concat(note.tag || []);
@@ -66471,6 +66513,7 @@ function readBody(req) {
     req.on("error", reject);
   });
 }
+var isAnnotation = (o) => arr(o?.type).some((t) => t === "Annotation" || t === "oa:Annotation" || t === "http://www.w3.org/ns/oa#Annotation");
 var C2S = class {
   constructor({ agent: agent2, log: log2 = console.log, auth, scheme = null, mount = "" }) {
     this.agent = agent2;
@@ -66757,7 +66800,8 @@ var C2S = class {
         const { also, deliverTo } = this.addressedActors(activity, object);
         if (makes !== "Note" && makes !== "Question") {
           const asSent = raw && typeof raw === "object" && !Array.isArray(raw) ? ACTIVITY_TYPES.has(raw.type) ? raw.object && typeof raw.object === "object" ? raw.object : null : raw : null;
-          const made2 = await agent2.publisher.publishObject(asSent || object, { visibility, slug, also, deliverTo });
+          const unaddressed = isAnnotation(asSent || object) && ["to", "cc", "bto", "bcc", "audience"].every((f) => !arr(activity[f] ?? object[f]).length);
+          const made2 = await agent2.publisher.publishObject(asSent || object, { visibility, slug, also, deliverTo, unaddressed });
           return reply(201, { id: made2.createId, object: made2.id }, { location: made2.createId });
         }
         const text = String(object.source?.content ?? object.content ?? "");
@@ -66970,6 +67014,7 @@ var Lease = class {
     this.timer = null;
     this.heldUntil = 0;
     this.denied = null;
+    this.unreadable = null;
   }
   // null means the lease document is NOT THERE — nobody holds it. UNREADABLE
   // means we could not ask, which is a different answer and must not be read as
@@ -66981,9 +67026,13 @@ var Lease = class {
     try {
       res = await this.fetchImpl(this.url, { headers: { accept: "application/json" } });
       if (res.status === 404 || res.status === 410) return null;
-      if (res.status >= 400) return UNREADABLE;
+      if (res.status >= 400) {
+        this.unreadable = `HTTP ${res.status}`;
+        return UNREADABLE;
+      }
       body = await res.text();
-    } catch {
+    } catch (e) {
+      this.unreadable = e.message;
       return UNREADABLE;
     }
     this.etag = res.headers?.get?.("etag") || null;
@@ -67014,7 +67063,7 @@ var Lease = class {
     const cur = await this.readFresh();
     if (cur === UNREADABLE) {
       this.denied = "unreadable";
-      this.log("lease unreadable \u2014 staying a viewer");
+      this.log(`lease unreadable (${this.unreadable}) \u2014 staying a viewer`);
       return false;
     }
     if (cur && cur.holder !== this.id && Date.now() < cur.expiresAt) {
@@ -67416,7 +67465,7 @@ function sendPodSigninPage(res, client, webId, mount = "") {
     } catch {
     }
     const who = client.name ? escapeHtml(client.name) : where ? escapeHtml(where) : "A client";
-    asking = `<p><strong>${who}</strong> is asking to use your account${where ? `, and will be sent back to <code>${escapeHtml(where)}</code>` : ""}.</p>`;
+    asking = `<p><strong>${who}</strong> is asking to use your account${where ? `, and you will be sent back to <code>${escapeHtml(where)}</code>` : ""}.</p>`;
   }
   res.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-cache" });
   res.end(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
@@ -72948,9 +72997,18 @@ init_urls();
 
 // web/app/copy-mode.mjs
 var RENEW_BEFORE_MS = 2 * 36e5;
-async function openCopy(agent2, frontOrigin, { handle: handle7 = null, kept = null } = {}) {
+var ASK_AGAIN_MS = 15 * 6e4;
+var REMEMBERED = [404, 409, 501, 502, 503];
+var failedKey = (agent2, frontOrigin) => `copy-open-failed:${frontOrigin}:${agent2.webId}`;
+var forgetFailedOpen = (agent2, frontOrigin) => kvDel(failedKey(agent2, frontOrigin)).catch(() => {
+});
+async function openCopy(agent2, frontOrigin, { handle: handle7 = null, kept = null, askAnyway = false, letGo = false } = {}) {
   if (kept && kept.expiresAt - Date.now() > RENEW_BEFORE_MS) return kept;
   if (!agent2.sessionFetch || !frontOrigin) return null;
+  const key = failedKey(agent2, frontOrigin);
+  const failed = await kvGet(key).catch(() => null);
+  const held = letGo && failed?.status === 409;
+  if (!askAnyway && !held && failed && Date.now() - failed.at < ASK_AGAIN_MS) return null;
   let res;
   try {
     res = await agent2.sessionFetch(`${frontOrigin.replace(/\/$/u, "")}/api/state/open`, {
@@ -72963,9 +73021,16 @@ async function openCopy(agent2, frontOrigin, { handle: handle7 = null, kept = nu
     return null;
   }
   if (res.status !== 200) {
-    if (![404, 409, 501].includes(res.status)) agent2.log(`the account's copy: the gateway answered ${res.status}`);
+    if (![404, 409, 501].includes(res.status)) {
+      const why = (await res.json().catch(() => null))?.error;
+      agent2.log(`the account's copy: the gateway answered ${res.status}${why ? ` (${why})` : ""}`);
+    }
+    if (REMEMBERED.includes(res.status)) await kvPut(key, { at: Date.now(), status: res.status }).catch(() => {
+    });
     return null;
   }
+  if (failed) await kvDel(key).catch(() => {
+  });
   const copy = await res.json().catch(() => null);
   return copy?.base && copy?.token ? { handle: copy.handle, base: copy.base, token: copy.token, expiresAt: copy.expiresAt, podHome: copy.podHome || null } : null;
 }
@@ -73049,7 +73114,7 @@ async function moveIntoCopy(agent2, frontOrigin) {
   if (agent2.copy) return true;
   await agent2.store.commit();
   await agent2.lease.release();
-  const copy = await openCopy(agent2, frontOrigin, { handle: agent2.doorKey });
+  const copy = await openCopy(agent2, frontOrigin, { handle: agent2.doorKey, letGo: true });
   if (!copy) {
     if (await agent2.lease.acquire()) agent2.lease.startRenewal();
     return false;
@@ -73254,6 +73319,7 @@ var BrowserAgent = class _BrowserAgent {
     if (!on) return { status: 200, ok: true, kept: false };
     const said = await this.tellGateway("keeper", { handle: this.doorKey, on: true });
     if (said?.status === 200) {
+      await forgetFailedOpen(this, this.frontOrigin);
       this._keeper.kept = true;
       if (this.masto) this.masto.scheduling = true;
       this.log("the gateway keeps this account running while the app is closed");
@@ -73467,7 +73533,7 @@ var BrowserAgent = class _BrowserAgent {
     const warmFrom = restart ? await warmMeta(webId).catch(() => null) : null;
     this.holderId = await this.deviceId();
     this.frontOrigin = frontOrigin || null;
-    this.copy = await openCopy(this, this.frontOrigin, { kept: isWarm(warmFrom) ? warmFrom.copy : null });
+    this.copy = await openCopy(this, this.frontOrigin, { kept: isWarm(warmFrom) ? warmFrom.copy : null, askAnyway: !restart });
     const warmRoot = isWarm(warmFrom) && !!warmFrom.copy === !!this.copy ? warmFrom.root : null;
     const copyRoot = this.copy?.podHome?.startsWith(remotePod) ? this.copy.podHome.slice(remotePod.length) : null;
     this._sweptAt = { ...warmFrom?.sweptAt || {} };

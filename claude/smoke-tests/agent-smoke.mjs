@@ -1288,6 +1288,27 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   const row2 = store.getStatuses().find(s => s.noteId === made2.id);
   check(row2?.content === '<p>again</p>', 'with no content, the body text is what the timeline shows');
 
+  // Addressed to nobody, as dokieli sends a comment: kept as sent, readable at
+  // its address, delivered to nobody, listed only in its owner's outbox.
+  const before = sent.length;
+  const dokieli = { '@context': ANNO, type: 'Annotation', id: '', motivation: 'replying',
+    body: { type: 'TextualBody', format: 'text/html',
+      value: { '@value': '@mei@far.example\n\nsent from Dokieli', '@type': 'http://www.w3.org/1999/02/22-rdf-syntax-ns#HTML' } },
+    target: { type: 'SpecificResource', source: 'https://dokie.li/demo' } };
+  const made4 = await pub.publishObject(dokieli, { slug: 'dok-1', unaddressed: true });
+  const doc4 = put.find(x => x.u === N + 'dok-1')?.b;
+  check(made4.id === N + 'dok-1' && doc4?.type === 'Annotation' && doc4.motivation === 'replying'
+    && doc4.body?.value?.['@value'] === dokieli.body.value['@value'] && doc4.target?.source === 'https://dokie.li/demo',
+    'an unaddressed annotation is kept as sent, in the notes container everyone may read');
+  check(!('to' in doc4) && !('cc' in doc4), 'and addressed to nobody');
+  check(sent.length === before, 'nothing is delivered');
+  check(!store.read('outbox.json', []).includes(N + 'dok-1'), 'the public outbox does not list it');
+  check(store.read('outbox-own.json', []).some(i => i === N + 'dok-1' || i?.id === N + 'dok-1-create'),
+    'its owner\'s outbox does');
+  const row4 = store.getStatuses().find(s => s.noteId === N + 'dok-1');
+  check(row4?.visibility === 'direct' && row4.content === '<p>@mei@far.example</p><p>sent from Dokieli</p>',
+    `its owner's timeline shows its text, marked private (${row4?.visibility} ${row4?.content})`);
+
   // An object that already lives on this pod is named, not copied.
   const mine = POD + 'annotations/2026/one';
   const made3 = await pub.publishObject({ '@context': ANNO, type: 'Annotation', id: mine, bodyValue: 'here' }, {});
@@ -11406,8 +11427,8 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
   check(anno.status === 201 && anno.headers.location === urls24.notes + 'anno-1-create',
     `a bare Annotation is wrapped and created → 201 + Location (got ${anno.status} ${anno.headers.location})`);
   check(objects24[0]?.object?.type === 'Annotation' && objects24[0]?.object?.bodyValue === 'a fine sentence'
-    && objects24[0]?.visibility === 'public' && objects24[0]?.slug === 'anno-1',
-    'the object reaches the publisher as sent, public by default, with its slug');
+    && objects24[0]?.unaddressed === true && objects24[0]?.slug === 'anno-1',
+    'the object reaches the publisher as sent, with its slug, marked as addressed to nobody');
   // dispatch answers values, so the drain can hand it an activity with no request in sight.
   const direct = await api24.dispatch({ type: 'Block', object: 'https://bad.example/u/troll3' });
   check(direct.status === 201 && direct.body?.object === 'https://bad.example/u/troll3'

@@ -1,5 +1,14 @@
 # Changes
 
+## Not yet released
+
+**A post from an ActivityPub app goes out in a moment while fedipod.net keeps
+your account running**, instead of waiting until you next open FediPod.
+
+**A comment from dokieli goes to nobody.** It names nobody to send it to, so it
+is kept at its own address, for the page it is on to point to, and listed only
+in your own outbox. Your timeline shows its text as a private post.
+
 ## 2026-09-26 (the right answer for accounts an app cannot sign in to — version 1.40.8)
 
 **An app signing in to an account it cannot use is told why.** 1.40.7 told

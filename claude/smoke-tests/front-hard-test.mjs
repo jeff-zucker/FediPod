@@ -135,6 +135,8 @@ const heldCtx = {
   pushWanted: async () => true,
   startPush: async (h) => { heldCtx.pushes.push(h); },
 };
+// Extras one block switches on for itself (the outbox door for a kept account).
+let doorExtras = {};
 const front = http.createServer(async (req, res) => {
   const body = await new Promise((resolve) => {
     const chunks = [];
@@ -174,6 +176,7 @@ const front = http.createServer(async (req, res) => {
     removeDirectory: async (h) => { delete attached[h]; return !directory[h]; },
     purge: async (tags) => { purged.push(...tags); },
     ...(holding ? heldCtx : {}),
+    ...doorExtras,
     podPut: async (_h, url, b, ct) => {
       const r = await fetch(url, { method: 'PUT', headers: { 'content-type': ct }, body: b })
         .catch(() => null);
@@ -500,6 +503,38 @@ try {
       'a pod naming no owner leaves where the WebID lives as the only evidence');
     check((await optIn({ webid: POD + 'profile/card#me' })).status === 201,
       'and there, a WebID under the pod is still proof enough');
+  }
+
+  // ---- the outbox door, for a kept account: the post goes out now ----
+  // With FediPod closed, the keeper is started as the post arrives; with it
+  // open, FediPod takes the post and the keeper is left alone.
+  {
+    const KEEPER = 'https://keeper.example/profile/card#me';
+    const started = [];
+    const row = attached.pwren;
+    const was = { openedAt: row.openedAt, keeper: row.keeper };
+    Object.assign(row, { openedAt: new Date().toISOString(), keeper: { webId: KEEPER } });
+    doorExtras = { keeperWebId: KEEPER, presentAt: async () => 0, startKeeper: async (h) => { started.push(h); } };
+    const note = JSON.stringify({ type: 'Note', content: 'from an app', to: ['https://www.w3.org/ns/activitystreams#Public'] });
+    const post = (handle) => get(`/u/${handle}/ap/outbox`, { method: 'POST', body: note,
+      headers: { 'content-type': 'application/activity+json', authorization: 'Bearer path-owner', dpop: 'proof' } });
+    const ok = await post('pwren');
+    const okBody = await ok.json().catch(() => ({}));
+    check(ok.status === 201 && okBody.note === 'it goes out in a moment' && started.join() === 'pwren',
+      `a post to a kept account starts its keeper at once, FediPod being closed (${ok.status} ${okBody.note})`);
+    // Whether FediPod is open is remembered a minute, so a second account.
+    attached['pwren-open'] = { ...row, handle: 'pwren-open' };
+    doorExtras.presentAt = async (h) => (h === 'pwren-open' ? Date.now() : 0);
+    const open = await post('pwren-open');
+    check(open.status === 201 && started.length === 1, 'with FediPod open, the keeper is left alone: FediPod takes the post');
+    delete attached['pwren-open'];
+    Object.assign(row, { keeper: undefined });
+    const unkept = await post('pwren');
+    const unkeptBody = await unkept.json().catch(() => ({}));
+    check(unkept.status === 201 && started.length === 1 && unkeptBody.note === 'it goes out when your FediPod agent next runs',
+      'an account the gateway does not keep waits for FediPod, as before');
+    Object.assign(row, was);
+    doorExtras = {};
   }
 
   // ---- the outbox door: the owner's own post, from another client ----------
