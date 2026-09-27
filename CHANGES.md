@@ -1,5 +1,12 @@
 # Changes
 
+## 2026-09-27 (the public address in all its spellings — version 1.41.2, fedipod-server 0.29.3)
+
+**A post from another app addressed to the public is public however the
+address is spelled.** `Public`, `as:Public` and the full address all count, as
+ActivityPub says they should. An annotation that names the public audience, as
+dokieli could, then goes to your followers instead of to nobody.
+
 ## 2026-09-27 (a dokieli comment says what it comments on — version 1.41.1, fedipod-server 0.29.2)
 
 **A comment from dokieli shows what it is about in your timeline.** It opens
