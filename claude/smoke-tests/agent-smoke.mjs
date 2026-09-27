@@ -1818,6 +1818,31 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     `and both addressed actors are delivered to, beside the followers (${JSON.stringify(last.i)})`);
 }
 
+// --- 5c1j2. the public address in any of its three spellings (ActivityPub §5.6) ---
+// An annotation that adds the ActivityStreams vocabulary, or names the property
+// in full, is read as JSON-LD, and the public address can come out as `as:Public`.
+{
+  const { C2S } = await import(path.join(root, 'lib/client/c2s.mjs'));
+  const { readLenient } = await import(path.join(root, 'lib/core/as2.mjs'));
+  const seen = [];
+  const agent = { publisher: { urls: { actor: 'https://gw.example/u/me/ap/actor', followers: 'https://gw.example/u/me/ap/followers', notes: 'https://pod.example/n/' },
+    publishObject: async (o, opts) => { seen.push(opts); return { id: 'x', createId: 'x-create' }; } }, store: {}, remote: {} };
+  const c2s = new C2S({ agent, log: () => {}, auth: async () => ({ ok: true }) });
+  const PUB = 'https://www.w3.org/ns/activitystreams#Public';
+  const base = { type: 'Annotation', id: '', motivation: 'replying', bodyValue: 'hi', target: 'https://doc.example/p' };
+  const decide = async (raw) => { const r = await readLenient(JSON.stringify(raw)); seen.length = 0; await c2s.dispatch(r.view ?? r.doc, { raw, slug: 't' }); return seen[0] || {}; };
+  const both = await decide({ '@context': ['https://www.w3.org/ns/activitystreams', 'http://www.w3.org/ns/anno.jsonld'], ...base, to: [PUB] });
+  check(both.visibility === 'public' && !both.unaddressed && !both.also.length && !both.deliverTo.length,
+    `an annotation with both vocabularies, to the public, is public and names nobody to deliver to (${both.visibility} ${JSON.stringify(both.also)})`);
+  const full = await decide({ '@context': 'http://www.w3.org/ns/anno.jsonld', ...base, 'https://www.w3.org/ns/activitystreams#to': { id: PUB } });
+  check(full.visibility === 'public', `so is one naming the property in full (${full.visibility})`);
+  const bare = await decide({ '@context': 'http://www.w3.org/ns/anno.jsonld', ...base, 'https://www.w3.org/ns/activitystreams#to': PUB });
+  check(bare.unaddressed === true, 'a bare string there is text, not an address: still addressed to nobody');
+  const cc = await decide({ '@context': ['https://www.w3.org/ns/activitystreams', 'http://www.w3.org/ns/anno.jsonld'], ...base,
+    to: ['https://gw.example/u/me/ap/followers'], cc: [PUB] });
+  check(cc.visibility === 'unlisted', `and the public address in cc is unlisted (${cc.visibility})`);
+}
+
 // --- 5c1k. the local actor a client-to-server client reads ---
 {
   const { C2S } = await import(path.join(root, 'lib/client/c2s.mjs'));

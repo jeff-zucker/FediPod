@@ -66514,6 +66514,11 @@ var ACTIVITY_TYPES = /* @__PURE__ */ new Set([
 ]);
 var arr = (v) => v === void 0 || v === null ? [] : Array.isArray(v) ? v : [v];
 var idOf2 = (v) => typeof v === "string" ? v : v?.id || null;
+var PUBLIC_SPELLINGS = /* @__PURE__ */ new Set(["Public", "as:Public"]);
+var audienceOf = (v) => {
+  const id = idOf2(v);
+  return PUBLIC_SPELLINGS.has(id) ? PUBLIC : id;
+};
 function readBody(req) {
   return new Promise((resolve2, reject) => {
     let size = 0;
@@ -66764,8 +66769,8 @@ var C2S = class {
   // every client means by a post with no audience chosen, and what a client
   // that never addresses (dokieli's annotations) needs.
   visibilityOf(activity, object) {
-    const to = arr(activity.to ?? object?.to).map(idOf2);
-    const cc = arr(activity.cc ?? object?.cc).map(idOf2);
+    const to = arr(activity.to ?? object?.to).map(audienceOf);
+    const cc = arr(activity.cc ?? object?.cc).map(audienceOf);
     const blind = arr(activity.bto ?? object?.bto).length + arr(activity.bcc ?? object?.bcc).length;
     if (!to.length && !cc.length) return blind ? "direct" : "public";
     if (to.includes(PUBLIC)) return "public";
@@ -66796,7 +66801,7 @@ var C2S = class {
   // in to/cc are listed and delivered to; the ones in bto/bcc are delivered
   // to and never listed (§6).
   addressedActors(activity, object) {
-    const pick = (...fields) => [...new Set(fields.flatMap((f) => arr(activity[f] ?? object?.[f]).map(idOf2)))].filter((a) => typeof a === "string" && /^https?:\/\//u.test(a) && a !== PUBLIC && a !== this.urls.followers && a !== this.urls.actor);
+    const pick = (...fields) => [...new Set(fields.flatMap((f) => arr(activity[f] ?? object?.[f]).map(audienceOf)))].filter((a) => typeof a === "string" && /^https?:\/\//u.test(a) && a !== PUBLIC && a !== this.urls.followers && a !== this.urls.actor);
     return { also: pick("to", "cc", "audience"), deliverTo: pick("bto", "bcc") };
   }
   async _dispatch(activity, { slug, raw, reply, serial, at }) {
