@@ -30,8 +30,7 @@
     "architecture.svg",
     "device-agent.md",
     "architecture.md",
-    "gateway.md",
-    "browser.svg"
+    "gateway.md"
   ],
   "scripts": {
     "start": "node bin/fedipod.mjs up",

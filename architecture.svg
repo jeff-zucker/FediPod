@@ -1,89 +1,97 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1290 800" width="1290" height="800" font-family="system-ui, sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1300 680" font-family="Arial, Helvetica, sans-serif">
   <defs>
-    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-      <path d="M0,0 L10,5 L0,10 z" fill="#555"/>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#333"/>
     </marker>
   </defs>
-  <style>
-    .t   { font-size: 18px; font-weight: 600; fill: #1a1a19; }
-    .d   { font-size: 16px; fill: #333; }
-    .sub { font-size: 15px; fill: #666; }
-    .lbl { font-size: 15px; fill: #555; }
-    .cc  { font-size: 11px; font-weight: 400; font-style: italic; fill: #555; }
-    .arrow  { stroke: #555; stroke-width: 2; fill: none; marker-end: url(#arr); }
-    .arrow2 { stroke: #555; stroke-width: 2; fill: none; marker-end: url(#arr); marker-start: url(#arr); }
-  </style>
+  <rect x="0" y="0" width="1300" height="680" fill="#ffffff"/>
 
-  <rect width="1290" height="800" fill="#ffffff"/>
+  <!-- boxes (draw.io palette, as browser.svg) -->
+  <g stroke-width="1.5">
+    <rect x="450"  y="24"  width="280" height="84"  rx="6"  fill="#dae8fc" stroke="#6c8ebf"/>
+    <rect x="260"  y="175" width="650" height="215" rx="10" fill="#f5f5f5" stroke="#666666" stroke-dasharray="8 6"/>
+    <rect x="285"  y="230" width="230" height="130" rx="6"  fill="#d5e8d4" stroke="#82b366"/>
+    <rect x="665"  y="230" width="230" height="130" rx="6"  fill="#e1d5e7" stroke="#9673a6"/>
+    <rect x="40"   y="500" width="300" height="110" rx="6"  fill="#f8cecc" stroke="#b85450"/>
+    <rect x="780"  y="500" width="300" height="110" rx="6"  fill="#fff2cc" stroke="#d6b656"/>
+    <rect x="1040" y="250" width="220" height="95"  rx="6"  fill="#ffe6cc" stroke="#d79b00"/>
+  </g>
 
-  <!-- The open social web -->
-  <rect x="210" y="30" width="870" height="92" rx="12" fill="#eef1f8" stroke="#7a88b8"/>
-  <text class="t" x="645" y="64" text-anchor="middle">The open social web</text>
-  <text class="d" x="645" y="94" text-anchor="middle">other servers: deliver mail to us, read what we publish</text>
+  <!-- box labels -->
+  <g fill="#111" text-anchor="middle">
+    <text x="590" y="60"  font-size="20" font-weight="bold">Open Social Web</text>
+    <text x="590" y="88"  font-size="16">Mastodon · Pixelfed · Bluesky …</text>
 
-  <!-- FediPod gateway -->
-  <rect x="210" y="180" width="870" height="134" rx="12" fill="#f2ece0" stroke="#b09a5e" stroke-dasharray="7 5"/>
-  <text class="t" x="645" y="214" text-anchor="middle">FediPod gateway</text>
-  <text class="d" x="645" y="240" text-anchor="middle">(optional — Netlify or any always on box)</text>
-  <text class="d" x="645" y="266" text-anchor="middle">checks each delivery's signature at the door;</text>
-  <text class="d" x="645" y="288" text-anchor="middle">drops spam and forgeries before the pod</text>
+    <text x="280" y="206" font-size="22" font-weight="bold" text-anchor="start">FediPod</text>
 
-  <!-- Pod -->
-  <rect x="210" y="375" width="360" height="197" rx="12" fill="#e7f2e7" stroke="#6a9a6a"/>
-  <text class="t" x="390" y="407" text-anchor="middle">Tamara's pod</text>
-  <text class="sub" x="390" y="431" text-anchor="middle">any https, sub-domained, always on pod</text>
-  <text class="d" x="390" y="459" text-anchor="middle">stores &amp; serves her public</text>
-  <text class="d" x="390" y="481" text-anchor="middle">record in S2S AS2 format —</text>
-  <text class="d" x="390" y="503" text-anchor="middle">actor, posts, collections;</text>
-  <text class="d" x="390" y="525" text-anchor="middle">her inbox buffers mail</text>
-  <text class="d" x="390" y="547" text-anchor="middle">even when her agent is off</text>
+    <text x="400" y="266" font-size="20" font-weight="bold">BrowserAgent</text>
+    <text x="400" y="294" font-size="16">FediPod in any browser,</text>
+    <text x="400" y="318" font-size="16">with Sengi or Phanpy</text>
 
-  <!-- Agent -->
-  <rect x="720" y="375" width="360" height="197" rx="12" fill="#fdeeee" stroke="#b87a7a"/>
-  <text class="t" x="900" y="407" text-anchor="middle">Tamara's FediPod Agent</text>
-  <text class="sub" x="900" y="431" text-anchor="middle">on local device</text>
-  <text class="d" x="900" y="459" text-anchor="middle">does the thinking:</text>
-  <text class="d" x="900" y="481" text-anchor="middle">reads the buffered mail,</text>
-  <text class="d" x="900" y="503" text-anchor="middle">accepts follows, builds her</text>
-  <text class="d" x="900" y="525" text-anchor="middle">timeline, signs &amp; delivers</text>
-  <text class="d" x="900" y="547" text-anchor="middle">everything she says</text>
+    <text x="780" y="266" font-size="20" font-weight="bold">Gateway</text>
+    <text x="780" y="294" font-size="16">at fedipod.net, keeps</text>
+    <text x="780" y="318" font-size="16">your account running</text>
+    <text x="780" y="342" font-size="16">from a working copy</text>
 
-  <!-- Client -->
-  <rect x="720" y="628" width="360" height="136" rx="12" fill="#f0e9f5" stroke="#9a7ab0"/>
-  <text class="t" x="900" y="662" text-anchor="middle">Browser or Native App</text>
-  <text class="sub" x="900" y="686" text-anchor="middle">(Phanpy, Whalebird, …)</text>
-  <text class="d" x="900" y="714" text-anchor="middle">where she reads and posts;</text>
-  <text class="d" x="900" y="736" text-anchor="middle">talks only to her agent</text>
+    <text x="190" y="536" font-size="20" font-weight="bold">Your Pod</text>
+    <text x="190" y="564" font-size="16">your key, your posts</text>
+    <text x="190" y="588" font-size="16">and your account's data</text>
 
-  <!-- open social web -> gateway -->
-  <path class="arrow" d="M 645 124 L 645 176"/>
-  <text class="lbl" x="657" y="155">deliveries in</text>
+    <text x="930" y="536" font-size="20" font-weight="bold">Mastodon Apps</text>
+    <text x="930" y="564" font-size="16">Elk · Ivory · Tusky · Fedilab</text>
+    <text x="930" y="588" font-size="16">on your phone or desktop</text>
 
-  <!-- gateway -> pod -->
-  <path class="arrow" d="M 390 316 L 390 371"/>
-  <text class="lbl" x="402" y="336">verified mail</text>
-  <text class="lbl" x="402" y="357">+ receipt</text>
+    <text x="1150" y="289" font-size="20" font-weight="bold">C2S Apps</text>
+    <text x="1150" y="317" font-size="16">box, Dokieli</text>
+  </g>
 
-  <!-- pod <-> agent -->
-  <path class="arrow2" d="M 572 473 L 718 473"/>
-  <text class="lbl" x="645" y="455" text-anchor="middle">drains mail,</text>
-  <text class="lbl" x="645" y="497" text-anchor="middle">writes the record</text>
+  <!-- arrows -->
+  <g stroke="#333" stroke-width="1.6" fill="none">
+    <!-- Open Social Web <-> BrowserAgent (ATProto, Bluesky) -->
+    <line x1="520" y1="108" x2="410" y2="230" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+    <!-- Open Social Web <-> Gateway (ActivityPub mail) -->
+    <line x1="660" y1="108" x2="770" y2="230" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+    <!-- BrowserAgent <-> Gateway -->
+    <line x1="515" y1="298" x2="665" y2="298" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+    <!-- Your Pod -> Open Social Web (public posts and profile) -->
+    <path d="M100,500 C0,400 0,110 450,70" marker-end="url(#arrow)"/>
+    <!-- BrowserAgent <-> Your Pod (Solid) -->
+    <line x1="350" y1="360" x2="230" y2="500" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+    <!-- Gateway <-> Your Pod (stores the account's data) -->
+    <line x1="720" y1="360" x2="340" y2="560" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+    <!-- Mastodon Apps <-> Gateway -->
+    <line x1="900" y1="500" x2="840" y2="360" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+    <!-- C2S Apps <-> Gateway -->
+    <line x1="1040" y1="298" x2="895" y2="298" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+  </g>
 
-  <!-- agent <-> client -->
-  <path class="arrow2" d="M 900 574 L 900 626"/>
-  <text class="lbl" x="912" y="605">read / post</text>
+  <!-- arrow labels -->
+  <g fill="#333" font-size="16">
+    <text x="470" y="140" text-anchor="end" font-weight="bold" fill="#111">ATProto Protocol</text>
+    <text x="470" y="160" text-anchor="end">for Bluesky</text>
 
-  <!-- pod -> open social web: read directly, never through the gateway -->
-  <path class="arrow" d="M 208 440 L 70 440 C 45 440, 38 400, 38 330 C 38 210, 88 100, 206 100"/>
-  <text class="lbl" x="188" y="412" text-anchor="end">reads her record</text>
+    <text x="712" y="140" text-anchor="start" font-weight="bold" fill="#111">S2S Protocol</text>
+    <text x="712" y="160" text-anchor="start">mail in, posts out</text>
 
-  <!-- agent -> open social web: delivers her own posts, never through the gateway -->
-  <path class="arrow" d="M 1082 440 L 1220 440 C 1245 440, 1252 400, 1252 330 C 1252 210, 1202 78, 1084 78"/>
-  <text class="lbl" x="1102" y="412">signed deliveries out</text>
+    <text x="590" y="286" text-anchor="middle">serves the app</text>
+    <text x="590" y="320" text-anchor="middle">posts out</text>
 
-  <text class="d" x="45" y="716">The gateway stops unwanted mail from reaching the pod.</text>
-  <text class="d" x="45" y="740">The agent prevents mail buildup and does the mail processing.</text>
-  <text class="d" x="45" y="764">This leaves the pod with the minimal possible load.</text>
+    <text x="968" y="286" text-anchor="middle" font-weight="bold" fill="#111">C2S Protocol</text>
 
-  <text class="cc" x="1245" y="764" text-anchor="end">(cc) 4.0 By, Jeff Zucker, 2026</text>
+    <text x="85" y="250" text-anchor="start">other servers read</text>
+    <text x="85" y="270" text-anchor="start">your public posts</text>
+    <text x="85" y="290" text-anchor="start">and profile</text>
+
+    <text x="272" y="420" text-anchor="end" font-weight="bold" fill="#111">Solid Protocol</text>
+    <text x="272" y="440" text-anchor="end">reads &amp; writes your pod</text>
+
+    <text x="520" y="490" text-anchor="start">stores the working copy</text>
+    <text x="520" y="510" text-anchor="start">on your pod</text>
+
+    <text x="894" y="415" text-anchor="start" font-weight="bold" fill="#111">Mastodon client API</text>
+    <text x="894" y="435" text-anchor="start">sign in at fedipod.net;</text>
+    <text x="894" y="455" text-anchor="start">notifications to your phone</text>
+  </g>
+
+  <text x="1260" y="660" text-anchor="end" font-size="16" fill="#555">© 2026 Jeff Zucker · CC BY-SA 4.0</text>
 </svg>
