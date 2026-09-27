@@ -57532,13 +57532,31 @@ async function updateObject(publisher, s, patch, { updated = (/* @__PURE__ */ ne
   return update;
 }
 function rowContent(obj) {
+  const text = objectText(obj);
+  const esc = (v) => String(v).replace(/[&<>"]/gu, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+  const on = annotationTarget(obj);
+  const link = on.page ? `<a href="${esc(on.page)}">${esc(on.page)}</a>` : "";
+  const context = on.exact ? `<p>${link ? `text from ${link}:` : "text:"}</p><blockquote><p>${esc(on.exact)}</p></blockquote>` : link ? `<p>${link}</p>` : "";
+  if (text) return context ? `${context}<p>comment:</p>${text}` : text;
+  return context || `<p><a href="${esc(obj?.id || "")}">${esc(obj?.type || "object")}</a></p>`;
+}
+function objectText(obj) {
   if (typeof obj?.content === "string" && obj.content.trim()) return sanitizeHtml(obj.content);
   const plain = [obj?.bodyValue, obj?.name, obj?.summary].find((v) => typeof v === "string" && v.trim());
   if (plain) return contentHtml(plain);
   const bodies = [].concat(obj?.body || []).map((b) => b && typeof b === "object" && b.purpose !== "tagging" ? b.value && typeof b.value === "object" ? b.value["@value"] : b.value : null).filter((v) => typeof v === "string" && v.trim());
-  if (bodies.length) return bodies.map((v) => /<[a-z]/iu.test(v) ? sanitizeHtml(v) : contentHtml(v)).join("");
-  const esc = (v) => String(v).replace(/[&<>"]/gu, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
-  return `<p><a href="${esc(obj?.id || "")}">${esc(obj?.type || "object")}</a></p>`;
+  return bodies.map((v) => /<[a-z]/iu.test(v) ? sanitizeHtml(v) : contentHtml(v)).join("");
+}
+function annotationTarget(obj) {
+  const val = (v) => v && typeof v === "object" ? v["@value"] ?? v.id : v;
+  for (const t of [].concat(obj?.target || [])) {
+    const page2 = val(typeof t === "string" ? t : t?.source ?? t?.id);
+    const quote = [].concat(t?.selector || []).find((sel) => sel?.type === "TextQuoteSelector");
+    const exact = val(quote?.exact);
+    const ok = typeof page2 === "string" && /^https?:\/\//u.test(page2);
+    if (ok || exact) return { page: ok ? page2 : null, exact: typeof exact === "string" && exact.trim() ? exact.trim() : null };
+  }
+  return { page: null, exact: null };
 }
 async function publishNote(publisher, content, { inReplyTo, attachments, visibility = "public", spoilerText = null, sensitive = false, slug: wanted = null, also = [], deliverTo = [], quote = null } = {}) {
   const { urls } = publisher;

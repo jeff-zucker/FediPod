@@ -1280,7 +1280,8 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     'and the Create is what followers receive');
   check(store.read('outbox.json', []).includes(N + 'anno-9'), 'the outbox lists it');
   const row = store.getStatuses().find(s => s.noteId === N + 'anno-9');
-  check(row?.kind === 'post' && row.content === '<p>ok</p>', 'the timeline row shows its content');
+  check(row?.kind === 'post' && row.content === '<p><a href="https://doc.example/paper">https://doc.example/paper</a></p><p>comment:</p><p>ok</p>',
+    `the timeline row shows its content and a link to the page it is on (${row?.content})`);
 
   // A taken slug is not overwritten; a minted name is used instead.
   const made2 = await pub.publishObject({ type: 'Annotation', bodyValue: 'again' }, { slug: 'taken' });
@@ -1294,7 +1295,8 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   const dokieli = { '@context': ANNO, type: 'Annotation', id: '', motivation: 'replying',
     body: { type: 'TextualBody', format: 'text/html',
       value: { '@value': '@mei@far.example\n\nsent from Dokieli', '@type': 'http://www.w3.org/1999/02/22-rdf-syntax-ns#HTML' } },
-    target: { type: 'SpecificResource', source: 'https://dokie.li/demo' } };
+    target: { type: 'SpecificResource', source: 'https://dokie.li/demo',
+      selector: { type: 'TextQuoteSelector', exact: { '@value': 'Hello federated Solid world!', '@language': 'en-GB' } } } };
   const made4 = await pub.publishObject(dokieli, { slug: 'dok-1', unaddressed: true });
   const doc4 = put.find(x => x.u === N + 'dok-1')?.b;
   check(made4.id === N + 'dok-1' && doc4?.type === 'Annotation' && doc4.motivation === 'replying'
@@ -1306,8 +1308,9 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   check(store.read('outbox-own.json', []).some(i => i === N + 'dok-1' || i?.id === N + 'dok-1-create'),
     'its owner\'s outbox does');
   const row4 = store.getStatuses().find(s => s.noteId === N + 'dok-1');
-  check(row4?.visibility === 'direct' && row4.content === '<p>@mei@far.example</p><p>sent from Dokieli</p>',
-    `its owner's timeline shows its text, marked private (${row4?.visibility} ${row4?.content})`);
+  check(row4?.visibility === 'direct' && row4.content === '<p>text from <a href="https://dokie.li/demo">https://dokie.li/demo</a>:</p>'
+    + '<blockquote><p>Hello federated Solid world!</p></blockquote><p>comment:</p><p>@mei@far.example</p><p>sent from Dokieli</p>',
+    `its owner's timeline shows the page and the words it was made on, then its text, marked private (${row4?.visibility} ${row4?.content})`);
 
   // An object that already lives on this pod is named, not copied.
   const mine = POD + 'annotations/2026/one';
@@ -1322,7 +1325,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   const pub2 = new Publisher({ config: { remotePod: POD, handle: 'me' }, store: lost, log: () => {},
     remote: { getJson: async (u) => docs[u] ?? null, listContainer: async () => [] } });
   const r = await pub2.rebuildStatuses();
-  check(r.recovered === 1 && lost.getStatuses()[0]?.noteId === N + 'anno-9' && lost.getStatuses()[0]?.content === '<p>ok</p>',
+  check(r.recovered === 1 && lost.getStatuses()[0]?.noteId === N + 'anno-9' && lost.getStatuses()[0]?.content === '<p><a href="https://doc.example/paper">https://doc.example/paper</a></p><p>comment:</p><p>ok</p>',
     'a rebuild brings an annotation back like a note');
 }
 
