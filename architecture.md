@@ -28,9 +28,7 @@ work from, and which the gateway writes to the pod every fifteen minutes. See
 Community Solid Server, so anyone with a pod on that server can opt in to a
 Fediverse account fed by the server itself.
 
-<!-- CLAUDE 2026-09-26 — the two old diagrams (now in drafts/) replaced by the new one; check the caption; delete these markers when done -->
 ![FediPod: the BrowserAgent and the Gateway, with your pod, Mastodon apps and C2S apps](https://raw.githubusercontent.com/jeff-zucker/FediPod/main/architecture.svg)
-<!-- /CLAUDE -->
 
 ## Protocol conformance
 

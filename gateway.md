@@ -117,15 +117,11 @@ there, signed in at your pod. The door checks that the token is yours, puts the
 post in your inbox marked as yours, and answers with the address the post will
 have. Your agent publishes it and sends it to your followers the next time it
 runs: for a browser account, the next time you open the site.
-<!-- CLAUDE 2026-09-26 — "the next time you open the site" above no longer holds while the gateway keeps the account running; suggested addition; delete these markers when done -->
 While the gateway keeps a browser account running, it starts the account's
 keeper as the post arrives, so the post goes out in a moment.
-<!-- /CLAUDE -->
-<!-- CLAUDE 2026-09-26 — dokieli comments are not sent to your followers; delete these markers when done -->
 A comment from dokieli names nobody to send it to, so it is sent to nobody. It
 is kept at its own address for the page it is on to point at, and only your
 own outbox lists it.
-<!-- /CLAUDE -->
 
 A post with no audience of its own goes out as a public post. A post that is
 not a note, an annotation say, is kept as the app sent it, under your name.

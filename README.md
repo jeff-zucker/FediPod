@@ -82,15 +82,11 @@ If your account turns a post down when it runs, you get a direct message from
 yourself saying what was refused and why. Signed in, your outbox shows you
 everything you've done, likes and follows included; everyone else sees only
 your public posts.
-<!-- CLAUDE 2026-09-26 — the sentence "The post goes out the next time you open fedipod.net" above is now true only when fedipod.net is not keeping your account running; suggested addition; delete these markers when done -->
 While fedipod.net keeps your account running, a post from such an app goes out
 in a moment, whether or not FediPod is open.
-<!-- /CLAUDE -->
-<!-- CLAUDE 2026-09-26 — dokieli comments are not sent to your followers; delete these markers when done -->
 A comment you post from dokieli names nobody to send it to, so it goes to
 nobody. It is kept on your pod at its own address, where the page you
 commented on points to it. Your own timeline shows it as a private post.
-<!-- /CLAUDE -->
 
 **The manage page.** `manage`, in the bar's account group, opens it: your profile,
 aliases, the gateway, key rotation, recovering posts, parking, moving to
