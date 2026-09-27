@@ -1,5 +1,11 @@
 # Changes
 
+## 2026-09-27 (a dokieli comment says what it comments on — version 1.41.1, fedipod-server 0.29.2)
+
+**A comment from dokieli shows what it is about in your timeline.** It opens
+with "text from" and a link to the page, then the words you selected, quoted,
+then "comment:" and what you wrote.
+
 ## 2026-09-27 (posts from other apps go out at once; dokieli comments go to nobody — version 1.41.0, fedipod-server 0.29.1)
 
 **A post from an ActivityPub app goes out in a moment while fedipod.net keeps
