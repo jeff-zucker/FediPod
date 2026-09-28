@@ -14,6 +14,24 @@
   "bin": {
     "fedipod": "bin/fedipod.mjs"
   },
+  "exports": {
+    "./embed": "./lib/server/embed.mjs",
+    "./front": "./lib/gateway/front-core.mjs",
+    "./front-pages": "./lib/gateway/front-pages.mjs",
+    "./surface": "./lib/surface/index.mjs",
+    "./agent": "./lib/core/agent.mjs",
+    "./remote": "./lib/core/remote.mjs",
+    "./place": "./lib/core/place.mjs",
+    "./core/*": "./lib/core/*",
+    "./pod/*": "./lib/pod/*",
+    "./client/*": "./lib/client/*",
+    "./connections/*": "./lib/connections/*",
+    "./gateway/*": "./lib/gateway/*",
+    "./shared/*": "./lib/shared/*",
+    "./surface/*": "./lib/surface/*",
+    "./vendor/*": "./vendor/*",
+    "./package.json": "./package.json"
+  },
   "files": [
     "bin",
     "lib",

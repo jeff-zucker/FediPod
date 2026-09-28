@@ -291,5 +291,47 @@ if (!failures) pass('every in-scope caller reaches the pod through a named opera
   if (!bad) pass('lib/session/ imports nothing above itself, names no application, tells a Mastodon address from a pod one and acts through each, and the app binds its own database name');
 }
 
+// ---- 9. core is a library: nothing in it reaches the DeviceAgent, and every entry loads alone ----
+{
+  // The folders a consumer of the `fedipod` package may import from. None of
+  // them may import the DeviceAgent's files (lib/device/, run-agent.mjs):
+  // the Server and the forum import core and nothing else.
+  const CORE = ['lib/core', 'lib/pod', 'lib/client', 'lib/connections', 'lib/gateway', 'lib/shared', 'lib/surface', 'lib/server'];
+  const walk = (dir) => fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
+    const p = path.join(dir, e.name);
+    return e.isDirectory() ? walk(p) : (e.name.endsWith('.mjs') ? [p] : []);
+  });
+  let bad = 0;
+  for (const folder of CORE) {
+    for (const file of walk(path.join(root, folder))) {
+      const src = code(read(file));
+      const specs = [...src.matchAll(/from\s+['"]([^'"]+)['"]/g), ...src.matchAll(/import\(\s*['"]([^'"]+)['"]/g)].map((m) => m[1]);
+      for (const spec of specs) {
+        if (/(^|\/)device\//.test(spec) || /run-agent\.mjs$/.test(spec)) {
+          fail(`${path.relative(root, file)} imports ${spec} — core may not reach the DeviceAgent`); bad++;
+        }
+      }
+    }
+  }
+  // The named entries of the exports map, imported by package name from
+  // inside the package (Node resolves a package's own name through its map),
+  // so a consumer's `import 'fedipod/embed'` is what is proved here.
+  const entries = { embed: 'startEmbeddedAgent', front: 'routeFront', 'front-pages': 'frontPages', surface: 'buildAdminSurface', agent: 'Agent', remote: 'RemotePod', place: 'chosenRoot' };
+  for (const [entry, name] of Object.entries(entries)) {
+    try {
+      const m = await import(`fedipod/${entry}`);
+      if (typeof m[name] !== 'function') { fail(`fedipod/${entry} exports no ${name}`); bad++; }
+    } catch (e) { fail(`fedipod/${entry} does not load by name: ${e.message}`); bad++; }
+  }
+  try {
+    const { frontPages } = await import('fedipod/front-pages');
+    const pages = frontPages();
+    const missing = ['signupPage', 'runPage', 'adminPage', 'noticesPage', 'authBundle', 'installScript'].filter((k) => !pages[k])
+      .concat(Object.entries(pages.pageScripts).filter(([, v]) => !v).map(([k]) => k));
+    if (missing.length) { fail(`frontPages() is missing ${missing.join(', ')}`); bad++; }
+  } catch (e) { fail(`frontPages(): ${e.message}`); bad++; }
+  if (!bad) pass('core imports nothing from the DeviceAgent, every named entry of the fedipod package loads by name, and the front pages are all there');
+}
+
 console.log(failures ? `\n${failures} failure(s)` : '\npod layer intact');
 process.exit(failures ? 1 : 0);
