@@ -1210,7 +1210,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   const h3 = await mk(fine).healStatuses();
   check(h3.missing === 0 && reads === 0, 'a healthy account is checked from the cache alone — no request');
   check(/healStatuses\(\)/.test(fs.readFileSync(path.join(root, 'web/app/agent.mjs'), 'utf8'))
-    && /healStatuses\(\)/.test(fs.readFileSync(path.join(root, 'run-agent.mjs'), 'utf8')),
+    && /healStatuses\(\)/.test(fs.readFileSync(path.join(root, 'lib/core/agent.mjs'), 'utf8')),
     'both the BrowserAgent and the DeviceAgent heal the index when they become active');
 }
 
@@ -1230,7 +1230,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     'the store keeps what the last load could not read');
   check(st.getStatuses().length === 0 && st.getConfig()?.handle === 'me', 'and the rest of the state still loads');
   const src = (f) => fs.readFileSync(path.join(root, f), 'utf8');
-  check(/stateSkipped: this\.store\?\.lastSkipped/.test(src('web/app/agent.mjs')) && /stateSkipped: this\.store\.lastSkipped/.test(src('run-agent.mjs')),
+  check(/stateSkipped: this\.store\?\.lastSkipped/.test(src('web/app/agent.mjs')) && /stateSkipped: this\.store\.lastSkipped/.test(src('lib/core/agent.mjs')),
     'both agents report it in /status');
   check(/id="state-skipped"/.test(src('web/admin/index.html')) && /stateSkipped/.test(src('web/admin/upkeep.js')),
     'and the record page shows it under the facts');
@@ -2275,7 +2275,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   const there = mk({ id: 'https://pod.example/fedipod/ap/featured', type: 'OrderedCollection' });
   check(await there.agent.ensureFeaturedPublished() === false && there.published() === 0,
     'a featured collection that exists is left alone');
-  check(/ensureFeaturedPublished\(\)/.test(fs.readFileSync(path.join(root, 'run-agent.mjs'), 'utf8').split('async startActive(')[1] || ''),
+  check(/ensureFeaturedPublished\(\)/.test(fs.readFileSync(path.join(root, 'lib/core/agent.mjs'), 'utf8').split('async startActive(')[1] || ''),
     'and the start-up repair runs the check');
 }
 
@@ -3352,7 +3352,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   await pub.publishProfile({ force: true });
   check(seen.length > n, 'and force publishes regardless of the digest');
 
-  check(/publishProfile\(\{ force: true \}\)/.test(fs.readFileSync(path.join(root, 'run-agent.mjs'), 'utf8')),
+  check(/publishProfile\(\{ force: true \}\)/.test(fs.readFileSync(path.join(root, 'lib/core/agent.mjs'), 'utf8')),
     'the repair path forces, because it publishes BECAUSE the pod is missing it');
   check(/publishProfile\(\{ force: true \}\)/.test(['', 'routes'].flatMap((d) => fs.readdirSync(path.join(root, 'lib/device/admin', d)).filter((f) => f.endsWith('.mjs')).map((f) => fs.readFileSync(path.join(root, 'lib/device/admin', d, f), 'utf8'))).join('\n')),
     'and so does the explicit republish control');
@@ -4396,7 +4396,8 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   check(/LOG_MAX_BYTES/.test(ra) && /renameSync\(logFile, logFile \+ '\.1'\)/.test(ra),
     'agent.log rotates rather than growing for the life of the install');
   // connect() can run twice — the CLI does it deliberately now.
-  check(/this\.intake\?\.stop\(\);\s*\n\s*this\.deliverer\?\.stop\(\);/.test(ra),
+  const ag = fs.readFileSync(path.join(root, 'lib/core/agent.mjs'), 'utf8');
+  check(/this\.intake\?\.stop\(\);\s*\n\s*this\.deliverer\?\.stop\(\);/.test(ag),
     'and connect stops the timers it is about to replace');
 }
 
@@ -4719,7 +4720,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 // --- 5g-bis. a command you decline should not have acted already ---
 {
   const bin = [path.join(root, 'bin/fedipod.mjs'), path.join(root, 'lib/device/cli/context.mjs'), ...fs.readdirSync(path.join(root, 'lib/device/cli/commands')).map((f) => path.join(root, 'lib/device/cli/commands', f))].map((f) => fs.readFileSync(f, 'utf8')).join('\n');
-  const ra = fs.readFileSync(path.join(root, 'run-agent.mjs'), 'utf8');
+  const ra = fs.readFileSync(path.join(root, 'lib/core/agent.mjs'), 'utf8');
 
   check(/async connect\(\{ name = null, repair = true, act = true \} = \{\}\)/.test(ra)
     && /if \(!act\) return true;/.test(ra),
@@ -4798,7 +4799,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   fs.rmSync(dir, { recursive: true, force: true });
 
   // No irreplaceable file is still written with a truncating writeFileSync.
-  for (const f of ['lib/core/keys.mjs', 'lib/device/setup.mjs', 'lib/device/home.mjs', 'run-agent.mjs', 'bin/fedipod.mjs',
+  for (const f of ['lib/core/keys.mjs', 'lib/core/agent.mjs', 'lib/device/setup.mjs', 'lib/device/home.mjs', 'lib/shared/files.mjs', 'run-agent.mjs', 'bin/fedipod.mjs',
     'lib/device/cli/context.mjs', ...fs.readdirSync(path.join(root, 'lib/device/cli/commands')).map((f) => 'lib/device/cli/commands/' + f)]) {
     const src = fs.readFileSync(path.join(root, f), 'utf8');
     const bad = src.split('\n').filter(l => /writeFileSync/.test(l) && /JSON\.stringify/.test(l));
@@ -4876,7 +4877,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
   // demote() stops the feed but does not clear it, so constructing a new one
   // over the top left the old chain sweeping with nothing able to reach it.
-  const src = fs.readFileSync(path.join(root, 'run-agent.mjs'), 'utf8');
+  const src = fs.readFileSync(path.join(root, 'lib/core/agent.mjs'), 'utf8');
   check(!/this\.tagfeed = new TagFeed/.test(src) && (src.match(/this\.tagfeed \|\|= new TagFeed/g) || []).length === 2,
     'run-agent reuses its TagFeed rather than orphaning a live one');
 
@@ -5127,7 +5128,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
 // --- 5o-bis. demoting stands the lease down with everything else ---
 {
-  const src = fs.readFileSync(path.join(root, 'run-agent.mjs'), 'utf8');
+  const src = fs.readFileSync(path.join(root, 'lib/core/agent.mjs'), 'utf8');
   const demote = src.slice(src.indexOf('  demote() {'), src.indexOf('  async requestTakeover'));
   check(/this\.lease\?\.stopRenewal\(\)/.test(demote),
     'demote() stops lease renewal, not just intake/tagfeed/deliverer');
@@ -6375,7 +6376,7 @@ if (up) {
     `claiming Host: localhost from off-machine no longer mints (${forgedHost.status})`);
 
   // The one place the precondition is stated where it can be seen.
-  const ra = fs.readFileSync(path.join(root, 'run-agent.mjs'), 'utf8');
+  const ra = fs.readFileSync(path.join(root, 'lib/core/agent.mjs'), 'utf8');
   check(/AP_ALLOWED_HOSTS && !config\.uiPassword/.test(ra),
     'and the agent says so at startup, once the config is known');
 }
