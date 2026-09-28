@@ -26,7 +26,7 @@ The `fedipod` package names these as its entries: `fedipod/embed` (an identity i
 | FediPod BrowserAgent | `web/app/` | the same core in a service worker: sign-up, the pod session, browser keys, the relay, the manage facade, the browser connections |
 | FediPod Server | `packages/fedipod-server/src/`, with `lib/server/embed.mjs` | the CSS component: the handler, the store shims, the directory, the streaming handler |
 | css-nextgraph | `packages/css-nextgraph/src/`: `accessor.ts`, `router.ts`, `wallets.ts`, `sdk.ts`, `sdk-store.ts`, `pod-store.ts`; `config/`, `bin/css-nextgraph.mjs` | the CSS storage component that keeps each pod in NextGraph under a wallet of its own: the accessor, the `.internal/`-or-pod router, the wallets, the SDK layer, the hand-over command; FediPod Server sits on top of it unchanged |
-| FediPod Gateway | `netlify/functions/` (`front`, `inbox`, `account`, `flush-mail`, `keeper-background`, `push-background`), `web/front/`, `web/app-signin/` | thin functions over the edges — deliveries and the front, the routes that act for an account, the fifteen-minute round, a keeper run, a push run — the front's pages, and the page a Mastodon app sends its person to |
+| FediPod Gateway | `netlify/functions/` (`front`, `inbox`, `account`, `flush-mail`, `keeper-background`, `push-background`), `netlify/forum-support.mjs` (the one line naming the forum this gateway keeps forums with, or nothing), `web/front/`, `web/app-signin/` | thin functions over the edges — deliveries and the front, the routes that act for an account, the fifteen-minute round, a keeper run, a push run — the front's pages, and the page a Mastodon app sends its person to |
 
 ## What the BrowserAgent takes from the shared libraries
 

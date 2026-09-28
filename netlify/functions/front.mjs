@@ -35,8 +35,8 @@ import { keeperBook } from '../../lib/gateway/keeper-due.mjs';
 import { keeperSession } from '../../lib/gateway/keeper-session.mjs';
 import * as podInbox from '../../lib/pod/inbox.mjs';
 import grant from '../../vendor/idp-grant.cjs';
-// The forum, as this gateway runs one: placed at the door, carried by its run.
-import * as forumGateway from '../../packages/fedipod-bb/src/gateway.mjs';
+// Forum support, when this Gateway keeps forums (netlify/forum-support.mjs).
+import forumGateway from '../forum-support.mjs';
 
 // The new-account page and the vendored auth library, read once at cold start.
 let signupPage = '';
@@ -261,8 +261,9 @@ export function gatewayCtx() {
     // The gateway's own pod identity, which an owner may let act for them while
     // their app is closed (lib/gateway/keeper.mjs), and what its last run left.
     keeperWebId: process.env.FEDIPOD_KEEPER_WEBID || null,
-    // A forum this gateway keeps is placed and run by the forum's own code.
-    forum: forumGateway,
+    // A forum this gateway keeps is placed and run by the forum's own code,
+    // when this Gateway keeps forums (netlify/forum-support.mjs); null otherwise.
+    forum: forumGateway || null,
     // The working copies of kept accounts (lib/gateway/copy.mjs), in a store
     // read and written with strong consistency: two functions working on one
     // account must see each other's writes at once.

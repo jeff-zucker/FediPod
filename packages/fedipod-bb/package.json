@@ -5,6 +5,12 @@
   "license": "MIT",
   "type": "module",
   "main": "src/index.mjs",
+  "exports": {
+    ".": "./src/index.mjs",
+    "./gateway": "./src/gateway.mjs",
+    "./src/*": "./src/*",
+    "./package.json": "./package.json"
+  },
   "bin": {
     "fedipod-bb": "bin/fedipod-bb.mjs"
   },
