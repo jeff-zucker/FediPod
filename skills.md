@@ -101,7 +101,9 @@ Six functions on Netlify, thin adapters around plain Node in `lib/gateway/`:
 ## Commands
 
 ```
-npm test                      the whole suite; it restages web/app/site, so never
+npm test                      the whole suite, the browser rigs included (headless
+                              google-chrome against a scratch CSS, about eight
+                              minutes more); it restages web/app/site, so never
                               deploy while it runs
 node scripts/check-netlify-bundles.mjs
                               the pre-deploy gate: builds the functions as Netlify
@@ -127,10 +129,14 @@ user-experience terms when he does, and list any change built but deferred
 (the memory `undeployed-changes`). `npm publish --ignore-scripts` is his too,
 after green suites, from a folder that is exactly what should go out.
 
-Live checks: `claude/validation/browser-agent/` drives a real headless
+Browser rigs: `claude/validation/browser-agent/` drives a real headless
 `google-chrome` against a scratch Solid server (`copy-browser-run.mjs` is
-the copy, an app sign-in, a push and the keeper handover). The in-app
-browser pane cannot register service workers, so those never run there.
+the copy, an app sign-in, a push and the keeper handover). `all.mjs` runs
+every rig in turn and is the last step of `npm test`, so a rig that breaks
+fails the suite. A scratch pod is given a public type index first
+(`pod-fixture.mjs`), as a person's pod has one; the rigs never script the
+yes the page asks for. The in-app browser pane cannot register service
+workers, so those never run there.
 
 ## Rules the code holds to
 

@@ -61,6 +61,10 @@ backoff.json
 # Claude working notes stay local; only the smoke suite ships
 /claude/*
 !/claude/smoke-tests/
+# The browser rigs run inside `npm test`, so a clone needs them.
+!/claude/validation/
+/claude/validation/*
+!/claude/validation/browser-agent/
 
 # scratch
 tmp/
