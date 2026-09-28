@@ -24,13 +24,19 @@ Another host needs only its own adapter calling the same `handleDelivery`. A
 Community Solid Server can run the same door as a component of itself instead
 — see [packages/fedipod-server](../packages/fedipod-server/README.md).
 
-The front also serves the installer at `/install`
-(`curl -fsSL https://<host>/install | sh`) and the vendored sign-in bundle.
-The `/.fediverse-account` page is served too, but opting in to being run is answered only on
+The front also serves the vendored sign-in bundle. The `/.fediverse-account` page is served too, but opting in to being run is answered only on
 a pod server — on Netlify the form's submit is refused.
 
 ## Deploying
 
+<!-- CLAUDE 2026-09-28 — a clone deploys the browser site; delete these markers when done -->
+This repo, deployed to Netlify as it stands: the build stages the browser
+site (`node scripts/stage-site.mjs`, into `web/app/site`) and publishes it
+with the functions, so a Gateway deployed from a fresh clone is the same site
+fedipod.net serves, sign-up page included. If the forum's page is to answer
+at its own host, set `BB_HOSTS` to that host (`bb.<your host>`) before the
+build; it defaults to `bb.fedipod.net`.
+<!-- /CLAUDE -->
 This repo, with `netlify.toml` as it stands. Before each deploy, run
 `node scripts/check-netlify-bundles.mjs`: it builds the functions the way
 Netlify ships them and sends requests through each one from its own bundle,

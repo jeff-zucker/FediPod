@@ -13,5 +13,5 @@ export const esmImport = new Function('s', 'return import(s)') as (s: string) =>
 /** The front's pages and the files they load, as fedipod/front-pages reads them. */
 export interface FrontPages {
   signupPage: string | null; runPage: string | null; adminPage: string | null; noticesPage: string | null;
-  authBundle: string | null; pageScripts: Record<string, string | null>; installScript: string | null;
+  authBundle: string | null; pageScripts: Record<string, string | null>;
 }

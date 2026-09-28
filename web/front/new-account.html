@@ -3,33 +3,25 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>FediPod — access the Fediverse and ATProto from a Solid pod</title>
+<title>FediPod Gateway</title>
 <link rel="icon" href="/icons/gateway.svg" type="image/svg+xml">
 <style>
-  :root { color-scheme: light dark; --line:#d9d4c7; --dim:#45443d; --accent:#6a8a5a; }
+  :root { color-scheme: light dark; --dim:#45443d; }
   @media (prefers-color-scheme: dark) { :root { --dim:#c2c0b4; } }
   body { font: 20px/1.6 Arial, Helvetica, sans-serif; max-width: 44rem; margin: 2rem auto; padding: 0 1.1rem; }
   h1 { font-size: 1.7rem; margin: 0 0 .2rem; }
-  h2 { font-size: 1.2rem; margin: 1.4rem 0 .4rem; }
   p.lede { color: var(--dim); margin-top: 0; }
   .hint { color: var(--dim); font-size: .95rem; }
-  code { background: rgba(120,120,120,.12); padding: .05em .35em; border-radius: 4px; }
-  pre { background: rgba(120,120,120,.12); padding: .7rem .9rem; border-radius: 8px; overflow-x: auto; }
-  ol.steps li { margin: .5rem 0; }
+  a { text-decoration: underline; }
   [hidden] { display: none !important; }
 </style>
 </head>
 <body>
-<h1>FediPod - join the Fediverse from a Solid pod.</h1>
-<p class="lede">Welcome to <b>FediPod</b>! Here, you can get a free pod and Fediverse account or link to your existing pod/account.</p>
-
-<p class="hint" id="current-version" hidden>Current FediPod: <strong id="current-version-num"></strong><br>
- — install or update an existing install with <code id="current-version-cmd"></code></p>
-
-<p>
-FediPod is experimental and free to use.  See the <a href="https://github.com/jeff-zucker/FediPod">FediPod repository</a> for details.
-</p>
-
+<h1>FediPod Gateway</h1>
+<p class="lede">This is a FediPod Gateway: the door other Fediverse servers deliver to, for accounts whose data lives on Solid pods.</p>
+<p>Accounts are made and used in the browser. <a href="/">Open FediPod</a> to create one or sign in. Nothing is installed.</p>
+<p class="hint" id="current-version" hidden>This gateway runs FediPod <strong id="current-version-num"></strong>.</p>
+<p>FediPod is experimental and free to use. See the <a href="https://github.com/jeff-zucker/FediPod">FediPod repository</a> for details.</p>
 <script src="/new-account.js"></script>
 </body>
 </html>

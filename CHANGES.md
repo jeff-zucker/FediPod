@@ -21,6 +21,14 @@ own, nothing changes: the post lands in the same pod inbox as before and shows
 when that machine takes it. No forum is kept by fedipod.net yet; moving the
 live one is the next step.
 
+**A Gateway deployed from a fresh clone is the browser site.** Until now a
+clone deployed as the docs said served the old front page, whose install
+line led to the deprecated DeviceAgent and its setup page asking for a pod
+password; `npm start` led there too. The deploy now stages and publishes the
+same site fedipod.net serves, sign-up page included; nothing hands out an
+installer any more (`/install` is gone); `npm start` says where FediPod
+runs instead of starting anything. A person on fedipod.net sees no change.
+
 **fedipod.net answers a forum page's browser at its door.** A browser could
 not post to the door across origins before; it can now. Nothing changes for
 other servers delivering there.

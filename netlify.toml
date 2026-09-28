@@ -2,9 +2,15 @@
 # nothing in FediPod publishes this; an operator deploys it themselves.
 [build]
   functions = "netlify/functions"
-  # Only the front pages are uploaded as statics; every route is answered by
-  # the front function anyway.
-  publish = "web/front"
+  # The site is the browser app — the landing and sign-up page, the app, its
+  # clients, the manage pages and the forum's page — staged from web/app into
+  # web/app/site. A deploy from a clone is the same site fedipod.net serves.
+  # The front's own pages stay under web/front, read by the function itself.
+  command = "node scripts/stage-site.mjs"
+  publish = "web/app/site"
+
+[build.environment]
+  NODE_VERSION = "22"
 
 [functions]
   node_bundler = "esbuild"

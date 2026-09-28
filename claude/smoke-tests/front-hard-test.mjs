@@ -162,7 +162,7 @@ const front = http.createServer(async (req, res) => {
     listNotices: async () => ({ ...notices }),
     putNotice: async (id, n) => { notices[id] = n; },
     deleteNotice: async (id) => { delete notices[id]; },
-    authBundle: '/* auth */', installScript: '#!/bin/sh\necho install\n',
+    authBundle: '/* auth */',
     offersPods: false, gatewayWebId: ORIGIN + '/gw#it',
     adminWebId: 'https://wren.example/profile/card#me',
     lookup: (h) => directory[h] || attached[h] || null,
@@ -224,7 +224,7 @@ try {
   check(bundle.status === 200 && /auth/.test(await bundle.text()),
     'the sign-in library those pages load is served');
   const inst = await get('/install');
-  check(inst.status === 200 && /^#!/.test(await inst.text()), 'the installer is served at /install');
+  check(inst.status === 404, `nothing is installed from a gateway any more: /install answers 404 (${inst.status})`);
 
   // ---- a remote server looking someone up ----------------------------------
   const wf = await get(`/.well-known/webfinger?resource=acct:alice@${HOST}`);

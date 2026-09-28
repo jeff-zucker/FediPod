@@ -42,14 +42,12 @@ export async function serveFront(h: FediPodServerHandler,
     // The notices page renders here too, and says the server keeps none:
     // a notices store is the Netlify front's, not this component's.
     noticesPage: pages.noticesPage,
-    // The opt-in and roster pages load the sign-in library, and the installer
-    // command is handed out with it; without these the pages render but
-    // cannot be used.
+    // The opt-in and roster pages load the sign-in library; without it the
+    // pages render but cannot be used.
     authBundle: pages.authBundle,
     // Each page's own script, so the pages can be served under
     // `script-src 'self'` (see fedipod/front).
     pageScripts: pages.pageScripts,
-    installScript: pages.installScript,
     lookup: (handle: string) => h.dir.lookup(handle),
     putDirectory: (handle: string, rec: never) => h.dir.putDirectory(handle, rec),
     podPut: (_handle: string, url: string, body: string, ct: string) => s.podPut(url, body, ct),

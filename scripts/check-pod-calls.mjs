@@ -326,7 +326,7 @@ if (!failures) pass('every in-scope caller reaches the pod through a named opera
   try {
     const { frontPages } = await import('fedipod/front-pages');
     const pages = frontPages();
-    const missing = ['signupPage', 'runPage', 'adminPage', 'noticesPage', 'authBundle', 'installScript'].filter((k) => !pages[k])
+    const missing = ['signupPage', 'runPage', 'adminPage', 'noticesPage', 'authBundle'].filter((k) => !pages[k])
       .concat(Object.entries(pages.pageScripts).filter(([, v]) => !v).map(([k]) => k));
     if (missing.length) { fail(`frontPages() is missing ${missing.join(', ')}`); bad++; }
   } catch (e) { fail(`frontPages(): ${e.message}`); bad++; }

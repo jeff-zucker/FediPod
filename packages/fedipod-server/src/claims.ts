@@ -14,8 +14,8 @@ const FRONT_PATHS = new Set(['/roster',
   '/.well-known/webfinger', '/api/handle', '/api/attach', '/api/agent',
   '/api/roster', '/api/revoke',
   // What the pages that remain load: the sign-in library the opt-in and
-  // roster pages use, and the installer, which is FediPod's own to hand out.
-  '/solid-oidc-client.js', '/install',
+  // roster pages use.
+  '/solid-oidc-client.js',
   // Each page's own script, served beside it; a page without its script has
   // buttons that never wake up.
   '/new-account.js', '/run.js', '/admin.js']);

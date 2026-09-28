@@ -51,7 +51,7 @@
     "gateway.md"
   ],
   "scripts": {
-    "start": "node bin/fedipod.mjs up",
+    "start": "node scripts/start.mjs",
     "install-service": "node bin/fedipod.mjs install-service",
     "uninstall-service": "node bin/fedipod.mjs uninstall-service",
     "prepublishOnly": "npm test",

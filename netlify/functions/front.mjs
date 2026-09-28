@@ -59,11 +59,6 @@ for (const name of ['new-account.js', 'run.js', 'admin.js', 'notices.js']) {
       fileURLToPath(new URL(`../../web/front/${name}`, import.meta.url)), 'utf8');
   } catch { /* without it that page has no behaviour; the page still serves */ }
 }
-let installScript = '';
-try {
-  installScript = readFileSync(
-    fileURLToPath(new URL('../../web/front/install.sh', import.meta.url)), 'utf8');
-} catch { /* without it /install 404s */ }
 let runPage = '';
 try {
   runPage = readFileSync(
@@ -189,7 +184,6 @@ export function gatewayCtx() {
     noticesPage,
     authBundle,
     pageScripts,
-    installScript,
     version: frontVersion,
     offersPods: process.env.FEDIPOD_OFFERS_PODS === '1',
     gatewayWebId: process.env.FEDIPOD_GATEWAY_WEBID || null,
