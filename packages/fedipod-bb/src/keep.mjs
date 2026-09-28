@@ -16,7 +16,8 @@ export async function keepForum(forum, { front, on = true }) {
   let keeper = null;
   for (const handle of handles) {
     const res = await forum.remote.session.fetch(`${origin}/api/keeper`, {
-      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ handle, on }),
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ handle, on, ...(handle === forum.config.handle ? {} : { forum: forum.config.handle }) }),
     });
     const d = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(`${origin} would not ${on ? 'keep' : 'let go of'} @${handle}: ${d.error || res.status}`);

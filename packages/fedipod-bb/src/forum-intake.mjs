@@ -111,6 +111,16 @@ export class ForumIntake extends Intake {
     } catch { return null; }
   }
 
+  // A receipt handed in with a delivery, the same way: any of the forum's
+  // secrets may have signed it.
+  async _checkReceipt(receipt) {
+    if (!receipt || typeof receipt !== 'object') return null;
+    const secrets = [this.config.gateway?.hmacSecret, ...this.forum.categories.map(c => c.config.gateway?.hmacSecret)].filter(Boolean);
+    if (!secrets.length) return null;
+    const { verifyReceipt } = await import('fedipod/gateway/httpsig.mjs');
+    return secrets.some(s => verifyReceipt(receipt, s)) ? receipt : null;
+  }
+
   gatewaySecret() {
     return this.config.gateway?.hmacSecret || this.forum.categories.find(c => c.config.gateway?.hmacSecret)?.config.gateway.hmacSecret || null;
   }
