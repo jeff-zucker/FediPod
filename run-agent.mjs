@@ -29,7 +29,8 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { PodStore } from './lib/core/store.mjs';
-import { apRoot, rootOf, writeJsonAtomic } from './lib/device/home.mjs';
+import { apRoot, rootOf } from './lib/device/home.mjs';
+import { writeJsonAtomic } from './lib/shared/files.mjs';
 import { ensureTrustedTls } from './lib/device/certs.mjs';
 import { storageFor } from './lib/core/storage.mjs';
 import { resolveKeys } from './lib/core/keys.mjs';

@@ -71919,7 +71919,7 @@ var fail2 = () => {
 };
 var node_os_default = new Proxy({}, { get: () => fail2 });
 
-// lib/device/home.mjs
+// lib/shared/files.mjs
 function writeFileAtomic(file, body, { mode = 384 } = {}) {
   const tmp = `${file}.${process.pid}.tmp`;
   node_fs_default.mkdirSync(node_path_default.dirname(file), { recursive: true, mode: 448 });
