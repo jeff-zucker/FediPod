@@ -1,6 +1,6 @@
 {
   "name": "fedipod-bb",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "FediPod-BB: a forum website whose record lives on a Solid pod.",
   "license": "MIT",
   "type": "module",

@@ -12,11 +12,19 @@ import { keepRows } from './setup.mjs';
 // does, from the pod's own rules, which name it beside the owner from here
 // on. `on: false` takes the name out again.
 export async function keepForum(forum, { front, on = true }) {
-  const { keeper, handles } = await keepRows({ fetch: (u, i) => forum.remote.session.fetch(u, i), front, config: forum.config, on });
-  forum.keepers = on && keeper ? [keeper] : [];
-  forum.remote.keepers = [...forum.keepers];
-  forum.remote.aclOwner = forum.readCredential()?.webId || forum.remote.aclOwner || null;
-  await forum.restateRules();
+  // Handing over: the categories' rows, then every rule on the tree with the
+  // keeper's name, then the forum's own row — whose switch starts the
+  // Gateway's first run, which reads the pod under those rules. Taking it
+  // back: the rows, then the rules without the name.
+  const restate = async (keeper) => {
+    forum.keepers = on && keeper ? [keeper] : [];
+    forum.remote.keepers = [...forum.keepers];
+    forum.remote.aclOwner = forum.readCredential()?.webId || forum.remote.aclOwner || null;
+    await forum.restateRules();
+  };
+  const { keeper, handles } = await keepRows({ fetch: (u, i) => forum.remote.session.fetch(u, i), front, config: forum.config, on,
+    between: on ? restate : null });
+  if (!on) await restate(null);
   return { keeper: on ? keeper : null, handles, on };
 }
 

@@ -63,12 +63,13 @@ test('attached at a Gateway: the forum\'s row and one per category, fronted, all
 test('kept: the categories are switched on first and the forum\'s own row last, each category naming its forum', async () => {
   const config = forumConfig({}, { remotePod: POD, handle: 'forum', categories: ['gardening', 'compost'] });
   const front = fakeFront();
-  const { keeper, handles } = await keepRows({ fetch: front.fetch, front: FRONT, config });
+  const { keeper, handles } = await keepRows({ fetch: front.fetch, front: FRONT, config,
+    between: async (k) => { front.calls.push({ path: 'rules', body: { keeper: k } }); } });
   assert.equal(keeper, KEEPER);
   assert.deepEqual(handles, ['gardening', 'compost', 'forum']);
   assert.deepEqual(front.calls.map((c) => c.body), [
-    { handle: 'gardening', on: true, forum: 'forum' }, { handle: 'compost', on: true, forum: 'forum' }, { handle: 'forum', on: true },
-  ]);
+    { handle: 'gardening', on: true, forum: 'forum' }, { handle: 'compost', on: true, forum: 'forum' }, { keeper: KEEPER }, { handle: 'forum', on: true },
+  ], 'the rules are stated, with the keeper known, before the forum\'s own switch');
   const off = await keepRows({ fetch: front.fetch, front: FRONT, config, on: false });
   assert.equal(off.keeper, null);
 });

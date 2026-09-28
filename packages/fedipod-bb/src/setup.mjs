@@ -99,15 +99,18 @@ export async function attachRows({ fetch: f, front, config, plain }, { log = () 
 /**
  * Let a Gateway keep the forum (or stop): every row, the categories first and
  * the forum's own row last, because turning the forum's row on is what starts
- * its first run, and that run wants every category kept already. Returns the
- * keeper's WebID.
+ * its first run, and that run wants every category kept already. `between`,
+ * given the keeper's WebID, runs after the categories and before that last
+ * switch: the caller names the keeper in the pod's rules there, so the first
+ * run can read the pod the moment it starts. Returns the keeper's WebID.
  */
-export async function keepRows({ fetch: f, front, config, on = true }) {
+export async function keepRows({ fetch: f, front, config, on = true, between = null }) {
   const origin = String(front).replace(/\/+$/u, '');
   const forumHandle = config.handle;
   const handles = [...(config.categories || []).map(c => c.slug), forumHandle];
   let keeper = null;
   for (const handle of handles) {
+    if (handle === forumHandle && between) await between(keeper);
     const res = await f(`${origin}/api/keeper`, {
       method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ handle, on, ...(handle === forumHandle ? {} : { forum: forumHandle }) }),
@@ -156,8 +159,8 @@ export async function setUpForumAtGateway({ remote, storageFor, fetch: f, front,
   await writeConfig(storage, { ...config, gateway, republish: true });
   onStep('attach', 'ok');
   onStep('keep', 'running');
-  const { keeper } = await keepRows({ fetch: f, front, config, on: true });
-  await nameKeeperInRules(remote, { config, plain, keeper, ownerWebId });
+  const { keeper } = await keepRows({ fetch: f, front, config, on: true,
+    between: (k) => nameKeeperInRules(remote, { config, plain, keeper: k, ownerWebId }) });
   onStep('keep', 'ok');
   return { handle: config.handle, front: gateway.front, handles, keeper };
 }

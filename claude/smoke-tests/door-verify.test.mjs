@@ -52,7 +52,8 @@ for (const spec of [undefined, 'rfc9421']) {
     const p = pod();
     const r = await handleDelivery(await throughEdge(await signed(spec)), ident(), { podPut: p.put, fetchImpl: fetch });
     assert.equal(r.status, 202);
-    assert.match(r.reason, /^buffered-unverified: signature invalidSignature; host fedipod-example\.netlify\.app, date yes, digest yes$/u);
+    assert.match(r.reason, new RegExp(`^buffered-unverified: signature invalidSignature \\(${tag}\\); host fedipod-example\\.netlify\\.app, date yes, digest yes; ${spec ? 'sig' : 'keyId='}`, 'u'));
+    assert.doesNotMatch(r.reason, /signature="[A-Za-z0-9+/=]{20}/u, 'the signature value itself is not logged');
     assert.equal(p.puts.length, 2, 'the item and its receipt reach the pod');
     const rcpt = JSON.parse(p.puts.find((x) => x.u.endsWith('.receipt.json')).b);
     assert.equal(verifyReceipt(rcpt, 'secret'), true); assert.equal(rcpt.verified, false); assert.equal(rcpt.reason, 'bad-signature');
