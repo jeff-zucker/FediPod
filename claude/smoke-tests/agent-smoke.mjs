@@ -5149,7 +5149,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
 // --- 5p2. the directory door belongs to a configured agent ---
 {
-  const door = fs.readFileSync(path.join(root, 'lib/gateway/directory.mjs'), 'utf8');
+  const door = fs.readFileSync(path.join(root, 'lib/device/directory.mjs'), 'utf8');
   const admin5p2 = ['', 'routes'].flatMap((d) => fs.readdirSync(path.join(root, 'lib/device/admin', d)).filter((f) => f.endsWith('.mjs')).map((f) => fs.readFileSync(path.join(root, 'lib/device/admin', d, f), 'utf8'))).join('\n');
   check(/if \(held \|\| !eligible\(\) \|\| Date\.now\(\) < pausedUntil\) return;/.test(door),
     'the door is only claimed while eligible');
