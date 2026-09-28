@@ -6,23 +6,13 @@ import { restateRules } from 'fedipod/pod/containers.mjs';
 import * as podInbox from 'fedipod/pod/inbox.mjs';
 import * as publish from './publish.mjs';
 import { provisionForum, provisionCategory } from './provision.mjs';
+import { keepRows } from './setup.mjs';
 
 // Let a Gateway keep this forum: it acts for the forum when nothing else
 // does, from the pod's own rules, which name it beside the owner from here
 // on. `on: false` takes the name out again.
 export async function keepForum(forum, { front, on = true }) {
-  const origin = String(front).replace(/\/+$/u, '');
-  const handles = [forum.config.handle, ...forum.categories.map(c => c.slug)];
-  let keeper = null;
-  for (const handle of handles) {
-    const res = await forum.remote.session.fetch(`${origin}/api/keeper`, {
-      method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ handle, on, ...(handle === forum.config.handle ? {} : { forum: forum.config.handle }) }),
-    });
-    const d = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(`${origin} would not ${on ? 'keep' : 'let go of'} @${handle}: ${d.error || res.status}`);
-    keeper = d.keeper || keeper;
-  }
+  const { keeper, handles } = await keepRows({ fetch: (u, i) => forum.remote.session.fetch(u, i), front, config: forum.config, on });
   forum.keepers = on && keeper ? [keeper] : [];
   forum.remote.keepers = [...forum.keepers];
   forum.remote.aclOwner = forum.readCredential()?.webId || forum.remote.aclOwner || null;

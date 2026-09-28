@@ -6,4 +6,5 @@ export * as topics from './topics.mjs';
 export * as publish from './publish.mjs';
 export * as moderation from './moderation.mjs';
 export { provisionForum, provisionCategory } from './provision.mjs';
+export * as setup from './setup.mjs';
 export { ForumAgent, ForumIntake } from './forum-agent.mjs';

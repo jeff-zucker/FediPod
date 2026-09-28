@@ -20136,7 +20136,7 @@ var require_buffer = __commonJS({
           return false;
       }
     };
-    Buffer3.concat = function concat(list, length) {
+    Buffer3.concat = function concat2(list, length) {
       if (!Array.isArray(list)) {
         throw new TypeError('"list" argument must be an Array of Buffers');
       }
@@ -23512,8 +23512,8 @@ var Serializer = class _Serializer {
     }
     var canUse = canUseMethod.bind(this);
     if ("#/".indexOf(p[p.length - 1]) >= 0) p = p.slice(0, -1);
-    var slash = p.lastIndexOf("/");
-    if (slash >= 0) p = p.slice(slash + 1);
+    var slash2 = p.lastIndexOf("/");
+    if (slash2 >= 0) p = p.slice(slash2 + 1);
     var i = 0;
     while (i < p.length) {
       if (this.prefixchars.indexOf(p[i]) >= 0) {
@@ -32544,6 +32544,52 @@ var REL = {
 };
 
 // lib/pod/urls.mjs
+function apUrls(remotePod, root, { publicBase = null } = {}) {
+  if (!root) throw new Error("apUrls: a container root is required \u2014 the caller states it, this library does not guess");
+  const base = remotePod.endsWith("/") ? remotePod : remotePod + "/";
+  const home = base + (root.endsWith("/") ? root : root + "/");
+  const face = publicBase ? publicBase.endsWith("/") ? publicBase : publicBase + "/" : home;
+  const urls = {
+    base,
+    home,
+    webfinger: base + ".well-known/webfinger",
+    actor: face + "ap/actor",
+    inbox: face + "ap/inbox/",
+    outbox: face + "ap/outbox",
+    followers: face + "ap/followers",
+    following: face + "ap/following",
+    notes: face + "ap/notes/",
+    privateNotes: face + "ap/private/",
+    featured: face + "ap/featured",
+    // FEP-1b12: the moderator roster a recipient validates announced
+    // moderation against. Published only when moderators are configured.
+    moderators: face + "ap/moderators",
+    // FEP-4ccd and FEP-c648: follows in limbo and the block list, as
+    // collections. They live in the private container so the owner-only ACL
+    // is inherited, not re-stated per document.
+    pendingFollowers: face + "ap/private/pending-followers",
+    pendingFollowing: face + "ap/private/pending-following",
+    blocked: face + "ap/private/blocked",
+    // The outbox as its owner reads it (every message, §5.1) and what the
+    // owner has liked (§5.5): the owner's alone, so they sit here too — and
+    // at the pod's own address even for a fronted identity, because the owner
+    // reads them there, with a credential the pod checks.
+    ownOutbox: home + "ap/private/outbox",
+    liked: home + "ap/private/liked",
+    profileHtml: face + "ap/profile.html",
+    // Media stays on the pod even when fronted: attachment urls are not
+    // identity-checked by remotes, and proxying blobs would be pure cost.
+    media: home + "ap/media/",
+    state: home + "ap-state/"
+  };
+  if (publicBase) {
+    urls.podHome = home;
+    urls.publicHome = face;
+    urls.toPod = (u) => typeof u === "string" && u.startsWith(face) ? home + u.slice(face.length) : u;
+    urls.toPublic = (u) => typeof u === "string" && u.startsWith(home) ? face + u.slice(home.length) : u;
+  }
+  return urls;
+}
 function podBaseOfWebId(webId) {
   const u = new URL(webId);
   u.hash = "";
@@ -33678,6 +33724,650 @@ async function moveIn(answers, { session, onStep = () => {
   return { config, address: `@${handle}@${new URL(origin).host}`, movedFrom: config.movedFrom };
 }
 
+// packages/fedipod-bb/src/setup.mjs
+var setup_exports = {};
+__export(setup_exports, {
+  ROOT: () => ROOT,
+  attachRows: () => attachRows,
+  forumConfig: () => forumConfig,
+  gatewayRows: () => gatewayRows,
+  keepRows: () => keepRows,
+  nameKeeperInRules: () => nameKeeperInRules,
+  setUpForumAtGateway: () => setUpForumAtGateway,
+  writeForumConfig: () => writeForumConfig
+});
+
+// lib/pod/containers.mjs
+var KEEP = { keep: true };
+var KEEP_CT = "application/json";
+var keepUrl = (base) => `${base}.keep`;
+async function exists(pod, base) {
+  try {
+    const r = await pod.fetch(keepUrl(base), { method: "HEAD" });
+    return r?.status >= 200 && r.status < 300;
+  } catch {
+    return false;
+  }
+}
+async function provisionPublic(pod, base) {
+  await pod.putJson(keepUrl(base), KEEP, KEEP_CT);
+  await pod.setAcl(base, ["Read"]);
+}
+async function provisionPrivate(pod, urls) {
+  if (await exists(pod, urls.state)) return false;
+  await pod.putJson(keepUrl(urls.state), KEEP, KEEP_CT);
+  await pod.setAcl(urls.state, []);
+  await pod.setAcl(urls.home, []);
+  return true;
+}
+async function restateRules(pod, urls) {
+  for (const url of [urls.home, urls.state, urls.home + "ap/private/"]) await pod.setAcl(url, [], { ifChanged: true });
+  for (const url of [urls.notes, urls.media]) await pod.setAcl(url, ["Read"], { ifChanged: true });
+  for (const child of await pod.listContainer(urls.home + "ap/")) {
+    if (!child.url.endsWith("/")) await pod.restateAcl(child.url);
+  }
+}
+
+// web/app/shims/node-crypto.mjs
+var K = new Uint32Array([
+  1116352408,
+  1899447441,
+  3049323471,
+  3921009573,
+  961987163,
+  1508970993,
+  2453635748,
+  2870763221,
+  3624381080,
+  310598401,
+  607225278,
+  1426881987,
+  1925078388,
+  2162078206,
+  2614888103,
+  3248222580,
+  3835390401,
+  4022224774,
+  264347078,
+  604807628,
+  770255983,
+  1249150122,
+  1555081692,
+  1996064986,
+  2554220882,
+  2821834349,
+  2952996808,
+  3210313671,
+  3336571891,
+  3584528711,
+  113926993,
+  338241895,
+  666307205,
+  773529912,
+  1294757372,
+  1396182291,
+  1695183700,
+  1986661051,
+  2177026350,
+  2456956037,
+  2730485921,
+  2820302411,
+  3259730800,
+  3345764771,
+  3516065817,
+  3600352804,
+  4094571909,
+  275423344,
+  430227734,
+  506948616,
+  659060556,
+  883997877,
+  958139571,
+  1322822218,
+  1537002063,
+  1747873779,
+  1955562222,
+  2024104815,
+  2227730452,
+  2361852424,
+  2428436474,
+  2756734187,
+  3204031479,
+  3329325298
+]);
+var rotr = (x, n) => x >>> n | x << 32 - n;
+function sha256(bytes) {
+  const l = bytes.length;
+  const withOne = l + 1;
+  const k = (56 - withOne % 64 + 64) % 64;
+  const total = withOne + k + 8;
+  const m = new Uint8Array(total);
+  m.set(bytes);
+  m[l] = 128;
+  const bits = l * 8;
+  const dv = new DataView(m.buffer);
+  dv.setUint32(total - 4, bits >>> 0);
+  dv.setUint32(total - 8, Math.floor(bits / 4294967296));
+  const H = new Uint32Array([1779033703, 3144134277, 1013904242, 2773480762, 1359893119, 2600822924, 528734635, 1541459225]);
+  const w = new Uint32Array(64);
+  for (let i = 0; i < total; i += 64) {
+    for (let t = 0; t < 16; t++) w[t] = dv.getUint32(i + t * 4);
+    for (let t = 16; t < 64; t++) {
+      const s0 = rotr(w[t - 15], 7) ^ rotr(w[t - 15], 18) ^ w[t - 15] >>> 3;
+      const s1 = rotr(w[t - 2], 17) ^ rotr(w[t - 2], 19) ^ w[t - 2] >>> 10;
+      w[t] = w[t - 16] + s0 + w[t - 7] + s1 >>> 0;
+    }
+    let [a, b, c, d, e, f, g, h] = H;
+    for (let t = 0; t < 64; t++) {
+      const S1 = rotr(e, 6) ^ rotr(e, 11) ^ rotr(e, 25);
+      const ch = e & f ^ ~e & g;
+      const t1 = h + S1 + ch + K[t] + w[t] >>> 0;
+      const S0 = rotr(a, 2) ^ rotr(a, 13) ^ rotr(a, 22);
+      const maj = a & b ^ a & c ^ b & c;
+      const t2 = S0 + maj >>> 0;
+      h = g;
+      g = f;
+      f = e;
+      e = d + t1 >>> 0;
+      d = c;
+      c = b;
+      b = a;
+      a = t1 + t2 >>> 0;
+    }
+    H[0] = H[0] + a >>> 0;
+    H[1] = H[1] + b >>> 0;
+    H[2] = H[2] + c >>> 0;
+    H[3] = H[3] + d >>> 0;
+    H[4] = H[4] + e >>> 0;
+    H[5] = H[5] + f >>> 0;
+    H[6] = H[6] + g >>> 0;
+    H[7] = H[7] + h >>> 0;
+  }
+  const out = new Uint8Array(32);
+  new DataView(out.buffer).setUint32(0, H[0]);
+  new DataView(out.buffer).setUint32(4, H[1]);
+  new DataView(out.buffer).setUint32(8, H[2]);
+  new DataView(out.buffer).setUint32(12, H[3]);
+  new DataView(out.buffer).setUint32(16, H[4]);
+  new DataView(out.buffer).setUint32(20, H[5]);
+  new DataView(out.buffer).setUint32(24, H[6]);
+  new DataView(out.buffer).setUint32(28, H[7]);
+  return out;
+}
+function hmacSha256(key, msg) {
+  if (key.length > 64) key = sha256(key);
+  const pad = new Uint8Array(64);
+  pad.set(key);
+  const ipad = new Uint8Array(64);
+  const opad = new Uint8Array(64);
+  for (let i = 0; i < 64; i++) {
+    ipad[i] = pad[i] ^ 54;
+    opad[i] = pad[i] ^ 92;
+  }
+  const inner = sha256(concat(ipad, msg));
+  return sha256(concat(opad, inner));
+}
+var concat = (a, b) => {
+  const o = new Uint8Array(a.length + b.length);
+  o.set(a);
+  o.set(b, a.length);
+  return o;
+};
+var toBytes = (data, enc2) => {
+  if (data == null) return new Uint8Array(0);
+  if (typeof data === "string") {
+    if (enc2 === "hex") return Uint8Array.from(data.match(/.{1,2}/g) || [], (h) => parseInt(h, 16));
+    if (enc2 === "base64") return Uint8Array.from(atob(data), (c) => c.charCodeAt(0));
+    return new TextEncoder().encode(data);
+  }
+  return data instanceof Uint8Array ? data : new Uint8Array(data);
+};
+var encode = (bytes, enc2) => {
+  if (!enc2 || enc2 === "buffer") return bytes;
+  if (enc2 === "hex") return [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
+  const b64 = btoa(String.fromCharCode(...bytes));
+  if (enc2 === "base64url") return b64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  return b64;
+};
+function createHash(alg) {
+  if (alg !== "sha256") throw new Error(`node-crypto shim: only sha256 is implemented (got ${alg})`);
+  let acc = new Uint8Array(0);
+  return { update(d, e) {
+    acc = concat(acc, toBytes(d, e));
+    return this;
+  }, digest(enc2) {
+    return encode(sha256(acc), enc2);
+  } };
+}
+function createHmac(alg, key) {
+  if (alg !== "sha256") throw new Error(`node-crypto shim: only hmac-sha256 is implemented (got ${alg})`);
+  const k = toBytes(key);
+  let acc = new Uint8Array(0);
+  return { update(d, e) {
+    acc = concat(acc, toBytes(d, e));
+    return this;
+  }, digest(enc2) {
+    return encode(hmacSha256(k, acc), enc2);
+  } };
+}
+function randomBytes(n) {
+  const b = new Uint8Array(n);
+  crypto.getRandomValues(b);
+  return globalThis.Buffer ? globalThis.Buffer.from(b) : b;
+}
+var webcrypto = globalThis.crypto;
+var randomUUID = () => globalThis.crypto.randomUUID();
+function timingSafeEqual(a, b) {
+  if (a.length !== b.length) return false;
+  let out = 0;
+  for (let i = 0; i < a.length; i++) out |= a[i] ^ b[i];
+  return out === 0;
+}
+var unavailable = (name) => () => {
+  throw new Error(`node:crypto ${name} is not available in the browser agent`);
+};
+var generateKeyPairSync = unavailable("generateKeyPairSync");
+var createPrivateKey = unavailable("createPrivateKey");
+var createPublicKey = unavailable("createPublicKey");
+var scryptSync = unavailable("scryptSync");
+var node_crypto_default = {
+  createHash,
+  createHmac,
+  randomBytes,
+  webcrypto,
+  randomUUID,
+  timingSafeEqual,
+  generateKeyPairSync,
+  createPrivateKey,
+  createPublicKey,
+  scryptSync
+};
+
+// packages/fedipod-bb/src/urls.mjs
+var ROOT = "fedipod-bb/";
+var SLUG = /^[a-z0-9][a-z0-9-]{0,62}$/u;
+var isSlug = (s) => typeof s === "string" && SLUG.test(s);
+var TID = /^[0-9]{4}-[0-9]{2}-[a-z0-9][a-z0-9-]{0,78}$/u;
+var isTid = (s) => typeof s === "string" && TID.test(s);
+var cacheKey = (postId) => node_crypto_default.createHash("sha256").update(String(postId)).digest("hex").slice(0, 16);
+function forumUrls(remotePod, root = ROOT, { publicBase = null, front = null, handle = null } = {}) {
+  const origin = front ? String(front).replace(/\/$/u, "") : null;
+  if (origin && !handle) throw new Error("forumUrls: a fronted forum needs its handle");
+  const site = apUrls(remotePod, root, { publicBase: publicBase || (origin ? `${origin}/u/${handle}/` : null) });
+  const face = site.actor.slice(0, -"ap/actor".length);
+  site.front = origin;
+  site.categories = face + "ap/categories";
+  site.administrators = face + "ap/administrators";
+  site.latest = face + "ap/latest";
+  site.mod = (remotePod.endsWith("/") ? remotePod : remotePod + "/") + (root.endsWith("/") ? root : root + "/") + "mod/";
+  site.siteHtml = face + "ap/site.html";
+  site.root = root.endsWith("/") ? root : root + "/";
+  site.category = (slug) => {
+    if (!isSlug(slug)) throw new Error(`forumUrls: not a category slug (${slug})`);
+    return categoryUrls(remotePod, site.root + "c/" + slug + "/", {
+      publicBase: origin ? `${origin}/u/${slug}/` : publicBase ? face + "c/" + slug + "/" : null,
+      forumInbox: site.inbox
+    });
+  };
+  return site;
+}
+function categoryUrls(remotePod, root, { publicBase = null, forumInbox = null } = {}) {
+  const urls = apUrls(remotePod, root, { publicBase });
+  const face = urls.actor.slice(0, -"ap/actor".length);
+  urls.forumInbox = forumInbox || urls.inbox;
+  urls.topics = face + "ap/topics";
+  urls.topicsPage = (n) => `${urls.topics}-${n}`;
+  urls.topicContainer = face + "ap/topic/";
+  urls.topic = (tid) => {
+    if (!isTid(tid)) throw new Error(`categoryUrls: not a topic id (${tid})`);
+    return urls.topicContainer + tid;
+  };
+  urls.topicPage = (tid, n) => `${urls.topic(tid)}-${n}`;
+  urls.cache = face + "ap/cache/";
+  urls.cached = (postId) => urls.cache + cacheKey(postId);
+  urls.members = face + "ap/members";
+  urls.categoryHtml = face + "ap/index.html";
+  urls.topicHtml = (tid) => face + "ap/t/" + tid + ".html";
+  return urls;
+}
+
+// packages/fedipod-bb/src/provision.mjs
+async function provisionForum(remote, site, { moderatorWebIds = [] } = {}) {
+  await provisionPrivate(remote, site);
+  await provisionPublic(remote, site.notes);
+  await provisionPublic(remote, site.media);
+  await remote.putJson(site.mod + ".keep", { "@context": "https://www.w3.org/ns/activitystreams", type: "Object" }, "application/activity+json");
+  await remote.setAcl(site.mod, [], { readAgents: moderatorWebIds });
+}
+async function provisionCategory(remote, cat, { memberWebIds = null } = {}) {
+  await provisionPrivate(remote, cat);
+  for (const base of [cat.notes, cat.media, cat.topicContainer, cat.cache]) {
+    if (memberWebIds) {
+      await remote.putJson(base + ".keep", { "@context": "https://www.w3.org/ns/activitystreams", type: "Object" }, "application/activity+json");
+      await remote.setAcl(base, [], { readAgents: memberWebIds });
+    } else {
+      await provisionPublic(remote, base);
+    }
+  }
+}
+
+// packages/fedipod-bb/src/setup.mjs
+function forumConfig(existing = {}, {
+  remotePod,
+  root = ROOT,
+  handle,
+  name,
+  categories = [],
+  moderators = [],
+  moderatorWebIds = [],
+  membersOnly = [],
+  memberWebIds = {},
+  approveJoins = false,
+  review = false,
+  replyPolicy = "open"
+}) {
+  if (!isSlug(handle)) throw new Error(`not a forum handle: ${handle}`);
+  const cats = categories.map((c) => typeof c === "string" ? { slug: c, name: c } : c);
+  for (const c of cats) if (!isSlug(c.slug)) throw new Error(`not a category slug: ${c.slug}`);
+  const was = JSON.stringify((existing.categories || []).map((c) => [c.slug, c.name]));
+  const access = JSON.stringify([existing.membersOnly || [], existing.memberWebIds || {}, existing.moderatorWebIds || []]);
+  const accessChanged = !!existing.handle && access !== JSON.stringify([membersOnly, memberWebIds, moderatorWebIds]);
+  const renamed = !!existing.handle && ((name || handle) !== existing.name || was !== JSON.stringify(cats.map((c) => [c.slug, c.name])));
+  return {
+    ...existing,
+    kind: "application",
+    handle,
+    name: name || existing.name || handle,
+    ...renamed || accessChanged ? { republish: true } : {},
+    ...accessChanged ? { reprovision: true } : {},
+    remotePod,
+    root,
+    categories: cats,
+    moderators,
+    moderatorWebIds,
+    membersOnly,
+    memberWebIds,
+    approveJoins,
+    review,
+    replyPolicy
+  };
+}
+var CONFIG = "config.json";
+var serialise = (obj) => JSON.stringify(obj, null, 2) + "\n";
+async function writeConfig2(storage, config) {
+  const w = await storage.write(CONFIG, serialise(config), "application/json");
+  if (!w.ok) throw new Error(`the forum's config could not be written${w.why ? ` (${w.why})` : ""}`);
+}
+async function writeForumConfig(remote, storageFor, opts, { log: log2 = () => {
+} } = {}) {
+  const plain = forumUrls(opts.remotePod, opts.root || ROOT);
+  await provisionForum(remote, plain);
+  const storage = storageFor(plain.state, (u, i) => remote.fetch(u, i));
+  const had = await storage.read(CONFIG).catch(() => null);
+  let existing = {};
+  if (had?.ok && had.body) {
+    try {
+      existing = JSON.parse(had.body) || {};
+    } catch {
+      existing = {};
+    }
+  }
+  const config = forumConfig(existing, opts);
+  await writeConfig2(storage, config);
+  log2(`forum ${config.handle} initialised with ${config.categories.length} categor${config.categories.length === 1 ? "y" : "ies"}`);
+  return { storage, config, plain };
+}
+var gatewayRows = (config, plain) => [
+  { handle: config.handle, podHome: plain.home, actorUrl: plain.actor, kind: "application" },
+  ...(config.categories || []).map((c) => ({
+    handle: c.slug,
+    podHome: plain.category(c.slug).home,
+    actorUrl: plain.category(c.slug).actor,
+    kind: "group"
+  }))
+];
+async function attachRows({ fetch: f, front, config, plain }, { log: log2 = () => {
+} } = {}) {
+  const origin = String(front).replace(/\/+$/u, "");
+  const secrets = {};
+  const rows = gatewayRows(config, plain);
+  for (const row of rows) {
+    const res = await f(`${origin}/api/attach`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ ...row, fronted: true, inboxUrl: plain.inbox })
+    });
+    const d = await res.json().catch(() => ({}));
+    if (res.status !== 201 || !d.hmacSecret) throw new Error(`attach ${row.handle} at ${origin}: HTTP ${res.status}${d.error ? " " + d.error : ""}`);
+    secrets[row.handle] = String(d.hmacSecret);
+    log2(`attached @${row.handle}@${new URL(origin).host}`);
+  }
+  return { gateway: { front: origin, mode: "trust", secrets }, handles: rows.map((r) => r.handle) };
+}
+async function keepRows({ fetch: f, front, config, on = true }) {
+  const origin = String(front).replace(/\/+$/u, "");
+  const forumHandle = config.handle;
+  const handles = [...(config.categories || []).map((c) => c.slug), forumHandle];
+  let keeper = null;
+  for (const handle of handles) {
+    const res = await f(`${origin}/api/keeper`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ handle, on, ...handle === forumHandle ? {} : { forum: forumHandle } })
+    });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(`${origin} would not ${on ? "keep" : "let go of"} @${handle}: ${d.error || res.status}`);
+    keeper = d.keeper || keeper;
+  }
+  return { keeper: on ? keeper : null, handles, on };
+}
+async function nameKeeperInRules(remote, { config, plain, keeper = null, ownerWebId = null }) {
+  remote.keepers = keeper ? [keeper] : [];
+  remote.aclOwner = ownerWebId || remote.aclOwner || null;
+  await provisionForum(remote, plain, { moderatorWebIds: config.moderatorWebIds || [] });
+  await restateRules(remote, plain);
+  for (const c of config.categories || []) {
+    const urls = plain.category(c.slug);
+    const members = (config.membersOnly || []).includes(c.slug) ? config.memberWebIds?.[c.slug] || [] : null;
+    await provisionCategory(remote, urls, { memberWebIds: members });
+    await restateRules(remote, urls);
+  }
+}
+async function setUpForumAtGateway({ remote, storageFor, fetch: f, front, ownerWebId, ...opts }, { log: log2 = () => {
+}, onStep = () => {
+} } = {}) {
+  onStep("write", "running");
+  const { storage, config, plain } = await writeForumConfig(remote, storageFor, opts, { log: log2 });
+  onStep("write", "ok");
+  onStep("attach", "running");
+  const { gateway, handles } = await attachRows({ fetch: f, front, config, plain }, { log: log2 });
+  await writeConfig2(storage, { ...config, gateway, republish: true });
+  onStep("attach", "ok");
+  onStep("keep", "running");
+  const { keeper } = await keepRows({ fetch: f, front, config, on: true });
+  await nameKeeperInRules(remote, { config, plain, keeper, ownerWebId });
+  onStep("keep", "ok");
+  return { handle: config.handle, front: gateway.front, handles, keeper };
+}
+
+// web/app/forum-support.mjs
+var forum_support_default = setup_exports;
+
+// stub:node:fs/promises
+var fail = () => {
+  throw new Error("node:fs/promises is not available in the browser agent");
+};
+var promises_default = new Proxy({}, { get: () => fail });
+
+// web/app/shims/_globals.mjs
+var URL2 = globalThis.URL;
+var URLSearchParams2 = globalThis.URLSearchParams;
+
+// web/app/shims/node-url.mjs
+var fileURLToPath = (u) => {
+  const s = typeof u === "string" ? u : u.href;
+  return s.replace(/^file:\/\//, "");
+};
+var pathToFileURL = (p) => new URL("file://" + (p.startsWith("/") ? p : "/" + p));
+var node_url_default = { URL: globalThis.URL, URLSearchParams: globalThis.URLSearchParams, fileURLToPath, pathToFileURL };
+
+// lib/core/storage.mjs
+var LDP2 = Namespace("http://www.w3.org/ns/ldp#");
+var slash = (u) => u.endsWith("/") ? u : u + "/";
+var HttpStorage = class {
+  constructor(base, fetchImpl) {
+    this.base = slash(base);
+    this.fetchImpl = fetchImpl;
+  }
+  get kind() {
+    return "pod";
+  }
+  // The same jail FileStorage has, and for the same reason: a path here can
+  // carry `..`, encodeURI leaves both `.` and `/` alone, and fetch normalises
+  // the segments away — so a name derived from remote input could name a
+  // resource outside the container entirely. A prefix check is not enough on
+  // its own: a concatenated URL always satisfies one.
+  _url(p) {
+    const u = new URL(encodeURI(p), this.base);
+    if (!u.href.startsWith(this.base)) throw new Error(`path escapes the container: ${p}`);
+    return u.href;
+  }
+  async list(sub = "", { etag } = {}) {
+    const url = this._url(sub);
+    const res = await this.fetchImpl(url, {
+      headers: { accept: "text/turtle", ...etag ? { "if-none-match": etag } : {} }
+    });
+    if (res.status === 304) return { notModified: true, names: null, etag };
+    if (res.status === 404) return { notModified: false, names: [], etag: null, missing: true };
+    if (res.status >= 400) throw new Error(`container unreadable (HTTP ${res.status})`);
+    const g = graph();
+    parse2(await res.text(), g, url, "text/turtle");
+    const here = namedNode2(url);
+    const names = g.each(here, LDP2("contains"), null, here).map((n) => n.value).filter((u) => u.startsWith(url) && u !== url).map((u) => decodeURIComponent(u.slice(url.length)));
+    return { notModified: false, names, etag: res.headers.get("etag") };
+  }
+  // `accept` is for callers reading something that is RDF but is wanted as it
+  // was written: asking turtle-first for a JSON-LD document gets turtle back,
+  // because the server is entitled to convert between two RDF syntaxes.
+  async read(p, { etag, accept } = {}) {
+    const res = await this.fetchImpl(this._url(p), {
+      headers: {
+        accept: accept || "text/turtle, application/json;q=0.9, */*;q=0.8",
+        ...etag ? { "if-none-match": etag } : {}
+      }
+    });
+    if (res.status === 304) return { ok: true, notModified: true, status: 304, body: null, etag };
+    if (res.status >= 400) return { ok: false, notModified: false, status: res.status, body: null, etag: null };
+    return { ok: true, notModified: false, status: res.status, body: await res.text(), etag: res.headers.get("etag") };
+  }
+  async write(p, body, contentType) {
+    const url = this._url(p);
+    try {
+      const res = await this.fetchImpl(url, {
+        method: "PUT",
+        headers: { "content-type": contentType },
+        body
+      });
+      if (res.status < 400) return { ok: true, retry: false, why: "" };
+      const retry = res.status >= 500 || res.status === 429;
+      const ra = Number(res.headers?.get?.("retry-after"));
+      return {
+        ok: false,
+        retry,
+        why: `HTTP ${res.status}`,
+        retryAfterMs: Number.isFinite(ra) && ra > 0 ? ra * 1e3 : 0
+      };
+    } catch (e) {
+      return { ok: false, retry: true, why: e.message, retryAfterMs: 0 };
+    }
+  }
+  async remove(p) {
+    const url = this._url(p);
+    try {
+      const res = await this.fetchImpl(url, { method: "DELETE" });
+      return res.status < 400 || res.status === 404;
+    } catch {
+      return false;
+    }
+  }
+};
+
+// web/app/forum-form.mjs
+var SLUG2 = /^[a-z0-9][a-z0-9-]{0,62}$/u;
+function categoriesFrom(text) {
+  const lines = String(text || "").split("\n").map((l) => l.trim()).filter(Boolean);
+  if (!lines.length) throw new Error("Categories: at least one is required.");
+  const out = [];
+  const seen = /* @__PURE__ */ new Set();
+  for (const line of lines) {
+    const i = line.indexOf(":");
+    const slug = (i < 0 ? line : line.slice(0, i)).trim().toLowerCase();
+    const name = (i < 0 ? "" : line.slice(i + 1)).trim() || slug;
+    if (!SLUG2.test(slug)) throw new Error(`Categories: "${slug}" is not a short name. Letters, digits and hyphens, starting with a letter or digit.`);
+    if (seen.has(slug)) throw new Error(`Categories: "${slug}" is listed twice.`);
+    seen.add(slug);
+    out.push({ slug, name: name.slice(0, 200) });
+  }
+  return out;
+}
+function moderatorFrom(text, frontOrigin) {
+  const s = String(text || "").trim();
+  if (!s) return null;
+  if (/^https?:\/\//iu.test(s)) {
+    try {
+      return new URL(s).href;
+    } catch {
+      throw new Error("Moderator: not a valid web address.");
+    }
+  }
+  const m = /^@?([a-z0-9][a-z0-9._-]*)@([a-z0-9.-]+(?::\d+)?)$/iu.exec(s);
+  if (!m) throw new Error("Moderator: write it as @name@server, or as a web address.");
+  const front = frontOrigin ? new URL(frontOrigin) : null;
+  if (front && m[2].toLowerCase() === front.host.toLowerCase()) return `${front.origin}/u/${m[1].toLowerCase()}/ap/actor`;
+  throw new Error(`Moderator: only an address at ${front ? front.host : "this site"} can be named here. Others can be added on the forum's settings page.`);
+}
+
+// web/app/signup-forum.mjs
+var forumsOffered = () => !!forum_support_default;
+async function signUpForum({ handle, name, categories, moderator = "" }, { session, onStep = () => {
+}, frontOrigin = null } = {}) {
+  if (!forum_support_default) throw new Error("This site does not host forums.");
+  if (!frontOrigin) throw new Error("A forum lives at a gateway, and this page has none.");
+  const bad = handleProblem(handle);
+  if (bad) throw new Error(`Forum handle: ${bad}`);
+  if (!String(name || "").trim()) throw new Error("A forum name is required.");
+  const cats = categoriesFrom(categories);
+  const mod = moderatorFrom(moderator, frontOrigin);
+  if (!session?.webId || typeof session.fetch !== "function") throw new Error("sign in at the forum's pod first");
+  const webId = session.webId;
+  const pod = podBaseOfWebId(webId);
+  const remote = new BrowserRemotePod(session, { webId, role: "signup", log: () => {
+  } });
+  onStep("pod", "running");
+  if (await findAccount(remote, pod, readConfigAt(remote, pod))) {
+    throw new Error("This pod already hosts a FediPod account. A forum needs a pod of its own.");
+  }
+  if (await resourceExists(session.fetch, pod + forum_support_default.ROOT)) {
+    throw new Error("This pod already holds a forum.");
+  }
+  for (const h of [handle, ...cats.map((c) => c.slug)]) await assertFrontNameFree(frontOrigin, h);
+  onStep("pod", "ok");
+  const made = await forum_support_default.setUpForumAtGateway({
+    remote,
+    storageFor: (base, fetch2) => new HttpStorage(base, fetch2),
+    fetch: (u, i) => session.fetch(u, i),
+    front: frontOrigin,
+    ownerWebId: webId,
+    remotePod: pod,
+    handle,
+    name: String(name).trim(),
+    categories: cats,
+    moderators: mod ? [mod] : [],
+    moderatorWebIds: [webId]
+  }, { onStep });
+  return { handle: made.handle, front: made.front, address: `@${made.handle}@${new URL(made.front).host}` };
+}
+
 // lib/pod/actor.mjs
 var ACCEPT_AP = 'application/activity+json, application/ld+json; profile="https://www.w3.org/ns/activitystreams"';
 async function readIssuer(actorUrl, fetchImpl = fetch) {
@@ -33695,7 +34385,7 @@ async function readIssuer(actorUrl, fetchImpl = fetch) {
 var STORE = "session";
 var b64u = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 var enc = (o) => b64u(new TextEncoder().encode(JSON.stringify(o)));
-var sha256 = (s) => crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
+var sha2562 = (s) => crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
 var rand = (n = 32) => b64u(crypto.getRandomValues(new Uint8Array(n)));
 async function dpopKey() {
   return crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, false, ["sign"]);
@@ -33778,7 +34468,7 @@ function solidOidcSession({ dbName = "solid-oidc-session", clientName = "Solid a
     const client_id = await registerClient(cfg, redirectUri, name);
     const pair = await dpopKey();
     const verifier = rand(48);
-    const challenge = b64u(await sha256(verifier));
+    const challenge = b64u(await sha2562(verifier));
     const state = rand(16);
     await idbPut("pending", {
       issuer,
@@ -33897,7 +34587,7 @@ function solidOidcSession({ dbName = "solid-oidc-session", clientName = "Solid a
     };
     const send = async (url, init) => {
       const jwk = await jwkP;
-      const ath = b64u(await sha256(accessToken));
+      const ath = b64u(await sha2562(accessToken));
       const headers = { ...init.headers || {}, authorization: `DPoP ${accessToken}`, dpop: await dpopProof(s.pair, jwk, init.method || "GET", url, ath) };
       return fetch(url, { ...init, headers });
     };
@@ -34026,6 +34716,11 @@ window.fedipodSignup = async ({ onStep, ...answers }) => {
   if (!session) throw new Error("Sign in at your pod first.");
   await signUp(answers, { session, onStep, frontOrigin: location.origin });
   await bootWorker({ reset: true });
+};
+window.fedipodForumSignup = async ({ onStep, ...answers }) => {
+  const session = await getSession();
+  if (!session) throw new Error("Sign in at the forum's pod first.");
+  return signUpForum(answers, { session, onStep, frontOrigin: location.origin });
 };
 window.fedipodMoveIn = async ({ onStep, ...answers }) => {
   const session = await getSession();
@@ -34326,6 +35021,11 @@ ${e.detail}` : "");
     $("container").placeholder = podRootPath(signedPod);
     $("container-field").hidden = !!moveFrom;
     $("movein-note").hidden = !moveFrom;
+    try {
+      const m = sessionStorage.getItem("fedipod:making");
+      if (m) for (const r of f().making) r.checked = r.value === m;
+    } catch {
+    }
     if (moveFrom) {
       $("movein-from").textContent = moveFrom.address;
       if (!f().handle.value) f().handle.value = moveFrom.config.handle;
@@ -34374,7 +35074,8 @@ ${e.detail}` : "");
       return false;
     }
   };
-  const shape = () => pathPod() || moveFrom ? "front" : f().shape.value;
+  const making = () => forumsOffered() && f().making?.value === "forum" ? "forum" : "account";
+  const shape = () => pathPod() || moveFrom || making() === "forum" ? "front" : f().shape.value;
   const answers = () => ({ handle: f().handle.value.trim().toLowerCase(), shape: shape(), container: f().container.value.trim() });
   const previewPlace = () => {
     if (!signedPod) return;
@@ -34392,12 +35093,26 @@ ${e.detail}` : "");
     $("preview").textContent = handle && host ? `@${handle}@${host}` : "@\u2026@\u2026";
   };
   const applyShape = () => {
-    const fixed = pathPod() || !!moveFrom;
+    const fixed = pathPod() || !!moveFrom || making() === "forum";
     for (const r of f().shape) {
       if (fixed) r.checked = r.value === "front";
     }
     $("shape-group").hidden = fixed;
-    $("shape-hint").hidden = !fixed || !!moveFrom;
+    $("shape-hint").hidden = !fixed || !!moveFrom || making() === "forum";
+  };
+  const applyMaking = () => {
+    const forum = making() === "forum";
+    $("making-hint").hidden = !forum;
+    $("forum-fields").hidden = !forum;
+    $("container-field").hidden = forum || !!moveFrom;
+    $("identity-legend").textContent = forum ? "Your forum" : "Your Fediverse Identity";
+    $("handle-label").textContent = forum ? "Forum handle" : "Fediverse handle";
+    $("handle-hint").textContent = forum ? `The name in the forum's address, @handle@${location.host}. This is permanent. Letters, digits, and hyphens only.` : "The name in your Fediverse address. This is permanent. Letters, digits, and hyphens only.";
+    $("handle").placeholder = forum ? "the handle part of the forum's address: @HANDLE@server" : "the handle part of your address: @HANDLE@server";
+    $("signed-pod-label").textContent = forum ? "The forum's pod" : "Your pod";
+    $("addr-label").textContent = forum ? "The forum's address" : "Your Fediverse address";
+    $("after-hint").textContent = forum ? "The handle, the categories' short names and the pod cannot be changed afterwards. Everything else you set on the forum's settings page." : "The handle and the pod cannot be changed afterwards. Everything else \u2014 display name, bio, pictures \u2014 you set later in the client.";
+    $("submit").textContent = forum ? "Create the forum" : moveFrom ? "Move your account here" : "Create your Fediverse account";
   };
   const applyMode = () => {
     const existing = f().mode.value === "existing";
@@ -34409,11 +35124,14 @@ ${e.detail}` : "");
   };
   for (const el of $("form").elements) for (const evt of ["input", "change"]) el.addEventListener(evt, () => {
     applyMode();
+    applyMaking();
     applyShape();
     previewAddr();
     previewPlace();
   });
   applyMode();
+  $("making-group").hidden = !forumsOffered();
+  applyMaking();
   const STEP_IDS = ["step-1", "step-2"];
   const FOCUS = { 1: "provider", 2: "handle" };
   const goStep = (n) => {
@@ -34423,6 +35141,7 @@ ${e.detail}` : "");
     $("err-1").textContent = "";
     $("form-error").textContent = "";
     if (n === 2) {
+      applyMaking();
       applyShape();
       previewAddr();
       previewPlace();
@@ -34436,6 +35155,17 @@ ${e.detail}` : "");
   };
   const validateStep2 = () => {
     const hp = window.fedipodHandleProblem(f().handle.value.trim().toLowerCase());
+    if (making() === "forum") {
+      if (hp) return `Forum handle: ${hp}`;
+      if (!f().forumName.value.trim()) return "Forum name: a name is required.";
+      try {
+        categoriesFrom(f().categories.value);
+        moderatorFrom(f().moderator.value, location.origin);
+      } catch (e) {
+        return e.message;
+      }
+      return null;
+    }
     if (hp) return `Fediverse handle: ${hp}`;
     if (!moveFrom) {
       const where = chosenRoot(signedPod, f().container.value).problem;
@@ -34456,6 +35186,10 @@ ${e.detail}` : "");
     }
     $("err-1").textContent = "";
     $("to-2").disabled = true;
+    try {
+      sessionStorage.setItem("fedipod:making", making());
+    } catch {
+    }
     try {
       await window.fedipodPodLogin({ issuer: providerUrl() });
     } catch (err) {
@@ -34483,6 +35217,7 @@ ${e.detail}` : "");
     place: "Recording where your account lives"
   };
   const MOVE_LABELS = { pod: "Reading your account on your pod", gateway: "Taking your address here", keys: "Moving your key and account record" };
+  const FORUM_LABELS = { pod: "Checking the forum's pod", write: "Writing the forum on its pod", attach: "Taking its addresses here", keep: "Making this site its keeper" };
   const run = async (createIndex = false) => {
     const a = { ...answers(), ...createIndex ? { createIndex: true } : {} };
     $("pane-form").hidden = true;
@@ -34490,10 +35225,12 @@ ${e.detail}` : "");
     $("running-title").textContent = "Setting up\u2026";
     $("run-error").textContent = "";
     $("run-actions").hidden = true;
+    $("run-done").hidden = true;
     const steps = $("steps");
     steps.textContent = "";
     const mark = {};
-    const labels = moveFrom ? MOVE_LABELS : LABELS;
+    const forum = making() === "forum";
+    const labels = forum ? FORUM_LABELS : moveFrom ? MOVE_LABELS : LABELS;
     const onStep = (k, st2) => {
       if (!mark[k]) {
         const li = document.createElement("li");
@@ -34503,6 +35240,23 @@ ${e.detail}` : "");
       mark[k].textContent = (st2 === "ok" ? "\u2713 " : st2 === "running" ? "\u2026 " : "") + (labels[k] || k);
     };
     try {
+      if (forum) {
+        const made = await window.fedipodForumSignup({
+          handle: a.handle,
+          name: f().forumName.value,
+          categories: f().categories.value,
+          moderator: f().moderator.value,
+          onStep
+        });
+        try {
+          sessionStorage.removeItem("fedipod:making");
+        } catch {
+        }
+        $("running-title").textContent = `Your forum is ready: ${made.address}`;
+        $("run-done-link").href = `${location.origin}/bb/?forum=${encodeURIComponent(made.handle)}`;
+        $("run-done").hidden = false;
+        return;
+      }
       if (moveFrom) await window.fedipodMoveIn({ handle: a.handle, onStep });
       else await window.fedipodSignup({ ...a, onStep });
       location.href = "/admin/client/";

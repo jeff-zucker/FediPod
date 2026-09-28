@@ -1,6 +1,15 @@
 # Changes
 
-## 2026-09-28 (a forum's page posts through fedipod.net — version 1.44.0, fedipod-bb 0.4.0)
+## 2026-09-28 (a forum from the sign-up page, and a forum's page posts through fedipod.net — version 1.44.0, fedipod-bb 0.4.0)
+
+**Anyone can make a forum from fedipod.net's sign-up page, with no machine of
+their own.** "A forum" is the first choice on the page: make a pod for it at
+a provider (a forum has a pod of its own), come back signed in as that pod,
+give it a handle, a name and its categories, and name the address you will
+moderate it as. fedipod.net writes the forum on its pod, takes its addresses,
+and becomes its keeper; its first run publishes the forum within the minute,
+and the forum's page is at bb.fedipod.net from then on. A site without forum
+support does not offer the choice.
 
 **A member's post goes to the forum through fedipod.net, not straight to the
 forum's pod.** For a forum fedipod.net keeps, the post is on the forum the

@@ -27,7 +27,7 @@ const keysDocFor = (pod, root) => `${pod}${root}ap-state/keys.json`;
 const stateOf = (pod, root) => `${pod}${root}ap-state/`;
 
 /** The account's config as it sits under `root`, read as its owner. */
-const readConfigAt = (remote, pod) => (root) => podState.readConfig(remote, { state: stateOf(pod, root) });
+export const readConfigAt = (remote, pod) => (root) => podState.readConfig(remote, { state: stateOf(pod, root) });
 
 const HANDLE_RE = /^[a-z0-9-]{2,30}$/;
 
@@ -49,7 +49,7 @@ const PROGRESS = new Map();
 const progressKey = (webId, a) => [webId, a.handle, a.shape || 'pod', a.container || ''].join('|');
 
 /** A fronted name is one per gateway; a taken one is refused before anything is made. */
-async function assertFrontNameFree(frontOrigin, handle) {
+export async function assertFrontNameFree(frontOrigin, handle) {
   const res = await fetch(`${frontOrigin.replace(/\/$/, '')}/api/handle?handle=${encodeURIComponent(handle)}`,
     { headers: { accept: 'application/json' } }).catch(() => null);
   const d = res ? await res.json().catch(() => ({})) : null;

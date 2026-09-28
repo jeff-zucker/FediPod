@@ -34,6 +34,18 @@ This README is about the `FediPod BrowserAgent`. There are also a number of [oth
 
 From now on, anyone can open your profile at `https://fedipod.net/@handle@provider`, signed in or not.
 
+<!-- CLAUDE 2026-09-28 — a forum from the sign-up page; delete these markers when done -->
+## Getting a forum
+
+The same page makes a forum. Choose **A forum** as the first thing on it. A
+forum has a pod of its own, so make a new pod for it at your provider (or
+sign in with one that holds nothing else), then give the forum a handle, a
+name and its categories, and the address at fedipod.net you will moderate it
+as. fedipod.net runs the forum from then on; nothing runs on your machine.
+Its page is at `https://bb.fedipod.net/<handle>/` and its address is
+`@handle@fedipod.net`, with one address per category.
+<!-- /CLAUDE -->
+
 ## What you can do
 
 There are two clients, both served by fedipod.net:

@@ -15,6 +15,8 @@
 //   Returning:    fedipodSignin({ address }) — redirect to the pod's login.
 //   On every load: fedipodOnLoad() — finish a redirect, or restore, then boot.
 import { signUp, moveIn, readAccount, handleProblem } from './signup.mjs';
+import { signUpForum, forumsOffered } from './signup-forum.mjs';
+import { categoriesFrom, moderatorFrom } from './forum-form.mjs';
 import { podRootPath, chosenRoot } from '../../lib/core/place.mjs';
 import * as podActor from '../../lib/pod/actor.mjs';
 import * as podState from '../../lib/pod/state.mjs';
@@ -133,6 +135,14 @@ window.fedipodSignup = async ({ onStep, ...answers }) => {
   if (!session) throw new Error('Sign in at your pod first.');
   await signUp(answers, { session, onStep, frontOrigin: location.origin });
   await bootWorker({ reset: true });
+};
+// A forum, on the pod the person just made for it (signup-forum.mjs): written
+// on the pod, its addresses taken here, this site named its keeper. No agent
+// boots here; the forum runs at this site from its first run on.
+window.fedipodForumSignup = async ({ onStep, ...answers }) => {
+  const session = await getSession();
+  if (!session) throw new Error("Sign in at the forum's pod first.");
+  return signUpForum(answers, { session, onStep, frontOrigin: location.origin });
 };
 // An account whose address lives at another gateway, moving here: the pod's
 // part (signup.mjs moveIn), then a boot under the new ids, which finishes
@@ -462,6 +472,9 @@ if (typeof document !== 'undefined') (async () => {
     $('container').placeholder = podRootPath(signedPod);
     $('container-field').hidden = !!moveFrom;
     $('movein-note').hidden = !moveFrom;
+    // What was being made was chosen before the pod's login; the page came
+    // back fresh from it.
+    try { const m = sessionStorage.getItem('fedipod:making'); if (m) for (const r of f().making) r.checked = r.value === m; } catch { /* storage blocked */ }
     if (moveFrom) {
       $('movein-from').textContent = moveFrom.address;
       if (!f().handle.value) f().handle.value = moveFrom.config.handle;
@@ -499,7 +512,10 @@ if (typeof document !== 'undefined') (async () => {
   // from the signed-in pod, not guessed from the provider.
   const pathPod = () => { try { return new URL(signedPod).pathname !== '/'; } catch { return false; } };
   // A move between gateways is an address at a gateway: no choice either.
-  const shape = () => ((pathPod() || moveFrom) ? 'front' : f().shape.value);
+  // What is being made: a person's account, or a forum (offered only where
+  // this site hosts forums). A forum's address is always at this site.
+  const making = () => (forumsOffered() && f().making?.value === 'forum' ? 'forum' : 'account');
+  const shape = () => ((pathPod() || moveFrom || making() === 'forum') ? 'front' : f().shape.value);
   const answers = () => ({ handle: f().handle.value.trim().toLowerCase(), shape: shape(), container: f().container.value.trim() });
   // Where the data will be, in full, as the person types.
   const previewPlace = () => {
@@ -516,10 +532,30 @@ if (typeof document !== 'undefined') (async () => {
   // The shape choice is fixed for a path pod, and open for a host-root pod.
   // A path pod has no choice to make: the radios go away and the note says why.
   const applyShape = () => {
-    const fixed = pathPod() || !!moveFrom;
+    const fixed = pathPod() || !!moveFrom || making() === 'forum';
     for (const r of f().shape) { if (fixed) r.checked = r.value === 'front'; }
     $('shape-group').hidden = fixed;
-    $('shape-hint').hidden = !fixed || !!moveFrom;   // a move explains itself in its own note
+    $('shape-hint').hidden = !fixed || !!moveFrom || making() === 'forum';   // a move and a forum explain themselves
+  };
+  // The forum's fields show for a forum; the person's container and address
+  // choices go, and the words say what is being made.
+  const applyMaking = () => {
+    const forum = making() === 'forum';
+    $('making-hint').hidden = !forum;
+    $('forum-fields').hidden = !forum;
+    $('container-field').hidden = forum || !!moveFrom;
+    $('identity-legend').textContent = forum ? 'Your forum' : 'Your Fediverse Identity';
+    $('handle-label').textContent = forum ? 'Forum handle' : 'Fediverse handle';
+    $('handle-hint').textContent = forum
+      ? `The name in the forum's address, @handle@${location.host}. This is permanent. Letters, digits, and hyphens only.`
+      : 'The name in your Fediverse address. This is permanent. Letters, digits, and hyphens only.';
+    $('handle').placeholder = forum ? "the handle part of the forum's address: @HANDLE@server" : 'the handle part of your address: @HANDLE@server';
+    $('signed-pod-label').textContent = forum ? "The forum's pod" : 'Your pod';
+    $('addr-label').textContent = forum ? "The forum's address" : 'Your Fediverse address';
+    $('after-hint').textContent = forum
+      ? "The handle, the categories' short names and the pod cannot be changed afterwards. Everything else you set on the forum's settings page."
+      : 'The handle and the pod cannot be changed afterwards. Everything else — display name, bio, pictures — you set later in the client.';
+    $('submit').textContent = forum ? 'Create the forum' : moveFrom ? 'Move your account here' : 'Create your Fediverse account';
   };
   const applyMode = () => {
     const existing = f().mode.value === 'existing';
@@ -529,8 +565,10 @@ if (typeof document !== 'undefined') (async () => {
     $('register-link').href = url || '#';
     $('register-link').textContent = providerHost() ? `Create your pod at ${providerHost()}` : 'Create your pod at your provider';
   };
-  for (const el of $('form').elements) for (const evt of ['input', 'change']) el.addEventListener(evt, () => { applyMode(); applyShape(); previewAddr(); previewPlace(); });
+  for (const el of $('form').elements) for (const evt of ['input', 'change']) el.addEventListener(evt, () => { applyMode(); applyMaking(); applyShape(); previewAddr(); previewPlace(); });
   applyMode();
+  $('making-group').hidden = !forumsOffered();
+  applyMaking();
 
   // Step machine: one screen at a time, each gated by its own validation.
   const STEP_IDS = ['step-1', 'step-2'];
@@ -538,7 +576,7 @@ if (typeof document !== 'undefined') (async () => {
   const goStep = (n) => {
     STEP_IDS.forEach((id, i) => { $(id).hidden = i !== n - 1; });
     $('err-1').textContent = ''; $('form-error').textContent = '';
-    if (n === 2) { applyShape(); previewAddr(); previewPlace(); $('index-ask').hidden = true; }
+    if (n === 2) { applyMaking(); applyShape(); previewAddr(); previewPlace(); $('index-ask').hidden = true; }
     if (FOCUS[n]) $(FOCUS[n]).focus();
   };
   const validateStep1 = () => {
@@ -547,6 +585,12 @@ if (typeof document !== 'undefined') (async () => {
   };
   const validateStep2 = () => {
     const hp = window.fedipodHandleProblem(f().handle.value.trim().toLowerCase());
+    if (making() === 'forum') {
+      if (hp) return `Forum handle: ${hp}`;
+      if (!f().forumName.value.trim()) return 'Forum name: a name is required.';
+      try { categoriesFrom(f().categories.value); moderatorFrom(f().moderator.value, location.origin); } catch (e) { return e.message; }
+      return null;
+    }
     if (hp) return `Fediverse handle: ${hp}`;
     if (!moveFrom) {
       const where = chosenRoot(signedPod, f().container.value).problem;
@@ -561,6 +605,7 @@ if (typeof document !== 'undefined') (async () => {
   $('to-2').addEventListener('click', async () => {
     const e = validateStep1(); if (e) { $('err-1').textContent = e; return; }
     $('err-1').textContent = ''; $('to-2').disabled = true;
+    try { sessionStorage.setItem('fedipod:making', making()); } catch { /* storage blocked */ }
     try { await window.fedipodPodLogin({ issuer: providerUrl() }); }
     catch (err) { $('err-1').textContent = err.message || String(err); $('to-2').disabled = false; }
   });
@@ -578,15 +623,28 @@ if (typeof document !== 'undefined') (async () => {
   const LABELS = { pod: 'Checking your pod', keys: 'Making your signing key', gateway: 'Connecting your mail door',
     place: 'Recording where your account lives' };
   const MOVE_LABELS = { pod: 'Reading your account on your pod', gateway: 'Taking your address here', keys: 'Moving your key and account record' };
+  const FORUM_LABELS = { pod: "Checking the forum's pod", write: 'Writing the forum on its pod', attach: 'Taking its addresses here', keep: 'Making this site its keeper' };
   // Run the setup. `createIndex` is the person's yes to a new public type index.
   const run = async (createIndex = false) => {
     const a = { ...answers(), ...(createIndex ? { createIndex: true } : {}) };
     $('pane-form').hidden = true; $('running').hidden = false;
-    $('running-title').textContent = 'Setting up…'; $('run-error').textContent = ''; $('run-actions').hidden = true;
+    $('running-title').textContent = 'Setting up…'; $('run-error').textContent = ''; $('run-actions').hidden = true; $('run-done').hidden = true;
     const steps = $('steps'); steps.textContent = ''; const mark = {};
-    const labels = moveFrom ? MOVE_LABELS : LABELS;
+    const forum = making() === 'forum';
+    const labels = forum ? FORUM_LABELS : moveFrom ? MOVE_LABELS : LABELS;
     const onStep = (k, st) => { if (!mark[k]) { const li = document.createElement('li'); steps.appendChild(li); mark[k] = li; } mark[k].textContent = (st === 'ok' ? '✓ ' : st === 'running' ? '… ' : '') + (labels[k] || k); };
     try {
+      if (forum) {
+        const made = await window.fedipodForumSignup({ handle: a.handle, name: f().forumName.value, categories: f().categories.value,
+          moderator: f().moderator.value, onStep });
+        try { sessionStorage.removeItem('fedipod:making'); } catch { /* storage blocked */ }
+        // The forum's page, read through this site; its first run publishes
+        // the forum within the minute.
+        $('running-title').textContent = `Your forum is ready: ${made.address}`;
+        $('run-done-link').href = `${location.origin}/bb/?forum=${encodeURIComponent(made.handle)}`;
+        $('run-done').hidden = false;
+        return;
+      }
       if (moveFrom) await window.fedipodMoveIn({ handle: a.handle, onStep });
       else await window.fedipodSignup({ ...a, onStep });
       location.href = '/admin/client/';

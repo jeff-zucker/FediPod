@@ -31,6 +31,7 @@ import * as access from './access.mjs';
 import { provisionForum, provisionCategory } from './provision.mjs';
 import * as settings from './settings.mjs';
 import { keepForum, restateForumRules } from './keep.mjs';
+import { writeForumConfig, attachRows } from './setup.mjs';
 import * as place from './place.mjs';
 
 import { ForumIntake } from './forum-intake.mjs';
@@ -131,39 +132,11 @@ export class ForumAgent {
     const cred = this.readCredential();
     if (!cred) throw new Error('no credential.json — make one first');
     await this.attachRemote(cred);
-    const site = forumUrls(cred.remotePod, cred.root || ROOT);
-    await provisionForum(this.remote, site);
-    const store = new PodStore({ log: this.log });
-    store.attach(this.storageFor(site.state, (u, i) => this.remote.fetch(u, i)));
-    await store.load().catch(() => {});
-    const existing = store.getConfig() || {};
-    const cats = categories.map(c => (typeof c === 'string' ? { slug: c, name: c } : c));
-    for (const c of cats) if (!isSlug(c.slug)) throw new Error(`not a category slug: ${c.slug}`);
-    // A renamed forum has to be published again: the profile is written only
-    // when its digest changed or something asks, and a name lives in the
-    // actor document, not in the config alone.
-    // A changed name — the forum's or any category's — lives in a published
-    // actor, and the profile is only rewritten when its digest changed or
-    // something asks. So it asks.
-    const was = JSON.stringify((existing.categories || []).map(c => [c.slug, c.name]));
-    // Who may read what is written into the pod's own access rules, which are
-    // only written when something asks for a republish — so a change to them
-    // asks for one.
-    const access = JSON.stringify([existing.membersOnly || [], existing.memberWebIds || {}, existing.moderatorWebIds || []]);
-    const accessChanged = !!existing.handle && access !== JSON.stringify([membersOnly, memberWebIds, moderatorWebIds]);
-    const renamed = !!existing.handle
-      && ((name || handle) !== existing.name || was !== JSON.stringify(cats.map(c => [c.slug, c.name])));
-    store.setConfig({
-      ...existing, kind: 'application', handle, name: name || existing.name || handle,
-      ...(renamed || accessChanged ? { republish: true } : {}),
-      ...(accessChanged ? { reprovision: true } : {}),
-      remotePod: cred.remotePod, root: cred.root || ROOT,
-      categories: cats, moderators, moderatorWebIds, membersOnly, memberWebIds,
-      approveJoins, review, replyPolicy,
-    });
-    await store.flush();
-    this.log(`forum ${handle} initialised with ${cats.length} categor${cats.length === 1 ? 'y' : 'ies'}`);
-    return store.getConfig();
+    const { config } = await writeForumConfig(this.remote, this.storageFor, {
+      remotePod: cred.remotePod, root: cred.root || ROOT, handle, name, categories, moderators, moderatorWebIds,
+      membersOnly, memberWebIds, approveJoins, review, replyPolicy,
+    }, { log: this.log });
+    return config;
   }
 
   async attachRemote(cred) {
@@ -412,28 +385,14 @@ export class ForumAgent {
     const cred = this.readCredential();
     if (!cred || !this.store || !this.config) throw new Error('connect first');
     const plain = forumUrls(cred.remotePod, cred.root || ROOT);
-    const post = attachOne || (async (body) => {
-      const res = await this.remote.session.fetch(`${origin}/api/attach`, {
-        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
-      });
-      const d = await res.json().catch(() => ({}));
-      if (res.status !== 201 || !d.hmacSecret) throw new Error(`attach ${body.handle} at ${origin}: HTTP ${res.status}${d.error ? ' ' + d.error : ''}`);
-      return d;
-    });
-    const secrets = {};
-    const rows = [
-      { handle: this.config.handle, podHome: plain.home, actorUrl: plain.actor, kind: 'application' },
-      ...(this.config.categories || []).map(c => ({ handle: c.slug, podHome: plain.category(c.slug).home,
-        actorUrl: plain.category(c.slug).actor, kind: 'group' })),
-    ];
-    for (const row of rows) {
-      const d = await post({ ...row, fronted: true, inboxUrl: plain.inbox });
-      secrets[row.handle] = String(d.hmacSecret);
-      this.log(`attached @${row.handle}@${new URL(origin).host}`);
-    }
-    this.store.setConfig({ ...this.store.getConfig(), gateway: { front: origin, mode: 'trust', secrets }, republish: true });
+    // A test hands in the attach itself; otherwise the pod session proves the owner.
+    const f = attachOne
+      ? async (_url, init) => { const d = await attachOne(JSON.parse(init.body)); return { status: 201, json: async () => d }; }
+      : (u, i) => this.remote.session.fetch(u, i);
+    const { gateway, handles } = await attachRows({ fetch: f, front: origin, config: this.config, plain }, { log: this.log });
+    this.store.setConfig({ ...this.store.getConfig(), gateway, republish: true });
     await this.store.flush();
-    return { front: origin, handles: rows.map(r => r.handle) };
+    return { front: origin, handles };
   }
 
   // One category's handle at the Gateway, claimed when a moderator creates

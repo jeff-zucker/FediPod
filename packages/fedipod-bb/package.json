@@ -8,6 +8,7 @@
   "exports": {
     ".": "./src/index.mjs",
     "./gateway": "./src/gateway.mjs",
+    "./setup": "./src/setup.mjs",
     "./src/*": "./src/*",
     "./package.json": "./package.json"
   },

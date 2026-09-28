@@ -673,7 +673,10 @@ test('keep: the Gateway is told, and every rule on the forum\'s tree names its k
   pod.session = { fetch: async (url, init) => { asked.push({ url, body: JSON.parse(init.body) }); return { ok: true, status: 200, json: async () => ({ ok: true, keeper: 'https://fedipod.net/keeper/profile/card#me' }) }; } };
   pod.acls.length = 0;
   const r = await agent.keep({ front: 'https://fedipod.net/' });
-  assert.deepEqual(asked.map(a => a.body), [{ handle: 'forum', on: true }, { handle: 'gardening', on: true, forum: 'forum' }, { handle: 'compost', on: true, forum: 'forum' }], 'the forum and each category are handed over, each category naming its forum');
+  // The categories first and the forum's own row last: switching the forum's
+  // row on is what starts its first run at the Gateway, and that run wants
+  // every category kept already.
+  assert.deepEqual(asked.map(a => a.body), [{ handle: 'gardening', on: true, forum: 'forum' }, { handle: 'compost', on: true, forum: 'forum' }, { handle: 'forum', on: true }], 'each category is handed over naming its forum, and the forum last');
   assert.equal(r.keeper, 'https://fedipod.net/keeper/profile/card#me');
   assert.deepEqual(pod.keepers, [r.keeper], 'the transport names the keeper on every rule it writes');
   const ruled = pod.acls.map(a => a[0]);

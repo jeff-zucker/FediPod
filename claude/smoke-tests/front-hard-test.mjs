@@ -750,6 +750,21 @@ try {
       `a placement clears the edge's copies of the category and the forum (${purged.join(',') || 'none'})`);
     check(keeperStarts.includes('forum'), `and starts the forum's run (${keeperStarts.join(',') || 'none'})`);
     delete attached.gardening.keeper; purged.length = 0;
+    // Switching the keeper on: a category's row starts nothing; the forum's
+    // own row, switched on last, starts the forum's first run.
+    const asForumOwner = { 'content-type': 'application/json', authorization: 'Bearer root-owner', dpop: 'proof' };
+    const flip = (body) => get('/api/keeper', { method: 'POST', headers: asForumOwner, body: JSON.stringify(body) });
+    doorExtras = { keeperWebId: 'https://keeper.example/profile/card#me' };
+    keeperStarts.length = 0;
+    const catOn = await flip({ handle: 'compost', on: true, forum: 'forum' });
+    check(catOn.status === 200 && keeperStarts.length === 0 && attached.compost.forum === 'forum',
+      `a category's row switched on names its forum and starts no run (${catOn.status}, ${keeperStarts.length})`);
+    const forumOn = await flip({ handle: 'forum', on: true });
+    check(forumOn.status === 200 && keeperStarts.length === 1 && keeperStarts[0] === 'forum',
+      `the forum's own row switched on starts its first run (${forumOn.status}, ${keeperStarts.join(',') || 'none'})`);
+    await flip({ handle: 'compost', on: false }); await flip({ handle: 'forum', on: false });
+    doorExtras = {};
+    keeperStarts.length = 0;
   }
 
   // ---- a document the pod would not give is held at the edge ---------------

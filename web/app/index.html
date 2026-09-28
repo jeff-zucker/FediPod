@@ -41,13 +41,14 @@ code { background: rgba(120,120,120,.18); padding: .05em .35em; border-radius: 4
 fieldset { border: 1px solid var(--line); border-radius: .4rem; margin: 1rem 0; padding: .75rem 1rem 1rem; }
 legend { padding: 0 .3rem; font-weight: 600; }
 label { display: block; margin: .75rem 0 .2rem; }
-input[type=text], input[type=email], input[type=url], input[type=password], select {
+input[type=text], input[type=email], input[type=url], input[type=password], select, textarea {
   font: inherit; font-size: 1rem; width: 100%; padding: .55rem; box-sizing: border-box;
   border: 1px solid var(--field-border); border-radius: .3rem;
   background: var(--field-bg); color: var(--field-text); }
 /* A list to pick from looks different from a box to type in: its own tint,
    the accent border, and the same on its options. */
 select { background: var(--select-bg); border-color: var(--select-border); }
+textarea { min-height: 6.5rem; resize: vertical; }
 select option { background: var(--select-bg); color: var(--field-text); }
 ::placeholder { color: var(--sub); opacity: 1; }
 .choice { display: block; margin: .4rem 0; font-weight: normal; }
@@ -145,6 +146,14 @@ a { color: var(--accent); }
       <fieldset>
         <legend>Your Solid Pod</legend>
 
+        <div role="radiogroup" aria-labelledby="making-label" id="making-group">
+          <span id="making-label" class="grouplabel">What you are making</span>
+          <label class="choice"><input type="radio" name="making" value="account" checked> An account for yourself</label>
+          <label class="choice"><input type="radio" name="making" value="forum"> A forum</label>
+          <p class="hint" id="making-hint" hidden>A forum has a pod of its own. Make a new pod for it at the
+            provider, or sign in with a pod that holds nothing else. The forum's address will be at this site.</p>
+        </div>
+
         <div role="radiogroup" aria-labelledby="podtype-label">
           <span id="podtype-label" class="grouplabel">Pod type</span>
           <label class="choice"><input type="radio" name="mode" value="existing"> An existing pod</label>
@@ -186,7 +195,7 @@ a { color: var(--accent); }
     <!-- Screen 2: Your Fediverse Identity — shown on return from the pod's login -->
     <div class="step" id="step-2" hidden>
       <fieldset>
-        <legend>Your Fediverse Identity</legend>
+        <legend id="identity-legend">Your Fediverse Identity</legend>
 
         <span id="signed-pod-label" class="grouplabel">Your pod</span>
         <p id="signed-pod" role="status" aria-labelledby="signed-pod-label"></p>
@@ -204,11 +213,26 @@ a { color: var(--accent); }
           Your posts, followers and key come with you, and your followers are told the
           new address. Keep the same handle, or choose a new one here.</p>
 
-        <label for="handle">Fediverse handle</label>
+        <label for="handle" id="handle-label">Fediverse handle</label>
         <input type="text" id="handle" name="handle" autocomplete="off"
           placeholder="the handle part of your address: @HANDLE@server" aria-describedby="handle-hint">
         <p class="hint" id="handle-hint">The name in your Fediverse address. This is permanent.
           Letters, digits, and hyphens only.</p>
+
+        <div id="forum-fields" hidden>
+          <label for="forumName">Forum name</label>
+          <input type="text" id="forumName" name="forumName" autocomplete="off" placeholder="The name readers see">
+          <label for="categories">Categories, one per line</label>
+          <textarea id="categories" name="categories" autocomplete="off" spellcheck="false" aria-describedby="categories-hint"
+            placeholder="general: General Discussion&#10;software: Software"></textarea>
+          <p class="hint" id="categories-hint">Each line is a short name for the category's address, then a colon and
+            the name readers see. Short names are letters, digits and hyphens, and are permanent.</p>
+          <label for="moderator">Your address at this site, to moderate the forum as</label>
+          <input type="text" id="moderator" name="moderator" autocomplete="off" spellcheck="false" aria-describedby="moderator-hint"
+            placeholder="@you@this-site">
+          <p class="hint" id="moderator-hint">Optional. Signing in with the forum's own pod moderates too. More
+            moderators can be named on the forum's settings page later.</p>
+        </div>
 
         <div role="radiogroup" aria-labelledby="shape-label" id="shape-group">
           <span id="shape-label" class="grouplabel">Where your address lives</span>
@@ -221,7 +245,7 @@ a { color: var(--accent); }
         <span id="addr-label" class="grouplabel">Your Fediverse address</span>
         <p class="address" id="preview" role="status" aria-live="polite" aria-labelledby="addr-label">@…@…</p>
       </fieldset>
-      <p class="hint">The handle and the pod cannot be changed afterwards. Everything else — display
+      <p class="hint" id="after-hint">The handle and the pod cannot be changed afterwards. Everything else — display
         name, bio, pictures — you set later in the client.</p>
       <p class="err" id="form-error" role="alert"></p>
       <div id="index-ask" role="alertdialog" aria-labelledby="index-ask-text" hidden>
@@ -246,6 +270,7 @@ a { color: var(--accent); }
   <h2 id="running-title">Setting up…</h2>
   <ul class="steps" id="steps" aria-live="polite"></ul>
   <p class="err" id="run-error" role="alert"></p>
+  <p id="run-done" hidden><a id="run-done-link" href="#">Open your forum</a></p>
   <p id="run-actions" hidden>
     <button type="button" id="run-back">Start over</button>
     <button type="button" class="primary" id="run-retry">Try again</button>
