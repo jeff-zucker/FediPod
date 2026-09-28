@@ -11,18 +11,18 @@
 import crypto from 'node:crypto';
 import path from 'node:path';
 import fs from 'node:fs';
-import { PodStore } from '../../../lib/core/store.mjs';
-import { storageFor as defaultStorageFor } from '../../../lib/core/storage.mjs';
-import { Deliverer } from '../../../lib/core/deliver.mjs';
-import { Publisher } from '../../../lib/core/publisher/index.mjs';
-import { Intake } from '../../../lib/core/intake/index.mjs';
-import { C2S } from '../../../lib/client/c2s.mjs';
-import { Lease } from '../../../lib/core/lease.mjs';
-import { resolveKeys } from '../../../lib/core/keys.mjs';
-import { assertionKeyId, orderedCollection } from '../../../lib/core/wire.mjs';
-import * as podFeatured from '../../../lib/pod/featured.mjs';
-import { resolveHandle } from '../../../lib/core/social.mjs';
-import * as podInbox from '../../../lib/pod/inbox.mjs';
+import { PodStore } from 'fedipod/core/store.mjs';
+import { storageFor as defaultStorageFor } from 'fedipod/core/storage.mjs';
+import { Deliverer } from 'fedipod/core/deliver.mjs';
+import { Publisher } from 'fedipod/core/publisher/index.mjs';
+import { Intake } from 'fedipod/core/intake/index.mjs';
+import { C2S } from 'fedipod/client/c2s.mjs';
+import { Lease } from 'fedipod/core/lease.mjs';
+import { resolveKeys } from 'fedipod/core/keys.mjs';
+import { assertionKeyId, orderedCollection } from 'fedipod/core/wire.mjs';
+import * as podFeatured from 'fedipod/pod/featured.mjs';
+import { resolveHandle } from 'fedipod/core/social.mjs';
+import * as podInbox from 'fedipod/pod/inbox.mjs';
 import { forumUrls, ROOT, isSlug } from './urls.mjs';
 import * as topics from './topics.mjs';
 import * as publish from './publish.mjs';
@@ -143,7 +143,7 @@ export class ForumAgent {
 
   async attachRemote(cred) {
     if (this.remote) return;
-    const { RemotePod } = await import('../../../lib/device/remote.mjs');
+    const { RemotePod } = await import('fedipod/remote');
     this.remote = new RemotePod(cred, { log: this.log, home: this.home });
     await this.remote.warmup();
   }
@@ -551,8 +551,8 @@ export class ForumAgent {
   // A pin that holds across the whole forum, not just one category: the site
   // actor has a featured collection of its own, and this is it.
   async sitePin(topicId, on) {
-    const { orderedCollection } = await import('../../../lib/core/wire.mjs');
-    const collection = await import('../../../lib/pod/collection.mjs');
+    const { orderedCollection } = await import('fedipod/core/wire.mjs');
+    const collection = await import('fedipod/pod/collection.mjs');
     const held = this.store.read('sitepins.json', []).filter(id => id !== topicId);
     const ids = on ? [topicId, ...held] : held;
     this.store.write('sitepins.json', ids);

@@ -10,10 +10,10 @@
 // A category here is the object the host builds: { urls, store, remote,
 // publisher, deliverer, intake, log }.
 
-import { AS_CTX, LEMMY_CTX, PUBLIC, orderedCollection, updateActorActivity } from '../../../lib/core/wire.mjs';
-import { announceModeration, applyModeration } from '../../../lib/core/social.mjs';
-import * as collection from '../../../lib/pod/collection.mjs';
-import * as podNotes from '../../../lib/pod/notes.mjs';
+import { AS_CTX, LEMMY_CTX, PUBLIC, orderedCollection, updateActorActivity } from 'fedipod/core/wire.mjs';
+import { announceModeration, applyModeration } from 'fedipod/core/social.mjs';
+import * as collection from 'fedipod/pod/collection.mjs';
+import * as podNotes from 'fedipod/pod/notes.mjs';
 import * as topics from './topics.mjs';
 import * as publish from './publish.mjs';
 import { applySettings } from './settings.mjs';
@@ -247,7 +247,7 @@ export async function applyForumModeration(forum, cat, entry) {
         if (!webid) throw new Error(`${object} has no WebID this forum can grant reading to`);
         await applySettings(forum, { type: 'Add', object: webid, target: cat.urls.members });
       }
-      const { admitRequest } = await import('../../../lib/core/social.mjs');
+      const { admitRequest } = await import('fedipod/core/social.mjs');
       await admitRequest(cat, object);
       return { admitted: object };
     }

@@ -65,7 +65,7 @@ export async function dropUnreadableFollowers(forum, cat) {
   if (!dropped.length) return 0;
   cat.store.setContacts(contacts);
   await cat.publisher.publishCollections({ followers: true }).catch(() => {});
-  const wire = await import('../../../lib/core/wire.mjs');
+  const wire = await import('fedipod/core/wire.mjs');
   for (const f of dropped) {
     const inbox = f.sharedInbox || f.inbox;
     if (!inbox) continue;

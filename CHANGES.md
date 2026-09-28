@@ -1,5 +1,13 @@
 # Changes
 
+## 2026-09-28 (the forum installs fedipod — fedipod-bb 0.2.0)
+
+**FediPod-BB installs `fedipod` instead of reaching into a checkout.** Its
+host is started with its own command, `fedipod-bb start`, and its pod
+credential is minted with its own, `fedipod-bb credential`. The read-only
+console page the host served on the moderator's machine is gone; the forum's
+own site is where a moderator looks.
+
 ## 2026-09-27 (fedipod is a library the Server imports — version 1.42.0, fedipod-server 0.30.0)
 
 **On a FediPod Server, four owner-door routes that belonged to a machine

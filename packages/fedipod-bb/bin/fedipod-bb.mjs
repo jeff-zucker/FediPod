@@ -1,12 +1,13 @@
 #!/usr/bin/env node
 // fedipod-bb.mjs — run a forum from this machine.
 //
+//   fedipod-bb credential --home DIR --email you@example.org --pod https://forum.example/ [--issuer URL]
+//     Mint the forum's pod credential at the pod's server (the password is
+//     asked at the terminal) and save it as DIR/credential.json.
 //   fedipod-bb init --home DIR --handle forum --name "The Forum" \
 //       [--moderator-webid https://you.example/profile/card#me] \
 //       --category gardening:Gardening --category compost:Compost [--moderator <actor>]
-//     The pod's credential is DIR/credential.json, made by
-//     `fedipod setup --cli … --home DIR`. Writes the forum's config and
-//     containers to the pod; publishes nothing yet.
+//     Writes the forum's config and containers to the pod; publishes nothing yet.
 //   fedipod-bb start --home DIR
 //     Host the forum from here. Publishes every actor on first start, then
 //     drains the forum's inbox, places posts in topics and carries them.
@@ -49,7 +50,16 @@ const replyPolicy = () => {
   return said;
 };
 
-if (cmd === 'init') {
+if (cmd === 'credential') {
+  const email = flag('email');
+  const pod = flag('pod');
+  if (!email || !pod) { console.error('--email and --pod are required'); process.exit(2); }
+  const { mintForumCredential } = await import('../src/credential.mjs');
+  try {
+    const file = await mintForumCredential({ email, pod, home, issuer: flag('issuer'), root: flag('root') || 'fedipod-bb/' });
+    console.log(`credential minted and saved to ${file}`);
+  } catch (e) { console.error(e.message); process.exit(1); }
+} else if (cmd === 'init') {
   const handle = flag('handle');
   if (!handle) { console.error('--handle is required'); process.exit(2); }
   const categories = flags('category').map(c => {
@@ -82,10 +92,7 @@ if (cmd === 'init') {
   console.log(JSON.stringify(cfg, null, 2));
 } else if (cmd === 'start') {
   const { runForum } = await import('../src/run.mjs');
-  const { DEFAULT_CONSOLE_PORT } = await import('../src/console.mjs');
-  const agent = await runForum({ home, log,
-    console: !args.includes('--no-console'),
-    port: Number(flag('console-port')) || Number(process.env.AP_PORT) || DEFAULT_CONSOLE_PORT });
+  const agent = await runForum({ home, log });
   if (!agent) process.exit(1);
 } else if (cmd === 'attach') {
   const front = flag('front');
@@ -101,7 +108,6 @@ if (cmd === 'init') {
   console.log(JSON.stringify(up ? agent.status() : { mode: 'unconfigured' }, null, 2));
   process.exit(0);
 } else {
-  console.log('usage: fedipod-bb <init|start|status|attach> --home DIR [--handle H --name N --category slug:Name … --reply-policy open|review | --front URL]');
-  console.log('       start also serves a read-only console on this machine: --console-port N, or --no-console');
+  console.log('usage: fedipod-bb <credential|init|start|status|attach> --home DIR [--email E --pod URL | --handle H --name N --category slug:Name … --reply-policy open|review | --front URL]');
   process.exit(2);
 }

@@ -2,7 +2,7 @@
 // rules, the way FediPod provisions an identity: a canary document and the
 // rule as one operation, idempotent, so running it on every start is safe.
 
-import * as containers from '../../../lib/pod/containers.mjs';
+import * as containers from 'fedipod/pod/containers.mjs';
 
 // The forum level: the site actor's home and state, owner-only; its notes
 // and media, public.

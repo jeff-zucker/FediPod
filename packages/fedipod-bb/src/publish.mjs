@@ -7,9 +7,9 @@
 // state (a PodStore), and the category's or forum's urls.
 
 import crypto from 'node:crypto';
-import * as collection from '../../../lib/pod/collection.mjs';
-import * as podNotes from '../../../lib/pod/notes.mjs';
-import { sanitizeHtml, orderedCollection } from '../../../lib/core/wire.mjs';
+import * as collection from 'fedipod/pod/collection.mjs';
+import * as podNotes from 'fedipod/pod/notes.mjs';
+import { sanitizeHtml, orderedCollection } from 'fedipod/core/wire.mjs';
 import * as fwire from './wire.mjs';
 import * as topics from './topics.mjs';
 

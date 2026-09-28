@@ -9,6 +9,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { ForumAgent } from '../src/forum-agent.mjs';
+import { isForumHome } from '../src/run.mjs';
 import * as topics from '../src/topics.mjs';
 import { forumUrls } from '../src/urls.mjs';
 import * as publish from '../src/publish.mjs';
@@ -345,7 +346,7 @@ test('a fronted forum: one Gateway row per category, one inbox behind them, fron
 
 test('a topic is named by the person opening it, not by the words of their post', async () => {
   // The activity that opens a topic carries its name; the post carries none.
-  const { PodStore } = await import('../../../lib/core/store.mjs');
+  const { PodStore } = await import('fedipod/core/store.mjs');
   const st = new PodStore({ log: () => {} });
   st.attach({ base: 'mem://', list: async () => ({ names: [], etag: null }), read: async () => ({ ok: false }),
     remove: async () => true, write: async () => ({ ok: true }) });
@@ -368,7 +369,7 @@ test('a reply from elsewhere finds its topic through what its parent says', asyn
   // The reply names a parent and nothing else; the parent, fetched at its
   // origin, names the topic. That is the only thread a server which knows
   // nothing of this forum can leave behind.
-  const { PodStore } = await import('../../../lib/core/store.mjs');
+  const { PodStore } = await import('fedipod/core/store.mjs');
   const st = new PodStore({ log: () => {} });
   st.attach({ base: 'mem://', list: async () => ({ names: [], etag: null }), read: async () => ({ ok: false }),
     remove: async () => true, write: async () => ({ ok: true }) });
@@ -391,7 +392,7 @@ test('a topic survives a restart: its record is where the state can read it', as
   // The state is loaded by listing ONE container and reading the .json files
   // in it. A topic filed in a folder below it was written and never read back,
   // so a forum that restarted lost every topic it had.
-  const { PodStore } = await import('../../../lib/core/store.mjs');
+  const { PodStore } = await import('fedipod/core/store.mjs');
   const st = new PodStore({ log: () => {} });
   const written = new Map();
   st.attach({ base: 'mem://', kind: 'pod',
@@ -670,4 +671,16 @@ test('a moderator ask is forum-wide whichever list it names, and every category 
   await agent.intake.drain();
   await agent.applySettingsAsks();
   assert.deepEqual(pod.docs.get(c.urls.moderators)?.orderedItems, [PRIYA, MEI, KWAME], 'a forum-wide add reaches every category');
+});
+
+test('a home that holds a forum says so, and one that holds a person does not', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bb-home-'));
+  try {
+    assert.equal(isForumHome(dir), false, 'a home with no credential is nobody');
+    fs.writeFileSync(path.join(dir, 'credential.json'), JSON.stringify({ remotePod: POD, root: 'fedipod/' }));
+    assert.equal(isForumHome(dir), false, 'a person keeps their things under their own root');
+    fs.writeFileSync(path.join(dir, 'credential.json'), JSON.stringify({ remotePod: POD, root: 'fedipod-bb/' }));
+    assert.equal(isForumHome(dir), true, 'a forum names its own');
+    assert.equal(isForumHome(dir + '/'), true, 'a trailing slash is the same home');
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });

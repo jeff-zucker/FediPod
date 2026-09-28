@@ -9,8 +9,8 @@ import { forumUrls } from '../src/urls.mjs';
 import * as topics from '../src/topics.mjs';
 import * as publish from '../src/publish.mjs';
 import * as moderation from '../src/moderation.mjs';
-import { PodStore } from '../../../lib/core/store.mjs';
-import { trimActivity } from '../../../lib/core/intake/activity.mjs';
+import { PodStore } from 'fedipod/core/store.mjs';
+import { trimActivity } from 'fedipod/core/intake/activity.mjs';
 
 const POD = 'https://forum.example/';
 const MEI = 'https://mei.pod.example/fedipod/ap/actor';

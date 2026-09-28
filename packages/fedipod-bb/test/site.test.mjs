@@ -8,7 +8,7 @@ import { forumUrls } from '../src/urls.mjs';
 import * as fwire from '../src/wire.mjs';
 import * as topics from '../src/topics.mjs';
 import * as publish from '../src/publish.mjs';
-import { PodStore } from '../../../lib/core/store.mjs';
+import { PodStore } from 'fedipod/core/store.mjs';
 import { reader, forumBase, placeOf, cacheKey, authorLabel } from '../site/read.mjs';
 import { MastoLogin, cleanHost, hostOfHandle, serverKind, actorOfHandle } from '../site/masto.mjs';
 import { readState } from '../site/seen.mjs';

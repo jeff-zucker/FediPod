@@ -21,14 +21,19 @@ node --test packages/fedipod-bb/test/*.test.mjs
 
 ## Hosting a forum
 
-The forum's pod credential is a FediPod one: `fedipod setup --cli … --home
-DIR` makes `DIR/credential.json`. Then:
-
+<!-- CLAUDE 2026-09-28 — the hosting commands are the package's own now; delete these markers when done -->
 ```
-node packages/fedipod-bb/bin/fedipod-bb.mjs init --home DIR --handle forum --name "The Forum" \
+npm install -g fedipod-bb
+fedipod-bb credential --home DIR --email you@example.org --pod https://forum.example/
+fedipod-bb init --home DIR --handle forum --name "The Forum" \
     --category gardening:Gardening --category compost:Compost --moderator <actor id>
-node packages/fedipod-bb/bin/fedipod-bb.mjs start --home DIR
+fedipod-bb start --home DIR
 ```
+
+`credential` mints the forum's pod credential at the pod's server, with the
+account's password asked at the terminal, and saves it as
+`DIR/credential.json`; nothing is written to the pod.
+<!-- /CLAUDE -->
 
 `init` writes the forum's config and containers. `start` publishes every
 actor the first time, then drains the forum's one inbox, hands each activity

@@ -9,7 +9,7 @@
 // to guess one, and a forum is one application.
 
 import crypto from 'node:crypto';
-import { apUrls } from '../../../lib/pod/urls.mjs';
+import { apUrls } from 'fedipod/pod/urls.mjs';
 
 export const ROOT = 'fedipod-bb/';
 

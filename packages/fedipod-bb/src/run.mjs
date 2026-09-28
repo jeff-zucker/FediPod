@@ -1,20 +1,12 @@
-// run.mjs — running a forum on this machine, however it was started: by
-// `fedipod-bb start`, or by the agent runner when the home it was pointed at
-// turns out to hold a forum rather than a person. One loop, so a forum in a
-// profile behaves exactly like one started by hand.
+// run.mjs — running a forum on this machine: connect, with retries while the
+// pod is not answering, then host or watch until the process is told to stop.
 
 import fs from 'node:fs';
 import { ForumAgent } from './forum-agent.mjs';
-import { startConsole, DEFAULT_CONSOLE_PORT } from './console.mjs';
 
-export async function runForum({ home, port = DEFAULT_CONSOLE_PORT, console: wantConsole = true,
-  log = (...a) => console.log('[bb]', ...a) } = {}) {
+export async function runForum({ home, log = (...a) => console.log('[bb]', ...a) } = {}) {
   fs.mkdirSync(home, { recursive: true, mode: 0o700 });
-  // The last of what it said, for the console to show: a forum runs unattended
-  // and the question is always what it has been doing.
-  const said = [];
-  const keep = (line) => { said.push(line); if (said.length > 200) said.shift(); };
-  const agent = new ForumAgent({ home, log: (...a) => { keep(`${new Date().toISOString().slice(11, 19)} ${a.join(' ')}`); log(...a); } });
+  const agent = new ForumAgent({ home, log });
 
   let up = false;
   for (let attempt = 1; !up; attempt++) {
@@ -36,18 +28,12 @@ export async function runForum({ home, port = DEFAULT_CONSOLE_PORT, console: wan
     }
   }
 
-  let window_ = null;
-  if (wantConsole) {
-    try { window_ = startConsole({ agent, home, port, log, lines: () => said.slice(-60) }); }
-    catch (e) { log(`console: not started (${e.message})`); }
-  }
-  // Every timer in the agent is unreferenced (the DeviceAgent's web server is
-  // what holds that process open); here nothing else would, and the host
-  // exited quietly once the push socket went idle. This holds it.
+  // Every timer in the agent is unreferenced; nothing else would hold the
+  // process open, and the host exited quietly once the push socket went
+  // idle. This holds it.
   const hold = setInterval(() => {}, 1 << 30);
   const shutdown = () => {
     clearInterval(hold);
-    window_?.stop();
     agent.stop().finally(() => process.exit(0));
     setTimeout(() => process.exit(0), 3000).unref();
   };

@@ -3,7 +3,7 @@
 // category and administrator lists, and the site actor. Every term is
 // ActivityStreams; the group actor a category publishes is FediPod's own.
 
-import { AS_CTX, pageItems, orderedCollection, actorDoc } from '../../../lib/core/wire.mjs';
+import { AS_CTX, pageItems, orderedCollection, actorDoc } from 'fedipod/core/wire.mjs';
 
 export const TOPIC_PAGE_SIZE = 20;
 export const TOPICS_PAGE_SIZE = 20;

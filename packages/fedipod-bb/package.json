@@ -1,15 +1,26 @@
 {
   "name": "fedipod-bb",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "FediPod-BB: a forum website whose record lives on a Solid pod.",
   "license": "MIT",
   "type": "module",
   "main": "src/index.mjs",
-  "bin": { "fedipod-bb": "bin/fedipod-bb.mjs" },
+  "bin": {
+    "fedipod-bb": "bin/fedipod-bb.mjs"
+  },
+  "files": [
+    "bin",
+    "src",
+    "site",
+    "README.md",
+    "fep-draft.md"
+  ],
   "scripts": {
+    "pretest": "node scripts/link-fedipod.mjs",
     "test": "node --test test/*.test.mjs"
   },
   "dependencies": {
+    "fedipod": "^1.42.0",
     "fediverse-session": "^0.2.1"
   }
 }

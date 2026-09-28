@@ -3,8 +3,8 @@
 // letters, the commit-before-delete rule — is the Intake's; only handle()
 // differs.
 
-import { Intake } from '../../../lib/core/intake/index.mjs';
-import * as podInbox from '../../../lib/pod/inbox.mjs';
+import { Intake } from 'fedipod/core/intake/index.mjs';
+import * as podInbox from 'fedipod/pod/inbox.mjs';
 import * as settings from './settings.mjs';
 
 const idOf = (v) => (typeof v === 'string' ? v : v?.id);
@@ -89,8 +89,8 @@ export class ForumIntake extends Intake {
       .filter(Boolean);
     if (!secrets.length) return null;
     try {
-      const { readCapped } = await import('../../../lib/shared/safefetch.mjs');
-      const { verifyReceipt } = await import('../../../lib/gateway/httpsig.mjs');
+      const { readCapped } = await import('fedipod/shared/safefetch.mjs');
+      const { verifyReceipt } = await import('fedipod/gateway/httpsig.mjs');
       const receipt = await podInbox.readDeliveryReceipt(this.remote, itemUrl, { maxBytes: 64 * 1024, readCapped });
       if (!receipt) return null;
       return secrets.some(s => verifyReceipt(receipt, s)) ? receipt : null;

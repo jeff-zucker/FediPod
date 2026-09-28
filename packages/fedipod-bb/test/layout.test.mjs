@@ -9,9 +9,9 @@ import * as fwire from '../src/wire.mjs';
 import * as topics from '../src/topics.mjs';
 import * as publish from '../src/publish.mjs';
 import { provisionForum, provisionCategory } from '../src/provision.mjs';
-import { PodStore } from '../../../lib/core/store.mjs';
-import { apUrls } from '../../../lib/pod/urls.mjs';
-import { readLenient } from '../../../lib/core/as2.mjs';
+import { PodStore } from 'fedipod/core/store.mjs';
+import { apUrls } from 'fedipod/pod/urls.mjs';
+import { readLenient } from 'fedipod/core/as2.mjs';
 
 const POD = 'https://forum.example/';
 
