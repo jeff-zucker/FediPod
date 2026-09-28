@@ -35,7 +35,7 @@ import { ensureTrustedTls } from './lib/device/certs.mjs';
 import { storageFor } from './lib/core/storage.mjs';
 import { resolveKeys } from './lib/core/keys.mjs';
 import { completeGatewayMove } from './lib/device/gateway-move.mjs';
-import { RemotePod } from './lib/device/remote.mjs';
+import { RemotePod } from './lib/core/remote.mjs';
 import { Deliverer } from './lib/core/deliver.mjs';
 import { Publisher } from './lib/core/publisher/index.mjs';
 import { Intake } from './lib/core/intake/index.mjs';
