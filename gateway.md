@@ -73,8 +73,9 @@ mode says how far you trust the door, and every step is reversible:
 - **locked** — your inbox accepts writes only from the gateway.
 
 In every mode past **off**, the door itself is already filtering: blocked
-actors, content that does not concern you, and forged signatures are dropped
-at the door and never reach the pod. The mode says only how far the agent
+actors and content that does not concern you are dropped at the door and
+never reach the pod; a delivery whose signature does not verify is passed on
+marked unverified, and the agent decides by fetching what it claims to be. The mode says only how far the agent
 believes the door's receipts.
 
 The shadow numbers come from the agent:

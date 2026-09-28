@@ -1,5 +1,20 @@
 # Changes
 
+## 2026-09-28 (mail from Mastodon reaches fedipod.net again — version 1.44.1)
+
+**Every delivery from a Mastodon server to a fedipod.net account was being
+thrown away as a forged signature, silently, for at least a day and probably
+longer.** Posts, replies, boosts and follows from Mastodon reached nobody;
+the sending servers were told all was well. The signature check read the
+Host header and the address as they arrived at the function, after the
+hosting edge had rewritten them, so every honest signature failed. The door
+now checks a delivery as the sender signed it, at fedipod.net's own address,
+and a delivery whose signature still fails is passed on to the account
+marked unverified instead of dropped, so the account decides by fetching the
+post from where it claims to come from, as it did before August. Each such
+failure is logged with its reason and the headers present. Mail from the
+period is lost; the senders will not resend it.
+
 ## 2026-09-28 (a forum from the sign-up page, and a forum's page posts through fedipod.net — version 1.44.0, fedipod-bb 0.4.0)
 
 **Anyone can make a forum from fedipod.net's sign-up page, with no machine of
