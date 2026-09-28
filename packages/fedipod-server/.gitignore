@@ -1,7 +1,2 @@
 node_modules/
 dist/
-# pack-time copies of the agent tree (scripts/pack-tree.mjs) — never committed
-/lib/
-/vendor/
-/web/
-/run-agent.mjs

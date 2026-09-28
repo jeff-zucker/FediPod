@@ -183,7 +183,7 @@ await app.start();
 
 const { createRequire } = await import('node:module');
 const req_ = createRequire(import.meta.url);
-const { mintCredential, createGrantSession } = req_(path.resolve(pkg, '../../vendor/idp-grant.cjs'));
+const { mintCredential, createGrantSession } = req_('fedipod/vendor/idp-grant.cjs');
 const sessionFor = async (email, podUrl) => createGrantSession(await mintCredential({
   origin: BASE.replace(/\/$/, ''), email, password: 'sekrit', podUrl, name: 'e2e-optin',
 }));

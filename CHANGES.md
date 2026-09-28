@@ -1,6 +1,6 @@
 # Changes
 
-## 2026-09-27 (fedipod is a library the Server imports — version 1.42.0)
+## 2026-09-27 (fedipod is a library the Server imports — version 1.42.0, fedipod-server 0.30.0)
 
 **On a FediPod Server, four owner-door routes that belonged to a machine
 of one's own stop answering.** `POST /update` could pull new code and exit
@@ -11,6 +11,12 @@ did. Nothing else a Server does changes.
 
 **A Server no longer logs "run `fedipod upgrade`"** about a layout it never
 had.
+
+**FediPod Server installs `fedipod` instead of carrying a copy of it.** The
+package is its own dozen files; the agent, the front and the pages come from
+`fedipod`, with every dependency they need, so an account starts on a Server
+installed from npm, and a fedipod fix reaches an installed Server at its next
+`npm install` without a Server release.
 
 **`fedipod` can be imported by name.** `fedipod/embed` runs an identity
 inside another process, `fedipod/front` and `fedipod/front-pages` are the

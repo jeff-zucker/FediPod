@@ -6,8 +6,6 @@
 // componentsjs-generator reads FediPodServerArgs to emit one component
 // parameter per field, so the config injects each by name.
 
-import { existsSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { HttpHandler, getLoggerFor } from '@solid/community-server';
 import type {
@@ -97,34 +95,28 @@ interface EmbeddedIdentity {
   agent?: { store?: { getConfig?: () => { kind?: string } | null | undefined } };
 }
 
-// The JS front-core is FediPod's own ESM tree, reached at runtime. A real
-// dynamic import() built via Function keeps tsc from downleveling it to
-// require() — which cannot load an ESM module with top-level await under a
-// CommonJS build.
-//
-// Two layouts carry that tree: the published package ships its own copy of
-// lib/ beside dist/ (prepack puts it there), and a repo checkout reaches the
-// repo's lib/ three levels up. Prefer the package's own copy when it exists.
-const LIB_ROOT = existsSync(join(__dirname, '../lib/server/embed.mjs')) ? '../lib' : '../../../lib';
-const FRONT_CORE = `${LIB_ROOT}/gateway/front-core.mjs`;
-const EMBED = `${LIB_ROOT}/server/embed.mjs`;
-const PLACE = `${LIB_ROOT}/core/place.mjs`;
-const TRANSPORT = `${LIB_ROOT}/pod/transport.mjs`;
+// FediPod's shared code is the `fedipod` package, an ESM tree imported by
+// name at runtime. A real dynamic import() built via Function keeps tsc from
+// downleveling it to require() — which cannot load an ESM module with
+// top-level await under a CommonJS build.
+const FRONT_CORE = 'fedipod/front';
+const FRONT_PAGES = 'fedipod/front-pages';
+const EMBED = 'fedipod/embed';
+const PLACE = 'fedipod/place';
+const TRANSPORT = 'fedipod/pod/transport.mjs';
 const esmImport = new Function('s', 'return import(s)') as (s: string) => Promise<Record<string, Function>>;
 
-// The front's pages and the files they load, carried in the same two layouts
-// as lib/. A missing file is not fatal: the route it feeds answers 404.
-const WEB_ROOT = existsSync(join(__dirname, '../web/front/run.html'))
-  ? join(__dirname, '../web/front') : join(__dirname, '../../../web/front');
-const webFile = (name: string): string | null => {
-  try { return readFileSync(join(WEB_ROOT, name), 'utf8'); } catch { return null; }
-};
+/** The front's pages and the files they load, as fedipod/front-pages reads them. */
+interface FrontPages {
+  signupPage: string | null; runPage: string | null; adminPage: string | null; noticesPage: string | null;
+  authBundle: string | null; pageScripts: Record<string, string | null>; installScript: string | null;
+}
 
 // A pod that will not come up yet is usually a pod still being created by the
 // server that is booting. Keep asking, slower each time, up to a few minutes.
 const START_RETRY_MS = [ 2_000, 5_000, 15_000, 60_000, 300_000 ];
 
-/** The identity's name, from its pod URL. Mirrors handleFor in lib/embed.mjs. */
+/** The identity's name, from its pod URL. Mirrors handleFor in fedipod/embed. */
 function deriveHandle(podBase: string): string {
   const u = new URL(podBase);
   const segments = u.pathname.split('/').filter((seg) => seg.length > 0);
@@ -732,6 +724,10 @@ export class FediPodServerHandler extends HttpHandler implements Initializable, 
       return;
     }
     const { routeFront } = await esmImport(FRONT_CORE);
+    // Read on each request, so an edited page shows without a restart. A
+    // missing file is not fatal: the route it feeds answers 404.
+    const { frontPages } = await esmImport(FRONT_PAGES) as unknown as { frontPages: () => FrontPages };
+    const pages = frontPages();
     let whatwg: Request;
     try {
       whatwg = await nodeToWhatwg(request as never, this.args.frontOrigin);
@@ -751,26 +747,21 @@ export class FediPodServerHandler extends HttpHandler implements Initializable, 
         this.webIdsFromSession(req),
       gatewayWebId: this.args.gatewayWebId,
       offersPods: !!this.args.offersPods,
-      signupPage: this.args.signupPage || webFile('new-account.html'),
-      runPage: this.args.runPage || webFile('run.html'),
+      signupPage: this.args.signupPage || pages.signupPage,
+      runPage: this.args.runPage || pages.runPage,
       runPath: this.runPath,
-      adminPage: this.args.adminPage || webFile('admin.html'),
+      adminPage: this.args.adminPage || pages.adminPage,
       // The notices page renders here too, and says the server keeps none:
       // a notices store is the Netlify front's, not this component's.
-      noticesPage: webFile('notices.html'),
+      noticesPage: pages.noticesPage,
       // The opt-in and roster pages load the sign-in library, and the installer
       // command is handed out with it; without these the pages render but
       // cannot be used.
-      authBundle: webFile('solid-oidc-client.js'),
-      // Each page's own script — inline until 2026-09-09, so that the pages can
-      // be served under `script-src 'self'` (see lib/front-core.mjs).
-      pageScripts: {
-        'new-account.js': webFile('new-account.js'),
-        'run.js': webFile('run.js'),
-        'admin.js': webFile('admin.js'),
-        'notices.js': webFile('notices.js'),
-      },
-      installScript: webFile('install.sh'),
+      authBundle: pages.authBundle,
+      // Each page's own script, so the pages can be served under
+      // `script-src 'self'` (see fedipod/front).
+      pageScripts: pages.pageScripts,
+      installScript: pages.installScript,
       lookup: (h: string) => this.dir.lookup(h),
       putDirectory: (h: string, rec: never) => this.dir.putDirectory(h, rec),
       podPut: (_handle: string, url: string, body: string, ct: string) => this.podPut(url, body, ct),
@@ -782,7 +773,7 @@ export class FediPodServerHandler extends HttpHandler implements Initializable, 
       // (the directory, with every user's receipt secret, included).
       //
       // The front now refuses to attach such a row at all (podHomeProblem in
-      // lib/front-core.mjs); this is the same refusal at the other end, because
+      // fedipod/front); this is the same refusal at the other end, because
       // a row can also arrive from a seed or an older deploy.
       podGet: async (url: string, opts?: { podHome?: string }) => {
         const denied = { status: 403, text: async () => '', headers: { get: () => null } };

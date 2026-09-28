@@ -17,8 +17,8 @@ import {
 } from '@solid/community-server';
 import { FediPodServerHandler } from '../dist/index.js';
 import { makeStoreSession } from '../dist/store-pod.js';
-import { RemotePod } from '../../../lib/device/remote.mjs';
-import { Lease } from '../../../lib/core/lease.mjs';
+import { RemotePod } from 'fedipod/remote';
+import { Lease } from 'fedipod/core/lease.mjs';
 
 let fails = 0;
 const check = (ok, label) => { console.log(`${ok ? 'PASS' : 'FAIL'}  ${label}`); if (!ok) fails++; };
@@ -278,8 +278,8 @@ check(asked.httpStatus === 409 && asked.code === 'needs-index' && await claimsFo
 const optReply = await optHandler.optInPod({ podBase: OPT_POD, webId: OPT_POD + 'profile/card#me', createIndex: true });
 {
   // The pod's profile now names a public type index, which records the account.
-  const { PodTransport } = await import('../../../lib/pod/transport.mjs');
-  const ti = await import('../../../lib/pod/type-index.mjs');
+  const { PodTransport } = await import('fedipod/pod/transport.mjs');
+  const ti = await import('fedipod/pod/type-index.mjs');
   const danaPod = new PodTransport({ fetch: danaFetch }, { webId: OPT_POD + 'profile/card#me' });
   const idx = await ti.findPublicIndex(danaPod, OPT_POD).catch(() => null);
   const actors = idx ? await ti.actorsIn(danaPod, idx) : [];

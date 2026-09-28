@@ -52,6 +52,10 @@ sign-up refuses rather than half-working.
 npm install fedipod-server
 ```
 
+It installs `fedipod` with it: the agent, the Gateway's front and the pages
+are that package's, and a fix there reaches this component at your next
+`npm install`.
+
 Add the package context to your CSS config and import the shipped snippet:
 
 ```json
@@ -109,7 +113,7 @@ naming the pod the identity runs on. Nothing private is in it.
 | `agentDataDir` | Where each identity keeps the file naming its pod; its log lines go to the server's own log. Required whenever sign-up is on. |
 | `agentUiPath` | Where the owner's pages live on the pod's origin. `/fp/` by default; empty serves no pages. On a suffixed pod it is under the pod's path, e.g. `/aisha/fp/`. |
 | `agentRegistryContainer` | The internal container holding the sign-up rows. |
-| `runPage` | The HTML of the page where a pod owner opts in or out. The package's own `web/front/run.html` is served unless you set this. |
+| `runPage` | The HTML of the page where a pod owner opts in or out. The page `fedipod` ships is served unless you set this. |
 | `runPath` | Where that page answers. `/.fediverse-account` unless you set it. The path it takes is one the pod no longer serves, so it is yours to name; the dot keeps it out of the way of anybody's data. |
 | `agentWebIdSuffix` | Path from a pod's base to its owner's WebID. Defaults to `profile/card#me`. |
 | `agentPollSeconds` | How often the inbox is swept. Deliveries also wake the sweep as they land, so this is the fallback. |
@@ -133,10 +137,8 @@ Each identity answers on its pod's origin, so the pod is what a client
 connects to. Point a Mastodon app at `https://mei.example.org/` and it finds
 what it expects: nodeinfo, the client API under `/api/`, sign-in under
 `/oauth/`, the live feed at `/api/v1/streaming`, and the ActivityPub write API
-at `/ap/outbox`. The owner's own pages — the record and, in a repository
-checkout, the bundled web client — are behind `agentUiPath`, which the door
-secret guards. The published package does not carry the web client; point a
-Mastodon app at the pod instead.
+at `/ap/outbox`. The owner's own pages — the record and the bundled web client — are behind
+`agentUiPath`, which the door secret guards.
 
 The client API answers any origin, the way any Mastodon server does, so a
 browser client works too: it registers an app, and the authorize screen names
@@ -252,7 +254,10 @@ npm run test:e2e:suffix   # the same, for suffixed pods (mode d)
 container listings — through the transport an identity uses, and checks the
 lease protocol and the deletion deny-list still hold across it.
 
-`npm test` is also what a publish runs, so a red suite blocks one.
+`npm test` is also what a publish runs, so a red suite blocks one. In a
+FediPod checkout the tests run against the checkout's own `fedipod`:
+`scripts/link-fedipod.mjs` links it into `node_modules` before each test
+script, and does nothing anywhere else.
 
 `npm run test:e2e` starts a real Community Solid Server with three pods (two
 become identities up front; the third opts in and out at runtime), then signs in as a phone app does, posts,
