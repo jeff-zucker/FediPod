@@ -21,13 +21,11 @@ node --test packages/fedipod-bb/test/*.test.mjs
 
 ## Hosting a forum
 
-<!-- CLAUDE 2026-09-28 — a forum from the sign-up page; delete these markers when done -->
 A forum can be made at a FediPod Gateway's sign-up page (fedipod.net's, for
 one) with no machine of your own: choose "A forum", make a pod for it at a
 provider, name it and its categories, and the Gateway writes it on the pod
 and runs it from then on. The commands below are for running a forum from a
 machine of your own instead.
-<!-- /CLAUDE -->
 
 ```
 npm install -g fedipod-bb

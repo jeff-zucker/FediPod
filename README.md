@@ -34,7 +34,6 @@ This README is about the `FediPod BrowserAgent`. There are also a number of [oth
 
 From now on, anyone can open your profile at `https://fedipod.net/@handle@provider`, signed in or not.
 
-<!-- CLAUDE 2026-09-28 — a forum from the sign-up page; delete these markers when done -->
 ## Getting a forum
 
 The same page makes a forum. Choose **A forum** as the first thing on it. A
@@ -44,7 +43,6 @@ name and its categories, and the address at fedipod.net you will moderate it
 as. fedipod.net runs the forum from then on; nothing runs on your machine.
 Its page is at `https://bb.fedipod.net/<handle>/` and its address is
 `@handle@fedipod.net`, with one address per category.
-<!-- /CLAUDE -->
 
 ## What you can do
 
@@ -153,13 +151,11 @@ not change.
 - [FediPod Groups](groups.md): hosting a discussion group of Fediverse and Bluesky users from a pod.
 - [FediPod Gateway](gateway.md): A thin, always-on door running on Netlify or any small host that provides a middleman between a pod and the single-user agents. (only needed with `BrowserAgent` and `DeviceAgent`)
 
-<!-- CLAUDE 2026-09-28 — the two ways to run FediPod; delete these markers when done -->
 There are two ways to run FediPod: in a browser at a Gateway such as
 fedipod.net, with nothing installed, or as a Gateway of your own, deployed
 from this repository ([netlify/README.md](netlify/README.md)). Cloning the
 repository and running it is not one of them: `npm start` only says so. The
 DeviceAgent is deprecated; nothing new is built for it.
-<!-- /CLAUDE -->
 
 
 ## Acknowledgements
