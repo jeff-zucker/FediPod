@@ -30,6 +30,8 @@ import * as moderation from './moderation.mjs';
 import * as access from './access.mjs';
 import { provisionForum, provisionCategory } from './provision.mjs';
 import * as settings from './settings.mjs';
+import { keepForum, restateForumRules } from './keep.mjs';
+import * as place from './place.mjs';
 
 import { ForumIntake } from './forum-intake.mjs';
 export { ForumIntake };
@@ -44,13 +46,24 @@ const VIEWER_REFRESH_MS = 5 * 60_000;
 
 export class ForumAgent {
   // `remote` and `storageFor` are injectable so a test can stand a pod in.
-  constructor({ home, log = () => {}, remote = null, storageFor = defaultStorageFor, push = true, pollSeconds = null }) {
+  // A host with no directory of its own — fedipod.net's door or its keeper —
+  // hands in the credential, the lease and its holder id instead of files,
+  // names the keeper the pod's rules must carry, reads keys and never mints
+  // them, and defers every send to the run that follows.
+  constructor({ home = null, log = () => {}, remote = null, storageFor = defaultStorageFor, push = true, pollSeconds = null,
+    credential = null, lease = null, holderId = null, keepers = [], mintKeys = true, defer = false }) {
     this.home = home;
     this.log = log;
     this.remote = remote;
     this.storageFor = storageFor;
     this.push = push;
     this.pollSeconds = pollSeconds;
+    this.credential = credential;
+    this.givenLease = lease;
+    this.holderId = holderId;
+    this.keepers = keepers;
+    this.mintKeys = mintKeys;
+    this.defer = defer;
     this.categories = [];
     this.viewer = true;
   }
@@ -64,6 +77,8 @@ export class ForumAgent {
   // a moderator's ask — until it expired. Which is what a restart to pick up a
   // fix looked like from the outside: the fix changing nothing.
   hostId() {
+    if (this.holderId) return this.holderId;
+    if (!this.home) return null;
     const at = path.join(this.home, 'host-id');
     try { return fs.readFileSync(at, 'utf8').trim() || null; } catch { /* not yet */ }
     try {
@@ -78,8 +93,18 @@ export class ForumAgent {
   }
 
   readCredential() {
+    if (this.credential) return this.credential;
+    if (!this.home) return null;
     try { return JSON.parse(fs.readFileSync(path.join(this.home, 'credential.json'), 'utf8')); }
     catch { return null; }
+  }
+
+  // The signing key of one actor, from its pod state. A host that may not
+  // mint — the door, which must never invent an identity's key — refuses a
+  // missing one instead.
+  async keysFor(store, actorId) {
+    if (!this.mintKeys && !store.read('keys.json', null)) throw new Error(`no signing key on the pod for ${actorId}`);
+    return resolveKeys(store, { localDir: null, actorId, log: this.log });
   }
 
   status() {
@@ -142,10 +167,17 @@ export class ForumAgent {
   }
 
   async attachRemote(cred) {
-    if (this.remote) return;
-    const { RemotePod } = await import('fedipod/remote');
-    this.remote = new RemotePod(cred, { log: this.log, home: this.home });
-    await this.remote.warmup();
+    if (!this.remote) {
+      const { RemotePod } = await import('fedipod/remote');
+      this.remote = new RemotePod(cred, { log: this.log, home: this.home });
+      await this.remote.warmup();
+    }
+    // Every rule this host writes names the keeper beside the owner, and the
+    // owner is the forum's, whoever holds the pen.
+    if (this.keepers.length) {
+      this.remote.keepers = [...this.keepers];
+      this.remote.aclOwner = cred.webId || this.remote.aclOwner || null;
+    }
   }
 
   async connect({ act = true } = {}) {
@@ -162,7 +194,7 @@ export class ForumAgent {
     if (!this.config) { this.log('credential present but the forum has no config — run init'); return false; }
     const front = this.config.gateway?.front || null;
     this.site = forumUrls(cred.remotePod, cred.root || ROOT, front ? { front, handle: this.config.handle } : {});
-    this.lease = new Lease({ url: this.site.state + 'lease.json', fetchImpl: (u, i) => this.remote.fetch(u, i), log: this.log,
+    this.lease = this.givenLease || new Lease({ url: this.site.state + 'lease.json', fetchImpl: (u, i) => this.remote.fetch(u, i), log: this.log,
       id: this.hostId() });
     this.viewer = act ? !(await this.lease.acquire()) : true;
     this.categories = [];
@@ -225,11 +257,11 @@ export class ForumAgent {
       } } : {}),
     };
     store.setConfig(config);
-    const keys = await resolveKeys(store, { localDir: null, actorId: urls.actor, log: this.log });
+    const keys = await this.keysFor(store, urls.actor);
     const cat = { slug, urls, store, config, remote: this.remote };
     cat.deliverer = new Deliverer({
       store, rsaPrivate: keys.rsaPrivate, keyId: urls.actor + '#main-key', actorId: urls.actor,
-      edPrivate: keys.edPrivate, proofKeyId: assertionKeyId(urls), log: this.log, passive: true,
+      edPrivate: keys.edPrivate, proofKeyId: assertionKeyId(urls), log: this.log, passive: true, defer: this.defer,
       onGone: () => cat.publisher.publishCollections({ followers: true }),
     });
     cat.publisher = new Publisher({
@@ -254,7 +286,7 @@ export class ForumAgent {
       if (doc || !(this.config.membersOnly || []).includes(slug)) return doc;
       return this.podFetchAP(url);
     };
-    cat.intake.onCarried = (ev) => this.onCarried(cat, ev);
+    cat.intake.onCarry = (ev) => this.onCarry(cat, ev);
     cat.intake.onReport = (activity, actor, opts) => cat.intake.queueModeration(activity, actor, opts);
     // What happens to a post from somebody who has not joined: dropped, or
     // held where a moderator will see it (the category's `replyPolicy`).
@@ -298,11 +330,11 @@ export class ForumAgent {
         mode: gw.mode || 'trust', hmacSecret: gw.secrets?.[this.config.handle] || null,
       } } : {}),
     };
-    const keys = await resolveKeys(store, { localDir: null, actorId: site.actor, log: this.log });
+    const keys = await this.keysFor(store, site.actor);
     const agent = { urls: site, store, config, remote: this.remote, log: this.log, configured: () => true };
     agent.deliverer = new Deliverer({
       store, rsaPrivate: keys.rsaPrivate, keyId: site.actor + '#main-key', actorId: site.actor,
-      edPrivate: keys.edPrivate, proofKeyId: assertionKeyId(site), log: this.log, passive: true,
+      edPrivate: keys.edPrivate, proofKeyId: assertionKeyId(site), log: this.log, passive: true, defer: this.defer,
     });
     agent.publisher = new Publisher({
       config, remote: this.remote, store, deliverer: agent.deliverer,
@@ -349,39 +381,26 @@ export class ForumAgent {
     return ids.some(id => id === s.actor || id === s.followers);
   }
 
-  // After a category carried a post: place it in its topic, keep a copy for
-  // readers, and publish what changed.
-  async onCarried(cat, { noteId, sent }) {
-    let note = cat.intake.recentNotes.get(noteId) || null;
-    cat.intake.recentNotes.delete(noteId);
-    if (!note) note = await cat.intake.fetchAP(noteId);
-    if (!note) { this.log(`carried ${noteId} but could not read it for the topic`); return; }
-    const tid = await topics.assign({ store: cat.store, urls: cat.urls, fetchAP: (u) => cat.intake.fetchAP(u) }, note, sent);
-    // A locked topic takes no more: the post leaves it again and the carry is
-    // unsaid, so members' servers do not keep what the forum does not.
-    if (moderation.isLocked(cat, tid) && !topics.list(cat.store).find(t => t.tid === tid && t.op === noteId)) {
-      topics.remove(cat.store, tid, noteId);
-      await cat.intake.retract(noteId).catch(e => this.log(`retract ${noteId}: ${e.message}`));
-      this.log(`${cat.slug}: ${noteId} not placed — topic ${tid} is locked`);
-      return;
-    }
-    await publish.cachePost(cat, note, { topic: cat.urls.topic(tid), replies: 0 });
-    this.noteLatest(cat, note);
-    const answered = idOf(note.inReplyTo);
-    if (answered) await this.countReplies(cat, tid, answered).catch(e => this.log(`replies of ${answered}: ${e.message}`));
-    // The author's card, from the actor the intake already holds; fetched
-    // once when it does not, so the website can name them.
-    const author = idOf([].concat(note.attributedTo || [])[0]);
-    if (author) {
-      const held = cat.store.getActors?.()[author];
-      const doc = held ? { id: author, ...held } : await cat.intake.fetchAP(author).catch(() => null);
-      if (doc) await publish.cacheAuthor(cat, doc).catch(e => this.log(`author card for ${author}: ${e.message}`));
-    }
-    await publish.publishTopic(cat, tid);
-    await publish.publishTopicIndex(cat);
-    await publish.publishLatest(this.siteAgent);
-    this.log(`${cat.slug}: ${noteId} in topic ${tid}`);
+  // Placing a post in its topic, and what an edit or a deletion does to the
+  // place: place.mjs.
+  onCarry(cat, ev) { return place.placePost(this, cat, ev); }
+  onCarriedEdit(cat, ev) { return place.editPlaced(this, cat, ev); }
+  onCarriedGone(cat, ev) { return place.dropPlaced(this, cat, ev); }
+  countReplies(cat, tid, postId) { return place.countReplies(this, cat, tid, postId); }
+  noteLatest(cat, note) { return place.noteLatest(this, cat, note); }
+  dropLatest(cat, noteId) { return place.dropLatest(this, cat, noteId); }
+
+  // One delivery, handed in by whoever took it at the forum's door, done the
+  // way the drain does one item: handled, every store committed, and only
+  // then reported done — so the caller may remove it from the inbox.
+  async placeOne(name, body, receipt = null) {
+    const done = await this.intake.takeHeld([{ name, body, receipt }]);
+    return done.includes(name);
   }
+
+  // Letting a Gateway keep this forum, and taking that back: keep.mjs.
+  keep(o) { return keepForum(this, o); }
+  restateRules() { return restateForumRules(this); }
 
   // Take addresses at a Gateway: one row for the forum and one per category,
   // each a handle at the front, all writing their mail into the forum's one
@@ -462,45 +481,6 @@ export class ForumAgent {
       this.log(`topic ${t.tid} carried into the state`);
     }
     await cat.store.flush().catch(() => {});
-  }
-
-  // An author edited a post of theirs that we hold: the copy the website
-  // reads is rewritten from the note as verified at its origin, and a changed
-  // title is the topic's title when that post opened it.
-  async onCarriedEdit(cat, { noteId, note }) {
-    // The copy is rewritten from the note as verified at its origin; the
-    // counts the forum keeps on it are put back from what the forum knows.
-    const v = cat.store.read('votes.json', {})[noteId];
-    const held = topics.topicOf(cat.store, noteId);
-    const replies = held ? (topics.get(cat.store, held)?.posts || []).filter(p => p.inReplyTo === noteId).length : null;
-    await publish.cachePost(cat, note, { topic: held ? cat.urls.topic(held) : null, replies,
-      likes: (Array.isArray(v) ? v : v?.up || []).length, dislikes: (Array.isArray(v) ? [] : v?.down || []).length });
-    await publish.publishLatest(this.siteAgent);
-    const tid = topics.topicOf(cat.store, noteId);
-    if (!tid) return;
-    await publish.publishTopic(cat, tid, { force: true });
-  }
-
-  // An author deleted one: it leaves the topic, its copy becomes a tombstone
-  // (FEP-4f05), and a topic with nothing left in it goes too. The carry has
-  // already been taken back by the group itself.
-  async onCarriedGone(cat, { noteId }) {
-    const tid = topics.topicOf(cat.store, noteId);
-    // Whatever it answered has one fewer answer now.
-    const answered = tid ? idOf(topics.get(cat.store, tid)?.posts?.find(p => p.id === noteId)?.inReplyTo) : null;
-    this.dropLatest(cat, noteId);
-    await publish.tombstoneCached(cat, noteId);
-    await publish.publishLatest(this.siteAgent);
-    if (!tid) return;
-    topics.remove(cat.store, tid, noteId);
-    const left = topics.get(cat.store, tid);
-    if (!left?.posts?.length) {
-      await moderation.deleteTopic(cat, tid).catch(e => this.log(`empty topic ${tid}: ${e.message}`));
-      return;
-    }
-    await publish.publishTopic(cat, tid, { force: true });
-    await publish.publishTopicIndex(cat, { force: true });
-    if (answered) await this.countReplies(cat, tid, answered).catch(e => this.log(`replies of ${answered}: ${e.message}`));
   }
 
   // Queued asks from listed moderators that can be verified at their own
@@ -752,28 +732,6 @@ export class ForumAgent {
     return true;
   }
 
-  // Answers to one post, counted in the topic that holds it, and written
-  // into the copy the website reads.
-  async countReplies(cat, tid, postId) {
-    const doc = topics.get(cat.store, tid);
-    if (!doc) return;
-    const n = (doc.posts || []).filter(p => p.inReplyTo === postId).length;
-    const copy = await this.remote.getJson(cat.urls.cached(postId)).catch(() => null);
-    if (!copy || copy.type === 'Tombstone') return;
-    if (Number(copy.replies?.totalItems) === n) return;
-    await publish.cachePost(cat, copy, { replies: n });
-  }
-
-  // The forum's own index of its newest posts, across every category.
-  noteLatest(cat, note) {
-    const copy = cat.urls.cached(note.id);
-    const at = note.published || new Date().toISOString();
-    const rows = this.store.read('latest.json', []).filter(e => e.copy !== copy);
-    rows.push({ copy, at });
-    rows.sort((a, b) => String(b.at).localeCompare(String(a.at)));
-    this.store.write('latest.json', rows.slice(0, publish.LATEST_MAX));
-  }
-
   // Everything the forum already holds, read back out of the topics, for an
   // index that did not exist when those posts arrived.
   // Copies kept before the forum recorded which topic they were in: the
@@ -804,11 +762,6 @@ export class ForumAgent {
     rows.sort((a, b) => String(b.at).localeCompare(String(a.at)));
     this.store.write('latest.json', rows.slice(0, publish.LATEST_MAX));
     return rows.length;
-  }
-
-  dropLatest(cat, noteId) {
-    const copy = cat.urls.cached(noteId);
-    this.store.write('latest.json', this.store.read('latest.json', []).filter(e => e.copy !== copy));
   }
 
   async applyModeration(slug, entryId) {
@@ -858,8 +811,20 @@ export class ForumAgent {
         .catch(e => this.log(`the reader list for ${cat.slug}: ${e.message}`));
       await this.dropUnreadableFollowers(cat)
         .catch(e => this.log(`letting go of ${cat.slug}'s strangers: ${e.message}`));
-      await this.carryOldTopics(cat);
-      await this.stampOldCopies(cat).catch(e => this.log(`stamping ${cat.slug}: ${e.message}`));
+      // Two passes over what older versions wrote, made once and recorded
+      // (upkeep.json): each reads every topic or every copy, which is no way
+      // to begin every start.
+      const upkeep = cat.store.read('upkeep.json', {});
+      if (!upkeep.oldTopicsCarried) {
+        await this.carryOldTopics(cat);
+        cat.store.write('upkeep.json', { ...cat.store.read('upkeep.json', {}), oldTopicsCarried: new Date().toISOString() });
+      }
+      if (!upkeep.copiesStamped) {
+        try {
+          await this.stampOldCopies(cat);
+          cat.store.write('upkeep.json', { ...cat.store.read('upkeep.json', {}), copiesStamped: new Date().toISOString() });
+        } catch (e) { this.log(`stamping ${cat.slug}: ${e.message}`); }
+      }
       const seen = cat.store.read('published.json', {});
       if (force || !seen.actorDigest) {
         await cat.publisher.publishProfile({ force });

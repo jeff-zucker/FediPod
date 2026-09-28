@@ -20,6 +20,10 @@
 //     per category. Deliveries arrive verified at the front and are written
 //     into the forum's inbox; every actor is republished with its front ids
 //     on the next start.
+//   fedipod-bb keep --home DIR --front https://fedipod.net
+//     Let that Gateway run the forum when nothing else does: the pod's rules
+//     name its keeper from here on, and it places posts as they land. `unkeep`
+//     takes the name out again.
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -102,12 +106,22 @@ if (cmd === 'credential') {
   const r = await agent.attach({ front });
   console.log(`attached at ${r.front}: ${r.handles.map(h => '@' + h).join(', ')} — start the forum to publish its new addresses`);
   process.exit(0);
+} else if (cmd === 'keep' || cmd === 'unkeep') {
+  const front = flag('front');
+  if (!front) { console.error('--front <https://gateway-origin> is required'); process.exit(2); }
+  const agent = new ForumAgent({ home, log });
+  if (!await agent.connect({ act: false })) { console.error('nothing to keep — run init first'); process.exit(1); }
+  const r = await agent.keep({ front, on: cmd === 'keep' });
+  console.log(cmd === 'keep'
+    ? `${front} keeps this forum (${r.handles.map(h => '@' + h).join(', ')}) as ${r.keeper}`
+    : `${front} no longer keeps this forum`);
+  process.exit(0);
 } else if (cmd === 'status') {
   const agent = new ForumAgent({ home, log: () => {} });
   const up = await agent.connect({ act: false });
   console.log(JSON.stringify(up ? agent.status() : { mode: 'unconfigured' }, null, 2));
   process.exit(0);
 } else {
-  console.log('usage: fedipod-bb <credential|init|start|status|attach> --home DIR [--email E --pod URL | --handle H --name N --category slug:Name … --reply-policy open|review | --front URL]');
+  console.log('usage: fedipod-bb <credential|init|start|status|attach|keep|unkeep> --home DIR [--email E --pod URL | --handle H --name N --category slug:Name … --reply-policy open|review | --front URL]');
   process.exit(2);
 }

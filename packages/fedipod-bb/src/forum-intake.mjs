@@ -78,6 +78,20 @@ export class ForumIntake extends Intake {
     return ok;
   }
 
+  // Deliveries handed in rather than listed — one placed at the door, a batch
+  // the door held — are done only when every category's state is on the pod
+  // too, the same rule the drain keeps.
+  async takeHeld(entries) {
+    for (const cat of this.forum.categories) cat.store.hold?.();
+    let done;
+    try { done = await super.takeHeld(entries); }
+    finally { for (const cat of this.forum.categories) cat.store.release?.(); }
+    if (!done.length) return done;
+    let ok = true;
+    for (const cat of this.forum.categories) ok = (await cat.store.commit()) && ok;
+    return ok ? done : [];
+  }
+
   // Categories carry (FEP-1b12); the forum's own inbox forwards nothing.
   async _maybeForward() {}
 

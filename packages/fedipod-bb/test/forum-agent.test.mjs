@@ -228,7 +228,7 @@ test('a forum hosts its categories as groups and drains one inbox to all of them
   pod.deliver('c6', { type: 'Create', actor: MEI, object: remoteDocs[L2], to: remoteDocs[L2].to, cc: [] });
   await agent.intake.drain();
   assert.equal(topics.get(g.store, ltid).posts.length, 1, 'the reply did not join the locked topic');
-  assert.ok(delivered.some(d => d.who === 'gardening' && d.a.type === 'Undo' && d.a.object?.type === 'Announce'), 'and its carry was unsaid');
+  assert.ok(!delivered.some(d => d.who === 'gardening' && d.a.type === 'Announce' && JSON.stringify(d.a).includes(L2)), 'and it was never carried');
 
   // Mail for nobody here is a dead letter, and leaves the inbox.
   pod.deliver('x1', { type: 'Create', actor: KWAME, object: note('https://kwame.example/notes/2', { by: KWAME, to: [PUBLIC] }), to: [PUBLIC] });
@@ -683,4 +683,87 @@ test('a home that holds a forum says so, and one that holds a person does not', 
     assert.equal(isForumHome(dir), true, 'a forum names its own');
     assert.equal(isForumHome(dir + '/'), true, 'a trailing slash is the same home');
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('a host with no files of its own: the credential, the lease and its name are handed in', async () => {
+  const pod = fakePod();
+  const dir = home();
+  const { agent: first } = await boot(pod, dir);
+  await first.init({ handle: 'forum', name: 'The Forum', categories: ['gardening'] });
+  assert.ok(await first.connect());
+  await first.stop();
+  const lease = { acquired: 0, acquire: async () => { lease.acquired++; return true; }, release: async () => {}, startRenewal() {}, stopRenewal() {}, stillHeld: async () => true };
+  const agent = new ForumAgent({ log: () => {}, remote: pod, storageFor: pod.storageFor, pollSeconds: 3600,
+    credential: { remotePod: POD, webId: 'https://forum.example/profile/card#me' }, lease, holderId: 'gateway',
+    keepers: ['https://fedipod.net/keeper/profile/card#me'], mintKeys: false, defer: true });
+  assert.ok(await agent.connect({ act: false }), 'connects with nothing on disk');
+  assert.equal(agent.hostId(), 'gateway');
+  assert.equal(agent.lease, lease, 'the lease handed in is the one it holds');
+  assert.deepEqual(pod.keepers, ['https://fedipod.net/keeper/profile/card#me'], 'the keeper is named on every rule from now on');
+  assert.equal(pod.aclOwner, 'https://forum.example/profile/card#me', 'and the owner stays the forum');
+  // A key the pod does not hold is never minted by such a host.
+  const bare = fakePod();
+  const dir2 = home();
+  const { agent: setup } = await boot(bare, dir2);
+  await setup.init({ handle: 'forum', name: 'The Forum', categories: ['gardening'] });
+  const noMint = new ForumAgent({ log: () => {}, remote: bare, storageFor: bare.storageFor, pollSeconds: 3600,
+    credential: { remotePod: POD, webId: 'https://forum.example/profile/card#me' }, lease, holderId: 'gateway', mintKeys: false });
+  await assert.rejects(() => noMint.connect({ act: false }), /no signing key on the pod/u);
+  fs.rmSync(dir, { recursive: true, force: true }); fs.rmSync(dir2, { recursive: true, force: true });
+});
+
+test('a post placed at the door: in its topic at once, the carry left on the queue for the run', async () => {
+  const pod = fakePod();
+  const dir = home();
+  const { agent: first } = await boot(pod, dir);
+  await first.init({ handle: 'forum', name: 'The Forum', categories: ['gardening'], replyPolicy: 'open' });
+  assert.ok(await first.connect());
+  await first.stop();
+  const lease = { acquire: async () => true, release: async () => {}, startRenewal() {}, stopRenewal() {}, stillHeld: async () => true };
+  const door = new ForumAgent({ log: () => {}, remote: pod, storageFor: pod.storageFor, pollSeconds: 3600,
+    credential: { remotePod: POD, webId: 'https://forum.example/profile/card#me' }, lease, holderId: 'gateway', mintKeys: false, defer: true });
+  assert.ok(await door.connect({ act: false }));
+  const g = door.categories[0];
+  g.intake.fetchAP = async (u) => remoteDocs[u] ?? null;
+  door.intake.fetchAP = async (u) => remoteDocs[u] ?? null;
+  // Mei is a member already, and so is Kwame, who is the one the carry goes to.
+  g.store.setContacts({ followers: [
+    { actor: MEI, inbox: remoteDocs[MEI].inbox, sharedInbox: remoteDocs[MEI].endpoints.sharedInbox, accepted: true },
+    { actor: KWAME, inbox: remoteDocs[KWAME].inbox, accepted: true },
+  ], following: [] });
+  const N = 'https://mei.pod.example/fedipod/ap/notes/at-the-door';
+  remoteDocs[N] = note(N, { type: 'Article', name: 'Placed as it landed', audience: g.urls.actor, published: '2026-09-28T10:00:00Z' });
+  const create = { '@context': 'https://www.w3.org/ns/activitystreams', id: N + '#create', type: 'Create', actor: MEI, object: remoteDocs[N], to: remoteDocs[N].to, cc: [] };
+  const done = await door.placeOne('item-1', JSON.stringify(create), null);
+  assert.equal(done, true, 'the door reports the delivery done');
+  const [topic] = topics.list(g.store);
+  assert.ok(topic && topics.get(g.store, topic.tid).posts.some(p => p.id === N), 'the post is in its topic');
+  assert.ok(pod.docs.get(g.urls.cached(N)), 'and its copy is written for readers');
+  assert.ok(pod.docs.get(door.site.latest), 'and the forum\'s latest index is written');
+  const q = g.store.getQueue();
+  assert.ok(q.some(i => i.activity?.type === 'Announce' && JSON.stringify(i.activity).includes(N)), 'the carry waits on the queue');
+  assert.ok(q.every(i => i.attempts === 0), 'nothing was attempted from the door');
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('keep: the Gateway is told, and every rule on the forum\'s tree names its keeper', async () => {
+  const pod = fakePod();
+  const dir = home();
+  const { agent } = await boot(pod, dir);
+  await agent.init({ handle: 'forum', name: 'The Forum', categories: ['gardening', 'compost'] });
+  assert.ok(await agent.connect({ act: false }));
+  const asked = [];
+  pod.session = { fetch: async (url, init) => { asked.push({ url, body: JSON.parse(init.body) }); return { ok: true, status: 200, json: async () => ({ ok: true, keeper: 'https://fedipod.net/keeper/profile/card#me' }) }; } };
+  pod.acls.length = 0;
+  const r = await agent.keep({ front: 'https://fedipod.net/' });
+  assert.deepEqual(asked.map(a => a.body), [{ handle: 'forum', on: true }, { handle: 'gardening', on: true }, { handle: 'compost', on: true }], 'the forum and each category are handed over');
+  assert.equal(r.keeper, 'https://fedipod.net/keeper/profile/card#me');
+  assert.deepEqual(pod.keepers, [r.keeper], 'the transport names the keeper on every rule it writes');
+  const ruled = pod.acls.map(a => a[0]);
+  for (const url of [agent.site.home, agent.site.state, agent.site.inbox, agent.categories[0].urls.home, agent.categories[0].urls.topicContainer, agent.categories[1].urls.cache]) {
+    assert.ok(ruled.includes(url), `the rule on ${url} was stated again`);
+  }
+  await agent.keep({ front: 'https://fedipod.net', on: false });
+  assert.deepEqual(pod.keepers, [], 'unkeep takes the name out');
+  fs.rmSync(dir, { recursive: true, force: true });
 });
