@@ -621,6 +621,15 @@ try {
     const otherRead = await get(outbox, { headers: { authorization: jwt('https://elsewhere.example/card#me'), dpop: 'proof' }, redirect: 'manual' });
     check(otherRead.status !== 303 || !/ap\/private\//.test(otherRead.headers.get('location') || ''),
       'anyone else signed in is not');
+    // The inbox door reads the same way: the owner is sent to the collection
+    // the drain keeps on the pod (§5.2); a delivery door answers nobody else.
+    const inboxDoor = '/u/pwren/ap/inbox/';
+    const ownerInbox = await get(inboxDoor, { headers: { authorization: jwt(POD + 'pods/wren/profile/card#me'), dpop: 'proof' }, redirect: 'manual' });
+    check(ownerInbox.status === 303 && /\/pods\/wren\/fedipod\/ap\/private\/inbox$/.test(ownerInbox.headers.get('location') || '')
+      && ownerInbox.headers.get('cache-control') === 'no-store',
+      `the signed-in owner reading the inbox is sent to the collection kept on the pod (${ownerInbox.status} ${ownerInbox.headers.get('location')})`);
+    const otherInbox = await get(inboxDoor, { headers: { authorization: jwt('https://elsewhere.example/card#me'), dpop: 'proof' }, redirect: 'manual' });
+    check(otherInbox.status === 405, `anyone else reading the inbox door is refused as before (${otherInbox.status})`);
     // The door refuses up front what the account would refuse.
     const own = (body) => post({ authorization: 'Bearer path-owner', dpop: 'proof', slug: '' }, JSON.stringify(body));
     const pwrenActor = `${ORIGIN}/u/pwren/ap/actor`;

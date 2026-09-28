@@ -339,8 +339,12 @@ Item-by-item answers to the Solid/ActivityPub interop checklist.
   documents.
   The
   inbox is never public: the pod's container takes deliveries append-only and
-  the agent drains it, and the owner reads what arrived at `GET /ap/inbox` on
-  the agent, authenticated as themselves.
+  the agent drains it. What arrived is kept for the owner as an
+  `OrderedCollection` in the private container (§5.2), twenty activities to
+  a page, newest first, an activity delivered twice listed once. The owner,
+  signed in, reads it at the inbox address on every build: the Gateway door
+  sends them to the pod's copy, and the DeviceAgent and the Server answer
+  `GET /ap/inbox` with the same documents.
 - **Relation to endpoints and LDP containers** — collections are plain pod
   resources; the inbox is the one container other servers write to.
 - **The profile form of the media type** — yes on the Server and through the
@@ -379,7 +383,7 @@ Item-by-item answers to the Solid/ActivityPub interop checklist.
   Retry-After.
 - **Agent providing an endpoint** — DeviceAgent and Server, three:
   `POST /ap/outbox` is the write API, and `GET /ap/inbox` is the owner's view
-  of what arrived. `GET /ap/actor` and `GET /ap/outbox` redirect to the pod's
+  of what arrived, the collection the drain keeps on the pod. `GET /ap/actor` and `GET /ap/outbox` redirect to the pod's
   canonical documents on the Server, where those are reachable; standalone
   the agent answers both itself, because the published actor names no address
   a local client could write to.

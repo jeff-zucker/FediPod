@@ -1,5 +1,18 @@
 # Changes
 
+## 2026-09-28 (the owner's inbox is a collection on every build — unreleased)
+
+**An app signed in as you can read everything your account received, on
+every build.** What arrives is kept on your pod as an ActivityPub inbox
+collection, twenty items to a page, newest first, and a delivery that
+reached you twice is listed once. A browser account, and any account whose
+address is at fedipod.net, had no such list; asking fedipod.net for your
+inbox while signed in now sends you to it. A DeviceAgent or Server owner
+reads the same list at the same address as before, in pages numbered from
+the oldest rather than by month. Mail received before this change stays in
+the archive and is not in the list. Nothing changes in Sengi or Phanpy.
+The pod pays one more small write per batch of mail handled.
+
 ## 2026-09-28 (mail from Mastodon reaches fedipod.net again — version 1.44.1)
 
 **Every delivery from a Mastodon server to a fedipod.net account was being

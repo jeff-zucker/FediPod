@@ -10684,28 +10684,32 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
   });
   const HASH = createHash('sha256').update(RAW).digest('hex').slice(0, 16);
 
-  const mkDrain = (archive, cfg = {}) => {
+  const INBOX21 = 'https://p.example/fedipod/ap/private/inbox';
+  const mkDrain = (archive, cfg = {}, { ready = true } = {}) => {
     const deleted = [];
+    const written = {};
+    const body = { raw: RAW };          // swapped by a test that re-delivers different bytes
     const state = {};
     const store = {
       read: (n, d) => (n in state ? JSON.parse(JSON.stringify(state[n])) : d),
-      write: (n, v) => { state[n] = v; },
+      write: (n, v) => { state[n] = JSON.parse(JSON.stringify(v)); },
       commit: async () => true,
       addDeadLetter: (e) => { (state.dead ||= []).push(e); },
       getDeadLetters: () => state.dead || [],
       getConfig: () => cfg,
     };
     const intake = new Intake({
-      config: {}, urls: { inbox: 'https://p.example/in/', base: 'https://p.example/' },
+      config: {}, urls: { inbox: 'https://p.example/in/', base: 'https://p.example/', ownInbox: INBOX21 },
       remote: {
-        listContainer: async () => [{ url: 'https://p.example/in/m1', size: RAW.length, modified: '2026-08-01' }],
-        fetch: async () => new Response(RAW, { status: 200 }),
+        listContainer: async () => [{ url: 'https://p.example/in/m1', size: body.raw.length, modified: '2026-08-01' }],
+        fetch: async () => new Response(body.raw, { status: 200 }),
         delete: async (u) => { deleted.push(u); return true; },
+        putJson: async (u, d) => { written[u] = JSON.parse(JSON.stringify(d)); },
       },
-      store, deliverer: {}, publisher: {}, log: () => {}, archive,
+      store, deliverer: {}, publisher: { privateReady: async () => ready }, log: () => {}, archive,
     });
     intake.handle = async () => null;   // accepted — verification has its own tests
-    return { intake, deleted };
+    return { intake, deleted, written, body, state };
   };
 
   const ARCH = fs.mkdtempSync('/tmp/fedipod-inbox-archive-');
@@ -10734,14 +10738,55 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
     && recG.any(recSym, $rdf21c.sym(AS21C + 'actor'))?.value === 'https://f.example/u/alice',
     'and the same file parses as RDF: cnt:chars, prov:generatedAtTime, prov:wasDerivedFrom, as:actor');
 
+  // §5.2: the same delivery is the owner's inbox collection on the pod — a head
+  // and a page carrying the activity itself, in the private container.
+  const head21 = on.written[INBOX21];
+  const page21 = on.written[INBOX21 + '-1'];
+  check(head21?.type === 'OrderedCollection' && head21.totalItems === 1
+    && head21.first === INBOX21 + '-1' && head21.last === INBOX21 + '-1'
+    && page21?.type === 'OrderedCollectionPage' && page21.partOf === INBOX21 && !page21.next
+    && page21.orderedItems?.[0]?.id === 'https://f.example/act/1' && page21.orderedItems[0].type === 'Create',
+    'a drained item is also listed in the inbox collection on the pod: a head, and a page carrying the activity');
+
   await on.intake.drain();   // the same delivery again
   check(fs.readdirSync(monthDir).length === 1, 're-delivery lands on the same file — no duplicates');
+  check(on.written[INBOX21].totalItems === 1, 'and is listed once in the collection');
+  // The same activity again with different addressing: new bytes, so a second
+  // archive file, but the collection lists an id once (§5.2).
+  on.body.raw = JSON.stringify({ ...JSON.parse(RAW), bcc: ['https://p.example/fedipod/ap/actor'] });
+  await on.intake.drain();
+  check(fs.readdirSync(monthDir).length === 2 && on.written[INBOX21].totalItems === 1
+    && on.written[INBOX21 + '-1'].orderedItems.length === 1,
+    'the same activity delivered again with other addressing is archived again but listed once');
+  // Twenty more fill the page; the twenty-second opens page 2, and page 1 is sealed as written.
+  for (let i = 2; i <= 22; i++) {
+    on.body.raw = JSON.stringify({ ...JSON.parse(RAW), id: `https://f.example/act/${i}` });
+    await on.intake.drain();
+  }
+  const sealed21 = on.written[INBOX21 + '-1'];
+  check(on.written[INBOX21].totalItems === 22 && on.written[INBOX21].first === INBOX21 + '-2'
+    && sealed21.orderedItems.length === 20 && sealed21.orderedItems[0].id === 'https://f.example/act/20'
+    && sealed21.orderedItems[19].id === 'https://f.example/act/1'
+    && on.written[INBOX21 + '-2'].orderedItems.map((a) => a.id).join() === 'https://f.example/act/22,https://f.example/act/21'
+    && on.written[INBOX21 + '-2'].next === INBOX21 + '-1',
+    'pages hold twenty, newest first, the head points at the newest, and an older page links to the one before it');
 
   const OFFDIR = fs.mkdtempSync('/tmp/fedipod-archive-off-');
   const off = mkDrain(storageFor(OFFDIR), { archiveInbox: false });
   await off.intake.drain();
-  check(off.deleted.length === 1 && fs.readdirSync(OFFDIR).length === 0,
-    'with the archive off, mail drains exactly as before and nothing is written');
+  check(off.deleted.length === 1 && fs.readdirSync(OFFDIR).length === 0 && Object.keys(off.written).length === 0,
+    'with the archive off, mail drains exactly as before and nothing is written — no collection either');
+
+  // Where the private container is not yet proved private, what arrived is
+  // recorded and nothing is written; the first time the bar is met, it is.
+  const wait = mkDrain(storageFor(fs.mkdtempSync('/tmp/fedipod-inbox-wait-')), {}, { ready: false });
+  await wait.intake.drain();
+  check(Object.keys(wait.written).length === 0 && wait.state['received.json']?.total === 1,
+    'a private container not proved private: the delivery is recorded, no collection is written');
+  wait.intake.publisher.privateReady = async () => true;
+  await wait.intake.drain();
+  check(wait.written[INBOX21]?.totalItems === 1 && wait.written[INBOX21 + '-1']?.orderedItems?.length === 1,
+    'and it is written, once, the first time the bar is met');
 
   const broken = mkDrain({ write: async () => ({ ok: false, why: 'disk says no' }) });
   await broken.intake.drain();
@@ -11614,6 +11659,35 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
   check(outboxPage1.json?.type === 'OrderedCollectionPage'
     && outboxPage1.json?.orderedItems?.[0] === `${OURS}-create`,
     'and its page lists the post by the Create beside it, as the pod copy does');
+  // The owner's inbox (§5.2) is the collection the drain keeps on the pod,
+  // served under this address with the pod's names swapped for this agent's.
+  const OWN_IN = urls24.ownInbox;
+  agent24.remote.getJson = async (u) => (u === OWN_IN
+    ? { '@context': wire24.AS_CTX, id: OWN_IN, type: 'OrderedCollection', totalItems: 21, first: `${OWN_IN}-2`, last: `${OWN_IN}-1` }
+    : u === `${OWN_IN}-2`
+      ? { '@context': wire24.AS_CTX, id: `${OWN_IN}-2`, type: 'OrderedCollectionPage', partOf: OWN_IN, next: `${OWN_IN}-1`,
+        orderedItems: [{ id: 'https://m.example/a/9', type: 'Follow', actor: 'https://m.example/u/kofi', object: urls24.actor }] }
+      : null);
+  const getInbox = await ask24(api24, null, { method: 'GET', pathname: '/ap/inbox' });
+  check(getInbox.status === 200 && getInbox.json?.type === 'OrderedCollection' && getInbox.json?.totalItems === 21
+    && getInbox.json?.id === `http://localhost:${PORT}/ap/inbox`
+    && getInbox.json?.first === `http://localhost:${PORT}/ap/inbox?page=2` && getInbox.json?.last === `http://localhost:${PORT}/ap/inbox?page=1`,
+    `GET inbox → the collection kept on the pod, under this address (got ${getInbox.status})`);
+  const inboxPage2 = await ask24(api24, null, { method: 'GET', pathname: '/ap/inbox', query: '?page=2' });
+  check(inboxPage2.status === 200 && inboxPage2.json?.partOf === `http://localhost:${PORT}/ap/inbox`
+    && inboxPage2.json?.next === `http://localhost:${PORT}/ap/inbox?page=1`
+    && inboxPage2.json?.orderedItems?.[0]?.id === 'https://m.example/a/9',
+    'and a page carries the activities, its links renamed the same way');
+  const inboxGone = await ask24(api24, null, { method: 'GET', pathname: '/ap/inbox', query: '?page=7' });
+  check(inboxGone.status === 404, `a page the pod does not have → 404 (got ${inboxGone.status})`);
+  const inboxBad = await ask24(api24, null, { method: 'GET', pathname: '/ap/inbox', query: '?page=2026-09' });
+  check(inboxBad.status === 400, `a page that is not a number → 400 (got ${inboxBad.status})`);
+  agent24.remote.getJson = async () => null;
+  const inboxNone = await ask24(api24, null, { method: 'GET', pathname: '/ap/inbox' });
+  check(inboxNone.status === 200 && inboxNone.json?.totalItems === 0 && Array.isArray(inboxNone.json?.orderedItems),
+    'no collection on the pod yet → an empty one');
+  delete agent24.remote.getJson;
+
   const getActor = await ask24(api24, null, { method: 'GET', pathname: '/ap/actor' });
   check(getActor.status === 200 && getActor.json?.id === `http://localhost:${PORT}/ap/actor`
     && getActor.json?.outbox === `http://localhost:${PORT}/ap/outbox`
