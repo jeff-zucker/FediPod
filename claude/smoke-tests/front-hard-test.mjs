@@ -28,6 +28,15 @@ const POD = `http://localhost:${POD_PORT}/`;
 // person follows and who they block, and an inbox that accepts appends.
 const inboxWrites = [];
 let policyServed = 0;
+// Two servers elsewhere that sign what they fetch: kofi follows wren, nia does not.
+const signers = {};
+for (const name of ['kofi', 'nia']) {
+  const pair = await crypto.subtle.generateKey({ name: 'RSASSA-PKCS1-v1_5', modulusLength: 2048,
+    publicExponent: new Uint8Array([1, 0, 1]), hash: 'SHA-256' }, true, ['sign', 'verify']);
+  const spki = Buffer.from(await crypto.subtle.exportKey('spki', pair.publicKey)).toString('base64');
+  signers[name] = { privateKey: pair.privateKey,
+    publicKeyPem: `-----BEGIN PUBLIC KEY-----\n${spki.match(/.{1,64}/g).join('\n')}\n-----END PUBLIC KEY-----\n` };
+}
 const pod = http.createServer((req, res) => {
   const url = req.url || '/';
   if (url === '/ap/actor') {
@@ -55,6 +64,24 @@ const pod = http.createServer((req, res) => {
     res.writeHead(200, { 'content-type': 'application/activity+json' });
     return res.end(JSON.stringify({ '@context': 'https://www.w3.org/ns/activitystreams',
       id: PP + 'ap/notes/gone', type: 'Tombstone', formerType: 'Note', deleted: '2026-09-24T00:00:00Z' }));
+  }
+  // Two posts in the private folder — for followers, and for nia alone — that
+  // the pod gives only to a credential (the keeper's, here any Authorization).
+  if (url === '/pods/wren/fedipod/ap/private/secret' || url === '/pods/wren/fedipod/ap/private/dm') {
+    if (!req.headers.authorization) { res.writeHead(401); return res.end(); }
+    const dm = url.endsWith('/dm');
+    res.writeHead(200, { 'content-type': 'application/activity+json' });
+    return res.end(JSON.stringify({ '@context': 'https://www.w3.org/ns/activitystreams',
+      id: PP + (dm ? 'ap/private/dm' : 'ap/private/secret'), type: 'Note', attributedTo: PP + 'ap/actor',
+      to: dm ? [POD + 'actors/nia'] : [PP + 'ap/followers'], cc: [], content: dm ? 'just for you' : 'for followers' }));
+  }
+  const signer = /^\/actors\/(kofi|nia)$/u.exec(url)?.[1];
+  if (signer) {
+    const id = POD + 'actors/' + signer;
+    res.writeHead(200, { 'content-type': 'application/activity+json' });
+    return res.end(JSON.stringify({ '@context': ['https://www.w3.org/ns/activitystreams', 'https://w3id.org/security/v1'],
+      id, type: 'Person', preferredUsername: signer, inbox: id + '/inbox',
+      publicKey: { id: id + '#main-key', owner: id, publicKeyPem: signers[signer].publicKeyPem } }));
   }
   if (url === '/pods/wren/fedipod/ap/notes/locked') { res.writeHead(401); return res.end(); }
   if (url === '/pods/wren/fedipod/ap/outbox') {
@@ -630,6 +657,52 @@ try {
       `the signed-in owner reading the inbox is sent to the collection kept on the pod (${ownerInbox.status} ${ownerInbox.headers.get('location')})`);
     const otherInbox = await get(inboxDoor, { headers: { authorization: jwt('https://elsewhere.example/card#me'), dpop: 'proof' }, redirect: 'manual' });
     check(otherInbox.status === 405, `anyone else reading the inbox door is refused as before (${otherInbox.status})`);
+    // ---- a private post, read at its address by a server it was sent to (§3.2) ----
+    // The read is signed like a delivery; a follower gets a followers-only post,
+    // the one named gets a direct post, anyone else is told nothing. Answered
+    // for a kept account: the post is read with the keeper's credential and the
+    // followers come from the account's copy.
+    {
+      const { signRequest } = await import('@fedify/fedify/sig');
+      const { memoryKv } = await import('../../lib/gateway/copy.mjs');
+      process.env.AP_ALLOW_PRIVATE_TARGETS = '1';   // the signers' keys live on localhost here
+      const KEEPER = 'https://keeper.example/profile/card#me';
+      const row = attached.pwren;
+      const was = { keeper: row.keeper };
+      Object.assign(row, { keeper: { webId: KEEPER } });
+      const kv = memoryKv();
+      await kv.set('pwren/contacts.json', JSON.stringify({ followers: [{ actor: POD + 'actors/kofi' }], following: [] }));
+      doorExtras = { keeperWebId: KEEPER, copyKv: kv,
+        keeperFetch: async () => (u, i) => fetch(u, { ...i, headers: { ...(i?.headers || {}), authorization: 'DPoP keeper' } }) };
+      const signedGet = async (who, p) => {
+        const r = await signRequest(new Request(ORIGIN + p, { method: 'GET', headers: { accept: 'application/activity+json' } }),
+          signers[who].privateKey, new URL(`${POD}actors/${who}#main-key`));
+        return fetch(ORIGIN + p, { method: 'GET', headers: Object.fromEntries(r.headers), redirect: 'manual' });
+      };
+      const secret = '/u/pwren/ap/private/secret';
+      const asFollower = await signedGet('kofi', secret);
+      const got = await asFollower.json().catch(() => null);
+      check(asFollower.status === 200 && got?.id === `${ORIGIN}${secret}` && got?.to?.[0] === `${ORIGIN}/u/pwren/ap/followers`
+        && asFollower.headers.get('cache-control') === 'no-store' && /signature/i.test(asFollower.headers.get('vary') || ''),
+        `a follower's server, signing its read, gets the followers-only post, named at the front, never held at the edge (${asFollower.status})`);
+      const asStranger = await signedGet('nia', secret);
+      check(asStranger.status === 404, `a signed read by someone who does not follow is told nothing (${asStranger.status})`);
+      const dmForNia = await signedGet('nia', '/u/pwren/ap/private/dm');
+      check(dmForNia.status === 200, `a direct post is given to the one it names, follower or not (${dmForNia.status})`);
+      const dmForKofi = await signedGet('kofi', '/u/pwren/ap/private/dm');
+      check(dmForKofi.status === 404, `and to nobody else, a follower included (${dmForKofi.status})`);
+      const list = await signedGet('kofi', '/u/pwren/ap/private/outbox');
+      check(list.status === 404, `the owner's own lists are never served this way (${list.status})`);
+      const unsigned = await get(secret, { redirect: 'manual' });
+      check(unsigned.status === 303 && /\/ap\/private\/secret$/.test(unsigned.headers.get('location') || ''),
+        `an unsigned read is sent on to the pod, which decides, as before (${unsigned.status})`);
+      Object.assign(row, { keeper: undefined });
+      const unkept = await signedGet('kofi', secret);
+      check(unkept.status === 404, `for an account fedipod.net does not keep there is nothing to read with: told nothing (${unkept.status})`);
+      Object.assign(row, was);
+      doorExtras = {};
+      delete process.env.AP_ALLOW_PRIVATE_TARGETS;
+    }
     // The door refuses up front what the account would refuse.
     const own = (body) => post({ authorization: 'Bearer path-owner', dpop: 'proof', slug: '' }, JSON.stringify(body));
     const pwrenActor = `${ORIGIN}/u/pwren/ap/actor`;

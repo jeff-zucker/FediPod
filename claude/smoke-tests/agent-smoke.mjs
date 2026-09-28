@@ -14466,6 +14466,27 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
   check(edited.status === 200 && docs.get(ourNote.id).quote === N2 && docs.get(ourNote.id).quoteAuthorization === AUTH_OURS, `an edit keeps the quote and its authorization (${edited.status})`);
 }
 
+// --- 31. who may read a private post at its address (§3.2): the rule itself ---
+{
+  const { audienceOf, mayRead } = await import(path.join(root, 'lib/gateway/private-read.mjs'));
+  const F = 'https://pod.example/fedipod/ap/followers';
+  const KOFI = 'https://m.example/u/kofi'; const NIA = 'https://m.example/u/nia';
+  const toFollowers = { type: 'Note', to: [F], cc: [] };
+  const direct = { type: 'Note', to: [NIA], cc: [] };
+  const wrapped = { type: 'Create', to: [F], object: { type: 'Note', content: 'x' } };
+  const pub = { type: 'Note', to: ['https://www.w3.org/ns/activitystreams#Public'], cc: [F] };
+  const opts = { followersUrls: [F, 'https://front.example/u/x/ap/followers'], followers: [KOFI] };
+  check(mayRead(toFollowers, KOFI, opts) && !mayRead(toFollowers, NIA, opts),
+    'a post to followers is read by a follower and by nobody else');
+  check(mayRead(direct, NIA, opts) && !mayRead(direct, KOFI, opts),
+    'a direct post is read by the one it names, follower or not, and by nobody else');
+  check(mayRead(wrapped, KOFI, opts) && audienceOf(wrapped, [F]).toFollowers && !audienceOf(wrapped, [F]).isPublic,
+    "a Create's audience counts, and so does its object's");
+  check(mayRead(pub, 'https://anyone.example/u/z', opts), 'a public post is read by anyone');
+  check(!mayRead({ type: 'OrderedCollection', totalItems: 3 }, KOFI, opts) && !mayRead(toFollowers, null, opts),
+    "a document with no audience — the owner's own lists — is read by nobody this way, nor is anything by an unsigned reader");
+}
+
 child.kill('SIGTERM');
 fs.rmSync(HOME, { recursive: true, force: true });
 console.log(failures ? `\n${failures} FAILURE(S)` : '\nall green');

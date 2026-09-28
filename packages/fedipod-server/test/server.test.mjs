@@ -73,6 +73,14 @@ test('an identity claims its protocol routes and its door, and nothing else', ()
     'and so is a write by name — an outside door forwards that way');
   assert.equal(agentClaims({ pathname: inbox + 'item.json', method: 'POST' }), false,
     'only the container itself takes deliveries');
+  const priv = '/fedipod/ap/private/secret';
+  assert.equal(agentClaims({ pathname: priv, method: 'GET', signed: true }), true,
+    'a signed read of a private post is answered at the door, to a server the post was sent to');
+  assert.equal(agentClaims({ pathname: priv, method: 'GET' }), false,
+    'unsigned, the document is the pod\'s: the owner reads it there');
+  assert.equal(agentClaims({ pathname: priv, method: 'POST', signed: true }), false, 'reads only');
+  assert.equal(agentClaims({ pathname: '/fedipod/ap/private/', method: 'GET', signed: true }), false,
+    'the folder itself is the pod\'s');
   assert.equal(agentClaims({ pathname: '/fp/' }, ''), false,
     'with no door configured there are no pages to claim');
 });

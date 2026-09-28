@@ -156,6 +156,11 @@ that document's address and registers nothing here. Once in, it posts to the
 outbox the actor names, and reads what the identity received at `/ap/inbox`,
 which nobody but the owner may read.
 
+A followers-only or direct post of the identity's is given, at its own
+address, to a server it was sent to when that server signs its request, the
+way Mastodon gives its own: a follower's server gets a followers-only post,
+the named person's server gets a direct one, and nobody else gets either.
+
 A subdomained pod gets an origin of its own and answers at its root; a
 suffixed pod answers under its own path (`/aisha/ap/actor`, `/aisha/api/…`,
 `/aisha/oauth/…`, its door at `/aisha/fp/`). So a host carries at most one

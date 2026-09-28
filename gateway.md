@@ -15,7 +15,10 @@ yours, which your agent then signs and sends. It still holds no key, but what yo
 trust it with grows by that much. A browser account is also kept running by
 the gateway (below). That gives the gateway your key while it works, so it can
 post as you, as any Fediverse server can, and your account's working data is
-kept at the gateway too and written to your pod every fifteen minutes.
+kept at the gateway too and written to your pod every fifteen minutes. For
+a kept account the gateway also answers a follower's server asking for one
+of your followers-only posts, and the named person's server asking for a
+direct one, when that server signs its request; nobody else gets them.
 
 A FediPod install works without any gateway at all. Deliveries go straight to
 your pod inbox, which holds them whether your agent is running or not.

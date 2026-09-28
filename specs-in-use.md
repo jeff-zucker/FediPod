@@ -361,7 +361,13 @@ Item-by-item answers to the Solid/ActivityPub interop checklist.
   posts live in the pod's owner-only private container, never appear on the
   public surface or in the public outbox collection (only in the owner's own
   view of it), and are never re-broadcast by
-  group fan-out.
+  group fan-out. A server a post was sent to can fetch it at its address
+  with a signed request (§3.2): a follower's server gets a followers-only
+  post, the named person's server gets a direct one, and nobody else gets
+  either, the rule Mastodon applies to its own posts. Answered on the Server,
+  and at fedipod.net for an account it keeps; a browser account fedipod.net
+  does not keep gives it nothing to read with, so that read is sent to the
+  pod, which refuses it.
 
 ### Inbox and outbox processing architectures
 

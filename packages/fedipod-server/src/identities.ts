@@ -20,7 +20,10 @@ export interface EmbeddedIdentity {
   actorUrl: string;
   surface: { handler: (req: unknown, res: unknown) => Promise<void>; streaming?: unknown };
   stop: () => Promise<void>;
-  agent?: { store?: { getConfig?: () => { kind?: string } | null | undefined } };
+  agent?: {
+    store?: { getConfig?: () => { kind?: string } | null | undefined; getContacts?: () => { followers?: { actor?: string }[] } };
+    urls?: { followers?: string; toPod?: (u: string) => string };
+  };
 }
 
 // A pod that will not come up yet is usually a pod still being created by the

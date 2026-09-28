@@ -56,6 +56,9 @@ const AGENT_PREFIXES = [ '/api/', '/oauth/', '/@' ];   // /@handle: the short pr
 // path is relative to the identity's mount (see agentClaims), so a suffix pod's
 // `/aisha/fedipod/ap/inbox/` arrives here already stripped to `/fedipod/ap/inbox/`.
 export const isInboxPath = (pathname: string): boolean => /^\/(?:[^/]+\/)+ap\/inbox\/$/u.test(pathname);
+// A document in the identity's private folder — a followers-only or direct
+// post, or one of the owner's own lists — matched by shape like the inbox.
+export const isPrivateReadPath = (pathname: string): boolean => /^\/(?:[^/]+\/)+ap\/private\/[^/]+$/u.test(pathname);
 
 /**
  * True when this path belongs to an identity's client surface.
@@ -68,11 +71,15 @@ export const isInboxPath = (pathname: string): boolean => /^\/(?:[^/]+\/)+ap\/in
  * or of where on the origin it lives.
  */
 export function agentClaims(
-  input: { pathname: string; method?: string },
+  input: { pathname: string; method?: string; signed?: boolean },
   uiPath = '/fp/',
 ): boolean {
   const { pathname } = input;
-  if (isInboxPath(pathname)) return String(input.method ?? '').toUpperCase() === 'POST';
+  const method = String(input.method ?? '').toUpperCase();
+  if (isInboxPath(pathname)) return method === 'POST';
+  // A signed read of a private post is answered at the door, to a server the
+  // post was sent to (private-read.ts). Unsigned, the document is the pod's.
+  if (isPrivateReadPath(pathname)) return !!input.signed && (method === 'GET' || method === 'HEAD');
   if (AGENT_PATHS.has(pathname)) return true;
   if (AGENT_PREFIXES.some((prefix) => pathname.startsWith(prefix))) return true;
   // The owner's door, when there is one: '' turns the pages off entirely.

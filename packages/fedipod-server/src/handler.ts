@@ -23,6 +23,7 @@ import * as identities from './identities';
 import type { EmbeddedIdentity } from './identities';
 import * as optIn from './opt-in';
 import { deliverAtDoor } from './door';
+import { readPrivateAtDoor } from './private-read';
 import { serveFront } from './front';
 
 export interface FediPodServerArgs {
@@ -170,7 +171,8 @@ export class FediPodServerHandler extends HttpHandler implements Initializable, 
     // relative to the claim's mount, so a suffix pod's `/aisha/ap/actor` is
     // judged as `/ap/actor`.
     const c = resolveClaim(this, host, pathname);
-    if (c && agentClaims({ pathname: stripMount(pathname, c.mount), method: request.method }, this.uiPath)) return;
+    if (c && agentClaims({ pathname: stripMount(pathname, c.mount), method: request.method,
+      signed: !!request.headers.signature }, this.uiPath)) return;
     throw new Error('not a gateway route');   // reject → CSS's LDP handler takes it
   }
 
@@ -235,6 +237,13 @@ export class FediPodServerHandler extends HttpHandler implements Initializable, 
     const inboxPath = new URL(identity.actorUrl).pathname.replace(/ap\/actor$/u, 'ap/inbox/');
     if (pathname === inboxPath && String(request.method).toUpperCase() === 'POST') {
       return deliverAtDoor(this, identity, request, response);
+    }
+    // A signed read of a private post — a followers-only or direct one, fetched
+    // at its address by a server it was sent to — is answered here (§3.2).
+    const privatePrefix = inboxPath.replace(/ap\/inbox\/$/u, 'ap/private/');
+    const method = String(request.method).toUpperCase();
+    if (pathname.startsWith(privatePrefix) && (method === 'GET' || method === 'HEAD') && request.headers.signature) {
+      return readPrivateAtDoor(this, identity, request, response);
     }
     await identity.surface.handler(request, response);
   }

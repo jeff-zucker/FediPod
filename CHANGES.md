@@ -13,6 +13,14 @@ the oldest rather than by month. Mail received before this change stays in
 the archive and is not in the list. Nothing changes in Sengi or Phanpy.
 The pod pays one more small write per batch of mail handled.
 
+**A follower on Mastodon can open your followers-only post when their
+server only has its address**, say to show what a reply answered, and the
+person you sent a direct post to can open that. Their server signs its
+request, as it signs a delivery, and gets the post if it was sent to them;
+anyone else is told nothing. On the Server, and at fedipod.net for an
+account it keeps. A browser account fedipod.net does not keep is unchanged:
+nothing there can read your private posts for you.
+
 ## 2026-09-28 (mail from Mastodon reaches fedipod.net again — version 1.44.1)
 
 **Every delivery from a Mastodon server to a fedipod.net account was being
