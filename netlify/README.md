@@ -36,7 +36,6 @@ This repo, with `netlify.toml` as it stands. Before each deploy, run
 Netlify ships them and sends requests through each one from its own bundle,
 under the rules Netlify's Node keeps. Deploy only when it ends "all green".
 
-<!-- CLAUDE 2026-09-28 — forum support is a switch; delete these markers when done -->
 Whether this gateway keeps forums is one line in `netlify/forum-support.mjs`:
 it names the forum (FediPod-BB) or nothing. With it, a forum whose moderator
 turned keeping on is placed as each post lands and run here in the background;
@@ -44,7 +43,6 @@ without it, a forum delivery is written to the forum's pod inbox and left for
 whatever runs the forum. In this repo the forum is `packages/fedipod-bb`;
 anywhere else it is `npm install fedipod-bb` and the package's `gateway`
 entry, shipped beside the function.
-<!-- /CLAUDE -->
 
 The functions read these environment variables:
 

@@ -1,5 +1,27 @@
 # Changes
 
+## 2026-09-28 (a forum fedipod.net keeps, and a Gateway with or without forums — version 1.43.0, fedipod-bb 0.3.0)
+
+**Groundwork; nothing on fedipod.net looks different yet.** A forum whose
+moderator has handed it to fedipod.net to keep has each post placed on the
+forum the moment it arrives, by fedipod.net itself, and carried to its
+followers elsewhere by a run fedipod.net starts right after; nothing runs on
+the moderator's machine. No forum is kept this way yet: the forum's own site
+still posts straight to the forum's pod, and the live forum at bb.fedipod.net
+still runs from a machine of its own. Moving it, and a forum made from the
+sign-up page, are the next steps.
+
+**A Gateway keeps forums or not.** Someone running a Gateway of their own
+chooses with one line of its deployment, which names the forum or nothing.
+Without it, a forum's mail still reaches the forum's pod; the Gateway just
+does not run the forum.
+
+**FediPod-BB 0.3.0.** A member's post is on the forum before it goes out to
+followers elsewhere, not after; on a forum with many followers that is seconds
+sooner. `fedipod-bb keep --front <gateway>` hands a forum to a Gateway to keep
+(and `unkeep` takes it back); the forum's own run then only carries what the
+Gateway placed. A moderator moving the live forum waits for the next step.
+
 ## 2026-09-28 (the forum installs fedipod — fedipod-bb 0.2.0)
 
 **FediPod-BB installs `fedipod` instead of reaching into a checkout.** Its
