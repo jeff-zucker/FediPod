@@ -189,7 +189,7 @@ const sessionFor = async (email, podUrl) => createGrantSession(await mintCredent
 }));
 const optIn = (session, podBase) => session.fetch(`${BASE}api/agent`, {
   method: 'POST', headers: { 'content-type': 'application/json' },
-  body: JSON.stringify({ action: 'opt-in', podBase }),
+  body: JSON.stringify({ action: 'opt-in', podBase, createIndex: true }),
 });
 
 const actorUrl = `${POD}fedipod/ap/actor`;

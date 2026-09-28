@@ -161,7 +161,7 @@ const sessionFor = async (email, podUrl) => createGrantSession(await mintCredent
 }));
 const optIn = (session, podBase) => session.fetch(`${BASE}api/agent`, {
   method: 'POST', headers: { 'content-type': 'application/json' },
-  body: JSON.stringify({ action: 'opt-in', podBase }),
+  body: JSON.stringify({ action: 'opt-in', podBase, createIndex: true }),
 });
 
 try {
@@ -253,10 +253,13 @@ try {
   })).json();
   check(Boolean(appReg.client_id), 'the client registers');
 
-  // Without a password there is no way in, however public the route is.
+  // Without a password the only way in is the owner's own pod: the authorize
+  // page sends them there, and nothing is granted until they come back signed in.
   const noPassword = await fetch(`${POD}oauth/authorize?client_id=${appReg.client_id
   }&redirect_uri=urn:ietf:wg:oauth:2.0:oob&response_type=code&scope=read+write`);
-  check(noPassword.status === 403, 'sign-in is refused until the identity has a password');
+  const noPasswordPage = await noPassword.text();
+  check(noPassword.status === 200 && /Sign in with your pod/.test(noPasswordPage) && /oauth\/session\/signin\.mjs/.test(noPasswordPage),
+    'without a password, sign-in goes through the owner\'s pod');
 
   // The operator sets one through their own door, which the secret guards.
   const noGate = await fetch(`${POD}fp/config`, {
