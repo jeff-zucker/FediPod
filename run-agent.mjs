@@ -52,22 +52,17 @@ export async function startAgent({
   handle = null,
 } = {}) {
   fs.mkdirSync(home, { recursive: true, mode: 0o700 });
-  // A home can hold a FORUM rather than a person or a group: same profiles
-  // directory, same unit, same startup — a different thing to run. Its
-  // credential says so, and running the agent over it would publish a person
-  // where a forum lives.
-  // The forum package is beside this file in a checkout and absent from an
-  // installed fedipod; a home that holds a forum needs it, a person's does not.
-  let forum = null;
+  // A home can hold a FORUM rather than a person or a group; its credential
+  // says so. A forum is run by its own package (`fedipod-bb start`), and
+  // running this agent over its home would publish a person where a forum
+  // lives.
   try {
-    forum = await import('./packages/fedipod-bb/src/run.mjs');
-  } catch (e) {
-    if (e?.code !== 'ERR_MODULE_NOT_FOUND') throw e;
-  }
-  if (forum?.isForumHome(home)) {
-    console.log(`[bb:${port}] this home holds a forum — running it`);
-    return forum.runForum({ home, port, log: (...a) => console.log(`[bb:${port}]`, ...a) });
-  }
+    const cred = JSON.parse(fs.readFileSync(path.join(home, 'credential.json'), 'utf8'));
+    if (String(cred.root || '').replace(/\/$/u, '') === 'fedipod-bb') {
+      console.error(`${home} holds a forum — run it with: fedipod-bb start --home ${home}`);
+      process.exit(2);
+    }
+  } catch { /* no credential yet, or not a forum */ }
   // connect() sets this from pod state a moment later, but the browser may
   // already be opening — seed it from what setup recorded so the named origin
   // works from the first request.
