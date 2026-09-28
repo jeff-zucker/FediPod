@@ -31,7 +31,10 @@ a pod server — on Netlify the form's submit is refused.
 
 ## Deploying
 
-This repo, with `netlify.toml` as it stands.
+This repo, with `netlify.toml` as it stands. Before each deploy, run
+`node scripts/check-netlify-bundles.mjs`: it builds the functions the way
+Netlify ships them and sends requests through each one from its own bundle,
+under the rules Netlify's Node keeps. Deploy only when it ends "all green".
 
 <!-- CLAUDE 2026-09-28 — forum support is a switch; delete these markers when done -->
 Whether this gateway keeps forums is one line in `netlify/forum-support.mjs`:
@@ -41,10 +44,7 @@ without it, a forum delivery is written to the forum's pod inbox and left for
 whatever runs the forum. In this repo the forum is `packages/fedipod-bb`;
 anywhere else it is `npm install fedipod-bb` and the package's `gateway`
 entry, shipped beside the function.
-<!-- /CLAUDE --> Before each deploy, run
-`node scripts/check-netlify-bundles.mjs`: it builds the functions the way
-Netlify ships them and sends requests through each one from its own bundle,
-under the rules Netlify's Node keeps. Deploy only when it ends "all green".
+<!-- /CLAUDE -->
 
 The functions read these environment variables:
 
