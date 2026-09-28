@@ -58,9 +58,12 @@ import { followActor, unfollowActor, resolveHandle } from './lib/core/social.mjs
 import * as podInbox from './lib/pod/inbox.mjs';
 
 export class Agent {
-  constructor({ home, log }) {
+  // `upgradeCheck(credential)` names the layout steps an install still owes;
+  // the DeviceAgent passes its own, an agent hosted elsewhere passes none.
+  constructor({ home, log, upgradeCheck = null }) {
     this.home = home;
     this.log = log;
+    this.upgradeCheck = upgradeCheck;
     this.logRing = [];
     this.store = new PodStore({ log });
   }
@@ -268,7 +271,7 @@ export class Agent {
     // nothing here refuses — but it should not go on SILENTLY. The whole reason
     // this is said out loud is that bbba587 changed a default and every install
     // that already existed kept the old layout with nothing to show for it.
-    const pending = pendingSteps(cred);
+    const pending = this.upgradeCheck ? this.upgradeCheck(cred) : [];
     for (const step of pending) {
       this.log(`this identity is on an older layout: ${step.what} (${step.why}). `
         + 'Run `fedipod upgrade` to see what is pending.');
@@ -760,10 +763,17 @@ export async function startAgent({
   // directory, same unit, same startup — a different thing to run. Its
   // credential says so, and running the agent over it would publish a person
   // where a forum lives.
-  const { isForumHome, runForum } = await import('./packages/fedipod-bb/src/run.mjs');
-  if (isForumHome(home)) {
+  // The forum package is beside this file in a checkout and absent from an
+  // installed fedipod; a home that holds a forum needs it, a person's does not.
+  let forum = null;
+  try {
+    forum = await import('./packages/fedipod-bb/src/run.mjs');
+  } catch (e) {
+    if (e?.code !== 'ERR_MODULE_NOT_FOUND') throw e;
+  }
+  if (forum?.isForumHome(home)) {
     console.log(`[bb:${port}] this home holds a forum — running it`);
-    return runForum({ home, port, log: (...a) => console.log(`[bb:${port}]`, ...a) });
+    return forum.runForum({ home, port, log: (...a) => console.log(`[bb:${port}]`, ...a) });
   }
   // connect() sets this from pod state a moment later, but the browser may
   // already be opening — seed it from what setup recorded so the named origin
@@ -783,7 +793,7 @@ export async function startAgent({
     } catch { /* the agent still runs; it is just harder to find */ }
   }
   const logFile = path.join(home, 'agent.log');
-  const agent = new Agent({ home, log: () => {} });
+  const agent = new Agent({ home, log: () => {}, upgradeCheck: pendingSteps });
   // The port on every line. Agents sharing a home share agent.log, and without
   // it there is no way to tell which one wrote what — a viewer's startup reads
   // as the active one's work.
