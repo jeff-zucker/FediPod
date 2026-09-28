@@ -1,5 +1,27 @@
 # Changes
 
+## 2026-09-27 (fedipod is a library the Server imports — version 1.42.0)
+
+**On a FediPod Server, four owner-door routes that belonged to a machine
+of one's own stop answering.** `POST /update` could pull new code and exit
+the whole pod server; `/setup/*` and `/profiles` described a machine the
+Server is not; un-fronting a fronted identity restarted a process that is
+the pod server itself. Un-fronting now answers 400, as fronting already
+did. Nothing else a Server does changes.
+
+**A Server no longer logs "run `fedipod upgrade`"** about a layout it never
+had.
+
+**`fedipod` can be imported by name.** `fedipod/embed` runs an identity
+inside another process, `fedipod/front` and `fedipod/front-pages` are the
+Gateway's front and its pages, `fedipod/surface` is the identity's HTTP
+surface, and the folders `core`, `pod`, `client`, `connections`,
+`gateway`, `shared`, `surface` and `vendor` are reachable under those
+names. Nothing under the DeviceAgent's folders is an entry, and nothing the
+entries reach imports from them. For anyone using FediPod today nothing
+changes; this is what lets the Server and the forum become packages that
+install `fedipod` instead of carrying a copy of it.
+
 ## 2026-09-27 (the public address in all its spellings — version 1.41.2, fedipod-server 0.29.3)
 
 **A post from another app addressed to the public is public however the
