@@ -28,7 +28,10 @@ jobs:
         with:
           node-version: '20'
       - run: npm ci
-      # In a checkout the tests run against the checkout's own fedipod.
+      # In a checkout the tests run against the checkout's own fedipod, which
+      # needs the checkout's dependencies installed beside it.
+      - run: npm ci
+        working-directory: .
       - run: node scripts/link-fedipod.mjs
       - run: npm run build
       - run: node --test test/*.mjs
