@@ -2925,7 +2925,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   const { Intake } = await import(path.join(root, 'lib/core/intake/index.mjs'));
 
   // --- the static jail: %2f decoded BEFORE the split made '..' a mount name ---
-  const admin = ['', 'routes'].flatMap((d) => fs.readdirSync(path.join(root, 'lib/device/admin', d)).filter((f) => f.endsWith('.mjs')).map((f) => fs.readFileSync(path.join(root, 'lib/device/admin', d, f), 'utf8'))).join('\n');
+  const admin = ['lib/surface', 'lib/device/admin'].flatMap((dir) => ['', 'routes'].flatMap((d) => fs.readdirSync(path.join(root, dir, d)).filter((f) => f.endsWith('.mjs')).map((f) => fs.readFileSync(path.join(root, dir, d, f), 'utf8')))).join('\n');
   const ss = admin.slice(admin.indexOf('function serveStatic'), admin.indexOf('function webDirRedirect'));
   check(/path\.resolve\(UI_DIR, uiName\)/.test(ss) && /startsWith\(UI_DIR \+ path\.sep\)/.test(ss),
     'the static mount is resolved and contained, not just joined');
@@ -3354,14 +3354,14 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
   check(/publishProfile\(\{ force: true \}\)/.test(fs.readFileSync(path.join(root, 'lib/core/agent.mjs'), 'utf8')),
     'the repair path forces, because it publishes BECAUSE the pod is missing it');
-  check(/publishProfile\(\{ force: true \}\)/.test(['', 'routes'].flatMap((d) => fs.readdirSync(path.join(root, 'lib/device/admin', d)).filter((f) => f.endsWith('.mjs')).map((f) => fs.readFileSync(path.join(root, 'lib/device/admin', d, f), 'utf8'))).join('\n')),
+  check(/publishProfile\(\{ force: true \}\)/.test(['lib/surface', 'lib/device/admin'].flatMap((dir) => ['', 'routes'].flatMap((d) => fs.readdirSync(path.join(root, dir, d)).filter((f) => f.endsWith('.mjs')).map((f) => fs.readFileSync(path.join(root, dir, d, f), 'utf8')))).join('\n')),
     'and so does the explicit republish control');
 }
 
 // --- 5a-quinquies. the low tail ---
 {
   const read = (f) => fs.readFileSync(path.join(root, f), 'utf8');
-  const admin = ['', 'routes'].flatMap((d) => fs.readdirSync(path.join(root, 'lib/device/admin', d)).filter((f) => f.endsWith('.mjs')).map((f) => fs.readFileSync(path.join(root, 'lib/device/admin', d, f), 'utf8'))).join('\n');
+  const admin = ['lib/surface', 'lib/device/admin'].flatMap((dir) => ['', 'routes'].flatMap((d) => fs.readdirSync(path.join(root, dir, d)).filter((f) => f.endsWith('.mjs')).map((f) => fs.readFileSync(path.join(root, dir, d, f), 'utf8')))).join('\n');
   const masto = fs.readdirSync(path.join(root, 'lib/client/masto')).map((f) => read('lib/client/masto/' + f)).join('\n');
 
   // The mount check was lexical while sendFile's has always been realpath, so
@@ -4483,7 +4483,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   check(gatedGroup.state.requests.length === 1, 'and a gated one still queues');
 
   // A queue nobody can answer is worse than no queue.
-  const admin = ['', 'routes'].flatMap((d) => fs.readdirSync(path.join(root, 'lib/device/admin', d)).filter((f) => f.endsWith('.mjs')).map((f) => fs.readFileSync(path.join(root, 'lib/device/admin', d, f), 'utf8'))).join('\n');
+  const admin = ['lib/surface', 'lib/device/admin'].flatMap((dir) => ['', 'routes'].flatMap((d) => fs.readdirSync(path.join(root, dir, d)).filter((f) => f.endsWith('.mjs')).map((f) => fs.readFileSync(path.join(root, dir, d, f), 'utf8')))).join('\n');
   const gated = (route) => {
     const at = admin.indexOf(route);
     return admin.slice(at, at + 300).includes("error: 'not a group'");
@@ -5150,7 +5150,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 // --- 5p2. the directory door belongs to a configured agent ---
 {
   const door = fs.readFileSync(path.join(root, 'lib/device/directory.mjs'), 'utf8');
-  const admin5p2 = ['', 'routes'].flatMap((d) => fs.readdirSync(path.join(root, 'lib/device/admin', d)).filter((f) => f.endsWith('.mjs')).map((f) => fs.readFileSync(path.join(root, 'lib/device/admin', d, f), 'utf8'))).join('\n');
+  const admin5p2 = ['lib/surface', 'lib/device/admin'].flatMap((dir) => ['', 'routes'].flatMap((d) => fs.readdirSync(path.join(root, dir, d)).filter((f) => f.endsWith('.mjs')).map((f) => fs.readFileSync(path.join(root, dir, d, f), 'utf8')))).join('\n');
   check(/if \(held \|\| !eligible\(\) \|\| Date\.now\(\) < pausedUntil\) return;/.test(door),
     'the door is only claimed while eligible');
   check(/eligible: \(\) => agent\.configured\(\)/.test(admin5p2),
