@@ -1,5 +1,21 @@
 # Changes
 
+## 2026-09-28 (a forum's page posts through fedipod.net — version 1.44.0, fedipod-bb 0.4.0)
+
+**A member's post goes to the forum through fedipod.net, not straight to the
+forum's pod.** For a forum fedipod.net keeps, the post is on the forum the
+moment the page comes back from sending it; the page re-reads the topic past
+its own cached copy, so the post is there without a wait and without the
+"waiting for the forum" mark. Votes, joins, edits, deletions, reports and
+moderators' asks go the same way. For a forum still run from a machine of its
+own, nothing changes: the post lands in the same pod inbox as before and shows
+when that machine takes it. No forum is kept by fedipod.net yet; moving the
+live one is the next step.
+
+**fedipod.net answers a forum page's browser at its door.** A browser could
+not post to the door across origins before; it can now. Nothing changes for
+other servers delivering there.
+
 ## 2026-09-28 (a forum fedipod.net keeps, and a Gateway with or without forums — version 1.43.0, fedipod-bb 0.3.0)
 
 **Groundwork; nothing on fedipod.net looks different yet.** A forum whose

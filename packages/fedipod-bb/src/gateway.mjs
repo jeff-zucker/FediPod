@@ -167,6 +167,12 @@ export async function keepOnce(ctx, handle, rec, { log = console.log, session = 
       await Promise.allSettled([forum.store.flush(), ...forum.categories.map((c) => c.store.flush())]);
       const waiting = [forum.store, ...forum.categories.map((c) => c.store)].reduce((n, s) => n + (s.getQueue?.() || []).length, 0);
       const asks = [forum.store, ...forum.categories.map((c) => c.store)].reduce((n, s) => n + s.read('modqueue.json', []).length, 0);
+      // The run wrote on the pod (what the door could not place, the queue,
+      // the heartbeat): the edge's copies of the forum's documents go.
+      if (ctx.purge) {
+        const tags = [`u-${f.forumHandle}`, ...(config.categories || []).map((c) => `u-${c.slug}`)];
+        await ctx.purge(tags).catch((e) => say(`purge: ${e.message}`));
+      }
       say(`done: inbox drained, ${waiting} delivery(ies) waiting, ${asks} ask(s) pending`);
       return { drained: true, waiting, nextAt: nextRun(forum, asks) };
     } finally { await forum.lease.release().catch(() => {}); }

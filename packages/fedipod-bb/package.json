@@ -1,6 +1,6 @@
 {
   "name": "fedipod-bb",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "FediPod-BB: a forum website whose record lives on a Solid pod.",
   "license": "MIT",
   "type": "module",
@@ -26,7 +26,7 @@
     "test": "node --test test/*.test.mjs"
   },
   "dependencies": {
-    "fedipod": "^1.43.0",
+    "fedipod": "^1.44.0",
     "fediverse-session": "^0.2.1"
   }
 }

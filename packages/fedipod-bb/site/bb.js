@@ -39,8 +39,14 @@ const place = placeOf({ origin: location.origin, pathname: location.pathname, se
 const { front, base } = place;
 const frontHost = new URL(front).host;
 // The reader asks anonymously first; where a category is members-only it
-// asks again with the pod session, if there is one.
-let read = reader();
+// asks again with the pod session, if there is one. Right after this reader
+// posts, the next read goes past the browser's own copy of each document (a
+// front lets a browser keep one for a minute): a post the forum placed as it
+// arrived is then on the page at once, not a minute later.
+let freshRead = false;
+const readerFetch = (url, init = {}) => fetch(url, freshRead ? { ...init, cache: 'reload' } : init);
+const makeReader = (session = null) => reader({ session, fetch: readerFetch });
+let read = makeReader();
 const login = new MastoLogin({ storage: localStorage, redirectUri: location.origin + location.pathname + location.search });
 // What this reader has already read. Theirs, in their own browser: a public
 // forum has nowhere to keep it and no business keeping it.
@@ -989,7 +995,7 @@ async function report(id) {
   if (why === null) return;
   try {
     const cat = replyCtx.cat;
-    const inbox = await pod.podInboxOf(cat.id, { front, handle: cat.slug || null });
+    const inbox = await pod.podInboxOf(cat.id);
     const who = podAcct?.actor || login.account()?.url;
     await pod.report({ actor: who, object: id, category: cat.id, inbox, why });
     alert('Reported. A moderator will see it in the forum\'s queue.');
@@ -1007,7 +1013,7 @@ async function asksTo(activity, forCat = null) {
   // The same reason voteOn says it.
   let step = 'finding where the forum takes mail';
   try {
-    const inbox = await pod.podInboxOf(cat.id, { front, handle: cat.slug || null });
+    const inbox = await pod.podInboxOf(cat.id);
     if (!inbox) throw new Error('the forum did not say where to send it');
     // moderate() names its own two requests, so nothing is added over the top.
     step = 'sending the request';
@@ -1049,7 +1055,7 @@ async function joinOrLeave(categoryId, on) {
     return;
   }
   try {
-    const inbox = await pod.podInboxOf(cat.id, { front, handle: cat.slug || null });
+    const inbox = await pod.podInboxOf(cat.id);
     const ok = on
       ? await pod.join({ actor: podAcct.actor, category: cat.id, inbox })
       : await pod.leave({ actor: podAcct.actor, category: cat.id, inbox });
@@ -1129,7 +1135,7 @@ async function voteOn(postId, way, was) {
   if (!cat) return;
   let step = 'finding where the forum takes mail';
   try {
-    const inbox = await pod.podInboxOf(cat.id, { front, handle: cat.slug || null });
+    const inbox = await pod.podInboxOf(cat.id);
     if (!inbox) throw new Error('the forum did not say where to send it');
     step = `sending the vote to ${new URL(inbox).host}`;
     await pod.vote({ actor: podAcct.actor, post: postId, category: cat.id, inbox, way, was });
@@ -1207,7 +1213,7 @@ async function askToJoin(categoryId) {
   const cat = cats().find(c => c.id === categoryId);
   if (!cat || !podAcct) return;
   try {
-    const inbox = await pod.podInboxOf(cat.id, { front, handle: cat.slug || null });
+    const inbox = await pod.podInboxOf(cat.id);
     await pod.join({ actor: podAcct.actor, category: cat.id, inbox });
     say('Asked. A moderator sees it in the forum\'s queue.');
     alert('Your request is with the moderators.');
@@ -1326,7 +1332,7 @@ function settingsSaid(text, bad = false) {
 
 async function settingsAsk(...activities) {
   try {
-    const inbox = await pod.podInboxOf(cats()[0]?.id || forum.id, { front, handle: cats()[0]?.slug || forum.handle });
+    const inbox = await pod.podInboxOf(cats()[0]?.id || forum.id);
     for (const activity of activities) {
       await pod.moderate({ actor: podAcct.actor, podHome: podAcct.podHome, inbox, activity });
     }
@@ -1404,7 +1410,7 @@ async function removePost(id) {
   try {
     const cat = replyCtx.cat;
     if (podAcct) {
-      const inbox = await pod.podInboxOf(cat.id, { front, handle: cat.slug || null });
+      const inbox = await pod.podInboxOf(cat.id);
       await pod.remove({ actor: podAcct.actor, podHome: podAcct.podHome, id, category: cat.id,
         categoryBase: cat.base, isPrivate: !!cat.private, inbox });
     } else {
@@ -1534,7 +1540,7 @@ $('who-act').addEventListener('click', async () => {
 async function saveEdit({ body }) {
   const cat = replyCtx.cat;
   if (podAcct) {
-    const inbox = await pod.podInboxOf(cat.id, { front, handle: cat.slug || null });
+    const inbox = await pod.podInboxOf(cat.id);
     return pod.edit({ actor: podAcct.actor, podHome: podAcct.podHome, id: editing.id, text: body, category: cat.id,
       categoryBase: cat.base, isPrivate: !!cat.private, inbox });
   }
@@ -1545,7 +1551,7 @@ async function saveEdit({ body }) {
 // category is named on its own pod, which is where a delivery is taken.
 async function postFromPod({ topic, body }) {
   const cat = replyCtx.cat;
-  const inbox = await pod.podInboxOf(cat.id, { front, handle: cat.slug || null });
+  const inbox = await pod.podInboxOf(cat.id);
   if (!inbox) throw new Error('the forum did not say where to send it');
   // Posting in an open category joins it on the way past, which is what makes
   // the post carry. A private one is joined by asking and being admitted, so
@@ -1584,7 +1590,8 @@ $('reply-send').addEventListener('click', async () => {
     $('topic-title').value = '';
     $('reply-dlg').close();
     forgetIndex();
-    await route();
+    freshRead = true;
+    try { await route(); } finally { freshRead = false; }
   } catch (e) { $('reply-err').textContent = e.message; }
   $('reply-send').disabled = false;
 });
@@ -1600,7 +1607,7 @@ $('reply-send').addEventListener('click', async () => {
   if (kept && !sessionStorage.getItem('bb:pod')) {
     try {
       const s = await pod.session();
-      if (s) { podAcct = { ...JSON.parse(kept), webId: s.webId }; read = reader({ session: s }); }
+      if (s) { podAcct = { ...JSON.parse(kept), webId: s.webId }; read = makeReader(s); }
       else localStorage.removeItem('bb:acct');
     } catch { localStorage.removeItem('bb:acct'); }
   }
@@ -1611,7 +1618,7 @@ $('reply-send').addEventListener('click', async () => {
       const s = params.get('code') ? await pod.complete(location.href) : await pod.session();
       if (s) {
         podAcct = { ...who, webId: s.webId };
-        read = reader({ session: s });
+        read = makeReader(s);
         try { localStorage.setItem('bb:acct', JSON.stringify(who)); } catch { /* blocked storage */ }
         sessionStorage.removeItem('bb:pod');
         params.delete('code'); params.delete('state'); params.delete('iss');

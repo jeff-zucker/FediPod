@@ -175,6 +175,12 @@ const front = http.createServer(async (req, res) => {
     // Mirrors the adapter: only attach-created rows can go; seeds survive.
     removeDirectory: async (h) => { delete attached[h]; return !directory[h]; },
     purge: async (tags) => { purged.push(...tags); },
+    // A forum kept here: the forum package's module, stood in for (see the forum section).
+    forum: {
+      isForumRow: (rec) => !!rec?.inboxUrl && (rec.kind === 'group' || rec.kind === 'application'),
+      placeAtDoor: async (_ctx, handle, rec, { name }) => { placedAtDoor.push({ handle, name }); return { placed: true, forum: rec.forum || 'forum' }; },
+    },
+    startKeeper: async (handle) => { keeperStarts.push(handle); },
     ...(holding ? heldCtx : {}),
     ...doorExtras,
     podPut: async (_h, url, b, ct) => {
@@ -203,6 +209,8 @@ await new Promise(r => front.listen(FRONT_PORT, '127.0.0.1', r));
 
 const get = (p, opts) => fetch(ORIGIN + p, opts);
 const purged = [];
+const placedAtDoor = [];
+const keeperStarts = [];
 
 try {
   // ---- the pages a person lands on -----------------------------------------
@@ -717,6 +725,31 @@ try {
     check(!inboxWrites.some(w => w.url.includes('/fedipod-bb/c/gardening/ap/inbox/')), 'and never into the category\'s own');
     check(inboxWrites.some(w => w.url.includes('/fedipod-bb/ap/inbox/') && w.url.endsWith('.receipt.json')),
       'with a receipt beside it, signed with that row\'s secret');
+    // The forum's own page posts to the door from its own host.
+    const doorPre = await get('/u/gardening/ap/inbox/', { method: 'OPTIONS',
+      headers: { origin: 'https://bb.example', 'access-control-request-method': 'POST', 'access-control-request-headers': 'content-type' } });
+    check(doorPre.status === 204 && doorPre.headers.get('access-control-allow-origin') === '*'
+      && /POST/u.test(doorPre.headers.get('access-control-allow-methods') || '')
+      && /content-type/iu.test(doorPre.headers.get('access-control-allow-headers') || ''),
+      `the door answers a browser's preflight (${doorPre.status}, ${doorPre.headers.get('access-control-allow-methods')})`);
+    check(r.headers.get('access-control-allow-origin') === '*', 'and a delivery\'s answer carries the open origin');
+    // A forum this gateway keeps: the door places the delivery, clears the
+    // edge's copies of the category's and the forum's documents, and starts
+    // the run. The forum's own code is stood in for; its behaviour is the
+    // forum package's tests.
+    attached.gardening.keeper = true;
+    purged.length = 0; keeperStarts.length = 0;
+    const kept = await fetch(`${ORIGIN}/u/gardening/ap/inbox/`, {
+      method: 'POST', headers: { 'content-type': 'application/activity+json' },
+      body: JSON.stringify({ '@context': 'https://www.w3.org/ns/activitystreams', id: 'https://m.example/f/10', type: 'Follow',
+        actor: 'https://m.example/u/kwame', object: `${ORIGIN}/u/gardening/ap/actor` }),
+    });
+    check(kept.status === 202 && placedAtDoor.length === 1 && placedAtDoor[0].handle === 'gardening' && placedAtDoor[0].name,
+      `a delivery to a kept forum is handed to the forum's code to place, with the item's name (${kept.status}, ${placedAtDoor.length})`);
+    check(purged.includes('u-gardening') && purged.includes('u-forum'),
+      `a placement clears the edge's copies of the category and the forum (${purged.join(',') || 'none'})`);
+    check(keeperStarts.includes('forum'), `and starts the forum's run (${keeperStarts.join(',') || 'none'})`);
+    delete attached.gardening.keeper; purged.length = 0;
   }
 
   // ---- a document the pod would not give is held at the edge ---------------

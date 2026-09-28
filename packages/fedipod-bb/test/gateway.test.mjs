@@ -59,15 +59,16 @@ async function keptForum() {
   };
   const started = [];
   const said = [];
+  const purged = [];
   const ctx = { copyKv: kv, keeperWebId: KEEPER, lookup: async (h) => rows[h] || null, keeperFetch: async () => pod.fetch,
-    startKeeper: async (h) => { started.push(h); } };
+    startKeeper: async (h) => { started.push(h); }, purge: async (tags) => { purged.push(...tags); } };
   // What the door and the run have to say the origins say: Mei's post and
   // the members' actors, in place of the network.
   const prepare = (forum) => {
     for (const cat of forum.categories) cat.intake.fetchAP = async (u) => remoteDocs[u] ?? null;
     forum.intake.fetchAP = async (u) => remoteDocs[u] ?? null;
   };
-  return { pod, kv, rows, ctx, started, said, prepare, log: (m) => said.push(m) };
+  return { pod, kv, rows, ctx, started, said, purged, prepare, log: (m) => said.push(m) };
 }
 
 test('a forum row and a category row are the forum\'s; a person\'s is not', () => {
@@ -100,7 +101,7 @@ test('placed at the door: the post is in its topic and its copy written, the ite
 });
 
 test('the run: carries what the door placed, writes the heartbeat, and says when it is next due', async () => {
-  const { pod, kv, rows, ctx, prepare, log } = await keptForum();
+  const { pod, kv, rows, ctx, purged, prepare, log } = await keptForum();
   const N = 'https://mei.pod.example/fedipod/ap/notes/door-2';
   remoteDocs[N] = note(N, { type: 'Article', name: 'Carried by the run', audience: HOME + 'c/gardening/ap/actor', published: '2026-09-28T12:30:00Z' });
   const create = { '@context': 'https://www.w3.org/ns/activitystreams', id: N + '#create', type: 'Create', actor: MEI, object: remoteDocs[N], to: remoteDocs[N].to, cc: [] };
@@ -116,4 +117,6 @@ test('the run: carries what the door placed, writes the heartbeat, and says when
   assert.ok(out.nextAt > Date.now(), 'and the run says when to come back for the retry');
   assert.ok(pod.docs.get(HOME + 'ap/heartbeat')?.at, 'the heartbeat says the forum was just hosted');
   assert.ok(await copyMeta(kv, 'forum') && await copyMeta(kv, 'gardening'), 'the copies are still the gateway\'s');
+  assert.ok(purged.includes('u-forum') && purged.includes('u-gardening'),
+    `the run clears the edge's copies of the forum and its categories (${purged.join(',') || 'none'})`);
 });
