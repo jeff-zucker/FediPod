@@ -1,6 +1,6 @@
 {
   "name": "fedipod-server",
-  "version": "0.30.0",
+  "version": "0.31.0",
   "description": "The FediPod Server: a full ActivityPub server as a Community Solid Server component.",
   "license": "MIT",
   "main": "dist/index.js",
@@ -15,16 +15,16 @@
     "@solid/community-server": "^7.0.0"
   },
   "dependencies": {
-    "fedipod": "^1.42.0"
+    "fedipod": "^1.45.0"
   },
   "devDependencies": {
-    "typescript": "^5.5.3",
-    "componentsjs-generator": "^3.1.2",
-    "@types/node": "^20.0.0",
-    "@solid/community-server": "^7.2.0",
     "@fedify/fedify": "^2.3.4",
+    "@solid/community-server": "^7.2.0",
+    "@types/node": "^20.0.0",
+    "componentsjs-generator": "^3.1.2",
     "n3": "^2.1.1",
-    "rdflib": "^2.4.0"
+    "rdflib": "^2.4.0",
+    "typescript": "^5.5.3"
   },
   "overrides": {
     "@opentelemetry/core": "^2.8.0",
