@@ -146,6 +146,39 @@ try {
   check(me.status === 200 && me.json.username === 'mei' && /gw\.example/.test(me.json.url || me.json.acct || ''), `the app sees whose account it is (${me.json?.acct})`);
   const home = await call('GET', '/api/v1/timelines/home', { headers: bearer });
   check(home.status === 200 && home.json.some((s) => /from the copy/.test(s.content)), 'and reads the timeline from the copy');
+
+  // ---- an app left open, checking again and again ----
+  const reads = [];
+  const realGet = copyKv.get;
+  copyKv.get = async (k) => { reads.push(k); return realGet(k); };
+  const poll = '/api/v1/timelines/home?since_id=0';
+  const firstPoll = await call('GET', poll, { headers: bearer });
+  reads.length = 0;
+  const repeated = await call('GET', poll, { headers: bearer });
+  check(repeated.status === 200 && repeated.body === firstPoll.body && reads.length === 0,
+    `the same check with nothing changed gets the same answer without the copy being opened (${reads.length} read(s))`);
+  await put('statuses.json', [{ noteId: 'https://mei.pod.example/fedipod/ap/notes/n2', kind: 'post', actor: `${ORIGIN}/u/mei/ap/actor`,
+    content: '<p>arrived since</p>', published: new Date().toISOString(), visibility: 'public' }]);
+  const afterPost = await call('GET', poll, { headers: bearer });
+  check(afterPost.json?.some((s) => /arrived since/.test(s.content)), 'a post that arrived since is in the next answer');
+  ctx.listHeld = async () => ['held-1'];
+  reads.length = 0;
+  await call('GET', poll, { headers: bearer });
+  check(reads.includes('mei/meta'), 'with mail waiting, the check is answered in full, so the mail is read in after it');
+  delete ctx.listHeld;
+  const other = crypto.randomBytes(32).toString('base64url');
+  await mastoKv.set(`token/${crypto.createHash('sha256').update(other).digest('base64url')}`,
+    JSON.stringify({ handle: 'mei', webId: WEBID, scope: 'read', clientId: app.client_id, at: Date.now() }));
+  reads.length = 0;
+  await call('GET', poll, { headers: { authorization: `Bearer ${other}` } });
+  check(reads.includes('mei/meta'), 'another app\'s token is never given this app\'s remembered answer');
+  const realNow = Date.now;
+  Date.now = () => realNow() + 11 * 60_000;
+  reads.length = 0;
+  await call('GET', poll, { headers: bearer });
+  Date.now = realNow;
+  check(reads.includes('mei/meta'), 'after ten minutes the answer is made again, for what changes with the clock');
+  copyKv.get = realGet;
   const readOnly = await call('POST', '/oauth/token', { body: { grant_type: 'client_credentials', client_id: app.client_id, client_secret: app.client_secret } });
   check((await call('GET', '/api/v1/timelines/home', { headers: { authorization: `Bearer ${readOnly.json.access_token}` } })).status === 403,
     'an app\'s own token, naming no account, reads no account');
