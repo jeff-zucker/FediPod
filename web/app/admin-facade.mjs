@@ -120,7 +120,7 @@ export class AdminFacade {
             name: cfg.name || null, summary: cfg.summary || null, icon: cfg.icon || null,
             image: cfg.image || null, fields: cfg.fields || [],
             aliases: cfg.aliases || [],
-            autoAcceptFollows: !!cfg.autoAcceptFollows,
+            autoAcceptFollows: cfg.autoAcceptFollows !== false,
             hasUiPassword: !!cfg.uiPassword,
             quiescedAt: cfg.quiescedAt || null, movedTo: cfg.movedTo || null,
             mode: a.status().mode,

@@ -9803,7 +9803,7 @@ function jrd({ handle: handle7, host, actor, aliases = [], page: page2 = null })
   };
 }
 function followsNeedApproval(config = {}) {
-  return !!config.approveJoins || config.kind !== "group" && !config.autoAcceptFollows;
+  return !!config.approveJoins || config.kind !== "group" && config.autoAcceptFollows === false;
 }
 function actorDoc({
   urls,
@@ -59737,7 +59737,7 @@ async function onFollow(intake, activity, actor, { trusted = false } = {}) {
   if (!doc.inbox) return `actor has no inbox (${actor})`;
   const contacts = intake.store.getContacts();
   const existing = contacts.followers.find((f) => f.actor === actor);
-  const unverifiedNeedsOk = intake.config.kind !== "group" && !intake.config.autoAcceptFollows && !trusted;
+  const unverifiedNeedsOk = intake.config.kind !== "group" && intake.config.autoAcceptFollows === false && !trusted;
   const mustApprove = intake.config.approveJoins || unverifiedNeedsOk;
   if (mustApprove && !existing) {
     const reqs = intake.store.getRequests();
@@ -71534,7 +71534,7 @@ var AdminFacade = class {
             image: cfg.image || null,
             fields: cfg.fields || [],
             aliases: cfg.aliases || [],
-            autoAcceptFollows: !!cfg.autoAcceptFollows,
+            autoAcceptFollows: cfg.autoAcceptFollows !== false,
             hasUiPassword: !!cfg.uiPassword,
             quiescedAt: cfg.quiescedAt || null,
             movedTo: cfg.movedTo || null,

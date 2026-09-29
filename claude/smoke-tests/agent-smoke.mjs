@@ -4458,18 +4458,17 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   };
   const follow = { type: 'Follow', id: 'https://them.example/f/9', actor: 'https://them.example/u/z' };
 
-  // Nothing proves the Follow came from the actor it names, so it waits rather
-  // than earning a signed Accept delivered to that person in our name.
+  // A person's new followers are accepted unless they asked to see them first.
   const person = mk({ kind: 'person' });
   await person.intake.onFollow(follow, follow.actor);
-  check(person.state.contacts.followers.length === 0 && person.state.requests.length === 1,
-    'an unverifiable Follow becomes a request rather than a follower');
-  check(person.sent.length === 0, 'and no Accept is signed and delivered to whoever it named');
+  check(person.state.contacts.followers.length === 1 && person.sent.length === 1,
+    'a person accepts a new follower by default');
 
-  const trusting = mk({ kind: 'person', autoAcceptFollows: true });
-  await trusting.intake.onFollow(follow, follow.actor);
-  check(trusting.state.contacts.followers.length === 1 && trusting.sent.length === 1,
-    'autoAcceptFollows: true restores the old behaviour for anyone who wants it');
+  const asking = mk({ kind: 'person', autoAcceptFollows: false });
+  await asking.intake.onFollow(follow, follow.actor);
+  check(asking.state.contacts.followers.length === 0 && asking.state.requests.length === 1,
+    'with autoAcceptFollows: false, an unverifiable Follow becomes a request rather than a follower');
+  check(asking.sent.length === 0, 'and no Accept is signed and delivered to whoever it named');
 
   // A GROUP is left alone: approveJoins:false is its operator saying in as many
   // words that anyone may join, which is documented behaviour.
@@ -12147,9 +12146,10 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
   const wire28 = await import(path.join(root, 'lib/core/wire.mjs'));
   const urls28 = wire28.apUrls('https://pod.example/');
   const FOLLOWER = 'https://m.example/u/joiner';
+  // An owner who approves follows: only then does a receipt decide anything.
   const mkIntake = (mode) => {
     const st = new PS28({ log: () => {} });
-    st.setConfig({ remotePod: 'https://pod.example/', handle: 'p', kind: 'person',
+    st.setConfig({ remotePod: 'https://pod.example/', handle: 'p', kind: 'person', autoAcceptFollows: false,
       ...(mode ? { gateway: { url: 'https://gw.example/in', webId: 'https://gw.example/#me', hmacSecret: 's', mode } } : {}) });
     const accepts = [];
     const ik = new IK28({ config: st.getConfig(), urls: urls28, remote: {}, store: st,
@@ -13062,17 +13062,17 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
     'an article with no headline reads exactly as before');
 
   // What the actor says about follows has to match what the agent does with
-  // them: a person queues them by default, so the document must say so.
-  check(wire29.followsNeedApproval({ kind: 'person' }) === true
-    && wire29.followsNeedApproval({ kind: 'person', autoAcceptFollows: true }) === false
+  // them: a person who approves follows queues them, so the document must say so.
+  check(wire29.followsNeedApproval({ kind: 'person' }) === false
+    && wire29.followsNeedApproval({ kind: 'person', autoAcceptFollows: false }) === true
     && wire29.followsNeedApproval({ kind: 'group' }) === false
     && wire29.followsNeedApproval({ kind: 'group', approveJoins: true }) === true,
     'the follow gate is read from the same config the drain reads');
   const u29 = wire29.apUrls('https://pod.example/');
   const person29 = wire29.actorDoc({ urls: u29, handle: 'me', publicKeyPem: 'K',
-    approveJoins: wire29.followsNeedApproval({ kind: 'person' }) });
+    approveJoins: wire29.followsNeedApproval({ kind: 'person', autoAcceptFollows: false }) });
   check(person29.manuallyApprovesFollowers === true,
-    'so a default person advertises a locked account rather than silently queueing');
+    'so a person who approves follows advertises a locked account rather than silently queueing');
 
   // draft-cavage signs the path AND the query. Fedify 2.3.4 signs the path
   // alone, which no correct verifier can reconstruct.

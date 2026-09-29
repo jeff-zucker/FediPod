@@ -324,7 +324,7 @@ function render() {
       dd.textContent = '';
       dd.append(FOLLOWS_CTL);
       FOLLOWS_CTL.hidden = false;
-      FOLLOWS_PICK.value = config.autoAcceptFollows ? 'auto' : 'approve';
+      FOLLOWS_PICK.value = config.autoAcceptFollows !== false ? 'auto' : 'approve';
     }
     if (k === 'gateway') {
       dd.textContent = '';

@@ -97,8 +97,9 @@ is marked **sign in again** rather than quietly dropped.
 
 ## Handling follow requests
 
-New followers appear under **Follow requests** with **Accept** and **Refuse**
-beside them; nothing is accepted without you.
+New followers are accepted automatically. Set **new followers** to *wait for
+approval* and they appear under **Follow requests** instead, with **Accept**
+and **Refuse** beside them; nothing is accepted without you.
 They show in any Mastodon client as well, now that the client API serves the
 queue and takes both answers.
 Groups are different — joining
