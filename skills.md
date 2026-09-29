@@ -159,10 +159,11 @@ workers, so those never run there.
   inside a Community Solid Server, importing `fedipod` by name. Its own
   `skills.md` is there. A local one runs on this machine on port 443.
 - **FediPod BB** (`packages/fedipod-bb/`): the forum, live at
-  bb.fedipod.net/forum/, importing `fedipod` by name. The one systemd unit on
-  this machine is `fedipod-fedipod-bb1`; restart it after changes under
-  `packages/fedipod-bb` or `lib/core`, and wait for `hosting forum` in its
-  journal.
+  bb.fedipod.net/forum/, importing `fedipod` by name. Since 2026-09-29 the
+  live forum is kept by fedipod.net (`src/gateway.mjs`: placed at the door,
+  run by `keeper-background`); nothing runs it on this machine, the old unit
+  `fedipod-fedipod-bb1` is stopped and disabled and must stay so. A forum
+  change reaches the live forum through a fedipod.net deploy.
 - **DeviceAgent** (`bin/fedipod.mjs`, `lib/device/`, `run-agent.mjs`):
   deprecated. Every off-pod agent sits behind a Gateway; nothing new is
   built for it, and it is never described as running on its own.
