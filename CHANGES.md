@@ -1,6 +1,6 @@
 # Changes
 
-## 2026-09-28 (a forum handed over reads its pod at once; a failed signature says its format — version 1.44.2, fedipod-bb 0.4.1)
+## 2026-09-28 (the owner's inbox is a collection on every build, and a private post reaches the one it was sent to — version 1.45.0, fedipod-bb 0.4.1)
 
 **Handing a forum to a Gateway names the Gateway in the pod's rules before
 the last switch.** That switch starts the Gateway's first run, which now
@@ -11,8 +11,6 @@ waiting for the next post.
 format and the sender's signature parameters**, key id, algorithm and the
 parts it signed, never the signature value. That settles what a sender does
 differently when its mail arrives unverified.
-
-## 2026-09-28 (the owner's inbox is a collection on every build, and a private post reaches the one it was sent to — version 1.45.0)
 
 **An app signed in as you can read everything your account received, on
 every build.** What arrives is kept on your pod as an ActivityPub inbox
