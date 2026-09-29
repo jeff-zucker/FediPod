@@ -31,7 +31,8 @@ await buildApp({ entry: path.join(here, 'entry.mjs'), out: bundle });
 
 const css = spawn(CSS_BIN, ['-p', String(CSS_PORT), '-c', '@css:config/memory-subdomains.json', '-b', `${ISSUER}/`, '-l', 'warn'], { cwd: tmp, stdio: ['ignore', 'pipe', 'pipe'] });
 css.stderr.on('data', (d) => process.env.RS_DEBUG && process.stderr.write(d));
-for (let i = 0; i < 60; i++) { try { if ((await fetch(`${ISSUER}/`)).status) break; } catch {} await sleep(500); }
+let cssUp = false; for (let i = 0; i < 360 && !cssUp; i++) { try { cssUp = !!(await fetch(`${ISSUER}/`)).status; } catch {} if (!cssUp) await sleep(500); }
+if (!cssUp) { console.log(`FAIL  the scratch server never answered at ${ISSUER} in 180s`); process.exit(1); }
 
 const dir = {};
 let attachN = 0;   // the gateway attach fails the first time, succeeds after
@@ -54,7 +55,7 @@ const server = http.createServer(async (req, res) => {
 await new Promise((r) => server.listen(FRONT_PORT, '127.0.0.1', r));
 
 const chrome = spawn('google-chrome', ['--headless=new', '--no-first-run', '--disable-gpu', `--remote-debugging-port=${CDP_PORT}`, '--remote-allow-origins=*', `--user-data-dir=${path.join(tmp, 'chrome')}`, 'about:blank'], { stdio: 'ignore' });
-let tabt; for (let i = 0; i < 40; i++) { try { const l = await (await fetch(`http://127.0.0.1:${CDP_PORT}/json/list`)).json(); tabt = l.find((t) => t.type === 'page'); if (tabt) break; } catch {} await sleep(500); }
+let tabt; for (let i = 0; i < 120; i++) { try { const l = await (await fetch(`http://127.0.0.1:${CDP_PORT}/json/list`)).json(); tabt = l.find((t) => t.type === 'page'); if (tabt) break; } catch {} await sleep(500); }
 const ws = new WebSocket(tabt.webSocketDebuggerUrl);
 await new Promise((ok, no) => { ws.addEventListener('open', ok); ws.addEventListener('error', () => no(new Error('cdp'))); });
 let seq = 0; const pend = new Map();

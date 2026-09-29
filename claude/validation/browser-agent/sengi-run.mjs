@@ -41,7 +41,8 @@ if (!fs.existsSync(path.join(SITE, 'sengi/index.html'))) {
 const css = spawn(CSS_BIN, ['-p', String(CSS_PORT), '-c', '@css:config/memory-subdomains.json', '-b', `${ISSUER}/`, '-l', 'warn'],
   { cwd: tmp, stdio: ['ignore', 'pipe', 'pipe'] });
 css.stderr.on('data', (d) => process.env.SENGI_DEBUG && process.stderr.write(d));
-for (let i = 0; i < 60; i++) { try { if ((await fetch(`${ISSUER}/`)).status) break; } catch {} await sleep(500); }
+let cssUp = false; for (let i = 0; i < 360 && !cssUp; i++) { try { cssUp = !!(await fetch(`${ISSUER}/`)).status; } catch {} if (!cssUp) await sleep(500); }
+if (!cssUp) { console.log(`FAIL  the scratch server never answered at ${ISSUER} in 180s`); process.exit(1); }
 
 // A self-signed cert for localhost. Chrome is told to ignore it; the only thing
 // that matters is that the origin is https, because Sengi will not build a URL
@@ -116,7 +117,7 @@ const chrome = spawn('google-chrome', ['--headless=new', '--no-first-run', '--di
   `--remote-debugging-port=${CDP_PORT}`, '--remote-allow-origins=*',
   `--user-data-dir=${path.join(tmp, 'chrome')}`, 'about:blank'], { stdio: 'ignore' });
 let tab;
-for (let i = 0; i < 40; i++) { try { const l = await (await fetch(`http://127.0.0.1:${CDP_PORT}/json/list`)).json(); tab = l.find((t) => t.type === 'page'); if (tab) break; } catch {} await sleep(500); }
+for (let i = 0; i < 120; i++) { try { const l = await (await fetch(`http://127.0.0.1:${CDP_PORT}/json/list`)).json(); tab = l.find((t) => t.type === 'page'); if (tab) break; } catch {} await sleep(500); }
 if (!tab) { console.error('chrome never came up'); process.exit(2); }
 const ws = new WebSocket(tab.webSocketDebuggerUrl);
 await new Promise((ok, no) => { ws.addEventListener('open', ok); ws.addEventListener('error', () => no(new Error('cdp'))); });

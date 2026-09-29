@@ -129,7 +129,7 @@ await new Promise((r) => masto.listen(MASTO_PORT, '127.0.0.1', r));
 await new Promise((r) => app.listen(APP_PORT, '127.0.0.1', r));
 
 const chrome = spawn('google-chrome', ['--headless=new', '--no-first-run', '--disable-gpu', `--remote-debugging-port=${CDP_PORT}`, '--remote-allow-origins=*', `--user-data-dir=${path.join(tmp, 'chrome')}`, 'about:blank'], { stdio: 'ignore' });
-let tab; for (let i = 0; i < 40; i++) { try { const l = await (await fetch(`http://127.0.0.1:${CDP_PORT}/json/list`)).json(); tab = l.find((t) => t.type === 'page'); if (tab) break; } catch {} await sleep(500); }
+let tab; for (let i = 0; i < 120; i++) { try { const l = await (await fetch(`http://127.0.0.1:${CDP_PORT}/json/list`)).json(); tab = l.find((t) => t.type === 'page'); if (tab) break; } catch {} await sleep(500); }
 const ws = new WebSocket(tab.webSocketDebuggerUrl);
 await new Promise((ok, no) => { ws.addEventListener('open', ok); ws.addEventListener('error', () => no(new Error('cdp'))); });
 let seq = 0; const pend = new Map();

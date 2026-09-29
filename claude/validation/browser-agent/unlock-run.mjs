@@ -38,7 +38,8 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'fedipod-unlock-'));
 const css = spawn(CSS_BIN, ['-p', String(CSS_PORT), '-c', '@css:config/memory-subdomains.json', '-b', `${ISSUER}/`, '-l', 'warn'],
   { cwd: tmp, stdio: ['ignore', 'pipe', 'pipe'] });
 css.stderr.on('data', (d) => process.env.UNLOCK_DEBUG && process.stderr.write(d));
-for (let i = 0; i < 60; i++) { try { if ((await fetch(`${ISSUER}/`)).status) break; } catch {} await sleep(500); }
+let cssUp = false; for (let i = 0; i < 360 && !cssUp; i++) { try { cssUp = !!(await fetch(`${ISSUER}/`)).status; } catch {} if (!cssUp) await sleep(500); }
+if (!cssUp) { console.log(`FAIL  the scratch server never answered at ${ISSUER} in 180s`); process.exit(1); }
 
 // The mail door, stubbed: sign-up attaches to it, and there is no front here.
 const attachStub = (req, res) => {

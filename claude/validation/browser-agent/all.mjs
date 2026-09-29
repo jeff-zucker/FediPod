@@ -21,6 +21,12 @@ const wanted = process.argv.slice(2).map((n) => (n.endsWith('.mjs') ? n : `${n}.
 const rigs = fs.readdirSync(here).filter(isRig).filter((f) => !wanted.length || wanted.includes(f)).sort();
 if (!rigs.length) { console.error('all.mjs: no rig matched'); process.exit(2); }
 
+// What every rig needs, named up front so a runner without them says so.
+try { console.log(`chrome: ${spawnSync('google-chrome', ['--version'], { encoding: 'utf8' }).stdout.trim() || 'not found'}`); }
+catch { console.log('chrome: google-chrome not found on PATH'); }
+const cssBin = path.join(root, 'packages/fedipod-server/node_modules/.bin/community-solid-server');
+console.log(`scratch server: ${fs.existsSync(cssBin) ? cssBin : 'MISSING — npm ci in packages/fedipod-server'}`);
+
 let broken = 0;
 for (const rig of rigs) {
   const started = Date.now();
@@ -32,7 +38,8 @@ for (const rig of rigs) {
   if (!ok) broken++;
   const why = r.signal ? ` (${r.signal})` : r.status !== 0 && fail === 0 ? ` — ${(out.match(/ERROR.*|Error:.*/u) || ['exited ' + r.status])[0].slice(0, 160)}` : '';
   console.log(`${ok ? 'PASS' : 'FAIL'}  ${rig}: ${pass} pass, ${fail} fail, ${Math.round((Date.now() - started) / 1000)}s${why}`);
-  if (!ok && process.env.RIG_DEBUG) console.log(out.split('\n').slice(-40).join('\n'));
+  // A failed rig shows its last lines: a runner has no other way to say why.
+  if (!ok) console.log(out.split('\n').filter((l) => l.trim()).slice(process.env.RIG_DEBUG ? -60 : -25).map((l) => '    ' + l).join('\n'));
 }
 console.log(broken ? `\n${broken} rig(s) FAILED` : '\nall rigs green');
 process.exit(broken);
