@@ -13,6 +13,8 @@
 import fs from 'node:fs'; import os from 'node:os'; import path from 'node:path';
 import http from 'node:http'; import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url'; import { createRequire } from 'node:module';
+import { randomBytes } from 'node:crypto';
+const mockKeysSalt = randomBytes(16).toString('base64'); // per-run salt; a static salt would defeat PBKDF2's rainbow-table defense
 const require = createRequire(import.meta.url);
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, '../../..');
