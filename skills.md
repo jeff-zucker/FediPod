@@ -122,6 +122,11 @@ removes the BrowserAgent from fedipod.net:
 cd /home/jeff/Dropbox/Web/solid/FediPod && node scripts/check-netlify-bundles.mjs && node scripts/stage-site.mjs && netlify deploy --prod --dir=/home/jeff/Dropbox/Web/solid/FediPod/web/app/site --functions=/home/jeff/Dropbox/Web/solid/FediPod/netlify/functions
 ```
 
+The command copies `web/app/dist/` as committed and never rebuilds it: after
+a change under lib/ that the browser runs, `npm run build:app`, commit the
+two bundles by path, run the suite (the rigs test the rebuilt bundles),
+then deploy. A deploy taken with a stale dist ships the old worker silently.
+
 Afterwards curl `/app/`, `/admin/client/`, `/sw.js` and `/app-signin/` for
 200, and `/build.json` for the version. Each deploy costs 15 Netlify credits
 (Personal plan): never raise deploying, give the per-build summary in
