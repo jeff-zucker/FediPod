@@ -32576,6 +32576,9 @@ function apUrls(remotePod, root, { publicBase = null } = {}) {
     // reads them there, with a credential the pod checks.
     ownOutbox: home + "ap/private/outbox",
     liked: home + "ap/private/liked",
+    // The inbox as its owner reads it (§5.2): what the account received,
+    // kept by the drain as a paged collection beside the archive.
+    ownInbox: home + "ap/private/inbox",
     profileHtml: face + "ap/profile.html",
     // Media stays on the pod even when fronted: attachment urls are not
     // identity-checked by remotes, and proxying blobs would be pure cost.
@@ -34144,12 +34147,13 @@ async function attachRows({ fetch: f, front, config, plain }, { log: log2 = () =
   }
   return { gateway: { front: origin, mode: "trust", secrets }, handles: rows.map((r) => r.handle) };
 }
-async function keepRows({ fetch: f, front, config, on = true }) {
+async function keepRows({ fetch: f, front, config, on = true, between = null }) {
   const origin = String(front).replace(/\/+$/u, "");
   const forumHandle = config.handle;
   const handles = [...(config.categories || []).map((c) => c.slug), forumHandle];
   let keeper = null;
   for (const handle of handles) {
+    if (handle === forumHandle && between) await between(keeper);
     const res = await f(`${origin}/api/keeper`, {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -34184,8 +34188,13 @@ async function setUpForumAtGateway({ remote, storageFor, fetch: f, front, ownerW
   await writeConfig2(storage, { ...config, gateway, republish: true });
   onStep("attach", "ok");
   onStep("keep", "running");
-  const { keeper } = await keepRows({ fetch: f, front, config, on: true });
-  await nameKeeperInRules(remote, { config, plain, keeper, ownerWebId });
+  const { keeper } = await keepRows({
+    fetch: f,
+    front,
+    config,
+    on: true,
+    between: (k) => nameKeeperInRules(remote, { config, plain, keeper: k, ownerWebId })
+  });
   onStep("keep", "ok");
   return { handle: config.handle, front: gateway.front, handles, keeper };
 }

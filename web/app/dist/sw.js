@@ -133,6 +133,9 @@ function apUrls(remotePod, root, { publicBase = null } = {}) {
     // reads them there, with a credential the pod checks.
     ownOutbox: home + "ap/private/outbox",
     liked: home + "ap/private/liked",
+    // The inbox as its owner reads it (§5.2): what the account received,
+    // kept by the drain as a paged collection beside the archive.
+    ownInbox: home + "ap/private/inbox",
     profileHtml: face + "ap/profile.html",
     // Media stays on the pod even when fronted: attachment urls are not
     // identity-checked by remotes, and proxying blobs would be pure cost.
@@ -32864,14 +32867,16 @@ function makeSafeLoader({ getActors = null, fetchImpl = fetch } = {}) {
 async function verifyHttpSignature(request, { documentLoader, keyCache, timeWindow } = {}) {
   const hadSig = request.headers.get("signature") != null;
   let result = null;
+  let threw = null;
   try {
     result = await verifyRequestDetailed(request, {
       documentLoader,
       ...keyCache ? { keyCache } : {},
       timeWindow: timeWindow ?? { hours: 1 }
     });
-  } catch {
+  } catch (e) {
     result = null;
+    threw = e?.message || String(e);
   }
   const method = request.headers.has("signature-input") ? "rfc9421" : "draft-cavage";
   if (result?.verified) {
@@ -32912,7 +32917,8 @@ async function verifyHttpSignature(request, { documentLoader, keyCache, timeWind
     keyId: null,
     actor: null,
     reason: "bad-signature",
-    checks: { signature: false }
+    checks: { signature: false },
+    why: threw ? `library threw: ${threw.split("\n")[0].slice(0, 120)}` : kind || "unknown"
   };
 }
 function sortedKeys(v) {
@@ -46117,13 +46123,13 @@ var PodStore = class {
   _mergeStatus(all, at, s) {
     const row = all[at];
     const known2 = new Set((row.sourceAccts || []).map((v) => v.acct));
-    const fresh = (s.sourceAccts || []).filter((v) => v && !known2.has(v.acct));
+    const fresh2 = (s.sourceAccts || []).filter((v) => v && !known2.has(v.acct));
     const first = (k) => k === "post" || k === "timeline";
     const raise = first(s.kind) && !first(row.kind);
-    if (!fresh.length && !raise) return { added: false, merged: false, status: row };
+    if (!fresh2.length && !raise) return { added: false, merged: false, status: row };
     all[at] = {
       ...row,
-      ...fresh.length ? { sourceAccts: [...row.sourceAccts || [], ...fresh] } : {},
+      ...fresh2.length ? { sourceAccts: [...row.sourceAccts || [], ...fresh2] } : {},
       ...raise ? { kind: s.kind, ...s.slug ? { slug: s.slug } : {} } : {}
     };
     this.write("statuses.json", all);
@@ -59464,14 +59470,18 @@ async function amplify(intake, noteId, { approved = false, activity = null } = {
     serial: intake.serial++,
     audience: intake.urls.actor
   });
+  if (intake.onCarry) {
+    const placed = await intake.onCarry({ noteId, actor: s.actor, activity: act, sent: activity });
+    if (placed === false) {
+      intake.log(`not amplified \u2014 ${noteId} has no place here`);
+      return;
+    }
+  }
   await intake.deliverer.deliverToAll(inboxes, act);
   intake.store.updateStatus(noteId, { announcedAt: (/* @__PURE__ */ new Date()).toISOString(), announceActivity: act });
   if (!intake.config.private) await intake.publisher.recordOutbox(act);
   intake.store.setPending(intake.store.getPending().filter((p) => p.noteId !== noteId));
   intake.log(`amplified ${noteId} \u2192 ${inboxes.length} inbox(es)`);
-  if (intake.onCarried) {
-    await intake.onCarried({ noteId, actor: s.actor, activity: act, sent: activity }).catch((e) => intake.log(`after the carry of ${noteId}: ${e.message}`));
-  }
   await intake.bskyGroup?.mirrorCarry(s).catch((e) => intake.log(`bluesky mirror of the carry failed: ${e.message}`));
 }
 async function isCoMember(intake, actor) {
@@ -59479,11 +59489,11 @@ async function isCoMember(intake, actor) {
   const groups = intake.store.getContacts().following.filter((f) => f.accepted && intake.store.getActors()[f.actor]?.type === "Group").map((f) => f.actor);
   if (!groups.length) return false;
   const cache = intake.store.read("comembers.json", {});
-  const fresh = Date.now() - CO_MEMBER_TTL_MS;
+  const fresh2 = Date.now() - CO_MEMBER_TTL_MS;
   let changed = false;
   for (const g of groups) {
     const held = cache[g];
-    if (held && Date.parse(held.at || 0) > fresh) continue;
+    if (held && Date.parse(held.at || 0) > fresh2) continue;
     const doc = await intake.fetchAP(g).catch(() => null);
     const list3 = doc?.followers ? await intake.collectionMembers(doc.followers) : null;
     if (!list3) continue;
@@ -59516,6 +59526,56 @@ function announceTargets(intake, author) {
     byTarget.get(t).add(f.actor);
   }
   return [...byTarget].filter(([, who]) => !(who.size === 1 && who.has(author))).map(([t]) => t);
+}
+
+// lib/core/intake/received.mjs
+init_wire();
+var PAGE_SIZE = FOLLOWERS_PAGE_SIZE;
+var SEEN_MAX = 500;
+var ITEM_MAX_CHARS = 32 * 1024;
+var HELD_MAX = PAGE_SIZE * 5;
+var RECEIVED = "received.json";
+var fresh = () => ({ sealed: 0, open: [], total: 0, seen: [] });
+var keeps = (intake) => !!intake.archive && !!intake.urls?.ownInbox && intake.store.getConfig?.()?.archiveInbox !== false;
+function recordReceived(intake, activity) {
+  if (!keeps(intake) || !activity || typeof activity !== "object") return false;
+  const st2 = { ...fresh(), ...intake.store.read(RECEIVED, {}) };
+  const id = typeof activity.id === "string" ? activity.id : null;
+  if (id && st2.seen.includes(id)) return false;
+  st2.open.push(id && JSON.stringify(activity).length > ITEM_MAX_CHARS ? id : activity);
+  if (st2.open.length > HELD_MAX) st2.open.splice(0, st2.open.length - HELD_MAX);
+  st2.total += 1;
+  if (id) {
+    st2.seen.push(id);
+    if (st2.seen.length > SEEN_MAX) st2.seen.splice(0, st2.seen.length - SEEN_MAX);
+  }
+  intake.store.write(RECEIVED, st2);
+  intake._receivedDirty = true;
+  return true;
+}
+async function publishReceived(intake) {
+  if (!intake._receivedDirty || !keeps(intake)) return;
+  const ready = intake.publisher?.privateReady;
+  if (typeof ready === "function" && await ready.call(intake.publisher) !== true) return;
+  const { remote, urls } = intake;
+  const st2 = { ...fresh(), ...intake.store.read(RECEIVED, {}) };
+  do {
+    const n = st2.sealed + 1;
+    const items = st2.open.slice(0, PAGE_SIZE);
+    await writePage(
+      remote,
+      followersPageId(urls.ownInbox, n),
+      followersPage(urls.ownInbox, n, items, n)
+    );
+    if (items.length < PAGE_SIZE) break;
+    st2.sealed = n;
+    st2.open = st2.open.slice(PAGE_SIZE);
+    intake.store.write(RECEIVED, st2);
+  } while (st2.open.length);
+  const pages = Math.max(1, st2.sealed + (st2.open.length ? 1 : 0));
+  await writeHead(remote, urls.ownInbox, followersHead(urls.ownInbox, st2.total, pages));
+  intake.store.write(RECEIVED, st2);
+  intake._receivedDirty = false;
 }
 
 // lib/core/intake/activities.mjs
@@ -65610,6 +65670,7 @@ var Intake = class {
       if (pending.length >= DELETE_BATCH && !await flush()) return;
     }
     if (!await this._finishSweep(flush)) return;
+    await publishReceived(this).catch((e) => this.log(`inbox collection: ${e.message}`));
     for (const stray of orphanReceipts(this.remote, this.urls).slice(0, ORPHAN_RECEIPTS_PER_SWEEP)) {
       if (!await dropStrayReceipt(this.remote, stray)) break;
       await new Promise((r) => setTimeout(r, DELETE_GAP_MS));
@@ -65640,7 +65701,10 @@ var Intake = class {
     if (activity && this.gatewaySecret()) this._bumpGatewayStat(!!receipt?.verified);
     const owned = activity && this.isOwnerPost(receipt);
     const rejection = !activity ? "unparsable JSON" : owned ? await this.ownerPostFrom(activity, raw, receipt) : await this.handle(activity, receipt);
-    if (!rejection && raw && !owned) await this._archive(url, raw, activity);
+    if (!rejection && raw && !owned) {
+      await this._archive(url, raw, activity);
+      recordReceived(this, activity);
+    }
     if (!rejection && !owned) await this._maybeForward(activity);
     if (rejection) {
       this.store.addDeadLetter({
@@ -66495,7 +66559,6 @@ async function pinStatus(agent2, s, pinned) {
 // lib/client/c2s.mjs
 init_wire();
 var MAX_BODY = 512 * 1024;
-var MAX_INBOX_PAGE = 500;
 var MAX_OUTBOX_PAGE = 50;
 var ACTIVITY_TYPES = /* @__PURE__ */ new Set([
   "Create",
@@ -66563,72 +66626,33 @@ var C2S = class {
   byIri(iri) {
     return iri ? this.store.getStatuses().find((s) => s.noteId === iri) : null;
   }
-  /** The months the archive holds, newest first. One container listing. */
-  async archiveMonths() {
-    const archive = this.agent.intake?.archive;
-    if (!archive) return [];
-    const { names } = await archive.list("");
-    return (names || []).map((n) => n.replace(/\/$/u, "")).filter((n) => /^\d{4}-\d{2}$/u.test(n)).sort().reverse();
-  }
   /**
-   * The owner's own inbox, §5.2. Paged by month because that is how the
-   * archive is stored, so a page costs one listing and a read per item and no
-   * page is dearer for another month being large.
+   * The owner's own inbox, §5.2: the collection the drain keeps on the pod in
+   * the private container (intake/received.mjs), served under this agent's
+   * address so a client holding no pod credential of its own can read it.
+   * Nothing is built per request; a page is the pod's page.
    */
-  async sendInbox(res, url) {
-    const id = `${this.urls.base}ap/inbox`;
+  async sendInbox(res, url, origin) {
+    const id = `${origin}ap/inbox`;
+    const own = this.urls.ownInbox;
     const page2 = url?.searchParams?.get("page") || null;
-    let months;
+    if (page2 !== null && !/^[1-9]\d{0,6}$/u.test(page2)) return this.send(res, 400, { error: "page is a number" });
+    let doc;
     try {
-      months = await this.archiveMonths();
+      doc = await this.agent.remote.getJson(page2 ? `${own}-${page2}` : own);
     } catch (e) {
-      return this.send(res, 502, { error: `the archive could not be read: ${e.message}` });
+      return this.send(res, 502, { error: `the inbox collection could not be read: ${e.message}` });
     }
-    if (!page2) {
-      if (!months.length && this.store.getConfig()?.archiveInbox === false) {
+    if (!doc) {
+      if (page2) return this.send(res, 404, { error: "no such page" });
+      if (this.store.getConfig()?.archiveInbox === false) {
         this.log("inbox read: nothing to show \u2014 this identity does not keep what it receives");
       }
-      return this.send(res, 200, {
-        "@context": AS_CTX,
-        id,
-        type: "OrderedCollection",
-        ...months.length ? { first: `${id}?page=${months[0]}` } : { orderedItems: [] }
-      });
+      return this.send(res, 200, { "@context": AS_CTX, id, type: "OrderedCollection", totalItems: 0, orderedItems: [] });
     }
-    if (!/^\d{4}-\d{2}$/u.test(page2)) {
-      return this.send(res, 400, { error: "page names a month, written 2026-09" });
-    }
-    const archive = this.agent.intake?.archive;
-    let names = [];
-    try {
-      ({ names } = await archive.list(`${page2}/`));
-    } catch (e) {
-      return this.send(res, 502, { error: `the archive could not be read: ${e.message}` });
-    }
-    const files = (names || []).filter((n) => n.endsWith(".json")).sort();
-    if (files.length > MAX_INBOX_PAGE) {
-      this.log(`inbox read: ${page2} holds ${files.length} items; serving the first ${MAX_INBOX_PAGE}`);
-    }
-    const kept = [];
-    for (const file of files.slice(0, MAX_INBOX_PAGE)) {
-      const read2 = await archive.read(`${page2}/${file}`, { accept: "*/*" });
-      if (!read2?.ok || !read2.body) continue;
-      try {
-        const record = JSON.parse(read2.body);
-        kept.push({ at: record.receivedAt || "", activity: JSON.parse(record.raw) });
-      } catch {
-      }
-    }
-    kept.sort((a, b) => String(b.at).localeCompare(String(a.at)));
-    const older = months.filter((m) => m < page2)[0] || null;
-    return this.send(res, 200, {
-      "@context": AS_CTX,
-      id: `${id}?page=${page2}`,
-      type: "OrderedCollectionPage",
-      partOf: id,
-      ...older ? { next: `${id}?page=${older}` } : {},
-      orderedItems: kept.map((k) => k.activity)
-    });
+    const here = (v) => typeof v === "string" && v.startsWith(own) ? v === own ? id : v.replace(`${own}-`, `${id}?page=`) : v;
+    for (const k of ["id", "partOf", "first", "last", "next", "prev"]) if (k in doc) doc[k] = here(doc[k]);
+    return this.send(res, 200, doc);
   }
   // The actor a client-to-server client on this machine reads. The same
   // document the pod holds, but for the fields naming where a write goes —
@@ -66719,7 +66743,7 @@ var C2S = class {
       }
       const reader = await this.auth(req, pathname);
       if (!reader.ok) return this.send(res, reader.status, { error: reader.error }, reader.headers || {});
-      return this.sendInbox(res, url);
+      return this.sendInbox(res, url, this.localOrigin(req) || this.urls.base);
     }
     if (req.method === "GET" || req.method === "HEAD") {
       const owner = pathname === "/ap/outbox" && req.headers.authorization ? (await this.auth(req, pathname)).ok : false;
@@ -70432,6 +70456,10 @@ var Deliverer = class {
   // passive: signing-only (viewer-mode agents) — no queue drain timer, so a
   // read-only agent never mutates shared delivery state. startQueue() flips
   // it live when a viewer is promoted to active.
+  // defer: nothing is sent now; every delivery goes on the queue, signed, for
+  // drainQueue() to make. For a process with seconds to answer — a door
+  // placing a post as it lands — which records what to send and leaves the
+  // sending to the run it starts.
   constructor({
     store,
     keyId,
@@ -70441,9 +70469,11 @@ var Deliverer = class {
     proofKeyId = null,
     log: log2 = console.log,
     passive = false,
+    defer = false,
     onGone = null
   }) {
     this.store = store;
+    this.defer = defer;
     this.onGone = onGone;
     this.keyId = keyId;
     this.rsaPrivate = rsaPrivate;
@@ -70564,6 +70594,10 @@ var Deliverer = class {
     this._sent(activity);
     if (this._blockedInbox(inbox)) return;
     const signed = await this.proofed(activity);
+    if (this.defer) {
+      this._enqueue({ inbox, activity: signed, attempts: 0, nextAt: Date.now() });
+      return;
+    }
     if (this._queueIfCooling(inbox, signed)) return;
     const [result] = await this.deliverManyNow([{ inbox, activity: signed }]);
     await this._settle(inbox, signed, result);
@@ -70634,6 +70668,10 @@ var Deliverer = class {
     this._sent(activity);
     const signed = await this.proofed(activity);
     const targets = [...new Set(inboxes)].filter((inbox) => !this._blockedInbox(inbox)).map((inbox) => ({ inbox, activity: signed }));
+    if (this.defer) {
+      for (const t of targets) this._enqueue({ inbox: t.inbox, activity: signed, attempts: 0, nextAt: Date.now() });
+      return;
+    }
     for (let i = 0; i < targets.length; i += this.batchSize) {
       const chunk = targets.slice(i, i + this.batchSize).filter((t) => !this._queueIfCooling(t.inbox, signed));
       if (!chunk.length) continue;
@@ -71063,15 +71101,15 @@ var ImportWorker = class {
       if (next.kind === "follow" && Date.now() - this.lastFollowAt < FOLLOW_GAP_MS) return;
       if (next.kind === "domain") {
         const b = agent2.store.getBlocklist();
-        const fresh = this.state();
-        if (!fresh?.rows) return;
-        for (const r of fresh.rows) {
+        const fresh2 = this.state();
+        if (!fresh2?.rows) return;
+        for (const r of fresh2.rows) {
           if (r.status !== "pending" || r.kind !== "domain") continue;
           if (!b.domains.includes(r.value)) b.domains.push(r.value);
           r.status = "done";
         }
         agent2.store.setBlocklist(b);
-        agent2.store.write(IMPORT_STATE_DOC, fresh);
+        agent2.store.write(IMPORT_STATE_DOC, fresh2);
         return;
       }
       const outcome = await this.applyRow(next);
@@ -73199,8 +73237,8 @@ async function handOverCopy(agent2) {
 }
 async function renewCopyToken(agent2, frontOrigin) {
   if (!agent2.copy || agent2.copy.expiresAt - Date.now() > RENEW_BEFORE_MS) return;
-  const fresh = await openCopy(agent2, frontOrigin, { handle: agent2.copy.handle });
-  if (fresh) agent2.copy = fresh;
+  const fresh2 = await openCopy(agent2, frontOrigin, { handle: agent2.copy.handle });
+  if (fresh2) agent2.copy = fresh2;
 }
 
 // web/app/agent.mjs
