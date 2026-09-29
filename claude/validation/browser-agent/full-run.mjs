@@ -53,9 +53,9 @@ copyDir(phanpy, path.join(site, 'app'));
 
 const css = spawn(CSS_BIN, ['-p', String(CSS_PORT), '-c', '@css:config/memory-subdomains.json', '-b', `${ISSUER}/`, '-l', 'warn'],
   { cwd: tmp, stdio: ['ignore', 'pipe', 'pipe'] });
-css.stderr.on('data', (d) => process.env.FULL_DEBUG && process.stderr.write(d));
+let cssErr = ''; css.stderr.on('data', (d) => { cssErr = (cssErr + d).slice(-3000); if (process.env.FULL_DEBUG) process.stderr.write(d); });
 let cssUp = false; for (let i = 0; i < 360 && !cssUp; i++) { try { cssUp = !!(await fetch(`${ISSUER}/`)).status; } catch {} if (!cssUp) await sleep(500); }
-if (!cssUp) { console.log(`FAIL  the scratch server never answered at ${ISSUER} in 180s`); process.exit(1); }
+if (!cssUp) { console.log(`FAIL  the scratch server never answered at ${ISSUER} in 180s` + (cssErr ? `\n--- its output ---\n${cssErr}` : '')); process.exit(1); }
 
 const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.ico': 'image/x-icon', '.png': 'image/png', '.svg': 'image/svg+xml', '.webmanifest': 'application/manifest+json', '.map': 'application/json' };
 // The front's mail door, stubbed. Sign-up attaches to it and the actor then

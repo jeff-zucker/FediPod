@@ -31,9 +31,9 @@ const bundle = path.join(tmp, 'test.js');
 await buildApp({ entry: path.join(here, 'entry.mjs'), out: bundle });
 
 const css = spawn(CSS_BIN, ['-p', String(CSS_PORT), '-c', '@css:config/memory-subdomains.json', '-b', `${ISSUER}/`, '-l', 'warn'], { cwd: tmp, stdio: ['ignore', 'pipe', 'pipe'] });
-css.stderr.on('data', (d) => process.env.GW_DEBUG && process.stderr.write(d));
+let cssErr = ''; css.stderr.on('data', (d) => { cssErr = (cssErr + d).slice(-3000); if (process.env.GW_DEBUG) process.stderr.write(d); });
 let cssUp = false; for (let i = 0; i < 360 && !cssUp; i++) { try { cssUp = !!(await fetch(`${ISSUER}/`)).status; } catch {} if (!cssUp) await sleep(500); }
-if (!cssUp) { console.log(`FAIL  the scratch server never answered at ${ISSUER} in 180s`); process.exit(1); }
+if (!cssUp) { console.log(`FAIL  the scratch server never answered at ${ISSUER} in 180s` + (cssErr ? `\n--- its output ---\n${cssErr}` : '')); process.exit(1); }
 
 const dir = {};
 const loader = `<!doctype html><meta charset=utf-8><title>gw</title><script type=module>import * as t from '/test.js'; window.T=t; window.__ready=true;</script>`;

@@ -26,6 +26,12 @@ try { console.log(`chrome: ${spawnSync('google-chrome', ['--version'], { encodin
 catch { console.log('chrome: google-chrome not found on PATH'); }
 const cssBin = path.join(root, 'packages/fedipod-server/node_modules/.bin/community-solid-server');
 console.log(`scratch server: ${fs.existsSync(cssBin) ? cssBin : 'MISSING — npm ci in packages/fedipod-server'}`);
+// The scratch server scans the Server package as a component module when it
+// starts, and that needs the package's build output; without it the server
+// never answers and every rig waits three minutes to say so.
+const serverBuilt = fs.existsSync(path.join(root, 'packages/fedipod-server/dist/components/context.jsonld'));
+console.log(`server package built: ${serverBuilt ? 'yes' : 'NO — run `npm run build` in packages/fedipod-server first'}`);
+if (!fs.existsSync(cssBin) || !serverBuilt) { console.log('\nFAIL  the rigs cannot run here (see above)'); process.exit(1); }
 
 let broken = 0;
 for (const rig of rigs) {
@@ -40,6 +46,13 @@ for (const rig of rigs) {
   console.log(`${ok ? 'PASS' : 'FAIL'}  ${rig}: ${pass} pass, ${fail} fail, ${Math.round((Date.now() - started) / 1000)}s${why}`);
   // A failed rig shows its last lines: a runner has no other way to say why.
   if (!ok) console.log(out.split('\n').filter((l) => l.trim()).slice(process.env.RIG_DEBUG ? -60 : -25).map((l) => '    ' + l).join('\n'));
+  // A machine where the scratch server does not start fails every rig the
+  // same way; one such failure is the finding, the rest is three minutes each.
+  if (!ok && /scratch (server|CSS) (never answered|did not come up)/u.test(out)) {
+    const left = rigs.length - rigs.indexOf(rig) - 1;
+    if (left > 0) { console.log(`FAIL  the scratch server does not start on this machine; ${left} rig(s) not run`); broken += left; }
+    break;
+  }
 }
 console.log(broken ? `\n${broken} rig(s) FAILED` : '\nall rigs green');
 process.exit(broken);

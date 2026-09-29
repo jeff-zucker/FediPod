@@ -133,7 +133,10 @@ Browser rigs: `claude/validation/browser-agent/` drives a real headless
 `google-chrome` against a scratch Solid server (`copy-browser-run.mjs` is
 the copy, an app sign-in, a push and the keeper handover). `all.mjs` runs
 every rig in turn and is the last step of `npm test`, so a rig that breaks
-fails the suite. A scratch pod is given a public type index first
+fails the suite. The scratch server is the Server package's CSS and scans
+that package as a component module on start, so `npm ci` and `npm run
+build` in `packages/fedipod-server` come first, on a clone and in CI; the
+runner refuses at once when they have not. A scratch pod is given a public type index first
 (`pod-fixture.mjs`), as a person's pod has one; the rigs never script the
 yes the page asks for. The in-app browser pane cannot register service
 workers, so those never run there.

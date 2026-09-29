@@ -16,8 +16,12 @@ jobs:
           node-version: '20'
       - run: npm ci
       # The browser rigs in the suite boot a scratch Community Solid Server,
-      # which the Server package installs, and drive the runner's Chrome.
+      # which the Server package installs, and drive the runner's Chrome. The
+      # scratch server scans the Server package as a component module on
+      # start, so that package must be built or it never starts.
       - run: npm ci
+        working-directory: packages/fedipod-server
+      - run: npm run build
         working-directory: packages/fedipod-server
       - run: npm test
 

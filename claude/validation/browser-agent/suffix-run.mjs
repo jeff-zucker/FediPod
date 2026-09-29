@@ -34,10 +34,10 @@ const bundle = path.join(tmp, 'test.js');
 await buildApp({ entry: path.join(here, 'entry.mjs'), out: bundle });
 
 const css = spawn(CSS_BIN, ['-p', String(CSS_PORT), '-c', path.join(here, 'css-memory-suffix.json'), '-b', `${ISSUER}/`, '-l', 'warn'], { cwd: tmp, stdio: ['ignore', 'pipe', 'pipe'] });
-css.stderr.on('data', (d) => process.env.GW_DEBUG && process.stderr.write(d));
+let cssErr = ''; css.stderr.on('data', (d) => { cssErr = (cssErr + d).slice(-3000); if (process.env.GW_DEBUG) process.stderr.write(d); });
 let cssUp = false;
 for (let i = 0; i < 360; i++) { try { if ((await fetch(`${ISSUER}/`)).status === 200) { cssUp = true; break; } } catch {} await sleep(500); }
-if (!cssUp) { console.log('FAIL  the scratch CSS did not come up within 90s'); css.kill('SIGKILL'); process.exit(1); }
+if (!cssUp) { console.log('FAIL  the scratch CSS did not come up within 180s' + (cssErr ? `\n--- its output ---\n${cssErr}` : '')); css.kill('SIGKILL'); process.exit(1); }
 
 // A remote server's inbox, to receive the Accept. Its actor publishes a key,
 // so a Follow it signs is verified at the door and answered without approval —

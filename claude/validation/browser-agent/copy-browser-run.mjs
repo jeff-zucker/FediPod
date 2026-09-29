@@ -33,9 +33,9 @@ fs.writeFileSync(seed, JSON.stringify([{ email: 'keeper@example.org', password: 
 
 const css = spawn(CSS_BIN, ['-p', String(CSS_PORT), '-c', '@css:config/memory-subdomains.json', '-b', `${ISSUER}/`, '--seedConfig', seed, '-l', 'warn'],
   { cwd: tmp, stdio: ['ignore', 'pipe', 'pipe'] });
-css.stderr.on('data', (d) => process.env.SW_DEBUG && process.stderr.write(d));
+let cssErr = ''; css.stderr.on('data', (d) => { cssErr = (cssErr + d).slice(-3000); if (process.env.SW_DEBUG) process.stderr.write(d); });
 let cssUp = false; for (let i = 0; i < 360 && !cssUp; i++) { try { cssUp = !!(await fetch(`${ISSUER}/`)).status; } catch {} if (!cssUp) await sleep(500); }
-if (!cssUp) { console.log(`FAIL  the scratch server never answered at ${ISSUER} in 180s`); process.exit(1); }
+if (!cssUp) { console.log(`FAIL  the scratch server never answered at ${ISSUER} in 180s` + (cssErr ? `\n--- its output ---\n${cssErr}` : '')); process.exit(1); }
 
 const file = (p, ct) => (q, s) => { s.writeHead(200, { 'content-type': ct, ...(p.endsWith('sw.js') ? { 'service-worker-allowed': '/' } : {}) }); s.end(fs.readFileSync(path.join(root, p))); };
 const page = '<!doctype html><meta charset=utf-8><title>boot</title><script type=module src="/dist/boot.js"></script>';
@@ -220,7 +220,7 @@ const evaluate = async (expression) => {
 const waitFor = async (fn, tries = 60, ms = 500) => { for (let i = 0; i < tries; i++) { if (await fn()) return true; await sleep(ms); } return false; };
 try {
   cssUp = false; for (let i = 0; i < 360 && !cssUp; i++) { try { cssUp = !!(await fetch(`${ISSUER}/`)).status; } catch {} if (!cssUp) await sleep(500); }
-if (!cssUp) { console.log(`FAIL  the scratch server never answered again at ${ISSUER} in 180s`); process.exit(1); }
+if (!cssUp) { console.log(`FAIL  the scratch server never answered again at ${ISSUER} in 180s` + (cssErr ? `\n--- its output ---\n${cssErr}` : '')); process.exit(1); }
   const keepCred = await mintCredential({ origin: ISSUER, email: 'keeper@example.org', password: 'keeper-password-2026', name: 'fedipod-keeper' });
   keeperSession = createGrantSession(keepCred);
   keeperWebId = keepCred.webId;
