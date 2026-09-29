@@ -325,6 +325,10 @@ Item-by-item answers to the Solid/ActivityPub interop checklist.
   answered with every message the account produced instead (§5.1): likes,
   follows, undos, follower decisions, blocks, pins, followers-only and direct
   posts. A `liked` collection (§5.5) is published for the owner alone.
+  Each post carries `likes` and `shares` (§5.7, §5.8) as totals that name
+  nobody, the filtering both sections allow, grown by Like and Announce and
+  shrunk by their Undo; a Like whose content is an emoji is a reaction and is
+  not in the total.
   On the Server the signed-in owner is answered with it at the outbox
   address. Everywhere, the actor names where it lives on the pod
   (`fedipod:ownerOutbox`, beside `liked`), so an app reads it there with the

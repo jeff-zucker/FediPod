@@ -1,5 +1,16 @@
 # Changes
 
+## 2026-09-29 (your posts show their likes and boosts — version 1.46.0)
+
+**Your posts carry their number of likes and boosts**, so a server that
+shows those numbers shows the real ones instead of none. The totals name
+nobody. Your own apps show the same totals on your posts, where they showed
+none. Likes and boosts from before this version are counted as far as your
+notifications still hold them, the latest five hundred. An edit or a
+deletion made while totals are being written wins, and the totals follow a
+batch later. The pod pays one write per post per batch of mail that liked or
+boosted it.
+
 ## 2026-09-28 (the owner's inbox is a collection on every build, and a private post reaches the one it was sent to — version 1.45.0, fedipod-bb 0.4.1)
 
 **Handing a forum to a Gateway names the Gateway in the pod's rules before

@@ -9765,6 +9765,7 @@ __export(wire_exports, {
   publicHandle: () => publicHandle,
   questionDoc: () => questionDoc,
   quotePolicy: () => quotePolicy,
+  reactionCounts: () => reactionCounts,
   rejectActivity: () => rejectActivity,
   repliesId: () => repliesId,
   sanitizeHtml: () => sanitizeHtml,
@@ -10182,6 +10183,12 @@ function quotePolicy(visibility) {
   const open3 = visibility === "public" || visibility === "unlisted";
   return { canQuote: { automaticApproval: open3 ? [PUBLIC] : [], manualApproval: [] } };
 }
+function reactionCounts(likes = 0, shares = 0) {
+  return {
+    likes: { type: "Collection", totalItems: Math.max(0, Number(likes) || 0) },
+    shares: { type: "Collection", totalItems: Math.max(0, Number(shares) || 0) }
+  };
+}
 function noteDoc({
   urls,
   slug,
@@ -10196,7 +10203,9 @@ function noteDoc({
   updated = null,
   container = null,
   also = [],
-  quote = null
+  quote = null,
+  likes = 0,
+  shares = 0
 }) {
   const id = (container || urls.notes) + slug;
   const who = mentions.map((m) => m.actor);
@@ -10213,6 +10222,7 @@ function noteDoc({
     to: addressed.to,
     cc: addressed.cc,
     replies: repliesId(id),
+    ...reactionCounts(likes, shares),
     interactionPolicy: quotePolicy(visibility)
   };
   if (quote?.id) {
@@ -29975,13 +29985,13 @@ var require_jsonld = __commonJS({
         );
       };
       jsonld2.get = async function(url, options) {
-        let load;
+        let load2;
         if (typeof options.documentLoader === "function") {
-          load = options.documentLoader;
+          load2 = options.documentLoader;
         } else {
-          load = jsonld2.documentLoader;
+          load2 = jsonld2.documentLoader;
         }
-        const remoteDoc = await load(url);
+        const remoteDoc = await load2(url);
         try {
           if (!remoteDoc.document) {
             throw new JsonLdError(
@@ -33272,8 +33282,8 @@ var require_common = __commonJS({
 var require_browser = __commonJS({
   "node_modules/debug/src/browser.js"(exports, module2) {
     exports.formatArgs = formatArgs;
-    exports.save = save;
-    exports.load = load;
+    exports.save = save2;
+    exports.load = load2;
     exports.useColors = useColors;
     exports.storage = localstorage();
     exports.destroy = /* @__PURE__ */ (() => {
@@ -33399,7 +33409,7 @@ var require_browser = __commonJS({
     }
     exports.log = console.debug || console.log || (() => {
     });
-    function save(namespaces) {
+    function save2(namespaces) {
       try {
         if (namespaces) {
           exports.storage.setItem("debug", namespaces);
@@ -33409,7 +33419,7 @@ var require_browser = __commonJS({
       } catch (error2) {
       }
     }
-    function load() {
+    function load2() {
       let r;
       try {
         r = exports.storage.getItem("debug") || exports.storage.getItem("DEBUG");
@@ -46674,6 +46684,27 @@ var writeEmptyReplies = (pod, repliesId2, doc) => pod.putJson(repliesId2, doc);
 var readReplies = (pod, repliesId2) => pod.getJson(repliesId2);
 var writeReplies = (pod, repliesId2, doc) => pod.putJson(repliesId2, doc);
 var read = (pod, noteId) => pod.getJson(noteId);
+async function readVersioned(pod, noteId) {
+  if (typeof pod.fetch !== "function") return { doc: await pod.getJson(noteId), version: null };
+  const res = await pod.fetch(noteId, { headers: { accept: "application/activity+json" } });
+  if (res.status === 404 || res.status === 410) return { doc: null, version: null };
+  if (res.status >= 400) throw new Error(`GET ${noteId} \u2192 ${res.status}`);
+  return { doc: await res.json().catch(() => null), version: res.headers?.get?.("etag") || null };
+}
+async function writeIfUnchanged(pod, noteId, doc, version2) {
+  if (!version2 || typeof pod.fetch !== "function") {
+    await pod.putJson(noteId, doc);
+    return true;
+  }
+  const res = await pod.fetch(noteId, {
+    method: "PUT",
+    headers: { "content-type": "application/activity+json", "if-match": version2 },
+    body: JSON.stringify(doc)
+  });
+  if (res.status === 412) return false;
+  if (res.status >= 400) throw new Error(`PUT ${noteId} \u2192 ${res.status}`);
+  return true;
+}
 async function writeTombstone2(pod, noteId, doc) {
   await pod.putJson(noteId, doc);
   await pod.setAcl(noteId, PUBLIC_READ5);
@@ -57370,6 +57401,114 @@ async function readLenient(raw) {
 init_node_crypto();
 init_wire();
 init_wire_quotes();
+
+// lib/core/intake/counts.mjs
+init_wire();
+var MAX_NAMED = 1e3;
+var MAX_POSTS = 2e3;
+var REWRITES_PER_SWEEP = 20;
+var COUNTS = "counts.json";
+var KIND = { Like: "likes", Announce: "shares" };
+var MORE = { likes: "moreLikes", shares: "moreShares" };
+var load = (store) => {
+  const st2 = typeof store?.read === "function" ? store.read(COUNTS, null) : null;
+  return st2 && typeof st2 === "object" && st2.posts && typeof st2.posts === "object" ? { posts: st2.posts, dirty: Array.isArray(st2.dirty) ? st2.dirty : [] } : { posts: {}, dirty: [] };
+};
+var totals = (p) => ({
+  likes: (p?.likes?.length || 0) + (p?.moreLikes || 0),
+  shares: (p?.shares?.length || 0) + (p?.moreShares || 0)
+});
+function totalsFor(store, noteId) {
+  const st2 = store?.cache?.get?.(COUNTS) ?? store?.read?.(COUNTS, null);
+  return totals(st2?.posts?.[noteId]);
+}
+function save(store, st2, noteId) {
+  if (typeof store?.write !== "function") return;
+  if (noteId && !st2.dirty.includes(noteId)) st2.dirty.push(noteId);
+  const ids = Object.keys(st2.posts);
+  if (ids.length > MAX_POSTS) {
+    ids.sort((a, b) => String(st2.posts[a].at || "").localeCompare(String(st2.posts[b].at || "")));
+    for (const id of ids.slice(0, ids.length - MAX_POSTS)) delete st2.posts[id];
+    st2.dirty = st2.dirty.filter((id) => st2.posts[id]);
+  }
+  store.write(COUNTS, st2);
+}
+function recordReaction(store, type, noteId, actor) {
+  const kind = KIND[type];
+  if (!kind || !noteId || !actor) return false;
+  const st2 = load(store);
+  const p = st2.posts[noteId] || { likes: [], shares: [] };
+  const named = p[kind] || [];
+  if (named.includes(actor)) return false;
+  if (named.length >= MAX_NAMED) p[MORE[kind]] = (p[MORE[kind]] || 0) + 1;
+  else p[kind] = [...named, actor];
+  p.at = (/* @__PURE__ */ new Date()).toISOString();
+  st2.posts[noteId] = p;
+  save(store, st2, noteId);
+  return true;
+}
+function withdrawReaction(store, type, noteId, actor) {
+  const kind = KIND[type];
+  if (!kind || !noteId || !actor) return false;
+  const st2 = load(store);
+  const p = st2.posts[noteId];
+  if (!p) return false;
+  const named = p[kind] || [];
+  if (named.includes(actor)) p[kind] = named.filter((a) => a !== actor);
+  else if (p[MORE[kind]] > 0) p[MORE[kind]] -= 1;
+  else return false;
+  p.at = (/* @__PURE__ */ new Date()).toISOString();
+  save(store, st2, noteId);
+  return true;
+}
+function forgetCounts(store, noteId) {
+  const st2 = load(store);
+  if (!st2.posts[noteId] && !st2.dirty.includes(noteId)) return;
+  delete st2.posts[noteId];
+  st2.dirty = st2.dirty.filter((id) => id !== noteId);
+  save(store, st2, null);
+}
+function seed(intake) {
+  const { store } = intake;
+  if (typeof store?.read !== "function" || store.read(COUNTS, null)) return;
+  const notes = intake.urls?.notes;
+  const all = typeof store.getNotifications === "function" ? store.getNotifications() : [];
+  for (const n of [...all].reverse()) {
+    if (!notes || !String(n?.noteId || "").startsWith(notes)) continue;
+    if (n.type === "favourite") recordReaction(store, "Like", n.noteId, n.actor);
+    else if (n.type === "reblog") recordReaction(store, "Announce", n.noteId, n.actor);
+  }
+  if (!store.read(COUNTS, null)) store.write(COUNTS, { posts: {}, dirty: [] });
+}
+async function publishCounts(intake) {
+  seed(intake);
+  const st2 = load(intake.store);
+  if (!st2.dirty.length) return 0;
+  const left = [];
+  let wrote = 0;
+  for (const noteId of st2.dirty.slice(0, REWRITES_PER_SWEEP)) {
+    try {
+      const { doc, version: version2 } = await readVersioned(intake.remote, noteId);
+      if (!doc || typeof doc !== "object" || !doc.id || doc.type === "Tombstone") {
+        delete st2.posts[noteId];
+        continue;
+      }
+      const t = totals(st2.posts[noteId]);
+      const next = { ...doc, ...reactionCounts(t.likes, t.shares) };
+      if (JSON.stringify([next.likes, next.shares]) === JSON.stringify([doc.likes, doc.shares])) continue;
+      if (await writeIfUnchanged(intake.remote, doc.id, next, version2)) wrote++;
+      else left.push(noteId);
+    } catch (e) {
+      intake.log?.(`like and boost totals for ${noteId}: ${e.message}`);
+      left.push(noteId);
+    }
+  }
+  st2.dirty = [...left, ...st2.dirty.slice(REWRITES_PER_SWEEP)].filter((id) => st2.posts[id]);
+  intake.store.write(COUNTS, st2);
+  return wrote;
+}
+
+// lib/core/publisher/notes.mjs
 async function ensureMediaContainer(publisher) {
   if (publisher._mediaReady) return;
   if (await exists(publisher.remote, publisher.urls.media)) {
@@ -57511,7 +57650,9 @@ var FIXED = /* @__PURE__ */ new Set([
   "endTime",
   "closed",
   "votersCount",
-  "replies"
+  "replies",
+  "likes",
+  "shares"
 ]);
 async function updateObject(publisher, s, patch, { updated = (/* @__PURE__ */ new Date()).toISOString() } = {}) {
   const { urls } = publisher;
@@ -57804,7 +57945,8 @@ async function updateNote(publisher, s, { content, spoilerText = null, sensitive
     updated,
     container,
     also: [.../* @__PURE__ */ new Set([...s.named || [], ...reply ? [reply.actor] : []])],
-    quote: rowQuote(s)
+    quote: rowQuote(s),
+    ...totalsFor(publisher.store, s.noteId)
   });
   await write4(publisher.remote, note.id, note);
   await writeCreate(publisher.remote, createActivityId(note.id), createActivity(note, urls));
@@ -57857,7 +57999,8 @@ async function restateNote(publisher, s, { quote }) {
     updated: s.editedAt || null,
     container,
     also: [...reply ? [reply.actor] : [], ...s.quoteRequest?.actor ? [s.quoteRequest.actor] : []],
-    quote
+    quote,
+    ...totalsFor(publisher.store, s.noteId)
   });
   await write4(publisher.remote, note.id, note);
   await writeCreate(publisher.remote, createActivityId(note.id), createActivity(note, urls));
@@ -59762,6 +59905,7 @@ async function onUndoReaction(intake, inner, actor, { trusted = false } = {}) {
     const type = inner.type === "Like" ? "favourite" : "reblog";
     const gone = intake.store.removeNotifications((n) => n.type === type && n.actor === actor && n.noteId === objectId);
     if (gone) intake.log(`${inner.type} withdrawn by ${actor} on ${objectId}`);
+    withdrawReaction(intake.store, inner.type, objectId, actor);
     return;
   }
   if (inner.type !== "Announce") return;
@@ -65429,6 +65573,7 @@ var Intake = class {
     this._draining = this._drainOnce().finally(async () => {
       this._inSweep = false;
       await this._publishPending();
+      await publishCounts(this).catch((e) => this.log(`like and boost totals: ${e.message}`));
       this.store.release?.();
       this._draining = null;
       if (this._drainAgain) {
@@ -65901,6 +66046,7 @@ var Intake = class {
             noteId: objectId,
             ...this.known(actor) ? {} : { unverified: true }
           });
+          recordReaction(this.store, activity.type, objectId, actor);
           return;
         }
         if (activity.type === "Announce") return this.onAnnounce(activity, actor, objectId);
@@ -66452,6 +66598,7 @@ async function deleteNote(agent2, s) {
     };
   }
   await dropReplies(agent2.remote, repliesId(s.noteId));
+  forgetCounts(agent2.store, s.noteId);
   if (s.atproto?.uri && agent2.atproto?.connected()) {
     await agent2.atproto.deleteCrossPost(s.atproto.uri).then(() => agent2.log?.(`bluesky mirror deleted: ${s.atproto.uri}`)).catch((e) => agent2.log?.(`bluesky mirror not deleted (${e.message}): ${s.atproto.uri}`));
   }
@@ -68424,6 +68571,7 @@ function quoteApproval(api, s) {
 }
 function status(api, s, { all, depth = 0 } = {}) {
   const replies = (all || api.store.getStatuses()).filter((x) => x.inReplyTo === s.noteId).length;
+  const counted = totalsFor(api.store, s.noteId);
   return {
     id: api.store.idFor(s.noteId),
     created_at: s.published || (/* @__PURE__ */ new Date()).toISOString(),
@@ -68437,8 +68585,8 @@ function status(api, s, { all, depth = 0 } = {}) {
     uri: s.noteId,
     url: s.link || s.noteId,
     replies_count: replies,
-    reblogs_count: 0,
-    favourites_count: 0,
+    reblogs_count: counted.shares,
+    favourites_count: counted.likes,
     // True when ANY of the owner's accounts holds it. The flag is really
     // what the next tap will do: an empty star on a post one account has
     // already liked invites a second outward like from a second identity.

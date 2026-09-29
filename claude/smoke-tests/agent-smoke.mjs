@@ -14487,6 +14487,123 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
     "a document with no audience — the owner's own lists — is read by nobody this way, nor is anything by an unsigned reader");
 }
 
+// --- 32. like and boost totals on the owner's posts (§5.7, §5.8) ---
+{
+  const { Intake } = await import(path.join(root, 'lib/core/intake/index.mjs'));
+  const counts = await import(path.join(root, 'lib/core/intake/counts.mjs'));
+  const wire32 = await import(path.join(root, 'lib/core/wire.mjs'));
+  const NOTES = 'https://p.example/fedipod/ap/notes/';
+  const POST = NOTES + 'n1';
+  const KOFI = 'https://m.example/u/kofi'; const NIA = 'https://m.example/u/nia'; const YUKI = 'https://g.example/u/yuki';
+  const state = {};
+  const notified = [];
+  const store = {
+    read: (n, d) => (n in state ? JSON.parse(JSON.stringify(state[n])) : d),
+    write: (n, v) => { state[n] = JSON.parse(JSON.stringify(v)); },
+    isBlocked: () => false, getConfig: () => ({}), getActors: () => ({}),
+    getContacts: () => ({ followers: [], following: [] }),
+    addNotification: (n) => notified.push(n), removeNotifications: () => 0, getStatuses: () => [],
+  };
+  // The pod: one post, served with a version; a conditional write must name it.
+  const pod = { doc: { '@context': 'https://www.w3.org/ns/activitystreams', id: POST, type: 'Note', content: 'hi',
+    updated: '2026-09-01T00:00:00Z', ...wire32.reactionCounts(0, 0) }, version: 1, puts: 0 };
+  const podFetch = async (u, init = {}) => {
+    if (u !== POST) return new Response('', { status: 404 });
+    const method = init.method || 'GET';
+    if (method === 'GET') return new Response(JSON.stringify(pod.doc), { status: 200, headers: { etag: `"v${pod.version}"` } });
+    if (init.headers?.['if-match'] !== `"v${pod.version}"`) return new Response('', { status: 412 });
+    pod.doc = JSON.parse(init.body); pod.version++; pod.puts++;
+    return new Response(null, { status: 205 });
+  };
+  const remote = { fetch: podFetch };
+  const intake = new Intake({ config: {}, urls: { inbox: 'https://p.example/in/', notes: NOTES, actor: 'https://p.example/fedipod/ap/actor' },
+    remote, store, deliverer: {}, publisher: {}, log: () => {} });
+  const like = (a, o = POST) => intake.handle({ id: `${a}#like-${o}`, type: 'Like', actor: a, object: o });
+  const boost = (a) => intake.handle({ id: `${a}#boost`, type: 'Announce', actor: a, object: POST });
+  await like(KOFI); await like(NIA); await like(KOFI); await boost(YUKI);
+  check(JSON.stringify(counts.totalsFor(store, POST)) === JSON.stringify({ likes: 2, shares: 1 })
+    && notified.filter(n => n.type === 'favourite').length === 3,
+    'two people liking a post, one of them twice, is two likes, and a boost is one boost; the notifications are as before');
+  check(await counts.publishCounts(intake) === 1 && pod.doc.likes?.totalItems === 2 && pod.doc.shares?.totalItems === 1 && pod.puts === 1,
+    'the totals go onto the post, in one write for the batch');
+  check(pod.doc.content === 'hi' && pod.doc.updated === '2026-09-01T00:00:00Z'
+    && pod.doc.likes.type === 'Collection' && !('items' in pod.doc.likes) && !('orderedItems' in pod.doc.likes),
+    'the post is otherwise as it was: not marked edited, and nobody named in the totals');
+  await counts.publishCounts(intake);
+  check(pod.puts === 1, 'nothing changed since, nothing written');
+  await intake.onUndo({ type: 'Undo', actor: KOFI, object: { type: 'Like', actor: KOFI, object: POST } }, KOFI);
+  await intake.onUndo({ type: 'Undo', actor: NIA, object: { type: 'Announce', actor: NIA, object: POST } }, NIA);
+  check(JSON.stringify(counts.totalsFor(store, POST)) === JSON.stringify({ likes: 1, shares: 1 }),
+    'an Undo takes back that one like; an Undo of a boost the sender never made takes back nothing');
+  // An edit lands between the read and the write: the edit stays, the totals wait.
+  remote.fetch = async (u, init = {}) => {
+    const res = await podFetch(u, init);
+    if ((init.method || 'GET') === 'GET') { pod.doc = { ...pod.doc, content: 'edited' }; pod.version++; }
+    return res;
+  };
+  await counts.publishCounts(intake);
+  remote.fetch = podFetch;
+  check(pod.doc.content === 'edited' && pod.doc.likes.totalItems === 2,
+    'an edit made while the totals were being written is kept, and the totals wait');
+  await counts.publishCounts(intake);
+  check(pod.doc.content === 'edited' && pod.doc.likes.totalItems === 1,
+    'and go on at the next pass, on top of the edit');
+  await like(NIA, 'https://elsewhere.example/n/5');
+  check(!state['counts.json'].posts['https://elsewhere.example/n/5'], "a like of someone else's post is not counted");
+  await like(YUKI);
+  pod.doc = { id: POST, type: 'Tombstone' }; pod.version++;
+  await counts.publishCounts(intake);
+  check(pod.doc.type === 'Tombstone' && !state['counts.json'].posts[POST] && !state['counts.json'].dirty.length,
+    'a deleted post is never written back, and its totals are dropped');
+
+  // The first run starts from the likes and boosts the notifications still hold.
+  const seedState = {};
+  const seedStore = {
+    read: (n, d) => (n in seedState ? JSON.parse(JSON.stringify(seedState[n])) : d),
+    write: (n, v) => { seedState[n] = JSON.parse(JSON.stringify(v)); },
+    getNotifications: () => [
+      { type: 'reblog', actor: NIA, noteId: POST }, { type: 'favourite', actor: KOFI, noteId: POST },
+      { type: 'favourite', actor: NIA, noteId: POST }, { type: 'favourite', actor: KOFI, noteId: 'https://elsewhere.example/n/5' },
+      { type: 'follow', actor: YUKI },
+    ],
+  };
+  pod.doc = { id: POST, type: 'Note', content: 'old post' }; pod.version++;
+  const seeded = new Intake({ config: {}, urls: { inbox: 'https://p.example/in/', notes: NOTES, actor: 'https://p.example/fedipod/ap/actor' },
+    remote, store: seedStore, deliverer: {}, publisher: {}, log: () => {} });
+  await counts.publishCounts(seeded);
+  check(pod.doc.likes?.totalItems === 2 && pod.doc.shares?.totalItems === 1 && pod.doc.content === 'old post',
+    'the first run counts the likes and boosts the notifications still hold, and writes them onto the post');
+  seedState['counts.json'].posts = {};
+  await counts.publishCounts(seeded);
+  check(Object.keys(seedState['counts.json'].posts).length === 0, 'and only the first run: totals kept since are not rebuilt');
+
+  // Past the cap the total still grows; the names stop.
+  const capped = { read: store.read, write: store.write };
+  for (let i = 0; i < counts.MAX_NAMED + 3; i++) counts.recordReaction(capped, 'Like', NOTES + 'big', `https://m.example/u/p${i}`);
+  check(counts.totalsFor(capped, NOTES + 'big').likes === counts.MAX_NAMED + 3
+    && state['counts.json'].posts[NOTES + 'big'].likes.length === counts.MAX_NAMED,
+    `past ${counts.MAX_NAMED} likes on one post the total still grows and the list of names stops`);
+  counts.forgetCounts(capped, NOTES + 'big');
+  check(counts.totalsFor(capped, NOTES + 'big').likes === 0, 'a deleted post keeps no totals');
+
+  // A post is written with its totals, and a new one with none.
+  const urls32 = { notes: NOTES, actor: 'https://p.example/fedipod/ap/actor', followers: 'https://p.example/fedipod/ap/followers' };
+  const fresh32 = wire32.noteDoc({ urls: urls32, slug: 'n9', content: 'new', published: '2026-09-29T00:00:00Z' });
+  const edited32 = wire32.noteDoc({ urls: urls32, slug: 'n9', content: 'new', published: '2026-09-29T00:00:00Z', likes: 3, shares: 4 });
+  check(fresh32.likes.totalItems === 0 && fresh32.shares.totalItems === 0 && edited32.likes.totalItems === 3 && edited32.shares.totalItems === 4,
+    'a new post says no likes and no boosts; an edited one keeps the totals it had');
+
+  // The owner's own apps see the same totals.
+  counts.recordReaction(store2, 'Like', OWN, ALICE);
+  counts.recordReaction(store2, 'Like', OWN, DAN);
+  counts.recordReaction(store2, 'Announce', OWN, DAN);
+  const own32 = await call(`/api/v1/statuses/${store2.idFor(OWN)}`);
+  const other32 = await call(`/api/v1/statuses/${store2.idFor(REPLY)}`);
+  check(own32.status === 200 && own32.json.favourites_count === 2 && own32.json.reblogs_count === 1
+    && other32.json.favourites_count === 0 && other32.json.reblogs_count === 0,
+    `your own apps show the same totals on your post, and none on someone else's (${own32.json?.favourites_count}/${own32.json?.reblogs_count})`);
+}
+
 child.kill('SIGTERM');
 fs.rmSync(HOME, { recursive: true, force: true });
 console.log(failures ? `\n${failures} FAILURE(S)` : '\nall green');
