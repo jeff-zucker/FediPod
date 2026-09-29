@@ -21,7 +21,9 @@ export default async function handler(request) {
   const { handle } = JSON.parse(body);
   const ctx = gatewayCtx();
   ctx.keeperCredential = await keeperCredential();
-  const rec = await ctx.lookup(handle);
+  // Read fresh: a run is started the moment a row is switched on, and the
+  // ordinary read can still answer with the row as it was.
+  const rec = await (ctx.lookupFresh || ctx.lookup)(handle);
   const started = Date.now();
   // A run that failed tries again in an hour, not every round.
   const out = await keepOnce(ctx, handle, rec).catch((e) => ({ skipped: `failed: ${e?.message || e}`, retry: 'later' }));

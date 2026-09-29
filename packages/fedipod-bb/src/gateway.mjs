@@ -27,7 +27,9 @@ export const isForumRow = (rec) => !!rec?.inboxUrl && (rec.kind === 'group' || r
 export async function forumFor(ctx, handle, rec) {
   const forumHandle = rec.kind === 'application' ? handle : rec.forum;
   if (!forumHandle) return { skipped: 'the category names no forum; run `fedipod-bb keep` again' };
-  const forumRec = forumHandle === handle ? rec : await ctx.lookup(forumHandle);
+  // Read fresh where the front offers it: the forum's row is switched on
+  // last, and its first run starts in the same breath.
+  const forumRec = forumHandle === handle ? rec : await (ctx.lookupFresh || ctx.lookup)(forumHandle);
   if (!forumRec || !isForumRow(forumRec) || !forumRec.keeper) return { skipped: `@${forumHandle} is not a forum this gateway keeps` };
   if (!forumRec.webId || !forumRec.podHome) return { skipped: 'the forum row names no owner or pod' };
   const home = forumRec.podHome.replace(/\/?$/u, '/');
@@ -89,7 +91,7 @@ async function readConfig(ctx, f, podFetch) {
 export async function ensureForumCopies(ctx, f, config, log) {
   const rows = [[f.forumHandle, f.forumRec]];
   for (const c of config?.categories || []) {
-    const r = await ctx.lookup(c.slug);
+    const r = await (ctx.lookupFresh || ctx.lookup)(c.slug);
     if (r && isForumRow(r)) rows.push([c.slug, r]);
   }
   const have = new Set();
