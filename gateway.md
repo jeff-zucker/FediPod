@@ -176,14 +176,12 @@ open FediPod, or every fifteen minutes otherwise. While FediPod is open, mail
 goes straight to your pod as before. A DeviceAgent's mail always goes straight
 to its pod.
 
-**The gateway keeps your account running.** Unless you turn it off, the
-gateway accepts your follows, tries again what failed to go out, and publishes
-the posts you scheduled, all while FediPod is closed. Other mail waits on your
+**The gateway keeps your account running.** It accepts your follows, tries
+again what failed to go out, and publishes the posts you scheduled, all while FediPod is closed. Other mail waits on your
 pod for FediPod to open, as before. It works under its own pod identity, which your app
 names in the access rules on your FediPod folder. It reads your signing key
 from your pod when it needs it, so it can post as you, and keeps no copy of the
-key. **Stop keeping it running** on the manage page takes it out of the rules.
-If fedipod.net ever changes its own pod identity, your FediPod moves your
+key. If fedipod.net ever changes its own pod identity, your FediPod moves your
 account over the next time you open it, with nothing for you to do.
 Scheduling a post is offered only while this is on, because otherwise nothing
 would be running when the time came.
@@ -193,9 +191,8 @@ keeps your account running, your timeline, notifications, followers, settings
 and the rest of your FediPod state are kept at fedipod.net, and FediPod in your
 browser, the gateway and any app you use all work from that one copy, so they
 never disagree. fedipod.net writes what changed to your pod every fifteen
-minutes, and everything at once when you stop it keeping your account running,
-move your address or close it. Your signing key and the passwords of accounts
-you connected elsewhere are never in the copy; they stay on your pod only.
+minutes, and everything at once when your address moves or is closed. Your
+signing key and the passwords of accounts you connected elsewhere are never in the copy; they stay on your pod only.
 
 ## Using any Mastodon app
 
@@ -231,8 +228,7 @@ content and discards it. Follows, unfollows, account moves, deletions and
 blocks still reach your pod. Signing in ends an automatic pause by itself; a
 pause you set lasts until you lift it.
 
-**Closed.** After six months without a sign-in, or when you say so on the
-manage page, the address is closed for good: its handle, its actor and its
+**Closed.** After six months without a sign-in, the address is closed for good: its handle, its actor and its
 door answer 410 Gone, other servers drop the account the next time they look,
 and nobody can take the name. Nothing on your pod is touched. An address that
 had already moved to another gateway keeps answering as moved.

@@ -109,6 +109,7 @@ there it takes over; the first drops back to reading.
 
 ## What the browser version does not do
 
+<!-- CLAUDE 2026-09-29 — the next two bullets are no longer true: the manage page no longer offers to stop fedipod.net keeping your account running. Delete both bullets and these markers. -->
 - **Scheduled posts, if you stop fedipod.net keeping your account running.**
   It does by default, and publishes them while FediPod is closed. Turned off
   on the manage page, nothing runs between now and the time you picked, so
@@ -117,6 +118,7 @@ there it takes over; the first drops back to reading.
   account running.** While it does (the default), any Mastodon app, phone or
   desktop, can use your account with `fedipod.net` as its server, and an app
   that offers notifications gets them on your phone with everything closed.
+<!-- /CLAUDE -->
 - **Live updates.** The client refreshes by polling.
 - **Hosting a group.** Joining one works.
 
