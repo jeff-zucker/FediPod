@@ -141,6 +141,33 @@ function nextRun(forum, asksPending) {
  * Returns what the keeper's bookkeeping expects: { drained, waiting, nextAt }
  * or { skipped, retry }.
  */
+// A queued delivery's identity: where it goes and what it carries.
+const queueKey = (item) => `${item.inbox}\u0000${typeof item.activity === 'string' ? item.activity : JSON.stringify(item.activity)}`;
+
+/**
+ * The queue after a carry that ran with nobody holding the forum: `before`
+ * is what the run took out to carry, `after` what the carry left of it
+ * (delivered items gone, failed ones with their next time), `fresh` the
+ * queue as the copy holds it now, which the door may have added to in the
+ * meantime. A door only ever appends, so: an item the run took out is kept
+ * as the carry left it or dropped if delivered; anything else is the door's
+ * and stays.
+ */
+export function mergeQueues(before, after, fresh) {
+  const taken = new Set(before.map(queueKey));
+  const left = new Map(after.map((i) => [queueKey(i), i]));
+  const out = [];
+  for (const item of fresh) {
+    const k = queueKey(item);
+    if (!taken.has(k)) { out.push(item); continue; }
+    if (left.has(k)) out.push(left.get(k));
+  }
+  return out;
+}
+
+const storesOf = (forum) => [forum.store, ...forum.categories.map((c) => c.store)];
+const deliverersOf = (forum) => [...forum.categories.map((c) => c.deliverer), forum.siteAgent.deliverer];
+
 export async function keepOnce(ctx, handle, rec, { log = console.log, session = null, remote: given = null, prepare = null } = {}) {
   const f = await forumFor(ctx, handle, rec);
   if (f.skipped) return { skipped: f.skipped };
@@ -151,10 +178,19 @@ export async function keepOnce(ctx, handle, rec, { log = console.log, session = 
   const config = await readConfig(ctx, f, podFetch);
   if (!config) return { skipped: 'no forum on the pod' };
   const copies = await ensureForumCopies(ctx, f, config, say);
+  // The forum is held only while its state changes: the drain, the asks, the
+  // queue, the heartbeat, the write to the copies. The carry — one signed
+  // POST per follower server, each with its own timeout — runs with the forum
+  // free, so a post arriving at the door meanwhile is placed at once instead
+  // of waiting for the run to end. The queue the carry changes is written
+  // back under the lock, merged with whatever the door queued in between.
   const unlock = await lockCopy(ctx.copyKv, f.forumHandle);
   if (!unlock) return { skipped: 'the gateway is busy with this forum', retry: 'soon' };
+  let forum;
+  let before;
+  let asks = 0;
   try {
-    const forum = agentFor(ctx, f, { remote, podFetch, copies, log: say, mode: 'run' });
+    forum = agentFor(ctx, f, { remote, podFetch, copies, log: say, mode: 'run' });
     if (!await forum.connect({ act: false })) return { skipped: 'no forum on the pod' };
     prepare?.(forum);   // a test's origins, in place of the network
     if (!await forum.lease.acquire()) return { skipped: 'another host has the forum', retry: 'soon' };
@@ -163,22 +199,42 @@ export async function keepOnce(ctx, handle, rec, { log = console.log, session = 
       await forum.intake.drain();
       await forum.applyVerifiedAsks().catch((e) => say(`asks: ${e.message}`));
       await forum.publishModQueue().catch((e) => say(`queue: ${e.message}`));
-      for (const cat of forum.categories) await cat.deliverer.drainQueue();
-      await forum.siteAgent.deliverer.drainQueue();
       await publish.publishHeartbeat(forum.siteAgent).catch((e) => say(`heartbeat: ${e.message}`));
-      await Promise.allSettled([forum.store.flush(), ...forum.categories.map((c) => c.store.flush())]);
-      const waiting = [forum.store, ...forum.categories.map((c) => c.store)].reduce((n, s) => n + (s.getQueue?.() || []).length, 0);
-      const asks = [forum.store, ...forum.categories.map((c) => c.store)].reduce((n, s) => n + s.read('modqueue.json', []).length, 0);
-      // The run wrote on the pod (what the door could not place, the queue,
-      // the heartbeat): the edge's copies of the forum's documents go.
-      if (ctx.purge) {
-        const tags = [`u-${f.forumHandle}`, ...(config.categories || []).map((c) => `u-${c.slug}`)];
-        await ctx.purge(tags).catch((e) => say(`purge: ${e.message}`));
-      }
-      say(`done: inbox drained, ${waiting} delivery(ies) waiting, ${asks} ask(s) pending`);
-      return { drained: true, waiting, nextAt: nextRun(forum, asks) };
+      await Promise.allSettled(storesOf(forum).map((s) => s.flush()));
+      asks = storesOf(forum).reduce((n, s) => n + s.read('modqueue.json', []).length, 0);
+      before = new Map(storesOf(forum).map((s) => [s, s.getQueue?.() || []]));
     } finally { await forum.lease.release().catch(() => {}); }
   } finally { await unlock(); }
+
+  // The carry, with the forum free.
+  for (const d of deliverersOf(forum)) await d.drainQueue().catch((e) => say(`carry: ${e.message}`));
+  const after = new Map(storesOf(forum).map((s) => [s, s.getQueue?.() || []]));
+
+  // What the carry left, written back under the lock beside what the door
+  // queued meanwhile. The door holds the forum for seconds, so the wait is short.
+  const relock = await lockCopy(ctx.copyKv, f.forumHandle, { waitMs: 20_000 });
+  if (!relock) { say('the queue could not be written back: the forum stayed busy'); return { drained: true, waiting: null, retry: 'soon' }; }
+  let waiting = 0;
+  try {
+    // The copy takes a write only from the lease's holder; the lease again, briefly.
+    if (!await forum.lease.acquire()) { say('the queue could not be written back: another host has the forum'); return { drained: true, waiting: null, retry: 'soon' }; }
+    for (const s of storesOf(forum)) {
+      let fresh = null;
+      try { await s.load(); fresh = s.getQueue?.() || []; } catch { fresh = null; }
+      const merged = fresh ? mergeQueues(before.get(s) || [], after.get(s) || [], fresh) : (after.get(s) || []);
+      s.setQueue?.(merged);
+      waiting += merged.length;
+    }
+    await Promise.allSettled(storesOf(forum).map((s) => s.flush()));
+  } finally { await forum.lease.release().catch(() => {}); await relock(); }
+  // The run wrote on the pod (what the door could not place, the queue, the
+  // heartbeat): the edge's copies of the forum's documents go.
+  if (ctx.purge) {
+    const tags = [`u-${f.forumHandle}`, ...(config.categories || []).map((c) => `u-${c.slug}`)];
+    await ctx.purge(tags).catch((e) => say(`purge: ${e.message}`));
+  }
+  say(`done: inbox drained, ${waiting} delivery(ies) waiting, ${asks} ask(s) pending`);
+  return { drained: true, waiting, nextAt: nextRun(forum, asks) };
 }
 
 /**

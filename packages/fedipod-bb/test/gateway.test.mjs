@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { memoryKv, copyMeta } from 'fedipod/gateway/copy.mjs';
 import { ForumAgent } from '../src/forum-agent.mjs';
-import { isForumRow, placeAtDoor, keepOnce } from '../src/gateway.mjs';
+import { isForumRow, placeAtDoor, keepOnce, mergeQueues } from '../src/gateway.mjs';
 import * as topics from '../src/topics.mjs';
 import { POD, MEI, KWAME, fakePod, home, remoteDocs, note } from './fake-pod.mjs';
 
@@ -70,6 +70,16 @@ async function keptForum() {
   };
   return { pod, kv, rows, ctx, started, said, purged, prepare, log: (m) => said.push(m) };
 }
+
+test('the queue after a carry: delivered items gone, failed ones as the carry left them, the door\'s additions kept', () => {
+  const a = { inbox: 'https://a/inbox', activity: '{"id":"1"}', attempts: 0, nextAt: 1 };
+  const b = { inbox: 'https://b/inbox', activity: '{"id":"1"}', attempts: 0, nextAt: 1 };
+  const bFailed = { ...b, attempts: 1, nextAt: 99 };
+  const c = { inbox: 'https://c/inbox', activity: '{"id":"2"}', attempts: 0, nextAt: 5 };   // queued by the door meanwhile
+  assert.deepEqual(mergeQueues([a, b], [bFailed], [a, b, c]), [bFailed, c]);
+  assert.deepEqual(mergeQueues([], [], [c]), [c], 'nothing taken out: the fresh queue as it is');
+  assert.deepEqual(mergeQueues([a], [], [a]), [], 'delivered and nothing new: empty');
+});
 
 test('a forum row and a category row are the forum\'s; a person\'s is not', () => {
   assert.equal(isForumRow({ kind: 'application', inboxUrl: 'https://p/fedipod-bb/ap/inbox/' }), true);

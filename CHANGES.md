@@ -7,6 +7,13 @@ the last switch.** That switch starts the Gateway's first run, which now
 finds the pod readable the moment it starts, instead of failing once and
 waiting for the next post.
 
+**A post sent to a forum while fedipod.net is still carrying an earlier one
+is on the forum at once.** Carrying a post to followers elsewhere used to hold
+the forum for the whole run, so a second post within the same minute waited
+until the run ended, a minute or two. The forum is now held only while its
+own record changes; the carry runs with the forum free, and what it leaves
+to try again is written back beside whatever arrived meanwhile.
+
 **A delivery whose signature fails the check is logged with its signature
 format and the sender's signature parameters**, key id, algorithm and the
 parts it signed, never the signature value. That settles what a sender does
