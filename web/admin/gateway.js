@@ -19,33 +19,22 @@ async function refreshGateway() {
     GW_OPEN_ATTACH.hidden = true;
     GW_OPEN_DETACH.hidden = false;
     // The account's standing at the gateway — paused, closed. The browser
-    // build's agent reports it; a DeviceAgent's does not, and the pause
+    // build's agent reports it; a DeviceAgent's does not, and the keep
     // control stays hidden.
     const st = g.standing;
     const known = !!st && (st.status === 200 || st.status === 410);
-    $('gateway-pause').hidden = !known || !!st.closed || !!st.paused;
-    $('gateway-resume').hidden = !known || !!st.closed || !st.paused;
     if (known && st.closed) GATEWAY_WORD.textContent += ' — this address is closed';
     else if (known && st.paused) GATEWAY_WORD.textContent += st.pausedBy === 'owner' ? ' — paused by you' : ' — paused';
     // Kept running while FediPod is closed; offered only to an account that is not.
     const kp = g.keeper;
     $('gateway-keep-on').hidden = !kp || !known || !!st.closed || kp.on;
-    if (kp?.on && known && !st.closed) GATEWAY_WORD.textContent += ' — kept running while you are away';
   } else {
     GATEWAY_WORD.textContent = '';
     GW_OPEN_ATTACH.hidden = false;
     GW_OPEN_DETACH.hidden = true;
-    for (const id of ['gateway-pause', 'gateway-resume', 'gateway-keep-on']) $(id).hidden = true;
+    $('gateway-keep-on').hidden = true;
   }
 }
-const setPausedAtGateway = async (paused) => {
-  const r = await write('/gateway/pause', { paused },
-    paused ? 'paused — posts sent to you are not kept until you resume; follows still arrive'
-      : 'resumed — posts sent to you are kept again');
-  if (r) refreshGateway();
-};
-$('gateway-pause').addEventListener('click', () => setPausedAtGateway(true));
-$('gateway-resume').addEventListener('click', () => setPausedAtGateway(false));
 $('gateway-keep-on').addEventListener('click', async () => {
   const r = await write('/gateway/keep', { on: true },
     'kept running — follows, deliveries to try again and scheduled posts are handled while FediPod is closed');

@@ -223,10 +223,9 @@ about each browser account — when its owner last signed in or posted, and
 how much content has arrived since — and acts on them.
 
 **Paused.** After about 5,000 posts, replies, likes, boosts and edits since
-you were last here, or when you say so on the manage page, the door accepts
-content and discards it. Follows, unfollows, account moves, deletions and
-blocks still reach your pod. Signing in ends an automatic pause by itself; a
-pause you set lasts until you lift it.
+you were last here, the door accepts content and discards it. Follows,
+unfollows, account moves, deletions and blocks still reach your pod. Signing
+in ends the pause.
 
 **Closed.** After six months without a sign-in, the address is closed for good: its handle, its actor and its
 door answer 410 Gone, other servers drop the account the next time they look,
