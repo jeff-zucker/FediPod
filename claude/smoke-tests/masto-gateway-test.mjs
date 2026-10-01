@@ -43,6 +43,7 @@ const ctx = {
   host: 'gw.example', copyKv, mastoKv,
   lookup: async (h) => rows[h] || null,
   listDirectory: async () => rows,
+  putDirectory: async (h, r) => { rows[h] = r; },
   keeperWebId: 'https://keeper.example/#me',
   keeperMark: 'first-credential',
   keeperCredential: { webId: 'https://keeper.example/#me', clientId: 'x', secret: 'y', tokenEndpoint: 'https://keeper.example/token', issuerOrigin: 'https://keeper.example' },
@@ -123,6 +124,7 @@ try {
   check(back?.origin === 'https://elk.zone' && back.searchParams.get('code') && back.searchParams.get('state') === 's1',
     'the owner\'s sign-in sends the app its code');
   const code = back.searchParams.get('code');
+  check(Date.now() - Date.parse(rows.mei.openedAt) < 5_000, 'signing an app in counts as the owner being here');
   const anaAsk = { ...ask, address: 'ana' };
   const refused = await call('POST', '/api/authorize', { body: anaAsk, headers: { authorization: 'DPoP ana', dpop: 'x' } });
   check(refused.status === 502 && /could not be read \(HTTP 403\)/.test(refused.json?.error) && !/another device/.test(refused.json?.error),
@@ -146,6 +148,16 @@ try {
   check(me.status === 200 && me.json.username === 'mei' && /gw\.example/.test(me.json.url || me.json.acct || ''), `the app sees whose account it is (${me.json?.acct})`);
   const home = await call('GET', '/api/v1/timelines/home', { headers: bearer });
   check(home.status === 200 && home.json.some((s) => /from the copy/.test(s.content)), 'and reads the timeline from the copy');
+
+  // ---- using an app counts as being here, at most once an hour ----
+  const longAgo = new Date(Date.now() - 2 * 3600_000).toISOString();
+  rows.mei.openedAt = longAgo;
+  await call('GET', '/api/v1/timelines/home', { headers: bearer });
+  const stamped = rows.mei.openedAt;
+  check(stamped !== longAgo && Date.now() - Date.parse(stamped) < 5_000,
+    'an app used two hours after the owner was last here counts as being here, so the account is not paused or closed');
+  await call('GET', '/api/v1/timelines/home', { headers: bearer });
+  check(rows.mei.openedAt === stamped, 'and is not written again within the hour');
 
   // ---- an app left open, checking again and again ----
   const reads = [];
