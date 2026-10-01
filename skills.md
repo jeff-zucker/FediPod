@@ -55,7 +55,7 @@ Six functions on Netlify, thin adapters around plain Node in `lib/gateway/`:
 | `front` | WebFinger, every fronted public face, sign-up and attach, the directory, notices, the outbox door, held mail, the keeper switch; a delivery to a browser account |
 | `inbox` | the one-person door (a DeviceAgent behind a gateway) |
 | `account` | the routes that act for an account: the browser reaching its copy (`/api/state/*`) and Mastodon apps (`/oauth/*`, `/api/v1/*`, `/api/v2/*`, `/api/authorize`); `front` leaves these paths to it |
-| `flush-mail` | every fifteen minutes: held mail to pods in batches, copies written to pods, kept accounts with work due handed to the keeper |
+| `flush-mail` | every fifteen minutes: held mail to pods in batches, the forum's copies written to its pod, kept accounts with work due (or with an outside app signed in and mail held) handed to the keeper, apps' sign-ins that ran out let go |
 | `keeper-background` | one kept account's run, started only by `flush-mail` |
 | `push-background` | one account's held mail read into its copy and each notification pushed to its phones |
 
@@ -72,13 +72,16 @@ Six functions on Netlify, thin adapters around plain Node in `lib/gateway/`:
   keeps it running; `movedTo` and `closedAt` end it; `kind` is `person`,
   `group` or `application` (the forum). Read one with
   `netlify blobs:get directory <key>`.
-- **Kept running**: the owner's rules name fedipod.net's own pod identity
-  (the four `FEDIPOD_KEEPER_*` variables; the steps are in
-  `claude/keeper-setup.md`, local only). The account's state documents then
-  live in a working copy (store `state`, strong consistency) that the
-  browser, the keeper and Mastodon apps all work from; the round writes it
-  to the pod. The signing key, the pod lease and connected-account passwords
-  never enter the copy. Turning keeping off gives the copy back first.
+- **Kept running**: the rule on the owner's signing key names fedipod.net's
+  key reader (`FEDIPOD_KEY_READER_*`, else the keeper's `FEDIPOD_KEEPER_*`;
+  the steps are in `claude/keeper-setup.md`, local only), to read it and
+  nothing else. The account keeps a slim copy (store `state`, strong
+  consistency; full while an outside app is signed in) that the browser, the
+  keeper and Mastodon apps work from; FediPod writes what it changes to the
+  pod as well, and fedipod.net hands what it changes to the pod inbox as
+  stamped `gw-` items (lib/gateway/pod-mail.mjs). The signing key, the pod
+  lease, the private settings and connected-account passwords never enter
+  the copy. The forum is kept with full access to its own folder.
 - **Mastodon apps** sign in at `/app-signin/` (a Fediverse address or a
   WebID, proved by the pod's own login); apps, codes and token hashes are in
   the store `masto`, with the one VAPID pair. Held mail is `mail`, presence

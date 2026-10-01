@@ -4,6 +4,7 @@
 // that sign-in to the gateway with one signed request; the gateway hands the
 // app its code. No password of ours anywhere.
 import { fediLogin } from './fedi-login.mjs';
+import { fillAppCopy } from './app-fill.mjs';
 
 const $ = (id) => document.getElementById(id);
 const say = (text, error = false) => { const s = $('signin-status'); s.textContent = text; s.setAttribute('role', error ? 'alert' : 'status'); };
@@ -36,6 +37,8 @@ async function prove(address) {
     body: JSON.stringify({ ...Object.fromEntries(params), address }),
   });
   const d = await res.json().catch(() => ({}));
+  // The app's copy at the gateway, filled from the pod before the app looks.
+  if (res.ok && d.fill) await fillAppCopy(d.fill, s.fetch, say);
   if (res.ok && d.redirect) { say('Signed in. Going back to the app…'); location.href = d.redirect; return true; }
   if (res.ok && d.code) { say(`Signed in. The app asks you to paste this code into it: ${d.code}`); return true; }
   say(d.error || `The sign-in was refused (HTTP ${res.status}).`, true);

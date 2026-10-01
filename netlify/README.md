@@ -62,11 +62,14 @@ Attachments people make through the signup page are kept in a Netlify Blobs
 store named `directory`, and take precedence over the rows in
 `FEDIPOD_DIRECTORY_JSON`. Mail held while an app is closed is in the `mail`
 store, when each app last said it was open in `present`, and what each kept
-account has waiting in `keeper`. A kept account's working copy is in `state`,
-and the apps signed in here, with their codes and tokens (as hashes), in
-`masto`, with the one push key pair the gateway makes for all its accounts
-the first time an app asks; both are read with strong consistency. The round writes each copy to
-its pod. The page an app sends its person to is `/app-signin/`.
+account has waiting in `keeper`. A kept account's copy is in `state`, and the
+apps signed in here, with their codes and tokens (as hashes), in `masto`, with
+the one push key pair the gateway makes for all its accounts the first time
+an app asks; both are read with strong consistency. A person's copy is never
+written to their pod from here: what the gateway changes goes to the pod inbox,
+and the public documents among it are served from `pending-public` until the
+owner's FediPod has put them on the pod. The round writes the forum's copies
+to its pod. The page an app sends its person to is `/app-signin/`.
 
 To keep browser accounts running while their apps are closed, the front needs
 a pod account of its own, on a Community Solid Server, with a client credential
@@ -74,7 +77,7 @@ made for it:
 
 | Variable | What it is |
 |---|---|
-| `FEDIPOD_KEEPER_WEBID` | The WebID of the gateway's own pod account. Owners' apps name it in the access rules on their FediPod folders. |
+| `FEDIPOD_KEEPER_WEBID` | The WebID of the gateway's own pod account. A forum's rules name it on the forum's folder; a person's rule names it on their signing key alone, unless the key reader below is set. |
 | `FEDIPOD_KEEPER_ISSUER` | That account's identity provider. |
 | `FEDIPOD_KEEPER_CLIENT_ID` | The client credential's id. |
 | `FEDIPOD_KEEPER_CLIENT_SECRET` | Its secret. It also signs the runs `flush-mail` starts. |
@@ -82,12 +85,27 @@ made for it:
 Without them the manage page does not offer it, and a client cannot schedule
 posts.
 
-To change to a different pod account, set the four variables to the new one's
-values. Each kept account moves over the next time its owner opens FediPod:
-their browser writes the account's working copy to their pod, names the new
-identity in its access rules instead of the old, and a new copy is made. Until
-then the gateway leaves that account alone, and an app using it is told to
-open FediPod once. The old account's login is not needed for the change.
+To read people's signing keys under an identity of its own, apart from the
+forum's, the front takes a second pod account the same way. Unset, the keeper's
+is used.
+
+| Variable | What it is |
+|---|---|
+| `FEDIPOD_KEY_READER_WEBID` | The WebID people's pods let read their signing key, and nothing else. |
+| `FEDIPOD_KEY_READER_ISSUER` | That account's identity provider. |
+| `FEDIPOD_KEY_READER_CLIENT_ID` | The client credential's id. |
+| `FEDIPOD_KEY_READER_CLIENT_SECRET` | Its secret. |
+
+Set, each person's FediPod names it on their key the next time it opens, in
+place of the keeper; until then the keeper goes on reading that person's key.
+
+To change the keeper to a different pod account, set its four variables to
+the new one's values. The forum moves over at once if its rules are put right
+by `fedipod-bb keep` again. A person whose rule names the old account, and
+not the key reader, moves over the next time they open FediPod: their browser
+names the new identity on their key instead of the old. Until then the
+gateway leaves that account alone, and an app using it is told to open
+FediPod once. The old account's login is not needed for the change.
 
 
 The `/roster` page lists every account the front answers for and can remove

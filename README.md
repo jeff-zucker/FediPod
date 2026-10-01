@@ -7,6 +7,11 @@ follow people on Mastodon, Bluesky, and other Fediverse or ATProto servers in
 one timeline. Your posts, followers and settings are kept on your pod. While fedipod.net
 keeps your account running, it works from a copy of them and writes it to your
 pod every fifteen minutes; your signing key never leaves your pod.
+<!-- CLAUDE 2026-09-30 — replaces the sentence above beginning "While fedipod.net keeps your account running", which is no longer true; delete that sentence and these markers when done -->
+While fedipod.net keeps your account running, your pod lets it read your
+signing key and nothing else there. It keeps only what it needs to work for
+you, and what it does for you reaches your pod through your inbox.
+<!-- /CLAUDE -->
 
 The easiest way to run FediPod is to use it in any browser at https://fedipod.net. Nothing to install. Sign-up points you to a pod provider if you need a pod, then attaches a Fediverse identity to the pod you sign in with.
 
@@ -133,6 +138,17 @@ While fedipod.net keeps your account running, its own pod identity can read
 that container too, so it can act for you while FediPod is closed, and it
 works from a copy of your account's data that it writes back to your pod every
 fifteen minutes. Your key stays on your pod only.
+<!-- CLAUDE 2026-09-30 — replaces the paragraph's sentences above beginning "While fedipod.net keeps your account running", which are no longer true; delete them and these markers when done -->
+While fedipod.net keeps your account running, its own pod identity can read
+your signing key and nothing else on your pod, so it can act for you while
+FediPod is closed. It never writes to your pod: what it does for you goes
+into your pod's inbox, which only you can read, and FediPod files it there
+the next time it runs. It keeps your followers and the people you follow,
+follow requests, blocks, the public part of your settings, and posts waiting
+to go out. While an app other than FediPod is signed in, it also keeps what
+that app shows: your timeline, notifications and direct messages. Those go
+from fedipod.net the moment the last such app signs out.
+<!-- /CLAUDE -->
 It all lives in the `fedipod` container you chose at sign-up. Your pod's
 public type index records it, as an ActivityStreams actor, which is how
 FediPod and other Solid apps find your account again.

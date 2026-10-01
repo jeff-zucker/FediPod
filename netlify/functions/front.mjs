@@ -255,6 +255,13 @@ export function gatewayCtx() {
     // The gateway's own pod identity, which an owner may let act for them while
     // their app is closed (lib/gateway/keeper.mjs), and what its last run left.
     keeperWebId: process.env.FEDIPOD_KEEPER_WEBID || null,
+    // The identity that reads a person's signing key, and nothing else on their
+    // pod (lib/gateway/account-agent.mjs). Its own when the operator gave it
+    // one (FEDIPOD_KEY_READER_*), else the keeper's above.
+    keyReaderWebId: process.env.FEDIPOD_KEY_READER_WEBID || null,
+    // Public documents fedipod.net wrote for a person and handed to their pod
+    // inbox, served from here until the pod has them (lib/gateway/pod-mail.mjs).
+    pendingPublic: pendingPublicStore(),
     // A forum this gateway keeps is placed and run by the forum's own code,
     // when this Gateway keeps forums (netlify/forum-support.mjs); null otherwise.
     forum: forumGateway || null,
@@ -325,6 +332,26 @@ export function gatewayCtx() {
   };
 }
 
+// Public documents waiting for their owner's FediPod to put them on the pod,
+// per account, named by a hash of their address.
+function pendingPublicStore() {
+  const store = () => getStore({ name: 'pending-public', consistency: 'strong' });
+  const key = (handle, url) => `${handle}/${crypto.createHash('sha256').update(url).digest('hex').slice(0, 32)}`;
+  return {
+    async get(handle, url) { return (await store().get(key(handle, url), { type: 'json' })) || null; },
+    async set(handle, url, value) { await store().setJSON(key(handle, url), { ...value, url }); },
+    async delete(handle, url) { await store().delete(key(handle, url)); },
+    async list(handle) {
+      const out = [];
+      for (const b of (await store().list({ prefix: `${handle}/` })).blobs) {
+        const value = await store().get(b.key, { type: 'json' });
+        if (value?.url) out.push({ url: value.url, value });
+      }
+      return out;
+    },
+  };
+}
+
 // A Netlify Blobs store as the copy's key-value store (lib/gateway/copy.mjs).
 function blobsKv(name) {
   const store = () => getStore({ name, consistency: 'strong' });
@@ -355,6 +382,18 @@ export async function keeperCredential() {
   const issuerOrigin = issuer.replace(/\/+$/u, '');
   tokenEndpoint ||= await grant.discoverTokenEndpoint(issuerOrigin);
   return { webId, issuerOrigin, clientId, secret, tokenEndpoint };
+}
+
+// The key reader's credential, when the operator gave it one of its own
+// (FEDIPOD_KEY_READER_*): null otherwise, and the keeper's is used.
+let readerTokenEndpoint = null;
+export async function keyReaderCredential() {
+  const { FEDIPOD_KEY_READER_WEBID: webId, FEDIPOD_KEY_READER_ISSUER: issuer,
+    FEDIPOD_KEY_READER_CLIENT_ID: clientId, FEDIPOD_KEY_READER_CLIENT_SECRET: secret } = process.env;
+  if (!webId || !issuer || !clientId || !secret) return null;
+  const issuerOrigin = issuer.replace(/\/+$/u, '');
+  readerTokenEndpoint ||= await grant.discoverTokenEndpoint(issuerOrigin);
+  return { webId, issuerOrigin, clientId, secret, tokenEndpoint: readerTokenEndpoint };
 }
 
 // The account routes are the account function's (account.mjs): it carries

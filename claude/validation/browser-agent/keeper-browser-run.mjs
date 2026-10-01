@@ -101,8 +101,9 @@ const server = http.createServer((q, s) => {
       const body = JSON.parse(raw || '{}');
       if (u === '/api/keeper') { keeperCalls.push({ on: body.on, auth: !!q.headers.authorization }); kept = body.on === true; }
       if (u === '/api/here') hereCalls.push(body);
-      const out = u === '/api/open' ? { ok: true, handle: body.handle, paused: false, closed: false, keeper: KEEPER, kept }
-        : u === '/api/keeper' ? { ok: true, handle: body.handle, kept, keeper: KEEPER } : { ok: true, handle: body.handle, flushed: 0 };
+      // A person's account: the gateway reads the signing key and nothing else (keyOnly).
+      const out = u === '/api/open' ? { ok: true, handle: body.handle, paused: false, closed: false, keeper: KEEPER, kept, keyOnly: true }
+        : u === '/api/keeper' ? { ok: true, handle: body.handle, kept, keeper: KEEPER, keyOnly: true } : { ok: true, handle: body.handle, flushed: 0 };
       s.writeHead(200, { 'content-type': 'application/json' }); s.end(JSON.stringify(out));
     });
     return;
@@ -154,6 +155,7 @@ const evaluate = async (expression) => {
   if (r.result?.exceptionDetails) return { __error: r.result.exceptionDetails.exception?.description || r.result.exceptionDetails.text };
   return r.result?.result?.value;
 };
+const waitFor = async (fn, tries = 60, ms = 500) => { for (let i = 0; i < tries; i++) { if (await fn()) return true; await sleep(ms); } return false; };
 try {
   await send('Page.enable'); await send('Runtime.enable');
   await send('Page.navigate', { url: `http://localhost:${APP_PORT}/` });
@@ -178,9 +180,11 @@ try {
   const owner = createGrantSession(cred);
   const rule = async (url) => (await owner.fetch(url + '.acl', { headers: { accept: 'text/turtle' } })).text();
   const names = async (url) => /keeper\.example/.test(await rule(url));
-  check(await names(pod + 'fedipod/ap-state/') && await names(pod + 'fedipod/'),
-    'its folder and its state now name the keeper');
-  check(await names(pod + 'fedipod/ap/actor'), 'and so does the rule on its public actor');
+  const reads = async () => { const r = await rule(pod + 'fedipod/ap-state/keys.json'); return /keeper\.example/.test(r) && !/acl:Write[^.]*keeper|keeper[^.]*acl:Write/s.test(r); };
+  check(await waitFor(reads, 30, 500), 'the rule on its signing key names the keeper, to read it');
+  check(!(await names(pod + 'fedipod/ap-state/')) && !(await names(pod + 'fedipod/')),
+    'its folder and its state do not');
+  check(!(await names(pod + 'fedipod/ap/actor')), 'nor does the rule on its public actor');
   check((await fetch(pod + 'fedipod/ap/actor', { headers: { accept: 'application/activity+json' } })).status === 200,
     'which is still public');
   const page = (p, init = {}) => evaluate(`(async () => { const r = await fetch(${JSON.stringify(p)}, { ...${JSON.stringify(init)}, headers: { 'x-fedipod-page': '1', 'content-type': 'application/json' } }); return { status: r.status, json: await r.json().catch(() => null) }; })()`);
@@ -189,7 +193,7 @@ try {
 
   const off = await page('/gateway/keep', { method: 'POST', body: JSON.stringify({ on: false }) });
   check(off.status === 200 && keeperCalls.at(-1)?.on === false, `turning it off tells the gateway first (${off.status})`);
-  check(!(await names(pod + 'fedipod/ap-state/')) && !(await names(pod + 'fedipod/ap/actor')), 'and takes the keeper out of the rules');
+  check(!(await names(pod + 'fedipod/ap-state/keys.json')), 'and takes the keeper off the key\'s rule');
   check((await page('/gateway')).json?.keeper?.on === false, 'and the manage page says so');
   // Turning it back on, from the manage page.
   await send('Page.navigate', { url: `http://localhost:${APP_PORT}/admin/` });
@@ -200,7 +204,7 @@ try {
   const callsBefore = keeperCalls.length;
   await evaluate(`${$('gateway-keep-on')}.click()`);
   for (let i = 0; i < 40 && keeperCalls.length === callsBefore; i++) await sleep(500);
-  check(keeperCalls.at(-1)?.on === true && await names(pod + 'fedipod/ap-state/'), 'one click turns it back on and names the gateway again');
+  check(keeperCalls.at(-1)?.on === true && await waitFor(reads, 30, 500), 'one click turns it back on and names the gateway on the key again');
   // Scheduling, now that something runs when the time comes.
   const at = new Date(Date.now() + 5 * 60_000).toISOString();
   const scheduled = await evaluate(`(async () => {

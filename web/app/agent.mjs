@@ -34,7 +34,8 @@ import { AcctFeed } from '../../lib/connections/acctfeed.mjs';
 import { followActor, unfollowActor, resolveHandle } from '../../lib/core/social.mjs';
 import { podBaseOfWebId } from '../../lib/pod/urls.mjs';
 import { ImportWorker } from '../../lib/connections/import.mjs';
-import { openCopy, copyStorage, copyLeaseOf, moveIntoCopy, leaveCopy, renewCopyToken, standDown, ensureCopyLease, handOverCopy, forgetFailedOpen } from './copy-mode.mjs';
+import { openCopy, copyStorage, copyLeaseOf, moveIntoCopy, leaveCopy, renewCopyToken, standDown, ensureCopyLease, handOverCopy, forgetFailedOpen,
+  fillCopy, upgradeCopy, refreshCopyMeta, copyNamesOf } from './copy-mode.mjs';
 
 // The authorities this identity answers on: exactly one, this origin. The Node
 // agent gets this from lib/guard.mjs, which is not in the browser bundle and
@@ -184,9 +185,14 @@ export class BrowserAgent {
       this._keeper.kept = false;
       if (this.masto) this.masto.scheduling = false;
     }
-    this.remote.keepers = on ? [webId] : [];
+    // A person's gateway reads the signing key and nothing else: named on the
+    // key's own rule, and on no other. The forum's keeper is named everywhere.
+    const keyOnly = !!this.gatewayStanding?.keyOnly;
+    this.remote.keepers = on && !keyOnly ? [webId] : [];
     await containers.restateRules(this.remote, this.urls);
+    if (keyOnly) await podState.ruleOnKey(this.remote, this.urls, on ? webId : null);
     await this.publisher.publishProfile();
+    if (keyOnly) this.store.setConfig({ ...this.store.getConfig(), keyReader: on ? webId : null });
     await this.store.flush?.();
     if (!on) return { status: 200, ok: true, kept: false };
     const said = await this.tellGateway('keeper', { handle: this.doorKey, on: true });
@@ -198,6 +204,16 @@ export class BrowserAgent {
       this.log('the gateway keeps this account running while the app is closed');
     }
     return said || { status: 502 };
+  }
+
+  // How far this account's pod has been brought with what fedipod.net handed
+  // it, told once per new item applied.
+  async reportApplied() {
+    const seq = this.intake?.appliedSeq || 0;
+    if (!this.copy || seq <= (this._reportedSeq || 0)) return;
+    const res = await fetch(`${this.copy.base}applied`, { method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${this.copy.token}` }, body: JSON.stringify({ seq }) });
+    if (res.status === 200) this._reportedSeq = seq;
   }
 
   // A post just scheduled: the gateway hears when the next one falls due.
@@ -232,6 +248,7 @@ export class BrowserAgent {
       await kvPut(key, { at: Date.now(), standing }).catch(() => {});
     }
     await renewCopyToken(this, this.frontOrigin).catch(() => {});
+    if (this.store) await refreshCopyMeta(this).catch((e) => this.log(`the account's copy: ${e.message}`));
     return standing;
   }
 
@@ -276,9 +293,16 @@ export class BrowserAgent {
         await completeGatewayMove(this).catch((e) => this.log(`gateway move: ${e.message}`));
         // The gateway has a new identity since this account's copy was made:
         // the copy goes to the pod from here, and the new one is named below.
-        if (this.copy && this._keeper?.keptBy && this._keeper.keptBy !== this._keeper.webId) {
+        if (this.copy && this.copy.v !== 2 && this._keeper?.keptBy && this._keeper.keptBy !== this._keeper.webId) {
           const moved = await handOverCopy(this).catch((e) => ({ ok: false, why: e.message }));
           if (!moved.ok) this.log(`handing the copy over to the gateway's new identity: ${moved.why}`);
+        }
+        // A person's rules name the gateway on the signing key alone, and the
+        // identity it names now: put right once, by the first start that sees
+        // otherwise (the gateway took a new identity, or the rules are older).
+        if (this._keeper?.kept && this.gatewayStanding?.keyOnly && !this.store.getConfig()?.keeperOff
+          && this.store.getConfig()?.keyReader !== this._keeper.webId) {
+          await this.setKeeper(true).catch((e) => this.log(`the gateway's rule on the key: ${e.message}`));
         }
         // The first start that can: the gateway may act for this account while
         // the app is closed, unless its owner said no (setKeeper).
@@ -442,6 +466,14 @@ export class BrowserAgent {
     // The Node agent has always passed remote.fetch here.
     const podFetch = (u, i) => this.remote.fetch(u, i);
     const podStateStorage = new HttpStorage(this.urls.state, podFetch);
+    this.podState = podStateStorage;
+    // A copy from before version 2 is copied to the pod and started again; a
+    // person's copy that is empty is filled from the pod. Both before anything
+    // is read from it.
+    if (this.copy) {
+      if (!await upgradeCopy(this, podStateStorage).catch((e) => { this.log(`the account's copy: ${e.message}`); return false; })) this.copy = null;
+      else await fillCopy(this, podStateStorage).catch((e) => this.log(`filling the copy: ${e.message}`));
+    }
     this.store = new PodStore({ storage: this.copy ? copyStorage(this, podStateStorage) : podStateStorage, log: this.log });
     keepInStep(this.store, webId, this.log);
     // Single-active-agent lease (lib/lease.mjs): the inbox drain is a
@@ -546,7 +578,7 @@ export class BrowserAgent {
     // the app is closed (lib/gateway/keeper.mjs). Unless the owner turned that
     // off, every rule this agent writes names it beside the owner.
     this._keeper = standing?.keeper ? { webId: standing.keeper, kept: !!standing.kept, keptBy: standing.keptBy || null } : null;
-    if (this._keeper && !this.store.getConfig()?.keeperOff) this.remote.keepers = [this._keeper.webId];
+    if (this._keeper && !this.store.getConfig()?.keeperOff && !standing?.keyOnly) this.remote.keepers = [this._keeper.webId];
 
     this.publisher = new Publisher({
       config: this.store.getConfig(), remote: this.remote, store: this.store,
@@ -590,6 +622,15 @@ export class BrowserAgent {
       store: this.store, deliverer: this.deliverer, publisher: this.publisher, log: this.log, push: true, lease: this.lease,
       ownerPost: (a, o) => this.c2s.dispatch(a, o),
     });
+    // What fedipod.net did for this account reaches the pod through the inbox
+    // (lib/core/intake/gateway-writes.mjs): the documents this agent works on at
+    // the gateway are brought up to date on the pod directly, the rest through
+    // the store. Then the gateway hears how far, so it lets go of the public
+    // copies it was showing meanwhile.
+    this.intake.inCopy = copyNamesOf(this.copy);
+    this.intake.podState = podStateStorage;
+    const drain = this.intake.drain.bind(this.intake);
+    this.intake.drain = async (...a) => { const out = await drain(...a); await this.reportApplied().catch(() => {}); return out; };
     // The Mastodon facade the service worker serves.
     //
     // It used to be handed `allowed: null`, which reads as "no policy" — and

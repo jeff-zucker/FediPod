@@ -1,5 +1,39 @@
 # Changes
 
+## Unreleased (fedipod.net may read your signing key and nothing else on your pod)
+
+**fedipod.net can no longer read or change anything on your pod but your
+signing key.** Your FediPod names it on the rule for your key, to read it, and
+takes it off every other rule on your pod, the next time you open FediPod.
+fedipod.net never writes to your pod: what it does for you while FediPod is
+closed (accepting a new follower, sending a scheduled post, a post you make in
+an app) goes into your pod's inbox, which only you can read, and FediPod files
+it there the next time it runs. A post or picture you make in an app is shown
+at its address on fedipod.net meanwhile.
+
+**fedipod.net keeps less of your account.** For an account that uses only
+FediPod, Sengi or Phanpy: your followers and the people you follow, follow
+requests, blocks, the public part of your settings, and posts waiting to go
+out. While an app other than FediPod is signed in, also what it shows: your
+timeline, notifications and direct messages. Those go from fedipod.net the
+moment the last such app signs out, or 90 days after it was connected.
+Signing an app in copies what it shows from your pod, mail still waiting in
+your pod's inbox included. FediPod writes everything it changes to your pod
+as well as to fedipod.net.
+
+**Using an app signed in at fedipod.net counts as being here,** so an account
+used only through an app is not paused, and its address not closed, for want
+of opening FediPod.
+
+**A follower's server asking fedipod.net later for one of your followers-only
+posts is not given it.** It already got the post when it was sent, and
+fedipod.net tries again for about three days when a server is down.
+
+**Upgrading:** the first time you open FediPod after this, it copies what
+fedipod.net kept for your account to your pod and rewrites the rules on your
+pod. Nothing to do. Until then fedipod.net goes on working for your account
+as it did.
+
 ## 2026-09-29 (your posts show their likes and boosts — version 1.46.0)
 
 **Your posts carry their number of likes and boosts**, so a server that
