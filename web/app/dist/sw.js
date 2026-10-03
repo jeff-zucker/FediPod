@@ -8978,7 +8978,7 @@ and ensure you are accounting for this risk.
                   }
                 }
                 if (name === "script" && a === "src") {
-                  let allowed2 = true;
+                  let allowed = true;
                   try {
                     const parsed = parseUrl(value);
                     if (options.allowedScriptHostnames || options.allowedScriptDomains) {
@@ -8988,22 +8988,22 @@ and ensure you are accounting for this risk.
                       const allowedDomain = (options.allowedScriptDomains || []).find(function(domain) {
                         return parsed.url.hostname === domain || parsed.url.hostname.endsWith(`.${domain}`);
                       });
-                      allowed2 = allowedHostname || allowedDomain;
+                      allowed = allowedHostname || allowedDomain;
                     }
                   } catch (e) {
-                    allowed2 = false;
+                    allowed = false;
                   }
-                  if (!allowed2) {
+                  if (!allowed) {
                     delete frame.attribs[a];
                     return;
                   }
                 }
                 if (name === "iframe" && a === "src") {
-                  let allowed2 = true;
+                  let allowed = true;
                   try {
                     const parsed = parseUrl(value);
                     if (parsed.isRelativeUrl) {
-                      allowed2 = has(options, "allowIframeRelativeUrls") ? options.allowIframeRelativeUrls : !options.allowedIframeHostnames && !options.allowedIframeDomains;
+                      allowed = has(options, "allowIframeRelativeUrls") ? options.allowIframeRelativeUrls : !options.allowedIframeHostnames && !options.allowedIframeDomains;
                     } else if (options.allowedIframeHostnames || options.allowedIframeDomains) {
                       const allowedHostname = (options.allowedIframeHostnames || []).find(function(hostname) {
                         return hostname === parsed.url.hostname;
@@ -9011,12 +9011,12 @@ and ensure you are accounting for this risk.
                       const allowedDomain = (options.allowedIframeDomains || []).find(function(domain) {
                         return parsed.url.hostname === domain || parsed.url.hostname.endsWith(`.${domain}`);
                       });
-                      allowed2 = allowedHostname || allowedDomain;
+                      allowed = allowedHostname || allowedDomain;
                     }
                   } catch (e) {
-                    allowed2 = false;
+                    allowed = false;
                   }
-                  if (!allowed2) {
+                  if (!allowed) {
                     delete frame.attribs[a];
                     return;
                   }
@@ -9350,13 +9350,13 @@ and ensure you are accounting for this risk.
           return allowedDeclarationsList;
         };
       }
-      function filterClasses(classes, allowed2, allowedGlobs) {
-        if (!allowed2) {
+      function filterClasses(classes, allowed, allowedGlobs) {
+        if (!allowed) {
           return classes;
         }
         classes = classes.split(/\s+/);
         return classes.filter(function(clss) {
-          return allowed2.indexOf(clss) !== -1 || allowedGlobs.some(function(glob) {
+          return allowed.indexOf(clss) !== -1 || allowedGlobs.some(function(glob) {
             return glob.test(clss);
           });
         }).join(" ");
@@ -45684,9 +45684,6 @@ async function probePrivateEnforcement(probe, podKeepUrl) {
 var readKeys = (pod, urls) => pod.getJson(urls.state + "keys.json");
 var readConfig = (pod, urls) => pod.getJson(urls.state + "config.json");
 var writeKeys = (pod, urls, keys) => pod.putJson(urls.state + "keys.json", keys, "application/json");
-async function ruleOnKey(pod, urls, reader) {
-  await pod.setAcl(urls.state + "keys.json", [], { readAgents: reader ? [reader] : [] });
-}
 
 // lib/core/store.mjs
 init_node_crypto();
@@ -46366,46 +46363,6 @@ var node_url_default = { URL: globalThis.URL, URLSearchParams: globalThis.URLSea
 
 // lib/core/pod-only.mjs
 var podOnly = (name) => name === "keys.json" || name === "lease.json" || name.startsWith("conn-");
-var SLIM_DOCS = /* @__PURE__ */ new Set([
-  "contacts.json",
-  "requests.json",
-  "blocklist.json",
-  "queue.json",
-  "deadletter.json",
-  "scheduled.json",
-  "actors.json",
-  "published.json",
-  "outbox.json",
-  "outbox-removed.json",
-  "outbox-own.json",
-  "liked.json",
-  "counts.json",
-  "poll-votes.json",
-  "intake-attempts.json",
-  "forwarded.json",
-  "c2s-seen.json"
-]);
-var PUBLIC_CONFIG_FIELDS = [
-  "handle",
-  "name",
-  "summary",
-  "icon",
-  "image",
-  "fields",
-  "aliases",
-  "createdAt",
-  "movedTo",
-  "movedFrom",
-  "quiescedAt",
-  "autoAcceptFollows",
-  "remotePod",
-  "root",
-  "inboxUrl",
-  "gateway",
-  "kind"
-];
-var PUBLIC_CONFIG = "config-public.json";
-var publicConfig = (config) => Object.fromEntries(PUBLIC_CONFIG_FIELDS.filter((k) => config?.[k] !== void 0).map((k) => [k, config[k]]));
 
 // lib/core/storage.mjs
 var LDP2 = Namespace("http://www.w3.org/ns/ldp#");
@@ -46488,62 +46445,40 @@ var HttpStorage = class {
   }
 };
 var StateApiStorage = class {
-  constructor(base, { fetchImpl = globalThis.fetch, token, holder, pod = null, onRefused = null, inCopy = null, mirror = false, publicConfig: publicConfig2 = null, onFull = null, log: log2 = () => {
-  } }) {
+  constructor(base, { fetchImpl = globalThis.fetch, token, holder, pod = null, onRefused = null }) {
     this.base = slash(base);
     this.fetchImpl = fetchImpl;
     this.token = token;
     this.holder = holder;
     this.pod = pod;
     this.onRefused = onRefused;
-    this.inCopy = inCopy;
-    this.mirror = mirror;
-    this.publicConfig = publicConfig2;
-    this.onFull = onFull;
-    this.log = log2;
   }
   get kind() {
     return "copy";
   }
-  async _ask(p, init = {}) {
-    const res = await this.fetchImpl(this.base + encodeURIComponent(p), {
+  _ask(p, init = {}) {
+    return this.fetchImpl(this.base + encodeURIComponent(p), {
       ...init,
       headers: { authorization: `Bearer ${this.token}`, ...init.headers || {} }
     });
-    const full = res.headers?.get?.("x-fedipod-full");
-    if (full !== null && full !== void 0) this.onFull?.(full === "1");
-    return res;
-  }
-  // On the pod alone: what never leaves it, and what this copy does not hold.
-  _onPod(p) {
-    return podOnly(p) || !!this.inCopy && !this.inCopy(p);
   }
   async list(sub = "", { etag } = {}) {
     if (sub) return { notModified: false, names: [], etag: null };
-    const [copyTag, podTag] = String(etag || "").split("|");
-    const res = await this._ask("", { headers: copyTag ? { "if-none-match": copyTag } : {} });
+    const res = await this._ask("", { headers: etag ? { "if-none-match": etag } : {} });
+    if (res.status === 304) return { notModified: true, names: null, etag };
     if (res.status >= 400) throw new Error(`the account's copy at the gateway is unreadable (HTTP ${res.status})`);
-    const fromCopy = res.status === 304 ? null : (await res.json()).names;
-    const newCopyTag = res.status === 304 ? copyTag : res.headers.get("etag");
-    if (!this.inCopy || !this.pod) {
-      if (res.status === 304) return { notModified: true, names: null, etag };
-      return { notModified: false, names: fromCopy, etag: newCopyTag };
-    }
-    const fromPod = await this.pod.list("", { etag: podTag || null });
-    if (res.status === 304 && fromPod.notModified) return { notModified: true, names: null, etag };
-    const copyNames = fromCopy || (await (await this._ask("")).json()).names;
-    const podNames = fromPod.notModified ? (await this.pod.list("")).names : fromPod.names || [];
-    const names = [.../* @__PURE__ */ new Set([...copyNames.filter((n) => this.inCopy(n) || podOnly(n)), ...podNames.filter((n) => this._onPod(n))])];
-    return { notModified: false, names, etag: `${newCopyTag || ""}|${fromPod.etag || ""}` };
+    const { names } = await res.json();
+    return { notModified: false, names, etag: res.headers.get("etag") };
   }
   async read(p, opts = {}) {
-    if (this._onPod(p)) return this.pod ? this.pod.read(p, opts) : { ok: false, notModified: false, status: 404, body: null, etag: null };
+    if (podOnly(p)) return this.pod ? this.pod.read(p, opts) : { ok: false, notModified: false, status: 404, body: null, etag: null };
     const res = await this._ask(p, { headers: opts.etag ? { "if-none-match": opts.etag } : {} });
     if (res.status === 304) return { ok: true, notModified: true, status: 304, body: null, etag: opts.etag };
     if (res.status >= 400) return { ok: false, notModified: false, status: res.status, body: null, etag: null };
     return { ok: true, notModified: false, status: res.status, body: await res.text(), etag: res.headers.get("etag") };
   }
-  async _copyWrite(p, body, contentType) {
+  async write(p, body, contentType = "application/json") {
+    if (podOnly(p)) return this.pod ? this.pod.write(p, body, contentType) : { ok: false, retry: false, why: "no pod for this document" };
     try {
       const res = await this._ask(p, { method: "PUT", headers: { "content-type": contentType, "x-fedipod-holder": this.holder }, body });
       if (res.status < 400) return { ok: true, retry: false, why: "" };
@@ -46556,40 +46491,15 @@ var StateApiStorage = class {
       return { ok: false, retry: true, why: e.message, retryAfterMs: 0 };
     }
   }
-  async write(p, body, contentType = "application/json") {
-    if (this._onPod(p)) {
-      const w2 = this.pod ? await this.pod.write(p, body, contentType) : { ok: false, retry: false, why: "no pod for this document" };
-      if (w2.ok && p === "config.json" && this.publicConfig) {
-        let doc = null;
-        try {
-          doc = JSON.parse(body);
-        } catch {
-        }
-        if (doc) {
-          const pub = await this._copyWrite("config-public.json", JSON.stringify(this.publicConfig(doc), null, 2) + "\n", "application/json");
-          if (!pub.ok) this.log(`the settings' public part was not kept at the gateway: ${pub.why}`);
-        }
-      }
-      return w2;
-    }
-    const w = await this._copyWrite(p, body, contentType);
-    if (w.ok && this.mirror && this.pod) {
-      const m = await this.pod.write(p, body, contentType);
-      if (!m.ok) this.log(`${p} is at the gateway but not yet on the pod: ${m.why}`);
-    }
-    return w;
-  }
   async remove(p) {
-    if (this._onPod(p)) return this.pod ? this.pod.remove(p) : false;
+    if (podOnly(p)) return this.pod ? this.pod.remove(p) : false;
     try {
       const res = await this._ask(p, { method: "DELETE", headers: { "x-fedipod-holder": this.holder } });
       if (res.status === 409) {
         this.onRefused?.();
         return false;
       }
-      const ok = res.status < 400 || res.status === 404;
-      if (ok && this.mirror && this.pod) await this.pod.remove(p);
-      return ok;
+      return res.status < 400 || res.status === 404;
     } catch {
       return false;
     }
@@ -64744,13 +64654,13 @@ var validateClosed = {
     if (!trueTerm.equals(closedNode)) {
       return;
     }
-    const allowed2 = new node_set_default(context.$shapes.node(currentShape).out(sh.property).out(sh.path).terms.filter((term3) => term3.termType === "NamedNode"));
+    const allowed = new node_set_default(context.$shapes.node(currentShape).out(sh.property).out(sh.path).terms.filter((term3) => term3.termType === "NamedNode"));
     if (ignoredPropertiesNode) {
-      allowed2.addAll(rdfListToArray(context.$shapes.node(ignoredPropertiesNode)));
+      allowed.addAll(rdfListToArray(context.$shapes.node(ignoredPropertiesNode)));
     }
     const results = [];
     const valueQuads = [...context.$data.dataset.match(valueNode, null, null)];
-    valueQuads.filter(({ predicate }) => !allowed2.has(predicate)).forEach(({ predicate, object }) => {
+    valueQuads.filter(({ predicate }) => !allowed.has(predicate)).forEach(({ predicate, object }) => {
       results.push({ path: predicate, value: object });
     });
     return results;
@@ -65529,112 +65439,6 @@ function describeShapeFailure(failure) {
   return failure.results.map((r) => `${r.path ? r.path.replace(/^.*[#/]/u, "") : "node"}: ${r.message}`).join("; ");
 }
 
-// lib/core/doc-delta.mjs
-var isRecord = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
-var keyFn = (key) => key === "=" ? (e) => JSON.stringify(e) : (e) => String(e[key]);
-function applyDelta(doc, delta) {
-  if (!delta) return doc;
-  if ("whole" in delta) return delta.whole;
-  if (delta.object) {
-    const out = isRecord(doc) ? { ...doc } : {};
-    Object.assign(out, delta.set || {});
-    for (const k of delta.del || []) delete out[k];
-    return out;
-  }
-  if (delta.list) {
-    const k = keyFn(delta.list);
-    const drop = new Set(delta.drop || []);
-    const put = new Map((delta.put || []).map((e) => [k(e), e]));
-    let out = (Array.isArray(doc) ? doc : []).filter((e) => !drop.has(k(e))).map((e) => put.get(k(e)) ?? e);
-    const have = new Set(out.map(k));
-    const missing = [...put.values()].filter((e) => !have.has(k(e)));
-    const front = (delta.front || []).filter((e) => !have.has(k(e)));
-    const back = [...delta.back || [], ...missing].filter((e) => !have.has(k(e)));
-    return [...front, ...out, ...back];
-  }
-  return doc;
-}
-
-// lib/core/intake/gateway-writes.mjs
-var isGatewayWrites = (url) => /\/gw-\d{10}-[0-9a-f]{16,64}\.json$/u.test(url);
-var MAX_GATEWAY_WRITES_BYTES = 8 * 1024 * 1024;
-var REPLICA = "replica.json";
-var applyAll = (doc, delta) => (Array.isArray(delta) ? delta : [delta]).reduce((d, one) => applyDelta(d, one), doc);
-var sha256Hex = async (text) => [...new Uint8Array(await globalThis.crypto.subtle.digest(
-  "SHA-256",
-  new TextEncoder().encode(text)
-))].map((b) => b.toString(16).padStart(2, "0")).join("");
-function b64bytes(s) {
-  if (typeof Buffer !== "undefined") return Buffer.from(s, "base64");
-  const bin = atob(s);
-  const out = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
-  return out;
-}
-function allowed(intake, url) {
-  const home = intake.urls.home;
-  const base = intake.urls.base;
-  return typeof url === "string" && !url.includes("..") && (url.startsWith(home) || base && url.startsWith(base + ".well-known/"));
-}
-async function applyGatewayWrites(intake, url, raw, receipt) {
-  if (!receipt || receipt.method !== "gateway-writes" || receipt.actor !== intake.urls.actor) {
-    return "an item named as fedipod.net's, without fedipod.net's stamp for this account";
-  }
-  if (receipt.hash !== await sha256Hex(raw)) return "fedipod.net's stamp is for a different item";
-  let item;
-  try {
-    item = JSON.parse(raw);
-  } catch {
-    return "unparsable item from fedipod.net";
-  }
-  if (item?.type !== "fedipod:GatewayWrites" || item.seq !== receipt.seq) return "not an item of fedipod.net's writes";
-  let written = 0;
-  for (const w of item.writes || []) {
-    if (!allowed(intake, w.url)) {
-      intake.log(`fedipod.net's item ${item.seq}: not written outside the account: ${w.url}`);
-      continue;
-    }
-    const body = w.method === "DELETE" ? void 0 : w.text ?? (w.base64 ? b64bytes(w.base64) : "");
-    const res = await intake.remote.fetch(w.url, {
-      method: w.method,
-      ...body !== void 0 ? { body } : {},
-      ...w.contentType ? { headers: { "content-type": w.contentType } } : {}
-    });
-    if (res.status >= 500 || res.status === 429) throw new Error(`the pod answered ${res.status} to ${w.method} ${w.url}`);
-    if (res.status >= 400 && !(w.method === "DELETE" && res.status === 404)) {
-      intake.log(`fedipod.net's item ${item.seq}: the pod refused ${w.method} ${w.url} (${res.status})`);
-      continue;
-    }
-    written++;
-  }
-  const replica = intake.store.read(REPLICA, { seq: 0 });
-  let changed = 0;
-  if (item.seq > (replica.seq || 0)) {
-    for (const [name, delta] of Object.entries(item.deltas || {})) {
-      if (intake.inCopy?.(name)) {
-        if (!intake.podState) continue;
-        const r = await intake.podState.read(name);
-        if (!r.ok && r.status !== 404) throw new Error(`${name} could not be read on the pod (${r.status})`);
-        let doc = null;
-        try {
-          doc = r.ok ? JSON.parse(r.body) : null;
-        } catch {
-          doc = null;
-        }
-        const w = await intake.podState.write(name, JSON.stringify(applyAll(doc, delta), null, 2) + "\n", "application/json");
-        if (!w.ok) throw new Error(`${name} could not be written on the pod (${w.why})`);
-      } else {
-        intake.store.write(name, applyAll(intake.store.read(name, null), delta));
-      }
-      changed++;
-    }
-    intake.store.write(REPLICA, { seq: item.seq, at: (/* @__PURE__ */ new Date()).toISOString() });
-  }
-  intake.log(`fedipod.net's item ${item.seq} applied: ${written} pod write(s), ${changed} document change(s)`);
-  intake.appliedSeq = Math.max(intake.appliedSeq || 0, item.seq);
-  return null;
-}
-
 // lib/core/intake/index.mjs
 var POLL_MS = 2 * 6e4;
 var POLL_PUSH_OK_MS = 10 * 6e4;
@@ -65805,16 +65609,7 @@ var Intake = class {
     const out = { considered: older.length, applied: 0, dropped: 0, discarded: 0, failed: 0 };
     for (const item of older) {
       try {
-        if (isGatewayWrites(item.url)) {
-          await this._takeGatewayWrites(item.url, item.receipt);
-          out.applied++;
-          if (!await this._persisted()) {
-            this.log("state not written \u2014 stopping the prune with an item of fedipod.net's left");
-            break;
-          }
-          await dropHandledItem(this.remote, item.url);
-          await dropReceiptBeside(this.remote, item.url);
-        } else if (isBatch(item.url)) {
+        if (isBatch(item.url)) {
           for (const e of await this._batchEntries(item.url) || []) {
             const read2 = typeof e?.body === "string" ? await readLenient(e.body) : null;
             const activity = read2?.view ?? read2?.doc ?? null;
@@ -65981,23 +65776,6 @@ var Intake = class {
         this._drainAgain = handled > 0 || pending.length > 0;
         break;
       }
-      if (isGatewayWrites(url)) {
-        spent++;
-        if (hasReceipt) withReceipt.add(url);
-        try {
-          await this._takeGatewayWrites(url, hasReceipt);
-          pending.push(url);
-        } catch (e) {
-          const n = this._bumpAttempt(url, e.message);
-          this.log(`fedipod.net's item ${url} attempt ${n}/${MAX_ITEM_ATTEMPTS}: ${e.message}`);
-          if (n >= MAX_ITEM_ATTEMPTS) {
-            this.store.addDeadLetter({ inboxUrl: url, reason: `failed ${n}x: ${e.message}`, activity: null });
-            pending.push(url);
-          }
-        }
-        if (pending.length >= DELETE_BATCH && !await flush()) return;
-        continue;
-      }
       if (isBatch(url)) {
         try {
           const took = await this._takeBatch(url);
@@ -66081,19 +65859,6 @@ var Intake = class {
         ...activity ? {} : { raw: raw?.slice(0, 2e3) ?? null }
       });
       this.log(`rejected (${rejection}) \u2014 dead-lettered: ${url}`);
-    }
-  }
-  // One item of what fedipod.net did for this account: applied, or
-  // dead-lettered when it is not really fedipod.net's. Throws when the pod
-  // would not take a write, so it is tried again.
-  async _takeGatewayWrites(url, hasReceipt) {
-    const got = await readItem(this.remote, url, { maxBytes: MAX_GATEWAY_WRITES_BYTES, readCapped: readCapped2 });
-    if (got.status === 404) return;
-    const receipt = hasReceipt !== false ? await this._readReceipt(url) : null;
-    const why = await applyGatewayWrites(this, url, got.raw, receipt);
-    if (why) {
-      this.store.addDeadLetter({ inboxUrl: url, reason: why, activity: null });
-      this.log(`refused (${why}): ${url}`);
     }
   }
   // The deliveries in a batch the gateway wrote while the owner's app was
@@ -66353,7 +66118,7 @@ var Intake = class {
   // document, not our reading of it); the graph is what it decides from.
   // Returns null when published, else the reason it was not — a dead letter.
   async ownerPostFrom(activity, raw, receipt) {
-    const hash = raw ? await sha256Hex2(raw) : null;
+    const hash = raw ? await sha256Hex(raw) : null;
     if (receipt.hash && receipt.hash !== hash) return "owner post refused: the body is not the one its receipt names";
     const seen = this.store.read("c2s-seen.json", []);
     if (hash && seen.includes(hash)) {
@@ -66475,7 +66240,7 @@ var Intake = class {
 };
 var article = (type) => `${/^[AEIOU]/u.test(String(type)) ? "an" : "a"} ${type || "post"}`;
 var C2S_SEEN_MAX = 500;
-var sha256Hex2 = async (text) => [...new Uint8Array(await globalThis.crypto.subtle.digest(
+var sha256Hex = async (text) => [...new Uint8Array(await globalThis.crypto.subtle.digest(
   "SHA-256",
   new TextEncoder().encode(text)
 ))].map((b) => b.toString(16).padStart(2, "0")).join("");
@@ -70157,8 +69922,8 @@ async function handle6(api, ctx) {
     const mediaUrl = api.urls.media + slug;
     await api.agent.publisher.ensureMediaContainer();
     await write6(api.agent.remote, mediaUrl, file.data, mediaType);
-    const entry = { url: api.agent.mediaUrlFor ? api.agent.mediaUrlFor(mediaUrl) : mediaUrl, mediaType, description: fields.description || "" };
-    const id = api.store.idFor(entry.url);
+    const entry = { url: mediaUrl, mediaType, description: fields.description || "" };
+    const id = api.store.idFor(mediaUrl);
     api.store.setMedia(id, entry);
     return send(200, api.mediaJson({ id, ...entry }));
   }
@@ -70183,7 +69948,7 @@ var MastoApi = class _MastoApi {
   constructor({
     agent: agent2,
     log: log2 = console.log,
-    allowed: allowed2 = null,
+    allowed = null,
     scheme = null,
     embedded = false,
     throughDoor = null,
@@ -70196,7 +69961,7 @@ var MastoApi = class _MastoApi {
     this.mount = mount;
     this.embedded = embedded;
     this.log = log2;
-    this.allowed = allowed2;
+    this.allowed = allowed;
     this.throughDoor = throughDoor;
     this.scheme = scheme;
     this.streaming = streaming;
@@ -73476,25 +73241,13 @@ async function openCopy(agent2, frontOrigin, { handle: handle7 = null, kept = nu
   if (failed) await kvDel(key).catch(() => {
   });
   const copy = await res.json().catch(() => null);
-  return copy?.base && copy?.token ? {
-    handle: copy.handle,
-    base: copy.base,
-    token: copy.token,
-    expiresAt: copy.expiresAt,
-    podHome: copy.podHome || null,
-    v: copy.v || 1,
-    full: !!copy.full,
-    filledAt: copy.filledAt || null,
-    filledFull: copy.filledFull || null
-  } : null;
+  return copy?.base && copy?.token ? { handle: copy.handle, base: copy.base, token: copy.token, expiresAt: copy.expiresAt, podHome: copy.podHome || null } : null;
 }
 var tokenFetch = (agent2) => (u, i = {}) => fetch(u, {
   ...i,
   headers: { ...i.headers || {}, authorization: `Bearer ${agent2.copy.token}` }
 });
-var copyNamesOf = (copy) => copy?.v === 2 ? (name) => copy.full ? !podOnly(name) && name !== "config.json" : SLIM_DOCS.has(name) : null;
 function copyStorage(agent2, podState) {
-  const v2 = agent2.copy.v === 2;
   const s = new StateApiStorage(agent2.copy.base, {
     fetchImpl: (u, i) => fetch(u, i),
     token: agent2.copy.token,
@@ -73502,19 +73255,7 @@ function copyStorage(agent2, podState) {
     pod: podState,
     // Refused: another agent (an app at the gateway, another browser) took
     // the lease. This one stops acting at once rather than at its next renewal.
-    onRefused: () => standDown(agent2),
-    inCopy: copyNamesOf(agent2.copy),
-    mirror: v2,
-    publicConfig: v2 ? publicConfig : null,
-    log: agent2.log,
-    // An app signed in, or the last one out: the store follows at once.
-    onFull: v2 ? (full) => {
-      if (full !== !!agent2.copy?.full && !agent2._reshaping) {
-        agent2._reshaping = refreshCopyMeta(agent2).catch((e) => agent2.log(`the account's copy: ${e.message}`)).finally(() => {
-          agent2._reshaping = null;
-        });
-      }
-    } : null
+    onRefused: () => standDown(agent2)
   });
   Object.defineProperty(s, "token", { get: () => agent2.copy.token, set() {
   } });
@@ -73588,15 +73329,11 @@ async function moveIntoCopy(agent2, frontOrigin) {
     return false;
   }
   agent2.copy = copy;
-  const podState = new HttpStorage(agent2.urls.state, (u, i) => agent2.remote.fetch(u, i));
-  await upgradeCopy(agent2, podState);
-  await fillCopy(agent2, podState).catch((e) => agent2.log(`filling the copy: ${e.message}`));
   const lease = copyLeaseOf(agent2);
   if (!await lease.acquire()) {
     agent2.log("the account's copy is held by another agent; reading only");
   }
-  agent2.store.attach(copyStorage(agent2, podState));
-  if (agent2.intake) agent2.intake.inCopy = copyNamesOf(agent2.copy);
+  agent2.store.attach(copyStorage(agent2, new HttpStorage(agent2.urls.state, (u, i) => agent2.remote.fetch(u, i))));
   await agent2.store.load({ force: true });
   useLease(agent2, lease);
   if (lease.heldUntil) lease.startRenewal();
@@ -73614,7 +73351,6 @@ async function leaveCopy(agent2) {
     return { ok: false, why: `the gateway could not write the copy to the pod (${res.status || res.e?.message})` };
   }
   agent2.copy = null;
-  if (agent2.intake) agent2.intake.inCopy = null;
   const podFetch = (u, i) => agent2.remote.fetch(u, i);
   const lease = new Lease({ url: `${agent2.urls.state}lease.json`, fetchImpl: podFetch, log: agent2.log, id: agent2.holderId });
   agent2.store.attach(new HttpStorage(agent2.urls.state, podFetch));
@@ -73640,7 +73376,6 @@ async function handOverCopy(agent2) {
   const res = await tokenFetch(agent2)(`${agent2.copy.base}forget`, { method: "POST", headers: { "x-fedipod-holder": agent2.holderId } }).catch((e) => ({ status: 0, e }));
   if (res.status !== 200) return { ok: false, why: `the gateway would not let the copy go (${res.status || res.e?.message})` };
   agent2.copy = null;
-  if (agent2.intake) agent2.intake.inCopy = null;
   agent2.store.attach(pod);
   await agent2.store.load({ force: true });
   useLease(agent2, podLease);
@@ -73648,96 +73383,10 @@ async function handOverCopy(agent2) {
   agent2.log(`handed the account's copy over: ${docs.length} documents written to the pod`);
   return { ok: true };
 }
-async function fillCopy(agent2, podState) {
-  const copy = agent2.copy;
-  if (copy?.v !== 2 || copy.filledAt && (!copy.full || copy.filledFull)) return 0;
-  const listing = await podState.list("");
-  const wanted = copyNamesOf(copy);
-  const docs = {};
-  for (const name of listing.names || []) {
-    if (name === "config.json") {
-      const r2 = await podState.read(name);
-      if (r2.ok) {
-        try {
-          docs[PUBLIC_CONFIG] = JSON.stringify(publicConfig(JSON.parse(r2.body)), null, 2) + "\n";
-        } catch {
-        }
-      }
-      continue;
-    }
-    if (!wanted(name)) continue;
-    const r = await podState.read(name);
-    if (r.ok) docs[name] = r.body;
-  }
-  const res = await tokenFetch(agent2)(`${copy.base}fill`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ docs, full: copy.full })
-  }).catch((e) => ({ status: 0, e }));
-  if (res.status !== 200) {
-    agent2.log(`the account's copy was not filled (${res.status || res.e?.message})`);
-    return 0;
-  }
-  const out = await res.json().catch(() => ({}));
-  copy.filledAt = copy.filledAt || Date.now();
-  if (copy.full) copy.filledFull = Date.now();
-  agent2.log(`the account's copy at the gateway: ${out.put || 0} document(s) filled from the pod`);
-  return out.put || 0;
-}
-async function upgradeCopy(agent2, podState) {
-  const copy = agent2.copy;
-  if (!copy || copy.v === 2) return true;
-  const old = new StateApiStorage(copy.base, { fetchImpl: (u, i) => fetch(u, i), token: copy.token, holder: agent2.holderId, pod: null });
-  for (let attempt = 0; attempt < 3; attempt++) {
-    const listing = await old.list("");
-    for (const name of listing.names.filter((n) => !podOnly(n))) {
-      const r = await old.read(name);
-      if (!r.ok) continue;
-      const w = await podState.write(name, r.body, "application/json");
-      if (!w.ok) {
-        agent2.log(`${name} could not be copied to the pod (${w.why}); the copy stays as it is`);
-        return false;
-      }
-    }
-    const res = await tokenFetch(agent2)(`${copy.base}reset`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ etag: listing.etag })
-    }).catch((e) => ({ status: 0, e }));
-    if (res.status === 200) {
-      const out = await res.json().catch(() => ({}));
-      Object.assign(copy, { v: 2, full: !!out.full, filledAt: null, filledFull: null });
-      agent2.log("the account's copy at the gateway was copied to the pod and started again");
-      return true;
-    }
-    if (res.status !== 409) {
-      agent2.log(`the account's copy was not started again (${res.status || res.e?.message})`);
-      return false;
-    }
-  }
-  return false;
-}
-async function refreshCopyMeta(agent2) {
-  if (agent2.copy?.v !== 2) return false;
-  const res = await tokenFetch(agent2)(`${agent2.copy.base}meta`).catch(() => null);
-  if (!res || res.status !== 200) return false;
-  const meta = await res.json().catch(() => null);
-  if (!meta || !agent2.copy || !!meta.full === !!agent2.copy.full) return false;
-  await agent2.store.commit();
-  if (!agent2.copy) return false;
-  Object.assign(agent2.copy, { full: !!meta.full, filledFull: meta.filledFull || null });
-  const podState = new HttpStorage(agent2.urls.state, (u, i) => agent2.remote.fetch(u, i));
-  if (agent2.copy.full) await fillCopy(agent2, podState).catch((e) => agent2.log(`filling the copy: ${e.message}`));
-  agent2.store.attach(copyStorage(agent2, podState));
-  if (agent2.intake) agent2.intake.inCopy = copyNamesOf(agent2.copy);
-  await agent2.store.load({ force: true });
-  agent2.log(agent2.copy.full ? "an outside app signed in: what apps show is kept at the gateway too" : "the last outside app signed out: what apps show is on the pod only");
-  return true;
-}
 async function renewCopyToken(agent2, frontOrigin) {
   if (!agent2.copy || agent2.copy.expiresAt - Date.now() > RENEW_BEFORE_MS) return;
   const fresh2 = await openCopy(agent2, frontOrigin, { handle: agent2.copy.handle });
-  if (fresh2) Object.assign(agent2.copy, { token: fresh2.token, expiresAt: fresh2.expiresAt });
+  if (fresh2) agent2.copy = fresh2;
 }
 
 // web/app/agent.mjs
@@ -73872,12 +73521,9 @@ var BrowserAgent = class _BrowserAgent {
       this._keeper.kept = false;
       if (this.masto) this.masto.scheduling = false;
     }
-    const keyOnly = !!this.gatewayStanding?.keyOnly;
-    this.remote.keepers = on && !keyOnly ? [webId] : [];
+    this.remote.keepers = on ? [webId] : [];
     await restateRules(this.remote, this.urls);
-    if (keyOnly) await ruleOnKey(this.remote, this.urls, on ? webId : null);
     await this.publisher.publishProfile();
-    if (keyOnly) this.store.setConfig({ ...this.store.getConfig(), keyReader: on ? webId : null });
     await this.store.flush?.();
     if (!on) return { status: 200, ok: true, kept: false };
     const said = await this.tellGateway("keeper", { handle: this.doorKey, on: true });
@@ -73888,18 +73534,6 @@ var BrowserAgent = class _BrowserAgent {
       this.log("the gateway keeps this account running while the app is closed");
     }
     return said || { status: 502 };
-  }
-  // How far this account's pod has been brought with what fedipod.net handed
-  // it, told once per new item applied.
-  async reportApplied() {
-    const seq = this.intake?.appliedSeq || 0;
-    if (!this.copy || seq <= (this._reportedSeq || 0)) return;
-    const res = await fetch(`${this.copy.base}applied`, {
-      method: "POST",
-      headers: { "content-type": "application/json", authorization: `Bearer ${this.copy.token}` },
-      body: JSON.stringify({ seq })
-    });
-    if (res.status === 200) this._reportedSeq = seq;
   }
   // A post just scheduled: the gateway hears when the next one falls due.
   onScheduled() {
@@ -73937,7 +73571,6 @@ var BrowserAgent = class _BrowserAgent {
     }
     await renewCopyToken(this, this.frontOrigin).catch(() => {
     });
-    if (this.store) await refreshCopyMeta(this).catch((e) => this.log(`the account's copy: ${e.message}`));
     return standing;
   }
   // Become the active agent: renew the lease, then start what a viewer skips —
@@ -73969,12 +73602,9 @@ var BrowserAgent = class _BrowserAgent {
         await this.publisher.publishProfile();
         await this.store.flush?.();
         await completeGatewayMove(this).catch((e) => this.log(`gateway move: ${e.message}`));
-        if (this.copy && this.copy.v !== 2 && this._keeper?.keptBy && this._keeper.keptBy !== this._keeper.webId) {
+        if (this.copy && this._keeper?.keptBy && this._keeper.keptBy !== this._keeper.webId) {
           const moved = await handOverCopy(this).catch((e) => ({ ok: false, why: e.message }));
           if (!moved.ok) this.log(`handing the copy over to the gateway's new identity: ${moved.why}`);
-        }
-        if (this._keeper?.kept && this.gatewayStanding?.keyOnly && !this.store.getConfig()?.keeperOff && this.store.getConfig()?.keyReader !== this._keeper.webId) {
-          await this.setKeeper(true).catch((e) => this.log(`the gateway's rule on the key: ${e.message}`));
         }
         if (this._keeper && !this._keeper.kept && !this.copy && !this.store.getConfig()?.keeperOff) {
           await this.setKeeper(true).catch((e) => this.log(`keeping the account while away: ${e.message}`));
@@ -74125,14 +73755,6 @@ var BrowserAgent = class _BrowserAgent {
     this.urls = apUrls2(remotePod, root);
     const podFetch = (u, i) => this.remote.fetch(u, i);
     const podStateStorage = new HttpStorage(this.urls.state, podFetch);
-    this.podState = podStateStorage;
-    if (this.copy) {
-      if (!await upgradeCopy(this, podStateStorage).catch((e) => {
-        this.log(`the account's copy: ${e.message}`);
-        return false;
-      })) this.copy = null;
-      else await fillCopy(this, podStateStorage).catch((e) => this.log(`filling the copy: ${e.message}`));
-    }
     this.store = new PodStore({ storage: this.copy ? copyStorage(this, podStateStorage) : podStateStorage, log: this.log });
     keepInStep(this.store, webId, this.log);
     this.lease = this.copy ? copyLeaseOf(this) : new Lease({ url: this.urls.state + "lease.json", fetchImpl: podFetch, log: this.log, id: this.holderId });
@@ -74191,7 +73813,7 @@ var BrowserAgent = class _BrowserAgent {
       throw e;
     }
     this._keeper = standing?.keeper ? { webId: standing.keeper, kept: !!standing.kept, keptBy: standing.keptBy || null } : null;
-    if (this._keeper && !this.store.getConfig()?.keeperOff && !standing?.keyOnly) this.remote.keepers = [this._keeper.webId];
+    if (this._keeper && !this.store.getConfig()?.keeperOff) this.remote.keepers = [this._keeper.webId];
     this.publisher = new Publisher({
       config: this.store.getConfig(),
       remote: this.remote,
@@ -74222,15 +73844,6 @@ var BrowserAgent = class _BrowserAgent {
       lease: this.lease,
       ownerPost: (a, o) => this.c2s.dispatch(a, o)
     });
-    this.intake.inCopy = copyNamesOf(this.copy);
-    this.intake.podState = podStateStorage;
-    const drain = this.intake.drain.bind(this.intake);
-    this.intake.drain = async (...a) => {
-      const out = await drain(...a);
-      await this.reportApplied().catch(() => {
-      });
-      return out;
-    };
     this.masto = new MastoApi({
       agent: this,
       log: this.log,

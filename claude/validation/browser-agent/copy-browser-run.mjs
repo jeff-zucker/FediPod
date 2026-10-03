@@ -1,17 +1,13 @@
-// copy-browser-run.mjs — a kept browser account and its copy at the gateway
-// (lib/gateway/copy.mjs, state-api.mjs, pod-mail.mjs, web/app/copy-mode.mjs),
-// where the gateway may read the account's key on the pod and nothing else.
+// copy-browser-run.mjs — a kept browser account working from its copy at the
+// gateway (lib/gateway/copy.mjs, state-api.mjs, web/app/copy-mode.mjs).
 //
-// A scratch CSS with two gateway identities; the gateway's real owner routes
-// (front-core: open, keeper, here), state API and app routes over in-memory
-// stores, with the real pod-token verifier; the built app in headless Chrome.
-// Signs up, and then: the copy is slim and filled by FediPod; the pod's rules
-// name the gateway on the key alone; FediPod's posts are on the pod at once;
-// an app signing in makes the copy full and the sign-in page fills it; an
-// app's post reaches the pod through the inbox; mail is read in for the app
-// and pushed to a phone; the gateway's new identity is named on the key at
-// the owner's next visit; the last app signing out empties the copy at once;
-// turning the keeper off lets the copy go.
+// A scratch CSS with a keeper account; the gateway's real owner routes
+// (front-core: open, keeper, here) and state API over in-memory stores, with
+// the real pod-token verifier; the built app in headless Chrome. Signs up, and
+// then: the account moves onto its copy; a post lands in the copy and not on
+// the pod; the round writes it to the pod; a restart comes back onto the copy;
+// the gateway taking the lease stops the browser writing, and the browser
+// acting takes it back; turning the keeper off puts everything back on the pod.
 //
 //   node claude/validation/browser-agent/copy-browser-run.mjs
 import fs from 'node:fs'; import os from 'node:os'; import path from 'node:path';
@@ -52,11 +48,11 @@ const attachStub = (req, res, frontOrigin) => {
   req.on('data', (d) => { raw += d; });
   req.on('end', () => {
     const { handle, podHome, actorUrl } = JSON.parse(raw || '{}');
-    // The row keeps the door secret it hands out, as the real front's does.
-    const hmacSecret = Buffer.from(`door-secret-for-${handle}`).toString('base64');
-    rows[handle] = { handle, podHome, actorUrl, kind: 'person', webId: `${new URL(podHome).origin}/profile/card#me`, hmacSecret };
+    rows[handle] = { handle, podHome, actorUrl, kind: 'person', webId: `${new URL(podHome).origin}/profile/card#me` };
     res.writeHead(201, { 'content-type': 'application/json' });
-    res.end(JSON.stringify({ ok: true, handle, doorInbox: `${frontOrigin}/u/${handle}/ap/inbox/`, hmacSecret }));
+    res.end(JSON.stringify({ ok: true, handle,
+      doorInbox: `${frontOrigin}/u/${handle}/ap/inbox/`,
+      hmacSecret: Buffer.from(`door-secret-for-${handle}`).toString('base64') }));
   });
 };
 
@@ -98,11 +94,11 @@ const lib = (p) => import(path.join(root, p));
 const { routeFront, verifyPodToken } = await lib('lib/gateway/front-core.mjs');
 const { routeStateApi } = await lib('lib/gateway/state-api.mjs');
 const { routeMastoGateway, pushHeld } = await lib('lib/gateway/masto-gateway.mjs');
-const { flushPending } = await lib('lib/gateway/pod-mail.mjs');
 const ece = require(path.join(root, 'node_modules/http_ece/ece.js'));
 const https = await import('node:https');
 const { logInAtIdp } = await import(new URL('./idp-login.mjs', import.meta.url));
-const { memoryKv, copyMeta, copyLease, GATEWAY_HOLDER } = await lib('lib/gateway/copy.mjs');
+const { memoryKv, copyMeta, copyLease, flushCopy, GATEWAY_HOLDER } = await lib('lib/gateway/copy.mjs');
+const { HttpStorage } = await lib('lib/core/storage.mjs');
 const { mintCredential, createGrantSession } = require(path.join(root, 'vendor/idp-grant.cjs'));
 const ORIGIN = `http://localhost:${APP_PORT}`;
 
@@ -142,10 +138,6 @@ const ctx = {
   heldAccounts: async () => [...new Set([...held.keys()].map((k) => k.split('/')[0]))],
   podPut: async (_h, url, b, ct) => (await fetch(url, { method: 'PUT', headers: { 'content-type': ct }, body: b }).catch(() => null))?.status < 400,
   noteNext: async () => {},
-  // Public documents the gateway handed the pod, served until the pod has them.
-  pendingPublic: (() => { const m = new Map(); return {
-    get: async (h, u) => m.get(u) || null, set: async (h, u, v) => { m.set(u, { ...v, handle: h }); }, delete: async (h, u) => { m.delete(u); },
-    list: async (h) => [...m].filter(([, v]) => v.handle === h).map(([url, value]) => ({ url, value })) }; })(),
   get keeperWebId() { return keeperWebId; },
   copyKv: kv,
   mastoKv: memoryKv(),
@@ -183,8 +175,6 @@ const server = http.createServer((q, s) => {
   // The app sign-in page, as the site stages it (scripts/stage-site.mjs).
   if (u === '/app-signin/') return file('web/app-signin/index.html', 'text/html')(q, s);
   if (u === '/app-signin/app-signin.mjs') return file('web/app-signin/app-signin.mjs', 'text/javascript')(q, s);
-  if (u === '/app-signin/app-fill.mjs') return file('web/app-signin/app-fill.mjs', 'text/javascript')(q, s);
-  if (u === '/app-signin/doc-delta.mjs') return file('lib/core/doc-delta.mjs', 'text/javascript')(q, s);
   if (u === '/app-signin/tokens.css') return file('web/admin/tokens.css', 'text/css')(q, s);
   if (/^\/app-signin\/(fedi-login|oidc-session)\.mjs$/.test(u)) return file(`lib/session/${path.basename(u)}`, 'text/javascript')(q, s);
   if (u.startsWith('/api/state/') || u.startsWith('/api/v1/') || u.startsWith('/api/v2/') || u.startsWith('/oauth/')
@@ -249,33 +239,18 @@ if (!cssUp) { console.log(`FAIL  the scratch server never answered again at ${IS
   const state = `${pod}fedipod/ap-state/`;
   const said = (re) => (workerLog?.lines || []).some((l) => re.test(l));
 
-  // ---- onto a slim copy, filled by FediPod ----
-  check(await waitFor(async () => !!rows[handle]?.keeper && (await copyMeta(kv, handle))?.filledAt, 60, 1000),
-    'once kept, the account\'s copy is made at the gateway and FediPod fills it');
-  check(await waitFor(async () => said(/working from the account's copy at the gateway|account's copy at the gateway: \d+ document/), 30, 500), 'and the browser works with it');
-  const meta = await copyMeta(kv, handle);
-  check(meta.v === 2 && meta.full === false, 'a version 2 copy, slim: no app is signed in');
-  check(!!(await kv.get(`${handle}/d/config-public.json`)) && !(await kv.get(`${handle}/d/config.json`))
-    && !(await kv.get(`${handle}/d/statuses.json`)) && !(await kv.get(`${handle}/d/keys.json`)),
-    'the copy holds the settings\' public part and the slim documents, not the timeline, the settings or the key');
+  // ---- onto the copy ----
+  check(await waitFor(async () => !!rows[handle]?.keeper && !!(await copyMeta(kv, handle)), 60, 1000),
+    'once kept, the account\'s copy is made at the gateway');
+  check(await waitFor(async () => said(/working from the account's copy at the gateway/), 30, 500), 'and the browser works from it');
+  check(!(await kv.get(`${handle}/d/keys.json`)) && !!(await kv.get(`${handle}/d/config.json`)),
+    'the copy holds the account\'s state and not its key');
   const cred = await mintCredential({ origin: ISSUER, email: `${handle}@example.org`, password, name: 'copy-browser-run' });
   const owner = createGrantSession(cred);
   const onPod = async (name) => { const r = await owner.fetch(state + name, { headers: { accept: 'application/json' } }); return r.ok ? r.text() : ''; };
-  const acl = async (url) => { const r = await owner.fetch(url, { headers: { accept: 'text/turtle' } }); return r.ok ? r.text() : ''; };
-  check(JSON.parse(await onPod('lease.json') || '{}').holder !== 'gateway-copy', 'the gateway holds no lease on the pod');
-  const keeperHost = new URL(keeperWebId).host;
-  check(await waitFor(async () => (await acl(`${state}keys.json.acl`)).includes(keeperHost), 30, 1000), 'the rule on the key names the gateway');
-  const keyAcl = await acl(`${state}keys.json.acl`);
-  // The rule naming the gateway: the block whose agent is under its prefix.
-  const prefixOf = (text, host) => (text.split('\n').find((l) => l.startsWith('@prefix') && l.includes(`//${host}/`)) || '').split(/\s+/)[1]?.replace(/:$/, '');
-  const ruleFor = (text, host) => { const pre = prefixOf(text, host); return text.split(/\n(?=:|<)/).find((b) => pre && b.includes(`acl:agent ${pre}:me`)) || ''; };
-  const keyBlock = ruleFor(keyAcl, keeperHost);
-  if (!/acl:mode acl:Read\./.test(keyBlock)) console.log('  the key\'s rule:\n' + keyAcl);
-  check(/acl:mode acl:Read\./.test(keyBlock), 'to read it and nothing more');
-  check(!(await acl(`${state}.acl`)).includes(keeperHost) && !(await acl(`${pod}fedipod/.acl`)).includes(keeperHost),
-    'and no other rule on the account\'s folder names it');
+  check(JSON.parse(await onPod('lease.json') || '{}').holder === 'gateway-copy', 'the pod\'s lease is held for the copy');
 
-  // ---- FediPod's own posts ----
+  // ---- a post lands in the copy ----
   const token = await evaluate(`(async () => {
     const j = async (m, p, opt = {}) => (await fetch(p, { method: m, ...opt })).json();
     const app = await j('POST', '/api/v1/apps', { headers:{'content-type':'application/json'}, body: JSON.stringify({ client_name:'t', redirect_uris:'urn:ietf:wg:oauth:2.0:oob', scopes:'read write' }) });
@@ -284,26 +259,27 @@ if (!cssUp) { console.log(`FAIL  the scratch server never answered again at ${IS
     return t.access_token; })()`);
   const post = (text) => evaluate(`(async () => { const r = await fetch('/api/v1/statuses', { method: 'POST', headers: { authorization: 'Bearer ${token}', 'content-type': 'application/json' }, body: JSON.stringify({ status: ${JSON.stringify(text)} }) }); return r.status; })()`);
   const home = () => evaluate(`(async () => { const r = await fetch('/api/v1/timelines/home?limit=40', { headers: { authorization: 'Bearer ${token}' } }); return r.ok ? (await r.json()).map((s) => s.content).join(' | ') : ''; })()`);
-  check(await post('written from the browser') === 200, 'a post from FediPod');
-  check(await waitFor(async () => /written from the browser/.test(await onPod('statuses.json')), 20, 500), 'is on the pod at once');
-  check(!/written from the browser/.test((await kv.get(`${handle}/d/statuses.json`))?.text || ''), 'and not at the gateway');
-  check(await waitFor(async () => (await onPod('outbox.json')) === (await kv.get(`${handle}/d/outbox.json`))?.text, 20, 500),
-    'what the slim copy holds is the same on the pod');
+  check(await post('written into the copy') === 200, 'a post from the browser');
+  check(await waitFor(async () => /written into the copy/.test((await kv.get(`${handle}/d/statuses.json`))?.text || ''), 20, 300),
+    'lands in the copy');
+  check(!/written into the copy/.test(await onPod('statuses.json')), 'and not yet on the pod');
+  const n = await flushCopy(kv, handle, { pod: new HttpStorage(state, (u, i) => keeperSession.fetch(u, i)) });
+  check(n > 0 && /written into the copy/.test(await onPod('statuses.json')), `the round writes it to the pod (${n} document(s))`);
 
-  // ---- a restart ----
+  // ---- a restart comes back onto the copy ----
   await send('ServiceWorker.enable').catch(() => {});
   await send('ServiceWorker.stopAllWorkers');
   await sleep(1500);
-  check(/written from the browser/.test(await home()), 'after a restart the timeline has the post');
-  check(await post('after the restart') === 200 && await waitFor(async () => /after the restart/.test(await onPod('statuses.json')), 20, 500),
-    'and the restarted worker writes to the pod too');
+  check(/written into the copy/.test(await home()), 'after a restart the timeline has the post');
+  check(await post('after the restart') === 200 && await waitFor(async () => /after the restart/.test((await kv.get(`${handle}/d/statuses.json`))?.text || ''), 20, 300)
+    && !/after the restart/.test(await onPod('statuses.json')), 'and the restarted worker writes to the copy too');
 
   // ---- the gateway acts, then the browser does ----
   check(await copyLease(kv, handle, { id: GATEWAY_HOLDER }).takeover(), 'the gateway takes the lease, as an app acting there would');
   check(await post('taken back by acting here') === 200, 'a post from the browser after that');
-  check(await waitFor(async () => /taken back by acting here/.test(await onPod('statuses.json')), 20, 500)
+  check(await waitFor(async () => /taken back by acting here/.test((await kv.get(`${handle}/d/statuses.json`))?.text || ''), 20, 300)
     && JSON.parse((await kv.get(`${handle}/lease`)).text).holder !== GATEWAY_HOLDER,
-    'is not lost: acting here takes the lease back first');
+    'is not lost: acting here takes the lease back first, and the post lands in the copy');
 
   // ---- a Mastodon app signs in at the gateway ----
   const appReg = await (await fetch(`${ORIGIN}/api/v1/apps`, { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' },
@@ -316,7 +292,8 @@ if (!cssUp) { console.log(`FAIL  the scratch server never answered again at ${IS
   await send('Page.navigate', { url: authorize });
   const named = await waitFor(async () => /Test App/.test(await evaluate(`document.getElementById('asking')?.textContent || ''`) || ''), 40, 250);
   if (!named) console.log('  status:', await evaluate(`document.getElementById('signin-status')?.textContent`), await evaluate('document.readyState'));
-  check(named, 'the app\'s sign-in reaches the gateway\'s page, past the worker, and names the app');
+  check(named,
+    'the app\'s sign-in reaches the gateway\'s page, past the worker, and names the app');
   await evaluate(`(() => { const f = document.getElementById('signin-form'); if (!f.hidden) { document.getElementById('address').value = ${JSON.stringify(handle)}; f.requestSubmit(); } })()`);
   await sleep(1500);
   if (!/^http:\/\/localhost:8998\/app-callback/.test(await evaluate('location.href'))) {
@@ -325,9 +302,6 @@ if (!cssUp) { console.log(`FAIL  the scratch server never answered again at ${IS
   check(await waitFor(async () => callbacks.length > 0, 40, 500), `after signing in at the pod the app gets its code (${await evaluate('location.href')})`);
   const cb = callbacks.at(-1);
   check(cb?.get('state') === 'st8', 'with the state it sent');
-  const full = await copyMeta(kv, handle);
-  check(full.full === true && /taken back by acting here/.test((await kv.get(`${handle}/d/statuses.json`))?.text || ''),
-    'the copy is full now, and the sign-in page filled it from the pod before going back to the app');
   const tokRes = await (await fetch(`${ORIGIN}/oauth/token`, { method: 'POST', headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ grant_type: 'authorization_code', code: cb?.get('code'), client_id: appReg.client_id, redirect_uri: `${ORIGIN}/app-callback`, code_verifier: verifier }) })).json();
   check(!!tokRes.access_token, 'and trades it for a token');
@@ -339,21 +313,12 @@ if (!cssUp) { console.log(`FAIL  the scratch server never answered again at ${IS
   const posted = await appApi('/api/v1/statuses', { method: 'POST', body: JSON.stringify({ status: 'posted from an app' }) });
   const postedJson = await posted.json();
   check(posted.status === 200 && /posted from an app/.test(postedJson.content), `the app posts (${posted.status})`);
-  check(/posted from an app/.test((await kv.get(`${handle}/d/statuses.json`))?.text || ''), 'the post is in the copy the app reads');
-  check(await waitFor(async () => (await (await owner.fetch(`${pod}fedipod/ap/inbox/`, { headers: { accept: 'text/turtle' } })).text()).includes('gw-')
-    || (await fetch(postedJson.uri, { headers: { accept: 'application/activity+json' } })).status === 200, 20, 300),
-    'what the gateway did is handed to the pod inbox, not written to the pod');
-  check(await waitFor(async () => (await fetch(postedJson.uri, { headers: { accept: 'application/activity+json' } })).status === 200, 60, 1000),
-    'FediPod puts the post on the pod from there');
-  check(await waitFor(async () => /posted from an app/.test(await onPod('statuses.json')), 30, 1000), 'and the pod\'s timeline has it too');
-  check(JSON.parse((await kv.get(`${handle}/lease`)).text).expiresAt === 0 || JSON.parse((await kv.get(`${handle}/lease`)).text).holder !== GATEWAY_HOLDER,
-    'the gateway lets the lease go once it has acted');
-  // Mail held while nobody read it: the app's next check reads it in. Here
-  // FediPod is open and has taken the lease back since the app posted; with it
-  // closed, the lease is free, as made here.
-  const freeLease = copyLease(kv, handle, { id: GATEWAY_HOLDER });
-  if (await freeLease.takeover()) await freeLease.release();
-  mentionTarget = rows[handle].actorUrl;
+  check(/posted from an app/.test((await kv.get(`${handle}/d/statuses.json`))?.text || '') && JSON.parse((await kv.get(`${handle}/lease`)).text).holder === GATEWAY_HOLDER,
+    'the post lands in the copy, the gateway having taken the lease to make it');
+  check((await fetch(postedJson.uri, { headers: { accept: 'application/activity+json' } })).status === 200, 'and the post itself is public on the pod');
+  check(JSON.parse((await kv.get(`${handle}/lease`)).text).expiresAt === 0, 'the gateway lets the lease go once it has acted');
+  // Mail held while nobody read it: the app's next check reads it in.
+  mentionTarget = rows[handle].actorUrl;            // the account's own actor, as attach recorded it
   held.set(`${handle}/held-mention-1`, JSON.stringify({ '@context': 'https://www.w3.org/ns/activitystreams', id: `${ORIGIN}/peer/1/creates/1`, type: 'Create',
     actor: `${ORIGIN}/peer/1`, to: [mentionTarget], object: `${ORIGIN}/peer/1/notes/1` }));
   await kv.delete(`${handle}/mail-read-at`);
@@ -362,11 +327,12 @@ if (!cssUp) { console.log(`FAIL  the scratch server never answered again at ${IS
   check(!held.size, 'mail held for the account is read into the copy after the app\'s check');
   check(await waitFor(async () => /hello from aisha/.test(JSON.stringify(await (await appApi('/api/v1/notifications')).json())), 10, 500),
     'and the app sees it among its notifications on its next check');
-  // The fifteen-minute round: what mail changed for the app goes to the pod.
-  const round = await flushPending(ctx, handle, rows[handle], { log: () => {} });
-  check(!!round.seq, 'the round hands what reading the mail changed to the pod inbox, in one item');
 
-
+  const againStatus = await post('from the browser after the app');
+  const landedAgain = await waitFor(async () => /from the browser after the app/.test((await kv.get(`${handle}/d/statuses.json`))?.text || ''), 30, 300);
+  const kept = /posted from an app/.test((await kv.get(`${handle}/d/statuses.json`))?.text || '');
+  if (!landedAgain || !kept) console.log(`  post ${againStatus}; lease ${(await kv.get(`${handle}/lease`))?.text}; landed ${landedAgain}; app post kept ${kept}`);
+  check(againStatus === 200 && landedAgain && kept, 'and the browser acts again straight after, keeping what the app wrote');
   // ---- phone notifications ----
   const phone = crypto.createECDH('prime256v1'); phone.generateKeys();
   const phoneAuth = crypto.randomBytes(16);
@@ -381,8 +347,10 @@ if (!cssUp) { console.log(`FAIL  the scratch server never answered again at ${IS
     actor: `${ORIGIN}/peer/1`, to: [mentionTarget], object: `${ORIGIN}/peer/1/notes/2` }));
   const pushedBefore = pushed.length;
   const pushLog = [];
+  const notesBefore = JSON.parse((await kv.get(`${handle}/d/notifications.json`))?.text || '[]').length;
   await pushHeld(ctx, handle, rows[handle], { log: (m) => pushLog.push(m) });
-  if (pushed.length === pushedBefore) console.log('  ' + pushLog.slice(-25).join('\n  '));
+  const notesAfter = JSON.parse((await kv.get(`${handle}/d/notifications.json`))?.text || '[]').length;
+  if (pushed.length === pushedBefore) console.log(`  notifications ${notesBefore} → ${notesAfter}\n  ` + pushLog.slice(-25).join('\n  '));
   check(!held.size && pushed.length > pushedBefore, `a mention held while every app is closed is read in and pushed to the phone (${pushed.length - pushedBefore} push)`);
   const got = pushed.at(-1);
   let payload = null;
@@ -391,43 +359,43 @@ if (!cssUp) { console.log(`FAIL  the scratch server never answered again at ${IS
     `the phone can read it: ${payload?.title} — ${payload?.body}`);
   check(/^vapid t=/.test(got?.headers?.authorization || ''), 'and it is signed with the instance\'s push key');
 
-  // ---- the gateway gets an identity of its own for reading keys ----
-  const keep2Cred = await mintCredential({ origin: ISSUER, email: 'keeper2@example.org', password: 'keeper2-password-2026', name: 'fedipod-key-reader' });
-  ctx.keyReaderWebId = keep2Cred.webId;                  // the operator sets FEDIPOD_KEY_READER_*
-  ctx.keyReaderCredential = keep2Cred;
-  check((await appApi('/api/v1/timelines/home')).status === 200, 'until the owner opens FediPod, the app goes on working under the identity the pod names now');
+  // ---- the gateway changes its identity: the account moves over ----
+  check(await post('written before the switch') === 200
+    && await waitFor(async () => /written before the switch/.test((await kv.get(`${handle}/d/statuses.json`))?.text || ''), 20, 300)
+    && !/written before the switch/.test(await onPod('statuses.json')), 'a post in the copy that the pod does not have yet');
+  const keep2Cred = await mintCredential({ origin: ISSUER, email: 'keeper2@example.org', password: 'keeper2-password-2026', name: 'fedipod-keeper-2' });
+  keeperSession = createGrantSession(keep2Cred);          // the operator sets new FEDIPOD_KEEPER_* values
+  keeperWebId = keep2Cred.webId;
+  ctx.keeperCredential = keep2Cred;
+  const appWhileMoving = await appApi('/api/v1/timelines/home');
+  check(appWhileMoving.status === 503 && /open FediPod/.test((await appWhileMoving.json()).error || ''),
+    'until the owner opens FediPod, an app is told to open it once');
   await send('ServiceWorker.stopAllWorkers');
   await sleep(1000);
   await send('Page.navigate', { url: `${ORIGIN}/` });       // the owner opens FediPod
-  const moved = await waitFor(async () => rows[handle]?.keeper?.webId === keep2Cred.webId, 90, 1000);
+  const moved = await waitFor(async () => (await copyMeta(kv, handle)) && rows[handle]?.keeper?.webId === keep2Cred.webId, 90, 1000);
   workerLog?.close?.();
   workerLog = await watchWorkerLog(WebSocket, CDP_PORT);
-  check(moved, 'the owner\'s next visit names the new identity');
-  // FediPod applies what fedipod.net handed the pod whenever it reads its inbox: at the latest, on a start.
-  const onPodToo = await waitFor(async () => /peer\/1/.test(await onPod('notifications.json')), 60, 1000);
-  if (!onPodToo) console.log(`  the pod's notifications: ${(await onPod('notifications.json')).slice(0, 300)}`);
-  check(onPodToo, 'the mail read in for the app is on the pod too, through the inbox');
-  const inboxLeft = async () => ((await (await owner.fetch(`${pod}fedipod/ap/inbox/`, { headers: { accept: 'text/turtle' } })).text()).match(/gw-\d+-[0-9a-f]+\.json(?!\.receipt)/g) || []);
-  check(await waitFor(async () => !(await inboxLeft()).length, 60, 1000), `and what FediPod applied is taken out of the inbox (${(await inboxLeft()).length} left)`);
-  const keyAcl2 = await acl(`${state}keys.json.acl`);
-  check(keyAcl2.includes(new URL(keep2Cred.webId).host) && !keyAcl2.includes(keeperHost), 'on the key, in place of the old one');
-  check(await waitFor(async () => (await appApi('/api/v1/timelines/home')).status === 200, 20, 500), 'and the app works under it');
+  check(/written before the switch/.test(await onPod('statuses.json')), 'the owner\'s browser wrote the old copy to the pod itself');
+  check(moved, 'then the gateway keeps the account under its new identity, with a new copy');
+  const stateAcl = await (await owner.fetch(`${state}.acl`, { headers: { accept: 'text/turtle' } })).text();
+  check(/keeper2\.localhost/.test(stateAcl) && !/\/\/keeper\.localhost/.test(stateAcl), 'the pod\'s rules name the new identity and no longer the old');
+  check(await waitFor(async () => (await appApi('/api/v1/timelines/home')).status === 200, 20, 500), 'and the app works again');
+  check(await post('after the switch') === 200
+    && await waitFor(async () => /after the switch/.test((await kv.get(`${handle}/d/statuses.json`))?.text || ''), 30, 500),
+    'the browser works from the new copy');
+  check(await flushCopy(kv, handle, { pod: new HttpStorage(state, (u, i) => keeperSession.fetch(u, i)) }) >= 1
+    && /after the switch/.test(await onPod('statuses.json')), 'which the new identity writes to the pod');
 
-  // ---- the last app signs out ----
-  await fetch(`${ORIGIN}/oauth/revoke`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ token: tokRes.access_token }) });
-  const slim = await copyMeta(kv, handle);
-  check(slim.full === false && !(await kv.get(`${handle}/d/statuses.json`)) && !(await kv.get(`${handle}/d/notifications.json`)),
-    'the last app signing out takes the timeline and notifications off the gateway at once');
-  check(/posted from an app/.test(await onPod('statuses.json')), 'and nothing is lost: the pod has them');
-
-  // ---- the keeper off ----
+  // ---- back to the pod ----
   const pageCall = (p, init = {}) => evaluate(`(async () => { const r = await fetch(${JSON.stringify(p)}, { ...${JSON.stringify(init)}, headers: { 'x-fedipod-page': '1', 'content-type': 'application/json' } }); return { status: r.status, json: await r.json().catch(() => null) }; })()`);
   const off = await pageCall('/gateway/keep', { method: 'POST', body: JSON.stringify({ on: false }) });
   check(off.status === 200 && !rows[handle].keeper, `turning the keeper off (${off.status} ${JSON.stringify(off.json)})`);
-  check(!(await copyMeta(kv, handle)), 'lets the copy go');
-  check(!(await acl(`${state}keys.json.acl`)).includes(new URL(keep2Cred.webId).host), 'and the key\'s rule names nobody but the owner');
+  check(!(await copyMeta(kv, handle)) && /taken back by acting here/.test(await onPod('statuses.json')),
+    'writes the copy to the pod and the gateway lets it go');
+  check(JSON.parse(await onPod('lease.json') || '{}').holder !== 'gateway-copy', 'the browser holds the pod\'s lease again');
   check(await post('on the pod again') === 200 && await waitFor(async () => /on the pod again/.test(await onPod('statuses.json')), 20, 500),
-    'and FediPod goes on writing to the pod');
+    'and writes to the pod again');
 } catch (e) { console.log('ERROR', e.stack || e.message); fails++; }
 finally {
   if (fails && workerLog?.lines?.length) console.log('\n--- the agent said ---\n  ' + workerLog.lines.slice(-50).join('\n  '));

@@ -13,11 +13,12 @@ push items into your inbox, and those still face your agent's own checks.
 With the outbox door below, a gateway can also hand your agent a post marked as
 yours, which your agent then signs and sends. It still holds no key, but what you
 trust it with grows by that much. A browser account is also kept running by
-the gateway (below). For that, your pod lets the gateway read your signing key,
-and nothing else there: it can post as you, as any Fediverse server can, but
-it cannot read or change anything else on your pod. It never writes to your
-pod. What it does for you goes into your pod's inbox, which only you can read,
-and FediPod files it the next time it runs.
+the gateway (below). That gives the gateway your key while it works, so it can
+post as you, as any Fediverse server can, and your account's working data is
+kept at the gateway too and written to your pod every fifteen minutes. For
+a kept account the gateway also answers a follower's server asking for one
+of your followers-only posts, and the named person's server asking for a
+direct one, when that server signs its request; nobody else gets them.
 
 A FediPod install works without any gateway at all. Deliveries go straight to
 your pod inbox, which holds them whether your agent is running or not.
@@ -172,33 +173,26 @@ closed, fedipod.net does two things for it.
 **Your mail waits at the gateway.** Deliveries are kept there, not written to
 your pod one by one, and reach your pod in batches of up to a hundred: when you
 open FediPod, or every fifteen minutes otherwise. While FediPod is open, mail
-goes straight to your pod. While an app other than FediPod is signed in, the
-gateway reads your mail into what the app shows instead, and what that changes
-goes into your pod's inbox within fifteen minutes. A DeviceAgent's mail always goes straight to its
-pod.
+goes straight to your pod as before. A DeviceAgent's mail always goes straight
+to its pod.
 
 **The gateway keeps your account running.** It accepts your follows, tries
-again what failed to go out, and publishes the posts you scheduled, all while
-FediPod is closed. Other mail waits on your pod for FediPod to open. It works
-under its own pod identity, which the access rule on your signing key names,
-to read it and nothing else; no other rule on your pod names it. It reads the
-key when it needs it, so it can post as you, and keeps no copy of it. If
-fedipod.net ever changes its own pod identity, your FediPod names the new one
-on your key the next time you open it, with nothing for you to do.
+again what failed to go out, and publishes the posts you scheduled, all while FediPod is closed. Other mail waits on your
+pod for FediPod to open, as before. It works under its own pod identity, which your app
+names in the access rules on your FediPod folder. It reads your signing key
+from your pod when it needs it, so it can post as you, and keeps no copy of the
+key. If fedipod.net ever changes its own pod identity, your FediPod moves your
+account over the next time you open it, with nothing for you to do.
 Scheduling a post is offered only while this is on, because otherwise nothing
 would be running when the time came.
 
-**A small part of your account is kept at the gateway.** While the gateway
-keeps your account running, it keeps what it needs to work for you: your
-followers and the people you follow, follow requests, blocks, the public part
-of your settings, and posts waiting to go out. While an app other than FediPod
-is signed in, it also keeps what the app shows: your timeline, notifications
-and direct messages. Those go from the gateway the moment the last such app
-signs out, or 90 days after it was connected. FediPod in your browser, the
-gateway and any app you use work from that one copy, so they never disagree,
-and FediPod writes everything it changes to your pod as well. Your signing
-key, your other settings and the passwords of accounts you connected elsewhere
-are never at the gateway.
+**Your account's working data is kept at the gateway.** While the gateway
+keeps your account running, your timeline, notifications, followers, settings
+and the rest of your FediPod state are kept at fedipod.net, and FediPod in your
+browser, the gateway and any app you use all work from that one copy, so they
+never disagree. fedipod.net writes what changed to your pod every fifteen
+minutes, and everything at once when your address moves or is closed. Your
+signing key and the passwords of accounts you connected elsewhere are never in the copy; they stay on your pod only.
 
 ## Using any Mastodon app
 
@@ -206,14 +200,8 @@ While the gateway keeps your account running, any Mastodon app can use it:
 elk.zone, Ivory, Tusky, Phanpy and the rest. In the app, give `fedipod.net` as
 your server. The app sends you to a fedipod.net page that asks for your
 Fediverse address or your WebID and signs you in at your own pod; no password
-is typed on fedipod.net. That page copies what the app shows from your pod to
-the gateway, mail still waiting in your pod's inbox included. The app then
-reads your timeline and notifications from your account's copy at the
-gateway, and posts, boosts, likes and follows as you. A post you make in the
-app is in your pod's inbox at once, and FediPod files it in its place the next
-time it runs; if your address is on your pod, a link to that post opens once
-FediPod has run. Using the app counts as being here (see "Accounts that go
-quiet"). An app stays signed in for 90 days, then asks you to sign in again.
+is typed on fedipod.net. The app then reads your timeline and notifications from your
+account's copy at the gateway, and posts, boosts, likes and follows as you.
 
 An app checks for new posts every minute or so while it is open; there are no
 live updates. Accounts are made on the fedipod.net front page, with a pod, not
@@ -237,9 +225,9 @@ how much content has arrived since — and acts on them.
 **Paused.** After about 5,000 posts, replies, likes, boosts and edits since
 you were last here, the door accepts content and discards it. Follows,
 unfollows, account moves, deletions and blocks still reach your pod. Signing
-in, or using an app signed in at fedipod.net, ends the pause.
+in ends the pause.
 
-**Closed.** After six months without a sign-in or any use of an app signed in at fedipod.net, the address is closed for good: its handle, its actor and its
+**Closed.** After six months without a sign-in, the address is closed for good: its handle, its actor and its
 door answer 410 Gone, other servers drop the account the next time they look,
 and nobody can take the name. Nothing on your pod is touched. An address that
 had already moved to another gateway keeps answering as moved.
@@ -269,11 +257,11 @@ blocklist public, which is part of the bargain of running behind a door.
 
 Three things go further, all for browser accounts only. Mail that waits at
 the gateway while your app is closed, direct messages included, is stored there
-until it reaches your pod. A gateway keeping your account running can read
-your signing key, and nothing else on your pod. And it keeps the part of your
-account described under "While your app is closed": your timeline,
-notifications and direct messages among it only while an app other than
-FediPod is signed in.
+until it reaches your pod. A gateway keeping your account running can read and
+write everything in your FediPod folder, your signing key included, while it
+works; nothing else on your pod is open to it. And it keeps your account's
+working data — your timeline, notifications and direct messages among it — for
+as long as it keeps your account running.
 
 ## Running a gateway
 

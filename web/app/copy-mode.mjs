@@ -2,16 +2,11 @@
 // gateway (lib/gateway/copy.mjs, lib/gateway/state-api.mjs), for an account the
 // gateway keeps running.
 //
-// A person's copy (version 2) holds only what the gateway needs: the slim
-// documents, and while an outside app is signed in, what apps show too. Those
-// are read and written at the gateway, and every write is made on the pod as
-// well; every other document lives on the pod alone. The lease that says which
-// agent acts is the copy's. The gateway never writes the pod: what it changed
-// reaches the pod through the inbox (lib/core/intake/gateway-writes.mjs). A
-// copy from before version 2 is copied to the pod once and started again
-// (upgradeCopy).
+// The state documents are read and written at the gateway instead of on the
+// pod, and the lease that says which agent acts is the copy's. What stays on
+// the pod (the key, connected-account passwords) is still read there. The
+// gateway writes the copy to the pod every fifteen minutes.
 import { HttpStorage, StateApiStorage, podOnly } from '../../lib/core/storage.mjs';
-import { SLIM_DOCS, PUBLIC_CONFIG, publicConfig } from '../../lib/core/pod-only.mjs';
 import { Lease } from '../../lib/core/lease.mjs';
 import { kvGet, kvPut, kvDel } from './idb-kv.mjs';
 
@@ -64,8 +59,7 @@ export async function openCopy(agent, frontOrigin, { handle = null, kept = null,
   if (failed) await kvDel(key).catch(() => {});
   const copy = await res.json().catch(() => null);
   return copy?.base && copy?.token
-    ? { handle: copy.handle, base: copy.base, token: copy.token, expiresAt: copy.expiresAt, podHome: copy.podHome || null,
-      v: copy.v || 1, full: !!copy.full, filledAt: copy.filledAt || null, filledFull: copy.filledFull || null }
+    ? { handle: copy.handle, base: copy.base, token: copy.token, expiresAt: copy.expiresAt, podHome: copy.podHome || null }
     : null;
 }
 
@@ -75,26 +69,13 @@ const tokenFetch = (agent) => (u, i = {}) => fetch(u, {
   ...i, headers: { ...(i.headers || {}), authorization: `Bearer ${agent.copy.token}` },
 });
 
-// Which documents a person's copy holds: the slim ones, and everything apps
-// show while an outside app is signed in. The settings stay on the pod; their
-// public part is kept in the copy beside them.
-export const copyNamesOf = (copy) => (copy?.v === 2
-  ? (name) => (copy.full ? !podOnly(name) && name !== 'config.json' : SLIM_DOCS.has(name))
-  : null);
-
 /** The store's storage, and the lease, for working from the copy. */
 export function copyStorage(agent, podState) {
-  const v2 = agent.copy.v === 2;
   const s = new StateApiStorage(agent.copy.base, {
     fetchImpl: (u, i) => fetch(u, i), token: agent.copy.token, holder: agent.holderId, pod: podState,
     // Refused: another agent (an app at the gateway, another browser) took
     // the lease. This one stops acting at once rather than at its next renewal.
     onRefused: () => standDown(agent),
-    inCopy: copyNamesOf(agent.copy), mirror: v2, publicConfig: v2 ? publicConfig : null, log: agent.log,
-    // An app signed in, or the last one out: the store follows at once.
-    onFull: v2 ? (full) => { if (full !== !!agent.copy?.full && !agent._reshaping) {
-      agent._reshaping = refreshCopyMeta(agent).catch((e) => agent.log(`the account's copy: ${e.message}`)).finally(() => { agent._reshaping = null; });
-    } } : null,
   });
   Object.defineProperty(s, 'token', { get: () => agent.copy.token, set() {} });
   return s;
@@ -189,13 +170,9 @@ export async function moveIntoCopy(agent, frontOrigin) {
     return false;
   }
   agent.copy = copy;
-  const podState = new HttpStorage(agent.urls.state, (u, i) => agent.remote.fetch(u, i));
-  await upgradeCopy(agent, podState);
-  await fillCopy(agent, podState).catch((e) => agent.log(`filling the copy: ${e.message}`));
   const lease = copyLeaseOf(agent);
   if (!await lease.acquire()) { agent.log('the account\'s copy is held by another agent; reading only'); }
-  agent.store.attach(copyStorage(agent, podState));
-  if (agent.intake) agent.intake.inCopy = copyNamesOf(agent.copy);
+  agent.store.attach(copyStorage(agent, new HttpStorage(agent.urls.state, (u, i) => agent.remote.fetch(u, i))));
   await agent.store.load({ force: true });
   useLease(agent, lease);
   if (lease.heldUntil) lease.startRenewal(); else agent.demote();
@@ -218,7 +195,6 @@ export async function leaveCopy(agent) {
     return { ok: false, why: `the gateway could not write the copy to the pod (${res.status || res.e?.message})` };
   }
   agent.copy = null;
-  if (agent.intake) agent.intake.inCopy = null;
   const podFetch = (u, i) => agent.remote.fetch(u, i);
   const lease = new Lease({ url: `${agent.urls.state}lease.json`, fetchImpl: podFetch, log: agent.log, id: agent.holderId });
   agent.store.attach(new HttpStorage(agent.urls.state, podFetch));
@@ -255,7 +231,6 @@ export async function handOverCopy(agent) {
     .catch((e) => ({ status: 0, e }));
   if (res.status !== 200) return { ok: false, why: `the gateway would not let the copy go (${res.status || res.e?.message})` };
   agent.copy = null;
-  if (agent.intake) agent.intake.inCopy = null;
   agent.store.attach(pod);
   await agent.store.load({ force: true });
   useLease(agent, podLease);
@@ -264,100 +239,9 @@ export async function handOverCopy(agent) {
   return { ok: true };
 }
 
-/**
- * A person's copy, filled from the pod where it is empty: the slim documents
- * and the settings' public part when it was just made, and what apps show
- * when an app has signed in and the sign-in page did not fill it. Only what
- * the copy lacks is taken (state-api.mjs: fill). Returns how many were put.
- */
-export async function fillCopy(agent, podState) {
-  const copy = agent.copy;
-  if (copy?.v !== 2 || (copy.filledAt && (!copy.full || copy.filledFull))) return 0;
-  const listing = await podState.list('');
-  const wanted = copyNamesOf(copy);
-  const docs = {};
-  for (const name of listing.names || []) {
-    if (name === 'config.json') {
-      const r = await podState.read(name);
-      if (r.ok) { try { docs[PUBLIC_CONFIG] = JSON.stringify(publicConfig(JSON.parse(r.body)), null, 2) + '\n'; } catch { /* unreadable: left out */ } }
-      continue;
-    }
-    if (!wanted(name)) continue;
-    const r = await podState.read(name);
-    if (r.ok) docs[name] = r.body;
-  }
-  const res = await tokenFetch(agent)(`${copy.base}fill`, {
-    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ docs, full: copy.full }),
-  }).catch((e) => ({ status: 0, e }));
-  if (res.status !== 200) { agent.log(`the account's copy was not filled (${res.status || res.e?.message})`); return 0; }
-  const out = await res.json().catch(() => ({}));
-  copy.filledAt = copy.filledAt || Date.now();
-  if (copy.full) copy.filledFull = Date.now();
-  agent.log(`the account's copy at the gateway: ${out.put || 0} document(s) filled from the pod`);
-  return out.put || 0;
-}
-
-/**
- * A copy from before version 2: every document in it copied to the pod as the
- * owner, then the gateway asked to start it again as a person's copy is now.
- * The gateway does it only if nothing changed in the copy since it was read,
- * so nothing is lost; asked again when something did. Returns whether it did.
- */
-export async function upgradeCopy(agent, podState) {
-  const copy = agent.copy;
-  if (!copy || copy.v === 2) return true;
-  const old = new StateApiStorage(copy.base, { fetchImpl: (u, i) => fetch(u, i), token: copy.token, holder: agent.holderId, pod: null });
-  for (let attempt = 0; attempt < 3; attempt++) {
-    const listing = await old.list('');
-    for (const name of listing.names.filter((n) => !podOnly(n))) {
-      const r = await old.read(name);
-      if (!r.ok) continue;
-      const w = await podState.write(name, r.body, 'application/json');
-      if (!w.ok) { agent.log(`${name} could not be copied to the pod (${w.why}); the copy stays as it is`); return false; }
-    }
-    const res = await tokenFetch(agent)(`${copy.base}reset`, {
-      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ etag: listing.etag }),
-    }).catch((e) => ({ status: 0, e }));
-    if (res.status === 200) {
-      const out = await res.json().catch(() => ({}));
-      Object.assign(copy, { v: 2, full: !!out.full, filledAt: null, filledFull: null });
-      agent.log('the account\'s copy at the gateway was copied to the pod and started again');
-      return true;
-    }
-    if (res.status !== 409) { agent.log(`the account's copy was not started again (${res.status || res.e?.message})`); return false; }
-  }
-  return false;
-}
-
-/**
- * Where the copy stands now: an app signing in makes it full, the last one
- * signing out slim. On a change the store reads its documents from where they
- * now live. The hourly check-in asks.
- */
-export async function refreshCopyMeta(agent) {
-  if (agent.copy?.v !== 2) return false;
-  const res = await tokenFetch(agent)(`${agent.copy.base}meta`).catch(() => null);
-  if (!res || res.status !== 200) return false;
-  const meta = await res.json().catch(() => null);
-  if (!meta || !agent.copy || !!meta.full === !!agent.copy.full) return false;
-  await agent.store.commit();
-  if (!agent.copy) return false;              // let go of meanwhile
-  Object.assign(agent.copy, { full: !!meta.full, filledFull: meta.filledFull || null });
-  const podState = new HttpStorage(agent.urls.state, (u, i) => agent.remote.fetch(u, i));
-  // Now full and not yet filled: what this agent has is the newest, so it goes in.
-  if (agent.copy.full) await fillCopy(agent, podState).catch((e) => agent.log(`filling the copy: ${e.message}`));
-  agent.store.attach(copyStorage(agent, podState));
-  if (agent.intake) agent.intake.inCopy = copyNamesOf(agent.copy);
-  await agent.store.load({ force: true });
-  agent.log(agent.copy.full ? 'an outside app signed in: what apps show is kept at the gateway too'
-    : 'the last outside app signed out: what apps show is on the pod only');
-  return true;
-}
-
 /** A token near its end, renewed; the hourly check-in asks. */
 export async function renewCopyToken(agent, frontOrigin) {
   if (!agent.copy || agent.copy.expiresAt - Date.now() > RENEW_BEFORE_MS) return;
   const fresh = await openCopy(agent, frontOrigin, { handle: agent.copy.handle });
-  // The token and its end are new; where the copy stands is refreshCopyMeta's.
-  if (fresh) Object.assign(agent.copy, { token: fresh.token, expiresAt: fresh.expiresAt });
+  if (fresh) agent.copy = fresh;
 }

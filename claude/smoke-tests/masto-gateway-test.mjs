@@ -32,14 +32,12 @@ const rows = {
 };
 // Mei's copy, as the gateway would have made it from her pod.
 const put = (name, obj) => copyKv.set(`mei/d/${name}`, JSON.stringify(obj, null, 2) + '\n');
-// The public part of the settings, which the owner's FediPod keeps in the copy.
-await put('config-public.json', { handle: 'mei', name: 'Mei', root: 'fedipod/', remotePod: 'https://mei.pod.example/', kind: 'person',
+await put('config.json', { handle: 'mei', name: 'Mei', root: 'fedipod/', remotePod: 'https://mei.pod.example/', kind: 'person',
   gateway: { url: `${ORIGIN}/u/mei/ap/inbox/`, frontActor: `${ORIGIN}/u/mei/ap/actor` } });
 await put('statuses.json', [{ noteId: 'https://mei.pod.example/fedipod/ap/notes/n1', kind: 'post', actor: `${ORIGIN}/u/mei/ap/actor`,
   content: '<p>from the copy</p>', published: new Date().toISOString(), visibility: 'public' }]);
 await put('contacts.json', { followers: [], following: [] });
-// A person's copy as it is now (version 2), full: an outside app is signed in.
-await copyKv.set('mei/meta', JSON.stringify({ v: 2, full: true, filledAt: Date.now(), stateUrl: 'https://mei.pod.example/fedipod/ap-state/', podOnly: ['keys.json'] }));
+await copyKv.set('mei/meta', JSON.stringify({ filledAt: Date.now(), stateUrl: 'https://mei.pod.example/fedipod/ap-state/', podOnly: ['keys.json'] }));
 
 const ctx = {
   host: 'gw.example', copyKv, mastoKv,
@@ -48,7 +46,6 @@ const ctx = {
   putDirectory: async (h, r) => { rows[h] = r; },
   keeperWebId: 'https://keeper.example/#me',
   keeperMark: 'first-credential',
-  stateSecret: Buffer.from('state-secret-for-the-test'),
   keeperCredential: { webId: 'https://keeper.example/#me', clientId: 'x', secret: 'y', tokenEndpoint: 'https://keeper.example/token', issuerOrigin: 'https://keeper.example' },
   // Only Ana's and Bo's pods are reached: Ana's refuses the gateway, and at
   // Bo's the gateway's own sign-in is refused.
@@ -127,24 +124,20 @@ try {
   check(back?.origin === 'https://elk.zone' && back.searchParams.get('code') && back.searchParams.get('state') === 's1',
     'the owner\'s sign-in sends the app its code');
   const code = back.searchParams.get('code');
-  check(signed.json.fill?.base === `${ORIGIN}/api/state/mei/` && signed.json.fill.token,
-    'the sign-in page is told where to fill the copy apps read, and given a token for it');
-  check(JSON.parse((await copyKv.get('mei/meta')).text).full === true, 'an app signing in makes the copy full');
   check(Date.now() - Date.parse(rows.mei.openedAt) < 5_000, 'signing an app in counts as the owner being here');
-  // A person's copy is never read from their pod by the gateway: the sign-in
-  // makes an empty one for the page to fill.
-  const asked0 = podAsks;
   const anaAsk = { ...ask, address: 'ana' };
-  const anaSigned = await call('POST', '/api/authorize', { body: anaAsk, headers: { authorization: 'DPoP ana', dpop: 'x' } });
-  check(anaSigned.status === 200 && anaSigned.json.fill && podAsks === asked0, 'a sign-in to an account with no copy makes an empty one, and reads nothing from the pod');
-  const anaMeta = JSON.parse((await copyKv.get('ana/meta')).text);
-  check(anaMeta.v === 2 && anaMeta.full === true && !(await copyKv.list('ana/d/')).length, 'version 2, full, and empty until the page fills it');
+  const refused = await call('POST', '/api/authorize', { body: anaAsk, headers: { authorization: 'DPoP ana', dpop: 'x' } });
+  check(refused.status === 502 && /could not be read \(HTTP 403\)/.test(refused.json?.error) && !/another device/.test(refused.json?.error),
+    `a pod that refuses the gateway is named as the reason, not another device (${refused.json?.error})`);
+  const appSees = await ensureCopy(ctx, 'ana', rows.ana, () => {});
+  check(appSees.status === 503 && /a moment ago: the pod could not be read \(HTTP 403\)/.test(appSees.why),
+    'an app checking in just after is told to wait, and why');
+  const again = await call('POST', '/api/authorize', { body: anaAsk, headers: { authorization: 'DPoP ana', dpop: 'x' } });
+  check(again.status === 502 && !/a moment ago/.test(again.json?.error), 'the owner signing in again is not made to wait');
   check((await call('POST', '/oauth/token', { body: { grant_type: 'authorization_code', code, client_id: app.client_id, redirect_uri: app.redirect_uri, code_verifier: 'wrong' } })).status === 400,
     'a code made with a challenge is not given up for a wrong answer');
   const tok = await call('POST', '/oauth/token', { body: { grant_type: 'authorization_code', code, client_id: app.client_id, redirect_uri: app.redirect_uri, code_verifier: verifier } });
   check(tok.status === 200 && tok.json.access_token && tok.json.scope === 'read write', 'the right answer gets the app its token');
-  const marks = (await mastoKv.list('signedin/mei/')).map((b) => b.key);
-  check(marks.length === 1 && !marks[0].includes('/code-'), `the app is marked as signed in to the account, and its code's mark has gone (${marks.join(', ')})`);
   check((await call('POST', '/oauth/token', { body: { grant_type: 'authorization_code', code, client_id: app.client_id, code_verifier: verifier } })).status === 400,
     'and a code works once');
   check(!(await mastoKv.list('token/')).some((b) => b.key.includes(tok.json.access_token)), 'the token is kept only as its hash');
@@ -214,20 +207,16 @@ try {
   rows.mei.webId = was;
   await call('POST', '/oauth/revoke', { body: { token: tok.json.access_token } });
   check((await call('GET', '/api/v1/timelines/home', { headers: bearer })).status === 401, 'a revoked token reads nothing');
-  // ---- the last app signing out empties what only apps needed ----
-  const metaNow = JSON.parse((await copyKv.get('mei/meta')).text);
-  check(metaNow.full === false && !(await copyKv.get('mei/d/statuses.json')), 'the last app signing out made the copy slim at once');
-  await copyKv.set('mei/meta', JSON.stringify({ ...metaNow, full: true }));
-  await put('statuses.json', [{ noteId: 'x' }]);
-  await put('notifications.json', [{ id: 'n1', type: 'follow' }]);
-  await mastoKv.set('signedin/mei/old-token', JSON.stringify({ at: Date.now() - 91 * 86400_000 }));
-  const { dropFullIfNoApps } = await import('../../lib/gateway/masto-gateway.mjs');
-  await dropFullIfNoApps(ctx, 'mei', () => {});
-  const after = JSON.parse((await copyKv.get('mei/meta')).text);
-  check(after.full === false && !(await copyKv.get('mei/d/statuses.json')) && !(await copyKv.get('mei/d/notifications.json'))
-    && !!(await copyKv.get('mei/d/contacts.json')) && !!(await copyKv.get('mei/d/config-public.json')),
-    'with no app left, the timeline and notifications go from the gateway at once; the slim copy stays');
-  check(podAsks === asked0, 'and the pod was never read for any of it');
+  // ---- the gateway's own sign-in refused: no account is tried for a while ----
+  const boFirst = await ensureCopy(ctx, 'bo', rows.bo, () => {}, { owner: true });
+  check(boFirst.status === 502 && /token request failed \(HTTP 401\)/.test(boFirst.why), 'a refused sign-in by the gateway itself is named');
+  const asked = podAsks;
+  const anaHeld = await ensureCopy(ctx, 'ana', rows.ana, () => {}, { owner: true });
+  check(anaHeld.status === 503 && /token request failed/.test(anaHeld.why) && podAsks === asked,
+    'then no account is tried, the owner\'s included, and no pod is asked');
+  ctx.keeperMark = 'second-credential';           // the operator put a new credential in
+  const anaTried = await ensureCopy(ctx, 'ana', rows.ana, () => {}, { owner: true });
+  check(podAsks > asked && /HTTP 403/.test(anaTried.why), 'a new credential is tried at once');
 
   // ---- FediPod asking for the copy the moment it has turned keeping on ----
   ctx.stateSecret = Buffer.from('state-secret-for-the-test');

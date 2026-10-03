@@ -277,8 +277,7 @@ cp('web/admin/tokens.css', 'demo/tokens.css');
 // The page a Mastodon app sends its person to (lib/gateway/masto-gateway.mjs),
 // with the pod sign-in library and the palette beside it, as the demo has.
 fs.mkdirSync(path.join(site, 'app-signin'), { recursive: true });
-for (const f of ['index.html', 'app-signin.mjs', 'app-fill.mjs']) cp(`web/app-signin/${f}`, `app-signin/${f}`);
-cp('lib/core/doc-delta.mjs', 'app-signin/doc-delta.mjs');
+for (const f of ['index.html', 'app-signin.mjs']) cp(`web/app-signin/${f}`, `app-signin/${f}`);
 for (const f of ['fedi-login.mjs', 'oidc-session.mjs']) cp(`lib/session/${f}`, `app-signin/${f}`);
 cp('web/admin/tokens.css', 'app-signin/tokens.css');
 fs.writeFileSync(path.join(site, 'demo/index.html'),

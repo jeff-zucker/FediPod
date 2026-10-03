@@ -3,7 +3,7 @@
 // and Mastodon apps signed in here (masto-gateway.mjs).
 // Kept apart from front.mjs, which answers every delivery, so the pieces that
 // act for an account are loaded only when an account is being worked on.
-import { gatewayCtx, keeperCredential, keyReaderCredential } from './front.mjs';
+import { gatewayCtx, keeperCredential } from './front.mjs';
 import { verifyPodToken } from '../../lib/gateway/front-core.mjs';
 import { routeStateApi } from '../../lib/gateway/state-api.mjs';
 import { routeMastoGateway } from '../../lib/gateway/masto-gateway.mjs';
@@ -14,7 +14,6 @@ export default async function handler(request, context) {
   const ctx = gatewayCtx();
   ctx.waitUntil = (p) => context?.waitUntil?.(p);
   ctx.keeperCredential = await keeperCredential().catch(() => null);
-  ctx.keyReaderCredential = await keyReaderCredential().catch(() => null);
   let out;
   try {
     out = await routeStateApi(request, pathname, ctx, { verifyPodToken })

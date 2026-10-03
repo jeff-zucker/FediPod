@@ -658,10 +658,10 @@ try {
     const otherInbox = await get(inboxDoor, { headers: { authorization: jwt('https://elsewhere.example/card#me'), dpop: 'proof' }, redirect: 'manual' });
     check(otherInbox.status === 405, `anyone else reading the inbox door is refused as before (${otherInbox.status})`);
     // ---- a private post, read at its address by a server it was sent to (§3.2) ----
-    // The read is signed like a delivery. For a person, fedipod.net reads their
-    // signing key and nothing else on their pod, so it gives no private post to
-    // anyone: a follower's server that missed one had it sent again by the
-    // retries. Anyone else is told nothing either.
+    // The read is signed like a delivery; a follower gets a followers-only post,
+    // the one named gets a direct post, anyone else is told nothing. Answered
+    // for a kept account: the post is read with the keeper's credential and the
+    // followers come from the account's copy.
     {
       const { signRequest } = await import('@fedify/fedify/sig');
       const { memoryKv } = await import('../../lib/gateway/copy.mjs');
@@ -682,12 +682,13 @@ try {
       const secret = '/u/pwren/ap/private/secret';
       const asFollower = await signedGet('kofi', secret);
       const got = await asFollower.json().catch(() => null);
-      check(asFollower.status === 404 && !got && asFollower.headers.get('cache-control') === 'no-store',
-        `a follower's server, signing its read, is not given a person's followers-only post, and the answer is never held at the edge (${asFollower.status})`);
+      check(asFollower.status === 200 && got?.id === `${ORIGIN}${secret}` && got?.to?.[0] === `${ORIGIN}/u/pwren/ap/followers`
+        && asFollower.headers.get('cache-control') === 'no-store' && /signature/i.test(asFollower.headers.get('vary') || ''),
+        `a follower's server, signing its read, gets the followers-only post, named at the front, never held at the edge (${asFollower.status})`);
       const asStranger = await signedGet('nia', secret);
       check(asStranger.status === 404, `a signed read by someone who does not follow is told nothing (${asStranger.status})`);
       const dmForNia = await signedGet('nia', '/u/pwren/ap/private/dm');
-      check(dmForNia.status === 404, `nor is a direct post given to the one it names (${dmForNia.status})`);
+      check(dmForNia.status === 200, `a direct post is given to the one it names, follower or not (${dmForNia.status})`);
       const dmForKofi = await signedGet('kofi', '/u/pwren/ap/private/dm');
       check(dmForKofi.status === 404, `and to nobody else, a follower included (${dmForKofi.status})`);
       const list = await signedGet('kofi', '/u/pwren/ap/private/outbox');

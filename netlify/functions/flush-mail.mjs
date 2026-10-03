@@ -2,18 +2,15 @@
 // browser accounts whose apps are closed goes to their pods, in batches
 // (lib/gateway/held-mail.mjs). A kept account whose keeper has work due (a
 // follow held at the door, a failed delivery's next try, a scheduled post, a
-// poll's end), or with an outside app signed in and mail held, is handed to
-// its keeper instead (keeper-background.mjs). A person's copy is never written
-// to their pod here: the gateway hands its changes to the pod inbox as it
-// makes them (lib/gateway/pod-mail.mjs). The forum's copies, and a person's
-// copy from before version 2, are written to the pod as before.
+// poll's end) is handed to its keeper instead (keeper-background.mjs), which
+// delivers the mail and reads it. Mail alone does not start a run. An app that
+// opens takes its own mail sooner. Last, each kept account's working copy at
+// the gateway is written to its pod (lib/gateway/copy.mjs).
 import { gatewayCtx } from './front.mjs';
 import { signRun } from './keeper-background.mjs';
 import { flushAll, isPresent } from '../../lib/gateway/held-mail.mjs';
 import { closedState } from '../../lib/gateway/quiet.mjs';
-import { listCopies, copyMeta, flushCopy, dropCopy, forgetCopy, lockCopy, renewPodLease, keptBefore, keptNow, isPersonal } from '../../lib/gateway/copy.mjs';
-import { readsMailHere, flushPending } from '../../lib/gateway/pod-mail.mjs';
-import { dropFullIfNoApps } from '../../lib/gateway/app-signins.mjs';
+import { listCopies, copyMeta, flushCopy, dropCopy, lockCopy, renewPodLease, keptBefore, keptNow } from '../../lib/gateway/copy.mjs';
 import { HttpStorage } from '../../lib/core/storage.mjs';
 
 export default async function handler() {
@@ -32,10 +29,7 @@ export default async function handler() {
   await flushAll(ctx, {
     isGone: async (handle, rec) => (await closedState(ctx, handle, rec)).closed,
     keep: async (handle, rec) => {
-      // Read here rather than sent to the pod: an outside app shows it.
-      const meta = ctx.copyKv && isPersonal(rec) ? await copyMeta(ctx.copyKv, handle) : null;
-      const appsRead = !!meta && meta.v === 2 && readsMailHere(meta);
-      if (!(due.has(handle) || appsRead) || !kept(rec) || await isPresent(ctx, handle)) return false;
+      if (!due.has(handle) || !kept(rec) || await isPresent(ctx, handle)) return false;
       await start(handle);
       started.add(handle);
       return true;
@@ -62,17 +56,6 @@ export default async function handler() {
       // Kept under the gateway's former identity: this one cannot write it
       // back; the owner's FediPod hands it over on its next start.
       if (keptBefore(ctx, rec)) return;
-      // A person's copy now: nothing to write back. An account that has gone
-      // just has it forgotten (the pod has everything); one whose apps have
-      // all signed out or run out has what only apps needed dropped.
-      if (meta.v === 2 && (!rec || isPersonal(rec))) {
-        const gone = !rec || rec.movedTo || !rec.keeper || (await closedState(ctx, handle, rec)).closed;
-        if (gone) { await forgetCopy(ctx.copyKv, handle, { log: console.log }); return; }
-        // What was set aside for the pod since the last round goes now.
-        await flushPending(ctx, handle, rec, { log: console.log }).catch((e) => console.log(`@${handle}: not handed to the pod: ${e?.message || e}`));
-        if (meta.full) await dropFullIfNoApps(ctx, handle, console.log);
-        return;
-      }
       const leaving = !rec || rec.movedTo || !rec.keeper || (await closedState(ctx, handle, rec)).closed;
       if (leaving) {
         const unlock = await lockCopy(ctx.copyKv, handle, { waitMs: 2000 });

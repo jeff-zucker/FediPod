@@ -5,7 +5,7 @@
 // ten seconds. Only those two may start it: the body is signed with the
 // keeper's own secret.
 import crypto from 'node:crypto';
-import { gatewayCtx, keeperCredential, keyReaderCredential } from './front.mjs';
+import { gatewayCtx, keeperCredential } from './front.mjs';
 import { keepOnce } from '../../lib/gateway/keeper.mjs';
 
 export const signRun = (body, secret) => crypto.createHmac('sha256', secret).update(body).digest('hex');
@@ -21,7 +21,6 @@ export default async function handler(request) {
   const { handle } = JSON.parse(body);
   const ctx = gatewayCtx();
   ctx.keeperCredential = await keeperCredential();
-  ctx.keyReaderCredential = await keyReaderCredential().catch(() => null);
   // Read fresh: a run is started the moment a row is switched on, and the
   // ordinary read can still answer with the row as it was.
   const rec = await (ctx.lookupFresh || ctx.lookup)(handle);

@@ -18,13 +18,11 @@ lightweight host will do, Netlify included.
 
 A gateway can also keep a browser account running. It then acts as that
 account's agent whenever FediPod is closed, under a pod identity of its own
-that the rule on the owner's signing key names, to read the key and nothing
-else on the pod. Part of the account's state lives in a copy at the gateway,
-which FediPod in the browser, the gateway and any Mastodon app all work from:
-what the gateway's work needs, and while an app other than FediPod is signed
-in, what apps show. FediPod writes what it changes to the pod as well; the
-gateway never writes the pod, and hands what it changed to the pod inbox for
-FediPod to apply. See [the gateway](gateway.md).
+that the owner's rules name, reading the signing key from the pod when it
+needs it. The account's state documents live in a working copy at the
+gateway, which FediPod in the browser, the gateway and any Mastodon app all
+work from, and which the gateway writes to the pod every fifteen minutes. See
+[the gateway](gateway.md).
 
 [FediPod Server](packages/fedipod-server/README.md) puts the agent inside a
 Community Solid Server, so anyone with a pod on that server can opt in to a
