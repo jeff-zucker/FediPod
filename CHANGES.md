@@ -1,6 +1,6 @@
 # Changes
 
-## Unreleased (fedipod.net keeps your account's data for at most fifteen minutes)
+## 2026-10-03 (fedipod.net keeps your account's data for at most fifteen minutes — version 1.47.0)
 
 **fedipod.net no longer keeps a lasting copy of your account.** While it keeps
 your account running, FediPod in your browser, any app you use and fedipod.net
@@ -24,6 +24,18 @@ never worked before: fedipod.net looked for your followers in the wrong place.
 **Using an app signed in at fedipod.net counts as being here,** so an account
 used only through an app is not paused, and its address not closed, for want
 of opening FediPod.
+
+**New followers are accepted automatically** unless you chose "wait for
+approval". An account that never chose now accepts automatically.
+
+**The manage page no longer has Close this address, Stop keeping it running,
+Pause or Resume,** nor the "kept running" notice. An account still pauses by
+itself after about 5,000 items arrive while you are away, and signing in ends
+the pause; an address still closes by itself after six months without a
+sign-in.
+
+**A Mastodon app left open costs fedipod.net less.** Its repeated check, with
+nothing new, gets the same answer without the account being opened again.
 
 ## 2026-09-29 (your posts show their likes and boosts — version 1.46.0)
 
