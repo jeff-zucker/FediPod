@@ -27,7 +27,7 @@ hold). A gateway's admin may turn the hold off: then there is no copy, and
 everything works on the pod, the browser and the gateway taking turns by the
 pod's lease. See [the gateway](gateway.md).
 
-[FediPod Server](packages/fedipod-server/README.md) puts the agent inside a
+[FediPod Server](https://github.com/jeff-zucker/fedipod-server) puts the agent inside a
 Community Solid Server, so anyone with a pod on that server can opt in to a
 Fediverse account fed by the server itself.
 

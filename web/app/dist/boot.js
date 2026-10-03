@@ -32544,55 +32544,6 @@ var REL = {
 };
 
 // lib/pod/urls.mjs
-function apUrls(remotePod, root, { publicBase = null } = {}) {
-  if (!root) throw new Error("apUrls: a container root is required \u2014 the caller states it, this library does not guess");
-  const base = remotePod.endsWith("/") ? remotePod : remotePod + "/";
-  const home = base + (root.endsWith("/") ? root : root + "/");
-  const face = publicBase ? publicBase.endsWith("/") ? publicBase : publicBase + "/" : home;
-  const urls = {
-    base,
-    home,
-    webfinger: base + ".well-known/webfinger",
-    actor: face + "ap/actor",
-    inbox: face + "ap/inbox/",
-    outbox: face + "ap/outbox",
-    followers: face + "ap/followers",
-    following: face + "ap/following",
-    notes: face + "ap/notes/",
-    privateNotes: face + "ap/private/",
-    featured: face + "ap/featured",
-    // FEP-1b12: the moderator roster a recipient validates announced
-    // moderation against. Published only when moderators are configured.
-    moderators: face + "ap/moderators",
-    // FEP-4ccd and FEP-c648: follows in limbo and the block list, as
-    // collections. They live in the private container so the owner-only ACL
-    // is inherited, not re-stated per document.
-    pendingFollowers: face + "ap/private/pending-followers",
-    pendingFollowing: face + "ap/private/pending-following",
-    blocked: face + "ap/private/blocked",
-    // The outbox as its owner reads it (every message, §5.1) and what the
-    // owner has liked (§5.5): the owner's alone, so they sit here too — and
-    // at the pod's own address even for a fronted identity, because the owner
-    // reads them there, with a credential the pod checks.
-    ownOutbox: home + "ap/private/outbox",
-    liked: home + "ap/private/liked",
-    // The inbox as its owner reads it (§5.2): what the account received,
-    // kept by the drain as a paged collection beside the archive.
-    ownInbox: home + "ap/private/inbox",
-    profileHtml: face + "ap/profile.html",
-    // Media stays on the pod even when fronted: attachment urls are not
-    // identity-checked by remotes, and proxying blobs would be pure cost.
-    media: home + "ap/media/",
-    state: home + "ap-state/"
-  };
-  if (publicBase) {
-    urls.podHome = home;
-    urls.publicHome = face;
-    urls.toPod = (u) => typeof u === "string" && u.startsWith(face) ? home + u.slice(face.length) : u;
-    urls.toPublic = (u) => typeof u === "string" && u.startsWith(home) ? face + u.slice(home.length) : u;
-  }
-  return urls;
-}
 function podBaseOfWebId(webId) {
   const u = new URL(webId);
   u.hash = "";
@@ -33727,7 +33678,7 @@ async function moveIn(answers, { session, onStep = () => {
   return { config, address: `@${handle}@${new URL(origin).host}`, movedFrom: config.movedFrom };
 }
 
-// packages/fedipod-bb/src/setup.mjs
+// node_modules/fedipod-bb/src/setup.mjs
 var setup_exports = {};
 __export(setup_exports, {
   ROOT: () => ROOT,
@@ -33740,7 +33691,7 @@ __export(setup_exports, {
   writeForumConfig: () => writeForumConfig
 });
 
-// lib/pod/containers.mjs
+// node_modules/fedipod/lib/pod/containers.mjs
 var KEEP = { keep: true };
 var KEEP_CT = "application/json";
 var keepUrl = (base) => `${base}.keep`;
@@ -33986,7 +33937,58 @@ var node_crypto_default = {
   scryptSync
 };
 
-// packages/fedipod-bb/src/urls.mjs
+// node_modules/fedipod/lib/pod/urls.mjs
+function apUrls2(remotePod, root, { publicBase = null } = {}) {
+  if (!root) throw new Error("apUrls: a container root is required \u2014 the caller states it, this library does not guess");
+  const base = remotePod.endsWith("/") ? remotePod : remotePod + "/";
+  const home = base + (root.endsWith("/") ? root : root + "/");
+  const face = publicBase ? publicBase.endsWith("/") ? publicBase : publicBase + "/" : home;
+  const urls = {
+    base,
+    home,
+    webfinger: base + ".well-known/webfinger",
+    actor: face + "ap/actor",
+    inbox: face + "ap/inbox/",
+    outbox: face + "ap/outbox",
+    followers: face + "ap/followers",
+    following: face + "ap/following",
+    notes: face + "ap/notes/",
+    privateNotes: face + "ap/private/",
+    featured: face + "ap/featured",
+    // FEP-1b12: the moderator roster a recipient validates announced
+    // moderation against. Published only when moderators are configured.
+    moderators: face + "ap/moderators",
+    // FEP-4ccd and FEP-c648: follows in limbo and the block list, as
+    // collections. They live in the private container so the owner-only ACL
+    // is inherited, not re-stated per document.
+    pendingFollowers: face + "ap/private/pending-followers",
+    pendingFollowing: face + "ap/private/pending-following",
+    blocked: face + "ap/private/blocked",
+    // The outbox as its owner reads it (every message, §5.1) and what the
+    // owner has liked (§5.5): the owner's alone, so they sit here too — and
+    // at the pod's own address even for a fronted identity, because the owner
+    // reads them there, with a credential the pod checks.
+    ownOutbox: home + "ap/private/outbox",
+    liked: home + "ap/private/liked",
+    // The inbox as its owner reads it (§5.2): what the account received,
+    // kept by the drain as a paged collection beside the archive.
+    ownInbox: home + "ap/private/inbox",
+    profileHtml: face + "ap/profile.html",
+    // Media stays on the pod even when fronted: attachment urls are not
+    // identity-checked by remotes, and proxying blobs would be pure cost.
+    media: home + "ap/media/",
+    state: home + "ap-state/"
+  };
+  if (publicBase) {
+    urls.podHome = home;
+    urls.publicHome = face;
+    urls.toPod = (u) => typeof u === "string" && u.startsWith(face) ? home + u.slice(face.length) : u;
+    urls.toPublic = (u) => typeof u === "string" && u.startsWith(home) ? face + u.slice(home.length) : u;
+  }
+  return urls;
+}
+
+// node_modules/fedipod-bb/src/urls.mjs
 var ROOT = "fedipod-bb/";
 var SLUG = /^[a-z0-9][a-z0-9-]{0,62}$/u;
 var isSlug = (s) => typeof s === "string" && SLUG.test(s);
@@ -33996,7 +33998,7 @@ var cacheKey = (postId) => node_crypto_default.createHash("sha256").update(Strin
 function forumUrls(remotePod, root = ROOT, { publicBase = null, front = null, handle = null } = {}) {
   const origin = front ? String(front).replace(/\/$/u, "") : null;
   if (origin && !handle) throw new Error("forumUrls: a fronted forum needs its handle");
-  const site = apUrls(remotePod, root, { publicBase: publicBase || (origin ? `${origin}/u/${handle}/` : null) });
+  const site = apUrls2(remotePod, root, { publicBase: publicBase || (origin ? `${origin}/u/${handle}/` : null) });
   const face = site.actor.slice(0, -"ap/actor".length);
   site.front = origin;
   site.categories = face + "ap/categories";
@@ -34015,7 +34017,7 @@ function forumUrls(remotePod, root = ROOT, { publicBase = null, front = null, ha
   return site;
 }
 function categoryUrls(remotePod, root, { publicBase = null, forumInbox = null } = {}) {
-  const urls = apUrls(remotePod, root, { publicBase });
+  const urls = apUrls2(remotePod, root, { publicBase });
   const face = urls.actor.slice(0, -"ap/actor".length);
   urls.forumInbox = forumInbox || urls.inbox;
   urls.topics = face + "ap/topics";
@@ -34034,7 +34036,7 @@ function categoryUrls(remotePod, root, { publicBase = null, forumInbox = null } 
   return urls;
 }
 
-// packages/fedipod-bb/src/provision.mjs
+// node_modules/fedipod-bb/src/provision.mjs
 async function provisionForum(remote, site, { moderatorWebIds = [] } = {}) {
   await provisionPrivate(remote, site);
   await provisionPublic(remote, site.notes);
@@ -34054,7 +34056,7 @@ async function provisionCategory(remote, cat, { memberWebIds = null } = {}) {
   }
 }
 
-// packages/fedipod-bb/src/setup.mjs
+// node_modules/fedipod-bb/src/setup.mjs
 function forumConfig(existing = {}, {
   remotePod,
   root = ROOT,
@@ -34390,7 +34392,7 @@ async function readIssuer(actorUrl, fetchImpl = fetch) {
   }
 }
 
-// lib/session/oidc-session.mjs
+// node_modules/fediverse-session/oidc-session.mjs
 var STORE = "session";
 var b64u = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 var enc = (o) => b64u(new TextEncoder().encode(JSON.stringify(o)));

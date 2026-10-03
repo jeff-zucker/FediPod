@@ -22,7 +22,7 @@ runtime-agnostic Node:
 
 Another host needs only its own adapter calling the same `handleDelivery`. A
 Community Solid Server can run the same door as a component of itself instead
-— see [packages/fedipod-server](../packages/fedipod-server/README.md).
+— see [fedipod-server](https://github.com/jeff-zucker/fedipod-server).
 
 The front also serves the vendored sign-in bundle. The `/.fediverse-account` page is served too, but opting in to being run is answered only on
 a pod server — on Netlify the form's submit is refused.
@@ -44,9 +44,9 @@ Whether this gateway keeps forums is one line in `netlify/forum-support.mjs`:
 it names the forum (FediPod-BB) or nothing. With it, a forum whose moderator
 turned keeping on is placed as each post lands and run here in the background;
 without it, a forum delivery is written to the forum's pod inbox and left for
-whatever runs the forum. In this repo the forum is `packages/fedipod-bb`;
-anywhere else it is `npm install fedipod-bb` and the package's `gateway`
-entry, shipped beside the function.
+whatever runs the forum. The forum is the `fedipod-bb` package from npm and
+its `gateway` entry, shipped beside the function with its own copy of
+fedipod.
 
 The functions read these environment variables:
 

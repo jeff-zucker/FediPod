@@ -137,11 +137,13 @@ not change.
 
 ## Other ways to use FediPod
 
-- [fediverse-session](lib/session/README.md) - an ESM library that supports both Solid-based and regular Fediverse accounts with methods to login, reply, boost, etc.
-- [FediPod Server](packages/fedipod-server/README.md): a full ActivityPub
+<!-- CLAUDE 2026-10-03 — the first three links pointed at lib/session/ and packages/ in this repository; each is a repository of its own now. Delete these markers when done -->
+- [fediverse-session](https://github.com/jeff-zucker/fediverse-session) - an ESM library that supports both Solid-based and regular Fediverse accounts with methods to login, reply, boost, etc.
+- [FediPod Server](https://github.com/jeff-zucker/fedipod-server): a full ActivityPub
   server as a Community Solid Server component, giving every pod on the server
   the option of a Fediverse account.
-- [FediPod BB](packages/fedipod-bb/README.md) - A Lemmy-like  bulletin board forum with the structure stored on a group pod and users' data stored on their own pod or on their Fediverse server if they don't have a pod.
+- [FediPod BB](https://github.com/jeff-zucker/fedipod-bb) - A Lemmy-like  bulletin board forum with the structure stored on a group pod and users' data stored on their own pod or on their Fediverse server if they don't have a pod.
+  <!-- /CLAUDE -->
 - [FediPod DeviceAgent](device-agent.md) a single-user AP server that lives partly in a gateway, partly on a local device, with all data stored on your pod.
 - [FediPod Groups](groups.md): hosting a discussion group of Fediverse and Bluesky users from a pod.
 - [FediPod Gateway](gateway.md): A thin, always-on door running on Netlify or any small host that provides a middleman between a pod and the single-user agents. (only needed with `BrowserAgent` and `DeviceAgent`)

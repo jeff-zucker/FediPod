@@ -12,6 +12,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { readyDependent } from '../../../scripts/dependents.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, '../../..');
@@ -24,13 +25,17 @@ if (!rigs.length) { console.error('all.mjs: no rig matched'); process.exit(2); }
 // What every rig needs, named up front so a runner without them says so.
 try { console.log(`chrome: ${spawnSync('google-chrome', ['--version'], { encoding: 'utf8' }).stdout.trim() || 'not found'}`); }
 catch { console.log('chrome: google-chrome not found on PATH'); }
-const cssBin = path.join(root, 'packages/fedipod-server/node_modules/.bin/community-solid-server');
-console.log(`scratch server: ${fs.existsSync(cssBin) ? cssBin : 'MISSING — npm ci in packages/fedipod-server'}`);
-// The scratch server scans the Server package as a component module when it
-// starts, and that needs the package's build output; without it the server
-// never answers and every rig waits three minutes to say so.
-const serverBuilt = fs.existsSync(path.join(root, 'packages/fedipod-server/dist/components/context.jsonld'));
-console.log(`server package built: ${serverBuilt ? 'yes' : 'NO — run `npm run build` in packages/fedipod-server first'}`);
+// The scratch server is the CSS the Server's folder installs, and it scans the
+// Server as a component module when it starts, which needs the Server built;
+// without that it never answers and every rig waits three minutes to say so.
+const serverDir = readyDependent('fedipod-server');
+if (!fs.existsSync(path.join(serverDir, 'dist/components/context.jsonld'))) {
+  spawnSync('npm', ['run', 'build'], { cwd: serverDir, stdio: 'inherit' });
+}
+const cssBin = path.join(serverDir, 'node_modules/.bin/community-solid-server');
+console.log(`scratch server: ${fs.existsSync(cssBin) ? cssBin : `MISSING — npm ci in ${serverDir}`}`);
+const serverBuilt = fs.existsSync(path.join(serverDir, 'dist/components/context.jsonld'));
+console.log(`server package built: ${serverBuilt ? 'yes' : `NO — npm run build in ${serverDir} failed`}`);
 if (!fs.existsSync(cssBin) || !serverBuilt) { console.log('\nFAIL  the rigs cannot run here (see above)'); process.exit(1); }
 
 let broken = 0;

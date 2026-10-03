@@ -1,4 +1,4 @@
-// oidc-run.mjs — lib/session/oidc-session.mjs proven correct and secure.
+// oidc-run.mjs — fediverse-session's oidc-session.mjs, as FediPod installs it, proven correct and secure.
 //
 // Uses a mock IdP that checks exactly what a real Solid-OIDC provider checks: the
 // token request carries a DPoP proof and a PKCE verifier, resource requests carry
@@ -76,7 +76,7 @@ const app = http.createServer(async (req, res) => {
   const j = (o, status = 200, headers = {}) => { res.writeHead(status, { 'content-type': 'application/json', ...headers }); res.end(JSON.stringify(o)); };
   if (req.url === '/' || req.url.startsWith('/callback') || req.url.startsWith('/where-i-was')) { res.writeHead(200, { 'content-type': 'text/html' }); return res.end(loader); }
   for (const m of ['oidc-session', 'fedi-login', 'fedi-account']) {
-    if (req.url.startsWith(`/${m}.mjs`)) { res.writeHead(200, { 'content-type': 'text/javascript' }); return res.end(fs.readFileSync(path.join(root, `lib/session/${m}.mjs`))); }
+    if (req.url.startsWith(`/${m}.mjs`)) { res.writeHead(200, { 'content-type': 'text/javascript' }); return res.end(fs.readFileSync(path.join(root, `node_modules/fediverse-session/${m}.mjs`))); }
   }
   // This host plays a Gateway: WebFinger names the actor here and, as an
   // alias, the actor on the pod; the pod (the same host, for the test)

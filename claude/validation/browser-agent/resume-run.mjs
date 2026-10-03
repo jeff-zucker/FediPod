@@ -13,12 +13,13 @@ import fs from 'node:fs'; import os from 'node:os'; import path from 'node:path'
 import http from 'node:http'; import { spawn } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url'; import { createRequire } from 'node:module';
 import { buildApp } from '../../../scripts/build-app.mjs';
+import { dependentDir } from '../../../scripts/dependents.mjs';
 const require = createRequire(import.meta.url);
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, '../../..');
 const { WebSocket } = require(path.join(root, 'node_modules/undici/index.js'));
 const { routeFront } = await import(pathToFileURL(path.join(root, 'lib/gateway/front-core.mjs')));
-const CSS_BIN = path.join(root, 'packages/fedipod-server/node_modules/.bin/community-solid-server');
+const CSS_BIN = path.join(dependentDir('fedipod-server'), 'node_modules/.bin/community-solid-server');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let fails = 0; const check = (ok, label) => { console.log(`${ok ? 'PASS' : 'FAIL'}  ${label}`); if (!ok) fails++; };
 

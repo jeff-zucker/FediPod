@@ -1,5 +1,8 @@
-# Runs the offline smoke and the UI check on every push and pull request,
-# and the Server's build and tests. Test only — no publish, no secrets, no deploy.
+# Runs the offline smoke, the UI check and the browser rigs on every push and
+# pull request, and the packages built on fedipod (the Server, the forum, the
+# session library) against this commit: npm test clones each one's main branch
+# into .dependents/ and runs its tests. Test only — no publish, no secrets, no
+# deploy.
 name: test
 
 on:
@@ -15,31 +18,4 @@ jobs:
         with:
           node-version: '20'
       - run: npm ci
-      # The browser rigs in the suite boot a scratch Community Solid Server,
-      # which the Server package installs, and drive the runner's Chrome. The
-      # scratch server scans the Server package as a component module on
-      # start, so that package must be built or it never starts.
-      - run: npm ci
-        working-directory: packages/fedipod-server
-      - run: npm run build
-        working-directory: packages/fedipod-server
       - run: npm test
-
-  server:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: packages/fedipod-server
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-      - run: npm ci
-      # In a checkout the tests run against the checkout's own fedipod, which
-      # needs the checkout's dependencies installed beside it.
-      - run: npm ci
-        working-directory: .
-      - run: node scripts/link-fedipod.mjs
-      - run: npm run build
-      - run: node --test test/*.mjs

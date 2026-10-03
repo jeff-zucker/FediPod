@@ -42,7 +42,7 @@ everyday client interface; client-to-server is the spec's own.
   to the pod's own inbox container is claimed by the component, checked with
   `lib/gateway/httpsig.mjs` while the headers exist, and written with an HMAC
   receipt the drain trusts (`lib/server/embed.mjs`,
-  `packages/fedipod-server/src/handler.ts`, the receipt itself in
+  the fedipod-server repository's `src/handler.ts`, the receipt itself in
   `lib/gateway/gateway-core.mjs`). Both the cavage draft and RFC 9421
   (`Signature-Input`, `Content-Digest`) are accepted at the door.
 
@@ -106,7 +106,7 @@ Mastodon-format CSV exports
   (`lib/core/contexts/litepub-0.1.json`). Nothing outbound: the client has no
   reaction control.
 
-- **FEP-7888 (conversation contexts)** — in FediPod-BB (`packages/fedipod-bb`):
+- **FEP-7888 (conversation contexts)** — in FediPod-BB (the `fedipod-bb` repository):
   a topic is an `OrderedCollection` owned by its category (`attributedTo`),
   named on every post as `context`; a post is placed by its `context`, else
   by its reply chain, else opens a topic. Not read by FediPod's own timeline,

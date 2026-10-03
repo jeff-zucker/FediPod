@@ -1,14 +1,17 @@
 #!/usr/bin/env node
 // check-sizes.mjs — no runtime source file over 1,000 lines. The split of
 // 2026-09-11 made every module readable one part at a time; this keeps it so.
-// Run by `npm test`. Exits 1 naming the offenders.
+// Run by `npm test`, and on the forum's and the Server's sources (named as
+// arguments) by scripts/test-dependents.mjs. Exits 1 naming the offenders.
+//
+//   node scripts/check-sizes.mjs [extra source folder ...]
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const LIMIT = 1000;
-const ROOTS = ['lib', 'bin', 'web/app', 'web/front', 'web/admin', 'netlify/functions', 'packages/fedipod-server/src', 'packages/css-nextgraph/src', 'packages/fedipod-bb/src'];
+const ROOTS = ['lib', 'bin', 'web/app', 'web/front', 'web/admin', 'netlify/functions', ...process.argv.slice(2).map(d => path.resolve(d))];
 const FILES = ['run-agent.mjs'];
 const SKIP = /\/(dist|site|node_modules|vendor|client|shims)\//u;
 const EXT = /\.(mjs|js|ts)$/u;
@@ -21,7 +24,7 @@ const walk = (dir, out = []) => {
   }
   return out;
 };
-const files = [...FILES.map(f => path.join(root, f)), ...ROOTS.flatMap(r => (fs.existsSync(path.join(root, r)) ? walk(path.join(root, r)) : []))];
+const files = [...FILES.map(f => path.join(root, f)), ...ROOTS.flatMap(r => (fs.existsSync(path.resolve(root, r)) ? walk(path.resolve(root, r)) : []))];
 const over = files
   .map(f => ({ f: path.relative(root, f), n: fs.readFileSync(f, 'utf8').split('\n').length }))
   .filter(x => x.n > LIMIT)

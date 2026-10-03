@@ -308,7 +308,7 @@ Two ways are ready to use:
   [netlify/README.md](netlify/README.md) for the deployment specifics.
 - **On any box of your own**, with your own adapter around the same core.
 - **Inside a Community Solid Server**, as the same door run in-process by the
-  CSS component — see [packages/fedipod-server](packages/fedipod-server/README.md).
+  CSS component — see [fedipod-server](https://github.com/jeff-zucker/fedipod-server).
 
 ### Offering accounts to other people
 

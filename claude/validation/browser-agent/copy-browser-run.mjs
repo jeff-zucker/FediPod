@@ -18,12 +18,13 @@
 import fs from 'node:fs'; import os from 'node:os'; import path from 'node:path';
 import http from 'node:http'; import { spawn } from 'node:child_process'; import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url'; import { createRequire } from 'node:module';
+import { dependentDir } from '../../../scripts/dependents.mjs';
 
 const require = createRequire(import.meta.url);
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, '../../..');
 const { WebSocket } = require(path.join(root, 'node_modules/undici/index.js'));
-const CSS_BIN = path.join(root, 'packages/fedipod-server/node_modules/.bin/community-solid-server');
+const CSS_BIN = path.join(dependentDir('fedipod-server'), 'node_modules/.bin/community-solid-server');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const { signUpThroughPage } = await import(new URL('./page-signup.mjs', import.meta.url));
 const { watchWorkerLog } = await import(new URL('./worker-log.mjs', import.meta.url));
@@ -181,7 +182,7 @@ const server = http.createServer((q, s) => {
   if (u === '/app-signin/') return file('web/app-signin/index.html', 'text/html')(q, s);
   if (u === '/app-signin/app-signin.mjs') return file('web/app-signin/app-signin.mjs', 'text/javascript')(q, s);
   if (u === '/app-signin/tokens.css') return file('web/admin/tokens.css', 'text/css')(q, s);
-  if (/^\/app-signin\/(fedi-login|oidc-session)\.mjs$/.test(u)) return file(`lib/session/${path.basename(u)}`, 'text/javascript')(q, s);
+  if (/^\/app-signin\/(fedi-login|oidc-session)\.mjs$/.test(u)) return file(`node_modules/fediverse-session/${path.basename(u)}`, 'text/javascript')(q, s);
   if (u.startsWith('/api/state/') || u.startsWith('/api/v1/') || u.startsWith('/api/v2/') || u.startsWith('/oauth/')
     || u === '/api/authorize' || ['/api/open', '/api/keeper', '/api/here'].includes(u)) {
     return gatewayRoute(q, s, u).catch((e) => { s.writeHead(500); s.end(String(e.stack || e)); });

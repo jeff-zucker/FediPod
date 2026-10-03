@@ -60,7 +60,7 @@ Six functions on Netlify, thin adapters around plain Node in `lib/gateway/`:
 | `push-background` | one account's held mail read into its copy (hold off: its pod inbox drained) and each notification pushed to its phones |
 
 - **Forum support is a switch**: `netlify/forum-support.mjs` is the one file
-  that names the forum's gateway module (`packages/fedipod-bb/src/gateway.mjs`)
+  that names the forum's gateway module (`fedipod-bb/gateway`, from npm)
   or exports null; nothing in `lib/gateway/` or `netlify/functions/` imports
   the forum. With it, a forum row with `keeper` set is placed at the door as a
   post lands and run by `keeper-background`; without it, a forum delivery goes
@@ -144,10 +144,10 @@ Browser rigs: `claude/validation/browser-agent/` drives a real headless
 `google-chrome` against a scratch Solid server (`copy-browser-run.mjs` is
 the copy, an app sign-in, a push and the keeper handover). `all.mjs` runs
 every rig in turn and is the last step of `npm test`, so a rig that breaks
-fails the suite. The scratch server is the Server package's CSS and scans
-that package as a component module on start, so `npm ci` and `npm run
-build` in `packages/fedipod-server` come first, on a clone and in CI; the
-runner refuses at once when they have not. A scratch pod is given a public type index first
+fails the suite. The scratch server is the CSS the Server's checkout installs
+and scans the Server as a component module on start; `all.mjs` readies that
+checkout (installs and builds it) through `scripts/dependents.mjs` first, and
+refuses at once when it cannot. A scratch pod is given a public type index first
 (`pod-fixture.mjs`), as a person's pod has one; the rigs never script the
 yes the page asks for. The in-app browser pane cannot register service
 workers, so those never run there.
@@ -169,15 +169,26 @@ workers, so those never run there.
 
 ## The other builds, in short
 
-- **Server** (`packages/fedipod-server/`): the agent and the Gateway's front
+- **The packages built on fedipod** each live in a repository of their own,
+  checked out beside FediPod: `../fedipod-server`, `../fedipod-bb`,
+  `../fediverse-session` (and `../css-nextgraph`, which uses nothing of
+  FediPod's). `npm test` runs the first three against this checkout through
+  `scripts/test-dependents.mjs`; without a checkout beside FediPod (CI, a
+  fresh clone) it clones each one's main branch into `.dependents/`. FediPod
+  itself installs `fedipod-bb` and `fediverse-session` from npm; the forum
+  brings its own copy of fedipod from npm, not this checkout.
+- **Server** (`../fedipod-server/`): the agent and the Gateway's front
   inside a Community Solid Server, importing `fedipod` by name. Its own
-  `skills.md` is there. A local one runs on this machine on port 443.
-- **FediPod BB** (`packages/fedipod-bb/`): the forum, live at
+  `skills.md` is there. A local one runs on this machine on port 443, started
+  from FediPod with `claude/scripts/local-fedipod-server.mjs`, its data under
+  `../fedipod-server/tmp/local/`.
+- **FediPod BB** (`../fedipod-bb/`): the forum, live at
   bb.fedipod.net/forum/, importing `fedipod` by name. Since 2026-09-29 the
   live forum is kept by fedipod.net (`src/gateway.mjs`: placed at the door,
   run by `keeper-background`); nothing runs it on this machine, the old unit
   `fedipod-fedipod-bb1` is stopped and disabled and must stay so. A forum
-  change reaches the live forum through a fedipod.net deploy.
+  change reaches the live forum once it is published to npm, FediPod takes
+  the new version, and fedipod.net is deployed.
 - **DeviceAgent** (`bin/fedipod.mjs`, `lib/device/`, `run-agent.mjs`):
   deprecated. Every off-pod agent sits behind a Gateway; nothing new is
   built for it, and it is never described as running on its own.

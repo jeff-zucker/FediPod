@@ -7,7 +7,7 @@ console.log(`FediPod is not started from this directory.
   In a browser:        open a Gateway such as https://fedipod.net and create an
                        account. Nothing is installed.
   A Gateway of your own:  deploy this repository to Netlify — netlify/README.md
-  A pod server with FediPod built in:  packages/fedipod-server/README.md
-  A forum:             packages/fedipod-bb/README.md, or "A forum" on a
+  A pod server with FediPod built in:  https://github.com/jeff-zucker/fedipod-server
+  A forum:             https://github.com/jeff-zucker/fedipod-bb, or "A forum" on a
                        Gateway's sign-up page
 `);

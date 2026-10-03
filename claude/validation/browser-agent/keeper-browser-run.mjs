@@ -14,12 +14,13 @@
 import fs from 'node:fs'; import os from 'node:os'; import path from 'node:path';
 import http from 'node:http'; import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url'; import { createRequire } from 'node:module';
+import { dependentDir } from '../../../scripts/dependents.mjs';
 
 const require = createRequire(import.meta.url);
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, '../../..');
 const { WebSocket } = require(path.join(root, 'node_modules/undici/index.js'));
-const CSS_BIN = path.join(root, 'packages/fedipod-server/node_modules/.bin/community-solid-server');
+const CSS_BIN = path.join(dependentDir('fedipod-server'), 'node_modules/.bin/community-solid-server');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const { signUpThroughPage } = await import(new URL('./page-signup.mjs', import.meta.url));
 const { watchWorkerLog } = await import(new URL('./worker-log.mjs', import.meta.url));

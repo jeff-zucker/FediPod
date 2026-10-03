@@ -1,5 +1,24 @@
 # Changes
 
+## 2026-10-03 (the Server, the forum, the session library and css-nextgraph each in a repository of their own)
+
+**FediPod Server, FediPod-BB, fediverse-session and css-nextgraph each live in
+a repository of their own**:
+[fedipod-server](https://github.com/jeff-zucker/fedipod-server),
+[fedipod-bb](https://github.com/jeff-zucker/fedipod-bb),
+[fediverse-session](https://github.com/jeff-zucker/fediverse-session) and
+[css-nextgraph](https://github.com/jeff-zucker/css-nextgraph). Each installs
+from npm as before. FediPod takes the forum and the session library from npm
+too, so a Gateway deployed from this repository runs the published forum,
+which brings its own copy of fedipod.
+
+**Every FediPod test run tests the Server, the forum and the session library
+against the FediPod being changed**, the Server's end-to-end runs included. A
+change here that breaks one of them fails the run.
+
+**The session library's demo is at
+https://jeff-zucker.github.io/fediverse-session/.**
+
 ## 2026-10-03 (on a FediPod Server, an app's notifications and inbox open again)
 
 **On a FediPod Server, a Mastodon app's notifications list failed with an

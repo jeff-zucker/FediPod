@@ -74177,7 +74177,7 @@ var BrowserAgent = class _BrowserAgent {
   }
 };
 
-// lib/session/oidc-session.mjs
+// node_modules/fediverse-session/oidc-session.mjs
 var STORE = "session";
 var b64u3 = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 var enc3 = (o) => b64u3(new TextEncoder().encode(JSON.stringify(o)));

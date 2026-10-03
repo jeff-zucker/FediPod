@@ -75,10 +75,13 @@ tmp/
 # Diagram renders — the .svg beside each one is the source
 architecture.png
 mult-account.png
-packages/fedipod-server/fedipod-server.png
 
 # generated agent bundles keep their source maps out of git
 web/app/dist/*.map
 
 # staged deployable site (generated)
 web/app/site/
+
+# The packages built on fedipod, cloned here by scripts/dependents.mjs when
+# there is no checkout of them beside FediPod.
+/.dependents/

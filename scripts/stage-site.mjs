@@ -13,10 +13,11 @@
 // source is the hardest kind of thing to see in the browser build.
 import fs from 'node:fs'; import path from 'node:path'; import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
+import { readyDependent } from './dependents.mjs';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const site = path.join(root, 'web/app/site');
 fs.rmSync(site, { recursive: true, force: true }); fs.mkdirSync(path.join(site, 'app'), { recursive: true });
-const cp = (from, to) => fs.copyFileSync(path.join(root, from), path.join(site, to));
+const cp = (from, to) => fs.copyFileSync(path.resolve(root, from), path.join(site, to));
 cp('web/app/index.html', 'index.html');
 cp('web/app/dist/boot.js', 'boot.js');
 cp('web/app/dist/sw.js', 'sw.js');
@@ -267,21 +268,22 @@ fs.writeFileSync(path.join(site, '_redirects'), [
 // own /u/<handle>/ or a pod named outright. Its script is a module file of
 // its own, so it is served under the same `script-src 'self'` as the app.
 fs.mkdirSync(path.join(site, 'bb'), { recursive: true });
-for (const f of ['index.html', 'bb.js', 'read.mjs', 'masto.mjs', 'pod.mjs', 'markdown.mjs', 'seen.mjs', 'mine.mjs', 'private.mjs', 'oidc-session.mjs']) cp(`packages/fedipod-bb/site/${f}`, `bb/${f}`);
+for (const f of ['index.html', 'bb.js', 'read.mjs', 'masto.mjs', 'pod.mjs', 'markdown.mjs', 'seen.mjs', 'mine.mjs', 'private.mjs', 'oidc-session.mjs']) cp(`node_modules/fedipod-bb/site/${f}`, `bb/${f}`);
 cp('web/admin/tokens.css', 'bb/tokens.css');   // the site's shared palette, size and family
-cp('lib/session/oidc-session.mjs', 'bb/solid-oidc-session.mjs');   // signing in to a pod: the library the forum's binding names
-// The account library's demo page, with the library beside it, under /demo/.
+cp('node_modules/fediverse-session/oidc-session.mjs', 'bb/solid-oidc-session.mjs');   // signing in to a pod: the library the forum's binding names
+// The account library's demo page, with the library beside it, under /demo/:
+// both from the library's own repository, since the package carries no demo.
+const sessionRepo = readyDependent('fediverse-session');
 fs.mkdirSync(path.join(site, 'demo'), { recursive: true });
-for (const f of ['fedi-account.mjs', 'fedi-login.mjs', 'oidc-session.mjs']) cp(`lib/session/${f}`, `demo/${f}`);
+for (const f of ['fedi-account.mjs', 'fedi-login.mjs', 'oidc-session.mjs']) cp(path.join(sessionRepo, f), `demo/${f}`);
 cp('web/admin/tokens.css', 'demo/tokens.css');
 // The page a Mastodon app sends its person to (lib/gateway/masto-gateway.mjs),
 // with the pod sign-in library and the palette beside it, as the demo has.
 fs.mkdirSync(path.join(site, 'app-signin'), { recursive: true });
 for (const f of ['index.html', 'app-signin.mjs']) cp(`web/app-signin/${f}`, `app-signin/${f}`);
-for (const f of ['fedi-login.mjs', 'oidc-session.mjs']) cp(`lib/session/${f}`, `app-signin/${f}`);
+for (const f of ['fedi-login.mjs', 'oidc-session.mjs']) cp(`node_modules/fediverse-session/${f}`, `app-signin/${f}`);
 cp('web/admin/tokens.css', 'app-signin/tokens.css');
-fs.writeFileSync(path.join(site, 'demo/index.html'),
-  fs.readFileSync(path.join(root, 'lib/session/demo.html'), 'utf8').replace('../../web/admin/tokens.css', './tokens.css'));
+cp(path.join(sessionRepo, 'demo.html'), 'demo/index.html');
 // Each file the forum page loads is named with a hash of its content. A
 // browser holding the last build cannot serve half of it back: the page is
 // revalidated (no-cache below) and every url under it changes with its bytes.
