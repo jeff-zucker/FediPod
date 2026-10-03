@@ -21,8 +21,11 @@ account's agent whenever FediPod is closed, under a pod identity of its own
 that the owner's rules name, reading the signing key from the pod when it
 needs it. The account's state documents live in a working copy at the
 gateway, which FediPod in the browser, the gateway and any Mastodon app all
-work from, and which the gateway writes to the pod every fifteen minutes. See
-[the gateway](gateway.md).
+work from. Every fifteen minutes the gateway writes the copy to the pod and
+deletes it, and makes it again from the pod when something next needs it (the
+hold). A gateway's admin may turn the hold off: then there is no copy, and
+everything works on the pod, the browser and the gateway taking turns by the
+pod's lease. See [the gateway](gateway.md).
 
 [FediPod Server](packages/fedipod-server/README.md) puts the agent inside a
 Community Solid Server, so anyone with a pod on that server can opt in to a

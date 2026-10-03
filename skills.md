@@ -55,9 +55,9 @@ Six functions on Netlify, thin adapters around plain Node in `lib/gateway/`:
 | `front` | WebFinger, every fronted public face, sign-up and attach, the directory, notices, the outbox door, held mail, the keeper switch; a delivery to a browser account |
 | `inbox` | the one-person door (a DeviceAgent behind a gateway) |
 | `account` | the routes that act for an account: the browser reaching its copy (`/api/state/*`) and Mastodon apps (`/oauth/*`, `/api/v1/*`, `/api/v2/*`, `/api/authorize`); `front` leaves these paths to it |
-| `flush-mail` | every fifteen minutes: held mail to pods in batches, copies written to pods, kept accounts with work due handed to the keeper |
+| `flush-mail` | every fifteen minutes: held mail to pods in batches, kept accounts with work due handed to the keeper, each person's copy written to their pod and deleted (the hold), a forum's written to its pod |
 | `keeper-background` | one kept account's run, started only by `flush-mail` |
-| `push-background` | one account's held mail read into its copy and each notification pushed to its phones |
+| `push-background` | one account's held mail read into its copy (hold off: its pod inbox drained) and each notification pushed to its phones |
 
 - **Forum support is a switch**: `netlify/forum-support.mjs` is the one file
   that names the forum's gateway module (`packages/fedipod-bb/src/gateway.mjs`)
@@ -76,9 +76,15 @@ Six functions on Netlify, thin adapters around plain Node in `lib/gateway/`:
   (the four `FEDIPOD_KEEPER_*` variables; the steps are in
   `claude/keeper-setup.md`, local only). The account's state documents then
   live in a working copy (store `state`, strong consistency) that the
-  browser, the keeper and Mastodon apps all work from; the round writes it
-  to the pod. The signing key, the pod lease and connected-account passwords
-  never enter the copy. Turning keeping off gives the copy back first.
+  browser, the keeper and Mastodon apps all work from. **The hold**: every
+  round writes a person's copy to the pod and deletes it, whatever is
+  happening; the next read or write makes it again (`state-api.mjs`
+  `ensureCopy`, or `account-agent.mjs` `settle` under `lockCopy`); the copy's
+  lease outlives it. `FEDIPOD_HOLD=off` (the admin's choice): no copy, no held
+  mail, everything on the pod; the browser's pod writes are then fenced by
+  the pod lease (`FencedStorage`, `copy-mode.mjs` `fencePod`). The signing
+  key, the pod lease and connected-account passwords never enter the copy.
+  Turning keeping off gives the copy back first.
 - **Mastodon apps** sign in at `/app-signin/` (a Fediverse address or a
   WebID, proved by the pod's own login); apps, codes and token hashes are in
   the store `masto`, with the one VAPID pair. Held mail is `mail`, presence

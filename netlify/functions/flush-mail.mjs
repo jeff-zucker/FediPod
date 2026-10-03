@@ -4,13 +4,18 @@
 // follow held at the door, a failed delivery's next try, a scheduled post, a
 // poll's end) is handed to its keeper instead (keeper-background.mjs), which
 // delivers the mail and reads it. Mail alone does not start a run. An app that
-// opens takes its own mail sooner. Last, each kept account's working copy at
-// the gateway is written to its pod (lib/gateway/copy.mjs).
+// opens takes its own mail sooner. Last, the hold (lib/gateway/copy.mjs): each
+// person's working copy at the gateway is written to their pod and deleted,
+// whatever is happening, and made again the next time something needs it. A
+// forum's copy is written to its pod and kept. With the hold off no mail is
+// held and no copy made, so this writes and deletes only what is left from
+// before.
 import { gatewayCtx } from './front.mjs';
 import { signRun } from './keeper-background.mjs';
 import { flushAll, isPresent } from '../../lib/gateway/held-mail.mjs';
 import { closedState } from '../../lib/gateway/quiet.mjs';
-import { listCopies, copyMeta, flushCopy, dropCopy, lockCopy, renewPodLease, keptBefore, keptNow } from '../../lib/gateway/copy.mjs';
+import { listCopies, copyMeta, flushCopy, dropCopy, holdOver, clearLeftover, lockCopy, renewPodLease, keptBefore, keptNow, isPersonal,
+  holdOn, heldByBrowser } from '../../lib/gateway/copy.mjs';
 import { HttpStorage } from '../../lib/core/storage.mjs';
 
 export default async function handler() {
@@ -48,7 +53,12 @@ export default async function handler() {
     const handles = podFetch ? await listCopies(ctx.copyKv) : [];
     const one = async (handle) => {
       const meta = await copyMeta(ctx.copyKv, handle);
-      if (!meta?.stateUrl) return;
+      if (!meta?.stateUrl) {
+        // A delete or a making cut off part way: its documents go now.
+        const unlock = await lockCopy(ctx.copyKv, handle, { waitMs: 2000 });
+        if (unlock) try { await clearLeftover(ctx.copyKv, handle, { log: console.log }); } finally { await unlock(); }
+        return;
+      }
       const pod = new HttpStorage(meta.stateUrl, podFetch);
       // An account no longer kept here — closed, moved, gone, or its keeper
       // stopped — has its copy written to the pod and given up.
@@ -63,6 +73,25 @@ export default async function handler() {
         try {
           const left = await dropCopy(ctx.copyKv, handle, { pod, podFetch, stateUrl: meta.stateUrl, log: console.log });
           if (!left.ok) console.log(`copy @${handle}: not given up: ${left.why}`);
+        } finally { await unlock(); }
+        return;
+      }
+      // The hold: a person's copy written to the pod and deleted. A run holding
+      // the account just now (a keeper run, an app acting) is waited for a
+      // little, else the next round does it.
+      if (isPersonal(rec)) {
+        // With the hold turned off, FediPod open in a browser gives its copy
+        // back itself, within five minutes (web/app/copy-mode.mjs: followHold),
+        // so nothing it is writing is lost; once closed, its lease runs out.
+        if (!holdOn(ctx) && await heldByBrowser(ctx.copyKv, handle)) {
+          console.log(`copy @${handle}: the hold is off; FediPod open in a browser gives this copy back itself`);
+          return;
+        }
+        const unlock = await lockCopy(ctx.copyKv, handle, { waitMs: 5000 });
+        if (!unlock) { console.log(`copy @${handle}: busy; written to the pod and deleted next round`); return; }
+        try {
+          const done = await holdOver(ctx.copyKv, handle, { pod, podFetch, stateUrl: meta.stateUrl, log: console.log });
+          if (!done.ok) console.log(`copy @${handle}: not deleted: ${done.why}`);
         } finally { await unlock(); }
         return;
       }

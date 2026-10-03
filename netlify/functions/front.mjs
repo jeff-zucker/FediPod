@@ -33,6 +33,7 @@ import { getStore } from '@netlify/blobs';
 import { routeFront } from '../../lib/gateway/front-core.mjs';
 import { keeperBook } from '../../lib/gateway/keeper-due.mjs';
 import { keeperSession } from '../../lib/gateway/keeper-session.mjs';
+import { holdFrom } from '../../lib/gateway/copy.mjs';
 import * as podInbox from '../../lib/pod/inbox.mjs';
 import grant from '../../vendor/idp-grant.cjs';
 // Forum support, when this Gateway keeps forums (netlify/forum-support.mjs).
@@ -262,6 +263,10 @@ export function gatewayCtx() {
     // read and written with strong consistency: two functions working on one
     // account must see each other's writes at once.
     copyKv: blobsKv('state'),
+    // The hold, the admin's choice (copy.mjs): on unless FEDIPOD_HOLD=off. On,
+    // a person's copy is written to their pod and deleted every fifteen
+    // minutes; off, none is made and mail goes straight to the pod.
+    hold: holdFrom(process.env.FEDIPOD_HOLD),
     // Mastodon apps signed in here: their registrations, codes and tokens
     // (lib/gateway/masto-gateway.mjs).
     mastoKv: blobsKv('masto'),

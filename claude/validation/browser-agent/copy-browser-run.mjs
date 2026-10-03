@@ -5,9 +5,14 @@
 // (front-core: open, keeper, here) and state API over in-memory stores, with
 // the real pod-token verifier; the built app in headless Chrome. Signs up, and
 // then: the account moves onto its copy; a post lands in the copy and not on
-// the pod; the round writes it to the pod; a restart comes back onto the copy;
-// the gateway taking the lease stops the browser writing, and the browser
-// acting takes it back; turning the keeper off puts everything back on the pod.
+// the pod; the round writes it to the pod; the hold: the round writes the copy
+// to the pod and deletes it, and the browser's next write makes it again; a
+// restart comes back onto the copy; the gateway taking the lease stops the
+// browser writing, and the browser acting takes it back; the admin turning the
+// hold off: the copy goes to the pod, the browser and an app work on the pod
+// taking turns, a mention reaches the phone from the pod inbox, and nothing of
+// the account is kept at the gateway; turning the keeper off puts everything
+// back on the pod.
 //
 //   node claude/validation/browser-agent/copy-browser-run.mjs
 import fs from 'node:fs'; import os from 'node:os'; import path from 'node:path';
@@ -92,7 +97,7 @@ const relayStub = (req, res) => {
 process.env.AP_ALLOW_PRIVATE_TARGETS = '1';
 const lib = (p) => import(path.join(root, p));
 const { routeFront, verifyPodToken } = await lib('lib/gateway/front-core.mjs');
-const { routeStateApi } = await lib('lib/gateway/state-api.mjs');
+const { routeStateApi, endHold } = await lib('lib/gateway/state-api.mjs');
 const { routeMastoGateway, pushHeld } = await lib('lib/gateway/masto-gateway.mjs');
 const ece = require(path.join(root, 'node_modules/http_ece/ece.js'));
 const https = await import('node:https');
@@ -266,6 +271,20 @@ if (!cssUp) { console.log(`FAIL  the scratch server never answered again at ${IS
   const n = await flushCopy(kv, handle, { pod: new HttpStorage(state, (u, i) => keeperSession.fetch(u, i)) });
   check(n > 0 && /written into the copy/.test(await onPod('statuses.json')), `the round writes it to the pod (${n} document(s))`);
 
+  // ---- the hold: the round writes the copy to the pod and deletes it ----
+  check(await post('just before the round') === 200
+    && await waitFor(async () => /just before the round/.test((await kv.get(`${handle}/d/statuses.json`))?.text || ''), 20, 300),
+    'another post lands in the copy');
+  const ended = await endHold(ctx, handle, rows[handle], () => {});
+  check(ended.ok && !(await copyMeta(kv, handle)) && !(await kv.list(`${handle}/d/`)).length,
+    `the round writes the copy to the pod and deletes it, whatever is happening (${ended.why || 'ok'})`);
+  check(/just before the round/.test(await onPod('statuses.json')) && JSON.parse(await onPod('lease.json') || '{}').expiresAt === 0,
+    'the pod has everything, and its lease is let go');
+  check(await post('after the copy was deleted') === 200
+    && await waitFor(async () => /after the copy was deleted/.test((await kv.get(`${handle}/d/statuses.json`))?.text || ''), 30, 500)
+    && /just before the round/.test((await kv.get(`${handle}/d/statuses.json`))?.text || ''),
+    'the browser carries on: its next write makes the copy again from the pod, and lands in it');
+
   // ---- a restart comes back onto the copy ----
   await send('ServiceWorker.enable').catch(() => {});
   await send('ServiceWorker.stopAllWorkers');
@@ -386,6 +405,46 @@ if (!cssUp) { console.log(`FAIL  the scratch server never answered again at ${IS
     'the browser works from the new copy');
   check(await flushCopy(kv, handle, { pod: new HttpStorage(state, (u, i) => keeperSession.fetch(u, i)) }) >= 1
     && /after the switch/.test(await onPod('statuses.json')), 'which the new identity writes to the pod');
+
+  // ---- the admin turns the hold off ----
+  ctx.hold = false;
+  await send('ServiceWorker.stopAllWorkers');
+  await sleep(1000);
+  await send('Page.navigate', { url: `${ORIGIN}/` });       // FediPod opened again
+  workerLog?.close?.();
+  workerLog = await watchWorkerLog(WebSocket, CDP_PORT);
+  check(await waitFor(async () => !(await copyMeta(kv, handle)) && !(await kv.list(`${handle}/d/`)).length, 60, 1000)
+    && /after the switch/.test(await onPod('statuses.json')),
+    'with the hold off, FediPod opening has the copy written to the pod and deleted');
+  const browserHolds = async () => { const l = JSON.parse(await onPod('lease.json') || '{}'); return !!l.holder && l.holder !== 'gateway-copy' && !/^keeper:/.test(l.holder) && l.expiresAt > Date.now(); };
+  check(await waitFor(browserHolds, 60, 1000), 'and the browser holds the pod\'s lease, working on the pod');
+  check(await post('on the pod, the hold off') === 200 && await waitFor(async () => /on the pod, the hold off/.test(await onPod('statuses.json')), 30, 500)
+    && !(await kv.list(`${handle}/d/`)).length, 'a post from the browser lands on the pod, and no copy is made');
+  const appOff = await appApi('/api/v1/statuses', { method: 'POST', body: JSON.stringify({ status: 'from an app, the hold off' }) });
+  check(appOff.status === 200 && /from an app, the hold off/.test(await onPod('statuses.json')), `an app posts straight to the pod (${appOff.status})`);
+  check(/^keeper:/.test(JSON.parse(await onPod('lease.json') || '{}').holder || '') && JSON.parse(await onPod('lease.json')).expiresAt === 0,
+    'the gateway having taken the pod\'s lease to make it, and let it go');
+  check(/from an app, the hold off/.test(await appHome()) && !(await copyMeta(kv, handle)) && !(await kv.list(`${handle}/d/`)).length,
+    'the app reads its timeline from the pod, and nothing of the account is kept at the gateway');
+  check(await post('from the browser after the app, the hold off') === 200
+    && await waitFor(async () => /from the browser after the app, the hold off/.test(await onPod('statuses.json')), 30, 500)
+    && /from an app, the hold off/.test(await onPod('statuses.json')),
+    'the browser, acting after the app, takes the pod back and keeps what the app wrote');
+  // A mention while FediPod is closed: in the pod inbox, not held; a push run drains it and tells the phone.
+  await send('Page.navigate', { url: 'about:blank' });
+  await send('ServiceWorker.stopAllWorkers');
+  await sleep(1000);
+  const inboxItem = `${pod}fedipod/ap/inbox/hold-off-mention-3`;
+  const putMention = await owner.fetch(inboxItem, { method: 'PUT', headers: { 'content-type': 'application/ld+json' },
+    body: JSON.stringify({ '@context': 'https://www.w3.org/ns/activitystreams', id: `${ORIGIN}/peer/1/creates/3`, type: 'Create',
+      actor: `${ORIGIN}/peer/1`, to: [mentionTarget], object: `${ORIGIN}/peer/1/notes/3` }) });
+  const pushedOff = pushed.length;
+  await pushHeld(ctx, handle, rows[handle], { log: () => {} });
+  check(putMention.status < 300 && pushed.length > pushedOff && (await owner.fetch(inboxItem)).status === 404,
+    `with the hold off, a mention in the pod inbox is drained from there and pushed to the phone (${pushed.length - pushedOff} push)`);
+  check(!(await kv.list(`${handle}/d/`)).length && !held.size, 'with nothing held or copied at the gateway');
+  await send('Page.navigate', { url: `${ORIGIN}/` });
+  await waitFor(browserHolds, 60, 1000);
 
   // ---- back to the pod ----
   const pageCall = (p, init = {}) => evaluate(`(async () => { const r = await fetch(${JSON.stringify(p)}, { ...${JSON.stringify(init)}, headers: { 'x-fedipod-page': '1', 'content-type': 'application/json' } }); return { status: r.status, json: await r.json().catch(() => null) }; })()`);

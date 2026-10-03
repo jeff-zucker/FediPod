@@ -7,6 +7,10 @@ follow people on Mastodon, Bluesky, and other Fediverse or ATProto servers in
 one timeline. Your posts, followers and settings are kept on your pod. While fedipod.net
 keeps your account running, it works from a copy of them and writes it to your
 pod every fifteen minutes; your signing key never leaves your pod.
+<!-- CLAUDE 2026-10-03 — the sentence above is no longer quite true: the copy is now deleted every fifteen minutes too. Replace its "it works from a copy of them and writes it to your pod every fifteen minutes" with the text below, then delete these markers. -->
+While fedipod.net keeps your account running, it works from a copy of them,
+and every fifteen minutes it writes that copy to your pod and deletes it.
+<!-- /CLAUDE -->
 
 The easiest way to run FediPod is to use it in any browser at https://fedipod.net. Nothing to install. Sign-up points you to a pod provider if you need a pod, then attaches a Fediverse identity to the pod you sign in with.
 
@@ -133,6 +137,12 @@ While fedipod.net keeps your account running, its own pod identity can read
 that container too, so it can act for you while FediPod is closed, and it
 works from a copy of your account's data that it writes back to your pod every
 fifteen minutes. Your key stays on your pod only.
+<!-- CLAUDE 2026-10-03 — correction to "works from a copy … every fifteen minutes" above: replace that sentence with the text below, then delete these markers. -->
+It works from a copy of your account's data, and every fifteen minutes it
+writes that copy to your pod and deletes it, so none of your data stays at
+fedipod.net longer than that. The next time anything needs your account, the
+copy is made again from your pod.
+<!-- /CLAUDE -->
 It all lives in the `fedipod` container you chose at sign-up. Your pod's
 public type index records it, as an ActivityStreams actor, which is how
 FediPod and other Solid apps find your account again.

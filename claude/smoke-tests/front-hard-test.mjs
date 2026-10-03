@@ -75,6 +75,12 @@ const pod = http.createServer((req, res) => {
       id: PP + (dm ? 'ap/private/dm' : 'ap/private/secret'), type: 'Note', attributedTo: PP + 'ap/actor',
       to: dm ? [POD + 'actors/nia'] : [PP + 'ap/followers'], cc: [], content: dm ? 'just for you' : 'for followers' }));
   }
+  // The account's followers, as the pod keeps them, for the same credential.
+  if (url === '/pods/wren/fedipod/ap-state/contacts.json') {
+    if (!req.headers.authorization) { res.writeHead(401); return res.end(); }
+    res.writeHead(200, { 'content-type': 'application/json' });
+    return res.end(JSON.stringify({ followers: [{ actor: POD + 'actors/kofi' }], following: [] }));
+  }
   const signer = /^\/actors\/(kofi|nia)$/u.exec(url)?.[1];
   if (signer) {
     const id = POD + 'actors/' + signer;
@@ -661,7 +667,7 @@ try {
     // The read is signed like a delivery; a follower gets a followers-only post,
     // the one named gets a direct post, anyone else is told nothing. Answered
     // for a kept account: the post is read with the keeper's credential and the
-    // followers come from the account's copy.
+    // followers come from the account's copy, or from the pod when there is none.
     {
       const { signRequest } = await import('@fedify/fedify/sig');
       const { memoryKv } = await import('../../lib/gateway/copy.mjs');
@@ -671,7 +677,7 @@ try {
       const was = { keeper: row.keeper };
       Object.assign(row, { keeper: { webId: KEEPER } });
       const kv = memoryKv();
-      await kv.set('pwren/contacts.json', JSON.stringify({ followers: [{ actor: POD + 'actors/kofi' }], following: [] }));
+      await kv.set('pwren/d/contacts.json', JSON.stringify({ followers: [{ actor: POD + 'actors/kofi' }], following: [] }));
       doorExtras = { keeperWebId: KEEPER, copyKv: kv,
         keeperFetch: async () => (u, i) => fetch(u, { ...i, headers: { ...(i?.headers || {}), authorization: 'DPoP keeper' } }) };
       const signedGet = async (who, p) => {
@@ -687,6 +693,11 @@ try {
         `a follower's server, signing its read, gets the followers-only post, named at the front, never held at the edge (${asFollower.status})`);
       const asStranger = await signedGet('nia', secret);
       check(asStranger.status === 404, `a signed read by someone who does not follow is told nothing (${asStranger.status})`);
+      // The hold has just deleted the copy: the followers are read from the pod.
+      await kv.delete('pwren/d/contacts.json');
+      const noCopy = await signedGet('kofi', secret);
+      check(noCopy.status === 200, `with no copy at fedipod.net just then, the followers come from the pod and the follower still gets it (${noCopy.status})`);
+      check(!(await kv.get('pwren/d/contacts.json')), 'and nothing read is kept');
       const dmForNia = await signedGet('nia', '/u/pwren/ap/private/dm');
       check(dmForNia.status === 200, `a direct post is given to the one it names, follower or not (${dmForNia.status})`);
       const dmForKofi = await signedGet('kofi', '/u/pwren/ap/private/dm');

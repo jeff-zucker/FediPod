@@ -4,9 +4,16 @@
 //
 // The state documents are read and written at the gateway instead of on the
 // pod, and the lease that says which agent acts is the copy's. What stays on
-// the pod (the key, connected-account passwords) is still read there. The
-// gateway writes the copy to the pod every fifteen minutes.
-import { HttpStorage, StateApiStorage, podOnly } from '../../lib/core/storage.mjs';
+// the pod (the key, connected-account passwords) is still read there. Every
+// fifteen minutes the gateway writes the copy to the pod and deletes it, and
+// makes it again from the pod when this browser next reads or writes (the
+// hold); the copy's lease stays, so nothing here notices.
+//
+// With the hold off, the gateway keeps no copy, and this browser works on the
+// pod while the gateway acts there too for an app. The pod's lease decides
+// which acts, and every write first checks this browser still holds it
+// (fencePod), as the copy checks every write.
+import { HttpStorage, StateApiStorage, FencedStorage, podOnly } from '../../lib/core/storage.mjs';
 import { Lease } from '../../lib/core/lease.mjs';
 import { kvGet, kvPut, kvDel } from './idb-kv.mjs';
 
@@ -76,6 +83,8 @@ export function copyStorage(agent, podState) {
     // Refused: another agent (an app at the gateway, another browser) took
     // the lease. This one stops acting at once rather than at its next renewal.
     onRefused: () => standDown(agent),
+    // No copy any more, and none to be made: the hold turned off.
+    onGone: () => { backToPod(agent).catch((e) => agent.log(`back to the pod: ${e.message}`)); },
   });
   Object.defineProperty(s, 'token', { get: () => agent.copy.token, set() {} });
   return s;
@@ -85,12 +94,44 @@ export function copyLeaseOf(agent) {
   return new Lease({ url: `${agent.copy.base}lease.json`, fetchImpl: tokenFetch(agent), log: agent.log, id: agent.holderId });
 }
 
+const podFetchOf = (agent) => (u, i) => agent.remote.fetch(u, i);
+
+/** The account's state on the pod, fenced when the gateway may act there too. */
+export function podStorageOf(agent) {
+  const s = new FencedStorage(new HttpStorage(agent.urls.state, podFetchOf(agent)), { onRefused: () => standDown(agent) });
+  if (agent._fenced) s.fence = () => stillMine(agent);
+  return s;
+}
+
+// Whether this browser still holds the pod's lease, asked before a write.
+// Unreadable is a yes: the write goes, as it would have without the check.
+async function stillMine(agent) {
+  const cur = await agent.lease.readFresh().catch(() => null);
+  if (!cur || typeof cur !== 'object') return true;
+  return cur.holder === agent.lease.id && Date.now() < cur.expiresAt;
+}
+
+/**
+ * Whether this browser's writes to the pod are fenced: the account kept, with
+ * the hold off, and no copy. Set on the store's storage as it is now.
+ */
+export function fencePod(agent) {
+  agent._fenced = !!(agent._keeper?.kept && agent._keeper.hold === false && !agent.copy && !agent.store?.getConfig()?.keeperOff);
+  const s = agent.store?.storage;
+  if (s instanceof FencedStorage) s.fence = agent._fenced ? () => stillMine(agent) : null;
+}
+
+// A lease held by the gateway, which gives it back when its piece of work is
+// done: the copy's ('gateway', copy.mjs), or with the hold off the pod's
+// (lib/gateway/account-agent.mjs: keeper:<its WebID>).
+const byGateway = (holder) => holder === 'gateway' || String(holder || '').startsWith('keeper:');
+
 // Swap the lease the agent and its drain go by.
 function useLease(agent, lease) {
   agent.lease.stopRenewal();
   agent.lease = lease;
   if (agent.intake) agent.intake.lease = lease;
-  lease.onLost = () => agent.demote();
+  lease.onLost = () => (agent.copy || agent._fenced ? standDown(agent) : agent.demote());
 }
 
 /**
@@ -137,8 +178,8 @@ export function standDown(agent) {
         await new Promise((r) => setTimeout(r, wait));
         if (!agent.viewer) return;
         const cur = await agent.lease.readFresh().catch(() => null);
-        // Held by anyone but the gateway (copy.mjs: GATEWAY_HOLDER) is another browser's.
-        if (cur && typeof cur === 'object' && cur.holder !== 'gateway' && Date.now() < cur.expiresAt) return;
+        // Held by anyone but the gateway is another browser's.
+        if (cur && typeof cur === 'object' && !byGateway(cur.holder) && Date.now() < cur.expiresAt) return;
         if (await agent.lease.acquire()) {
           clearTimeout(agent._viewerTimer); agent._viewerTimer = null;
           // Read what the app wrote, then carry on as a restart moments later
@@ -195,14 +236,37 @@ export async function leaveCopy(agent) {
     return { ok: false, why: `the gateway could not write the copy to the pod (${res.status || res.e?.message})` };
   }
   agent.copy = null;
-  const podFetch = (u, i) => agent.remote.fetch(u, i);
-  const lease = new Lease({ url: `${agent.urls.state}lease.json`, fetchImpl: podFetch, log: agent.log, id: agent.holderId });
-  agent.store.attach(new HttpStorage(agent.urls.state, podFetch));
-  await agent.store.load({ force: true });
+  const lease = new Lease({ url: `${agent.urls.state}lease.json`, fetchImpl: podFetchOf(agent), log: agent.log, id: agent.holderId });
+  agent.store.attach(podStorageOf(agent));
   useLease(agent, lease);
+  fencePod(agent);
+  await agent.store.load({ force: true });
   if (await lease.acquire()) lease.startRenewal(); else agent.demote();
   agent.log('working from the pod again');
   return { ok: true };
+}
+
+/**
+ * The gateway keeps no copy of this account any more and will make none (its
+ * admin turned the hold off): back to the pod, where the gateway wrote the
+ * copy. Writes not yet sent are dropped, as when another agent acts, and the
+ * state is read afresh from the pod.
+ */
+export async function backToPod(agent) {
+  if (!agent.copy || agent._backToPod) return;
+  agent._backToPod = true;
+  try {
+    await agent.store.discardPending();
+    agent.lease.stopRenewal();
+    agent.copy = null;
+    const lease = new Lease({ url: `${agent.urls.state}lease.json`, fetchImpl: podFetchOf(agent), log: agent.log, id: agent.holderId });
+    agent.store.attach(podStorageOf(agent));
+    useLease(agent, lease);
+    fencePod(agent);
+    await agent.store.load({ force: true });
+    if (await lease.acquire()) lease.startRenewal(); else agent.demote();
+    agent.log('the gateway keeps no copy of this account now: working from the pod');
+  } finally { agent._backToPod = false; }
 }
 
 /**
@@ -218,8 +282,8 @@ export async function leaveCopy(agent) {
 export async function handOverCopy(agent) {
   if (!agent.copy) return { ok: true };
   await agent.store.commit();
-  const podFetch = (u, i) => agent.remote.fetch(u, i);
-  const pod = new HttpStorage(agent.urls.state, podFetch);
+  const podFetch = podFetchOf(agent);
+  const pod = podStorageOf(agent);
   const docs = agent.store.names().filter((n) => !podOnly(n)).map((n) => [n, agent.store.read(n, null)]).filter(([, v]) => v !== null);
   for (const [name, value] of docs) {
     const w = await pod.write(name, JSON.stringify(value, null, 2) + '\n', 'application/json');
@@ -232,11 +296,32 @@ export async function handOverCopy(agent) {
   if (res.status !== 200) return { ok: false, why: `the gateway would not let the copy go (${res.status || res.e?.message})` };
   agent.copy = null;
   agent.store.attach(pod);
-  await agent.store.load({ force: true });
   useLease(agent, podLease);
+  fencePod(agent);
+  await agent.store.load({ force: true });
   podLease.startRenewal();
   agent.log(`handed the account's copy over: ${docs.length} documents written to the pod`);
   return { ok: true };
+}
+
+/**
+ * The gateway's admin turned the hold off or on since this browser last
+ * heard (agent.mjs: hereAtGateway): off, the copy goes back to the pod and
+ * writes there are fenced; on, the account moves onto a copy again.
+ */
+export async function followHold(agent, frontOrigin, hold) {
+  if (!agent._keeper) return;
+  const was = agent._keeper.hold;
+  agent._keeper.hold = hold;
+  // Asked again at every check-in until the copy has gone.
+  if (!hold && agent.copy) {
+    const left = await leaveCopy(agent);
+    if (!left.ok) agent.log(`the gateway keeps no copies now; leaving this one: ${left.why}`);
+  } else if (hold && was === false && !agent.copy && agent._keeper.kept && !agent.viewer && !agent.store.getConfig()?.keeperOff) {
+    await forgetFailedOpen(agent, frontOrigin);
+    await moveIntoCopy(agent, frontOrigin);
+  }
+  fencePod(agent);
 }
 
 /** A token near its end, renewed; the hourly check-in asks. */

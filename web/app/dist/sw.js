@@ -46311,11 +46311,27 @@ var PodStore = class {
   }
 };
 
-// stub:node:fs/promises
-var fail = () => {
-  throw new Error("node:fs/promises is not available in the browser agent");
+// lib/core/publisher/index.mjs
+init_node_crypto();
+init_wire();
+
+// web/app/shims/node-fs.mjs
+var PKG = JSON.stringify({ version: "0.18.0", name: "fedipod" });
+var readFileSync = (p) => {
+  if (String(p).endsWith("package.json")) return PKG;
+  throw new Error(`node:fs readFileSync(${p}) is not available in the browser agent`);
 };
-var promises_default = new Proxy({}, { get: () => fail });
+var existsSync = () => false;
+var nope = (name) => () => {
+  throw new Error(`node:fs ${name} is not available in the browser agent`);
+};
+var writeFileSync = nope("writeFileSync");
+var mkdirSync = nope("mkdirSync");
+var readdirSync = () => [];
+var statSync = nope("statSync");
+var unlinkSync = nope("unlinkSync");
+var rmSync = nope("rmSync");
+var node_fs_default = { readFileSync, existsSync, writeFileSync, mkdirSync, readdirSync, statSync, unlinkSync, rmSync };
 
 // web/app/shims/node-path.mjs
 var normalize = (p) => {
@@ -46360,173 +46376,6 @@ var fileURLToPath = (u) => {
 };
 var pathToFileURL = (p) => new URL("file://" + (p.startsWith("/") ? p : "/" + p));
 var node_url_default = { URL: globalThis.URL, URLSearchParams: globalThis.URLSearchParams, fileURLToPath, pathToFileURL };
-
-// lib/core/pod-only.mjs
-var podOnly = (name) => name === "keys.json" || name === "lease.json" || name.startsWith("conn-");
-
-// lib/core/storage.mjs
-var LDP2 = Namespace("http://www.w3.org/ns/ldp#");
-var slash = (u) => u.endsWith("/") ? u : u + "/";
-var HttpStorage = class {
-  constructor(base, fetchImpl) {
-    this.base = slash(base);
-    this.fetchImpl = fetchImpl;
-  }
-  get kind() {
-    return "pod";
-  }
-  // The same jail FileStorage has, and for the same reason: a path here can
-  // carry `..`, encodeURI leaves both `.` and `/` alone, and fetch normalises
-  // the segments away — so a name derived from remote input could name a
-  // resource outside the container entirely. A prefix check is not enough on
-  // its own: a concatenated URL always satisfies one.
-  _url(p) {
-    const u = new URL(encodeURI(p), this.base);
-    if (!u.href.startsWith(this.base)) throw new Error(`path escapes the container: ${p}`);
-    return u.href;
-  }
-  async list(sub = "", { etag } = {}) {
-    const url = this._url(sub);
-    const res = await this.fetchImpl(url, {
-      headers: { accept: "text/turtle", ...etag ? { "if-none-match": etag } : {} }
-    });
-    if (res.status === 304) return { notModified: true, names: null, etag };
-    if (res.status === 404) return { notModified: false, names: [], etag: null, missing: true };
-    if (res.status >= 400) throw new Error(`container unreadable (HTTP ${res.status})`);
-    const g = graph();
-    parse2(await res.text(), g, url, "text/turtle");
-    const here = namedNode2(url);
-    const names = g.each(here, LDP2("contains"), null, here).map((n) => n.value).filter((u) => u.startsWith(url) && u !== url).map((u) => decodeURIComponent(u.slice(url.length)));
-    return { notModified: false, names, etag: res.headers.get("etag") };
-  }
-  // `accept` is for callers reading something that is RDF but is wanted as it
-  // was written: asking turtle-first for a JSON-LD document gets turtle back,
-  // because the server is entitled to convert between two RDF syntaxes.
-  async read(p, { etag, accept } = {}) {
-    const res = await this.fetchImpl(this._url(p), {
-      headers: {
-        accept: accept || "text/turtle, application/json;q=0.9, */*;q=0.8",
-        ...etag ? { "if-none-match": etag } : {}
-      }
-    });
-    if (res.status === 304) return { ok: true, notModified: true, status: 304, body: null, etag };
-    if (res.status >= 400) return { ok: false, notModified: false, status: res.status, body: null, etag: null };
-    return { ok: true, notModified: false, status: res.status, body: await res.text(), etag: res.headers.get("etag") };
-  }
-  async write(p, body, contentType) {
-    const url = this._url(p);
-    try {
-      const res = await this.fetchImpl(url, {
-        method: "PUT",
-        headers: { "content-type": contentType },
-        body
-      });
-      if (res.status < 400) return { ok: true, retry: false, why: "" };
-      const retry = res.status >= 500 || res.status === 429;
-      const ra = Number(res.headers?.get?.("retry-after"));
-      return {
-        ok: false,
-        retry,
-        why: `HTTP ${res.status}`,
-        retryAfterMs: Number.isFinite(ra) && ra > 0 ? ra * 1e3 : 0
-      };
-    } catch (e) {
-      return { ok: false, retry: true, why: e.message, retryAfterMs: 0 };
-    }
-  }
-  async remove(p) {
-    const url = this._url(p);
-    try {
-      const res = await this.fetchImpl(url, { method: "DELETE" });
-      return res.status < 400 || res.status === 404;
-    } catch {
-      return false;
-    }
-  }
-};
-var StateApiStorage = class {
-  constructor(base, { fetchImpl = globalThis.fetch, token, holder, pod = null, onRefused = null }) {
-    this.base = slash(base);
-    this.fetchImpl = fetchImpl;
-    this.token = token;
-    this.holder = holder;
-    this.pod = pod;
-    this.onRefused = onRefused;
-  }
-  get kind() {
-    return "copy";
-  }
-  _ask(p, init = {}) {
-    return this.fetchImpl(this.base + encodeURIComponent(p), {
-      ...init,
-      headers: { authorization: `Bearer ${this.token}`, ...init.headers || {} }
-    });
-  }
-  async list(sub = "", { etag } = {}) {
-    if (sub) return { notModified: false, names: [], etag: null };
-    const res = await this._ask("", { headers: etag ? { "if-none-match": etag } : {} });
-    if (res.status === 304) return { notModified: true, names: null, etag };
-    if (res.status >= 400) throw new Error(`the account's copy at the gateway is unreadable (HTTP ${res.status})`);
-    const { names } = await res.json();
-    return { notModified: false, names, etag: res.headers.get("etag") };
-  }
-  async read(p, opts = {}) {
-    if (podOnly(p)) return this.pod ? this.pod.read(p, opts) : { ok: false, notModified: false, status: 404, body: null, etag: null };
-    const res = await this._ask(p, { headers: opts.etag ? { "if-none-match": opts.etag } : {} });
-    if (res.status === 304) return { ok: true, notModified: true, status: 304, body: null, etag: opts.etag };
-    if (res.status >= 400) return { ok: false, notModified: false, status: res.status, body: null, etag: null };
-    return { ok: true, notModified: false, status: res.status, body: await res.text(), etag: res.headers.get("etag") };
-  }
-  async write(p, body, contentType = "application/json") {
-    if (podOnly(p)) return this.pod ? this.pod.write(p, body, contentType) : { ok: false, retry: false, why: "no pod for this document" };
-    try {
-      const res = await this._ask(p, { method: "PUT", headers: { "content-type": contentType, "x-fedipod-holder": this.holder }, body });
-      if (res.status < 400) return { ok: true, retry: false, why: "" };
-      if (res.status === 409) {
-        this.onRefused?.();
-        return { ok: false, retry: false, why: "another agent holds this account now", lost: true };
-      }
-      return { ok: false, retry: res.status >= 500 || res.status === 429, why: `HTTP ${res.status}`, retryAfterMs: 0 };
-    } catch (e) {
-      return { ok: false, retry: true, why: e.message, retryAfterMs: 0 };
-    }
-  }
-  async remove(p) {
-    if (podOnly(p)) return this.pod ? this.pod.remove(p) : false;
-    try {
-      const res = await this._ask(p, { method: "DELETE", headers: { "x-fedipod-holder": this.holder } });
-      if (res.status === 409) {
-        this.onRefused?.();
-        return false;
-      }
-      return res.status < 400 || res.status === 404;
-    } catch {
-      return false;
-    }
-  }
-};
-
-// lib/core/publisher/index.mjs
-init_node_crypto();
-init_wire();
-
-// web/app/shims/node-fs.mjs
-var PKG = JSON.stringify({ version: "0.18.0", name: "fedipod" });
-var readFileSync = (p) => {
-  if (String(p).endsWith("package.json")) return PKG;
-  throw new Error(`node:fs readFileSync(${p}) is not available in the browser agent`);
-};
-var existsSync = () => false;
-var nope = (name) => () => {
-  throw new Error(`node:fs ${name} is not available in the browser agent`);
-};
-var writeFileSync = nope("writeFileSync");
-var mkdirSync = nope("mkdirSync");
-var readdirSync = () => [];
-var statSync = nope("statSync");
-var unlinkSync = nope("unlinkSync");
-var rmSync = nope("rmSync");
-var node_fs_default = { readFileSync, existsSync, writeFileSync, mkdirSync, readdirSync, statSync, unlinkSync, rmSync };
 
 // lib/shared/ua.mjs
 var version = "0";
@@ -66910,7 +66759,7 @@ var C2S = class {
     }
     const who = await this.auth(req, pathname);
     if (!who.ok) return this.send(res, who.status, { error: who.error }, who.headers || {});
-    if (this.agent.viewer) {
+    if (this.agent.viewer || this.agent.sharesState) {
       const took = await this.agent.requestTakeover?.();
       if (!took) return this.send(res, 503, { error: "another agent is active for this pod \u2014 takeover failed, try again" });
     }
@@ -70037,7 +69886,7 @@ var MastoApi = class _MastoApi {
       return send(403, { error: `This action is outside the authorized scopes (needs ${need})` });
     }
     if (!this.agent.configured()) return send(503, { error: "agent not configured" });
-    if ((this.agent.viewer || this.agent.copy) && req.method !== "GET" && req.method !== "HEAD") {
+    if ((this.agent.viewer || this.agent.sharesState) && req.method !== "GET" && req.method !== "HEAD") {
       const took = await this.agent.requestTakeover?.();
       if (!took) return send(503, { error: "another agent is active for this pod \u2014 takeover failed, try again" });
     }
@@ -72100,10 +71949,10 @@ async function completeGatewayMove(agent2) {
 }
 
 // stub:node:os
-var fail2 = () => {
+var fail = () => {
   throw new Error("node:os is not available in the browser agent");
 };
-var node_os_default = new Proxy({}, { get: () => fail2 });
+var node_os_default = new Proxy({}, { get: () => fail });
 
 // lib/shared/files.mjs
 function writeFileAtomic(file, body, { mode = 384 } = {}) {
@@ -73204,6 +73053,205 @@ var AcctFeed = class {
 // web/app/agent.mjs
 init_urls();
 
+// stub:node:fs/promises
+var fail2 = () => {
+  throw new Error("node:fs/promises is not available in the browser agent");
+};
+var promises_default = new Proxy({}, { get: () => fail2 });
+
+// lib/core/pod-only.mjs
+var podOnly = (name) => name === "keys.json" || name === "lease.json" || name.startsWith("conn-");
+
+// lib/core/storage.mjs
+var LDP2 = Namespace("http://www.w3.org/ns/ldp#");
+var slash = (u) => u.endsWith("/") ? u : u + "/";
+var HttpStorage = class {
+  constructor(base, fetchImpl) {
+    this.base = slash(base);
+    this.fetchImpl = fetchImpl;
+  }
+  get kind() {
+    return "pod";
+  }
+  // The same jail FileStorage has, and for the same reason: a path here can
+  // carry `..`, encodeURI leaves both `.` and `/` alone, and fetch normalises
+  // the segments away — so a name derived from remote input could name a
+  // resource outside the container entirely. A prefix check is not enough on
+  // its own: a concatenated URL always satisfies one.
+  _url(p) {
+    const u = new URL(encodeURI(p), this.base);
+    if (!u.href.startsWith(this.base)) throw new Error(`path escapes the container: ${p}`);
+    return u.href;
+  }
+  async list(sub = "", { etag } = {}) {
+    const url = this._url(sub);
+    const res = await this.fetchImpl(url, {
+      headers: { accept: "text/turtle", ...etag ? { "if-none-match": etag } : {} }
+    });
+    if (res.status === 304) return { notModified: true, names: null, etag };
+    if (res.status === 404) return { notModified: false, names: [], etag: null, missing: true };
+    if (res.status >= 400) throw new Error(`container unreadable (HTTP ${res.status})`);
+    const g = graph();
+    parse2(await res.text(), g, url, "text/turtle");
+    const here = namedNode2(url);
+    const names = g.each(here, LDP2("contains"), null, here).map((n) => n.value).filter((u) => u.startsWith(url) && u !== url).map((u) => decodeURIComponent(u.slice(url.length)));
+    return { notModified: false, names, etag: res.headers.get("etag") };
+  }
+  // `accept` is for callers reading something that is RDF but is wanted as it
+  // was written: asking turtle-first for a JSON-LD document gets turtle back,
+  // because the server is entitled to convert between two RDF syntaxes.
+  async read(p, { etag, accept } = {}) {
+    const res = await this.fetchImpl(this._url(p), {
+      headers: {
+        accept: accept || "text/turtle, application/json;q=0.9, */*;q=0.8",
+        ...etag ? { "if-none-match": etag } : {}
+      }
+    });
+    if (res.status === 304) return { ok: true, notModified: true, status: 304, body: null, etag };
+    if (res.status >= 400) return { ok: false, notModified: false, status: res.status, body: null, etag: null };
+    return { ok: true, notModified: false, status: res.status, body: await res.text(), etag: res.headers.get("etag") };
+  }
+  async write(p, body, contentType) {
+    const url = this._url(p);
+    try {
+      const res = await this.fetchImpl(url, {
+        method: "PUT",
+        headers: { "content-type": contentType },
+        body
+      });
+      if (res.status < 400) return { ok: true, retry: false, why: "" };
+      const retry = res.status >= 500 || res.status === 429;
+      const ra = Number(res.headers?.get?.("retry-after"));
+      return {
+        ok: false,
+        retry,
+        why: `HTTP ${res.status}`,
+        retryAfterMs: Number.isFinite(ra) && ra > 0 ? ra * 1e3 : 0
+      };
+    } catch (e) {
+      return { ok: false, retry: true, why: e.message, retryAfterMs: 0 };
+    }
+  }
+  async remove(p) {
+    const url = this._url(p);
+    try {
+      const res = await this.fetchImpl(url, { method: "DELETE" });
+      return res.status < 400 || res.status === 404;
+    } catch {
+      return false;
+    }
+  }
+};
+var StateApiStorage = class {
+  constructor(base, { fetchImpl = globalThis.fetch, token, holder, pod = null, onRefused = null, onGone = null }) {
+    this.base = slash(base);
+    this.fetchImpl = fetchImpl;
+    this.token = token;
+    this.holder = holder;
+    this.pod = pod;
+    this.onRefused = onRefused;
+    this.onGone = onGone;
+  }
+  get kind() {
+    return "copy";
+  }
+  async _gone(res) {
+    if (res.status !== 404 || !this.onGone) return false;
+    const said = await res.clone().json().catch(() => null);
+    if (!said?.gone) return false;
+    this.onGone();
+    return true;
+  }
+  _ask(p, init = {}) {
+    return this.fetchImpl(this.base + encodeURIComponent(p), {
+      ...init,
+      headers: { authorization: `Bearer ${this.token}`, ...init.headers || {} }
+    });
+  }
+  async list(sub = "", { etag } = {}) {
+    if (sub) return { notModified: false, names: [], etag: null };
+    const res = await this._ask("", { headers: etag ? { "if-none-match": etag } : {} });
+    if (res.status === 304) return { notModified: true, names: null, etag };
+    if (res.status >= 400) {
+      await this._gone(res);
+      throw new Error(`the account's copy at the gateway is unreadable (HTTP ${res.status})`);
+    }
+    const { names } = await res.json();
+    return { notModified: false, names, etag: res.headers.get("etag") };
+  }
+  async read(p, opts = {}) {
+    if (podOnly(p)) return this.pod ? this.pod.read(p, opts) : { ok: false, notModified: false, status: 404, body: null, etag: null };
+    const res = await this._ask(p, { headers: opts.etag ? { "if-none-match": opts.etag } : {} });
+    if (res.status === 304) return { ok: true, notModified: true, status: 304, body: null, etag: opts.etag };
+    if (res.status >= 400) {
+      await this._gone(res);
+      return { ok: false, notModified: false, status: res.status, body: null, etag: null };
+    }
+    return { ok: true, notModified: false, status: res.status, body: await res.text(), etag: res.headers.get("etag") };
+  }
+  async write(p, body, contentType = "application/json") {
+    if (podOnly(p)) return this.pod ? this.pod.write(p, body, contentType) : { ok: false, retry: false, why: "no pod for this document" };
+    try {
+      const res = await this._ask(p, { method: "PUT", headers: { "content-type": contentType, "x-fedipod-holder": this.holder }, body });
+      if (res.status < 400) return { ok: true, retry: false, why: "" };
+      if (res.status === 409) {
+        this.onRefused?.();
+        return { ok: false, retry: false, why: "another agent holds this account now", lost: true };
+      }
+      if (await this._gone(res)) return { ok: false, retry: false, why: "the gateway keeps no copy of this account now", lost: true };
+      return { ok: false, retry: res.status >= 500 || res.status === 429, why: `HTTP ${res.status}`, retryAfterMs: 0 };
+    } catch (e) {
+      return { ok: false, retry: true, why: e.message, retryAfterMs: 0 };
+    }
+  }
+  async remove(p) {
+    if (podOnly(p)) return this.pod ? this.pod.remove(p) : false;
+    try {
+      const res = await this._ask(p, { method: "DELETE", headers: { "x-fedipod-holder": this.holder } });
+      if (res.status === 409) {
+        this.onRefused?.();
+        return false;
+      }
+      if (await this._gone(res)) return false;
+      return res.status < 400 || res.status === 404;
+    } catch {
+      return false;
+    }
+  }
+};
+var FencedStorage = class {
+  constructor(inner, { fence = null, onRefused = null } = {}) {
+    this.inner = inner;
+    this.fence = fence;
+    this.onRefused = onRefused;
+  }
+  get kind() {
+    return this.inner.kind;
+  }
+  get base() {
+    return this.inner.base;
+  }
+  list(sub, opts) {
+    return this.inner.list(sub, opts);
+  }
+  read(p, opts) {
+    return this.inner.read(p, opts);
+  }
+  async _refused() {
+    if (!this.fence || await this.fence().catch(() => true)) return false;
+    this.onRefused?.();
+    return true;
+  }
+  async write(p, body, contentType) {
+    if (await this._refused()) return { ok: false, retry: false, why: "another agent holds this account now", lost: true };
+    return this.inner.write(p, body, contentType);
+  }
+  async remove(p) {
+    if (await this._refused()) return false;
+    return this.inner.remove(p);
+  }
+};
+
 // web/app/copy-mode.mjs
 var RENEW_BEFORE_MS = 2 * 36e5;
 var ASK_AGAIN_MS = 15 * 6e4;
@@ -73255,7 +73303,11 @@ function copyStorage(agent2, podState) {
     pod: podState,
     // Refused: another agent (an app at the gateway, another browser) took
     // the lease. This one stops acting at once rather than at its next renewal.
-    onRefused: () => standDown(agent2)
+    onRefused: () => standDown(agent2),
+    // No copy any more, and none to be made: the hold turned off.
+    onGone: () => {
+      backToPod(agent2).catch((e) => agent2.log(`back to the pod: ${e.message}`));
+    }
   });
   Object.defineProperty(s, "token", { get: () => agent2.copy.token, set() {
   } });
@@ -73264,11 +73316,28 @@ function copyStorage(agent2, podState) {
 function copyLeaseOf(agent2) {
   return new Lease({ url: `${agent2.copy.base}lease.json`, fetchImpl: tokenFetch(agent2), log: agent2.log, id: agent2.holderId });
 }
+var podFetchOf = (agent2) => (u, i) => agent2.remote.fetch(u, i);
+function podStorageOf(agent2) {
+  const s = new FencedStorage(new HttpStorage(agent2.urls.state, podFetchOf(agent2)), { onRefused: () => standDown(agent2) });
+  if (agent2._fenced) s.fence = () => stillMine(agent2);
+  return s;
+}
+async function stillMine(agent2) {
+  const cur = await agent2.lease.readFresh().catch(() => null);
+  if (!cur || typeof cur !== "object") return true;
+  return cur.holder === agent2.lease.id && Date.now() < cur.expiresAt;
+}
+function fencePod(agent2) {
+  agent2._fenced = !!(agent2._keeper?.kept && agent2._keeper.hold === false && !agent2.copy && !agent2.store?.getConfig()?.keeperOff);
+  const s = agent2.store?.storage;
+  if (s instanceof FencedStorage) s.fence = agent2._fenced ? () => stillMine(agent2) : null;
+}
+var byGateway = (holder) => holder === "gateway" || String(holder || "").startsWith("keeper:");
 function useLease(agent2, lease) {
   agent2.lease.stopRenewal();
   agent2.lease = lease;
   if (agent2.intake) agent2.intake.lease = lease;
-  lease.onLost = () => agent2.demote();
+  lease.onLost = () => agent2.copy || agent2._fenced ? standDown(agent2) : agent2.demote();
 }
 async function ensureCopyLease(agent2) {
   const cur = await agent2.lease.readFresh().catch(() => null);
@@ -73303,7 +73372,7 @@ function standDown(agent2) {
         await new Promise((r) => setTimeout(r, wait));
         if (!agent2.viewer) return;
         const cur = await agent2.lease.readFresh().catch(() => null);
-        if (cur && typeof cur === "object" && cur.holder !== "gateway" && Date.now() < cur.expiresAt) return;
+        if (cur && typeof cur === "object" && !byGateway(cur.holder) && Date.now() < cur.expiresAt) return;
         if (await agent2.lease.acquire()) {
           clearTimeout(agent2._viewerTimer);
           agent2._viewerTimer = null;
@@ -73351,21 +73420,40 @@ async function leaveCopy(agent2) {
     return { ok: false, why: `the gateway could not write the copy to the pod (${res.status || res.e?.message})` };
   }
   agent2.copy = null;
-  const podFetch = (u, i) => agent2.remote.fetch(u, i);
-  const lease = new Lease({ url: `${agent2.urls.state}lease.json`, fetchImpl: podFetch, log: agent2.log, id: agent2.holderId });
-  agent2.store.attach(new HttpStorage(agent2.urls.state, podFetch));
-  await agent2.store.load({ force: true });
+  const lease = new Lease({ url: `${agent2.urls.state}lease.json`, fetchImpl: podFetchOf(agent2), log: agent2.log, id: agent2.holderId });
+  agent2.store.attach(podStorageOf(agent2));
   useLease(agent2, lease);
+  fencePod(agent2);
+  await agent2.store.load({ force: true });
   if (await lease.acquire()) lease.startRenewal();
   else agent2.demote();
   agent2.log("working from the pod again");
   return { ok: true };
 }
+async function backToPod(agent2) {
+  if (!agent2.copy || agent2._backToPod) return;
+  agent2._backToPod = true;
+  try {
+    await agent2.store.discardPending();
+    agent2.lease.stopRenewal();
+    agent2.copy = null;
+    const lease = new Lease({ url: `${agent2.urls.state}lease.json`, fetchImpl: podFetchOf(agent2), log: agent2.log, id: agent2.holderId });
+    agent2.store.attach(podStorageOf(agent2));
+    useLease(agent2, lease);
+    fencePod(agent2);
+    await agent2.store.load({ force: true });
+    if (await lease.acquire()) lease.startRenewal();
+    else agent2.demote();
+    agent2.log("the gateway keeps no copy of this account now: working from the pod");
+  } finally {
+    agent2._backToPod = false;
+  }
+}
 async function handOverCopy(agent2) {
   if (!agent2.copy) return { ok: true };
   await agent2.store.commit();
-  const podFetch = (u, i) => agent2.remote.fetch(u, i);
-  const pod = new HttpStorage(agent2.urls.state, podFetch);
+  const podFetch = podFetchOf(agent2);
+  const pod = podStorageOf(agent2);
   const docs = agent2.store.names().filter((n) => !podOnly(n)).map((n) => [n, agent2.store.read(n, null)]).filter(([, v]) => v !== null);
   for (const [name, value] of docs) {
     const w = await pod.write(name, JSON.stringify(value, null, 2) + "\n", "application/json");
@@ -73377,11 +73465,25 @@ async function handOverCopy(agent2) {
   if (res.status !== 200) return { ok: false, why: `the gateway would not let the copy go (${res.status || res.e?.message})` };
   agent2.copy = null;
   agent2.store.attach(pod);
-  await agent2.store.load({ force: true });
   useLease(agent2, podLease);
+  fencePod(agent2);
+  await agent2.store.load({ force: true });
   podLease.startRenewal();
   agent2.log(`handed the account's copy over: ${docs.length} documents written to the pod`);
   return { ok: true };
+}
+async function followHold(agent2, frontOrigin, hold) {
+  if (!agent2._keeper) return;
+  const was = agent2._keeper.hold;
+  agent2._keeper.hold = hold;
+  if (!hold && agent2.copy) {
+    const left = await leaveCopy(agent2);
+    if (!left.ok) agent2.log(`the gateway keeps no copies now; leaving this one: ${left.why}`);
+  } else if (hold && was === false && !agent2.copy && agent2._keeper.kept && !agent2.viewer && !agent2.store.getConfig()?.keeperOff) {
+    await forgetFailedOpen(agent2, frontOrigin);
+    await moveIntoCopy(agent2, frontOrigin);
+  }
+  fencePod(agent2);
 }
 async function renewCopyToken(agent2, frontOrigin) {
   if (!agent2.copy || agent2.copy.expiresAt - Date.now() > RENEW_BEFORE_MS) return;
@@ -73459,11 +73561,17 @@ var BrowserAgent = class _BrowserAgent {
   configured() {
     return !!this.store?.getConfig();
   }
+  // Whether the gateway acts on this account's state too: its copy there, or
+  // with the gateway's hold off, its pod (copy-mode.mjs). An action here then
+  // makes sure of the lease first (requestTakeover).
+  get sharesState() {
+    return !!(this.copy || this._fenced);
+  }
   // Asked by every write / destructive path before it acts. If we already hold
   // the lease, proceed. If we are a viewer, the owner acting HERE outranks the
   // idle active device: claim the lease outright and become active.
   async requestTakeover() {
-    if (!this.viewer && this.copy) await ensureCopyLease(this);
+    if (!this.viewer && this.sharesState) await ensureCopyLease(this);
     if (!this.viewer) return true;
     if (!await this.lease.takeover()) return false;
     clearTimeout(this._viewerTimer);
@@ -73519,6 +73627,7 @@ var BrowserAgent = class _BrowserAgent {
       const said2 = await this.tellGateway("keeper", { handle: this.doorKey, on: false });
       if (said2?.status !== 200) return said2 || { status: 502 };
       this._keeper.kept = false;
+      fencePod(this);
       if (this.masto) this.masto.scheduling = false;
     }
     this.remote.keepers = on ? [webId] : [];
@@ -73530,6 +73639,7 @@ var BrowserAgent = class _BrowserAgent {
     if (said?.status === 200) {
       await forgetFailedOpen(this, this.frontOrigin);
       this._keeper.kept = true;
+      fencePod(this);
       if (this.masto) this.masto.scheduling = true;
       this.log("the gateway keeps this account running while the app is closed");
     }
@@ -73549,6 +73659,9 @@ var BrowserAgent = class _BrowserAgent {
     const said = await this.tellGateway("here", { handle: this.doorKey, nextAt: this.store ? nextDue(this.store) : null });
     if (said?.status === 200) saveMeta(this.webId, { hereAt: Date.now() }).catch(() => {
     });
+    if (said?.status === 200 && typeof said.hold === "boolean") {
+      await followHold(this, this.frontOrigin, said.hold).catch((e) => this.log(`the gateway's hold: ${e.message}`));
+    }
     return said;
   }
   // The hourly "still here". A worker the browser killed and restarted is the
@@ -73583,7 +73696,7 @@ var BrowserAgent = class _BrowserAgent {
     this._openTimer = setInterval(() => {
       this.checkInAtGateway();
     }, _BrowserAgent.OPEN_EVERY_MS);
-    this.lease.onLost = () => this.copy ? standDown(this) : this.demote();
+    this.lease.onLost = () => this.sharesState ? standDown(this) : this.demote();
     this.lease.startRenewal();
     try {
       if (!warm) {
@@ -73754,7 +73867,7 @@ var BrowserAgent = class _BrowserAgent {
     ).catch(() => null))?.root || DEFAULT_ROOT;
     this.urls = apUrls2(remotePod, root);
     const podFetch = (u, i) => this.remote.fetch(u, i);
-    const podStateStorage = new HttpStorage(this.urls.state, podFetch);
+    const podStateStorage = podStorageOf(this);
     this.store = new PodStore({ storage: this.copy ? copyStorage(this, podStateStorage) : podStateStorage, log: this.log });
     keepInStep(this.store, webId, this.log);
     this.lease = this.copy ? copyLeaseOf(this) : new Lease({ url: this.urls.state + "lease.json", fetchImpl: podFetch, log: this.log, id: this.holderId });
@@ -73812,8 +73925,9 @@ var BrowserAgent = class _BrowserAgent {
       e.code = "address-closed";
       throw e;
     }
-    this._keeper = standing?.keeper ? { webId: standing.keeper, kept: !!standing.kept, keptBy: standing.keptBy || null } : null;
+    this._keeper = standing?.keeper ? { webId: standing.keeper, kept: !!standing.kept, keptBy: standing.keptBy || null, hold: standing.hold !== false } : null;
     if (this._keeper && !this.store.getConfig()?.keeperOff) this.remote.keepers = [this._keeper.webId];
+    fencePod(this);
     this.publisher = new Publisher({
       config: this.store.getConfig(),
       remote: this.remote,

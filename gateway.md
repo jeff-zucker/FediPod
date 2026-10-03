@@ -15,7 +15,7 @@ yours, which your agent then signs and sends. It still holds no key, but what yo
 trust it with grows by that much. A browser account is also kept running by
 the gateway (below). That gives the gateway your key while it works, so it can
 post as you, as any Fediverse server can, and your account's working data is
-kept at the gateway too and written to your pod every fifteen minutes. For
+held at the gateway while it works, for at most fifteen minutes at a time. For
 a kept account the gateway also answers a follower's server asking for one
 of your followers-only posts, and the named person's server asking for a
 direct one, when that server signs its request; nobody else gets them.
@@ -174,7 +174,8 @@ closed, fedipod.net does two things for it.
 your pod one by one, and reach your pod in batches of up to a hundred: when you
 open FediPod, or every fifteen minutes otherwise. While FediPod is open, mail
 goes straight to your pod as before. A DeviceAgent's mail always goes straight
-to its pod.
+to its pod. On a gateway whose admin has turned the hold off (below), mail
+always goes straight to your pod.
 
 **The gateway keeps your account running.** It accepts your follows, tries
 again what failed to go out, and publishes the posts you scheduled, all while FediPod is closed. Other mail waits on your
@@ -186,13 +187,44 @@ account over the next time you open it, with nothing for you to do.
 Scheduling a post is offered only while this is on, because otherwise nothing
 would be running when the time came.
 
-**Your account's working data is kept at the gateway.** While the gateway
-keeps your account running, your timeline, notifications, followers, settings
-and the rest of your FediPod state are kept at fedipod.net, and FediPod in your
-browser, the gateway and any app you use all work from that one copy, so they
-never disagree. fedipod.net writes what changed to your pod every fifteen
-minutes, and everything at once when your address moves or is closed. Your
-signing key and the passwords of accounts you connected elsewhere are never in the copy; they stay on your pod only.
+**Your account's working data is held at the gateway for at most fifteen
+minutes.** While the gateway keeps your account running, FediPod in your
+browser, the gateway and any app you use all work from one copy of your
+timeline, notifications, followers, settings and the rest of your FediPod
+state, made at fedipod.net from your pod, so they never disagree. Every
+fifteen minutes, whatever is happening, fedipod.net writes that copy to your
+pod and deletes it. The next time anything needs your account (FediPod, an
+app, or the gateway's own work while you're away), the copy is made again from
+your pod. You don't notice, except that an app's first check after a deletion
+can take a few seconds longer. When your address moves or is closed, the copy
+goes to your pod at once. Your signing key and the passwords of accounts you
+connected elsewhere are never in the copy; they stay on your pod only.
+
+## The hold, for a gateway's admin
+
+Whoever runs a gateway decides whether it holds copies of accounts at all,
+with one setting, `FEDIPOD_HOLD` ([netlify/README.md](netlify/README.md)).
+
+- **On**, the default and fedipod.net's choice: as above. Mail waits at the
+  gateway for up to fifteen minutes, and each account's copy is written to its
+  pod and deleted every fifteen minutes.
+- **Off**: the gateway keeps no copy of anyone's account and holds no mail.
+  Mail goes straight to the pod as it arrives, an app's every check reads the
+  pod, and FediPod in the browser works on the pod, taking turns with the
+  gateway when an app acts. None of anyone's mail, timeline or direct messages
+  is ever stored at the gateway. It costs more: roughly two to four times the
+  gateway's hosting per account, and about ten times the requests on each pod.
+  Apps are slower, and on a pod provider that limits traffic they can show
+  errors at busy times.
+
+A change takes effect within fifteen minutes. Off to on: an account's copy is
+made the next time anything uses it. On to off: every copy is written to its
+pod and deleted, at the next round, or by FediPod itself within five minutes
+where it is open, so nothing it is writing is lost.
+
+Either way the gateway keeps app sign-ins (as fingerprints), phone-notification
+sign-ups, each account's record (with its door secret), the time an account's
+next scheduled post is due, and public copies of posts for up to an hour.
 
 ## Using any Mastodon app
 
@@ -201,7 +233,8 @@ elk.zone, Ivory, Tusky, Phanpy and the rest. In the app, give `fedipod.net` as
 your server. The app sends you to a fedipod.net page that asks for your
 Fediverse address or your WebID and signs you in at your own pod; no password
 is typed on fedipod.net. The app then reads your timeline and notifications from your
-account's copy at the gateway, and posts, boosts, likes and follows as you.
+account's copy at the gateway (from your pod, on a gateway with the hold off),
+and posts, boosts, likes and follows as you.
 
 An app checks for new posts every minute or so while it is open; there are no
 live updates. Accounts are made on the fedipod.net front page, with a pod, not

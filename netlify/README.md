@@ -16,8 +16,8 @@ runtime-agnostic Node:
 | `functions/inbox.mjs` | One person's door: verify a delivery, forward it to their pod. | `lib/gateway/gateway-core.mjs` |
 | `functions/front.mjs` | A door for many people: WebFinger, each public face, per-person delivery routing, and the signup and attach flow. | `lib/gateway/front-core.mjs` |
 | `functions/account.mjs` | The routes that act for an account: the owner's browser reaching the account's working copy (`/api/state/…`), and Mastodon apps signing in and working here (`/oauth/…`, `/api/v1/…`, `/api/v2/…`, `/api/authorize`). `front.mjs` leaves these paths to it. | `lib/gateway/state-api.mjs`, `lib/gateway/masto-gateway.mjs` |
-| `functions/push-background.mjs` | One kept account's held mail read into its copy, and each notification that makes pushed to the phones and browsers its owner signed up. Started by the door when it holds a delivery that becomes a notification. | `lib/gateway/masto-gateway.mjs` |
-| `functions/flush-mail.mjs` | Every fifteen minutes: mail held for browser accounts whose apps are closed goes to their pods in batches, and a kept account with work due (a follow, a delivery to try again, a scheduled post) is handed to the keeper. | `lib/gateway/held-mail.mjs` |
+| `functions/push-background.mjs` | One kept account's held mail read into its copy (with the hold off, its pod inbox drained), and each notification that makes pushed to the phones and browsers its owner signed up. Started by the door when a delivery that becomes a notification arrives while the account's apps are closed. | `lib/gateway/masto-gateway.mjs` |
+| `functions/flush-mail.mjs` | Every fifteen minutes: mail held for browser accounts whose apps are closed goes to their pods in batches, a kept account with work due (a follow, a delivery to try again, a scheduled post) is handed to the keeper, and each person's working copy is written to their pod and deleted (the hold). | `lib/gateway/held-mail.mjs`, `lib/gateway/copy.mjs` |
 | `functions/keeper-background.mjs` | One kept account's run: its mail delivered and read, its waiting deliveries sent, its scheduled posts published. Started only by `flush-mail`. | `lib/gateway/keeper.mjs` |
 
 Another host needs only its own adapter calling the same `handleDelivery`. A
@@ -65,8 +65,8 @@ store, when each app last said it was open in `present`, and what each kept
 account has waiting in `keeper`. A kept account's working copy is in `state`,
 and the apps signed in here, with their codes and tokens (as hashes), in
 `masto`, with the one push key pair the gateway makes for all its accounts
-the first time an app asks; both are read with strong consistency. The round writes each copy to
-its pod. The page an app sends its person to is `/app-signin/`.
+the first time an app asks; both are read with strong consistency. The round writes each person's copy to
+their pod and deletes it, and a forum's to its pod. The page an app sends its person to is `/app-signin/`.
 
 To keep browser accounts running while their apps are closed, the front needs
 a pod account of its own, on a Community Solid Server, with a client credential
@@ -81,6 +81,13 @@ made for it:
 
 Without them the manage page does not offer it, and a client cannot schedule
 posts.
+
+Whether the gateway holds copies of accounts at all is the admin's choice
+(see [the gateway](../gateway.md#the-hold-for-a-gateways-admin)):
+
+| Variable | What it is |
+|---|---|
+| `FEDIPOD_HOLD` | `on` (the default, used when it is unset): mail waits here up to fifteen minutes while an account's apps are closed, and each account's working copy is written to its pod and deleted every fifteen minutes. `off`: no mail is held and no copy made; everything works on the pods directly, at roughly two to four times the hosting cost per account and about ten times the pod requests. `no`, `false` and `0` also mean off. A change takes effect within fifteen minutes. |
 
 To change to a different pod account, set the four variables to the new one's
 values. Each kept account moves over the next time its owner opens FediPod:

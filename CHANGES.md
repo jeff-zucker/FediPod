@@ -1,5 +1,30 @@
 # Changes
 
+## Unreleased (fedipod.net keeps your account's data for at most fifteen minutes)
+
+**fedipod.net no longer keeps a lasting copy of your account.** While it keeps
+your account running, FediPod in your browser, any app you use and fedipod.net
+itself all work from one copy of your account's data, made from your pod.
+Every fifteen minutes, whatever is happening, fedipod.net writes that copy to
+your pod and deletes it, and the next time anything needs your account it is
+made again from your pod. FediPod and your apps work as before, except that
+an app's first check after a deletion can take a few seconds longer.
+
+**A gateway's admin can turn this off** (`FEDIPOD_HOLD=off`). The gateway then
+keeps no copy and holds no mail: mail goes straight to your pod, apps read
+your pod on every check, and FediPod in your browser works on your pod, taking
+turns with the gateway when an app acts. It costs the gateway roughly two to
+four times as much per account, and your pod about ten times the requests.
+fedipod.net keeps it on.
+
+**A follower's server asking fedipod.net later for one of your followers-only
+posts gets it.** fedipod.net reads it from your pod and keeps nothing. This
+never worked before: fedipod.net looked for your followers in the wrong place.
+
+**Using an app signed in at fedipod.net counts as being here,** so an account
+used only through an app is not paused, and its address not closed, for want
+of opening FediPod.
+
 ## 2026-09-29 (your posts show their likes and boosts — version 1.46.0)
 
 **Your posts carry their number of likes and boosts**, so a server that

@@ -13,7 +13,6 @@ import { findAccount } from '../../lib/core/place.mjs';
 import * as containers from '../../lib/pod/containers.mjs';
 import * as podState from '../../lib/pod/state.mjs';
 import { PodStore } from '../../lib/core/store.mjs';
-import { HttpStorage } from '../../lib/core/storage.mjs';
 import { Publisher } from '../../lib/core/publisher/index.mjs';
 import { Intake } from '../../lib/core/intake/index.mjs';
 import { C2S } from '../../lib/client/c2s.mjs';
@@ -34,7 +33,8 @@ import { AcctFeed } from '../../lib/connections/acctfeed.mjs';
 import { followActor, unfollowActor, resolveHandle } from '../../lib/core/social.mjs';
 import { podBaseOfWebId } from '../../lib/pod/urls.mjs';
 import { ImportWorker } from '../../lib/connections/import.mjs';
-import { openCopy, copyStorage, copyLeaseOf, moveIntoCopy, leaveCopy, renewCopyToken, standDown, ensureCopyLease, handOverCopy, forgetFailedOpen } from './copy-mode.mjs';
+import { openCopy, copyStorage, copyLeaseOf, moveIntoCopy, leaveCopy, renewCopyToken, standDown, ensureCopyLease, handOverCopy, forgetFailedOpen,
+  podStorageOf, fencePod, followHold } from './copy-mode.mjs';
 
 // The authorities this identity answers on: exactly one, this origin. The Node
 // agent gets this from lib/guard.mjs, which is not in the browser bundle and
@@ -129,13 +129,19 @@ export class BrowserAgent {
 
   configured() { return !!this.store?.getConfig(); }
 
+  // Whether the gateway acts on this account's state too: its copy there, or
+  // with the gateway's hold off, its pod (copy-mode.mjs). An action here then
+  // makes sure of the lease first (requestTakeover).
+  get sharesState() { return !!(this.copy || this._fenced); }
+
   // Asked by every write / destructive path before it acts. If we already hold
   // the lease, proceed. If we are a viewer, the owner acting HERE outranks the
   // idle active device: claim the lease outright and become active.
   async requestTakeover() {
-    // Working from the copy, an app at the gateway may have taken the lease
-    // since this browser last looked: asked now, before acting (copy-mode.mjs).
-    if (!this.viewer && this.copy) await ensureCopyLease(this);
+    // Working from the copy, or on the pod with the hold off, an app at the
+    // gateway may have taken the lease since this browser last looked: asked
+    // now, before acting (copy-mode.mjs).
+    if (!this.viewer && this.sharesState) await ensureCopyLease(this);
     if (!this.viewer) return true;
     if (!(await this.lease.takeover())) return false;
     clearTimeout(this._viewerTimer); this._viewerTimer = null;
@@ -182,6 +188,7 @@ export class BrowserAgent {
       const said = await this.tellGateway('keeper', { handle: this.doorKey, on: false });
       if (said?.status !== 200) return said || { status: 502 };
       this._keeper.kept = false;
+      fencePod(this);
       if (this.masto) this.masto.scheduling = false;
     }
     this.remote.keepers = on ? [webId] : [];
@@ -194,6 +201,7 @@ export class BrowserAgent {
       // A copy that could not be had while the account was not kept may be now.
       await forgetFailedOpen(this, this.frontOrigin);
       this._keeper.kept = true;
+      fencePod(this);
       if (this.masto) this.masto.scheduling = true;
       this.log('the gateway keeps this account running while the app is closed');
     }
@@ -211,6 +219,10 @@ export class BrowserAgent {
   async hereAtGateway() {
     const said = await this.tellGateway('here', { handle: this.doorKey, nextAt: this.store ? nextDue(this.store) : null });
     if (said?.status === 200) saveMeta(this.webId, { hereAt: Date.now() }).catch(() => {});
+    // The gateway's admin may have turned the hold off or on (copy-mode.mjs).
+    if (said?.status === 200 && typeof said.hold === 'boolean') {
+      await followHold(this, this.frontOrigin, said.hold).catch((e) => this.log(`the gateway's hold: ${e.message}`));
+    }
     return said;
   }
 
@@ -244,9 +256,10 @@ export class BrowserAgent {
     // Reading here is being here: the gateway hears so once an hour.
     clearInterval(this._openTimer);
     this._openTimer = setInterval(() => { this.checkInAtGateway(); }, BrowserAgent.OPEN_EVERY_MS);
-    // Working from the copy, an app at the gateway takes the lease only while
-    // it acts, and this browser takes it back (copy-mode.mjs).
-    this.lease.onLost = () => (this.copy ? standDown(this) : this.demote());
+    // Working from the copy, or on the pod with the hold off, an app at the
+    // gateway takes the lease only while it acts, and this browser takes it
+    // back (copy-mode.mjs).
+    this.lease.onLost = () => (this.sharesState ? standDown(this) : this.demote());
     this.lease.startRenewal();
     try {
       // Forced, not revalidated, when this device WATCHED first: the active
@@ -441,7 +454,8 @@ export class BrowserAgent {
     // the deletion deny-list that every other write on this agent observes.
     // The Node agent has always passed remote.fetch here.
     const podFetch = (u, i) => this.remote.fetch(u, i);
-    const podStateStorage = new HttpStorage(this.urls.state, podFetch);
+    // Fenced once the gateway is known to act on the pod too (fencePod below).
+    const podStateStorage = podStorageOf(this);
     this.store = new PodStore({ storage: this.copy ? copyStorage(this, podStateStorage) : podStateStorage, log: this.log });
     keepInStep(this.store, webId, this.log);
     // Single-active-agent lease (lib/lease.mjs): the inbox drain is a
@@ -545,8 +559,11 @@ export class BrowserAgent {
     // The gateway's own pod identity, when it can act for this account while
     // the app is closed (lib/gateway/keeper.mjs). Unless the owner turned that
     // off, every rule this agent writes names it beside the owner.
-    this._keeper = standing?.keeper ? { webId: standing.keeper, kept: !!standing.kept, keptBy: standing.keptBy || null } : null;
+    // `hold`: whether it keeps a copy of the account at all (copy-mode.mjs).
+    this._keeper = standing?.keeper
+      ? { webId: standing.keeper, kept: !!standing.kept, keptBy: standing.keptBy || null, hold: standing.hold !== false } : null;
     if (this._keeper && !this.store.getConfig()?.keeperOff) this.remote.keepers = [this._keeper.webId];
+    fencePod(this);
 
     this.publisher = new Publisher({
       config: this.store.getConfig(), remote: this.remote, store: this.store,
