@@ -1,5 +1,16 @@
 # Changes
 
+## 2026-10-03 (on a FediPod Server, an app's notifications and inbox open again)
+
+**On a FediPod Server, a Mastodon app's notifications list failed with an
+error whenever there was anything in it.** The links an app is handed to page
+through it were not valid addresses, and building them stopped the answer.
+They are valid now, and the next page opens.
+
+**On a FediPod Server, an app reading your inbox was told how much mail there
+was but could not open it.** The inbox's links to its pages had the same
+fault. An app now opens the pages and finds what arrived.
+
 ## 2026-10-03 (fedipod.net keeps your account's data for at most fifteen minutes — version 1.47.0)
 
 **fedipod.net no longer keeps a lasting copy of your account.** While it keeps
