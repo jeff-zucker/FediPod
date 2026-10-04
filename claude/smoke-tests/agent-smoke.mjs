@@ -1041,6 +1041,41 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     && (await place.findAccount(f.pod, host, read, (c) => c.handle === 'old'))?.root === 'fedipod/',
     'the recorded place is found first, and a caller can pass over one that is not theirs');
 
+  // Retiring: the account's place leaves the index, and its links leave the profile.
+  const fIdx = await ti.findPublicIndex(f.pod, host);
+  check(await place.forgetPlace(f.pod, host, host + 'apps/fedipod/ap/actor') === 'removed'
+    && !(await ti.actorsIn(f.pod, fIdx)).length && (await place.findAccount(f.pod, host, read))?.root === 'fedipod/'
+    && /TypeIndex/.test(f.docs[fIdx]),
+    'a retired account\'s place leaves the type index, and the index stays an index');
+  check(await place.forgetPlace(f.pod, host, host + 'apps/fedipod/ap/actor') === 'absent',
+    'forgetting it again finds nothing to remove');
+  const sharedIdx = host + 'settings/shared.ttl';
+  const sh = makePod({ [card]: profile + `<#me> <http://www.w3.org/ns/solid/terms#publicTypeIndex> <${sharedIdx}>.\n`,
+    [sharedIdx]: `@prefix solid: <http://www.w3.org/ns/solid/terms#>.\n<> a solid:TypeIndex, solid:ListedDocument.\n`
+      + `<#both> a solid:TypeRegistration; solid:forClass <https://www.w3.org/ns/activitystreams#Actor>;\n`
+      + `  solid:instance <${host}one/fedipod/ap/actor>, <${host}two/fedipod/ap/actor>.\n` });
+  check(await ti.unregister(sh.pod, sharedIdx, host + 'one/fedipod/ap/actor') === true
+    && (await ti.actorsIn(sh.pod, sharedIdx)).join() === host + 'two/fedipod/ap/actor',
+    'a registration that names another account too keeps that one');
+  const lk = makePod({ [card]: profile });
+  const lkActor = host + 'fedipod/ap/actor';
+  const lkOutbox = 'https://gw.example/u/jz/ap/outbox';
+  await lk.pod.linkAccountInProfile({ actorUrl: lkActor, accountName: '@jz@gw.example', outbox: lkOutbox });
+  const linked = lk.docs[card];
+  const lkChanged = await lk.pod.unlinkAccountInProfile({ actorUrl: lkActor, outbox: lkOutbox });
+  const lkG = $rdf.graph(); $rdf.parse(lk.docs[card], lkG, card, 'text/turtle');
+  check(/account/.test(linked) && lkChanged === 1
+    && !lkG.statementsMatching($rdf.sym(me), $rdf.sym('http://xmlns.com/foaf/0.1/account'), null).length
+    && !lkG.statementsMatching($rdf.sym(lkActor), null, null).length
+    && !lkG.statementsMatching($rdf.sym(me), $rdf.sym('https://www.w3.org/ns/activitystreams#outbox'), null).length
+    && lkG.holds($rdf.sym(me), $rdf.sym('http://www.w3.org/ns/solid/terms#oidcIssuer'), $rdf.sym('https://idp.example/')),
+    'a retired account\'s link, handle and outbox leave the profile, and the rest of the profile stays');
+  await lk.pod.linkAccountInProfile({ actorUrl: lkActor, accountName: '@jz@gw.example', outbox: 'https://elsewhere.example/outbox' });
+  await lk.pod.unlinkAccountInProfile({ actorUrl: lkActor, outbox: lkOutbox });
+  const lkG2 = $rdf.graph(); $rdf.parse(lk.docs[card], lkG2, card, 'text/turtle');
+  check(lkG2.holds($rdf.sym(me), $rdf.sym('https://www.w3.org/ns/activitystreams#outbox'), $rdf.sym('https://elsewhere.example/outbox')),
+    'an outbox the profile names for something else is left alone');
+
   // Sign-up with no index stops before anything is written.
   const { signUp } = await import(path.join(root, 'web/app/signup.mjs'));
   const g2 = makePod({ [card]: profile });
@@ -2534,11 +2569,13 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   const written = new Map();
   const acls = [];
   let flushed = false, savedConfig = { ...config };
+  const unlinked = [];
   const pub = new Publisher({
     config,
     remote: {
       putJson: async (url, obj) => { written.set(url, obj); },
       setAcl: async (url, modes) => { acls.push([url, modes]); },
+      unlinkAccountInProfile: async (o) => { unlinked.push(o); return 1; },
     },
     store: {
       getStatuses: () => [],
@@ -2571,6 +2608,8 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     'the Tombstone stays publicly readable');
   check(savedConfig.retiredAt === r.deletedAt && flushed && r.inboxes === 2,
     'retirement is recorded in pod state so the agent will not restart the identity');
+  check(unlinked.length === 1 && unlinked[0].actorUrl === pub.urls.actor,
+    'retiring takes the account out of the owner\'s WebID profile, and a type index it cannot read does not stop it');
 }
 
 // --- 5h. we identify ourselves, and never exceed a local request ceiling ---
@@ -3461,6 +3500,10 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     'and both the BrowserAgent boot and the unlock use it');
   // A fronted WebFinger names the pod actor as an alias, which is how a browser
   // signing in by @you@fedipod.net finds the pod and its login.
+  check(wireK.jrd({ handle: 'me', host: 'h', actor: 'a', avatar: 'https://p.example/me.png' }).links
+    .some((l) => l.rel === 'http://webfinger.net/rel/avatar' && l.href === 'https://p.example/me.png')
+    && !wireK.jrd({ handle: 'me', host: 'h', actor: 'a' }).links.some((l) => /avatar/.test(l.rel)),
+    'an account with a picture names it in its WebFinger answer, and one without names none');
   check(JSON.stringify(wireK.jrd({ handle: 'me', host: 'fedipod.net', actor: 'https://fedipod.net/u/me/ap/actor', aliases: ['https://alice.pod/fedipod/ap/actor'] }).aliases)
     === '["https://alice.pod/fedipod/ap/actor"]' && !('aliases' in wireK.jrd({ handle: 'me', host: 'h', actor: 'a' })),
     'a JRD carries aliases only when given some');

@@ -19,7 +19,8 @@ The software row names the version the agent is running. When the copy on the ma
   old handle keeps working as a redirect, and the identity is parked
   afterwards.
 * **Retire identity** is permanent — every follower's server is told to drop
-  the account, and the identity does not come back.
+  the account, your WebID profile and public type index stop naming it, and
+  the identity does not come back.
 * In the **Upkeep** group: **Drain the inbox** fetches and handles everything
   waiting now, and **Show dead letters** lists deliveries that failed for
   good and will not be retried.
