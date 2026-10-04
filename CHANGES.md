@@ -1,5 +1,13 @@
 # Changes
 
+## 2026-10-04 (your phone hears about mail while FediPod is open — version 1.48.1)
+
+**Phone notifications arrive while FediPod is open in a browser.** A mention,
+reply, follow, like, boost or reaction reached a phone app signed in at the
+Gateway only while FediPod was closed. It now reaches the phone as it arrives
+either way. Notifications from a connected Bluesky or Mastodon account are not
+pushed.
+
 ## 2026-10-04 (on a FediPod Server, an app's notifications and inbox open again; the Server, the forum, the session library and css-nextgraph each in a repository of their own — version 1.48.0)
 
 **On a FediPod Server, a Mastodon app's notifications list failed with an
