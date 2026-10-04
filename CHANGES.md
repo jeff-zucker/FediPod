@@ -17,8 +17,8 @@ index.** Your profile no longer names the account, its handle or its outbox,
 and Solid apps reading your type index no longer find it.
 
 **An address's WebFinger answer names the account's picture**, at the Gateway
-and on the pod. At the Gateway it follows FediPod's next check-in, within an
-hour.
+and on the pod. At the Gateway a new picture shows within about two hours of
+FediPod being open.
 
 ## 2026-10-04 (on a FediPod Server, an app's notifications and inbox open again; the Server, the forum, the session library and css-nextgraph each in a repository of their own — version 1.48.0)
 
