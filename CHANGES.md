@@ -1,12 +1,16 @@
 # Changes
 
-## 2026-10-04 (your phone hears about mail while FediPod is open — version 1.48.1)
+## 2026-10-04 (your phone hears about mail while FediPod is open; an app you use stays signed in — version 1.48.1)
 
 **Phone notifications arrive while FediPod is open in a browser.** A mention,
 reply, follow, like, boost or reaction reached a phone app signed in at the
 Gateway only while FediPod was closed. It now reaches the phone as it arrives
 either way. Notifications from a connected Bluesky or Mastodon account are not
 pushed.
+
+**An app signed in at a Gateway stays signed in while you use it.** It was
+signed out 90 days after signing in, however often it was used. It is now
+signed out after 90 days without use.
 
 ## 2026-10-04 (on a FediPod Server, an app's notifications and inbox open again; the Server, the forum, the session library and css-nextgraph each in a repository of their own — version 1.48.0)
 

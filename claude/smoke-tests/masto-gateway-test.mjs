@@ -184,6 +184,25 @@ try {
   reads.length = 0;
   await call('GET', poll, { headers: { authorization: `Bearer ${other}` } });
   check(reads.includes('mei/meta'), 'another app\'s token is never given this app\'s remembered answer');
+  // ---- an app stays signed in for ninety days from its last use ----
+  const day = 86400_000;
+  const oldTok = crypto.randomBytes(32).toString('base64url');
+  const oldKey = `token/${crypto.createHash('sha256').update(oldTok).digest('base64url')}`;
+  const asOld = { authorization: `Bearer ${oldTok}` };
+  await mastoKv.set(oldKey, JSON.stringify({ handle: 'mei', webId: WEBID, scope: 'read', clientId: app.client_id,
+    at: Date.now() - 100 * day, usedAt: Date.now() - 10 * day }));
+  const stillIn = await call('GET', '/api/v1/accounts/verify_credentials', { headers: asOld });
+  const marked = JSON.parse((await mastoKv.get(oldKey)).text);
+  check(stillIn.status === 200 && Date.now() - marked.usedAt < 5_000,
+    `an app signed in 100 days ago and used 10 days ago is still signed in, and this use is marked (${stillIn.status})`);
+  await call('GET', '/api/v1/accounts/verify_credentials', { headers: asOld });
+  check(JSON.parse((await mastoKv.get(oldKey)).text).usedAt === marked.usedAt, 'and the mark is not written again the same day');
+  await mastoKv.set(oldKey, JSON.stringify({ ...marked, usedAt: Date.now() - 91 * day }));
+  check((await call('GET', '/api/v1/accounts/verify_credentials', { headers: asOld })).status === 401,
+    'an app unused for 91 days is signed out');
+  await mastoKv.set(oldKey, JSON.stringify({ ...marked, usedAt: undefined, at: Date.now() - 91 * day }));
+  check((await call('GET', '/api/v1/accounts/verify_credentials', { headers: asOld })).status === 401,
+    'and so is one signed in 91 days ago and never marked since');
   const realNow = Date.now;
   Date.now = () => realNow() + 11 * 60_000;
   reads.length = 0;
