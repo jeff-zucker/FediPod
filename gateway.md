@@ -242,9 +242,9 @@ from an app.
 
 **Notifications on your phone.** An app that offers notifications can sign up
 for them here. A mention, a reply, a direct message, a follow, or a like, boost
-or reaction to your own post then reaches your phone as it arrives, while
-FediPod and the app are closed. While FediPod is open in a browser, it reads
-your mail itself, and those arrivals are not pushed.
+or reaction to your own post then reaches your phone as it arrives, whether
+FediPod is open in a browser or closed. Notifications from a connected Bluesky
+or Mastodon account are not pushed.
 
 ## Accounts that go quiet
 

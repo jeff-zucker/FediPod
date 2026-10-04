@@ -99,7 +99,7 @@ process.env.AP_ALLOW_PRIVATE_TARGETS = '1';
 const lib = (p) => import(path.join(root, p));
 const { routeFront, verifyPodToken } = await lib('lib/gateway/front-core.mjs');
 const { routeStateApi, endHold } = await lib('lib/gateway/state-api.mjs');
-const { routeMastoGateway, pushHeld } = await lib('lib/gateway/masto-gateway.mjs');
+const { routeMastoGateway, pushHeld, pushMade } = await lib('lib/gateway/masto-gateway.mjs');
 const ece = require(path.join(root, 'node_modules/http_ece/ece.js'));
 const https = await import('node:https');
 const { logInAtIdp } = await import(new URL('./idp-login.mjs', import.meta.url));
@@ -151,6 +151,9 @@ const ctx = {
   waitUntil: (p) => { pendingWork.push(p); },
   stateSecret: Buffer.from('a-secret-only-this-test-knows'),
   keeperFetch: async () => (u, i) => keeperSession.fetch(u, i),
+  // As push-background does for notifications FediPod named while open.
+  pushWanted: async (h) => Number((await ctx.mastoKv.get(`push/${h}`))?.text || 0) > 0,
+  startPush: async (h, o) => { if (o?.ids) pendingWork.push(pushMade(ctx, h, rows[h], o.ids, { log: () => {} })); },
 };
 const gatewayRoute = async (q, s, u) => {
   const chunks = []; for await (const c of q) chunks.push(c);
@@ -184,7 +187,7 @@ const server = http.createServer((q, s) => {
   if (u === '/app-signin/tokens.css') return file('web/admin/tokens.css', 'text/css')(q, s);
   if (/^\/app-signin\/(fedi-login|oidc-session)\.mjs$/.test(u)) return file(`node_modules/fediverse-session/${path.basename(u)}`, 'text/javascript')(q, s);
   if (u.startsWith('/api/state/') || u.startsWith('/api/v1/') || u.startsWith('/api/v2/') || u.startsWith('/oauth/')
-    || u === '/api/authorize' || ['/api/open', '/api/keeper', '/api/here'].includes(u)) {
+    || u === '/api/authorize' || ['/api/open', '/api/keeper', '/api/here', '/api/push'].includes(u)) {
     return gatewayRoute(q, s, u).catch((e) => { s.writeHead(500); s.end(String(e.stack || e)); });
   }
   if (u === '/' || u === '/index.html') { s.writeHead(200, { 'content-type': 'text/html' }); return s.end(page); }
@@ -378,6 +381,19 @@ if (!cssUp) { console.log(`FAIL  the scratch server never answered again at ${IS
   check(payload?.notification_type === 'mention' && /aisha/i.test(payload.title || '') && !!payload.notification_id,
     `the phone can read it: ${payload?.title} — ${payload?.body}`);
   check(/^vapid t=/.test(got?.headers?.authorization || ''), 'and it is signed with the instance\'s push key');
+  // A mention while FediPod is open: it reaches the pod inbox, FediPod reads it, and the phone hears.
+  check(await post('acting again before a mention') === 200, 'FediPod acts again after the push run');
+  const openPushed = pushed.length;
+  const openMention = await owner.fetch(`${pod}fedipod/ap/inbox/open-mention-4`, { method: 'PUT', headers: { 'content-type': 'application/ld+json' },
+    body: JSON.stringify({ '@context': 'https://www.w3.org/ns/activitystreams', id: `${ORIGIN}/peer/1/creates/4`, type: 'Create',
+      actor: `${ORIGIN}/peer/1`, to: [mentionTarget], object: `${ORIGIN}/peer/1/notes/4` }) });
+  const heardOpen = await waitFor(async () => { await Promise.all(pendingWork.splice(0)); return pushed.length > openPushed; }, 60, 1000);
+  let openPayload = null;
+  try { openPayload = JSON.parse(ece.decrypt(pushed.at(-1).body, { version: 'aes128gcm', privateKey: phone, authSecret: phoneAuth.toString('base64url') }).toString()); } catch (e) { console.log('  ' + e.message); }
+  check(openMention.status < 300 && heardOpen && openPayload?.notification_type === 'mention' && /aisha/i.test(openPayload.title || ''),
+    `a mention while FediPod is open is read by FediPod and pushed to the phone (${pushed.length - openPushed} push: ${openPayload?.title})`);
+  check(await pushMade(ctx, handle, rows[handle], [openPayload?.notification_id], { log: () => {} }) === 0 && pushed.length === openPushed + 1,
+    'and named again, it is not pushed twice');
 
   // ---- the gateway changes its identity: the account moves over ----
   check(await post('written before the switch') === 200
@@ -431,6 +447,14 @@ if (!cssUp) { console.log(`FAIL  the scratch server never answered again at ${IS
     && await waitFor(async () => /from the browser after the app, the hold off/.test(await onPod('statuses.json')), 30, 500)
     && /from an app, the hold off/.test(await onPod('statuses.json')),
     'the browser, acting after the app, takes the pod back and keeps what the app wrote');
+  // And while FediPod is open, the hold off: FediPod reads it from the pod, and the phone hears.
+  const offOpenPushed = pushed.length;
+  const offOpenMention = await owner.fetch(`${pod}fedipod/ap/inbox/hold-off-open-mention-5`, { method: 'PUT', headers: { 'content-type': 'application/ld+json' },
+    body: JSON.stringify({ '@context': 'https://www.w3.org/ns/activitystreams', id: `${ORIGIN}/peer/1/creates/5`, type: 'Create',
+      actor: `${ORIGIN}/peer/1`, to: [mentionTarget], object: `${ORIGIN}/peer/1/notes/5` }) });
+  check(offOpenMention.status < 300 && await waitFor(async () => { await Promise.all(pendingWork.splice(0)); return pushed.length > offOpenPushed; }, 60, 1000)
+    && !(await kv.list(`${handle}/d/`)).length,
+    `with the hold off, a mention while FediPod is open is pushed to the phone, and nothing is copied at the gateway (${pushed.length - offOpenPushed} push)`);
   // A mention while FediPod is closed: in the pod inbox, not held; a push run drains it and tells the phone.
   await send('Page.navigate', { url: 'about:blank' });
   await send('ServiceWorker.stopAllWorkers');

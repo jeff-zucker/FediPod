@@ -57,7 +57,7 @@ Six functions on Netlify, thin adapters around plain Node in `lib/gateway/`:
 | `account` | the routes that act for an account: the browser reaching its copy (`/api/state/*`) and Mastodon apps (`/oauth/*`, `/api/v1/*`, `/api/v2/*`, `/api/authorize`); `front` leaves these paths to it |
 | `flush-mail` | every fifteen minutes: held mail to pods in batches, kept accounts with work due handed to the keeper, each person's copy written to their pod and deleted (the hold), a forum's written to its pod |
 | `keeper-background` | one kept account's run, started only by `flush-mail` |
-| `push-background` | one account's held mail read into its copy (hold off: its pod inbox drained) and each notification pushed to its phones |
+| `push-background` | one account's held mail read into its copy (hold off: its pod inbox drained) and each notification pushed to its phones; or the notifications FediPod named while open (`/api/push`), pushed |
 
 - **Forum support is a switch**: `netlify/forum-support.mjs` is the one file
   that names the forum's gateway module (`fedipod-bb/gateway`, from npm)

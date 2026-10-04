@@ -152,8 +152,9 @@ export class BrowserAgent {
 
   // One call to the gateway's owner API, proved with the pod session. What
   // comes back on 200 or 410 is the account's standing there, kept for the
-  // manage page; anything else is logged and forgotten.
-  async tellGateway(what, body) {
+  // manage page; anything else is logged and forgotten. `standing: false` for
+  // a call whose answer says nothing about the account's standing.
+  async tellGateway(what, body, { standing = true } = {}) {
     if (!this.gatewayApi) return null;
     let res;
     try {
@@ -163,7 +164,7 @@ export class BrowserAgent {
     } catch (e) { this.log(`gateway ${what}: ${e.message}`); return null; }
     const json = await res.json().catch(() => ({}));
     const out = { status: res.status, ...json };
-    if (res.status === 200 || res.status === 410) this.gatewayStanding = out;
+    if (res.status === 200 || res.status === 410) { if (standing) this.gatewayStanding = out; }
     else this.log(`gateway ${what}: ${res.status} ${json.error || ''}`);
     return out;
   }
@@ -171,6 +172,24 @@ export class BrowserAgent {
   pauseAtGateway(paused) { return this.tellGateway('pause', { handle: this.doorKey, paused: !!paused }); }
   closeAtGateway() { return this.tellGateway('close', { handle: this.doorKey, confirm: true }); }
   static OPEN_EVERY_MS = 60 * 60_000;
+
+  // A notification made here, from mail read while FediPod is open, goes to
+  // the phones the owner signed up, as one made while it is closed does
+  // (lib/gateway/held-mail.mjs: /api/push). Named a moment later, once written,
+  // so a burst is one call. One from another network is not pushed.
+  static PUSH_AFTER_MS = 2_000;
+  notePush(n) {
+    if (!this.gatewayApi || n?.bsky || n?.via) return;
+    if (!Object.keys(this.store.read('webpush.json', { subs: {} }).subs || {}).length) return;
+    (this._toPush ||= new Set()).add(n.id);
+    this._pushTimer ||= setTimeout(async () => {
+      const ids = [...this._toPush];
+      this._toPush.clear();
+      this._pushTimer = null;
+      await this.store.flush?.().catch(() => {});
+      await this.tellGateway('push', { handle: this.doorKey, ids }, { standing: false });
+    }, BrowserAgent.PUSH_AFTER_MS);
+  }
 
   // The gateway acting for this account while the app is closed, or not. On:
   // the rules on the account's folders name the gateway's pod identity, then
@@ -304,6 +323,7 @@ export class BrowserAgent {
           if (this.viewer) return;              // another agent holds the copy: reading only
         }
       }
+      this.store.onEvent = (type, n) => { if (type === 'notification') this.notePush(n); };
       const now = Date.now();
       // Said before the drain starts, so held mail is in the inbox to be read.
       const hereDue = !warm || now - (warm.hereAt || 0) >= BrowserAgent.HERE_EVERY_MS;

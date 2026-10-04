@@ -166,7 +166,7 @@ const heldCtx = {
   noteNext: async (h, at, opt) => { heldCtx.woke.push({ h, at, earliest: !!opt?.earliest }); },
   pushes: [],
   pushWanted: async () => true,
-  startPush: async (h) => { heldCtx.pushes.push(h); },
+  startPush: async (h, o) => { heldCtx.pushes.push(o?.ids ? { h, ids: o.ids } : h); },
 };
 // Extras one block switches on for itself (the outbox door for a kept account).
 let doorExtras = {};
@@ -1014,6 +1014,15 @@ try {
     check(!(await heldCtx.listHeld('thrush')).length, 'and nothing is held any more');
     check((await post('/api/here', { handle: 'thrush' }, { ...asOwner, authorization: 'Bearer someone-else' })).status === 403,
       'only the owner can say the app is open');
+    // FediPod open, naming the notifications it made, for the owner's phones.
+    heldCtx.pushes.length = 0;
+    const named = await post('/api/push', { handle: 'thrush', ids: ['0123456789abcdef', '0123456789abcdef', 'not-an-id', '../x'] });
+    check(named.status === 200 && (await named.json()).pushing === 1 && heldCtx.pushes.length === 1
+      && heldCtx.pushes[0].h === 'thrush' && heldCtx.pushes[0].ids.join() === '0123456789abcdef',
+      `FediPod open names the notifications it made, and they are pushed, each once (${JSON.stringify(heldCtx.pushes)})`);
+    check((await post('/api/push', { handle: 'thrush', ids: ['0123456789abcdef'] }, { ...asOwner, authorization: 'Bearer someone-else' })).status === 403
+      && heldCtx.pushes.length === 1, 'only the owner can ask for a push');
+    heldCtx.pushes.length = 0;
     await post('/api/open', { handle: 'thrush' });        // the test's pause cap is three; a sign-in starts the count again
     const direct = inboxWrites.length;
     await toThrush(4);

@@ -45821,9 +45821,13 @@ var PodStore = class {
   // Read these documents again, whatever is held: a kept copy caught them
   // mid-write, so the pod's copy is the one to hold. Throws when one cannot be
   // read, so the caller can fall back to a full load rather than act without it.
-  async refresh(names) {
+  // `ifChanged`: a document held here is asked for only if it changed since — a
+  // pod's listing does not change when a document in it is rewritten.
+  async refresh(names, { ifChanged = false } = {}) {
     for (const name of names) {
-      const r = await this.storage.read(name);
+      const etag = ifChanged && this.cache.has(name) ? this.etags.get(name) : null;
+      const r = await this.storage.read(name, etag ? { etag } : void 0);
+      if (r.notModified) continue;
       if (r.status === 404) {
         this.cache.delete(name);
         this.lastText.delete(name);
@@ -73582,8 +73586,9 @@ var BrowserAgent = class _BrowserAgent {
   }
   // One call to the gateway's owner API, proved with the pod session. What
   // comes back on 200 or 410 is the account's standing there, kept for the
-  // manage page; anything else is logged and forgotten.
-  async tellGateway(what, body) {
+  // manage page; anything else is logged and forgotten. `standing: false` for
+  // a call whose answer says nothing about the account's standing.
+  async tellGateway(what, body, { standing = true } = {}) {
     if (!this.gatewayApi) return null;
     let res;
     try {
@@ -73598,8 +73603,9 @@ var BrowserAgent = class _BrowserAgent {
     }
     const json2 = await res.json().catch(() => ({}));
     const out = { status: res.status, ...json2 };
-    if (res.status === 200 || res.status === 410) this.gatewayStanding = out;
-    else this.log(`gateway ${what}: ${res.status} ${json2.error || ""}`);
+    if (res.status === 200 || res.status === 410) {
+      if (standing) this.gatewayStanding = out;
+    } else this.log(`gateway ${what}: ${res.status} ${json2.error || ""}`);
     return out;
   }
   openAtGateway() {
@@ -73612,6 +73618,24 @@ var BrowserAgent = class _BrowserAgent {
     return this.tellGateway("close", { handle: this.doorKey, confirm: true });
   }
   static OPEN_EVERY_MS = 60 * 6e4;
+  // A notification made here, from mail read while FediPod is open, goes to
+  // the phones the owner signed up, as one made while it is closed does
+  // (lib/gateway/held-mail.mjs: /api/push). Named a moment later, once written,
+  // so a burst is one call. One from another network is not pushed.
+  static PUSH_AFTER_MS = 2e3;
+  notePush(n) {
+    if (!this.gatewayApi || n?.bsky || n?.via) return;
+    if (!Object.keys(this.store.read("webpush.json", { subs: {} }).subs || {}).length) return;
+    (this._toPush ||= /* @__PURE__ */ new Set()).add(n.id);
+    this._pushTimer ||= setTimeout(async () => {
+      const ids = [...this._toPush];
+      this._toPush.clear();
+      this._pushTimer = null;
+      await this.store.flush?.().catch(() => {
+      });
+      await this.tellGateway("push", { handle: this.doorKey, ids }, { standing: false });
+    }, _BrowserAgent.PUSH_AFTER_MS);
+  }
   // The gateway acting for this account while the app is closed, or not. On:
   // the rules on the account's folders name the gateway's pod identity, then
   // the gateway is told. Off: the gateway is told first, so it stops, then the
@@ -73727,6 +73751,9 @@ var BrowserAgent = class _BrowserAgent {
           if (this.viewer) return;
         }
       }
+      this.store.onEvent = (type, n) => {
+        if (type === "notification") this.notePush(n);
+      };
       const now = Date.now();
       const hereDue = !warm || now - (warm.hereAt || 0) >= _BrowserAgent.HERE_EVERY_MS;
       const here = hereDue ? await this.hereAtGateway() : null;
