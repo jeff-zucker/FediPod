@@ -17,7 +17,8 @@ against the FediPod being changed**, the Server's end-to-end runs included. A
 change here that breaks one of them fails the run.
 
 **The session library's demo is at
-https://jeff-zucker.github.io/fediverse-session/.**
+https://jeff-zucker.github.io/fediverse-session/**, and its old address
+forwards there. Each package's old folder here points to its repository.
 
 ## 2026-10-03 (on a FediPod Server, an app's notifications and inbox open again)
 
