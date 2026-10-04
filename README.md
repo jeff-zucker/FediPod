@@ -2,63 +2,36 @@
 
 - access the Fediverse from a Solid pod
 
-FediPod gives you a Fediverse account whose data lives on a Solid pod. You
-follow people on Mastodon, Bluesky, and other Fediverse or ATProto servers in
-one timeline. Your posts, followers and settings are kept on your pod. While fedipod.net
-keeps your account running, it works from a copy of them, and every fifteen
-minutes it writes that copy to your pod and deletes it; your signing key never
-leaves your pod.
+FediPod gives you a Fediverse account whose data lives on a Solid pod, and you
+use it with any Fediverse client. You can follow people on Mastodon, Bluesky, and other Fediverse or ATProto servers in one timeline. 
 
 The easiest way to run FediPod is to use it in any browser at https://fedipod.net. Nothing to install. Sign-up points you to a pod provider if you need a pod, then attaches a Fediverse identity to the pod you sign in with.
 
-
-This README is about the `FediPod BrowserAgent`. There are also a number of [other ways to run FediPod](#other-ways-to-run-fedipod) which offer a variety of scenarios.  If interested in the code, see also : [architecture overview](architecture.md) and [files overview](files-overview.md). Which specs FediPod follows, and where it stops short: [specs-in-use.md](specs-in-use.md).
+This README is about the `FediPod` as used with a Gateway. There are also a number of [other ways to run FediPod](#other-ways-to-run-fedipod) which offer a variety of scenarios.  If interested in the code, see also : [architecture overview](architecture.md) and [files overview](files-overview.md). Which specs FediPod follows, and where it stops short: [specs-in-use.md](specs-in-use.md).
 
 ## Requirements
 
 - A current browser
 - A free account on a gateway such as https://fedipod.net
-- A Solid pod that supports WAC (you can get one if you don't have one as part of account setup)
+- A Solid pod (you can get one if you don't have one as part of account setup)
 
 ## Getting an account
 
 1. Open https://fedipod.net and choose **create an account**.
 2. Choose your pod provider. You'll be redirected to your provider to login if you have a pod or sign up if you need to create one.
 3. Back on fedipod.net, choose your handle and where your address lives:
-   on your pod, `@handle@yourpod`, or at this site, `@handle@fedipod.net`.
+   on your pod, `@handle@yourpod`, or at the gateway, `@handle@fedipod.net`.
    Choose where on your pod your data goes: a container named `fedipod`,
    inside whichever container you name (your pod's root if you leave it
-   empty). If your pod has no public type index yet, you're asked whether
-   to create one; FediPod records there where your account lives, and
-   nothing is set up without it.
+   empty).
 4. You see your Fediverse timeline.
-
-From now on, anyone can open your profile at `https://fedipod.net/@handle@provider`, signed in or not.
-
-## Getting a forum
-
-The same page makes a forum. Choose **A forum** as the first thing on it. A
-forum has a pod of its own, so make a new pod for it at your provider (or
-sign in with one that holds nothing else), then give the forum a handle, a
-name and its categories, and the address at fedipod.net you will moderate it
-as. fedipod.net runs the forum from then on; nothing runs on your machine.
-Its page is at `https://bb.fedipod.net/<handle>/` and its address is
-`@handle@fedipod.net`, with one address per category.
 
 ## What you can do
 
-There are two clients, both served by fedipod.net:
-[Sengi](https://github.com/NicolasConstant/sengi) (MIT, by Nicolas Constant),
-which you get by default, and [Phanpy](https://github.com/cheeaun/phanpy)
-(MIT, by Chee Aun). The links at the top right of every page switch between
+You can access your account by pointing any Mastodon API or C2S client at fedipod.net and signing in.  There are also two built-inclients, both served by fedipod.net: [Sengi](https://github.com/NicolasConstant/sengi) (MIT, by Nicolas Constant), which you get by default, and [Phanpy](https://github.com/cheeaun/phanpy)(MIT, by Chee Aun). The links at the top right of every page switch between
 them, at any time; whichever you opened last is the one that opens next time.
 
-You follow and unfollow, post, reply,
-favourite, boost, attach media, edit and delete. Content warnings, polls with
-up to four options and one or several answers, all four visibility levels, a
-conversations view for direct messages, bookmarks, lists, keyword filters,
-pinned posts that other servers can see, blocking and muting, and the custom
-emojis other servers send.
+You can follow and unfollow, post, reply, favourite, boost, attach media, edit and delete. Content warnings, polls with up to four options and one or several answers, all four visibility levels, a conversations view for direct messages, bookmarks, lists, keyword filters, pinned posts that other servers can see, blocking and muting, and the custom emojis other servers send.
 
 A post can quote another post. Quote is offered on posts whose author allows
 it; the quoted author's server is asked, and the quote shows as pending until
@@ -108,50 +81,18 @@ the DeviceAgent has, described in [the admin interface](gui.md).
 it in a second browser shows your timeline read-only, and the moment you act
 there it takes over; the first drops back to reading.
 
-## What the browser version does not do
-
-- **Live updates.** The client refreshes by polling.
-- **Hosting a group.** Joining one works.
-
-For these, see [Other ways to run FediPod](#other-ways-to-run-fedipod).
-
-## Your data and your keys
-
-Everything you publish and everything you read is stored on your pod. Your
-signing key is stored there too, in a container only you can read through
-your pod's login.
-While fedipod.net keeps your account running, its own pod identity can read
-that container too, so it can act for you while FediPod is closed. It works
-from a copy of your account's data, and every fifteen minutes it writes that
-copy to your pod and deletes it, so none of your data stays at fedipod.net
-longer than that. The next time anything needs your account, the copy is made
-again from your pod. Your key stays on your pod only.
-It all lives in the `fedipod` container you chose at sign-up. Your pod's
-public type index records it, as an ActivityStreams actor, which is how
-FediPod and other Solid apps find your account again.
- fedipod.net holds no key: it verifies incoming mail, drops
-the junk, forwards the rest to your pod, and hands your browser the app.
-With an address on your pod, `@handle@yourpod`, you can detach from it at
-any time and attach to a gateway of your own; your address and your data do
-not change.
-
 ## Other ways to use FediPod
 
 - [fediverse-session](https://github.com/jeff-zucker/fediverse-session) - an ESM library that supports both Solid-based and regular Fediverse accounts with methods to login, reply, boost, etc.
 - [FediPod Server](https://github.com/jeff-zucker/fedipod-server): a full ActivityPub
   server as a Community Solid Server component, giving every pod on the server
-  the option of a Fediverse account.
+  the option of a Fediverse account.  See this link for how to host your own Solid-ActivityPub server.
 - [FediPod BB](https://github.com/jeff-zucker/fedipod-bb) - A Lemmy-like  bulletin board forum with the structure stored on a group pod and users' data stored on their own pod or on their Fediverse server if they don't have a pod.
+<!--
 - [FediPod DeviceAgent](device-agent.md) a single-user AP server that lives partly in a gateway, partly on a local device, with all data stored on your pod.
+-->
 - [FediPod Groups](groups.md): hosting a discussion group of Fediverse and Bluesky users from a pod.
-- [FediPod Gateway](gateway.md): A thin, always-on door running on Netlify or any small host that provides a middleman between a pod and the single-user agents. (only needed with `BrowserAgent` and `DeviceAgent`)
-
-There are two ways to run FediPod: in a browser at a Gateway such as
-fedipod.net, with nothing installed, or as a Gateway of your own, deployed
-from this repository ([netlify/README.md](netlify/README.md)). Cloning the
-repository and running it is not one of them: `npm start` only says so. The
-DeviceAgent is deprecated; nothing new is built for it.
-
+- [FediPod Gateway](gateway.md): A thin, always-on door running on Netlify or any small host that provides a middleman between a pod and the single-user agents. See this link for how to host your own gateway.
 
 ## Acknowledgements
 
