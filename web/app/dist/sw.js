@@ -9792,13 +9792,15 @@ function hostMeta(base) {
 </XRD>
 `;
 }
-function jrd({ handle: handle7, host, actor, aliases = [], page: page2 = null }) {
+function jrd({ handle: handle7, host, actor, aliases = [], page: page2 = null, avatar = null }) {
   return {
     subject: `acct:${handle7}@${host}`,
     ...aliases.length ? { aliases } : {},
     links: [
       { rel: "self", type: "application/activity+json", href: actor },
-      ...page2 ? [{ rel: "http://webfinger.net/rel/profile-page", type: "text/html", href: page2 }] : []
+      ...page2 ? [{ rel: "http://webfinger.net/rel/profile-page", type: "text/html", href: page2 }] : [],
+      // The account's picture, as Mastodon's answer names it.
+      ...avatar ? [{ rel: "http://webfinger.net/rel/avatar", href: avatar }] : []
     ]
   };
 }
@@ -34462,6 +34464,24 @@ async function register(pod, indexUrl, actorUrl) {
   if (status2 >= 300) throw new Error(`the type index at ${indexUrl} did not take the registration (${status2})`);
   return true;
 }
+async function unregister(pod, indexUrl, actorUrl) {
+  const g = await pod.readRdf(indexUrl);
+  if (!g) return false;
+  const actor = pod.sym(actorUrl);
+  const instance = pod.sym(SOLID + "instance");
+  const gone = [];
+  for (const reg of g.each(null, instance, actor)) {
+    if (!g.holds(reg, pod.sym(SOLID + "forClass"), pod.sym(AS_ACTOR))) continue;
+    const others = g.each(reg, instance, null).filter((i) => i.value !== actorUrl);
+    for (const st2 of others.length ? g.statementsMatching(reg, instance, actor) : g.statementsMatching(reg, null, null)) {
+      gone.push([st2.subject, st2.predicate, st2.object]);
+    }
+  }
+  if (!gone.length) return false;
+  const status2 = await pod.writeRdfChecked(indexUrl, g, { deletes: gone, mustDescribe: indexUrl });
+  if (status2 >= 300) throw new Error(`the type index at ${indexUrl} did not let the registration go (${status2})`);
+  return true;
+}
 async function createPublicIndex(pod, podBase) {
   const url = newIndexUrl(podBase);
   const doc = pod.sym(url);
@@ -45399,6 +45419,33 @@ var PodTransport = class {
     return true;
   }
   /**
+   * The account taken out of the WebID profile again, as linkAccountInProfile
+   * wrote it: the foaf:account link, what the profile says of the actor, and
+   * `outbox` when it is the one named. From every document of the profile that
+   * holds any of it, each write checked. Returns how many documents changed.
+   */
+  async unlinkAccountInProfile({ actorUrl, outbox = null }) {
+    const me = namedNode2(this.webId);
+    const actor = namedNode2(actorUrl);
+    let changed = 0;
+    for (const d of await this.profileDocs(podBaseOfWebId(this.webId))) {
+      if (!d.g) continue;
+      const gone = [
+        ...d.g.statementsMatching(me, FOAF("account"), actor),
+        ...d.g.statementsMatching(actor, RDF3("type"), FOAF("OnlineAccount")),
+        ...d.g.statementsMatching(actor, RDF3("type"), AS("Person")),
+        ...d.g.statementsMatching(actor, RDF3("type"), AS("Group")),
+        ...d.g.statementsMatching(actor, FOAF("accountName"), null),
+        ...outbox ? d.g.statementsMatching(me, AS("outbox"), namedNode2(outbox)) : []
+      ].map((st2) => [st2.subject, st2.predicate, st2.object]);
+      if (!gone.length) continue;
+      const status2 = await this.writeRdfChecked(d.url, d.g, { deletes: gone, mustDescribe: d.profile ? this.webId : null });
+      if (status2 >= 300) throw new Error(`not written: ${d.url} \u2192 ${status2}`);
+      changed++;
+    }
+    return changed;
+  }
+  /**
    * An N3 Patch of exactly these statements, or false when the pod will not
    * take one and the caller should write the document instead.
    *
@@ -45610,6 +45657,11 @@ async function recordPlace(pod, podBase, actorAtPod, { create = false } = {}) {
     index = await createPublicIndex(pod, podBase);
   }
   return await register(pod, index, actorAtPod) ? "registered" : "already";
+}
+async function forgetPlace(pod, podBase, actorAtPod) {
+  const index = await findPublicIndex(pod, podBase);
+  if (!index) return "no-index";
+  return await unregister(pod, index, actorAtPod) ? "removed" : "absent";
 }
 
 // lib/pod/containers.mjs
@@ -46444,6 +46496,9 @@ async function writeProfilePage(pod, urls, html) {
 }
 function linkInWebIdProfile(pod, { actorUrl, accountName, kind = "person", outbox = null }) {
   return pod.linkAccountInProfile({ actorUrl, accountName, kind, outbox });
+}
+async function unlinkInWebIdProfile(pod, { actorUrl, outbox = null }) {
+  return pod.unlinkAccountInProfile({ actorUrl, outbox });
 }
 
 // lib/pod/inbox.mjs
@@ -58599,7 +58654,7 @@ var Publisher = class {
       await writeWebfinger(
         this.remote,
         urls,
-        jrd({ handle: this.config.handle, host, actor: urls.actor, page: urls.profileHtml })
+        jrd({ handle: this.config.handle, host, actor: urls.actor, page: urls.profileHtml, avatar: this.config.icon || null })
       );
       await writeHostMeta(this.remote, urls, hostMeta(urls.base));
       const nodeinfoDocUrl = urls.home + "ap/nodeinfo-2.0";
@@ -58755,6 +58810,17 @@ var Publisher = class {
     await writeTombstone(this.remote, urls, tombstoneDoc(urls, deletedAt, this.config.kind));
     this.store.setConfig({ ...this.store.getConfig(), retiredAt: deletedAt });
     await this.store.flush();
+    if (!this.config.forum) {
+      await unlinkInWebIdProfile(this.remote, {
+        actorUrl: urls.actor,
+        outbox: this.clientOrigin ? `${this.clientOrigin}ap/outbox` : this.gatewayOutbox()
+      }).then((n) => {
+        if (n) this.log("the WebID profile no longer lists the actor");
+      }).catch((e) => this.log(`the WebID profile still lists the actor: ${e.message}`));
+      await forgetPlace(this.remote, urls.base, urls.home + "ap/actor").then((r) => {
+        if (r === "removed") this.log("the public type index no longer records the account");
+      }).catch((e) => this.log(`the type index still records the account: ${e.message}`));
+    }
     this.log(`retired: Delete sent to ${inboxes.length} inbox(es), actor replaced with a Tombstone`);
     return { inboxes: inboxes.length, deletedAt };
   }
@@ -73608,8 +73674,11 @@ var BrowserAgent = class _BrowserAgent {
     } else this.log(`gateway ${what}: ${res.status} ${json2.error || ""}`);
     return out;
   }
+  // The account's picture goes with it, for the address's WebFinger answer;
+  // said only once the account has been read, so "none" is never a guess.
   openAtGateway() {
-    return this.tellGateway("open", { handle: this.doorKey });
+    const config = this.store?.getConfig?.();
+    return this.tellGateway("open", { handle: this.doorKey, ...config ? { icon: config.icon || null } : {} });
   }
   pauseAtGateway(paused) {
     return this.tellGateway("pause", { handle: this.doorKey, paused: !!paused });

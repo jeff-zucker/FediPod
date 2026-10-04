@@ -33000,6 +33000,33 @@ var PodTransport = class {
     return true;
   }
   /**
+   * The account taken out of the WebID profile again, as linkAccountInProfile
+   * wrote it: the foaf:account link, what the profile says of the actor, and
+   * `outbox` when it is the one named. From every document of the profile that
+   * holds any of it, each write checked. Returns how many documents changed.
+   */
+  async unlinkAccountInProfile({ actorUrl, outbox = null }) {
+    const me = namedNode2(this.webId);
+    const actor = namedNode2(actorUrl);
+    let changed = 0;
+    for (const d of await this.profileDocs(podBaseOfWebId(this.webId))) {
+      if (!d.g) continue;
+      const gone = [
+        ...d.g.statementsMatching(me, FOAF("account"), actor),
+        ...d.g.statementsMatching(actor, RDF3("type"), FOAF("OnlineAccount")),
+        ...d.g.statementsMatching(actor, RDF3("type"), AS("Person")),
+        ...d.g.statementsMatching(actor, RDF3("type"), AS("Group")),
+        ...d.g.statementsMatching(actor, FOAF("accountName"), null),
+        ...outbox ? d.g.statementsMatching(me, AS("outbox"), namedNode2(outbox)) : []
+      ].map((st2) => [st2.subject, st2.predicate, st2.object]);
+      if (!gone.length) continue;
+      const status = await this.writeRdfChecked(d.url, d.g, { deletes: gone, mustDescribe: d.profile ? this.webId : null });
+      if (status >= 300) throw new Error(`not written: ${d.url} \u2192 ${status}`);
+      changed++;
+    }
+    return changed;
+  }
+  /**
    * An N3 Patch of exactly these statements, or false when the pod will not
    * take one and the caller should write the document instead.
    *

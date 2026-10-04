@@ -1023,6 +1023,20 @@ try {
     check((await post('/api/push', { handle: 'thrush', ids: ['0123456789abcdef'] }, { ...asOwner, authorization: 'Bearer someone-else' })).status === 403
       && heldCtx.pushes.length === 1, 'only the owner can ask for a push');
     heldCtx.pushes.length = 0;
+    // The account's picture, carried by the sign-in to the WebFinger answer.
+    const avatarOf = async () => (await (await get(`/.well-known/webfinger?resource=acct:thrush@${HOST}`)).json())
+      .links?.find((l) => l.rel === 'http://webfinger.net/rel/avatar')?.href || null;
+    const noPic = await avatarOf();
+    await post('/api/open', { handle: 'thrush', icon: 'https://pod.example/thrush.png' });
+    const pic = await avatarOf();
+    await post('/api/open', { handle: 'thrush' });
+    const keptPic = await avatarOf();
+    await post('/api/open', { handle: 'thrush', icon: 'javascript:alert(1)' });
+    const notPic = await avatarOf();
+    await post('/api/open', { handle: 'thrush', icon: null });
+    const gonePic = await avatarOf();
+    check(noPic === null && pic === 'https://pod.example/thrush.png' && keptPic === pic && notPic === pic && gonePic === null,
+      `the picture FediPod names at sign-in is in the address's WebFinger answer, kept until it says otherwise (${[noPic, pic, keptPic, notPic, gonePic].join(' | ')})`);
     await post('/api/open', { handle: 'thrush' });        // the test's pause cap is three; a sign-in starts the count again
     const direct = inboxWrites.length;
     await toThrush(4);

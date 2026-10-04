@@ -168,7 +168,12 @@ export class BrowserAgent {
     else this.log(`gateway ${what}: ${res.status} ${json.error || ''}`);
     return out;
   }
-  openAtGateway() { return this.tellGateway('open', { handle: this.doorKey }); }
+  // The account's picture goes with it, for the address's WebFinger answer;
+  // said only once the account has been read, so "none" is never a guess.
+  openAtGateway() {
+    const config = this.store?.getConfig?.();
+    return this.tellGateway('open', { handle: this.doorKey, ...(config ? { icon: config.icon || null } : {}) });
+  }
   pauseAtGateway(paused) { return this.tellGateway('pause', { handle: this.doorKey, paused: !!paused }); }
   closeAtGateway() { return this.tellGateway('close', { handle: this.doorKey, confirm: true }); }
   static OPEN_EVERY_MS = 60 * 60_000;

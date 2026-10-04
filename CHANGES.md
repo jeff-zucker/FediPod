@@ -1,6 +1,6 @@
 # Changes
 
-## 2026-10-04 (your phone hears about mail while FediPod is open; an app you use stays signed in — version 1.48.1)
+## 2026-10-04 (your phone hears about mail while FediPod is open; an app you use stays signed in; retiring tidies your profile — version 1.48.1)
 
 **Phone notifications arrive while FediPod is open in a browser.** A mention,
 reply, follow, like, boost or reaction reached a phone app signed in at the
@@ -11,6 +11,14 @@ pushed.
 **An app signed in at a Gateway stays signed in while you use it.** It was
 signed out 90 days after signing in, however often it was used. It is now
 signed out after 90 days without use.
+
+**Retiring an account takes it out of your WebID profile and your public type
+index.** Your profile no longer names the account, its handle or its outbox,
+and Solid apps reading your type index no longer find it.
+
+**An address's WebFinger answer names the account's picture**, at the Gateway
+and on the pod. At the Gateway it follows FediPod's next check-in, within an
+hour.
 
 ## 2026-10-04 (on a FediPod Server, an app's notifications and inbox open again; the Server, the forum, the session library and css-nextgraph each in a repository of their own — version 1.48.0)
 
