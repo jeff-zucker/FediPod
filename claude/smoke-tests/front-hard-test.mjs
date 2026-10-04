@@ -1094,7 +1094,8 @@ try {
       const m = new Map();
       const book = keeperBook({ get: async (k) => m.get(k) ?? null, set: async (k, v) => { m.set(k, v); }, keys: async () => [...m.keys()] });
       const t = (ms) => new Date(Date.now() + ms).toISOString();
-      check(earliest(null, null) === null && earliest(t(0), null) !== null && earliest(t(9000), t(1000)) === earliest(t(1000), t(9000)),
+      const soon = t(1000), later = t(9000);   // one reading each: two calls a millisecond apart differ
+      check(earliest(null, null) === null && earliest(t(0), null) !== null && earliest(later, soon) === earliest(soon, later),
         'the sooner of two times, either of them missing');
       await book.noteKept('a', { nextAt: t(3_600_000), waiting: 2 }, Date.now());
       await book.noteKept('b', { nextAt: null }, Date.now());
