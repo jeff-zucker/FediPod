@@ -186,7 +186,7 @@ async function showReply(res, p) {
     // back from the server and one comes from sessionStorage, and pasting any
     // of them into innerHTML means whatever markup they contain is rendered.
     // Only the fixed wording is markup here; everything variable is text.
-    const manage = `${p.podBase.replace(/\/$/, '')}${d.doorPath}?dk-token=${encodeURIComponent(d.doorSecret)}`;
+    const manage = d.manage || `${p.podBase.replace(/\/$/, '')}${d.doorPath}?dk-token=${encodeURIComponent(d.doorSecret)}`;
     n.textContent = 'Your Fediverse account is ready. Manage it at ';
     const a = say('a', p.podBase.replace(/\/$/, '') + d.doorPath); a.href = manage;
     n.append(a, '.');
