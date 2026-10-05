@@ -9032,6 +9032,18 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
       && pdoc.attachment[0].value === 'https://example.org'
       && JSON.stringify(pdoc['@context']).includes('PropertyValue'),
       'the actor publishes image and attachment, with PropertyValue declared in the context');
+
+    // A "picture" that is a web page would be served from the pod's own
+    // address and run there when opened: refused, and nothing is stored.
+    const before = uploaded.length;
+    const page = await fetch(pbase + '/api/v1/accounts/update_credentials', {
+      method: 'PATCH', body: part('avatar', '<script>alert(1)</script>', 'me.html', 'text/html') + `--${B}--\r\n`,
+      headers: { 'content-type': `multipart/form-data; boundary=${B}`, authorization: 'Bearer TKN' },
+    });
+    check(page.status === 422 && uploaded.length === before,
+      `a profile picture that is a web page is refused and nothing is uploaded (${page.status})`);
+    check(/\.png$/.test(String(pcfg.icon)) && /\.jpg$/.test(String(pcfg.image)),
+      `and an accepted picture is named by its image type (${pcfg.icon}, ${pcfg.image})`);
     psrv.close();
   }
 
