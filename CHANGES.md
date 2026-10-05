@@ -26,9 +26,10 @@ which, opened in your browser, could act on your management pages as you.
 notifications.** It went on receiving the first lines of every mention and
 direct message, and so did an app whose sign-in had run out.
 
-**A stranger can no longer make a FediPod Server send requests to addresses of
-their choosing.** A made-up sign-in could make the server reach machines on its
-own private network and show pieces of what they answered.
+**A stranger can no longer make a FediPod Server or fedipod.net send requests
+to addresses of their choosing.** A made-up sign-in could make the server reach
+machines on its own private network and, on a Server, show pieces of what they
+answered.
 
 **On a FediPod Server, an account takes at most ten app registrations a
 minute, each of a reasonable size.** A stranger could register apps large
