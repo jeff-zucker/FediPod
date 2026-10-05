@@ -1,6 +1,6 @@
 # Changes
 
-## 2026-10-05 (strangers can no longer read private posts, sign an app in with one click, or swamp a FediPod Server; apps get only what you allowed them)
+## 2026-10-05 (strangers can no longer read private posts, sign an app in with one click, or swamp a FediPod Server; apps get only what you allowed them — version 1.49.0)
 
 **A stranger could read your followers-only posts and direct messages.**
 Anyone who had a post's link and knew the address of one of your followers
