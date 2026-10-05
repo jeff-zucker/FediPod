@@ -1,6 +1,6 @@
 # Changes
 
-## 2026-10-05 (strangers can no longer read private posts, sign an app in with one click, or swamp a FediPod Server with app registrations)
+## 2026-10-05 (strangers can no longer read private posts, sign an app in with one click, or swamp a FediPod Server; apps get only what you allowed them)
 
 **A stranger could read your followers-only posts and direct messages.**
 Anyone who had a post's link and knew the address of one of your followers
@@ -12,6 +12,23 @@ follower's own server can.
 your account.** If you had signed an app in with your pod before, the sign-in
 page let the next app in as soon as it opened. It now names the app on an
 Allow button, beside Cancel, and does nothing until you press Allow.
+
+**On a FediPod Server, an app you allowed only to read can no longer post as
+you.** It could post, follow, block and delete through the account's
+ActivityPub route; that route now asks the same permission the Mastodon one
+does.
+
+**On a FediPod Server, a profile picture or header must be an image** (PNG,
+JPEG, GIF, WebP or AVIF). An app could upload a web page as your picture,
+which, opened in your browser, could act on your management pages as you.
+
+**On a FediPod Server, an app you sign out of stops getting your
+notifications.** It went on receiving the first lines of every mention and
+direct message, and so did an app whose sign-in had run out.
+
+**A stranger can no longer make a FediPod Server send requests to addresses of
+their choosing.** A made-up sign-in could make the server reach machines on its
+own private network and show pieces of what they answered.
 
 **On a FediPod Server, an account takes at most ten app registrations a
 minute, each of a reasonable size.** A stranger could register apps large
