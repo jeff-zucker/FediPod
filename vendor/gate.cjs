@@ -88,11 +88,18 @@ function cookieValue(header, name) {
 // AP_ALLOWED_HOSTS has nothing but this token, so the gate has to be total.
 // `token` may be a function, resolved per request: an identity's secret can
 // rotate while the server runs, and the very next request sees the new one.
-function makeGate(token, { allowOrigins = [], publicEndpoints = false, secureCookie = false, cookiePath = '/' } = {}) {
+// `failClosed`: with no token, refuse rather than open — for a gate whose
+// token is only ever missing by accident (an account on a pod server).
+function makeGate(token, { allowOrigins = [], publicEndpoints = false, secureCookie = false, cookiePath = '/', failClosed = false } = {}) {
   const tokenNow = () => (typeof token === 'function' ? token() : token);
   // gate(req, res) → true when the gate handled the response (caller stops).
   function gate(req, res) {
     const t = tokenNow();
+    if (!t && failClosed) {
+      res.writeHead(401, { 'content-type': 'text/plain' });
+      res.end('fedipod: this account has no key to open its pages with\n');
+      return true;
+    }
     if (!t) return false;
     if (tokenOk(req.headers[HEADER], t)) return false;
     if (tokenOk(cookieValue(req.headers.cookie, COOKIE), t)) return false;
@@ -129,7 +136,8 @@ function makeGate(token, { allowOrigins = [], publicEndpoints = false, secureCoo
   // Websocket upgrades have no res to answer with — just allowed or not.
   gate.upgradeOk = (req) => {
     const t = tokenNow();
-    return !t || tokenOk(req.headers[HEADER], t) || tokenOk(cookieValue(req.headers.cookie, COOKIE), t);
+    if (!t) return !failClosed;
+    return tokenOk(req.headers[HEADER], t) || tokenOk(cookieValue(req.headers.cookie, COOKIE), t);
   };
 
   return gate;

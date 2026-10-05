@@ -1,5 +1,19 @@
 # Changes
 
+## 2026-10-05 (on a FediPod Server, a sign-in goes back only to the account's own pages; a stolen sign-in code cannot be spoiled)
+
+**On a Server with suffixed pods, a sign-in could be sent back to another
+pod's page.** A link naming a page in someone else's pod on the same server
+looked like your own server, and Allow sent that page a key to your account.
+A sign-in now returns only to addresses under your own pod.
+
+**A sign-in proof the account does not know is refused**, rather than taken as
+the weakest kind. **A wrong proof no longer uses up the sign-in**, so someone
+holding an intercepted code cannot make yours fail.
+
+**An account's management pages refuse, rather than open, if their key is
+ever missing.**
+
 ## 2026-10-05 (strangers can no longer read private posts, sign an app in with one click, or swamp a FediPod Server; apps get only what you allowed them — version 1.49.0)
 
 **A stranger could read your followers-only posts and direct messages.**
