@@ -14,6 +14,24 @@ holding an intercepted code cannot make yours fail.
 **An account's management pages refuse, rather than open, if their key is
 ever missing.**
 
+**A FediPod Server with many accounts fetches each followed hashtag once in
+twelve minutes, not once per account.** Every account still has its hashtag
+feed.
+
+**On a FediPod Server, a post from an app is confirmed as soon as it is saved**,
+and your followers' servers are sent it six at a time behind, not one after
+another while the app waits.
+
+**A FediPod Server's accounts do less background work.** The check for
+scheduled posts and polls no longer copies the whole timeline twice a minute;
+the inbox backstop runs hourly, since new mail already wakes the account at
+once; renewing the account's lease is one write.
+
+**When an owner turns their account off, a FediPod Server stops checking their
+connected Mastodon accounts** at once, not at its next restart.
+
+**An edited post from elsewhere is held to the size of a new one.**
+
 **On a FediPod Server, the page where an app asks to use your account asks one
 question:** "Allow Elk to access your @you@server account?", with Allow and
 Cancel.

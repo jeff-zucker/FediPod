@@ -5191,9 +5191,11 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   const body = fs.readFileSync(path.join(root, 'lib/core/intake/index.mjs'), 'utf8');
   const fallback = Number((body.match(/const POLL_MS = (\d+) \* 60_000/) || [])[1]);
   const pushOk = Number((body.match(/const POLL_PUSH_OK_MS = (\d+) \* 60_000/) || [])[1]);
-  check(fallback === 2 && pushOk === 10
-    && /wsState === 'open' \|\| this\.wsState === 'in-process' \? POLL_PUSH_OK_MS : POLL_MS/.test(body),
-    `poll is ${fallback}min without a push channel and ${pushOk}min with one (socket or in-process)`);
+  const inProcess = Number((body.match(/const POLL_IN_PROCESS_MS = (\d+) \* 60_000/) || [])[1]);
+  check(fallback === 2 && pushOk === 10 && inProcess === 60
+    && /if \(this\.wsState === 'in-process'\) return POLL_IN_PROCESS_MS;/.test(body)
+    && /this\.wsState === 'open' \? POLL_PUSH_OK_MS : POLL_MS/.test(body),
+    `poll is ${fallback}min without a push channel, ${pushOk}min with a socket, and ${inProcess}min inside the pod server`);
 }
 
 // --- 5p2. the directory door belongs to a configured agent ---
