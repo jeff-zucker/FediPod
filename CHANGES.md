@@ -1,5 +1,24 @@
 # Changes
 
+## 2026-10-05 (strangers can no longer read private posts, sign an app in with one click, or swamp a FediPod Server with app registrations)
+
+**A stranger could read your followers-only posts and direct messages.**
+Anyone who had a post's link and knew the address of one of your followers
+(or, for a direct message, of the person it was sent to) could read it, on a
+FediPod Server and at fedipod.net for the accounts it keeps. Now only that
+follower's own server can.
+
+**On a FediPod Server, one click on a link could sign a stranger's app into
+your account.** If you had signed an app in with your pod before, the sign-in
+page let the next app in as soon as it opened. It now names the app on an
+Allow button, beside Cancel, and does nothing until you press Allow.
+
+**On a FediPod Server, an account takes at most ten app registrations a
+minute, each of a reasonable size.** A stranger could register apps large
+enough and fast enough to stall the whole server and push your own apps off
+the list. Apps you have signed in with are now the last to go when the list
+is full.
+
 ## 2026-10-04 (your phone hears about mail while FediPod is open; an app you use stays signed in; retiring tidies your profile — version 1.48.1)
 
 **Phone notifications arrive while FediPod is open in a browser.** A mention,

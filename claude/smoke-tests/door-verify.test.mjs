@@ -104,3 +104,13 @@ test('a key published on another server naming a follower as its owner reads as 
   assert.equal(r.actor, null);
   assert.equal(r.reason, 'key-not-on-signer-origin');
 });
+
+test('an inbox with no room for unchecked mail turns it away unwritten, and still takes signed mail', async () => {
+  const roomFor = (verified) => verified;
+  const p = pod();
+  const unsigned = await handleDelivery(new Request(DOOR + '/u/jeff/ap/inbox/', { method: 'POST', headers: { 'content-type': 'application/activity+json' }, body: body() }),
+    ident(), { podPut: p.put, fetchImpl: fetch, origin: DOOR, admit: roomFor });
+  assert.equal(unsigned.status, 503); assert.equal(p.puts.length, 0);
+  const signedOne = await handleDelivery(await signed(), ident(), { podPut: p.put, fetchImpl: fetch, origin: DOOR, admit: roomFor });
+  assert.equal(signedOne.status, 202); assert.equal(signedOne.reason, 'verified'); assert.equal(p.puts.length, 2);
+});
