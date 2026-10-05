@@ -11474,7 +11474,8 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
   // The auth path, through the real wrapper with an injected verifier.
   const authReal = makeC2sAuth({
     agent: agent24,
-    masto: { authed: (req) => req.headers.authorization === 'Bearer smoke-ok' },
+    masto: { tokenOf: (req) => ({ 'Bearer smoke-ok': { token: 'smoke-ok', scope: 'read write follow' },
+      'Bearer smoke-read': { token: 'smoke-read', scope: 'read' } })[req.headers.authorization] || null },
     verifier: async (authz) => {
       if (authz === 'DPoP good') return { webid: OWNER };
       if (authz === 'DPoP other') return { webid: 'https://other.example/profile#me' };
@@ -11497,6 +11498,9 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
   const asBearer = await ask24(apiAuth, { type: 'Block', object: 'https://bad.example/u/troll2' },
     { headers: { authorization: 'Bearer smoke-ok' } });
   check(asBearer.status === 201, `the facade bearer drives C2S too (got ${asBearer.status})`);
+  const asReader = await ask24(apiAuth, { type: 'Block', object: 'https://bad.example/u/readonly' },
+    { headers: { authorization: 'Bearer smoke-read' } });
+  check(asReader.status === 403, `an app allowed only to read cannot post through it (got ${asReader.status})`);
   const b24 = st24.getBlocklist();
   check(b24.actors.includes('https://bad.example/u/troll') && b24.actors.includes('https://bad.example/u/troll2'),
     'both blocks landed in the blocklist');
