@@ -15,8 +15,8 @@ holding an intercepted code cannot make yours fail.
 ever missing.**
 
 **On a FediPod Server, the page where an app asks to use your account asks one
-question:** "Allow Elk to Act as You?", then "Allow Elk to access your
-@you@server account.", with Allow and Cancel.
+question:** "Allow Elk to access your @you@server account?", with Allow and
+Cancel.
 
 ## 2026-10-05 (strangers can no longer read private posts, sign an app in with one click, or swamp a FediPod Server; apps get only what you allowed them — version 1.49.0)
 
