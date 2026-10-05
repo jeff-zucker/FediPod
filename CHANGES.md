@@ -1,5 +1,11 @@
 # Changes
 
+## 2026-10-05 (on a suffixed pod, a phone app can sign in with the password)
+
+**On a FediPod Server with suffixed pods, signing a phone app in with the
+account's password works.** The password form posted to the server's own root,
+where no account answers.
+
 ## 2026-10-05 (on a FediPod Server, a sign-in goes back only to the account's own pages; a stolen sign-in code cannot be spoiled; the app sign-in page asks one question — version 1.49.1)
 
 **On a Server with suffixed pods, a sign-in could be sent back to another
