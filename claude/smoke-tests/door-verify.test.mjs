@@ -75,3 +75,32 @@ test('an unsigned delivery reads as before', async () => {
     ident(), { podPut: p.put, fetchImpl: fetch, origin: DOOR });
   assert.equal(r.reason, 'buffered-unverified'); assert.equal(p.puts.length, 2);
 });
+
+// A signed read of a private post: the reader is the key's owner only when the
+// key sits on the owner's own server. Anyone can publish a key document naming
+// somebody else as its owner.
+const { signedReader } = await import('../../lib/gateway/private-read.mjs');
+const forger = await crypto.subtle.generateKey({ name: 'RSASSA-PKCS1-v1_5', modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: 'SHA-256' }, true, ['sign', 'verify']);
+const forgedPem = `-----BEGIN PUBLIC KEY-----\n${Buffer.from(await crypto.subtle.exportKey('spki', forger.publicKey)).toString('base64').match(/.{1,64}/g).join('\n')}\n-----END PUBLIC KEY-----\n`;
+let FORGED_KEY = '';
+const elsewhere = http.createServer((req, res) => {
+  res.writeHead(200, { 'content-type': 'application/activity+json' });
+  res.end(JSON.stringify({ '@context': 'https://w3id.org/security/v1', id: FORGED_KEY, type: 'CryptographicKey', owner: ACTOR, publicKeyPem: forgedPem }));
+});
+await new Promise((r) => elsewhere.listen(0, '127.0.0.1', r));
+FORGED_KEY = `http://127.0.0.1:${elsewhere.address().port}/keys/1`;
+test.after(() => elsewhere.close());
+
+const privateGet = (key, keyId) => signRequest(new Request(DOOR + '/u/jeff/ap/private/2026-10-05-abcd1234', { method: 'GET', headers: { accept: 'application/activity+json' } }),
+  key, new URL(keyId));
+
+test('a signed read names the follower whose own server holds the key', async () => {
+  const r = await signedReader(await privateGet(pair.privateKey, ACTOR + '#main-key'), { fetchImpl: fetch, origin: DOOR });
+  assert.equal(r.actor, ACTOR);
+});
+
+test('a key published on another server naming a follower as its owner reads as nobody', async () => {
+  const r = await signedReader(await privateGet(forger.privateKey, FORGED_KEY), { fetchImpl: fetch, origin: DOOR });
+  assert.equal(r.actor, null);
+  assert.equal(r.reason, 'key-not-on-signer-origin');
+});
