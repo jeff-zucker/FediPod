@@ -295,6 +295,13 @@ if (up) {
   const appRec = await apps.json();
   check(!!appRec.client_id && !!appRec.client_secret && appRec.client_id !== 'dk-ap-client',
     'POST /api/v1/apps registers a client with its own id and secret');
+  // Registering needs no sign-in, so a registration's size is the part a
+  // stranger controls; one carrying a megabyte of return addresses is refused.
+  const bloated = await fetchLocal(`https://127.0.0.1:${PORT}/api/v1/apps`, {
+    method: 'POST', headers: { ...gh, 'content-type': 'application/json' },
+    body: JSON.stringify({ client_name: 'bloat', redirect_uris: Array.from({ length: 500 }, (_, i) => `https://x.example/${i}/${'a'.repeat(1500)}`) }),
+  });
+  check(bloated.status === 422, `a registration with hundreds of long return addresses is refused (${bloated.status})`);
 
   // A client that registers with a FormData sends multipart, not a query
   // string. Read as one, every field came back undefined and the registration
