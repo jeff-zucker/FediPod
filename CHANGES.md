@@ -1,6 +1,6 @@
 # Changes
 
-## 2026-10-05 (on a FediPod Server, a sign-in goes back only to the account's own pages; a stolen sign-in code cannot be spoiled)
+## 2026-10-05 (on a FediPod Server, a sign-in goes back only to the account's own pages; a stolen sign-in code cannot be spoiled; the app sign-in page asks one question — version 1.49.1)
 
 **On a Server with suffixed pods, a sign-in could be sent back to another
 pod's page.** A link naming a page in someone else's pod on the same server
