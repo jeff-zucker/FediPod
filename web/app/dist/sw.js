@@ -46164,6 +46164,15 @@ var PodStore = class {
   getStatuses() {
     return this.read("statuses.json", []);
   }
+  // When each open poll closes, read in place: asked every 30 seconds, where
+  // a copy of the whole timeline each time was the whole cost of asking.
+  openPollEnds() {
+    const out = [];
+    for (const s of this.cache.get("statuses.json") || []) {
+      if (s?.kind === "post" && s.poll && !s.poll.closed && s.poll.expiresAt) out.push(Date.parse(s.poll.expiresAt));
+    }
+    return out;
+  }
   // A count must not pay for a clone: nodeinfo and the instance document are
   // public and answer strangers, so they read the cache directly.
   countStatuses(kind = null) {
@@ -46205,6 +46214,9 @@ var PodStore = class {
     const all = this.getStatuses();
     const i = all.findIndex((x) => x.noteId === noteId);
     if (i < 0) return null;
+    if (typeof patch?.content === "string" && patch.content.length > MAX_CONTENT) {
+      patch = { ...patch, content: clamp(patch.content, MAX_CONTENT), truncated: true };
+    }
     all[i] = { ...all[i], ...patch };
     this.write("statuses.json", all);
     return all[i];
@@ -57691,7 +57703,9 @@ async function publishNote(publisher, content, { inReplyTo, attachments, visibil
     reply?.inbox,
     ...addressedInboxes
   ].filter(Boolean))];
-  await publisher.deliverer.deliverToAll(inboxes, create);
+  const fanout = publisher.deliverer.deliverToAll(inboxes, create);
+  if (publisher.background) fanout.catch((e) => publisher.log(`delivering ${note.id}: ${e.message}`));
+  else await fanout;
   publisher.log(`note published: ${note.id} \u2192 ${inboxes.length} inbox(es)`);
   if (request) {
     const [inbox] = await inboxesFor(publisher, [quote.actor]);
@@ -58502,7 +58516,8 @@ var Publisher = class {
     probeFetch = null,
     resolveMention = null,
     resolveActor = null,
-    clientOrigin = null
+    clientOrigin = null,
+    background = false
   }) {
     this.config = config;
     this.remote = remote;
@@ -58512,6 +58527,7 @@ var Publisher = class {
     this.publicKeyPem = publicKeyPem;
     this.assertionKey = assertionKey;
     this.clientOrigin = clientOrigin;
+    this.background = background;
     const publicBase = config.gateway?.frontActor ? config.gateway.frontActor.replace(/ap\/actor\/?$/, "") : null;
     this.urls = apUrls2(config.remotePod, config.root, { publicBase });
     if (this.urls.toPod && this.remote?.setUrlMap) this.remote.setUrlMap(this.urls.toPod);
@@ -65361,6 +65377,7 @@ function describeShapeFailure(failure) {
 // lib/core/intake/index.mjs
 var POLL_MS = 2 * 6e4;
 var POLL_PUSH_OK_MS = 10 * 6e4;
+var POLL_IN_PROCESS_MS = 60 * 6e4;
 var DRAIN_COOLDOWN_MIN_MS = 2 * 6e4;
 var DRAIN_COOLDOWN_MAX_MS = 30 * 6e4;
 var DELETE_GAP_MS = 150;
@@ -65417,13 +65434,15 @@ var Intake = class {
   // what makes the fallback poll a slow one.
   _pollMs() {
     if (this.pollSeconds) return this.pollSeconds * 1e3;
-    return this.wsState === "open" || this.wsState === "in-process" ? POLL_PUSH_OK_MS : POLL_MS;
+    if (this.wsState === "in-process") return POLL_IN_PROCESS_MS;
+    return this.wsState === "open" ? POLL_PUSH_OK_MS : POLL_MS;
   }
   // `drainNow: false` and `subscribe: false` are for a browser worker the
   // browser restarted: it drained moments ago, and a socket would die with it.
   async start({ drainNow = true, subscribe: subscribe2 = true } = {}) {
     this.stopped = false;
     if (drainNow) await this.drain().catch((e) => this.log(`drain: ${e.message}`));
+    if (!this.push) this.wsState = "in-process";
     const tick = () => {
       this.pollTimer = setTimeout(() => {
         this.drain().catch((e) => this.log(`drain: ${e.message}`)).finally(() => {
@@ -65433,8 +65452,7 @@ var Intake = class {
       this.pollTimer.unref?.();
     };
     tick();
-    if (!this.push) this.wsState = "in-process";
-    else if (subscribe2) this.subscribe().catch((e) => this.log(`subscribe: ${e.message}`));
+    if (this.push && subscribe2) this.subscribe().catch((e) => this.log(`subscribe: ${e.message}`));
   }
   stop() {
     this.stopped = true;
@@ -67324,10 +67342,11 @@ var web_push_default = { generateVAPIDKeys, setVapidDetails, sendNotification };
 // lib/client/webpush.mjs
 var Push = class {
   constructor({ store, subject, log: log2 = () => {
-  } }) {
+  }, liveKeys = null }) {
     this.store = store;
     this.subject = subject;
     this.log = log2;
+    this.liveKeys = liveKeys;
   }
   state() {
     return this.store.read("webpush.json", { subs: {} });
@@ -67387,14 +67406,27 @@ var Push = class {
   }
   // Push one notification to every subscription whose alerts allow the type.
   // A push service answering 404/410 means the browser dropped the
-  // subscription — it is removed rather than retried forever.
+  // subscription — it is removed rather than retried forever. With
+  // `liveKeys`, every subscription whose sign-in is no longer in force is
+  // forgotten first: an app signed out, expired or pushed off the list hears
+  // nothing more.
   async notify(n, payload) {
     const st2 = this.state();
+    let dropped = false;
+    const live = this.liveKeys?.() || null;
+    if (live) {
+      for (const key of Object.keys(st2.subs)) if (!live.has(key)) {
+        delete st2.subs[key];
+        dropped = true;
+      }
+    }
     const entries = Object.entries(st2.subs);
-    if (!entries.length) return;
+    if (!entries.length) {
+      if (dropped) this.save(st2);
+      return;
+    }
     const { publicKey, privateKey } = this.vapid();
     const details = { subject: this.subject(), publicKey, privateKey };
-    let dropped = false;
     for (const [key, sub] of entries) {
       if (sub.alerts && sub.alerts[n.type] === false) continue;
       try {
@@ -67549,6 +67581,10 @@ var AUTHZ_WINDOW_MS = 6e4;
 var AUTHZ_MAX_ATTEMPTS = 5;
 var CODE_TTL_MS = 5 * 6e4;
 var MAX_APPS = 200;
+var MAX_REDIRECTS = 10;
+var MAX_REDIRECT_CHARS = 2048;
+var REGISTRATION_WINDOW_MS = 6e4;
+var MAX_REGISTRATIONS = 10;
 var CLIENT_DOC_TTL_MS = 10 * 6e4;
 var CLIENT_DOC_MAX_CACHED = 200;
 var CLIENT_DOC_WINDOW_MS = 6e4;
@@ -67569,40 +67605,42 @@ function checkPassword(rec, password) {
 }
 var escapeHtml = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 var parseRedirects = (v) => (Array.isArray(v) ? v : String(v || "").split(/\s+/)).map((s) => s.trim()).filter(Boolean);
-function sendPodSigninPage(res, client, webId, mount = "") {
-  let asking = "";
-  if (client && (client.name || client.redirect)) {
-    let where = "";
-    try {
-      where = client.redirect ? new URL(client.redirect).host : "";
-    } catch {
-    }
-    const who = client.name ? escapeHtml(client.name) : where ? escapeHtml(where) : "A client";
-    asking = `<p><strong>${who}</strong> is asking to use your account${where ? `, and you will be sent back to <code>${escapeHtml(where)}</code>` : ""}.</p>`;
+var ownAddress = (api) => {
+  const handle7 = api.store.getConfig()?.handle;
+  return handle7 && api.host ? `@${handle7}@${api.host}` : null;
+};
+function sendPodSigninPage(res, client, webId, mount = "", address = null) {
+  let where = "";
+  try {
+    where = client?.redirect ? new URL(client.redirect).host : "";
+  } catch {
   }
+  const app = escapeHtml(client?.name || where || "this app");
+  const question = `Allow ${app} to access your ${address ? `${escapeHtml(address)} ` : ""}account?`;
   res.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-cache" });
   res.end(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Sign in with your pod</title>
+<title>${question}</title>
 <style>:root{color-scheme:light dark;--heading:#1a4f8a;--btn:#3d6b35;--line:#9a9a9a}
 body{font:20px Arial,Helvetica,sans-serif;max-width:28rem;margin:12vh auto;padding:0 1rem}
 h1{color:var(--heading);font-size:1.5rem}
-code{word-break:break-all;background:rgba(120,120,120,.12);padding:.05em .35em;border-radius:4px}
+h1,p{overflow-wrap:anywhere}
 button{font:inherit;padding:.6rem 1.1rem;background:var(--btn);color:#fff;border:none;border-radius:9px;cursor:pointer}
 button[hidden]{display:none}
+#cancel{background:transparent;color:inherit;border:2px solid currentColor;margin-left:.6rem}
 #signin-status{min-height:1.5em;padding:.6rem .8rem;border:1px solid var(--line);border-radius:8px;margin-top:1rem}
-@media (prefers-color-scheme:dark){:root{--heading:#7fb3e8;--btn:#5a8a4f}}</style></head><body>
+#signin-status:empty{min-height:0;padding:0;border:0;margin:0}
+@media (prefers-color-scheme:dark){:root{--heading:#7fb3e8;--btn:#4a7a40}}</style></head><body>
 <main>
-<h1>Sign in with your pod</h1>
-${asking}
-<p>This account belongs to <a id="webid" href="${escapeHtml(webId)}">${escapeHtml(webId)}</a>. Sign in at that pod to allow it.</p>
-<p><button type="button" id="signin" hidden>Sign in with your pod</button></p>
+<h1>${question}</h1>
+<a id="webid" href="${escapeHtml(webId)}" hidden></a>
+<p><button type="button" id="signin" hidden>Allow</button><button type="button" id="cancel" hidden>Cancel</button></p>
 <p id="signin-status" role="status" aria-live="polite"></p>
 </main>
 <script type="module" src="${escapeHtml(mount)}/oauth/session/signin.mjs"><\/script>
 </body></html>`);
   return true;
 }
-function sendLoginForm(res, params, error2 = "", client = null, status2 = null, headers = {}) {
+function sendLoginForm(res, params, error2 = "", client = null, status2 = null, headers = {}, mount = "") {
   const hidden = [...params.entries()].filter(([k]) => k !== "password").map(([k, v]) => `<input type="hidden" name="${escapeHtml(k)}" value="${escapeHtml(v)}">`).join("\n");
   let asking = "<p>Enter the agent password to authorize this client.</p>";
   if (client && (client.name || client.redirect)) {
@@ -67632,7 +67670,7 @@ input,button{font:inherit;width:100%;padding:.5rem;margin:.3rem 0;box-sizing:bor
 <h1>FediPod</h1>
 ${asking}
 ${error2 ? `<p class="err" id="login-err" role="alert">${escapeHtml(error2)}</p>` : ""}
-<form method="POST" action="/oauth/authorize">
+<form method="POST" action="${escapeHtml(mount)}/oauth/authorize">
 ${hidden}
 <label for="password">Agent password</label>
 <input type="password" id="password" name="password" autofocus autocomplete="current-password"
@@ -67780,11 +67818,42 @@ function registerApp(api, { name, website, redirectUris, scopes }) {
     name: String(name || "client").slice(0, 200),
     website: String(website || "").slice(0, 500),
     redirectUris,
-    scopes: String(scopes || "read"),
-    createdAt: Date.now()
+    scopes: String(scopes || "read").slice(0, 500),
+    createdAt: Date.now(),
+    // Set when the owner first lets it sign in (touchApp): a client nobody
+    // has used is the first to go when the list is full.
+    usedAt: null
   };
-  api.store.write("oauth-apps.json", [...api.apps(), app].slice(-MAX_APPS));
+  const kept = api.apps();
+  while (kept.length >= MAX_APPS) kept.splice(kept.indexOf(leastUsed(kept)), 1);
+  api.store.write("oauth-apps.json", [...kept, app]);
   return app;
+}
+function leastUsed(list3) {
+  const never = list3.filter((a) => a.usedAt === null);
+  const when = (a) => a.usedAt ?? a.createdAt ?? 0;
+  return (never.length ? never : list3).reduce((a, b) => when(b) < when(a) ? b : a);
+}
+function touchApp(api, clientId) {
+  const all = api.apps();
+  const app = all.find((a) => a.clientId === clientId);
+  if (!app) return;
+  app.usedAt = Date.now();
+  api.store.write("oauth-apps.json", all);
+}
+function redirectsProblem(raw) {
+  if (Array.isArray(raw) && raw.some((v) => typeof v !== "string")) return "redirect_uris must be text";
+  const list3 = parseRedirects(raw);
+  if (list3.length > MAX_REDIRECTS) return `at most ${MAX_REDIRECTS} redirect_uris`;
+  if (list3.some((u) => u.length > MAX_REDIRECT_CHARS)) return `a redirect_uri is at most ${MAX_REDIRECT_CHARS} characters`;
+  return null;
+}
+function registrationLimited(api) {
+  const now = Date.now();
+  api.appRegistrations = (api.appRegistrations || []).filter((t) => now - t < REGISTRATION_WINDOW_MS);
+  if (api.appRegistrations.length >= MAX_REGISTRATIONS) return true;
+  api.appRegistrations.push(now);
+  return false;
 }
 function mintCode(api, { clientId, redirectUri, scope, challenge = null, challengeMethod = null }) {
   const code = node_crypto_default.randomBytes(24).toString("hex");
@@ -67803,6 +67872,10 @@ function mintCode(api, { clientId, redirectUri, scope, challenge = null, challen
     ...challenge ? { challenge, challengeMethod: challengeMethod || "plain" } : {}
   }].slice(-50));
   return code;
+}
+function peekCode(api, code) {
+  const now = Date.now();
+  return api.store.read("oauth-codes.json", []).find((c) => c.code === code && now - c.createdAt < CODE_TTL_MS) || null;
 }
 function consumeCode(api, code) {
   const now = Date.now();
@@ -67828,7 +67901,9 @@ function redirectAllowed(api, redirect) {
   try {
     const u = new URL(redirect);
     if (u.protocol !== "http:" && u.protocol !== "https:") return false;
-    return api.allowed.has(u.host.toLowerCase());
+    if (!api.allowed.has(u.host.toLowerCase())) return false;
+    const mount = api.mount || "";
+    return !mount || u.pathname === mount || u.pathname.startsWith(`${mount}/`);
   } catch {
     return false;
   }
@@ -67844,6 +67919,16 @@ async function handle(api, ctx) {
   const { req, res, pathname, url, send } = ctx;
   if (pathname === "/api/v1/apps" && req.method === "POST") {
     const body = await readBody2(req);
+    const problem = redirectsProblem(body.redirect_uris);
+    if (problem) return send(422, { error: problem });
+    if (registrationLimited(api)) {
+      api.log("app registration refused: too many this minute");
+      return send(
+        429,
+        { error: "too many apps registered just now \u2014 try again in a minute" },
+        { "retry-after": String(REGISTRATION_WINDOW_MS / 1e3) }
+      );
+    }
     const redirectUris = parseRedirects(body.redirect_uris);
     const app = api.registerApp({
       name: body.client_name,
@@ -67878,7 +67963,7 @@ async function handle(api, ctx) {
     }
     const ownerWebId = api.ownerWebId?.() || null;
     if (req.method === "GET" && !params.get("client_id") && params.get("code") && params.get("state") && ownerWebId) {
-      return sendPodSigninPage(res, null, ownerWebId, api.mount || "");
+      return sendPodSigninPage(res, null, ownerWebId, api.mount || "", ownAddress(api));
     }
     const app = api.findApp(params.get("client_id") || "");
     const doc = app ? null : await api.resolveClientDocument(params.get("client_id") || "");
@@ -67888,8 +67973,12 @@ async function handle(api, ctx) {
       return send(403, { error: "a cross-site navigation may not authorize a client" });
     }
     const client = { name: app?.name || doc?.name || null, redirect, scope: params.get("scope") || "read" };
+    const challengeMethod = params.get("code_challenge_method");
+    if (params.get("code_challenge") && challengeMethod && challengeMethod !== "S256" && challengeMethod !== "plain") {
+      return send(400, { error: "code_challenge_method must be S256 or plain" });
+    }
     if (external && !proved && !api.store.getConfig()?.uiPassword && !api.redirectAllowed(redirect)) {
-      if (req.method === "GET" && ownerWebId) return sendPodSigninPage(res, client, ownerWebId, api.mount || "");
+      if (req.method === "GET" && ownerWebId) return sendPodSigninPage(res, client, ownerWebId, api.mount || "", ownAddress(api));
       api.log(`authorize refused: no UI password, and "${redirect}" is not an address of this agent`);
       return send(403, {
         error: "this client asks to be sent somewhere other than this agent, and no password is set to approve that with. Run `fedipod passwd` and try again."
@@ -67922,16 +68011,17 @@ async function handle(api, ctx) {
           "too many attempts \u2014 wait a minute",
           client,
           429,
-          { "retry-after": String(Math.ceil(AUTHZ_WINDOW_MS / 1e3)) }
+          { "retry-after": String(Math.ceil(AUTHZ_WINDOW_MS / 1e3)) },
+          api.mount || ""
         );
       }
       if (!pw || !checkPassword(pw, body.password || "")) {
-        return sendLoginForm(res, params, "wrong password \u2014 try again", client);
+        return sendLoginForm(res, params, "wrong password \u2014 try again", client, null, {}, api.mount || "");
       }
     } else if (pw && !proved) {
-      return sendLoginForm(res, params, "", client);
+      return sendLoginForm(res, params, "", client, null, {}, api.mount || "");
     } else if (!proved && api.allowed && !api.allowed.isLocalRequest(req) && !api.throughDoor?.(req)) {
-      if (req.method === "GET" && ownerWebId) return sendPodSigninPage(res, client, ownerWebId, api.mount || "");
+      if (req.method === "GET" && ownerWebId) return sendPodSigninPage(res, client, ownerWebId, api.mount || "", ownAddress(api));
       api.log(`authorize refused: no UI password, and "${req.headers.host}" is not this machine`);
       return send(403, {
         error: api.embedded ? "Open your account's management page first, then sign in from there." : "Signing in from another machine needs a password. On the machine that runs your account, run: fedipod passwd"
@@ -67944,6 +68034,7 @@ async function handle(api, ctx) {
       challenge: params.get("code_challenge") || null,
       challengeMethod: params.get("code_challenge_method") || null
     }) : api.mintToken(client.scope);
+    if (app) touchApp(api, app.clientId);
     if (!redirect || redirect === "urn:ietf:wg:oauth:2.0:oob") return send(200, { code });
     const target = new URL(redirect);
     target.searchParams.set("code", code);
@@ -67957,7 +68048,7 @@ async function handle(api, ctx) {
     const body = await readBody2(req);
     const app = api.findApp(body.client_id || "");
     if (!app && body.code_verifier && /^https:\/\//iu.test(String(body.client_id || ""))) {
-      const rec = api.consumeCode(body.code || "");
+      const rec = api.peekCode(body.code || "");
       if (!rec || rec.clientId !== body.client_id || body.redirect_uri && rec.redirectUri !== body.redirect_uri) {
         api.log("token refused: code is not a live authorization for that client document");
         return send(400, { error: "invalid_grant" });
@@ -67966,6 +68057,7 @@ async function handle(api, ctx) {
         api.log("token refused: the verifier does not answer the challenge this code was made with");
         return send(400, { error: "invalid_grant" });
       }
+      if (!api.consumeCode(body.code || "")) return send(400, { error: "invalid_grant" });
       return send(200, {
         access_token: api.mintToken(rec.scope || "read"),
         token_type: "Bearer",
@@ -67975,7 +68067,7 @@ async function handle(api, ctx) {
       });
     }
     if (app && body.code_verifier) {
-      const rec = api.consumeCode(body.code || "");
+      const rec = api.peekCode(body.code || "");
       if (!rec || rec.clientId !== app.clientId || body.redirect_uri && rec.redirectUri !== body.redirect_uri) {
         api.log("token refused: code is not a live authorization for this client");
         return send(400, { error: "invalid_grant" });
@@ -67984,6 +68076,7 @@ async function handle(api, ctx) {
         api.log("token refused: the verifier does not answer the challenge this code was made with");
         return send(400, { error: "invalid_grant" });
       }
+      if (!api.consumeCode(body.code || "")) return send(400, { error: "invalid_grant" });
       return send(200, {
         access_token: api.mintToken(rec.scope || "read"),
         token_type: "Bearer",
@@ -68000,7 +68093,7 @@ async function handle(api, ctx) {
         api.log("token refused: client secret mismatch");
         return send(401, { error: "invalid_client" });
       }
-      const rec = api.consumeCode(body.code || "");
+      const rec = api.peekCode(body.code || "");
       if (!rec || rec.clientId !== app.clientId || body.redirect_uri && rec.redirectUri !== body.redirect_uri) {
         api.log("token refused: code is not a live authorization for this client");
         return send(400, { error: "invalid_grant" });
@@ -68009,6 +68102,7 @@ async function handle(api, ctx) {
         api.log("token refused: this code was made with a challenge and the verifier does not answer it");
         return send(400, { error: "invalid_grant" });
       }
+      if (!api.consumeCode(body.code || "")) return send(400, { error: "invalid_grant" });
       return send(200, {
         access_token: api.mintToken(rec.scope || "read"),
         token_type: "Bearer",
@@ -68039,6 +68133,7 @@ async function handle(api, ctx) {
     if (gone) {
       const kept = api.tokenRecords().filter((r) => r.token !== gone);
       api.store.write("masto-tokens.json", kept);
+      if (api.push.get(gone)) api.push.drop(gone);
       api.log("client token revoked");
     }
     return send(200, {});
@@ -68878,6 +68973,11 @@ init_node_crypto();
 var write6 = (pod, url, bytes, contentType) => pod.put(url, bytes, contentType);
 
 // lib/client/masto/accounts.mjs
+var PROFILE_IMAGE_EXT = { "image/png": "png", "image/jpeg": "jpg", "image/gif": "gif", "image/webp": "webp", "image/avif": "avif" };
+var profileImageType = (f) => {
+  const t = String(f?.contentType || "").split(";")[0].trim().toLowerCase();
+  return PROFILE_IMAGE_EXT[t] ? t : null;
+};
 async function handle3(api, ctx) {
   const { req, res, pathname, url, send } = ctx;
   if (pathname === "/api/v1/accounts/verify_credentials") {
@@ -68902,12 +69002,17 @@ async function handle3(api, ctx) {
     if (ct.includes("multipart/form-data")) ({ fields: form, files } = await readMultipart(req));
     else form = await readBody2(req);
     const cfg = { ...api.store.getConfig() };
+    for (const f of [files.avatar, files.header]) {
+      if (f?.data?.length && !profileImageType(f)) {
+        return send(422, { error: "a profile picture or header must be a PNG, JPEG, GIF, WebP or AVIF image" });
+      }
+    }
     const putImage = async (f) => {
-      const ext = (f.filename || "").includes(".") ? f.filename.split(".").pop().replace(/[^\w]/g, "") : "bin";
-      const slug = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10) + "-" + node_crypto_default.randomBytes(4).toString("hex") + "." + ext;
+      const type = profileImageType(f);
+      const slug = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10) + "-" + node_crypto_default.randomBytes(4).toString("hex") + "." + PROFILE_IMAGE_EXT[type];
       const url2 = api.urls.media + slug;
       await api.agent.publisher.ensureMediaContainer();
-      await write6(api.agent.remote, url2, f.data, f.contentType);
+      await write6(api.agent.remote, url2, f.data, type);
       return url2;
     };
     if ("display_name" in form) cfg.name = String(form.display_name).trim() || cfg.handle;
@@ -69898,7 +70003,8 @@ var MastoApi = class _MastoApi {
     this._push ||= new Push({
       store: this.store,
       subject: () => this.urls?.actor || "https://localhost/",
-      log: this.log
+      log: this.log,
+      liveKeys: () => new Set(this.tokens().map((t) => this._push.keyOf(t)))
     });
     return this._push;
   }
@@ -69996,6 +70102,9 @@ var MastoApi = class _MastoApi {
   }
   consumeCode(...a) {
     return consumeCode(this, ...a);
+  }
+  peekCode(...a) {
+    return peekCode(this, ...a);
   }
   tokenOf(...a) {
     return tokenOf(this, ...a);
@@ -70106,6 +70215,20 @@ var DEFAULTS2 = {
   intervalMin: 15
 };
 var PER_TAG = 20;
+var SHARED_TTL_MS = 12 * 6e4;
+var sharedTimelines = /* @__PURE__ */ new Map();
+function timelineOnce(key, load2) {
+  const now = Date.now();
+  const held = sharedTimelines.get(key);
+  if (held && now - held.at < SHARED_TTL_MS) return held.answer;
+  const answer = load2().catch((e) => {
+    sharedTimelines.delete(key);
+    throw e;
+  });
+  sharedTimelines.set(key, { at: now, answer });
+  if (sharedTimelines.size > 500) sharedTimelines.delete(sharedTimelines.keys().next().value);
+  return answer;
+}
 var MAX_NEW_PER_SWEEP = 8;
 var MAX_NEW_PER_TAG = 2;
 var TAGS_PER_SWEEP = 4;
@@ -70197,12 +70320,17 @@ var TagFeed = class {
         try {
           const { safeFetch: safeFetch2, retryAfterMs: retryAfterMs3, readCapped: readCapped3 } = await Promise.resolve().then(() => (init_safefetch(), safefetch_exports));
           const url = `${instance}/api/v1/timelines/tag/${encodeURIComponent(tag)}?limit=${PER_TAG}`;
-          const res = this.fetcher === globalThis.fetch ? await safeFetch2(url, { headers: { accept: "application/json" } }) : await this.fetcher(url, { headers: { accept: "application/json" } });
-          if (res.status >= 400) {
-            this._backOff(res.status, retryAfterMs3(res));
+          const load2 = async () => {
+            const res = this.fetcher === globalThis.fetch ? await safeFetch2(url, { headers: { accept: "application/json" } }) : await this.fetcher(url, { headers: { accept: "application/json" } });
+            if (res.status >= 400) return { status: res.status, retryAfter: retryAfterMs3(res), list: null };
+            return { status: res.status, list: JSON.parse(await readCapped3(res, MAX_TIMELINE_BYTES)) };
+          };
+          const got = this.fetcher === globalThis.fetch ? await timelineOnce(`${instance}|${tag}`, load2) : await load2();
+          if (got.status >= 400) {
+            this._backOff(got.status, got.retryAfter);
             return;
           }
-          list3 = JSON.parse(await readCapped3(res, MAX_TIMELINE_BYTES));
+          list3 = got.list;
         } catch (e) {
           this.log(`tagfeed #${tag}: ${e.message}`);
           this._backOff(0, null);
@@ -70480,7 +70608,7 @@ async function attachProof(activity, { privateKey, verificationMethod, created =
 
 // lib/core/deliver.mjs
 init_safefetch();
-var MAX_REDIRECTS = 3;
+var MAX_REDIRECTS2 = 3;
 async function withQueryInTarget(signed, privateKey) {
   const url = new URL(signed.url);
   if (!url.search) return signed;
@@ -70537,7 +70665,8 @@ var Deliverer = class {
     log: log2 = console.log,
     passive = false,
     defer = false,
-    onGone = null
+    onGone = null,
+    parallel = 1
   }) {
     this.store = store;
     this.defer = defer;
@@ -70548,7 +70677,8 @@ var Deliverer = class {
     this.edPrivate = edPrivate;
     this.proofKeyId = proofKeyId;
     this.log = log2;
-    this.batchSize = 1;
+    this.batchSize = parallel;
+    this.parallel = parallel;
     if (!passive) this.startQueue();
   }
   startQueue() {
@@ -70568,7 +70698,7 @@ var Deliverer = class {
       signal: init.signal || AbortSignal.timeout(HTTP_TIMEOUT_MS),
       headers: { "user-agent": USER_AGENT, ...init.headers || {} }
     };
-    for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
+    for (let hop = 0; hop <= MAX_REDIRECTS2; hop++) {
       const dispatcher = await pinnedFor(current);
       const req = new Request(current, withUa);
       const signed = await withQueryInTarget(
@@ -70629,6 +70759,9 @@ var Deliverer = class {
   // with the error deliverNow would have thrown. Here one at a time; the
   // relay deliverer sends the whole list in one call.
   async deliverManyNow(targets) {
+    if (this.parallel > 1) {
+      return Promise.all(targets.map((t) => this.deliverNow(t.inbox, t.activity).then(() => ({ ok: true }), (error2) => ({ error: error2 }))));
+    }
     const out = [];
     for (const t of targets) {
       try {
