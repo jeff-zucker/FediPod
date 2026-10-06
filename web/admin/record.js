@@ -7,9 +7,6 @@
 // Two rules the routes enforce and this page respects: a write is a MERGE, so a
 // form that never mentions a field cannot delete it; and anything on the wire is
 // not real until the actor is republished, which POST /config does for itself.
-//
-// The UI password is deliberately not here — `fedipod passwd` sets it. It
-// only gates /oauth/authorize, so it does nothing for a loopback-only agent.
 
 let config = null;
 // Held, because render() moves it into a generated row and empties that row's

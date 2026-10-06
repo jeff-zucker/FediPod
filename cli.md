@@ -77,20 +77,15 @@ nothing local is overwritten.  Agent must be running.
 ## Security
 
 ```
-fedipod passwd                           # require a password when a client logs in
 fedipod tokens                           # list client logins; --revoke <prefix> or --revoke-all
 fedipod revoke-credential --email EMAIL  # cut this machine off from the pod account
 ```
-A new password takes effect when a running agent restarts.
 
-**A client hosted somewhere else now needs one.** A client running on its own
-site (Elk, Phanpy on someone's own domain) asks the agent to send the sign-in
-result back to that site. Without a password there is nothing to approve that
-with — and the agent used to do it anyway, which meant any page you happened
-to have open could ask for the same thing and be given a key to your account.
-So: no password, no sending credentials off this machine. Clients that live on
-the agent itself (the bundled one, a dist in `ui/`, anything on
-`https://localhost:<port>`) are unaffected and need no password.
+**A client hosted somewhere else is approved at your pod.** A client running
+on its own site (Elk, Phanpy on someone's own domain) asks the agent to send
+the sign-in result back to that site; you approve it by signing in at your pod
+and pressing Allow. Clients that live on the agent itself (the bundled one, a
+dist in `ui/`, anything on `https://localhost:<port>`) need nothing.
 
 ## Bluesky
 

@@ -1,5 +1,12 @@
 # Changes
 
+## 2026-10-05 (an app is signed in at your pod; the separate app password is gone — version 1.50.0)
+
+**An app is signed in by signing in at your pod and pressing Allow.** The
+separate password an account could set for signing apps in is gone, along with
+`fedipod passwd`. An account that had one set signs its apps in at its pod from
+now on; apps already signed in stay signed in.
+
 ## 2026-10-05 (on a suffixed pod, a phone app can sign in with the password — version 1.49.2)
 
 **On a FediPod Server with suffixed pods, signing a phone app in with the

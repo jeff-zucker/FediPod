@@ -70,9 +70,6 @@
 //                         into profiles/<its handle>/. Installs made before the
 //                         2026-07-30 rename keep ~/.activitypod until they run
 //                         `--to`; new ones get ~/.fedipod.
-//   fedipod passwd    set/change the UI password (REQUIRED before any
-//                         non-loopback exposure — it turns the instant
-//                         OAuth redirect into a real login form)
 //   fedipod tokens    list client tokens; --revoke <prefix> / --revoke-all
 //   fedipod revoke-credential --email you@example.org
 //                         kill this machine's pod credential server-side and
@@ -93,7 +90,7 @@ const COMMANDS = new Map([
   ['up', run.up], ['start', run.start], ['run', run.start], ['stop', run.stop], ['status', run.status],
   ['https', run.https],
   ['setup', setup.setup], ['rotate-key', setup.rotateKey], ['revoke-credential', setup.revokeCredential],
-  ['tokens', setup.tokens], ['passwd', setup.passwd], ['keys', setup.keys],
+  ['tokens', setup.tokens], ['keys', setup.keys],
   ['state', state.state], ['upgrade', state.upgrade], ['profiles', state.profiles], ['home', state.home],
   ['export', state.exportCollectionsCmd],
   ['update', service.update], ['install-service', service.service], ['uninstall-service', service.service],
@@ -109,7 +106,7 @@ const command = COMMANDS.get(cmd);
 if (command) {
   await command();
 } else {
-console.log('usage: fedipod <setup|start|stop|status|state|upgrade|rebuild|home|passwd'
+console.log('usage: fedipod <setup|start|stop|status|state|upgrade|rebuild|home'
   + '|tokens|revoke-credential|install-service|archive|alias|import|keys|front> [--flags]');
 console.log('  keys: where the signing key lives; --to pod|local moves it (pod = multi-device signing)');
 console.log('  https: the local certificate agents serve TLS with; --trust mints a local CA for strict clients');

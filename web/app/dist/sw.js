@@ -67577,8 +67577,6 @@ function readMultipart(req, limit = 12e6) {
 
 // lib/client/masto/oauth.mjs
 var TOKEN_TTL_MS = 90 * 24 * 60 * 60 * 1e3;
-var AUTHZ_WINDOW_MS = 6e4;
-var AUTHZ_MAX_ATTEMPTS = 5;
 var CODE_TTL_MS = 5 * 6e4;
 var MAX_APPS = 200;
 var MAX_REDIRECTS = 10;
@@ -67590,19 +67588,6 @@ var CLIENT_DOC_MAX_CACHED = 200;
 var CLIENT_DOC_WINDOW_MS = 6e4;
 var CLIENT_DOC_MAX_FETCHES = 20;
 var CLIENT_DOC_MAX = 64 * 1024;
-function hashPassword(password) {
-  const salt = node_crypto_default.randomBytes(16);
-  const hash = node_crypto_default.scryptSync(String(password), salt, 32);
-  return { saltHex: salt.toString("hex"), hashHex: hash.toString("hex") };
-}
-function checkPassword(rec, password) {
-  try {
-    const hash = node_crypto_default.scryptSync(String(password), Buffer.from(rec.saltHex, "hex"), 32);
-    return node_crypto_default.timingSafeEqual(hash, Buffer.from(rec.hashHex, "hex"));
-  } catch {
-    return false;
-  }
-}
 var escapeHtml = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 var parseRedirects = (v) => (Array.isArray(v) ? v : String(v || "").split(/\s+/)).map((s) => s.trim()).filter(Boolean);
 var ownAddress = (api) => {
@@ -67638,46 +67623,6 @@ button[hidden]{display:none}
 </main>
 <script type="module" src="${escapeHtml(mount)}/oauth/session/signin.mjs"><\/script>
 </body></html>`);
-  return true;
-}
-function sendLoginForm(res, params, error2 = "", client = null, status2 = null, headers = {}, mount = "") {
-  const hidden = [...params.entries()].filter(([k]) => k !== "password").map(([k, v]) => `<input type="hidden" name="${escapeHtml(k)}" value="${escapeHtml(v)}">`).join("\n");
-  let asking = "<p>Enter the agent password to authorize this client.</p>";
-  if (client && (client.name || client.redirect)) {
-    let where = "";
-    try {
-      where = client.redirect ? new URL(client.redirect).host : "";
-    } catch {
-    }
-    const who = client.name ? escapeHtml(client.name) : where ? escapeHtml(where) : "A client";
-    asking = `<p><strong>${who}</strong> is asking to access your account${where ? `, sending the authorization to <code>${escapeHtml(where)}</code>` : ""}.</p><p>Scope: <code>${escapeHtml(client.scope || "read")}</code>. Enter the agent password to allow it.</p>`;
-  }
-  res.writeHead(
-    status2 || (error2 ? 401 : 200),
-    { "content-type": "text/html; charset=utf-8", ...headers }
-  );
-  res.end(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>FediPod \u2014 authorize</title>
-<style>:root{color-scheme:light dark;font-size:125%;--heading:#1a4f8a}
-body{font:1rem system-ui,sans-serif;max-width:22rem;margin:15vh auto;padding:0 1rem}
-h1{color:var(--heading)}
-code{word-break:break-all}
-@media (prefers-color-scheme:dark){:root{--heading:#7fb3e8}}
-input,button{font:inherit;width:100%;padding:.5rem;margin:.3rem 0;box-sizing:border-box}
-.err{color:#b00020}
-@media (prefers-color-scheme:dark){.err{color:#ff8a8a}}</style></head><body>
-<main>
-<h1>FediPod</h1>
-${asking}
-${error2 ? `<p class="err" id="login-err" role="alert">${escapeHtml(error2)}</p>` : ""}
-<form method="POST" action="${escapeHtml(mount)}/oauth/authorize">
-${hidden}
-<label for="password">Agent password</label>
-<input type="password" id="password" name="password" autofocus autocomplete="current-password"
-  ${error2 ? 'aria-invalid="true" aria-describedby="login-err"' : ""}>
-<button type="submit">Authorize</button>
-</form>
-</main></body></html>`);
   return true;
 }
 function scopeFor(method, pathname) {
@@ -67908,13 +67853,6 @@ function redirectAllowed(api, redirect) {
     return false;
   }
 }
-function rateLimited(api) {
-  const now = Date.now();
-  api.authzAttempts = api.authzAttempts.filter((t) => now - t < AUTHZ_WINDOW_MS);
-  if (api.authzAttempts.length >= AUTHZ_MAX_ATTEMPTS) return true;
-  api.authzAttempts.push(now);
-  return false;
-}
 async function handle(api, ctx) {
   const { req, res, pathname, url, send } = ctx;
   if (pathname === "/api/v1/apps" && req.method === "POST") {
@@ -67947,7 +67885,6 @@ async function handle(api, ctx) {
     });
   }
   if (pathname === "/oauth/authorize" && (req.method === "GET" || req.method === "POST")) {
-    const pw = api.store.getConfig()?.uiPassword;
     let params = url.searchParams;
     let body = null;
     if (req.method === "POST") {
@@ -67977,11 +67914,11 @@ async function handle(api, ctx) {
     if (params.get("code_challenge") && challengeMethod && challengeMethod !== "S256" && challengeMethod !== "plain") {
       return send(400, { error: "code_challenge_method must be S256 or plain" });
     }
-    if (external && !proved && !api.store.getConfig()?.uiPassword && !api.redirectAllowed(redirect)) {
+    if (external && !proved && !api.redirectAllowed(redirect)) {
       if (req.method === "GET" && ownerWebId) return sendPodSigninPage(res, client, ownerWebId, api.mount || "", ownAddress(api));
-      api.log(`authorize refused: no UI password, and "${redirect}" is not an address of this agent`);
+      api.log(`authorize refused: "${redirect}" is not an address of this agent, and nothing approved it`);
       return send(403, {
-        error: "this client asks to be sent somewhere other than this agent, and no password is set to approve that with. Run `fedipod passwd` and try again."
+        error: "this client asks to be sent somewhere other than this account; approve it by signing in at your pod"
       });
     }
     if (app) {
@@ -68002,29 +67939,11 @@ async function handle(api, ctx) {
       api.log(`authorize refused: redirect_uri "${redirect}" is not this agent`);
       return send(400, { error: "redirect_uri must be an address of this agent" });
     }
-    if (req.method === "POST" && !proved) {
-      if (api.rateLimited()) {
-        api.log("authorize rate limited");
-        return sendLoginForm(
-          res,
-          params,
-          "too many attempts \u2014 wait a minute",
-          client,
-          429,
-          { "retry-after": String(Math.ceil(AUTHZ_WINDOW_MS / 1e3)) },
-          api.mount || ""
-        );
-      }
-      if (!pw || !checkPassword(pw, body.password || "")) {
-        return sendLoginForm(res, params, "wrong password \u2014 try again", client, null, {}, api.mount || "");
-      }
-    } else if (pw && !proved) {
-      return sendLoginForm(res, params, "", client, null, {}, api.mount || "");
-    } else if (!proved && api.allowed && !api.allowed.isLocalRequest(req) && !api.throughDoor?.(req)) {
+    if (!proved && api.allowed && !api.allowed.isLocalRequest(req) && !api.throughDoor?.(req)) {
       if (req.method === "GET" && ownerWebId) return sendPodSigninPage(res, client, ownerWebId, api.mount || "", ownAddress(api));
-      api.log(`authorize refused: no UI password, and "${req.headers.host}" is not this machine`);
+      api.log(`authorize refused: not approved at the pod, and "${req.headers.host}" is not this machine`);
       return send(403, {
-        error: api.embedded ? "Open your account's management page first, then sign in from there." : "Signing in from another machine needs a password. On the machine that runs your account, run: fedipod passwd"
+        error: api.embedded ? "Open your account's management page first, then sign in from there." : "Signing in from another machine goes through your pod: sign in there to approve this app."
       });
     }
     const code = external ? api.mintCode({
@@ -69991,7 +69910,6 @@ var MastoApi = class _MastoApi {
     this.streaming = streaming;
     this.webPush = webPush;
     this.scheduling = scheduling;
-    this.authzAttempts = [];
   }
   get store() {
     return this.agent.store;
@@ -70114,9 +70032,6 @@ var MastoApi = class _MastoApi {
   }
   redirectAllowed(...a) {
     return redirectAllowed(this, ...a);
-  }
-  rateLimited(...a) {
-    return rateLimited(this, ...a);
   }
   // render.mjs
   selfAccount(...a) {
@@ -71587,7 +71502,6 @@ var AdminFacade = class {
             fields: cfg.fields || [],
             aliases: cfg.aliases || [],
             autoAcceptFollows: cfg.autoAcceptFollows !== false,
-            hasUiPassword: !!cfg.uiPassword,
             quiescedAt: cfg.quiescedAt || null,
             movedTo: cfg.movedTo || null,
             mode: a.status().mode,
@@ -71703,10 +71617,6 @@ var AdminFacade = class {
           cfg.fields = (Array.isArray(body.fields) ? body.fields : []).filter((f) => f?.name?.trim()).map((f) => ({ name: String(f.name).trim(), value: String(f.value ?? "").trim() }));
         }
         if ("autoAcceptFollows" in body) cfg.autoAcceptFollows = !!body.autoAcceptFollows;
-        if ("password" in body) {
-          if (body.password) cfg.uiPassword = hashPassword(body.password);
-          else delete cfg.uiPassword;
-        }
         const republish = WIRE_CONFIG.some((k) => k in body);
         a.store.setConfig(cfg);
         if ("autoAcceptFollows" in body && a.publisher) a.publisher.config.autoAcceptFollows = cfg.autoAcceptFollows;

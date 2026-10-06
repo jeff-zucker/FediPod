@@ -18,7 +18,6 @@ import { publicHandle, webfingerHost } from '../../lib/core/wire.mjs';
 import * as podInbox from '../../lib/pod/inbox.mjs';
 import { normalizeImport, IMPORT_KINDS } from '../../lib/connections/import.mjs';
 import { followActor, followHandle } from '../../lib/core/social.mjs';
-import { hashPassword } from '../../lib/client/masto/index.mjs';
 
 // The identity itself — changing any means a different actor, i.e. a new setup.
 const PERMANENT_CONFIG = ['handle', 'remotePod', 'issuer', 'root', 'kind'];
@@ -121,7 +120,6 @@ export class AdminFacade {
             image: cfg.image || null, fields: cfg.fields || [],
             aliases: cfg.aliases || [],
             autoAcceptFollows: cfg.autoAcceptFollows !== false,
-            hasUiPassword: !!cfg.uiPassword,
             quiescedAt: cfg.quiescedAt || null, movedTo: cfg.movedTo || null,
             mode: a.status().mode,
             // Live from the credential's actual backend on THIS browser (a
@@ -218,10 +216,6 @@ export class AdminFacade {
             .map(f => ({ name: String(f.name).trim(), value: String(f.value ?? '').trim() }));
         }
         if ('autoAcceptFollows' in body) cfg.autoAcceptFollows = !!body.autoAcceptFollows;
-        if ('password' in body) {
-          if (body.password) cfg.uiPassword = hashPassword(body.password);
-          else delete cfg.uiPassword;
-        }
         const republish = WIRE_CONFIG.some(k => k in body);
         a.store.setConfig(cfg);
         if ('autoAcceptFollows' in body && a.publisher) a.publisher.config.autoAcceptFollows = cfg.autoAcceptFollows;

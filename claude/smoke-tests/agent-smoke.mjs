@@ -397,18 +397,16 @@ if (up) {
     + `&client_id=${reg.client_id}&redirect_uri=${encodeURIComponent(EXT)}&scope=read`,
     { headers: gh, redirect: 'manual' });
 
-  // S36. Registering is open, as it is on Mastodon — so with no password set,
-  // "send the code to my own server" is a request anyone can make, and the
-  // owner's browser is what carries it out. Refused until there is a password
-  // to approve it with: a page in another tab cannot type one. (The other half
-  // — that the same client works once a password IS set — is section 8c, where
-  // the store is in this process and a password can be put on it.)
-  const noPw = await authzExt();
-  check(noPw.status === 403 && !noPw.headers.get('location'),
-    `with no password set, a redirect off this agent is refused (got ${noPw.status})`);
-  check(/passwd/.test((await noPw.json()).error || ''), 'and the refusal says how to make it possible');
+  // S36. Registering is open, as it is on Mastodon — so "send the code to my
+  // own server" is a request anyone can make, and the owner's browser is what
+  // carries it out. The owner approves it by signing in at their pod; this
+  // agent has no pod yet, so there is nothing to approve it with.
+  const unapproved = await authzExt();
+  check(unapproved.status === 403 && !unapproved.headers.get('location'),
+    `a redirect off this agent nobody approved is refused (got ${unapproved.status})`);
+  check(/pod/.test((await unapproved.json()).error || ''), 'and the refusal says where it is approved');
 
-  // A client whose redirect comes back to THIS agent needs no password: there
+  // A client whose redirect comes back to THIS agent needs no approval: there
   // the code never leaves the machine. That is the flow the rest of this block
   // exercises — register, be sent a bound code, exchange it with the secret.
   const SELF = `https://localhost:${PORT}/cb`;
@@ -4615,9 +4613,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
     check(d && ratio(d, SURFACE_DARK) >= 4.5,
       `record --danger in dark ${d} = ${d ? ratio(d, SURFACE_DARK).toFixed(2) : '?'}:1`);
   }
-  for (const [label, css] of [['setup', setup], ['login form', masto]]) {
-    // From the LAST dark block: the login form has two, and the earlier one
-    // is followed by the light .err, which is the value being corrected.
+  for (const [label, css] of [['setup', setup]]) {
     const darkFrom = css.lastIndexOf('prefers-color-scheme');
     const m = /\.err\s*\{[^}]*color:\s*(#[0-9a-fA-F]{3,6})/.exec(css.slice(darkFrom));
     check(m && ratio(m[1], SURFACE_DARK) >= 4.5,
@@ -4646,7 +4642,7 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
 
   // --- Level A: every page declares its language ---
   for (const [label, css] of [['record', record], ['setup', setup],
-    ['client', read('web/admin/client/index.html')], ['login form', masto]]) {
+    ['client', read('web/admin/client/index.html')], ['pod sign-in page', masto]]) {
     check(/<html lang="en"/.test(css), `${label} declares its language (3.1.1)`);
   }
 
@@ -4654,9 +4650,6 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   check(/id="fatal" role="alert"/.test(record), 'the record page announces a fatal error');
   check((setup.match(/class="err" id="[a-z-]+" role="alert"/g) || []).length === 2,
     'and setup announces both of its errors');
-  check(/class="err"(?: id="[a-z-]+")? role="alert"/.test(masto), 'as does the login form');
-  check(/<label for="password">/.test(masto),
-    'whose password field has a real label, not just a placeholder');
 
   // A live region put into the accessibility tree in the SAME task as its text
   // does not reliably announce, so none of them is toggled with `hidden`: they
@@ -6373,13 +6366,13 @@ if (up) {
   check(st.getConfig()?.handle === 'b', 're-attaching the same tree keeps its cache');
 }
 
-// --- 8b4. no password + not this machine = no bearer ---
+// --- 8b4. not approved at the pod + not this machine = no bearer ---
 {
   const { MastoApi } = await import(path.join(root, 'lib/client/masto/index.mjs'));
   const { Authorities } = await import(path.join(root, 'lib/shared/guard.mjs'));
   const allowed = new Authorities(8030, 'me');
   const st = new PodStore({ log: () => {} });
-  st.setConfig({ remotePod: 'https://p.example/', handle: 'me', name: 'me' });   // no uiPassword
+  st.setConfig({ remotePod: 'https://p.example/', handle: 'me', name: 'me' });
   const api = new MastoApi({
     store: st, agent: { configured: () => true, store: st }, allowed,
     host: 'me.localhost:8030', log: () => {},
@@ -6403,7 +6396,7 @@ if (up) {
   // Loopback: whoever reaches it IS the user, and the instant path is honest.
   const local = await ask('localhost:8030');
   check(local.status === 200 && /"code"/.test(local.body || ''),
-    'on loopback with no password, authorize still mints instantly');
+    'on loopback, authorize still mints instantly');
   const named = await ask('me.localhost:8030');
   check(named.status === 200 && /"code"/.test(named.body || ''),
     "and on this identity's own named origin");
@@ -6416,8 +6409,8 @@ if (up) {
   const remote = await ask('agent.tailnet.example');
   delete process.env.AP_ALLOWED_HOSTS;
   allowed.rebuild();
-  check(remote.status === 403 && /passwd/.test(remote.body || ''),
-    `an exposed address with no password is refused, and told what to run (${remote.status})`);
+  check(remote.status === 403 && /pod/.test(remote.body || ''),
+    `an exposed address nobody approved is refused, and told where to approve it (${remote.status})`);
 
   // And the forgery that check used to be worth nothing against: a caller who
   // reaches an exposed agent and simply CLAIMS a loopback Host. The header is
@@ -6425,59 +6418,6 @@ if (up) {
   const forgedHost = await ask('localhost:8030', '10.0.0.4');
   check(forgedHost.status === 403,
     `claiming Host: localhost from off-machine no longer mints (${forgedHost.status})`);
-
-  // The one place the precondition is stated where it can be seen.
-  const ra = fs.readFileSync(path.join(root, 'lib/core/agent.mjs'), 'utf8');
-  check(/AP_ALLOWED_HOSTS && !config\.uiPassword/.test(ra),
-    'and the agent says so at startup, once the config is known');
-}
-
-// --- 8c. real OAuth when a UI password is set ---
-{
-  const { hashPassword } = await import(path.join(root, 'lib/client/masto/index.mjs'));
-  const cfg = store2.getConfig();
-  store2.setConfig({ ...cfg, uiPassword: hashPassword('sesame') });
-  const form = await call('/oauth/authorize?client_id=dk-ap-client&redirect_uri=http%3A%2F%2Fx%2Fcb&response_type=code&state=st1');
-  check(form.status === 200 && String(form.json) === 'null', 'authorize with password set → login form (html)');
-  const bad = await call('/oauth/authorize', { method: 'POST', body: 'password=wrong&redirect_uri=http%3A%2F%2Fx%2Fcb', contentType: 'application/x-www-form-urlencoded' });
-  check(bad.status === 401, `wrong password → 401 form (got ${bad.status})`);
-  const okRes = { status: 0, headers: null, writeHead(s, h) { this.status = s; this.headers = h; }, end() {} };
-  const okReq = Readable.from([Buffer.from('password=sesame&redirect_uri=http%3A%2F%2Fx%2Fcb&state=st1')]);
-  okReq.method = 'POST';
-  okReq.headers = { 'content-type': 'application/x-www-form-urlencoded' };
-  await masto2.handle(okReq, okRes, '/oauth/authorize', new URL('http://x/oauth/authorize'));
-  check(okRes.status === 302 && /code=/.test(okRes.headers?.location) && /state=st1/.test(okRes.headers?.location),
-    'right password → 302 with code + state');
-
-  // S36, the other half. A third-party client registered with a redirect to its
-  // OWN server is the ordinary fediverse flow — and it is only safe because
-  // somebody types the password, which a page in another tab cannot do. With
-  // the password set the client is served the form and then its code; with it
-  // cleared the same request is refused outright (the live-agent section above
-  // covers that on a real listener).
-  const elk = masto2.registerApp({ name: 'Elk', redirectUris: ['https://elk.example/cb'], scopes: 'read' });
-  const elkQuery = `client_id=${elk.clientId}&redirect_uri=${encodeURIComponent('https://elk.example/cb')}&response_type=code`;
-  const elkForm = await call(`/oauth/authorize?${elkQuery}`);
-  check(elkForm.status === 200,
-    `a third-party client with a password set is served the login form (got ${elkForm.status})`);
-
-  const elkRes = { status: 0, headers: null, writeHead(st, h) { this.status = st; this.headers = h; }, end() {} };
-  const elkReq = Readable.from([Buffer.from(new URLSearchParams({
-    client_id: elk.clientId, redirect_uri: 'https://elk.example/cb',
-    response_type: 'code', password: 'sesame',
-  }).toString())]);
-  elkReq.method = 'POST';
-  elkReq.headers = { 'content-type': 'application/x-www-form-urlencoded' };
-  await masto2.handle(elkReq, elkRes, '/oauth/authorize', new URL('http://x/oauth/authorize'));
-  check(elkRes.status === 302 && /^https:\/\/elk\.example\/cb\?code=/.test(elkRes.headers?.location || ''),
-    `and the password sends its code to its own server (${elkRes.status})`);
-
-  store2.setConfig(cfg);   // clear the password for later sections
-  // The refusal WITHOUT a password is not asserted here: this harness builds
-  // MastoApi with no `allowed`, which redirectAllowed reads as "no policy" and
-  // waves everything through. Every production path supplies one
-  // (lib/admin.mjs, lib/embed.mjs, web/app/agent.mjs), so the live-agent
-  // section above is where that check belongs and where it runs.
 }
 
 // --- 8d. drain lease: one active, second is viewer, expiry hands over ---
@@ -6699,19 +6639,19 @@ if (up) {
   check(live.includes(fresh) && !live.includes('stale0000'), 'tokens: fresh kept, 200-day-old expired');
 }
 
-// --- 8i0. renaming merges into config; setup re-run keeps the password ---
+// --- 8i0. renaming merges into config ---
 {
   const { Agent } = await import(path.join(root, 'run-agent.mjs'));
   const home = fs.mkdtempSync('/tmp/dk-ap-name-');
   const agent = new Agent({ home, log: () => {} });
   agent.store.setConfig({ remotePod: 'https://pod.example/', handle: 'jeff', name: 'jeff',
-    issuer: 'https://idp.example', uiPassword: { saltHex: 'aa', hashHex: 'bb' } });
+    issuer: 'https://idp.example', summary: 'birds' });
   // The rename path (run --name) must preserve every other config field.
   const cfg = agent.store.getConfig();
   agent.store.setConfig({ ...cfg, name: 'Jeff Zucker' });
   const after = agent.store.getConfig();
-  check(after.name === 'Jeff Zucker' && after.uiPassword?.hashHex === 'bb' && after.handle === 'jeff',
-    'rename merges: display name changes, password and handle survive');
+  check(after.name === 'Jeff Zucker' && after.summary === 'birds' && after.handle === 'jeff',
+    'rename merges: display name changes, summary and handle survive');
   fs.rmSync(home, { recursive: true, force: true });
 }
 
@@ -8353,7 +8293,7 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
   const cstore = new PodStore({ log: () => {} });
   cstore.setConfig({
     remotePod: 'https://solo.example/', handle: 'solo', name: 'solo', issuer: 'https://example',
-    kind: 'person', summary: 'birds, mostly', uiPassword: { saltHex: 'aa', hashHex: 'bb' },
+    kind: 'person', summary: 'birds, mostly',
   });
   const curls = wire.apUrls('https://solo.example/');
   const republished = [];
@@ -8392,9 +8332,8 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
   });
 
   const got = await cjson('/config');
-  check(got.status === 200 && got.json.handle === 'solo' && got.json.address === '@solo@solo.example'
-    && got.json.hasUiPassword === true && got.json.uiPassword === undefined,
-    'GET /config reports that a UI password is set, never the record itself');
+  check(got.status === 200 && got.json.handle === 'solo' && got.json.address === '@solo@solo.example',
+    'GET /config reports the account');
   check(!/SECRET-NOT-FOR-THE-PAGE/.test(JSON.stringify(got.json)),
     'and never the pod credential');
 
@@ -8414,9 +8353,9 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
     `a checkout ahead of the running agent never renames what is running (${ahead.version} / ${ahead.versionOnDisk})`);
 
   const partial = await cpost({ summary: 'finches, actually' });
-  check(partial.status === 200 && cstore.getConfig().uiPassword?.saltHex === 'aa'
+  check(partial.status === 200 && cstore.getConfig().issuer === 'https://example'
     && cstore.getConfig().handle === 'solo' && cstore.getConfig().summary === 'finches, actually',
-    'an edit that never mentions the password keeps it — a write is a merge');
+    'an edit keeps every field it never mentions — a write is a merge');
 
   const before = JSON.stringify(cstore.getConfig());
   const fixed = await cpost({ handle: 'someone-else' });
@@ -8447,16 +8386,6 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
   const groupOnly = await cpost({ review: true });
   check(groupOnly.status === 404 && /not a group/.test(groupOnly.json?.error || ''),
     'a person has no review queue to switch on');
-
-  const beforePw = republished.length;
-  const pw = await cpost({ password: 'a new one' });
-  check(pw.status === 200 && pw.json.published === false && republished.length === beforePw
-    && cstore.getConfig().uiPassword.saltHex !== 'aa'
-    && !JSON.stringify(pw.json).includes('a new one'),
-    'a password change is local: hashed, not echoed, and not republished');
-
-  const cleared = await cpost({ password: '' });
-  check(cleared.status === 200 && !cstore.getConfig().uiPassword, 'and an empty one removes it');
 
   // ---- lifecycle, the page's version of park | revive | rotate-key | retire ----
   const lpost = (p, body = {}) => cjson(p, {
@@ -13938,29 +13867,6 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
       'and a form-encoded one from the bracket spelling clients use for it');
     check(pollParams({ poll: { options: ['a', 'b'] } }).expiresIn === null,
       'a poll with no closing time says so, rather than claiming one');
-  }
-}
-
-// ---------------------------------------------------------------------------
-// 34. Being turned away for asking too often says so. Last in the file on
-//     purpose: it spends the authorize allowance for the rest of the minute.
-{
-  const ask = () => fetchLocal(`https://127.0.0.1:${PORT}/oauth/authorize`
-    + '?redirect_uri=urn:ietf:wg:oauth:2.0:oob&client_id=dk-ap-client&response_type=code',
-  { method: 'POST',
-    headers: { 'x-dk-token': TOKEN, 'content-type': 'application/x-www-form-urlencoded' },
-    body: 'password=wrong' });
-
-  let throttled = null;
-  for (let i = 0; i < 8 && !throttled; i++) {
-    const res = await ask();
-    if (res.status === 429) throttled = res;
-    else if (res.status !== 401) { check(false, `a refused authorize answered ${res.status}`); break; }
-  }
-  check(Boolean(throttled), 'asking too often is refused with 429, not another wrong-password 401');
-  if (throttled) {
-    check(Number(throttled.headers.get('retry-after')) > 0,
-      'and says how long the wait is, so a client can wait rather than ask the person to retype');
   }
 }
 
