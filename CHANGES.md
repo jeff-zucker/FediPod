@@ -1,6 +1,6 @@
 # Changes
 
-## 2026-10-05 (on a suffixed pod, a phone app can sign in with the password)
+## 2026-10-05 (on a suffixed pod, a phone app can sign in with the password — version 1.49.2)
 
 **On a FediPod Server with suffixed pods, signing a phone app in with the
 account's password works.** The password form posted to the server's own root,
