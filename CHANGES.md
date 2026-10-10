@@ -1,5 +1,13 @@
 # Changes
 
+## 2026-10-10 (a busy pod no longer costs you your timeline or your followers — version 1.50.1)
+
+**If your pod was too busy to hand FediPod one of your documents, FediPod
+could replace it.** Your timeline then showed empty, and the next post to
+arrive was saved in place of everything you had received; a new follower could
+do the same to your follower list. FediPod now reads that document again
+before anything is saved to it, and until it can, saves nothing over it.
+
 ## 2026-10-05 (an app is signed in at your pod; the separate app password is gone — version 1.50.0)
 
 **An app is signed in by signing in at your pod and pressing Allow.** The

@@ -45791,6 +45791,7 @@ var PodStore = class {
     this._held = 0;
     this.chain = Promise.resolve();
     this.verdicts = /* @__PURE__ */ new Map();
+    this.unread = /* @__PURE__ */ new Set();
     this.generation = 0;
     this.onLoaded = null;
     this.onWriting = null;
@@ -45804,6 +45805,7 @@ var PodStore = class {
       this.cache.clear();
       this.etags.clear();
       this.lastText.clear();
+      this.unread.clear();
     }
     this.storage = storage;
   }
@@ -45826,8 +45828,8 @@ var PodStore = class {
     if (listing.missing && this.storage.kind === "pod") {
       throw new Error(`state container missing (HTTP 404) at ${this.base} \u2014 pod unreachable or state gone`);
     }
-    this.etags.set("", listing.etag);
     const names = listing.names.filter((n) => n.endsWith(".json"));
+    for (const name of this.unread) if (!names.includes(name)) this.unread.delete(name);
     let fetched = 0;
     const skipped = [];
     for (const name of names) {
@@ -45838,10 +45840,12 @@ var PodStore = class {
         if (name === "config.json" && !this.cache.has(name)) {
           throw new Error(`state doc ${name} unreadable (HTTP ${r.status})`);
         }
+        if (!this.lastText.has(name)) this.unread.add(name);
         skipped.push(`${name} (HTTP ${r.status})`);
         continue;
       }
       fetched++;
+      this.unread.delete(name);
       this.etags.set(name, r.etag);
       try {
         this.cache.set(name, JSON.parse(r.body));
@@ -45851,7 +45855,9 @@ var PodStore = class {
       }
     }
     this.lastSkipped = skipped;
-    if (skipped.length) this.log(`state load skipped ${skipped.length}: ${skipped.join(", ")}`);
+    if (skipped.length) this.etags.delete("");
+    else this.etags.set("", listing.etag);
+    if (skipped.length) this.log(`state load skipped ${skipped.length}: ${skipped.join(", ")}` + (this.unread.size ? ` \u2014 not written until read: ${[...this.unread].join(", ")}` : ""));
     this.log(`state loaded: ${this.cache.size} doc(s) from ${this.base} (${fetched} re-fetched)`);
     this.onLoaded?.();
   }
@@ -45866,6 +45872,7 @@ var PodStore = class {
         continue;
       }
       this.lastText.set(name, text);
+      this.unread.delete(name);
       if (etag) this.etags.set(name, etag);
     }
     if (listingEtag) this.etags.set("", listingEtag);
@@ -45884,12 +45891,14 @@ var PodStore = class {
         this.cache.delete(name);
         this.lastText.delete(name);
         this.etags.delete(name);
+        this.unread.delete(name);
       } else if (!r.ok) {
         throw new Error(`state doc ${name} unreadable (HTTP ${r.status})`);
       } else {
         this.cache.set(name, JSON.parse(r.body));
         this.lastText.set(name, r.body);
         this.etags.set(name, r.etag);
+        this.unread.delete(name);
       }
       this.onSettled?.(name);
     }
@@ -45908,6 +45917,10 @@ var PodStore = class {
   write(name, obj) {
     this.cache.set(name, structuredClone(obj));
     if (!this.storage) return;
+    if (this.unread.has(name)) {
+      this.verdicts.set(name, false);
+      return;
+    }
     if (this.lastText.get(name) === serialise(obj)) {
       clearTimeout(this.timers.get(name));
       this.timers.delete(name);
@@ -45957,6 +45970,7 @@ var PodStore = class {
   // the returned promise so one failure cannot poison the queue.
   _put(name) {
     const done = this.chain.then(async () => {
+      if (this.unread.has(name)) return false;
       const body = serialise(this.cache.get(name));
       await Promise.resolve(this.onWriting?.(name, body)).catch(() => {
       });
@@ -46011,6 +46025,8 @@ var PodStore = class {
   // `since`: the generation the caller's work began in. Anything dropped since
   // makes the answer false.
   async commit({ since } = {}) {
+    if (this.unread.size && this.storage) await this.refresh([...this.unread]).catch(() => {
+    });
     const pending = [];
     for (const name of /* @__PURE__ */ new Set([...this.timers.keys(), ...this.dirty])) {
       const t = this.timers.get(name);
@@ -58104,6 +58120,7 @@ async function rebuildStatuses(publisher, { fromNotes = false } = {}) {
 }
 async function healStatuses(publisher) {
   const { urls, store } = publisher;
+  if (store.unread?.has("statuses.json")) return { missing: 0, recovered: 0 };
   const own = store.read("outbox.json", []).map((i) => typeof i === "string" ? i : null).filter((id) => id && id.startsWith(urls.notes));
   if (!own.length) return { missing: 0, recovered: 0 };
   const have = new Set(store.getStatuses().map((s) => s.noteId));
@@ -74022,7 +74039,7 @@ var BrowserAgent = class _BrowserAgent {
     const fullLoad = () => this.store.load().catch((e) => {
       unread = e;
     });
-    if (this._warm) await this.store.refresh(this._warm.pending).catch(fullLoad);
+    if (this._warm && warmFrom.listingEtag) await this.store.refresh(this._warm.pending).catch(fullLoad);
     else await fullLoad();
     const cfg = config || this.store.getConfig();
     if (!cfg) throw await accountNotRead({ unread, podBase: remotePod, state: this.urls.state, webId, actorUrl: this.urls.actor });

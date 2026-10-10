@@ -516,7 +516,9 @@ export class BrowserAgent {
     let unread = null;
     const fullLoad = () => this.store.load().catch((e) => { unread = e; });
     // Warm: only documents caught mid-write are read again, else a full load.
-    if (this._warm) await this.store.refresh(this._warm.pending).catch(fullLoad);
+    // A kept copy without the container's ETag is one whose last load could
+    // not read everything: what it lacks is still on the pod, unread.
+    if (this._warm && warmFrom.listingEtag) await this.store.refresh(this._warm.pending).catch(fullLoad);
     else await fullLoad();
     // Config: handed in on sign-up, or read from the pod on a returning sign-in.
     const cfg = config || this.store.getConfig();
