@@ -1,5 +1,10 @@
 # Changes
 
+## 2026-10-10 (a post's text shows once — version 1.50.2)
+
+**Posts from Mastodon and most other servers show their text once.** Each
+showed it twice, with a comma between; posts already received show once too.
+
 ## 2026-10-10 (a busy pod no longer costs you your timeline or your followers — version 1.50.1)
 
 **If your pod was too busy to hand FediPod one of your documents, FediPod

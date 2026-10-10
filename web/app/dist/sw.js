@@ -57185,6 +57185,7 @@ function fromLiteral(term3) {
   }
   return term3.value;
 }
+var isTagged = (term3) => term3.termType === "Literal" && !!term3.language;
 function toValue(term3, ctx, depth, path) {
   if (term3.termType === "Literal") return fromLiteral(term3);
   if (isListHead(term3, ctx)) return readList(term3.value, ctx, depth, path);
@@ -57203,8 +57204,12 @@ function readProperty(subject, name, ctx, depth = 0, path = /* @__PURE__ */ new 
   }
   const term3 = TERMS.get(name);
   if (!term3) return void 0;
-  const values = preds.get(term3.iri);
+  let values = preds.get(term3.iri);
   if (!values || !values.length) return void 0;
+  if (values.some(isTagged)) {
+    const plain = values.filter((v) => !isTagged(v));
+    values = plain.length ? plain : [values.find(isTagged)];
+  }
   const listed = values.filter((v) => isListHead(v, ctx));
   if (term3.list) {
     if (!listed.length) return void 0;
@@ -68305,6 +68310,10 @@ var BskyFeed = class {
 };
 
 // lib/client/masto/render.mjs
+var once = (html) => {
+  const m = (html.length - 1) / 2;
+  return Number.isInteger(m) && html[m] === "," && html.slice(0, m) === html.slice(m + 1) ? html.slice(0, m) : html;
+};
 var TRANSPARENT_PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
 var DEFAULT_AVATAR = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAABd0lEQVR42u3ZoW4CQRDG8Xk6NBLbVCJ5gBpMTQ2iBlFR29RXNsFhz1JHXV9hydfkEkoobW5n2F34i0kIHMfN73ZvdwYbTabpmsMAAAAAAAAAAAAAAAAAAACiY3wzS/ePz+n1bZW6zTZ9fH59h17rPX2mYy4OQEktnl5+JP1b6Bgdey6IcIDb2Ty9r7s/Ez8MfUffbRpACfznrp8aDdEIFjnsh9z5YyMhcjqEAWge5ybfh87VFIDuWM7QPzYVokZBCICWM6/k+9A5mwHQmu4NoHM2A+A5/PenQTMA3sn3AQBTgIcgyyAbIbbCFEOUwzREaInRFKUtDgAAFQLcPSxDCqH9Z4V+o0oAXVhU4ofhiWCtJe+NYKV3e6V3idkAHvv9nDqhKIBnxVeqUrRaav5SvQKrqetTols0GGDdbaoB0LWcFUBP31qS72PoimCtD//caWC1tL1Ltc2ttbXfe08wCKC25HP+OgMAAAAAAAAAAAAAAAAArhNgB1PE/x/JOiuNAAAAAElFTkSuQmCC";
 var selfIcon = (api, self2, cached) => (self2 ? api.store.getConfig()?.icon : null) || cached.icon;
@@ -68528,7 +68537,7 @@ function status(api, s, { all, depth = 0 } = {}) {
     in_reply_to_id: s.inReplyTo ? api.store.idFor(s.inReplyTo) : null,
     in_reply_to_account_id: null,
     sensitive: !!(s.spoiler || s.sensitive),
-    spoiler_text: s.spoiler || "",
+    spoiler_text: once(s.spoiler || ""),
     visibility: s.visibility || "public",
     language: null,
     edited_at: s.editedAt || null,
@@ -68545,7 +68554,7 @@ function status(api, s, { all, depth = 0 } = {}) {
     muted: false,
     bookmarked: !!s.bookmarked,
     pinned: !!s.pinned,
-    content: s.content || "",
+    content: once(s.content || ""),
     reblog: null,
     application: null,
     account: api.account(s.actor),
@@ -68587,7 +68596,7 @@ function status(api, s, { all, depth = 0 } = {}) {
 }
 function filtersFor(api, s) {
   const now = Date.now();
-  const hay = `${s.content || ""} ${s.spoiler || ""}`.replace(/<[^>]*>/gu, " ").toLowerCase();
+  const hay = `${once(s.content || "")} ${once(s.spoiler || "")}`.replace(/<[^>]*>/gu, " ").toLowerCase();
   if (!hay.trim()) return [];
   const out = [];
   for (const f of api.store.getFilters?.() || []) {
@@ -68674,7 +68683,7 @@ function pushNotify(api, n) {
     notification_type: n.type,
     preferred_locale: "en",
     title: `${acct.display_name || acct.acct} ${verbs[n.type] || n.type}`,
-    body: s ? htmlToText(s.content || "").slice(0, 140) : "",
+    body: s ? htmlToText(once(s.content || "")).slice(0, 140) : "",
     icon: acct.avatar || ""
   });
 }
