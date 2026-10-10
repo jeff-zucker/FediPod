@@ -98,6 +98,6 @@
   },
   "devDependencies": {
     "esbuild": "^0.28.2",
-    "fedipod-bb": "^0.4.1"
+    "fedipod-bb": "^0.4.4"
   }
 }
