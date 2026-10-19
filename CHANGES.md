@@ -1,5 +1,14 @@
 # Changes
 
+## 2026-10-19 (mail that arrived while FediPod was closed is read, not thrown away — version 1.51.1)
+
+**Mail that arrived while FediPod was closed is read when FediPod opens.**
+fedipod.net hands that mail over in batches, and FediPod in the browser could
+not read one: after five tries it set the batch aside as a dead letter saying
+"Buffer.byteLength is not a function", and the mail in it was lost. It cannot
+be brought back. Someone who followed you while FediPod was closed may have
+to follow you again.
+
 ## 2026-10-19 (a Mastodon or Bluesky account you connect is kept on your pod, and never at fedipod.net — version 1.51.0)
 
 **A Mastodon or Bluesky account you connect is kept on your pod, and only

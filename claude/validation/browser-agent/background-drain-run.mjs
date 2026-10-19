@@ -198,6 +198,35 @@ try {
   st = await status();
   check(st?.followers === FOLLOWS, `the account lists ${st?.followers} followers`);
 
+  // Mail fedipod.net held while the app was closed reaches the pod as one
+  // batch document (lib/gateway/held-mail.mjs); the browser reads it the same.
+  const BATCHED = 20;
+  const batch = [];
+  for (let i = FOLLOWS + 1; i <= FOLLOWS + BATCHED; i++) {
+    const peer = `http://localhost:${APP_PORT}/peer/${i}`;
+    batch.push({ name: `held-${i}.json`, receipt: null,
+      body: JSON.stringify({ '@context': 'https://www.w3.org/ns/activitystreams', id: `${peer}#follow`, type: 'Follow', actor: peer, object: actorUrl }) });
+  }
+  const deadBefore = st?.deadLetters ?? 0;
+  await send('ServiceWorker.stopAllWorkers');
+  await sleep(1500);
+  const put = await fetch(inboxUrl, { method: 'POST', headers: { 'content-type': 'application/json', slug: `batch-${Date.now()}-0-rig.json` },
+    body: JSON.stringify({ batch }) });
+  check(put.status === 201 && /\/batch-[^/]*\.json$/u.test(put.headers.get('location') || ''), `a batch of ${BATCHED} held follows in the pod inbox (${put.headers.get('location')})`);
+  await evaluate(`new Promise((res) => { const o = indexedDB.open('fedipod-warm'); o.onerror = () => res(false);
+    o.onsuccess = () => { const db = o.result; const t = db.transaction('meta', 'readwrite'); const s = t.objectStore('meta');
+      const c = s.openCursor(); c.onsuccess = () => { const cur = c.result; if (cur) { cur.update({ ...cur.value, drainedAt: 0 }); cur.continue(); } };
+      t.oncomplete = () => { db.close(); res(true); }; t.onerror = () => { db.close(); res(false); }; }; })`);
+  const t1 = Date.now();
+  await evaluate('(async () => (await fetch("/api/v1/instance")).status)()');
+  for (let i = 0; i < 60; i++) {
+    await sleep(2000);
+    if (podLog.slice(from).some((l) => /^DELETE /u.test(l) && /\/batch-[^/]*\.json$/u.test(l))) break;
+  }
+  st = await status();
+  check(st?.followers === FOLLOWS + BATCHED, `the batch's follows are followers too (${st?.followers}, ${Math.round((Date.now() - t1) / 1000)} s)`);
+  check((st?.deadLetters ?? 0) === deadBefore, `and none of them became a dead letter (${(st?.deadLetters ?? 0) - deadBefore})`);
+
   // The "wait for approval" switch, through the worker, reaches the actor.
   const setApproval = (on) => evaluate(`(async () => { const r = await fetch('/config', { method: 'POST',
     headers: { 'x-fedipod-page': '1', 'content-type': 'application/json' }, body: JSON.stringify({ autoAcceptFollows: ${on} }) });

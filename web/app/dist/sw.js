@@ -54,6 +54,7 @@ globalThis.Buffer ??= (() => {
     concat: (list) => { const n = list.reduce((s, x) => s + x.length, 0); const o = new Buf(n); let i = 0; for (const x of list) { o.set(x, i); i += x.length; } return o; },
     alloc: (n) => new Buf(n),
     isBuffer: (x) => x instanceof Uint8Array,
+    byteLength: (d, enc) => (typeof d === 'string' ? fromString(d, enc).length : d.byteLength ?? d.length),
   };
 })();
 
