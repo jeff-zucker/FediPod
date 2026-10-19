@@ -166,7 +166,7 @@ const heldCtx = {
   noteNext: async (h, at, opt) => { heldCtx.woke.push({ h, at, earliest: !!opt?.earliest }); },
   pushes: [],
   pushWanted: async () => true,
-  startPush: async (h, o) => { heldCtx.pushes.push(o?.ids ? { h, ids: o.ids } : h); },
+  startPush: async (h, o) => { heldCtx.pushes.push(o?.ids ? { h, ids: o.ids } : o?.alert ? { h, alert: o.alert } : h); },
 };
 // Extras one block switches on for itself (the outbox door for a kept account).
 let doorExtras = {};
@@ -1022,6 +1022,15 @@ try {
       `FediPod open names the notifications it made, and they are pushed, each once (${JSON.stringify(heldCtx.pushes)})`);
     check((await post('/api/push', { handle: 'thrush', ids: ['0123456789abcdef'] }, { ...asOwner, authorization: 'Bearer someone-else' })).status === 403
       && heldCtx.pushes.length === 1, 'only the owner can ask for a push');
+    heldCtx.pushes.length = 0;
+    // FediPod could not read some mail: its owner's phones are told, in its words.
+    const alerted = await post('/api/alert', { handle: 'thrush', text: 'FediPod could not read a piece of your mail.' });
+    check(alerted.status === 200 && (await alerted.json()).pushing === 1 && heldCtx.pushes.length === 1
+      && heldCtx.pushes[0].h === 'thrush' && heldCtx.pushes[0].alert === 'FediPod could not read a piece of your mail.',
+      `FediPod could not read mail, and its owner's phones are told (${JSON.stringify(heldCtx.pushes)})`);
+    check((await post('/api/alert', { handle: 'thrush', text: 'x' }, { ...asOwner, authorization: 'Bearer someone-else' })).status === 403
+      && (await post('/api/alert', { handle: 'thrush', text: '  ' })).status === 400 && heldCtx.pushes.length === 1,
+      'only the owner can raise one, and it has to say something');
     heldCtx.pushes.length = 0;
     // The account's picture, carried by the sign-in to the WebFinger answer.
     const avatarOf = async () => (await (await get(`/.well-known/webfinger?resource=acct:thrush@${HOST}`)).json())

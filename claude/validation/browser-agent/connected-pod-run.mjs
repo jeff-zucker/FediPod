@@ -189,17 +189,48 @@ try {
     body: JSON.stringify({ id: 'me@mastodon.example', storage: 'browser' }) })).status)()`);
   check(refused === 400, `no other place to keep it is accepted (${refused})`);
 
-  // The account page: the connections show, with no choice of where to keep them.
+  // Mail FediPod cannot read: a batch that is not one, read at the next start.
+  const inboxUrl = st.actor.replace(/actor$/u, 'inbox/');
+  await send('ServiceWorker.stopAllWorkers');
+  await sleep(1500);
+  const bad = await fetch(inboxUrl, { method: 'POST', headers: { 'content-type': 'application/json', slug: `batch-${Date.now()}-0-unreadable.json` },
+    body: '{ this is not a batch' });
+  await evaluate(`new Promise((res) => { const o = indexedDB.open('fedipod-warm'); o.onerror = () => res(false);
+    o.onsuccess = () => { const db = o.result; const t = db.transaction('meta', 'readwrite'); const s = t.objectStore('meta');
+      const c = s.openCursor(); c.onsuccess = () => { const cur = c.result; if (cur) { cur.update({ ...cur.value, drainedAt: 0 }); cur.continue(); } };
+      t.oncomplete = () => { db.close(); res(true); }; t.onerror = () => { db.close(); res(false); }; }; })`);
+  let trouble = null;
+  for (let i = 0; i < 40 && !trouble?.count; i++) { trouble = (await status())?.trouble; if (!trouble?.count) await sleep(1000); }
+  check(bad.status === 201 && trouble?.count === 1, `mail FediPod cannot read is counted (${JSON.stringify(trouble)})`);
+
+  // The account page: the connections show, with no choice of where to keep
+  // them, and the bar says mail was not read.
   await send('Page.navigate', { url: `http://localhost:${APP_PORT}/admin/` });
   let page = null;
   for (let i = 0; i < 40; i++) {
-    page = await evaluate(`(() => { const t = document.body?.innerText || ''; return { shown: t.includes('@me@mastodon.example') && t.includes('me.bsky.example'),
-      storeKey: /Store key/u.test(t) || [...document.querySelectorAll('option')].some((o) => /Store key/u.test(o.textContent)) }; })()`);
-    if (page?.shown) break;
+    page = await evaluate(`(() => { const t = document.body?.innerText || ''; const b = document.getElementById('trouble-banner');
+      return { shown: t.includes('@me@mastodon.example') && t.includes('me.bsky.example'),
+        storeKey: /Store key/u.test(t) || [...document.querySelectorAll('option')].some((o) => /Store key/u.test(o.textContent)),
+        banner: b ? { role: b.getAttribute('role'), text: b.innerText } : null }; })()`);
+    if (page?.shown && page?.banner) break;
     await sleep(500);
   }
   check(page?.shown === true, 'the account page lists both connected accounts');
   check(page?.storeKey === false, 'and offers no "Store key" choice');
+  check(page?.banner?.role === 'alert' && /could not read a piece of your mail\. It is listed under Show dead letters/u.test(page.banner.text || ''),
+    `the bar says mail was not read (${page?.banner?.text})`);
+  if (process.env.SHOT_TROUBLE) {
+    await send('Emulation.setDeviceMetricsOverride', { width: 1200, height: 520, deviceScaleFactor: 1, mobile: false });
+    await sleep(500);
+    const shot = await send('Page.captureScreenshot', { format: 'png' });
+    if (shot.result?.data) fs.writeFileSync(process.env.SHOT_TROUBLE, Buffer.from(shot.result.data, 'base64'));
+    await send('Emulation.clearDeviceMetricsOverride');
+  }
+  await evaluate(`document.getElementById('do-deadletter').click()`);
+  let cleared = false;
+  for (let i = 0; i < 20 && !cleared; i++) { await sleep(500); cleared = await evaluate(`!document.getElementById('trouble-banner')`); }
+  const after = (await status())?.trouble;
+  check(cleared && after?.count === 0, 'opening the dead letters takes the line away, and the count starts again');
   if (process.env.SHOT) {
     await send('Emulation.setDeviceMetricsOverride', { width: 1200, height: 760, deviceScaleFactor: 1, mobile: false });
     await evaluate(`document.querySelector('dt.under')?.scrollIntoView({ block: 'center' })`);

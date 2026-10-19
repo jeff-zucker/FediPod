@@ -3,12 +3,13 @@
 // for it is read into the account's copy, and each notification that makes is
 // pushed to the phones and browsers its owner signed up
 // (lib/gateway/masto-gateway.mjs: pushHeld). Or FediPod, open in a browser,
-// named the notifications it made, and those are pushed (pushMade). Started
+// named the notifications it made, and those are pushed (pushMade), or it
+// could not read some mail, and says so (pushAlert). Started
 // only by the front (front.mjs startPush), whose request is signed with the
 // keeper's secret.
 import crypto from 'node:crypto';
 import { gatewayCtx, keeperCredential } from './front.mjs';
-import { pushHeld, pushMade } from '../../lib/gateway/masto-gateway.mjs';
+import { pushHeld, pushMade, pushAlert } from '../../lib/gateway/masto-gateway.mjs';
 
 export default async function handler(request) {
   const secret = process.env.FEDIPOD_KEEPER_CLIENT_SECRET;
@@ -16,12 +17,13 @@ export default async function handler(request) {
   const said = Buffer.from(request.headers.get('x-fedipod-push') || '');
   const want = Buffer.from(secret ? crypto.createHmac('sha256', `fedipod-push:${secret}`).update(body).digest('hex') : '');
   if (!want.length || said.length !== want.length || !crypto.timingSafeEqual(said, want)) return new Response(null, { status: 403 });
-  const { handle, at, ids } = JSON.parse(body);
+  const { handle, at, ids, alert } = JSON.parse(body);
   if (!handle || Date.now() - Number(at) > 5 * 60_000) return new Response(null, { status: 400 });
   const ctx = gatewayCtx();
   ctx.keeperCredential = await keeperCredential();
   const rec = await ctx.lookup(handle);
-  const push = Array.isArray(ids) ? () => pushMade(ctx, handle, rec, ids) : () => pushHeld(ctx, handle, rec);
+  const push = typeof alert === 'string' ? () => pushAlert(ctx, handle, rec, alert)
+    : Array.isArray(ids) ? () => pushMade(ctx, handle, rec, ids) : () => pushHeld(ctx, handle, rec);
   if (rec) await push().catch((e) => console.log(`push @${handle}: ${e?.message || e}`));
   return new Response(null, { status: 204 });
 }

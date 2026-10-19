@@ -99,7 +99,7 @@ process.env.AP_ALLOW_PRIVATE_TARGETS = '1';
 const lib = (p) => import(path.join(root, p));
 const { routeFront, verifyPodToken } = await lib('lib/gateway/front-core.mjs');
 const { routeStateApi, endHold } = await lib('lib/gateway/state-api.mjs');
-const { routeMastoGateway, pushHeld, pushMade } = await lib('lib/gateway/masto-gateway.mjs');
+const { routeMastoGateway, pushHeld, pushMade, pushAlert } = await lib('lib/gateway/masto-gateway.mjs');
 const ece = require(path.join(root, 'node_modules/http_ece/ece.js'));
 const https = await import('node:https');
 const { logInAtIdp } = await import(new URL('./idp-login.mjs', import.meta.url));
@@ -153,7 +153,10 @@ const ctx = {
   keeperFetch: async () => (u, i) => keeperSession.fetch(u, i),
   // As push-background does for notifications FediPod named while open.
   pushWanted: async (h) => Number((await ctx.mastoKv.get(`push/${h}`))?.text || 0) > 0,
-  startPush: async (h, o) => { if (o?.ids) pendingWork.push(pushMade(ctx, h, rows[h], o.ids, { log: () => {} })); },
+  startPush: async (h, o) => {
+    if (o?.ids) pendingWork.push(pushMade(ctx, h, rows[h], o.ids, { log: () => {} }));
+    if (o?.alert) pendingWork.push(pushAlert(ctx, h, rows[h], o.alert, { log: () => {} }));
+  },
 };
 const gatewayRoute = async (q, s, u) => {
   const chunks = []; for await (const c of q) chunks.push(c);
@@ -187,7 +190,7 @@ const server = http.createServer((q, s) => {
   if (u === '/app-signin/tokens.css') return file('web/admin/tokens.css', 'text/css')(q, s);
   if (/^\/app-signin\/(fedi-login|oidc-session)\.mjs$/.test(u)) return file(`node_modules/fediverse-session/${path.basename(u)}`, 'text/javascript')(q, s);
   if (u.startsWith('/api/state/') || u.startsWith('/api/v1/') || u.startsWith('/api/v2/') || u.startsWith('/oauth/')
-    || u === '/api/authorize' || ['/api/open', '/api/keeper', '/api/here', '/api/push'].includes(u)) {
+    || u === '/api/authorize' || ['/api/open', '/api/keeper', '/api/here', '/api/push', '/api/alert'].includes(u)) {
     return gatewayRoute(q, s, u).catch((e) => { s.writeHead(500); s.end(String(e.stack || e)); });
   }
   if (u === '/' || u === '/index.html') { s.writeHead(200, { 'content-type': 'text/html' }); return s.end(page); }
@@ -394,6 +397,24 @@ if (!cssUp) { console.log(`FAIL  the scratch server never answered again at ${IS
     `a mention while FediPod is open is read by FediPod and pushed to the phone (${pushed.length - openPushed} push: ${openPayload?.title})`);
   check(await pushMade(ctx, handle, rows[handle], [openPayload?.notification_id], { log: () => {} }) === 0 && pushed.length === openPushed + 1,
     'and named again, it is not pushed twice');
+
+  // ---- mail FediPod could not read: the phone is told, and the bar says so ----
+  const statusOf = () => evaluate(`(async () => { const r = await fetch('/status', { headers: { 'x-fedipod-page': '1' } }); return r.ok ? r.json() : null; })()`);
+  const alertPushed = pushed.length;
+  const unreadable = await owner.fetch(`${pod}fedipod/ap/inbox/batch-${Date.now()}-0-unreadable.json`, { method: 'PUT',
+    headers: { 'content-type': 'application/json' }, body: '{ this is not a batch' });
+  const toldPhone = await waitFor(async () => { await Promise.all(pendingWork.splice(0)); return pushed.length > alertPushed; }, 90, 1000);
+  let alertPayload = null;
+  try { alertPayload = JSON.parse(ece.decrypt(pushed.at(-1).body, { version: 'aes128gcm', privateKey: phone, authSecret: phoneAuth.toString('base64url') }).toString()); } catch (e) { console.log('  ' + e.message); }
+  check(unreadable.status < 300 && toldPhone && alertPayload?.title === 'FediPod' && /^Could not read a piece of your mail/.test(alertPayload?.body || ''),
+    `mail FediPod could not read reaches the phone as an alert (${alertPayload?.title}: ${alertPayload?.body})`);
+  const troubled = await statusOf();
+  check(troubled?.trouble?.count === 1 && /unreadable batch/.test(troubled.trouble.last?.reason || ''),
+    `and FediPod counts it for the bar (${JSON.stringify(troubled?.trouble)})`);
+  const seenTrouble = await evaluate(`(async () => { const r = await fetch('/trouble', { method: 'POST', headers: { 'x-fedipod-page': '1', 'content-type': 'application/json' }, body: JSON.stringify({ seen: true }) }); return r.status; })()`);
+  const afterSeen = await statusOf();
+  check(seenTrouble === 200 && afterSeen?.trouble?.count === 0 && !!afterSeen.trouble.alertedAt,
+    'opening the dead letters clears it, and the hourly limit stands');
 
   // ---- the gateway changes its identity: the account moves over ----
   check(await post('written before the switch') === 200

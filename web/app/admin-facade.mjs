@@ -29,7 +29,7 @@ const WIRE_CONFIG = ['name', 'summary', 'icon', 'image', 'fields', 'aliases', 'a
 // not here falls through to the network as a static file or the gateway.
 export const ADMIN_PATHS = new Set([
   '/status', '/config', '/gateway', '/alias', '/rotate-key', '/import',
-  '/deadletter', '/blocks', '/profiles', '/modqueue', '/log', '/fediacct', '/describe', '/follow',
+  '/deadletter', '/trouble', '/blocks', '/profiles', '/modqueue', '/log', '/fediacct', '/describe', '/follow',
   '/atproto', '/atproto/connect', '/atproto/disconnect',
   '/rebuild', '/move', '/retire', '/inbox/prune', '/park', '/revive', '/takeover',
   '/gateway/pause', '/gateway/keep', '/gateway/close',
@@ -194,6 +194,13 @@ export class AdminFacade {
 
     // ---- writes ----
     switch (p) {
+      // The owner has opened the dead letters: the bar stops saying so.
+      case '/trouble': {
+        if (body.seen !== true) return json(400, { error: 'seen: true is the only thing to say here' });
+        a.troubleSeen?.();
+        await a.store.flush();
+        return json(200, { ok: true, trouble: a.status().trouble });
+      }
       case '/config': {
         const fixed = PERMANENT_CONFIG.filter(k => k in body);
         if (fixed.length) return json(400, { error: `${fixed.join(', ')} cannot be changed — that is the identity itself` });

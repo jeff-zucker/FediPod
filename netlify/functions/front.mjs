@@ -276,18 +276,19 @@ export function gatewayCtx() {
     // One run at a time per account: an arrival while one runs is noted, and
     // the run goes round again for it (masto-gateway.mjs: pushHeld).
     // Notifications FediPod made while open come named, `ids`, and are pushed
-    // by a run of their own (pushMade).
-    startPush: async (handle, { ids = null } = {}) => {
+    // by a run of their own (pushMade); so does an alert FediPod raised
+    // (pushAlert).
+    startPush: async (handle, { ids = null, alert = null } = {}) => {
       const secret = process.env.FEDIPOD_KEEPER_CLIENT_SECRET;
       if (!secret || !process.env.URL) return;
       const kv = blobsKv('masto');
-      if (!ids) {
+      if (!ids && !alert) {
         await kv.set(`pushwant/${handle}`, `${Date.now()}-${Math.random()}`);
         const running = await kv.get(`pushrun/${handle}`);
         if (running && Date.now() - Number(running.text) < 60_000) return;
         await kv.set(`pushrun/${handle}`, String(Date.now()));
       }
-      const body = JSON.stringify({ handle, at: Date.now(), ...(ids ? { ids } : {}) });
+      const body = JSON.stringify({ handle, at: Date.now(), ...(ids ? { ids } : {}), ...(alert ? { alert } : {}) });
       const mac = crypto.createHmac('sha256', `fedipod-push:${secret}`).update(body).digest('hex');
       await fetch(`${process.env.URL}/.netlify/functions/push-background`, {
         method: 'POST', headers: { 'content-type': 'application/json', 'x-fedipod-push': mac }, body,

@@ -64,6 +64,9 @@ $('do-deadletter').addEventListener('click', async () => {
   if (showingFrom('deadletter')) { closePanels(); return; }
   const { json } = await api('/deadletter');
   output(json?.items?.length ? json.items : 'no dead letters', 'deadletter');
+  // Looked at: the bar stops saying mail was not read.
+  const seen = await postJson('/trouble', { seen: true }).catch(() => null);
+  if (seen?.status === 200) document.getElementById('trouble-banner')?.remove();
 });
 
 // ---- lifecycle ----

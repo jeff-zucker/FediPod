@@ -65493,7 +65493,16 @@ var Intake = class {
     rec.last = String(message || "").slice(0, 200);
     all[url] = rec;
     this.store.write(ATTEMPTS_DOC, all);
+    if (rec.n === 2) this._trouble("failing", url, message);
     return rec.n;
+  }
+  // Mail that could not be read, as against mail refused: a second failed try,
+  // or a piece set aside after its last. `onTrouble` tells the owner.
+  _trouble(kind, url, reason) {
+    try {
+      this.onTrouble?.({ kind, url, reason: String(reason || "").slice(0, 200), at: (/* @__PURE__ */ new Date()).toISOString() });
+    } catch {
+    }
   }
   _clearAttempt(url) {
     const all = this.store.read(ATTEMPTS_DOC, {});
@@ -65758,6 +65767,7 @@ var Intake = class {
           this.log(`inbox batch ${url} attempt ${n}/${MAX_ITEM_ATTEMPTS}: ${e.message}`);
           if (n >= MAX_ITEM_ATTEMPTS) {
             this.store.addDeadLetter({ inboxUrl: url, reason: `failed ${n}x: ${e.message}`, activity: null });
+            this._trouble("set-aside", url, e.message);
             pending.push(url);
           }
         }
@@ -65781,6 +65791,7 @@ var Intake = class {
         this.log(`inbox item ${url} attempt ${n}/${MAX_ITEM_ATTEMPTS}: ${e.message}`);
         if (n >= MAX_ITEM_ATTEMPTS) {
           this.store.addDeadLetter({ inboxUrl: url, reason: `failed ${n}x: ${e.message}`, activity: trimActivity(at.activity) });
+          this._trouble("set-aside", url, e.message);
           pending.push(url);
         }
       }
@@ -65855,6 +65866,7 @@ var Intake = class {
     const batch = await this._batchEntries(url);
     if (!batch) {
       this.store.addDeadLetter({ inboxUrl: url, reason: "unreadable batch", activity: null });
+      this._trouble("set-aside", url, "unreadable batch");
       return { entries: 1, complete: true };
     }
     let complete = true;
@@ -65874,6 +65886,7 @@ var Intake = class {
         this.log(`inbox batch entry ${key} attempt ${n}/${MAX_ITEM_ATTEMPTS}: ${err.message}`);
         if (n >= MAX_ITEM_ATTEMPTS) {
           this.store.addDeadLetter({ inboxUrl: key, reason: `failed ${n}x: ${err.message}`, activity: trimActivity(at.activity) });
+          this._trouble("set-aside", key, err.message);
         } else {
           complete = false;
         }
@@ -65912,6 +65925,7 @@ var Intake = class {
           this.log(`held delivery ${key} attempt ${n}/${MAX_ITEM_ATTEMPTS}: ${err.message}`);
           if (n >= MAX_ITEM_ATTEMPTS) {
             this.store.addDeadLetter({ inboxUrl: key, reason: `failed ${n}x: ${err.message}`, activity: trimActivity(at.activity) });
+            this._trouble("set-aside", key, err.message);
             done.push(e.name);
           }
         }
@@ -71440,6 +71454,7 @@ var ADMIN_PATHS = /* @__PURE__ */ new Set([
   "/rotate-key",
   "/import",
   "/deadletter",
+  "/trouble",
   "/blocks",
   "/profiles",
   "/modqueue",
@@ -71637,6 +71652,13 @@ var AdminFacade = class {
       return json2(400, { error: "expected JSON body" });
     }
     switch (p) {
+      // The owner has opened the dead letters: the bar stops saying so.
+      case "/trouble": {
+        if (body.seen !== true) return json2(400, { error: "seen: true is the only thing to say here" });
+        a.troubleSeen?.();
+        await a.store.flush();
+        return json2(200, { ok: true, trouble: a.status().trouble });
+      }
       case "/config": {
         const fixed = PERMANENT_CONFIG.filter((k) => k in body);
         if (fixed.length) return json2(400, { error: `${fixed.join(", ")} cannot be changed \u2014 that is the identity itself` });
@@ -73752,6 +73774,35 @@ var BrowserAgent = class _BrowserAgent {
   // (lib/gateway/held-mail.mjs: /api/push). Named a moment later, once written,
   // so a burst is one call. One from another network is not pushed.
   static PUSH_AFTER_MS = 2e3;
+  // Mail FediPod could not read: counted until its owner opens the dead
+  // letters, shown in the bar meanwhile, and told to their phones at most
+  // once an hour (lib/gateway/held-mail.mjs: /api/alert).
+  static TROUBLE_ALERT_MS = 60 * 6e4;
+  noteTrouble(t) {
+    const had = this.store.read("trouble.json", null) || { count: 0 };
+    const now = Date.now();
+    const due = now - (had.alertedAt ? Date.parse(had.alertedAt) : 0) >= _BrowserAgent.TROUBLE_ALERT_MS;
+    const next = {
+      ...had,
+      count: (had.count || 0) + 1,
+      firstAt: had.firstAt || t.at,
+      lastAt: t.at,
+      last: { kind: t.kind, reason: t.reason },
+      ...due ? { alertedAt: new Date(now).toISOString() } : {}
+    };
+    this.store.write("trouble.json", next);
+    this.log(`could not read mail (${t.kind}): ${t.reason}`);
+    if (due) {
+      const many = next.count === 1 ? "a piece of your mail" : `${next.count} pieces of your mail`;
+      this.tellGateway("alert", { handle: this.doorKey, text: `Could not read ${many}. Your manage page lists them under Show dead letters and Show the log.` }, { standing: false }).catch(() => {
+      });
+    }
+  }
+  // The owner has looked: the count starts again, and the hourly limit stands.
+  troubleSeen() {
+    const had = this.store.read("trouble.json", null);
+    if (had?.count) this.store.write("trouble.json", { count: 0, ...had.alertedAt ? { alertedAt: had.alertedAt } : {} });
+  }
   notePush(n) {
     if (!this.gatewayApi || n?.bsky || n?.via) return;
     if (!Object.keys(this.store.read("webpush.json", { subs: {} }).subs || {}).length) return;
@@ -74116,6 +74167,7 @@ var BrowserAgent = class _BrowserAgent {
       lease: this.lease,
       ownerPost: (a, o) => this.c2s.dispatch(a, o)
     });
+    this.intake.onTrouble = (t) => this.noteTrouble(t);
     this.masto = new MastoApi({
       agent: this,
       log: this.log,
@@ -74176,7 +74228,8 @@ var BrowserAgent = class _BrowserAgent {
       podRequests: this.remote?.stats?.() || null,
       update: null,
       inboxCooldownFor: 0,
-      stateSkipped: this.store?.lastSkipped || []
+      stateSkipped: this.store?.lastSkipped || [],
+      trouble: this.store?.read("trouble.json", null) || null
     };
   }
   // Rotate the signing key (POST /rotate-key). Mint a fresh keypair, replace the

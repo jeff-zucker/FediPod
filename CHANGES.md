@@ -1,5 +1,13 @@
 # Changes
 
+## 2026-10-19 (you are told when FediPod cannot read your mail — version 1.52.0)
+
+**When FediPod cannot read a piece of your mail, you are told.** A red line
+across the top of FediPod's pages says so until you open Show dead letters on
+your manage page. Your phone hears too, at most once an hour, if a Mastodon app
+on it is signed in at fedipod.net with notifications on. It is mail FediPod
+failed to read; mail it refused, such as a forged delivery, raises nothing.
+
 ## 2026-10-19 (mail that arrived while FediPod was closed is read, not thrown away — version 1.51.1)
 
 **Mail that arrived while FediPod was closed is read when FediPod opens.**

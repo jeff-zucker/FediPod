@@ -183,6 +183,31 @@ export class BrowserAgent {
   // (lib/gateway/held-mail.mjs: /api/push). Named a moment later, once written,
   // so a burst is one call. One from another network is not pushed.
   static PUSH_AFTER_MS = 2_000;
+
+  // Mail FediPod could not read: counted until its owner opens the dead
+  // letters, shown in the bar meanwhile, and told to their phones at most
+  // once an hour (lib/gateway/held-mail.mjs: /api/alert).
+  static TROUBLE_ALERT_MS = 60 * 60_000;
+  noteTrouble(t) {
+    const had = this.store.read('trouble.json', null) || { count: 0 };
+    const now = Date.now();
+    const due = now - (had.alertedAt ? Date.parse(had.alertedAt) : 0) >= BrowserAgent.TROUBLE_ALERT_MS;
+    const next = { ...had, count: (had.count || 0) + 1, firstAt: had.firstAt || t.at, lastAt: t.at,
+      last: { kind: t.kind, reason: t.reason }, ...(due ? { alertedAt: new Date(now).toISOString() } : {}) };
+    this.store.write('trouble.json', next);
+    this.log(`could not read mail (${t.kind}): ${t.reason}`);
+    if (due) {
+      const many = next.count === 1 ? 'a piece of your mail' : `${next.count} pieces of your mail`;
+      this.tellGateway('alert', { handle: this.doorKey, text: `Could not read ${many}. Your manage page lists them under Show dead letters and Show the log.` }, { standing: false })
+        .catch(() => {});
+    }
+  }
+  // The owner has looked: the count starts again, and the hourly limit stands.
+  troubleSeen() {
+    const had = this.store.read('trouble.json', null);
+    if (had?.count) this.store.write('trouble.json', { count: 0, ...(had.alertedAt ? { alertedAt: had.alertedAt } : {}) });
+  }
+
   notePush(n) {
     if (!this.gatewayApi || n?.bsky || n?.via) return;
     if (!Object.keys(this.store.read('webpush.json', { subs: {} }).subs || {}).length) return;
@@ -637,6 +662,7 @@ export class BrowserAgent {
       store: this.store, deliverer: this.deliverer, publisher: this.publisher, log: this.log, push: true, lease: this.lease,
       ownerPost: (a, o) => this.c2s.dispatch(a, o),
     });
+    this.intake.onTrouble = (t) => this.noteTrouble(t);
     // The Mastodon facade the service worker serves.
     //
     // It used to be handed `allowed: null`, which reads as "no policy" — and
@@ -737,6 +763,7 @@ export class BrowserAgent {
       update: null,
       inboxCooldownFor: 0,
       stateSkipped: this.store?.lastSkipped || [],
+      trouble: this.store?.read('trouble.json', null) || null,
     };
   }
 

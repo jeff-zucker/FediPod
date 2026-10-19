@@ -28,6 +28,7 @@
     // leaves the account looking broken from outside. Say so where the
     // account is, and let the owner take it back from here.
     if (s?.mode === 'viewer') viewerBanner();
+    if (s?.trouble?.count > 0) troubleBanner(s.trouble.count);
   }).catch(() => { /* not up yet; the bar still works */ });
 
   // The actors dropdown, on a page whose bar carries one. The record page
@@ -63,6 +64,34 @@
     }).catch(() => { pick.hidden = true; });
   }
 })();
+
+// Mail FediPod could not read, until its owner opens the dead letters
+// (upkeep.js), on every page with the bar.
+function troubleBanner(count) {
+  if (document.getElementById('trouble-banner')) return;
+  const base = location.pathname.replace(/\/admin\/.*$/u, '');
+  const onManage = !!document.getElementById('do-deadletter');
+  const box = document.createElement('div');
+  box.id = 'trouble-banner';
+  box.setAttribute('role', 'alert');
+  box.style.cssText = 'padding:.7rem 1rem;background:var(--field-bg,#ececec);color:var(--fg,#1a1a1a);'
+    + 'border-bottom:3px solid var(--err,#b00020);border-left:6px solid var(--err,#b00020);font:inherit';
+  const head = document.createElement('strong');
+  head.style.color = 'var(--err,#b00020)';
+  head.textContent = 'Mail not read. ';
+  const said = document.createElement('span');
+  said.textContent = `FediPod could not read ${count === 1 ? 'a piece' : `${count} pieces`} of your mail. `;
+  box.append(head, said);
+  if (onManage) {
+    box.append(`${count === 1 ? 'It is' : 'They are'} listed under Show dead letters and Show the log.`);
+  } else {
+    const go = document.createElement('a');
+    go.href = base + '/admin/';
+    go.textContent = 'See them on your manage page';
+    box.append(go);
+  }
+  document.body.prepend(box);
+}
 
 // "Another device is active": what it means for this account, and the way out.
 // The lease is a document on the pod with a five-minute life; a browser that
