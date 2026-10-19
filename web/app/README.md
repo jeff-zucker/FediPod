@@ -38,16 +38,12 @@ worker answers the data endpoints it calls. See
 `claude/plans/browser-manage-surface.md` for the whole design and status, and
 `claude/plans/post-as-connected-account.md` for the deferred "post as" plan.
 
-<!-- CLAUDE 2026-10-19 — the atproto-browser, fediacct-browser and idb-kv rows are rewritten: a connected account's credential is kept on the pod only; delete these markers when done -->
-
 | file | what |
 |---|---|
 | `admin-facade.mjs` | Answers the owner/manage endpoints (`/status`, `/config`, `/gateway`, `/alias`, `/rotate-key`, `/rebuild`, `/move`, `/retire`, `/inbox/prune`, `/deadletter`, `/blocks`, `/atproto*`, `/fediacct*`) over the browser agent, mirroring `lib/device/admin.mjs`. Personal only. |
 | `atproto-browser.mjs` | The Bluesky connection (`lib/connections/atproto.mjs`), its credential kept in the owner-only pod state and nowhere else, plus pause. A record found in IndexedDB moves to the pod. |
 | `fediacct-browser.mjs` | Connections to fediverse accounts on other servers (`lib/connections/fediacct.mjs`): the OAuth dance, the credential kept on the pod the same way, and a best-effort server-side revoke on disconnect. |
 | `idb-kv.mjs` | The per-origin IndexedDB key/value store the two connectors use for app registrations, the OAuth pending state, and any credential found there, until it moves to the pod. |
-
-<!-- /CLAUDE -->
 
 `agent.mjs` also holds the single-active-agent **lease** (`lib/core/lease.mjs`) — a
 second device runs read-only until it takes over — and starts the drain/mirrors

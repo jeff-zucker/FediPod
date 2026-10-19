@@ -20,10 +20,8 @@ runtime-agnostic Node:
 | `functions/flush-mail.mjs` | Every fifteen minutes: mail held for browser accounts whose apps are closed goes to their pods in batches, a kept account with work due (a follow, a delivery to try again, a scheduled post) is handed to the keeper, and each person's working copy is written to their pod and deleted (the hold). | `lib/gateway/held-mail.mjs`, `lib/gateway/copy.mjs` |
 | `functions/keeper-background.mjs` | One kept account's run: its mail delivered and read, its waiting deliveries sent, its scheduled posts published. Started only by `flush-mail`. | `lib/gateway/keeper.mjs` |
 
-<!-- CLAUDE 2026-10-19 — one sentence on push-background's new job; delete these markers when done -->
 `push-background` also sends the alert FediPod raises when it cannot read some
 of its owner's mail (`/api/alert`), to the same phones and browsers.
-<!-- /CLAUDE -->
 
 Another host needs only its own adapter calling the same `handleDelivery`. A
 Community Solid Server can run the same door as a component of itself instead
