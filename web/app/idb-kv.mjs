@@ -1,7 +1,7 @@
-// idb-kv.mjs — a tiny per-origin key/value store on IndexedDB, for the browser
-// agent's "on this device, never the pod" storage: a connected account's
-// credential when the owner chooses to keep it in this browser rather than let
-// it follow them to their pod. Shared by atproto-browser and fediacct-browser.
+// idb-kv.mjs — a tiny per-origin key/value store on IndexedDB, for what the
+// browser agent keeps on this device: app registrations, the short OAuth
+// pending state, and connected-account credentials an earlier build kept here
+// until they move to the pod. Shared by atproto-browser and fediacct-browser.
 const DB = 'fedipod-accounts';
 
 function open() {

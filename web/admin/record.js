@@ -130,7 +130,6 @@ function identityRows() {
     crossPost: 'crossPost' in config.atproto ? config.atproto.crossPost : null,
     feed: (paused) => ['/atproto', { feedPaused: paused }],
     cross: (on) => ['/atproto', { crossPost: on }],
-    store: (w) => ['/atproto', { storage: w }],
     off: () => ['/atproto/disconnect', {}],
   });
   for (const acct of config.fediAccounts || []) accounts.push({
@@ -141,7 +140,6 @@ function identityRows() {
     feedPaused: !acct.enabled,
     crossPost: null,
     feed: (paused) => ['/fediacct', { id: acct.id, enabled: !paused }],
-    store: (w) => ['/fediacct', { id: acct.id, storage: w }],
     off: () => ['/fediacct/disconnect', { id: acct.id }],
   });
   for (const acct of accounts) {
@@ -149,18 +147,16 @@ function identityRows() {
     name.textContent = acct.handle;
     if (acct.href) { name.href = acct.href; name.target = '_blank'; name.rel = 'noopener'; name.title = '   Open this account elsewhere in a new tab'; }
     if (acct.warn) name.className = 'warn';
-    // Where storage is a real choice (every browser-build account today), two
-    // dropdowns sit in the row itself. Where it isn't (the Node agent's
-    // Bluesky, which shows a cross-post toggle instead), the Options
-    // disclosure it always has is unchanged.
+    // A browser-build account (it says where it is stored) gets its dropdown
+    // in the row itself. The Node agent's Bluesky, which shows a cross-post
+    // toggle instead, keeps the Options disclosure it always has.
     row(acct.label, name, ' ', ...(acct.storage ? connectionControls(acct) : [optionsMenu(acct)]));
   }
   return out;
 }
 
-// Connected, Paused or Disconnected, and where the key lives — one dropdown
-// each, in the row. Replaces the separate feed and connect dropdowns that used
-// to sit behind an Options disclosure; only reached where acct.storage is set.
+// Connected, Paused or Disconnected, as one dropdown in the row; only reached
+// where acct.storage is set. The key is kept on the pod, with no choice to make.
 function connectionControls(acct) {
   const send = async ([path, payload], msg) => { if (await write(path, payload, msg)) await load(); };
   const pick = (opts, current, onChange, title) => {
@@ -177,23 +173,14 @@ function connectionControls(acct) {
       ? send(acct.off(), 'disconnected')
       : send(acct.feed(v === 'paused'), v === 'paused' ? 'paused adding to your feed' : 'added to your home feed')),
     '   Connected feeds this account into your home feed here; Paused keeps the account but stops adding its posts; Disconnected removes it.');
-  const storage = pick(
-    [['pod', 'Store key on Pod'], ['browser', 'Store key in Browser']],
-    acct.storage,
-    (v) => {
-      if (v === 'pod' && !confirm('Store this account on your pod?\n\nIt will follow you to any browser you sign in from — but a full-access token to that account then lives on your pod.')) { load(); return; }
-      send(acct.store(v), v === 'pod' ? 'stored on your pod' : 'stored in this browser');
-    },
-    '   On your pod the key follows you to any browser you sign in from, and a full-access token then lives there; in this browser the token never leaves this device.');
   const wrap = document.createElement('span');
   wrap.className = 'conn-controls';
-  wrap.append(conn, ' ', storage);
+  wrap.append(conn);
   return [wrap];
 }
 
-// Every connected account without a storage choice carries an Options menu
-// instead: pause its feed, its cross-post toggle (the Node agent's Bluesky),
-// disconnect.
+// The Node agent's Bluesky carries an Options menu instead: pause its feed,
+// its cross-post toggle, disconnect.
 function optionsMenu(acct) {
   const d = document.createElement('details');
   d.className = 'opts';
@@ -218,14 +205,8 @@ function optionsMenu(acct) {
     pick([['show', 'Add to home feed'], ['hide', 'Pause adding to home feed']], acct.feedPaused ? 'hide' : 'show',
       (v) => send(acct.feed(v === 'hide'), v === 'hide' ? 'paused adding to your feed' : 'added to your home feed'));
   }
-  // Storage where the browser offers the choice; the Node agent's Bluesky shows
-  // its cross-post toggle in the same slot instead.
-  if (acct.storage) {
-    pick([['browser', 'Store key in Browser'], ['pod', 'Store key on Pod']], acct.storage, (v) => {
-      if (v === 'pod' && !confirm('Store this account on your pod?\n\nIt will follow you to any browser you sign in from — but a full-access token to that account then lives on your pod.')) { load(); return; }
-      send(acct.store(v), v === 'pod' ? 'stored on your pod' : 'stored in this browser');
-    });
-  } else if (acct.crossPost !== null) {
+  // The Node agent's Bluesky: its cross-post toggle.
+  if (acct.crossPost !== null) {
     pick([['on', 'Cross-post On'], ['off', 'Cross-post Off']], acct.crossPost ? 'on' : 'off',
       (v) => send(acct.cross(v === 'on'), ''));
   }
@@ -233,14 +214,6 @@ function optionsMenu(acct) {
   pick([['connected', 'Connected'], ['disconnect', 'Disconnect']], 'connected',
     (v) => { if (v === 'disconnect') send(acct.off(), 'disconnected'); else load(); });
 
-  // The storage consequence, at the bottom of the box under every dropdown.
-  if (acct.storage) {
-    const hint = document.createElement('p'); hint.className = 'opt-hint';
-    hint.textContent = acct.storage === 'pod'
-      ? 'Follows you to every browser you sign in from; a full-access token lives on your pod.'
-      : 'Stays in this browser; the token never leaves this device.';
-    body.appendChild(hint);
-  }
   return d;
 }
 

@@ -129,11 +129,10 @@ dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
 .muted { color: var(--muted); }
 /* The actors dropdown rides the bar, at the bar's own text scale. */
 #bar select { font-size: .95rem; }
-/* The per-account Options disclosure: only where storage is not a real choice
-   (the Node agent's Bluesky, cross-post instead) — a summary opening
-   Show/Hide in Feed, Cross-post On/Off, Connected/Disconnect. Where storage
-   IS a choice, two dropdowns sit in the row directly instead (admin.js
-   connectionControls). */
+/* The per-account Options disclosure, for the Node agent's Bluesky — a
+   summary opening Show/Hide in Feed, Cross-post On/Off, Connected/Disconnect.
+   A browser-build account's dropdown sits in the row directly instead
+   (record.js connectionControls). */
 details.opts { display: inline-block; }
 details.opts > summary { cursor: pointer; color: var(--link); list-style: none; }
 details.opts > summary::-webkit-details-marker { display: none; }
@@ -143,9 +142,8 @@ details.opts > div { margin: .4rem 0 .2rem; padding: .5rem .6rem; display: flex;
   gap: .4rem; align-items: stretch; border: 1px solid var(--line); border-radius: .3rem;
   background: var(--raised); min-width: 11rem; }
 details.opts > div select { width: 100%; }
-.opt-hint { color: var(--muted); font-size: .9rem; margin: -.1rem 0 .1rem; }
-/* The connection and storage dropdowns that sit in the row itself (admin.js
-   connectionControls) — extra room from the account name before them. */
+/* The connection dropdown that sits in the row itself (record.js
+   connectionControls) — extra room from the account name before it. */
 .conn-controls { display: inline-flex; align-items: center; gap: .4rem; margin-left: 1rem; }
 /* The alias row inside the Transfer-an-account-here panel. */
 #alias-ctl { display: flex; gap: .5rem; align-items: center; margin-top: .3rem; }

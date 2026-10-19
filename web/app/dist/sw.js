@@ -71964,23 +71964,20 @@ var AdminFacade = class {
         await a.store.flush();
         return json2(200, { ok: true });
       }
-      // Bluesky settings: pause/resume the mirror, and move the credential
-      // between this browser and the pod. Cross-post is default-on, not toggled.
+      // Bluesky settings: pause/resume the mirror. Cross-post is default-on, not
+      // toggled. The credential is kept on the pod, with nowhere else to move.
       case "/atproto": {
         if (!a.atproto?.connected()) return json2(400, { error: "no bluesky account connected" });
+        if ("storage" in body) return json2(400, { error: "a connected account is kept on your pod" });
         if ("feedPaused" in body) {
           a.atproto.setFeedPaused(!!body.feedPaused);
           a.restartBsky?.();
-        }
-        if ("storage" in body) {
-          if (!["pod", "browser"].includes(body.storage)) return json2(400, { error: "storage must be pod or browser" });
-          a.atproto.setStorage(body.storage);
         }
         return json2(200, { ok: true, ...a.atproto.status() });
       }
       // Connect a fediverse account on another server: start its OAuth at that
       // server. The browser is then sent to `authorize`; the code comes back to
-      // GET /fediacct/callback (above). The token never touches the pod.
+      // GET /fediacct/callback (above). The token is kept on the pod.
       case "/fediacct/connect": {
         if (!body.host) return json2(400, { error: "the address of the server is required" });
         try {
@@ -71997,14 +71994,11 @@ var AdminFacade = class {
         a.restartAccts?.();
         return json2(200, { ok: true });
       }
-      // Pause/resume the mirror, or move the credential between browser and pod.
+      // Pause/resume the mirror. The credential is kept on the pod.
       case "/fediacct": {
         if (!body.id) return json2(400, { error: "id required" });
-        let row;
-        if ("storage" in body) {
-          if (!["pod", "browser"].includes(body.storage)) return json2(400, { error: "storage must be pod or browser" });
-          row = a.fediaccts.setStorage(body.id, body.storage);
-        } else row = a.fediaccts.setEnabled(body.id, !!body.enabled);
+        if ("storage" in body) return json2(400, { error: "a connected account is kept on your pod" });
+        const row = a.fediaccts.setEnabled(body.id, !!body.enabled);
         if (!row) return json2(404, { error: "no such account" });
         a.restartAccts?.();
         return json2(200, { ok: true, account: row });
@@ -72479,15 +72473,13 @@ var BrowserAtproto = class extends Atproto {
   read() {
     let rec = null;
     let where = null;
-    if (this._idbRec) {
+    const p = this.store.read(POD_DOC, null);
+    if (p) {
+      rec = p;
+      where = "pod";
+    } else if (this._idbRec) {
       rec = this._idbRec;
       where = "browser";
-    } else {
-      const p = this.store.read(POD_DOC, null);
-      if (p) {
-        rec = p;
-        where = "pod";
-      }
     }
     if (!rec) return null;
     if (rec.mintedFor && this.actorId && rec.mintedFor !== this.actorId) {
@@ -72496,25 +72488,25 @@ var BrowserAtproto = class extends Atproto {
     }
     return { ...rec, storage: where };
   }
-  // Write to the record's chosen backend (default browser), and clear the other
-  // so a moved credential leaves no copy behind.
   write(rec) {
-    const where = rec.storage || "browser";
-    const clean = { ...rec, storage: where };
-    if (where === "pod") {
-      this.store.write(POD_DOC, clean);
-      this.store.flush?.().catch(() => {
-      });
-      this._idbRec = null;
-      kvDel(IDB_KEY).catch(() => {
-      });
-    } else {
-      this._idbRec = clean;
-      kvPut(IDB_KEY, clean).catch((e) => this.log(`atproto persist: ${e.message}`));
-      this.store.write(POD_DOC, null);
-      this.store.flush?.().catch(() => {
-      });
+    this.store.write(POD_DOC, { ...rec, storage: "pod" });
+    this.store.flush?.().catch(() => {
+    });
+  }
+  // A record still in this browser, onto the pod, and out of the browser once
+  // the pod has it. One the pod already holds is newer there.
+  async moveToPod() {
+    const rec = this._idbRec;
+    if (!rec || rec.mintedFor && this.actorId && rec.mintedFor !== this.actorId) return false;
+    if (!this.store.read(POD_DOC, null)) {
+      this.store.write(POD_DOC, { ...rec, storage: "pod" });
+      if (!await this.store.commit()) return false;
     }
+    this._idbRec = null;
+    await kvDel(IDB_KEY).catch(() => {
+    });
+    this.log("the Bluesky account moved from this browser to the pod");
+    return true;
   }
   status() {
     const rec = this.read();
@@ -72536,11 +72528,6 @@ var BrowserAtproto = class extends Atproto {
   setFeedPaused(on) {
     const rec = this.read();
     if (rec) this.write({ ...rec, feedPaused: !!on });
-  }
-  // Move the credential between backends (the Options menu's Storage control).
-  setStorage(where) {
-    const rec = this.read();
-    if (rec && (where === "pod" || where === "browser")) this.write({ ...rec, storage: where });
   }
   async disconnect() {
     const rec = this.read();
@@ -72825,15 +72812,13 @@ var BrowserFediAccounts = class extends FediAccounts {
   read(id) {
     let rec = null;
     let where = null;
-    if (this._recs.has(id)) {
+    const p = this._podMap()[id];
+    if (p) {
+      rec = p;
+      where = "pod";
+    } else if (this._recs.has(id)) {
       rec = this._recs.get(id);
       where = "browser";
-    } else {
-      const p = this._podMap()[id];
-      if (p) {
-        rec = p;
-        where = "pod";
-      }
     }
     if (!rec) return null;
     if (rec.mintedFor && this.actorId && rec.mintedFor !== this.actorId) {
@@ -72843,27 +72828,28 @@ var BrowserFediAccounts = class extends FediAccounts {
     return { ...rec, storage: where };
   }
   write(rec) {
-    const where = rec.storage || "browser";
-    const clean = { ...rec, storage: where };
-    if (where === "pod") {
-      const map = { ...this._podMap(), [clean.id]: clean };
-      this.store.write(POD_DOC2, map);
-      this.store.flush?.().catch(() => {
+    const clean = { ...rec, storage: "pod" };
+    const map = { ...this._podMap(), [clean.id]: clean };
+    this.store.write(POD_DOC2, map);
+    this.store.flush?.().catch(() => {
+    });
+  }
+  // The records still in this browser, onto the pod, and out of the browser
+  // once the pod has them. One the pod already holds is newer there.
+  async moveToPod() {
+    const moving = [...this._recs.values()].filter((r) => !r.mintedFor || !this.actorId || r.mintedFor === this.actorId);
+    if (!moving.length) return 0;
+    const map = { ...this._podMap() };
+    for (const r of moving) if (!(r.id in map)) map[r.id] = { ...r, storage: "pod" };
+    this.store.write(POD_DOC2, map);
+    if (!await this.store.commit()) return 0;
+    for (const r of moving) {
+      this._recs.delete(r.id);
+      await kvDel("rec:" + r.id).catch(() => {
       });
-      this._recs.delete(clean.id);
-      kvDel("rec:" + clean.id).catch(() => {
-      });
-    } else {
-      this._recs.set(clean.id, clean);
-      kvPut("rec:" + clean.id, clean).catch((e) => this.log(`fediacct persist: ${e.message}`));
-      const map = this._podMap();
-      if (clean.id in map) {
-        delete map[clean.id];
-        this.store.write(POD_DOC2, map);
-        this.store.flush?.().catch(() => {
-        });
-      }
     }
+    this.log(`${moving.length} connected account(s) moved from this browser to the pod`);
+    return moving.length;
   }
   // Best-effort: tell the server to revoke our token (RFC 7009), so a
   // disconnect actually invalidates it there — not just locally. Mirrors
@@ -72915,15 +72901,6 @@ var BrowserFediAccounts = class extends FediAccounts {
       storage: r.storage,
       cooldownFor: Math.max(0, Math.round(((this.pausedUntil.get(r.host) || 0) - Date.now()) / 1e3))
     }));
-  }
-  // Move a connection between backends (the Options menu's Storage control).
-  setStorage(id, where) {
-    const rec = this.read(id);
-    if (rec && (where === "pod" || where === "browser")) {
-      this.write({ ...rec, storage: where });
-      return this.roster().find((r) => r.id === id) || null;
-    }
-    return null;
   }
   // One app registration per host, remembered — over IndexedDB.
   async appFor(host, redirectUri) {
@@ -73211,7 +73188,8 @@ var fail2 = () => {
 var promises_default = new Proxy({}, { get: () => fail2 });
 
 // lib/core/pod-only.mjs
-var podOnly = (name) => name === "keys.json" || name === "lease.json" || name.startsWith("conn-");
+var CONNECTED = /* @__PURE__ */ new Set(["fediaccts.json", "atproto.json"]);
+var podOnly = (name) => name === "keys.json" || name === "lease.json" || name.startsWith("conn-") || CONNECTED.has(name);
 
 // lib/core/storage.mjs
 var LDP2 = Namespace("http://www.w3.org/ns/ldp#");
@@ -73922,6 +73900,8 @@ var BrowserAgent = class _BrowserAgent {
       }, 3e4);
       const drainNow = !warm || now - (warm.drainedAt || 0) >= DRAIN_EVERY_MS || here?.flushed > 0;
       await this.intake.start({ drainNow, subscribe: !warm || !!warm.resubscribe });
+      await this.atproto.moveToPod?.().catch((e) => this.log(`Bluesky account to the pod: ${e.message}`));
+      await this.fediaccts.moveToPod?.().catch((e) => this.log(`connected accounts to the pod: ${e.message}`));
       this.startBsky();
       this.startAccts();
       this.tagfeed?.start(this.mirrorStart("tags"));

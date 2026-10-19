@@ -343,6 +343,9 @@ export class BrowserAgent {
       this._schedTimer = setInterval(() => { publishDue(this.store, this.publisher, this.log).catch(() => {}); }, 30_000);
       const drainNow = !warm || now - (warm.drainedAt || 0) >= DRAIN_EVERY_MS || here?.flushed > 0;
       await this.intake.start({ drainNow, subscribe: !warm || !!warm.resubscribe });
+      // Connected accounts still kept in this browser go to the pod.
+      await this.atproto.moveToPod?.().catch((e) => this.log(`Bluesky account to the pod: ${e.message}`));
+      await this.fediaccts.moveToPod?.().catch((e) => this.log(`connected accounts to the pod: ${e.message}`));
       this.startBsky();
       this.startAccts();
       this.tagfeed?.start(this.mirrorStart('tags'));
@@ -685,8 +688,8 @@ export class BrowserAgent {
       // its last full start.
       if (!this._warm) await containers.provisionPrivate(this.remote, this.urls);
       // Connected-account records are reads — safe whether we act or view.
-      await this.atproto.load();      // the Bluesky credential, if it is browser-stored
-      await this.fediaccts.load();    // connected fediverse accounts, from both backends
+      await this.atproto.load();      // a Bluesky credential still kept in this browser
+      await this.fediaccts.load();    // connected fediverse accounts still kept in this browser
       // The lease decides: this device ACTS on the pod, or reads it read-only.
       // A warm restart already holds it, and writes it only when renewal is due.
       this.viewer = !(this._warm && !this._warm.renewDue ? true : await this.lease.acquire());

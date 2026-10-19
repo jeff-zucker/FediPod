@@ -1,5 +1,16 @@
 # Changes
 
+## 2026-10-19 (a Mastodon or Bluesky account you connect is kept on your pod, and never at fedipod.net — version 1.51.0)
+
+**A Mastodon or Bluesky account you connect is kept on your pod, and only
+there.** Its login follows you to any browser you sign in from. One kept in a
+browser moves to your pod the next time FediPod opens there, and the choice to
+keep it in the browser is gone.
+
+**fedipod.net no longer holds those logins.** A login kept on your pod was also
+in fedipod.net's 15-minute working copy of your account. It stays on your pod
+only, and any already in a copy go to your pod and leave the copy.
+
 ## 2026-10-19 (mail and new followers are taken in while FediPod's tab is in the background — version 1.50.3)
 
 **Mail and new followers are taken in while FediPod's tab sits in the

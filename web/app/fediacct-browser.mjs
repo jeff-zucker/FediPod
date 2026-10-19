@@ -2,29 +2,25 @@
 // OTHER servers, in the browser.
 //
 // Same FediAccounts client the Node agent uses (lib/fediacct.mjs): the same
-// OAuth dance and authenticated calls. What the browser adds is the owner's
-// per-connection storage choice, the same one Bluesky has:
-//
-//  - "browser": the credential lives in IndexedDB on this device (default).
-//  - "pod": it lives in the owner-only pod state, so it follows the owner to
-//    any browser they sign in from.
-//
-// A record carries which backend it lives in; list() merges both, and moving a
-// connection is a re-write to the other backend. App registrations and the
-// short-lived OAuth "pending" state stay in IndexedDB (per browser), and the
-// pending state is persisted so a connection survives the worker being
-// idle-killed between the redirect out and the code coming back.
+// OAuth dance and authenticated calls. The credentials live in the owner-only
+// pod state, on the pod only (lib/core/pod-only.mjs), so they follow the owner
+// to any browser they sign in from. Records an earlier build kept in this
+// browser's IndexedDB are still read, and moveToPod() takes them to the pod.
+// App registrations and the short-lived OAuth "pending" state stay in
+// IndexedDB (per browser), and the pending state is persisted so a connection
+// survives the worker being idle-killed between the redirect out and the code
+// coming back.
 import { FediAccounts } from '../../lib/connections/fediacct.mjs';
 import { kvAll, kvPut, kvDel } from './idb-kv.mjs';
 
-const POD_DOC = 'fediaccts.json';   // { id: record } for pod-stored connections
+const POD_DOC = 'fediaccts.json';   // { id: record }
 const PEND_TTL_MS = 10 * 60_000;
 
 export class BrowserFediAccounts extends FediAccounts {
   constructor({ store, actorId = null, log = console.log } = {}) {
     super({ localDir: '/fediaccts', actorId, log });   // localDir unused; storage below
     this.store = store;
-    this._recs = new Map();     // browser (IndexedDB) records, id → record
+    this._recs = new Map();     // records still in this browser (IndexedDB), id → record
     this._apps = new Map();     // host → app registration
   }
 
@@ -47,8 +43,8 @@ export class BrowserFediAccounts extends FediAccounts {
 
   read(id) {
     let rec = null; let where = null;
-    if (this._recs.has(id)) { rec = this._recs.get(id); where = 'browser'; }
-    else { const p = this._podMap()[id]; if (p) { rec = p; where = 'pod'; } }
+    const p = this._podMap()[id];
+    if (p) { rec = p; where = 'pod'; } else if (this._recs.has(id)) { rec = this._recs.get(id); where = 'browser'; }
     if (!rec) return null;
     if (rec.mintedFor && this.actorId && rec.mintedFor !== this.actorId) {
       this.log(`fediaccts/${id} belongs to ${rec.mintedFor} — not reusing it for ${this.actorId}`);
@@ -58,17 +54,23 @@ export class BrowserFediAccounts extends FediAccounts {
   }
 
   write(rec) {
-    const where = rec.storage || 'browser';
-    const clean = { ...rec, storage: where };
-    if (where === 'pod') {
-      const map = { ...this._podMap(), [clean.id]: clean };
-      this.store.write(POD_DOC, map); this.store.flush?.().catch(() => {});
-      this._recs.delete(clean.id); kvDel('rec:' + clean.id).catch(() => {});
-    } else {
-      this._recs.set(clean.id, clean); kvPut('rec:' + clean.id, clean).catch((e) => this.log(`fediacct persist: ${e.message}`));
-      const map = this._podMap();
-      if (clean.id in map) { delete map[clean.id]; this.store.write(POD_DOC, map); this.store.flush?.().catch(() => {}); }
-    }
+    const clean = { ...rec, storage: 'pod' };
+    const map = { ...this._podMap(), [clean.id]: clean };
+    this.store.write(POD_DOC, map); this.store.flush?.().catch(() => {});
+  }
+
+  // The records still in this browser, onto the pod, and out of the browser
+  // once the pod has them. One the pod already holds is newer there.
+  async moveToPod() {
+    const moving = [...this._recs.values()].filter((r) => !r.mintedFor || !this.actorId || r.mintedFor === this.actorId);
+    if (!moving.length) return 0;
+    const map = { ...this._podMap() };
+    for (const r of moving) if (!(r.id in map)) map[r.id] = { ...r, storage: 'pod' };
+    this.store.write(POD_DOC, map);
+    if (!await this.store.commit()) return 0;
+    for (const r of moving) { this._recs.delete(r.id); await kvDel('rec:' + r.id).catch(() => {}); }
+    this.log(`${moving.length} connected account(s) moved from this browser to the pod`);
+    return moving.length;
   }
 
   // Best-effort: tell the server to revoke our token (RFC 7009), so a
@@ -109,8 +111,6 @@ export class BrowserFediAccounts extends FediAccounts {
     }));
   }
 
-  // Move a connection between backends (the Options menu's Storage control).
-  setStorage(id, where) { const rec = this.read(id); if (rec && (where === 'pod' || where === 'browser')) { this.write({ ...rec, storage: where }); return this.roster().find(r => r.id === id) || null; } return null; }
 
   // One app registration per host, remembered — over IndexedDB.
   async appFor(host, redirectUri) {

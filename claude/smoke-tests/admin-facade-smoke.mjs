@@ -43,24 +43,22 @@ function mockAgent() {
         storage: this._rec?.storage || null, feedPaused: !!this._rec?.feedPaused };
     },
     async connect({ service, identifier }) {
-      this._rec = { did: 'did:plc:xyz', handle: identifier, service: service || 'https://bsky.social', storage: 'browser' };
+      this._rec = { did: 'did:plc:xyz', handle: identifier, service: service || 'https://bsky.social', storage: 'pod' };
       return { did: this._rec.did, handle: this._rec.handle, service: this._rec.service };
     },
     setFeedPaused(on) { if (this._rec) this._rec.feedPaused = !!on; },
-    setStorage(w) { if (this._rec) this._rec.storage = w; },
     async disconnect() { this._rec = null; },
   };
   const fediaccts = {
     _rows: [],
     connected() { return this._rows.some(r => r.enabled !== false); },
-    status() { return this._rows.map(r => ({ id: r.id, handle: r.handle, host: r.host, enabled: r.enabled !== false, needsReconnect: false, cooldownFor: 0, storage: r.storage || 'browser' })); },
-    roster() { return this._rows.map(r => ({ id: r.id, handle: r.handle, host: r.host, enabled: r.enabled !== false, storage: r.storage || 'browser' })); },
+    status() { return this._rows.map(r => ({ id: r.id, handle: r.handle, host: r.host, enabled: r.enabled !== false, needsReconnect: false, cooldownFor: 0, storage: r.storage || 'pod' })); },
+    roster() { return this._rows.map(r => ({ id: r.id, handle: r.handle, host: r.host, enabled: r.enabled !== false, storage: r.storage || 'pod' })); },
     async begin({ host, redirectUri }) { this._redirectUri = redirectUri; return { url: `https://${host}/oauth/authorize?state=xyz`, state: 'xyz', host }; },
-    async complete({ state, code }) { const row = { id: 'me@mastodon.social', handle: '@me@mastodon.social', host: 'mastodon.social', enabled: true, storage: 'browser' }; this._rows.push(row); return row; },
+    async complete({ state, code }) { const row = { id: 'me@mastodon.social', handle: '@me@mastodon.social', host: 'mastodon.social', enabled: true, storage: 'pod' }; this._rows.push(row); return row; },
     async revoke(id) { this._revoked = id; },
     remove(id) { const n = this._rows.length; this._rows = this._rows.filter(r => r.id !== id); return this._rows.length < n; },
-    setEnabled(id, on) { const r = this._rows.find(x => x.id === id); if (!r) return null; r.enabled = on; return { id: r.id, handle: r.handle, host: r.host, enabled: on, storage: r.storage || 'browser' }; },
-    setStorage(id, w) { const r = this._rows.find(x => x.id === id); if (!r) return null; r.storage = w; return { id: r.id, handle: r.handle, host: r.host, enabled: r.enabled !== false, storage: w }; },
+    setEnabled(id, on) { const r = this._rows.find(x => x.id === id); if (!r) return null; r.enabled = on; return { id: r.id, handle: r.handle, host: r.host, enabled: on, storage: r.storage || 'pod' }; },
   };
   return {
     store, publisher, atproto, fediaccts, _bsky: false, _moved: null, _accts: false,
@@ -210,10 +208,10 @@ assert.equal(r.status, 200); assert.equal(r.json.feedPaused, true);
 assert.equal(agent.atproto.feedActive(), false); assert.equal(agent.atproto.connected(), true);
 ok('POST /atproto pauses the feed without disconnecting');
 
-// move the Bluesky credential to the pod
-r = await call(facade, 'POST', '/atproto', { storage: 'pod' });
-assert.equal(r.status, 200); assert.equal(r.json.storage, 'pod');
-ok('POST /atproto moves the Bluesky credential between browser and pod');
+// the Bluesky credential is kept on the pod, with nowhere else to move it
+r = await call(facade, 'POST', '/atproto', { storage: 'browser' });
+assert.equal(r.status, 400); assert.match(r.json.error, /kept on your pod/);
+ok('POST /atproto offers no other place to keep the Bluesky credential');
 
 // disconnect tears it down and stops the mirror
 r = await call(facade, 'POST', '/atproto/disconnect');
@@ -317,12 +315,12 @@ r = await call(facade, 'GET', '/fediacct');
 assert.equal(r.json.accounts.length, 1); assert.equal(r.json.accounts[0].host, 'mastodon.social');
 r = await call(facade, 'POST', '/fediacct', { id: 'me@mastodon.social', enabled: false });
 assert.equal(r.status, 200); assert.equal(r.json.account.enabled, false);
-r = await call(facade, 'POST', '/fediacct', { id: 'me@mastodon.social', storage: 'pod' });
-assert.equal(r.status, 200); assert.equal(r.json.account.storage, 'pod');
+r = await call(facade, 'POST', '/fediacct', { id: 'me@mastodon.social', storage: 'browser' });
+assert.equal(r.status, 400); assert.match(r.json.error, /kept on your pod/);
 r = await call(facade, 'POST', '/fediacct/disconnect', { id: 'me@mastodon.social' });
 assert.equal(r.status, 200); assert.equal(agent.fediaccts._rows.length, 0);
 assert.equal(agent.fediaccts._revoked, 'me@mastodon.social');   // revoked server-side, not just locally
-ok('fediacct list / pause / storage-move / disconnect (with server-side revoke) work');
+ok('fediacct list / pause / disconnect (with server-side revoke) work, and the credential stays on the pod');
 
 // a path the facade does not own falls through (handled=false)
 r = await call(facade, 'GET', '/api/v1/timelines/home');

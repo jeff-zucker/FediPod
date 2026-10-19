@@ -54,6 +54,11 @@ interleaved by time, and a post both accounts see appears once. Favouriting,
 boosting and replying act as the account the post came through. The token it
 hands back stays in your browser unless you choose to keep it on your pod.
 
+<!-- CLAUDE 2026-10-19 — the last sentence of the paragraph above is wrong now: the browser choice is gone and the token is always kept on the pod. This replaces it; delete these markers when done -->
+The token it hands back is kept on your pod, so the account follows you to
+any browser you sign in from.
+<!-- /CLAUDE -->
+
 **Moving in.** Mastodon-format exports of follows, blocks, mutes, lists and
 domain blocks import from the manage page. Your old account can be listed as
 an alias, so a Move from it lands here.

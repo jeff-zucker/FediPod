@@ -511,21 +511,18 @@ export class AdminFacade {
         await a.store.flush();
         return json(200, { ok: true });
       }
-      // Bluesky settings: pause/resume the mirror, and move the credential
-      // between this browser and the pod. Cross-post is default-on, not toggled.
+      // Bluesky settings: pause/resume the mirror. Cross-post is default-on, not
+      // toggled. The credential is kept on the pod, with nowhere else to move.
       case '/atproto': {
         if (!a.atproto?.connected()) return json(400, { error: 'no bluesky account connected' });
+        if ('storage' in body) return json(400, { error: 'a connected account is kept on your pod' });
         if ('feedPaused' in body) { a.atproto.setFeedPaused(!!body.feedPaused); a.restartBsky?.(); }
-        if ('storage' in body) {
-          if (!['pod', 'browser'].includes(body.storage)) return json(400, { error: 'storage must be pod or browser' });
-          a.atproto.setStorage(body.storage);
-        }
         return json(200, { ok: true, ...a.atproto.status() });
       }
 
       // Connect a fediverse account on another server: start its OAuth at that
       // server. The browser is then sent to `authorize`; the code comes back to
-      // GET /fediacct/callback (above). The token never touches the pod.
+      // GET /fediacct/callback (above). The token is kept on the pod.
       case '/fediacct/connect': {
         if (!body.host) return json(400, { error: 'the address of the server is required' });
         try {
@@ -540,14 +537,11 @@ export class AdminFacade {
         a.restartAccts?.();
         return json(200, { ok: true });
       }
-      // Pause/resume the mirror, or move the credential between browser and pod.
+      // Pause/resume the mirror. The credential is kept on the pod.
       case '/fediacct': {
         if (!body.id) return json(400, { error: 'id required' });
-        let row;
-        if ('storage' in body) {
-          if (!['pod', 'browser'].includes(body.storage)) return json(400, { error: 'storage must be pod or browser' });
-          row = a.fediaccts.setStorage(body.id, body.storage);
-        } else row = a.fediaccts.setEnabled(body.id, !!body.enabled);
+        if ('storage' in body) return json(400, { error: 'a connected account is kept on your pod' });
+        const row = a.fediaccts.setEnabled(body.id, !!body.enabled);
         if (!row) return json(404, { error: 'no such account' });
         a.restartAccts?.();
         return json(200, { ok: true, account: row });
