@@ -9142,11 +9142,11 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
   }).then(async r => ({ status: r.status, json: await r.json().catch(() => null) }));
 
   const auto = await cpostA('/config', { autoAcceptFollows: true });
-  check(auto.status === 200 && auto.json.published === false
+  check(auto.status === 200 && auto.json.published === true
     && astore.getConfig().autoAcceptFollows === true
     && aagent.publisher.config.autoAcceptFollows === true
     && auto.json.config.autoAcceptFollows === true,
-    'autoAcceptFollows is a setting: stored, patched into the LIVE config, not republished');
+    'autoAcceptFollows is a setting: stored, patched into the LIVE config, and republished, since the actor says it');
 
   const delivered = [];
   const published = [];

@@ -135,7 +135,9 @@ self.addEventListener('message', (e) => {
     return;
   }
   if (e.data?.type !== 'boot') return;
-  ensureBooting(e.data.frontOrigin)
+  const booted = ensureBooting(e.data.frontOrigin);
+  e.waitUntil(stillWorking(booted));
+  booted
     .then(() => e.source?.postMessage({ type: 'booted' }))
     // `code` matters: a boot that failed only because this browser has never
     // opened the signing key is not a failure the page should show as one — it
@@ -151,8 +153,28 @@ self.addEventListener('fetch', (e) => {
   // sending its owner back to that sign-in: the gateway's, not this browser's
   // agent, whose own client signs in from a page on this origin.
   if (url.pathname.startsWith('/oauth/') && !sameOriginReferrer(e.request)) return;
-  e.respondWith(serve(e.request, url));
+  const served = serve(e.request, url);
+  e.respondWith(served);
+  e.waitUntil(stillWorking(served));
 });
+
+// A browser stops a worker about thirty seconds after its last event, however
+// far the agent's own work has got. Each request keeps it up until the agent's
+// start and its inbox rounds are done, for at most four minutes (a browser
+// allows one event five); the next request carries it on.
+const STILL_WORKING_MS = 4 * 60_000;
+function stillWorking(first) {
+  const work = (async () => {
+    await Promise.resolve(first).catch(() => {});
+    const a = agent;
+    if (!a) return;
+    await a.provisioning?.catch(() => {});
+    await a.intake?.settled?.();
+  })().catch(() => {});
+  let timer;
+  const cap = new Promise((r) => { timer = setTimeout(r, STILL_WORKING_MS); });
+  return Promise.race([work, cap]).finally(() => clearTimeout(timer));
+}
 
 async function serve(request, url) {
   // Before anything is booted or read: is this caller allowed to be here at all?

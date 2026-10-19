@@ -1,5 +1,17 @@
 # Changes
 
+## 2026-10-19 (mail and new followers are taken in while FediPod's tab is in the background — version 1.50.3)
+
+**Mail and new followers are taken in while FediPod's tab sits in the
+background.** With the tab open but not in front, FediPod stopped partway
+through your mail, so it piled up on your pod and people who followed you got
+no answer. It now finishes.
+
+**Switching "wait for approval" on or off tells other servers at once.** They
+went on seeing your old choice until FediPod next published your profile, so a
+Mastodon server could offer "Request to follow" for an account that accepts
+everyone.
+
 ## 2026-10-10 (a post's text shows once — version 1.50.2)
 
 **Posts from Mastodon and most other servers show their text once.** Each

@@ -65537,11 +65537,23 @@ var Intake = class {
       this._draining = null;
       if (this._drainAgain) {
         this._drainAgain = false;
-        const t = setTimeout(() => this.drain().catch((e) => this.log(`drain: ${e.message}`)), CHAIN_GAP_MS);
-        t.unref?.();
+        this._chainTimer = setTimeout(() => {
+          this._chainTimer = null;
+          this.drain().catch((e) => this.log(`drain: ${e.message}`));
+        }, CHAIN_GAP_MS);
+        this._chainTimer.unref?.();
       }
     });
     return this._draining;
+  }
+  // Resolves once no sweep is running and none is waiting to follow on, so a
+  // browser worker can stay up until the round it started is done.
+  async settled() {
+    while (this._draining || this._chainTimer) {
+      if (this._draining) await this._draining.catch(() => {
+      });
+      else await new Promise((r) => setTimeout(r, 500));
+    }
   }
   // Discard the content waiting in the inbox from before `before`, on the
   // owner's say-so — the admin page asks, this does it. NOT a blind sweep:
@@ -71418,7 +71430,7 @@ var ImportWorker = class {
 
 // web/app/admin-facade.mjs
 var PERMANENT_CONFIG = ["handle", "remotePod", "issuer", "root", "kind"];
-var WIRE_CONFIG = ["name", "summary", "icon", "image", "fields", "aliases"];
+var WIRE_CONFIG = ["name", "summary", "icon", "image", "fields", "aliases", "autoAcceptFollows"];
 var ADMIN_PATHS = /* @__PURE__ */ new Set([
   "/status",
   "/config",
@@ -74705,7 +74717,9 @@ self.addEventListener("message", (e) => {
     return;
   }
   if (e.data?.type !== "boot") return;
-  ensureBooting(e.data.frontOrigin).then(() => e.source?.postMessage({ type: "booted" })).catch((err) => e.source?.postMessage({
+  const booted = ensureBooting(e.data.frontOrigin);
+  e.waitUntil(stillWorking(booted));
+  booted.then(() => e.source?.postMessage({ type: "booted" })).catch((err) => e.source?.postMessage({
     type: "boot-error",
     error: err.message,
     code: err.code || null,
@@ -74716,8 +74730,28 @@ self.addEventListener("fetch", (e) => {
   const url = new URL(e.request.url);
   if (url.origin !== self.location.origin || !(isFacade(url.pathname) || isAdmin(url.pathname))) return;
   if (url.pathname.startsWith("/oauth/") && !sameOriginReferrer(e.request)) return;
-  e.respondWith(serve(e.request, url));
+  const served = serve(e.request, url);
+  e.respondWith(served);
+  e.waitUntil(stillWorking(served));
 });
+var STILL_WORKING_MS = 4 * 6e4;
+function stillWorking(first) {
+  const work = (async () => {
+    await Promise.resolve(first).catch(() => {
+    });
+    const a = agent;
+    if (!a) return;
+    await a.provisioning?.catch(() => {
+    });
+    await a.intake?.settled?.();
+  })().catch(() => {
+  });
+  let timer;
+  const cap = new Promise((r) => {
+    timer = setTimeout(r, STILL_WORKING_MS);
+  });
+  return Promise.race([work, cap]).finally(() => clearTimeout(timer));
+}
 async function serve(request, url) {
   const refuse = notAllowed(request, url);
   if (refuse) {

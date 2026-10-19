@@ -22,7 +22,7 @@ import { followActor, followHandle } from '../../lib/core/social.mjs';
 // The identity itself — changing any means a different actor, i.e. a new setup.
 const PERMANENT_CONFIG = ['handle', 'remotePod', 'issuer', 'root', 'kind'];
 // Carried in the actor document, so a change is not live until republished.
-const WIRE_CONFIG = ['name', 'summary', 'icon', 'image', 'fields', 'aliases'];
+const WIRE_CONFIG = ['name', 'summary', 'icon', 'image', 'fields', 'aliases', 'autoAcceptFollows'];
 
 // The data endpoints this agent answers at the origin root (the page computes
 // its base as the origin, so it asks for /status, not /admin/status). Anything
