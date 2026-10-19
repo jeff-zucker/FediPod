@@ -65812,6 +65812,11 @@ var Intake = class {
     const read2 = raw ? await readLenient(raw) : null;
     if (read2?.degraded) this.log(`inbox item ${url} grounded to read: ${read2.degraded}`);
     const activity = at.activity = read2?.view ?? read2?.doc ?? null;
+    const from = typeof activity?.actor === "string" ? activity.actor : activity?.actor?.id;
+    if (from && this.checkLetters?.actor && from === this.checkLetters.actor) {
+      await this.checkLetters.taken(String(activity.id || ""));
+      return;
+    }
     if (read2?.graph) {
       const failure = await checkShapes(read2.graph);
       if (failure) {
@@ -73778,10 +73783,10 @@ var BrowserAgent = class _BrowserAgent {
   // letters, shown in the bar meanwhile, and told to their phones at most
   // once an hour (lib/gateway/held-mail.mjs: /api/alert).
   static TROUBLE_ALERT_MS = 60 * 6e4;
-  noteTrouble(t) {
+  noteTrouble(t, { tell = true } = {}) {
     const had = this.store.read("trouble.json", null) || { count: 0 };
     const now = Date.now();
-    const due = now - (had.alertedAt ? Date.parse(had.alertedAt) : 0) >= _BrowserAgent.TROUBLE_ALERT_MS;
+    const due = tell && now - (had.alertedAt ? Date.parse(had.alertedAt) : 0) >= _BrowserAgent.TROUBLE_ALERT_MS;
     const next = {
       ...had,
       count: (had.count || 0) + 1,
@@ -73801,7 +73806,13 @@ var BrowserAgent = class _BrowserAgent {
   // The owner has looked: the count starts again, and the hourly limit stands.
   troubleSeen() {
     const had = this.store.read("trouble.json", null);
-    if (had?.count) this.store.write("trouble.json", { count: 0, ...had.alertedAt ? { alertedAt: had.alertedAt } : {} });
+    if (had?.count) {
+      this.store.write("trouble.json", {
+        count: 0,
+        ...had.alertedAt ? { alertedAt: had.alertedAt } : {},
+        ...had.letterMissing ? { letterMissing: had.letterMissing } : {}
+      });
+    }
   }
   notePush(n) {
     if (!this.gatewayApi || n?.bsky || n?.via) return;
@@ -73863,6 +73874,10 @@ var BrowserAgent = class _BrowserAgent {
     const said = await this.tellGateway("here", { handle: this.doorKey, nextAt: this.store ? nextDue(this.store) : null });
     if (said?.status === 200) saveMeta(this.webId, { hereAt: Date.now() }).catch(() => {
     });
+    if (said?.status === 200 && said.missingLetter && this.store?.read("trouble.json", null)?.letterMissing !== said.missingLetter) {
+      this.noteTrouble({ kind: "test-letter", reason: "the gateway's test letter has not arrived", at: (/* @__PURE__ */ new Date()).toISOString() }, { tell: false });
+      this.store.write("trouble.json", { ...this.store.read("trouble.json", {}), letterMissing: said.missingLetter });
+    }
     if (said?.status === 200 && typeof said.hold === "boolean") {
       await followHold(this, this.frontOrigin, said.hold).catch((e) => this.log(`the gateway's hold: ${e.message}`));
     }
@@ -74168,6 +74183,15 @@ var BrowserAgent = class _BrowserAgent {
       ownerPost: (a, o) => this.c2s.dispatch(a, o)
     });
     this.intake.onTrouble = (t) => this.noteTrouble(t);
+    if (this.gatewayApi) {
+      this.intake.checkLetters = {
+        actor: `${this.frontOrigin.replace(/\/$/u, "")}/check/actor`,
+        taken: async (letter) => {
+          const said = await this.tellGateway("check", { handle: this.doorKey, letter }, { standing: false });
+          if (said?.status !== 200) throw new Error(`the gateway did not take the answer to its test letter (${said?.status || "no answer"})`);
+        }
+      };
+    }
     this.masto = new MastoApi({
       agent: this,
       log: this.log,

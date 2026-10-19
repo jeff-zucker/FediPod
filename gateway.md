@@ -281,6 +281,18 @@ removes them at `/notices`, signed in as the admin the way the roster is.
 A notice is a title and plain text: a blank line starts a paragraph, and a
 web address becomes a link.
 
+## When mail does not get through
+
+When FediPod cannot read a piece of your mail, a red line across the top of
+its pages says so until you open Show dead letters on your manage page. Your
+phone hears too, at most once an hour, if a Mastodon app on it is signed in at
+the gateway with notifications on.
+
+The gateway's admin also gets a test letter every six hours, sent to their own
+account through the same door every server uses. FediPod takes it in and shows
+it nowhere. If FediPod has been open for an hour and the letter has not
+arrived, the admin's phone is told and the red line goes up.
+
 ## What the gateway can see
 
 It reads only public data to decide what concerns you: your published

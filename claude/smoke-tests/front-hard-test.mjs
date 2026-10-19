@@ -13,6 +13,8 @@
 import http from 'node:http';
 import crypto from 'node:crypto';
 import { routeFront } from '../../lib/gateway/front-core.mjs';
+import { memoryKv as checkKv } from '../../lib/gateway/copy.mjs';
+import { letterFor } from '../../lib/gateway/check-letter.mjs';
 
 let fails = 0;
 const check = (ok, label) => { console.log(`${ok ? 'PASS' : 'FAIL'}  ${label}`); if (!ok) fails++; };
@@ -165,6 +167,7 @@ const heldCtx = {
   woke: [],
   noteNext: async (h, at, opt) => { heldCtx.woke.push({ h, at, earliest: !!opt?.earliest }); },
   pushes: [],
+  mastoKv: checkKv(),
   pushWanted: async () => true,
   startPush: async (h, o) => { heldCtx.pushes.push(o?.ids ? { h, ids: o.ids } : o?.alert ? { h, alert: o.alert } : h); },
 };
@@ -1032,6 +1035,25 @@ try {
       && (await post('/api/alert', { handle: 'thrush', text: '  ' })).status === 400 && heldCtx.pushes.length === 1,
       'only the owner can raise one, and it has to say something');
     heldCtx.pushes.length = 0;
+    // The gateway's test letter: taken at the door like any mail, answered
+    // only by the owner's FediPod, and missed out loud.
+    const letterId = `${ORIGIN}/check/letters/${'ab'.repeat(12)}`;
+    await heldCtx.mastoKv.set('check/thrush', JSON.stringify({ letter: letterId, sentAt: Date.now() }));
+    const atDoor = await get('/u/thrush/ap/inbox/', { method: 'POST', headers: { 'content-type': 'application/activity+json' },
+      body: JSON.stringify(letterFor(ORIGIN, letterId, thrushActor)) });
+    check(atDoor.status === 202, `the door takes the test letter like any mail (${atDoor.status})`);
+    const sender = await get('/check/actor');
+    const senderDoc = await sender.json().catch(() => null);
+    check(sender.status === 200 && senderDoc?.type === 'Application' && senderDoc.id === `${ORIGIN}/check/actor`,
+      `its sender is an application anyone can look up (${senderDoc?.type})`);
+    check((await post('/api/check', { handle: 'thrush', letter: letterId }, { ...asOwner, authorization: 'Bearer someone-else' })).status === 403,
+      'only the owner\'s FediPod can answer it');
+    await heldCtx.mastoKv.set('check/thrush', JSON.stringify({ letter: letterId, sentAt: Date.now() - 2 * 3600_000, alertedAt: Date.now() }));
+    const hereMissing = await (await post('/api/here', { handle: 'thrush' })).json();
+    check(!!hereMissing.missingLetter, 'FediPod hears when the letter is missing, so its bar can say so');
+    const answeredLetter = await (await post('/api/check', { handle: 'thrush', letter: letterId })).json();
+    const hereAnswered = await (await post('/api/here', { handle: 'thrush' })).json();
+    check(answeredLetter.answered === true && !hereAnswered.missingLetter, 'answered, it is missing no more');
     // The account's picture, carried by the sign-in to the WebFinger answer.
     const avatarOf = async () => (await (await get(`/.well-known/webfinger?resource=acct:thrush@${HOST}`)).json())
       .links?.find((l) => l.rel === 'http://webfinger.net/rel/avatar')?.href || null;

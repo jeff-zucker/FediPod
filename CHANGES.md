@@ -1,5 +1,13 @@
 # Changes
 
+## 2026-10-19 (fedipod.net checks every six hours that your mail gets through — version 1.53.0)
+
+**fedipod.net checks every six hours that mail reaches your FediPod.** It sends
+its admin's account a test letter through the same door every server uses.
+FediPod takes it in and shows it nowhere. If FediPod has been open for an hour
+and the letter has not arrived, the admin's phone is told and the red line goes
+up.
+
 ## 2026-10-19 (you are told when FediPod cannot read your mail — version 1.52.0)
 
 **When FediPod cannot read a piece of your mail, you are told.** A red line

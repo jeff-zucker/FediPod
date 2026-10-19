@@ -188,10 +188,10 @@ export class BrowserAgent {
   // letters, shown in the bar meanwhile, and told to their phones at most
   // once an hour (lib/gateway/held-mail.mjs: /api/alert).
   static TROUBLE_ALERT_MS = 60 * 60_000;
-  noteTrouble(t) {
+  noteTrouble(t, { tell = true } = {}) {
     const had = this.store.read('trouble.json', null) || { count: 0 };
     const now = Date.now();
-    const due = now - (had.alertedAt ? Date.parse(had.alertedAt) : 0) >= BrowserAgent.TROUBLE_ALERT_MS;
+    const due = tell && now - (had.alertedAt ? Date.parse(had.alertedAt) : 0) >= BrowserAgent.TROUBLE_ALERT_MS;
     const next = { ...had, count: (had.count || 0) + 1, firstAt: had.firstAt || t.at, lastAt: t.at,
       last: { kind: t.kind, reason: t.reason }, ...(due ? { alertedAt: new Date(now).toISOString() } : {}) };
     this.store.write('trouble.json', next);
@@ -205,7 +205,10 @@ export class BrowserAgent {
   // The owner has looked: the count starts again, and the hourly limit stands.
   troubleSeen() {
     const had = this.store.read('trouble.json', null);
-    if (had?.count) this.store.write('trouble.json', { count: 0, ...(had.alertedAt ? { alertedAt: had.alertedAt } : {}) });
+    if (had?.count) {
+      this.store.write('trouble.json', { count: 0, ...(had.alertedAt ? { alertedAt: had.alertedAt } : {}),
+        ...(had.letterMissing ? { letterMissing: had.letterMissing } : {}) });
+    }
   }
 
   notePush(n) {
@@ -268,6 +271,12 @@ export class BrowserAgent {
   async hereAtGateway() {
     const said = await this.tellGateway('here', { handle: this.doorKey, nextAt: this.store ? nextDue(this.store) : null });
     if (said?.status === 200) saveMeta(this.webId, { hereAt: Date.now() }).catch(() => {});
+    // The gateway's test letter has not arrived: the bar says so, once per
+    // letter. The gateway has told the phones itself.
+    if (said?.status === 200 && said.missingLetter && this.store?.read('trouble.json', null)?.letterMissing !== said.missingLetter) {
+      this.noteTrouble({ kind: 'test-letter', reason: "the gateway's test letter has not arrived", at: new Date().toISOString() }, { tell: false });
+      this.store.write('trouble.json', { ...this.store.read('trouble.json', {}), letterMissing: said.missingLetter });
+    }
     // The gateway's admin may have turned the hold off or on (copy-mode.mjs).
     if (said?.status === 200 && typeof said.hold === 'boolean') {
       await followHold(this, this.frontOrigin, said.hold).catch((e) => this.log(`the gateway's hold: ${e.message}`));
@@ -663,6 +672,16 @@ export class BrowserAgent {
       ownerPost: (a, o) => this.c2s.dispatch(a, o),
     });
     this.intake.onTrouble = (t) => this.noteTrouble(t);
+    // The gateway's test letter: answered when taken in, and shown nowhere.
+    if (this.gatewayApi) {
+      this.intake.checkLetters = {
+        actor: `${this.frontOrigin.replace(/\/$/u, '')}/check/actor`,
+        taken: async (letter) => {
+          const said = await this.tellGateway('check', { handle: this.doorKey, letter }, { standing: false });
+          if (said?.status !== 200) throw new Error(`the gateway did not take the answer to its test letter (${said?.status || 'no answer'})`);
+        },
+      };
+    }
     // The Mastodon facade the service worker serves.
     //
     // It used to be handed `allowed: null`, which reads as "no policy" — and

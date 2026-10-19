@@ -9,7 +9,9 @@
 // whatever is happening, and made again the next time something needs it. A
 // forum's copy is written to its pod and kept. With the hold off no mail is
 // held and no copy made, so this writes and deletes only what is left from
-// before.
+// before. And the test letter (lib/gateway/check-letter.mjs): one every six
+// hours to the admin's own account, and its owner told when FediPod has been
+// open an hour without taking it in.
 import { gatewayCtx } from './front.mjs';
 import { signRun } from './keeper-background.mjs';
 import { flushAll, isPresent } from '../../lib/gateway/held-mail.mjs';
@@ -17,6 +19,7 @@ import { closedState } from '../../lib/gateway/quiet.mjs';
 import { listCopies, copyMeta, flushCopy, dropCopy, holdOver, clearLeftover, lockCopy, renewPodLease, keptBefore, keptNow, isPersonal,
   holdOn, heldByBrowser } from '../../lib/gateway/copy.mjs';
 import { HttpStorage } from '../../lib/core/storage.mjs';
+import { roundChecks } from '../../lib/gateway/check-letter.mjs';
 
 export default async function handler() {
   const ctx = gatewayCtx();
@@ -40,6 +43,13 @@ export default async function handler() {
       return true;
     },
   });
+  // The test letter, sent through the account's own door as any server sends.
+  await roundChecks(ctx, {
+    send: async (handle, _rec, doc) => (await fetch(`${ctx.frontOrigin.replace(/\/$/u, '')}/u/${handle}/ap/inbox/`, {
+      method: 'POST', headers: { 'content-type': 'application/activity+json' }, body: JSON.stringify(doc),
+    })).status,
+    alert: async (handle, text) => { await ctx.startPush?.(handle, { alert: text }); },
+  }).catch((e) => console.log(`check: ${e?.message || e}`));
   // Work due where no mail was held this round.
   for (const handle of due) {
     if (started.has(handle)) continue;

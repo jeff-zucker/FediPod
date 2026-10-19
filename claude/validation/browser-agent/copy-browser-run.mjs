@@ -190,7 +190,7 @@ const server = http.createServer((q, s) => {
   if (u === '/app-signin/tokens.css') return file('web/admin/tokens.css', 'text/css')(q, s);
   if (/^\/app-signin\/(fedi-login|oidc-session)\.mjs$/.test(u)) return file(`node_modules/fediverse-session/${path.basename(u)}`, 'text/javascript')(q, s);
   if (u.startsWith('/api/state/') || u.startsWith('/api/v1/') || u.startsWith('/api/v2/') || u.startsWith('/oauth/')
-    || u === '/api/authorize' || ['/api/open', '/api/keeper', '/api/here', '/api/push', '/api/alert'].includes(u)) {
+    || u === '/api/authorize' || ['/api/open', '/api/keeper', '/api/here', '/api/push', '/api/alert', '/api/check'].includes(u)) {
     return gatewayRoute(q, s, u).catch((e) => { s.writeHead(500); s.end(String(e.stack || e)); });
   }
   if (u === '/' || u === '/index.html') { s.writeHead(200, { 'content-type': 'text/html' }); return s.end(page); }
@@ -415,6 +415,45 @@ if (!cssUp) { console.log(`FAIL  the scratch server never answered again at ${IS
   const afterSeen = await statusOf();
   check(seenTrouble === 200 && afterSeen?.trouble?.count === 0 && !!afterSeen.trouble.alertedAt,
     'opening the dead letters clears it, and the hourly limit stands');
+
+  // ---- the gateway's test letter: answered, and shown nowhere ----
+  const { letterFor } = await lib('lib/gateway/check-letter.mjs');
+  const letterState = async () => JSON.parse((await ctx.mastoKv.get(`check/${handle}`))?.text || '{}');
+  const newLetter = async () => {
+    const letter = `${ORIGIN}/check/letters/${crypto.randomBytes(12).toString('hex')}`;
+    await ctx.mastoKv.set(`check/${handle}`, JSON.stringify({ letter, sentAt: Date.now() }));
+    return letter;
+  };
+  // FediPod open: the door writes it to the pod inbox, as it writes any mail then.
+  const letter1 = await newLetter();
+  const put1 = await owner.fetch(`${pod}fedipod/ap/inbox/check-letter-1`, { method: 'PUT', headers: { 'content-type': 'application/ld+json' },
+    body: JSON.stringify(letterFor(ORIGIN, letter1, rows[handle].actorUrl)) });
+  const answered1 = await waitFor(async () => !!(await letterState()).answeredAt, 90, 1000);
+  check(put1.status < 300 && answered1, 'FediPod, open, takes the test letter in and answers it');
+  const shownIn = [(await kv.get(`${handle}/d/notifications.json`))?.text, (await kv.get(`${handle}/d/statuses.json`))?.text,
+    await onPod('notifications.json').catch(() => ''), await onPod('statuses.json').catch(() => '')].join('');
+  check(!shownIn.includes(letter1), 'and shows it nowhere: no notification, nothing in the timeline');
+  // FediPod closed, a phone signed up: the gateway reads it in itself and answers it.
+  const letter2 = await newLetter();
+  held.set(`${handle}/check-letter-2`, JSON.stringify(letterFor(ORIGIN, letter2, rows[handle].actorUrl)));
+  const pushedBeforeLetter = pushed.length;
+  await pushHeld(ctx, handle, rows[handle], { log: () => {} });
+  check(!!(await letterState()).answeredAt && !held.size && pushed.length === pushedBeforeLetter,
+    'held, the gateway reads it in, answers it, and pushes nothing');
+  check(await post('acting again after the letter') === 200, 'FediPod acts again after the gateway read it');
+  // Missing: the next "I am open" hears it, and the bar says so.
+  await ctx.mastoKv.set(`check/${handle}`, JSON.stringify({ ...(await letterState()), answeredAt: null, alertedAt: Date.now() }));
+  await send('ServiceWorker.stopAllWorkers');
+  await sleep(1000);
+  await evaluate(`new Promise((res) => { const o = indexedDB.open('fedipod-warm'); o.onerror = () => res(false);
+    o.onsuccess = () => { const db = o.result; const t = db.transaction('meta', 'readwrite'); const st = t.objectStore('meta');
+      const c = st.openCursor(); c.onsuccess = () => { const cur = c.result; if (cur) { cur.update({ ...cur.value, hereAt: 0 }); cur.continue(); } };
+      t.oncomplete = () => { db.close(); res(true); }; t.onerror = () => { db.close(); res(false); }; }; })`);
+  let missingSaid = null;
+  for (let i = 0; i < 30 && missingSaid?.last?.kind !== 'test-letter'; i++) { missingSaid = (await statusOf())?.trouble; if (missingSaid?.last?.kind !== 'test-letter') await sleep(1000); }
+  check(missingSaid?.count === 1 && missingSaid.last?.kind === 'test-letter' && !!missingSaid.letterMissing,
+    `a letter that has not arrived puts the line in the bar (${JSON.stringify(missingSaid)})`);
+  await evaluate(`fetch('/trouble', { method: 'POST', headers: { 'x-fedipod-page': '1', 'content-type': 'application/json' }, body: JSON.stringify({ seen: true }) })`);
 
   // ---- the gateway changes its identity: the account moves over ----
   check(await post('written before the switch') === 200
