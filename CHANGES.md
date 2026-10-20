@@ -1,5 +1,9 @@
 # Changes
 
+## 2026-10-20 (the manage page no longer shows "stored at" — version 1.55.1)
+
+**The manage page no longer has a "stored at" row.**
+
 ## 2026-10-20 (hashtag posts can be kept out of your home timeline — version 1.55.0)
 
 **Hashtag posts can be kept out of your home timeline.** On your manage page,
