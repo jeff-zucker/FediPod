@@ -480,6 +480,25 @@ if (!cssUp) { console.log(`FAIL  the scratch server never answered again at ${IS
   }
   check(healed, 'a profile saying approval by hand, against the setting, is written again at the next start');
 
+  // ---- connected accounts, kept on the pod only, survive every kind of restart ----
+  const conn = { 'me@mastodon.example': { id: 'me@mastodon.example', handle: '@me@mastodon.example', host: 'mastodon.example',
+    token: 'full-access', addedAt: '2026-10-01T00:00:00Z', enabled: false, storage: 'pod' } };
+  const putConn = await owner.fetch(`${state}fediaccts.json`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(conn) });
+  const listed = async () => (await evaluate(`(async () => { const r = await fetch('/config', { headers: { 'x-fedipod-page': '1' } }); return r.ok ? r.json() : null; })()`))?.fediAccounts || [];
+  await send('ServiceWorker.stopAllWorkers');
+  await sleep(1000);
+  await evaluate(`new Promise((res) => { const r = indexedDB.deleteDatabase('fedipod-warm'); r.onsuccess = r.onerror = r.onblocked = () => res(); })`);
+  let afterFull = [];
+  for (let i = 0; i < 30 && !afterFull.length; i++) { afterFull = await listed(); if (!afterFull.length) await sleep(1000); }
+  check(putConn.status < 300 && afterFull.some((a) => a.id === 'me@mastodon.example'), `a connected account is there after a full start, working from the copy (${afterFull.length})`);
+  await send('ServiceWorker.stopAllWorkers');
+  await sleep(1000);
+  const afterQuick = await listed();
+  check(afterQuick.some((a) => a.id === 'me@mastodon.example'), `and after a quick restart (${afterQuick.length})`);
+  const logNow = await evaluate(`(async () => (await (await fetch('/log', { headers: { 'x-fedipod-page': '1' } })).json()).lines)()`);
+  check(Array.isArray(logNow) && logNow.length > 5 && logNow.some((l) => /browser agent/.test(l)),
+    `the manage page's log has FediPod's own lines, across restarts (${logNow?.length})`);
+
   // ---- the gateway changes its identity: the account moves over ----
   check(await post('written before the switch') === 200
     && await waitFor(async () => /written before the switch/.test((await kv.get(`${handle}/d/statuses.json`))?.text || ''), 20, 300)

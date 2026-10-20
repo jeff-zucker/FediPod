@@ -162,7 +162,7 @@ export class AdminFacade {
           });
         }
         case '/modqueue': return json(200, []);           // person: no moderation queue
-        case '/log': return json(200, { lines: [] });     // no local log file in the browser
+        case '/log': return json(200, { lines: (await a.recentLog?.()) || [] });
         case '/fediacct': return json(200, { accounts: a.fediaccts?.status() || [] });
         case '/import':
           return json(200, a.importer ? a.importer.progress() : { running: false, total: 0, done: 0 });

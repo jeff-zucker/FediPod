@@ -24,7 +24,9 @@ export class BrowserFediAccounts extends FediAccounts {
     this._apps = new Map();     // host → app registration
   }
 
-  async load() {
+  // `fromPod`: the pod's records read as well (agent.mjs says when).
+  async load({ fromPod = false } = {}) {
+    if (fromPod) await this.store.refresh?.([POD_DOC], { ifChanged: true }).catch((e) => this.log(`connected accounts: ${e.message}`));
     const all = await kvAll().catch(() => ({}));
     for (const [k, v] of Object.entries(all)) {
       if (k.startsWith('rec:')) this._recs.set(k.slice(4), v);

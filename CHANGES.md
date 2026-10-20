@@ -1,5 +1,15 @@
 # Changes
 
+## 2026-10-19 (a connected Mastodon or Bluesky account stays connected when you reload; Show the log is back — version 1.53.2)
+
+**A connected Mastodon or Bluesky account stays connected when you reload.**
+Since it was kept on your pod only, FediPod working from fedipod.net's copy of
+your account could not see it after a reload, so it seemed to have gone, and
+connecting it again kept only that one.
+
+**Show the log is back on your manage page.** FediPod in your browser now
+keeps its last 300 lines, with this browser's date and time.
+
 ## 2026-10-19 (FediPod keeps running after a hard reload; your profile matches your follower setting; a deleted account raises no alarm — version 1.53.1)
 
 **FediPod keeps running after a hard reload.** A hard reload (Ctrl+Shift+R)

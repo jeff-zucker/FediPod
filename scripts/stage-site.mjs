@@ -152,8 +152,7 @@ const copyAdmin = (from, to) => { fs.mkdirSync(to, { recursive: true });
         .replace('</head>', '<script src="/admin/client-pick.js"></script>\n</head>')
   .replace('</body>', `${clientNews()}</body>`);
       // Hide controls the browser build does not carry: the manual drain (it
-      // drains automatically over notifications), the local logfile viewer
-      // (there is no local log in a browser), and the "create a handle at the
+      // drains automatically over notifications), and the "create a handle at the
       // gateway" choice — a fronted @you@front identity is not the browser
       // model, and admin-facade.mjs refuses one outright. Leaving the radio
       // visible meant the page checked the name's availability as you typed,
@@ -162,7 +161,7 @@ const copyAdmin = (from, to) => { fs.mkdirSync(to, { recursive: true });
       // And rename "Recover posts" to the plainer "Refresh Feed" for this
       // audience.
       text = text
-        .replace('<style>#actor-pick', '<style>#gw-shape-front,#do-drain,#do-log,#actor-pick')
+        .replace('<style>#actor-pick', '<style>#gw-shape-front,#do-drain,#actor-pick')
         .replace('>Recover posts<', '>Refresh Feed<')
         // The move-to-another-gateway hint: only the browser build can move
         // in (signup.mjs moveIn), so only here does gateway.js get to show it.

@@ -71634,8 +71634,7 @@ var AdminFacade = class {
           return json2(200, []);
         // person: no moderation queue
         case "/log":
-          return json2(200, { lines: [] });
-        // no local log file in the browser
+          return json2(200, { lines: await a.recentLog?.() || [] });
         case "/fediacct":
           return json2(200, { accounts: a.fediaccts?.status() || [] });
         case "/import":
@@ -72507,8 +72506,10 @@ var BrowserAtproto = class extends Atproto {
   }
   // The IndexedDB copy into memory, so read() stays synchronous as the base
   // class expects. The pod copy is already in the loaded store.
-  async load() {
+  // `fromPod`: the pod's record read as well (agent.mjs says when).
+  async load({ fromPod = false } = {}) {
     this._idbRec = await kvGet(IDB_KEY).catch(() => null);
+    if (fromPod) await this.store.refresh?.([POD_DOC], { ifChanged: true }).catch((e) => this.log(`Bluesky account: ${e.message}`));
     return this;
   }
   // Whichever backend holds it, tagged with where it lives. The stamped-record
@@ -72830,7 +72831,9 @@ var BrowserFediAccounts = class extends FediAccounts {
     this._recs = /* @__PURE__ */ new Map();
     this._apps = /* @__PURE__ */ new Map();
   }
-  async load() {
+  // `fromPod`: the pod's records read as well (agent.mjs says when).
+  async load({ fromPod = false } = {}) {
+    if (fromPod) await this.store.refresh?.([POD_DOC2], { ifChanged: true }).catch((e) => this.log(`connected accounts: ${e.message}`));
     const all = await kvAll().catch(() => ({}));
     for (const [k, v] of Object.entries(all)) {
       if (k.startsWith("rec:")) this._recs.set(k.slice(4), v);
@@ -74227,8 +74230,11 @@ var BrowserAgent = class _BrowserAgent {
     this.tagfeed = new TagFeed({ store: this.store, intake: this.intake, log: this.log, fetcher: relayGet });
     this.provisioning = (async () => {
       if (!this._warm) await provisionPrivate(this.remote, this.urls);
-      await this.atproto.load();
-      await this.fediaccts.load();
+      const readConn = !this._warm || !this._warm.connRead;
+      await this.atproto.load({ fromPod: readConn });
+      await this.fediaccts.load({ fromPod: readConn });
+      if (readConn) saveMeta(this.webId, { connRead: true }).catch(() => {
+      });
       this.viewer = !(this._warm && !this._warm.renewDue ? true : await this.lease.acquire());
       if (this.viewer) {
         this._watched = true;
@@ -74735,6 +74741,28 @@ async function bridge(request, url, { sameOrigin: sameOrigin2 = false } = {}) {
 // web/app/sw-src.mjs
 var agent = null;
 var booting = null;
+var LOG_KEEP = 300;
+var logLines = [];
+var logTimer = null;
+var logRead = kvGet("log").then((kept) => {
+  logLines = [...Array.isArray(kept) ? kept : [], ...logLines].slice(-LOG_KEEP);
+}).catch(() => {
+});
+function agentLog(m) {
+  console.log("[sw-agent]", m);
+  const at = (/* @__PURE__ */ new Date()).toLocaleString(void 0, { month: "2-digit", day: "2-digit", hour: "numeric", minute: "2-digit", second: "2-digit" });
+  logLines.push(`${at}  ${m}`);
+  if (logLines.length > LOG_KEEP) logLines.splice(0, logLines.length - LOG_KEEP);
+  clearTimeout(logTimer);
+  logTimer = setTimeout(() => {
+    logRead.then(() => kvPut("log", logLines)).catch(() => {
+    });
+  }, 1500);
+}
+var recentLog = async () => {
+  await logRead;
+  return logLines;
+};
 var FACADE = /^\/(api\/v[12]\/|oauth\/|nodeinfo\/)/;
 var FACADE_EXACT = /* @__PURE__ */ new Set(["/.well-known/nodeinfo", "/.well-known/oauth-authorization-server", "/nodeinfo/2.0"]);
 var isFacade = (p) => FACADE.test(p) || FACADE_EXACT.has(p);
@@ -74773,7 +74801,8 @@ self.addEventListener("activate", (e) => e.waitUntil(self.clients.claim()));
 async function bootFromSession(frontOrigin, restart) {
   const oidc = await getSession();
   if (!oidc) throw new Error("no session \u2014 sign in first");
-  const a = new BrowserAgent({ log: (m) => console.log("[sw-agent]", m) });
+  const a = new BrowserAgent({ log: agentLog });
+  a.recentLog = recentLog;
   await a.boot({ oidc, frontOrigin: frontOrigin || self.location.origin, restart });
   agent = a;
   return a;

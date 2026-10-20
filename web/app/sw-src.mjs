@@ -10,9 +10,27 @@ import { BrowserAgent } from './agent.mjs';
 import { getSession } from './oidc-session.mjs';
 import { ADMIN_PATHS } from './admin-facade.mjs';
 import { bridge } from '../../lib/client/masto/bridge.mjs';
+import { kvGet, kvPut } from './idb-kv.mjs';
 
 let agent = null;
 let booting = null;
+
+// What the agent has said lately, for the manage page's Show the log: the last
+// 300 lines, kept in this browser across the worker's restarts, each with this
+// browser's own date and time.
+const LOG_KEEP = 300;
+let logLines = [];
+let logTimer = null;
+const logRead = kvGet('log').then((kept) => { logLines = [...(Array.isArray(kept) ? kept : []), ...logLines].slice(-LOG_KEEP); }).catch(() => {});
+function agentLog(m) {
+  console.log('[sw-agent]', m);
+  const at = new Date().toLocaleString(undefined, { month: '2-digit', day: '2-digit', hour: 'numeric', minute: '2-digit', second: '2-digit' });
+  logLines.push(`${at}  ${m}`);
+  if (logLines.length > LOG_KEEP) logLines.splice(0, logLines.length - LOG_KEEP);
+  clearTimeout(logTimer);
+  logTimer = setTimeout(() => { logRead.then(() => kvPut('log', logLines)).catch(() => {}); }, 1500);
+}
+const recentLog = async () => { await logRead; return logLines; };
 
 const FACADE = /^\/(api\/v[12]\/|oauth\/|nodeinfo\/)/;   // Mastodon paths only — never the front's own /api/handle, /api/attach, /api/relay
 const FACADE_EXACT = new Set(['/.well-known/nodeinfo', '/.well-known/oauth-authorization-server', '/nodeinfo/2.0']);
@@ -109,7 +127,8 @@ self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()));
 async function bootFromSession(frontOrigin, restart) {
   const oidc = await getSession();
   if (!oidc) throw new Error('no session — sign in first');
-  const a = new BrowserAgent({ log: (m) => console.log('[sw-agent]', m) });
+  const a = new BrowserAgent({ log: agentLog });
+  a.recentLog = recentLog;
   await a.boot({ oidc, frontOrigin: frontOrigin || self.location.origin, restart });
   agent = a;
   return a;

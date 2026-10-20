@@ -741,8 +741,14 @@ export class BrowserAgent {
       // its last full start.
       if (!this._warm) await containers.provisionPrivate(this.remote, this.urls);
       // Connected-account records are reads — safe whether we act or view.
-      await this.atproto.load();      // a Bluesky credential still kept in this browser
-      await this.fediaccts.load();    // connected fediverse accounts still kept in this browser
+      // Connected accounts: their records stay on the pod only, so no listing
+      // of the gateway's copy names them; read at every full start, and at the
+      // first quick one that has not had them. A Bluesky credential or
+      // fediverse accounts still kept in this browser are read as well.
+      const readConn = !this._warm || !this._warm.connRead;
+      await this.atproto.load({ fromPod: readConn });
+      await this.fediaccts.load({ fromPod: readConn });
+      if (readConn) saveMeta(this.webId, { connRead: true }).catch(() => {});
       // The lease decides: this device ACTS on the pod, or reads it read-only.
       // A warm restart already holds it, and writes it only when renewal is due.
       this.viewer = !(this._warm && !this._warm.renewDue ? true : await this.lease.acquire());

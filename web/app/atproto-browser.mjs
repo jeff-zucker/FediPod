@@ -24,7 +24,12 @@ export class BrowserAtproto extends Atproto {
 
   // The IndexedDB copy into memory, so read() stays synchronous as the base
   // class expects. The pod copy is already in the loaded store.
-  async load() { this._idbRec = await kvGet(IDB_KEY).catch(() => null); return this; }
+  // `fromPod`: the pod's record read as well (agent.mjs says when).
+  async load({ fromPod = false } = {}) {
+    this._idbRec = await kvGet(IDB_KEY).catch(() => null);
+    if (fromPod) await this.store.refresh?.([POD_DOC], { ifChanged: true }).catch((e) => this.log(`Bluesky account: ${e.message}`));
+    return this;
+  }
 
   // Whichever backend holds it, tagged with where it lives. The stamped-record
   // guard is the base class's.
