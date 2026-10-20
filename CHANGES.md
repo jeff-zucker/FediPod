@@ -1,5 +1,21 @@
 # Changes
 
+## 2026-10-20 (your connected accounts are read with FediPod closed; Elk shows and changes your hashtags — version 1.54.0)
+
+**Your connected Mastodon and Bluesky accounts are read while FediPod is
+closed.** Until now only FediPod open in a browser read them, so with it
+closed an app like Elk showed nothing new from them. Now fedipod.net reads
+them while an app is in use, at most every five minutes. Their logins are read
+from your pod each time and are not kept at fedipod.net.
+
+**Elk and other apps show the hashtags you follow, and can unfollow them.**
+They showed none followed, and their Follow and Unfollow buttons said they
+worked but changed nothing.
+
+**A connected account on a server that does not report its request limit is
+read.** FediPod took the missing figure to mean none were left, and never
+brought in that account's timeline.
+
 ## 2026-10-19 (a connected Mastodon or Bluesky account stays connected when you reload; Show the log is back — version 1.53.2)
 
 **A connected Mastodon or Bluesky account stays connected when you reload.**
