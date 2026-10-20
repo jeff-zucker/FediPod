@@ -1,5 +1,14 @@
 # Changes
 
+## 2026-10-20 (hashtag posts can be kept out of your home timeline — version 1.55.0)
+
+**Hashtag posts can be kept out of your home timeline.** On your manage page,
+set **hashtag posts in home** to *hidden*: the posts brought in for the
+hashtags you follow then show only on the public timeline and on each
+hashtag's page, in FediPod and in an app like Elk. They are still brought in.
+One that a connected account also brought in is from someone you follow
+there, and stays.
+
 ## 2026-10-20 (your connected accounts are read with FediPod closed; Elk shows and changes your hashtags — version 1.54.0)
 
 **Your connected Mastodon and Bluesky accounts are read while FediPod is
