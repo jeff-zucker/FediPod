@@ -1,5 +1,10 @@
 # Changes
 
+## 2026-10-20 (sanitize-html 2.18.1 — version 1.55.2)
+
+**The library that cleans the HTML of posts is updated** to sanitize-html
+2.18.1. Nothing you see changes.
+
 ## 2026-10-20 (the manage page no longer shows "stored at" — version 1.55.1)
 
 **The manage page no longer has a "stored at" row.**
