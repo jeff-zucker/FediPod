@@ -367,6 +367,13 @@ if (!cssUp) { console.log(`FAIL  the scratch server never answered again at ${IS
   const kept = /posted from an app/.test((await kv.get(`${handle}/d/statuses.json`))?.text || '');
   if (!landedAgain || !kept) console.log(`  post ${againStatus}; lease ${(await kv.get(`${handle}/lease`))?.text}; landed ${landedAgain}; app post kept ${kept}`);
   check(againStatus === 200 && landedAgain && kept, 'and the browser acts again straight after, keeping what the app wrote');
+  // The browser holds the account again: its manage page's switch, as an app reads it.
+  const setHome = (show) => evaluate(`(async () => (await fetch('/config', { method: 'POST', headers: { 'x-fedipod-page': '1', 'content-type': 'application/json' },
+    body: JSON.stringify({ tagsInHome: ${show} }) })).status)()`);
+  const hid = await setHome(false);
+  check(hid === 200 && await waitFor(async () => JSON.parse((await kv.get(`${handle}/d/config.json`))?.text || '{}').tagsInHome === false, 20, 300),
+    `the manage page's switch keeps hashtag posts out of Home in the copy an app reads (${hid})`);
+  await setHome(true);
   // ---- phone notifications ----
   const phone = crypto.createECDH('prime256v1'); phone.generateKeys();
   const phoneAuth = crypto.randomBytes(16);

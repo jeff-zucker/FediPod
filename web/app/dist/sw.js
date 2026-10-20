@@ -69227,9 +69227,10 @@ async function handle4(api, ctx) {
   const { req, res, pathname, url, send } = ctx;
   if (pathname === "/api/v1/timelines/home" || pathname === "/api/v1/timelines/public" || pathname === "/api/v1/trends/statuses") {
     const localOnly = pathname === "/api/v1/timelines/public" && url.searchParams.get("local") === "true";
+    const hideTags = pathname === "/api/v1/timelines/home" && api.store.getConfig?.()?.tagsInHome === false;
     const all = api.store.getStatuses();
     const muted = new Set(api.store.getMuted().actors);
-    let items = all.filter((s) => s.kind !== "remote" && s.kind !== "mention").filter((s) => !s.direct && s.visibility !== "direct").filter((s) => !muted.has(s.actor) && !muted.has(s.via)).filter((s) => !localOnly || s.kind === "post" && s.visibility !== "private").sort((a, b) => String(b.published || "").localeCompare(String(a.published || "")));
+    let items = all.filter((s) => s.kind !== "remote" && s.kind !== "mention").filter((s) => !s.direct && s.visibility !== "direct").filter((s) => !muted.has(s.actor) && !muted.has(s.via)).filter((s) => !hideTags || s.kind !== "tag" || s.sourceAccts?.length).filter((s) => !localOnly || s.kind === "post" && s.visibility !== "private").sort((a, b) => String(b.published || "").localeCompare(String(a.published || "")));
     const { items: page2, headers } = api.page(items, url);
     return send(200, page2.map((s) => api.statusOrBoost(s, { all })), headers);
   }
@@ -71577,6 +71578,7 @@ var AdminFacade = class {
             fields: cfg.fields || [],
             aliases: cfg.aliases || [],
             autoAcceptFollows: cfg.autoAcceptFollows !== false,
+            tagsInHome: cfg.tagsInHome !== false,
             quiescedAt: cfg.quiescedAt || null,
             movedTo: cfg.movedTo || null,
             mode: a.status().mode,
@@ -71698,6 +71700,7 @@ var AdminFacade = class {
           cfg.fields = (Array.isArray(body.fields) ? body.fields : []).filter((f) => f?.name?.trim()).map((f) => ({ name: String(f.name).trim(), value: String(f.value ?? "").trim() }));
         }
         if ("autoAcceptFollows" in body) cfg.autoAcceptFollows = !!body.autoAcceptFollows;
+        if ("tagsInHome" in body) cfg.tagsInHome = !!body.tagsInHome;
         const republish = WIRE_CONFIG.some((k) => k in body);
         a.store.setConfig(cfg);
         if ("autoAcceptFollows" in body && a.publisher) a.publisher.config.autoAcceptFollows = cfg.autoAcceptFollows;

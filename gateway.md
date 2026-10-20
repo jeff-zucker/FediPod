@@ -250,7 +250,8 @@ read here.
 
 **Hashtags.** The hashtags you follow are one list, in FediPod and in an app:
 following or unfollowing one in either changes it in both. FediPod brings in
-the posts for them, while it is open.
+the posts for them, while it is open. **hashtag posts in home** on your manage
+page keeps them out of your home timeline, in FediPod and in an app alike.
 
 **Notifications on your phone.** An app that offers notifications can sign up
 for them here. A mention, a reply, a direct message, a follow, or a like, boost

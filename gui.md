@@ -96,6 +96,15 @@ Disconnecting stops the reading and removes the stored token; nothing already
 posted is touched. If the other server stops accepting the token, the account
 is marked **sign in again** rather than quietly dropped.
 
+## Hashtag posts in your home timeline
+
+The posts brought in for the hashtags you follow appear in your home timeline.
+Set **hashtag posts in home** to *hidden* and they appear only on the public
+timeline and on each hashtag's page; they are still brought in. A hashtag post
+that one of your connected accounts also brought in is from someone you follow
+there, and stays. An app already showing them keeps them on screen until it
+reloads.
+
 ## Handling follow requests
 
 New followers are accepted automatically. Set **new followers** to *wait for

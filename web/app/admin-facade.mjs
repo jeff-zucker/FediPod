@@ -120,6 +120,7 @@ export class AdminFacade {
             image: cfg.image || null, fields: cfg.fields || [],
             aliases: cfg.aliases || [],
             autoAcceptFollows: cfg.autoAcceptFollows !== false,
+            tagsInHome: cfg.tagsInHome !== false,
             quiescedAt: cfg.quiescedAt || null, movedTo: cfg.movedTo || null,
             mode: a.status().mode,
             // Live from the credential's actual backend on THIS browser (a
@@ -223,6 +224,7 @@ export class AdminFacade {
             .map(f => ({ name: String(f.name).trim(), value: String(f.value ?? '').trim() }));
         }
         if ('autoAcceptFollows' in body) cfg.autoAcceptFollows = !!body.autoAcceptFollows;
+        if ('tagsInHome' in body) cfg.tagsInHome = !!body.tagsInHome;
         const republish = WIRE_CONFIG.some(k => k in body);
         a.store.setConfig(cfg);
         if ('autoAcceptFollows' in body && a.publisher) a.publisher.config.autoAcceptFollows = cfg.autoAcceptFollows;

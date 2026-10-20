@@ -110,6 +110,23 @@ const setAutoAccept = async (auto) => {
 onPick(FOLLOWS_PICK, (v) => setAutoAccept(v === 'auto'),
   () => { FOLLOWS_PICK.value = config?.autoAcceptFollows ? 'auto' : 'approve'; });
 
+// Hashtag posts in the home timeline, or only on the public timeline and each
+// hashtag's page. FediPod goes on bringing them in either way.
+let homeTagsBusy = false;
+const setTagsInHome = async (show) => {
+  if (homeTagsBusy || show === (config.tagsInHome !== false)) return;
+  homeTagsBusy = true;
+  try {
+    if (await write('/config', { tagsInHome: show },
+      show ? 'hashtag posts are shown in your home timeline' : 'hashtag posts are kept out of your home timeline')) {
+      config.tagsInHome = show;
+    }
+    HOME_TAGS_PICK.value = config.tagsInHome !== false ? 'show' : 'hide';
+  } finally { homeTagsBusy = false; }
+};
+onPick(HOME_TAGS_PICK, (v) => setTagsInHome(v === 'show'),
+  () => { HOME_TAGS_PICK.value = config?.tagsInHome !== false ? 'show' : 'hide'; });
+
 // One row: what it is, then what can be done to it.
 function row(text, sub, actions) {
   const li = document.createElement('li');

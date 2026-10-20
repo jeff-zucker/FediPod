@@ -156,6 +156,27 @@ try {
   const tagOff = await call('GET', '/api/v1/tags/cats', { headers: bearer });
   check(tagOn.json?.following === true && tagOff.json?.following === false, 'and which hashtag is followed, on its page');
 
+  // ---- hashtag posts kept out of Home, and only Home ----
+  const published = new Date().toISOString();
+  const own = JSON.parse((await copyKv.get('mei/d/statuses.json')).text);
+  await put('statuses.json', [...own,
+    { noteId: 'https://far.example/notes/t1', kind: 'tag', tag: 'fediverse', actor: 'https://far.example/users/x',
+      content: '<p>a hashtag post</p>', published, visibility: 'public' },
+    { noteId: 'https://far.example/notes/t2', kind: 'tag', tag: 'fediverse', actor: 'https://far.example/users/y',
+      content: '<p>a hashtag post by someone followed elsewhere</p>', published, visibility: 'public',
+      sourceAccts: [{ acct: 'me@mastodon.example', remoteId: '5' }] }]);
+  const words = async (p) => (await call('GET', p, { headers: bearer })).json.map((x) => x.content).join(' | ');
+  check(/a hashtag post</.test(await words('/api/v1/timelines/home')), 'hashtag posts are in Home unless the owner says otherwise');
+  const cfgNow = JSON.parse((await copyKv.get('mei/d/config.json')).text);
+  await put('config.json', { ...cfgNow, tagsInHome: false });
+  const homeNow = await words('/api/v1/timelines/home');
+  check(!/a hashtag post</.test(homeNow) && /from the copy/.test(homeNow), `set to hide, they leave Home (${homeNow})`);
+  check(/followed elsewhere/.test(homeNow), 'except one a connected account brought in as well');
+  check(/a hashtag post</.test(await words('/api/v1/timelines/public')) && /a hashtag post</.test(await words('/api/v1/timelines/tag/fediverse')),
+    'and stay on the public timeline and the hashtag\'s page');
+  await put('config.json', cfgNow);
+  await put('statuses.json', own);
+
   // ---- using an app counts as being here, at most once an hour ----
   const longAgo = new Date(Date.now() - 2 * 3600_000).toISOString();
   rows.mei.openedAt = longAgo;

@@ -219,6 +219,28 @@ try {
   check(page?.storeKey === false, 'and offers no "Store key" choice');
   check(page?.banner?.role === 'alert' && /could not read a piece of your mail\. Show dead letters lists what it gave up on/u.test(page.banner.text || ''),
     `the bar says mail was not read (${page?.banner?.text})`);
+  // Hashtag posts in Home: shown, until the switch says hidden.
+  const tagRow = await evaluate(`(() => { const p = document.getElementById('home-tags-pick'); const dd = p?.closest('dd');
+    return p ? { value: p.value, shown: !!dd && !p.closest('[hidden]'), label: dd?.previousElementSibling?.textContent || '' } : null; })()`);
+  check(tagRow?.value === 'show' && tagRow.shown && tagRow.label === 'hashtag posts in home',
+    `the account page has the hashtag switch, set to shown (${JSON.stringify(tagRow)})`);
+  if (process.env.SHOT_HOME_TAGS) {
+    await evaluate(`document.getElementById('home-tags-pick').scrollIntoView({ block: 'center' })`);
+    await send('Emulation.setDeviceMetricsOverride', { width: 1200, height: 700, deviceScaleFactor: 1, mobile: false });
+    await sleep(500);
+    const shot = await send('Page.captureScreenshot', { format: 'png' });
+    if (shot.result?.data) fs.writeFileSync(process.env.SHOT_HOME_TAGS, Buffer.from(shot.result.data, 'base64'));
+    await send('Emulation.clearDeviceMetricsOverride');
+  }
+  const tagsInHome = () => evaluate(`(async () => (await (await fetch('/config', { headers: { 'x-fedipod-page': '1' } })).json()).tagsInHome)()`);
+  await evaluate(`(() => { const p = document.getElementById('home-tags-pick'); p.value = 'hide'; p.dispatchEvent(new Event('change')); })()`);
+  let hidden = false;
+  for (let i = 0; i < 20 && !hidden; i++) { await sleep(300); hidden = (await tagsInHome()) === false; }
+  check(hidden, 'set to hidden on the page, FediPod keeps hashtag posts out of Home');
+  await evaluate(`(() => { const p = document.getElementById('home-tags-pick'); p.value = 'show'; p.dispatchEvent(new Event('change')); })()`);
+  let shownAgain = false;
+  for (let i = 0; i < 20 && !shownAgain; i++) { await sleep(300); shownAgain = (await tagsInHome()) === true; }
+  check(shownAgain, 'and set to shown, shows them again');
   if (process.env.SHOT_TROUBLE) {
     await send('Emulation.setDeviceMetricsOverride', { width: 1200, height: 520, deviceScaleFactor: 1, mobile: false });
     await sleep(500);

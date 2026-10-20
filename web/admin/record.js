@@ -17,6 +17,8 @@ const STATUS_PICK = $('status-pick');   // held: getElementById can't see it mid
 const IDENT_CTL = $('ident-ctl');
 const FOLLOWS_CTL = $('follows-ctl');
 const FOLLOWS_PICK = $('follows-pick');
+const HOME_TAGS_CTL = $('home-tags-ctl');
+const HOME_TAGS_PICK = $('home-tags-pick');
 const UPDATE_CTL = $('update-ctl');
 const UPDATE_WORD = $('update-word');
 const UPDATE_GO = $('update-go');
@@ -255,7 +257,7 @@ function render() {
   if (config.movedTo) rows.push(['moved to', config.movedTo]);
   // A person gates followers here; a group's gate is the joins control on its
   // kind row, so the row would be a second switch for the same thing.
-  if (config.kind !== 'group') rows.splice(2, 0, ['new followers', 'ctl']);
+  if (config.kind !== 'group') rows.splice(2, 0, ['new followers', 'ctl'], ['hashtag posts in home', 'ctl']);
   // Rows that belong under the one being written, appended after it.
   let kids = null;
   for (const [k, v, link] of rows) {
@@ -295,6 +297,12 @@ function render() {
       dd.append(FOLLOWS_CTL);
       FOLLOWS_CTL.hidden = false;
       FOLLOWS_PICK.value = config.autoAcceptFollows !== false ? 'auto' : 'approve';
+    }
+    if (k === 'hashtag posts in home') {
+      dd.textContent = '';
+      dd.append(HOME_TAGS_CTL);
+      HOME_TAGS_CTL.hidden = false;
+      HOME_TAGS_PICK.value = config.tagsInHome !== false ? 'show' : 'hide';
     }
     if (k === 'gateway') {
       dd.textContent = '';

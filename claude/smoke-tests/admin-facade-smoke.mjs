@@ -135,6 +135,18 @@ assert.equal(agent.publisher.config.name, 'FP One Renamed');
 assert.equal(published, before + 1);
 ok('POST /config edits the profile and republishes');
 
+// POST /config — hashtag posts in Home: shown unless set, and no profile is republished
+assert.equal((await call(facade, 'GET', '/config')).json.tagsInHome, true);
+const beforeTags = published;
+r = await call(facade, 'POST', '/config', { tagsInHome: false });
+assert.equal(r.status, 200); assert.equal(r.json.published, false);
+assert.equal(agent.store.getConfig().tagsInHome, false);
+assert.equal((await call(facade, 'GET', '/config')).json.tagsInHome, false);
+assert.equal(published, beforeTags);
+r = await call(facade, 'POST', '/config', { tagsInHome: true });
+assert.equal(agent.store.getConfig().tagsInHome, true);
+ok('POST /config keeps hashtag posts out of Home, or shows them, without republishing the profile');
+
 // POST /config — the identity itself cannot be changed
 r = await call(facade, 'POST', '/config', { handle: 'someone-else' });
 assert.equal(r.status, 400); assert.match(r.json.error, /cannot be changed/);
