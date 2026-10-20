@@ -240,6 +240,18 @@ An app checks for new posts every minute or so while it is open; there are no
 live updates. Accounts are made on the fedipod.net front page, with a pod, not
 from an app.
 
+**Your connected accounts, with FediPod closed.** FediPod open in a browser
+reads the Mastodon and Bluesky accounts you connected every five minutes.
+While it is closed and an app is in use, fedipod.net reads them instead, at
+most every five minutes, when the app checks your timeline or notifications.
+Their logins are read from your pod for each read and are not kept at
+fedipod.net. An account you have just connected can take up to an hour to be
+read here.
+
+**Hashtags.** The hashtags you follow are one list, in FediPod and in an app:
+following or unfollowing one in either changes it in both. FediPod brings in
+the posts for them, while it is open.
+
 **Notifications on your phone.** An app that offers notifications can sign up
 for them here. A mention, a reply, a direct message, a follow, or a like, boost
 or reaction to your own post then reaches your phone as it arrives, whether

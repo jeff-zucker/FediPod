@@ -148,6 +148,13 @@ try {
   check(me.status === 200 && me.json.username === 'mei' && /gw\.example/.test(me.json.url || me.json.acct || ''), `the app sees whose account it is (${me.json?.acct})`);
   const home = await call('GET', '/api/v1/timelines/home', { headers: bearer });
   check(home.status === 200 && home.json.some((s) => /from the copy/.test(s.content)), 'and reads the timeline from the copy');
+  await put('tagfeed.json', { tags: ['solidproject', 'fediverse'] });
+  const followed = await call('GET', '/api/v1/followed_tags', { headers: bearer });
+  check(followed.status === 200 && followed.json.map((t) => t.name).join() === 'solidproject,fediverse' && followed.json.every((t) => t.following),
+    `the app sees the hashtags followed (${followed.json?.map?.((t) => t.name)})`);
+  const tagOn = await call('GET', '/api/v1/tags/fediverse', { headers: bearer });
+  const tagOff = await call('GET', '/api/v1/tags/cats', { headers: bearer });
+  check(tagOn.json?.following === true && tagOff.json?.following === false, 'and which hashtag is followed, on its page');
 
   // ---- using an app counts as being here, at most once an hour ----
   const longAgo = new Date(Date.now() - 2 * 3600_000).toISOString();

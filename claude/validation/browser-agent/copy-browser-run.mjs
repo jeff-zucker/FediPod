@@ -343,6 +343,14 @@ if (!cssUp) { console.log(`FAIL  the scratch server never answered again at ${IS
     'the post lands in the copy, the gateway having taken the lease to make it');
   check((await fetch(postedJson.uri, { headers: { accept: 'application/activity+json' } })).status === 200, 'and the post itself is public on the pod');
   check(JSON.parse((await kv.get(`${handle}/lease`)).text).expiresAt === 0, 'the gateway lets the lease go once it has acted');
+  // ---- the hashtags followed, changed from an app ----
+  const tagsSeen = async () => (await (await appApi('/api/v1/followed_tags')).json()).map((t) => t.name);
+  const tagOn = await appApi('/api/v1/tags/rigtag/follow', { method: 'POST', body: '{}' });
+  check(tagOn.status === 200 && (await tagsSeen()).includes('rigtag'), `an app follows a hashtag, and sees it followed (${tagOn.status})`);
+  const tagOff = await appApi('/api/v1/tags/rigtag/unfollow', { method: 'POST', body: '{}' });
+  const tagsNow = JSON.parse((await kv.get(`${handle}/d/tagfeed.json`))?.text || '{}').tags || [];
+  check(tagOff.status === 200 && !(await tagsSeen()).includes('rigtag') && tagsNow.length > 0 && !tagsNow.includes('rigtag'),
+    `and unfollows it, in the copy FediPod reads (${tagsNow.length} left)`);
   // Mail held while nobody read it: the app's next check reads it in.
   mentionTarget = rows[handle].actorUrl;            // the account's own actor, as attach recorded it
   held.set(`${handle}/held-mention-1`, JSON.stringify({ '@context': 'https://www.w3.org/ns/activitystreams', id: `${ORIGIN}/peer/1/creates/1`, type: 'Create',
@@ -498,6 +506,41 @@ if (!cssUp) { console.log(`FAIL  the scratch server never answered again at ${IS
   const logNow = await evaluate(`(async () => (await (await fetch('/log', { headers: { 'x-fedipod-page': '1' } })).json()).lines)()`);
   check(Array.isArray(logNow) && logNow.length > 5 && logNow.some((l) => /browser agent/.test(l)),
     `the manage page's log has FediPod's own lines, across restarts (${logNow?.length})`);
+
+  // ---- FediPod closed: an app checking in reads the connected account at the gateway ----
+  const farAsked = [];
+  ctx.fetchImpl = async (u, init = {}) => {
+    if (!String(u).startsWith('https://mastodon.example/')) return fetch(u, init);
+    farAsked.push(`${new URL(u).pathname} ${init.headers?.authorization || ''}`);
+    const rate = { 'content-type': 'application/json', 'x-ratelimit-remaining': '299' };
+    const body = new URL(u).pathname === '/api/v1/timelines/home'
+      ? [{ id: '2001', uri: 'https://elsewhere.example/users/pat/statuses/2001', content: '<p>followed on the connected account</p>',
+        created_at: new Date().toISOString(), account: { id: '9', username: 'pat', acct: 'pat@elsewhere.example', display_name: 'Pat', uri: 'https://elsewhere.example/users/pat', avatar: '' } }]
+      : [];
+    return new Response(JSON.stringify(body), { status: 200, headers: rate });
+  };
+  await send('ServiceWorker.stopAllWorkers');
+  await sleep(1000);
+  const onConn = { [Object.keys(conn)[0]]: { ...Object.values(conn)[0], enabled: true } };
+  await owner.fetch(`${state}fediaccts.json`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(onConn) });
+  // As a closed browser leaves the account five minutes on, with any wait the
+  // gateway set itself earlier (an hour, finding nothing connected) gone.
+  const leaseDoc = JSON.parse((await kv.get(`${handle}/lease`)).text);
+  await kv.set(`${handle}/lease`, JSON.stringify({ ...leaseDoc, expiresAt: 0 }));
+  await kv.delete(`${handle}/feeds-due`);
+  await appHome();
+  await Promise.all(pendingWork.splice(0));
+  check(farAsked.some((a) => /^\/api\/v1\/timelines\/home .*Bearer full-access/.test(a)), `the gateway asks the connected account for its timeline (${farAsked.length})`);
+  check(/followed on the connected account/.test((await kv.get(`${handle}/d/statuses.json`))?.text || ''), 'what it follows there lands in the copy');
+  check(/followed on the connected account/.test(await appHome()), 'and the app sees it on its next check');
+  check(![...kv.map.keys()].some((k) => /fediaccts|atproto/.test(k)) && ![...kv.map.values()].some((v) => /full-access/.test(v.text)),
+    'the login is read from the pod and kept nowhere at the gateway');
+  const askedOnce = farAsked.length;
+  await appHome();
+  await Promise.all(pendingWork.splice(0));
+  check(farAsked.length === askedOnce, 'checking again at once asks the other server nothing');
+  delete ctx.fetchImpl;
+  await owner.fetch(`${state}fediaccts.json`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(conn) });
 
   // ---- the gateway changes its identity: the account moves over ----
   check(await post('written before the switch') === 200

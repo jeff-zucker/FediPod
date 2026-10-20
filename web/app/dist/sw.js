@@ -70239,8 +70239,9 @@ var TagFeed = class {
     if (Array.isArray(patch.tags)) clean.tags = patch.tags.map((t) => String(t).replace(/^#/, "").trim()).filter(Boolean);
     if (patch.intervalMin) clean.intervalMin = Math.max(5, Number(patch.intervalMin) || DEFAULTS2.intervalMin);
     this.store.write("tagfeed.json", { ...this.config(), ...clean });
+    const sweeping = this.stopped === false;
     this.stop();
-    this.start();
+    if (sweeping) this.start();
     return this.config();
   }
   // `lastSweptAt` and `onSwept` are for a browser worker the browser stops and
@@ -73123,8 +73124,11 @@ var AcctFeed = class {
     }
     return map;
   }
+  // A server that does not say what is left (not every Mastodon-API server
+  // does) is not taken to have nothing left.
   _rateGuard(id, handle7, res) {
-    const left = Number(res.headers.get("x-ratelimit-remaining"));
+    const said = res.headers.get("x-ratelimit-remaining");
+    const left = said == null || said.trim() === "" ? NaN : Number(said);
     if (!Number.isFinite(left) || left > RATE_FLOOR) return false;
     const reset = Date.parse(res.headers.get("x-ratelimit-reset") || "");
     const wait = Number.isFinite(reset) ? Math.max(0, reset - Date.now()) : BACKOFF_MIN_MS3;

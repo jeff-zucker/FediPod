@@ -90,6 +90,13 @@ Six functions on Netlify, thin adapters around plain Node in `lib/gateway/`:
   the store `masto`, with the one VAPID pair. Held mail is `mail`, presence
   `present`, the keeper's due-times `keeper`, deliveries counted for quiet
   accounts `received`, notices `notices`.
+- An app checking the home timeline or notifications also reads the owner's
+  connected Mastodon-API and Bluesky accounts into the copy
+  (`connected-feeds.mjs`), when due (`<handle>/feeds-due` in `state`: five
+  minutes, an hour when nothing is connected) and only when no browser holds
+  the lease. The logins come from the pod for each read. The gateway's
+  agents carry a `TagFeed` that only answers for the hashtag list; the tag
+  posts are swept by the browser alone.
 - While the app is open it says so every five minutes (`/api/here`) and mail
   goes straight to the pod; closed, mail is held and batched.
 - The edge holds documents ten minutes (stale served forty more), WebFinger
