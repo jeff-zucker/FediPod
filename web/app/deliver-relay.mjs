@@ -105,7 +105,8 @@ export class RelayDeliverer extends Deliverer {
     const status = r0.status || 0;
     if (status === 0) { const err = new Error(r0.error || 'relay could not send'); err.status = 502; throw err; }
     if (status >= 400) {
-      const err = new Error(`${method} ${url} → ${status}`); err.status = status;
+      // `answered`: the far server's own answer, as against the relay's.
+      const err = new Error(`${method} ${url} → ${status}`); err.status = status; err.answered = true;
       // The receiving server's own answer to "when should I try again", carried
       // through the relay (lib/front-core.mjs). Spelled `retryAfterMs`, which is
       // what the delivery queue reads (lib/deliver.mjs) — the queue's ladder is

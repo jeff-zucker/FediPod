@@ -4,6 +4,22 @@
 // relationship.
 
 (() => {
+  // A page loaded past its worker (a hard reload does that) leaves FediPod's
+  // own part asleep in the browser: nothing the page asks reaches it. Loaded
+  // again, normally, the worker answers. Once per tab, in case it cannot.
+  try {
+    const sw = navigator.serviceWorker;
+    const reloaded = performance.getEntriesByType?.('navigation')?.[0]?.type === 'reload';
+    if (sw?.controller) sessionStorage.removeItem('fedipod-reattached');
+    else if (sw && reloaded && !sessionStorage.getItem('fedipod-reattached')) {
+      sw.getRegistration().then((reg) => {
+        if (!reg?.active) return;
+        sessionStorage.setItem('fedipod-reattached', '1');
+        location.reload();
+      }).catch(() => {});
+    }
+  } catch { /* no storage to guard a second try: leave the page as it is */ }
+
   // The three destinations are <a href> now: they are navigations, so they
   // belong in a screen reader's links list, and middle-click and open-in-new-tab
   // work the way they do everywhere else. Nothing here has to drive them.
@@ -83,7 +99,7 @@ function troubleBanner(count) {
   said.textContent = `FediPod could not read ${count === 1 ? 'a piece' : `${count} pieces`} of your mail. `;
   box.append(head, said);
   if (onManage) {
-    box.append(`${count === 1 ? 'It is' : 'They are'} listed under Show dead letters and Show the log.`);
+    box.append('Show dead letters lists what it gave up on.');
   } else {
     const go = document.createElement('a');
     go.href = base + '/admin/';

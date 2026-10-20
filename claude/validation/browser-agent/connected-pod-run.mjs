@@ -217,7 +217,7 @@ try {
   }
   check(page?.shown === true, 'the account page lists both connected accounts');
   check(page?.storeKey === false, 'and offers no "Store key" choice');
-  check(page?.banner?.role === 'alert' && /could not read a piece of your mail\. It is listed under Show dead letters/u.test(page.banner.text || ''),
+  check(page?.banner?.role === 'alert' && /could not read a piece of your mail\. Show dead letters lists what it gave up on/u.test(page.banner.text || ''),
     `the bar says mail was not read (${page?.banner?.text})`);
   if (process.env.SHOT_TROUBLE) {
     await send('Emulation.setDeviceMetricsOverride', { width: 1200, height: 520, deviceScaleFactor: 1, mobile: false });
@@ -231,6 +231,17 @@ try {
   for (let i = 0; i < 20 && !cleared; i++) { await sleep(500); cleared = await evaluate(`!document.getElementById('trouble-banner')`); }
   const after = (await status())?.trouble;
   check(cleared && after?.count === 0, 'opening the dead letters takes the line away, and the count starts again');
+
+  // A hard reload loads the page past its worker; the page loads itself
+  // again, normally, and the worker answers it.
+  await send('Page.reload', { ignoreCache: true });
+  let reattached = false;
+  for (let i = 0; i < 30 && !reattached; i++) {
+    await sleep(500);
+    reattached = await evaluate(`!!navigator.serviceWorker?.controller && !!document.getElementById('do-deadletter')`).catch(() => false);
+  }
+  const answers = await status();
+  check(reattached === true && answers?.mode === 'active', `after a hard reload the page is FediPod's again (${answers?.mode || answers?.__status})`);
   if (process.env.SHOT) {
     await send('Emulation.setDeviceMetricsOverride', { width: 1200, height: 760, deviceScaleFactor: 1, mobile: false });
     await evaluate(`document.querySelector('dt.under')?.scrollIntoView({ block: 'center' })`);

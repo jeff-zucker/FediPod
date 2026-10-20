@@ -455,6 +455,31 @@ if (!cssUp) { console.log(`FAIL  the scratch server never answered again at ${IS
     `a letter that has not arrived puts the line in the bar (${JSON.stringify(missingSaid)})`);
   await evaluate(`fetch('/trouble', { method: 'POST', headers: { 'x-fedipod-page': '1', 'content-type': 'application/json' }, body: JSON.stringify({ seen: true }) })`);
 
+  // ---- a profile that disagrees with the follower setting is written again ----
+  const actorAt = `${pod}fedipod/ap/actor`;
+  const shown = await owner.fetch(actorAt, { headers: { accept: 'application/activity+json' } });
+  const shownType = shown.headers.get('content-type') || 'application/activity+json';
+  const asPublished = await shown.json();
+  check(!asPublished.manuallyApprovesFollowers, 'the profile says followers are accepted, as the setting does');
+  // As an older FediPod wrote it: approval by hand, and no record of it.
+  await owner.fetch(actorAt, { method: 'PUT', headers: { 'content-type': shownType },
+    body: JSON.stringify({ ...asPublished, manuallyApprovesFollowers: true }) });
+  const rec = JSON.parse((await kv.get(`${handle}/d/published.json`))?.text || '{}');
+  delete rec.approvesByHand;
+  await kv.set(`${handle}/d/published.json`, JSON.stringify(rec));
+  // A full start, as the first one after an hour is: nothing kept in this browser.
+  await send('ServiceWorker.stopAllWorkers');
+  await sleep(1000);
+  await evaluate(`new Promise((res) => { const r = indexedDB.deleteDatabase('fedipod-warm'); r.onsuccess = r.onerror = r.onblocked = () => res(); })`);
+  let healed = false;
+  for (let i = 0; i < 40 && !healed; i++) {
+    await statusOf();
+    const now = await (await owner.fetch(actorAt, { headers: { accept: 'application/activity+json' } })).json().catch(() => ({}));
+    healed = now.id && !now.manuallyApprovesFollowers;
+    if (!healed) await sleep(1000);
+  }
+  check(healed, 'a profile saying approval by hand, against the setting, is written again at the next start');
+
   // ---- the gateway changes its identity: the account moves over ----
   check(await post('written before the switch') === 200
     && await waitFor(async () => /written before the switch/.test((await kv.get(`${handle}/d/statuses.json`))?.text || ''), 20, 300)

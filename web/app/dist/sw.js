@@ -58588,6 +58588,21 @@ var Publisher = class {
   // `clientOrigin` is overridden only by the agent serving a client its own
   // local actor: standalone, the published document cannot name a loopback
   // address, but a client already talking to that address can be told it.
+  // Whether follows wait for the owner, from the setting as saved now: this
+  // config is a copy taken when the agent started, and the saved one may have
+  // changed since.
+  approvesByHand() {
+    const saved = this.store?.getConfig?.() || {};
+    return followsNeedApproval({
+      ...this.config,
+      ..."autoAcceptFollows" in saved ? { autoAcceptFollows: saved.autoAcceptFollows } : {},
+      ..."approveJoins" in saved ? { approveJoins: saved.approveJoins } : {}
+    });
+  }
+  // Whether the profile last published says what the setting says.
+  profileAgrees() {
+    return this.store.read("published.json", {}).approvesByHand === this.approvesByHand();
+  }
   actorDocFor({
     priv = false,
     moderators = null,
@@ -58603,7 +58618,7 @@ var Publisher = class {
       publicKeyPem: this.publicKeyPem,
       movedTo,
       kind: this.config.kind,
-      approveJoins: followsNeedApproval(this.config),
+      approveJoins: this.approvesByHand(),
       assertionKey: this.assertionKey,
       summary: this.config.summary || null,
       icon: this.config.icon || null,
@@ -58739,12 +58754,11 @@ var Publisher = class {
     const updated = await this.announceProfileChange(actor, { force });
     await this.ensurePrivateAcls();
     const unreachable = await this.verifyPublicSurface();
-    if (!unreachable.length) {
-      this.store.write(
-        "published.json",
-        { ...this.store.read("published.json", {}), surfaceDigest: surface }
-      );
-    }
+    this.store.write("published.json", {
+      ...this.store.read("published.json", {}),
+      ...!unreachable.length ? { surfaceDigest: surface } : {},
+      approvesByHand: !!actorDoc2.manuallyApprovesFollowers
+    });
     const pubName = publicHandle(this.config);
     const pubHost = this.config.gateway?.frontActor ? new URL(this.config.gateway.frontActor).host : host;
     this.log(this.config.gateway?.frontActor || webfingerHost(urls.base) ? `profile published: @${pubName}@${pubHost} \u2192 ${urls.actor}` : `profile published \u2192 ${urls.actor} \u2014 NOT discoverable as @${pubName}@${pubHost}: this pod is suffixed, and WebFinger is only answered for a subdomained pod`);
@@ -59447,8 +59461,8 @@ async function isGone(intake, url) {
   let res;
   try {
     res = await intake.deliverer.signedFetch(url, { headers: { accept: ACCEPT_AP2 } });
-  } catch {
-    return null;
+  } catch (e) {
+    return e?.answered && (e.status === 404 || e.status === 410) ? true : null;
   }
   if (res.status === 404 || res.status === 410) return true;
   if (res.status < 400) {
@@ -71066,6 +71080,7 @@ var RelayDeliverer = class extends Deliverer {
     if (status2 >= 400) {
       const err = new Error(`${method} ${url} \u2192 ${status2}`);
       err.status = status2;
+      err.answered = true;
       if (r0.retryAfter) {
         const secs = Number(r0.retryAfter);
         const ms = Number.isFinite(secs) ? Math.max(secs, 1) * 1e3 : Math.max(Date.parse(r0.retryAfter) - Date.now(), 1e3);
@@ -73799,7 +73814,7 @@ var BrowserAgent = class _BrowserAgent {
     this.log(`could not read mail (${t.kind}): ${t.reason}`);
     if (due) {
       const many = next.count === 1 ? "a piece of your mail" : `${next.count} pieces of your mail`;
-      this.tellGateway("alert", { handle: this.doorKey, text: `Could not read ${many}. Your manage page lists them under Show dead letters and Show the log.` }, { standing: false }).catch(() => {
+      this.tellGateway("alert", { handle: this.doorKey, text: `Could not read ${many}. Show dead letters on your manage page lists what it gave up on.` }, { standing: false }).catch(() => {
       });
     }
   }
@@ -73949,6 +73964,11 @@ var BrowserAgent = class _BrowserAgent {
       this.store.onEvent = (type, n) => {
         if (type === "notification") this.notePush(n);
       };
+      const tried = this.store.read("published.json", {}).healTriedAt;
+      if (!this.publisher.profileAgrees() && !(tried && Date.now() - Date.parse(tried) < 60 * 6e4)) {
+        this.store.write("published.json", { ...this.store.read("published.json", {}), healTriedAt: (/* @__PURE__ */ new Date()).toISOString() });
+        await this.publisher.publishProfile({ force: true }).catch((e) => this.log(`profile: ${e.message}`));
+      }
       const now = Date.now();
       const hereDue = !warm || now - (warm.hereAt || 0) >= _BrowserAgent.HERE_EVERY_MS;
       const here = hereDue ? await this.hereAtGateway() : null;

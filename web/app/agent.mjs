@@ -198,7 +198,7 @@ export class BrowserAgent {
     this.log(`could not read mail (${t.kind}): ${t.reason}`);
     if (due) {
       const many = next.count === 1 ? 'a piece of your mail' : `${next.count} pieces of your mail`;
-      this.tellGateway('alert', { handle: this.doorKey, text: `Could not read ${many}. Your manage page lists them under Show dead letters and Show the log.` }, { standing: false })
+      this.tellGateway('alert', { handle: this.doorKey, text: `Could not read ${many}. Show dead letters on your manage page lists what it gave up on.` }, { standing: false })
         .catch(() => {});
     }
   }
@@ -363,6 +363,14 @@ export class BrowserAgent {
         }
       }
       this.store.onEvent = (type, n) => { if (type === 'notification') this.notePush(n); };
+      // A profile that says otherwise than the follower setting (written by an
+      // older FediPod, or before the setting changed) is written again.
+      // Tried at most hourly, so a pod that refuses it is not asked at every wake.
+      const tried = this.store.read('published.json', {}).healTriedAt;
+      if (!this.publisher.profileAgrees() && !(tried && Date.now() - Date.parse(tried) < 60 * 60_000)) {
+        this.store.write('published.json', { ...this.store.read('published.json', {}), healTriedAt: new Date().toISOString() });
+        await this.publisher.publishProfile({ force: true }).catch((e) => this.log(`profile: ${e.message}`));
+      }
       const now = Date.now();
       // Said before the drain starts, so held mail is in the inbox to be read.
       const hereDue = !warm || now - (warm.hereAt || 0) >= BrowserAgent.HERE_EVERY_MS;

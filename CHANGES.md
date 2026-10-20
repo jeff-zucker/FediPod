@@ -1,5 +1,21 @@
 # Changes
 
+## 2026-10-19 (FediPod keeps running after a hard reload; your profile matches your follower setting; a deleted account raises no alarm — version 1.53.1)
+
+**FediPod keeps running after a hard reload.** A hard reload (Ctrl+Shift+R)
+loaded the page without FediPod's background part, which then ran for a few
+minutes and stopped, and your mail waited at fedipod.net. The page now loads
+itself again, normally, when that happens.
+
+**Your public profile says what your follower setting says.** A profile
+written by an older FediPod could go on telling other servers that you approve
+followers by hand, so Mastodon offered "Request to follow". FediPod rewrites it
+at its next start whenever it disagrees with your setting.
+
+**A deleted account no longer raises the red line.** When a server announced
+that one of its accounts was deleted, FediPod in the browser could not confirm
+it, kept trying, and in the end set the notice aside and raised an alert.
+
 ## 2026-10-19 (fedipod.net checks every six hours that your mail gets through — version 1.53.0)
 
 **fedipod.net checks every six hours that mail reaches your FediPod.** It sends
