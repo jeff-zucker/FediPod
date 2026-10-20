@@ -1,4 +1,4 @@
-// sanitize-html 2.17.7 with its dependencies, packed by scripts/vendor-sanitize.mjs. Do not edit.
+// sanitize-html 2.18.1 with its dependencies, packed by scripts/vendor-sanitize.mjs. Do not edit.
 var __defProp = Object.defineProperty;
 var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
 var __getOwnPropNames = Object.getOwnPropertyNames;
@@ -3392,7 +3392,6 @@ var require_escape_string_regexp = __commonJS({
 var require_is_plain_object = __commonJS({
   "node_modules/is-plain-object/dist/is-plain-object.js"(exports2) {
     "use strict";
-    Object.defineProperty(exports2, "__esModule", { value: true });
     /*!
      * is-plain-object <https://github.com/jonschlinkert/is-plain-object>
      *
@@ -3415,109 +3414,6 @@ var require_is_plain_object = __commonJS({
       return true;
     }
     exports2.isPlainObject = isPlainObject2;
-  }
-});
-
-// node_modules/deepmerge/dist/cjs.js
-var require_cjs = __commonJS({
-  "node_modules/deepmerge/dist/cjs.js"(exports2, module2) {
-    "use strict";
-    var isMergeableObject = function isMergeableObject2(value) {
-      return isNonNullObject(value) && !isSpecial(value);
-    };
-    function isNonNullObject(value) {
-      return !!value && typeof value === "object";
-    }
-    function isSpecial(value) {
-      var stringValue = Object.prototype.toString.call(value);
-      return stringValue === "[object RegExp]" || stringValue === "[object Date]" || isReactElement(value);
-    }
-    var canUseSymbol = typeof Symbol === "function" && Symbol.for;
-    var REACT_ELEMENT_TYPE = canUseSymbol ? /* @__PURE__ */ Symbol.for("react.element") : 60103;
-    function isReactElement(value) {
-      return value.$$typeof === REACT_ELEMENT_TYPE;
-    }
-    function emptyTarget(val) {
-      return Array.isArray(val) ? [] : {};
-    }
-    function cloneUnlessOtherwiseSpecified(value, options) {
-      return options.clone !== false && options.isMergeableObject(value) ? deepmerge2(emptyTarget(value), value, options) : value;
-    }
-    function defaultArrayMerge(target, source, options) {
-      return target.concat(source).map(function(element) {
-        return cloneUnlessOtherwiseSpecified(element, options);
-      });
-    }
-    function getMergeFunction(key, options) {
-      if (!options.customMerge) {
-        return deepmerge2;
-      }
-      var customMerge = options.customMerge(key);
-      return typeof customMerge === "function" ? customMerge : deepmerge2;
-    }
-    function getEnumerableOwnPropertySymbols(target) {
-      return Object.getOwnPropertySymbols ? Object.getOwnPropertySymbols(target).filter(function(symbol) {
-        return Object.propertyIsEnumerable.call(target, symbol);
-      }) : [];
-    }
-    function getKeys(target) {
-      return Object.keys(target).concat(getEnumerableOwnPropertySymbols(target));
-    }
-    function propertyIsOnObject(object, property) {
-      try {
-        return property in object;
-      } catch (_) {
-        return false;
-      }
-    }
-    function propertyIsUnsafe(target, key) {
-      return propertyIsOnObject(target, key) && !(Object.hasOwnProperty.call(target, key) && Object.propertyIsEnumerable.call(target, key));
-    }
-    function mergeObject(target, source, options) {
-      var destination = {};
-      if (options.isMergeableObject(target)) {
-        getKeys(target).forEach(function(key) {
-          destination[key] = cloneUnlessOtherwiseSpecified(target[key], options);
-        });
-      }
-      getKeys(source).forEach(function(key) {
-        if (propertyIsUnsafe(target, key)) {
-          return;
-        }
-        if (propertyIsOnObject(target, key) && options.isMergeableObject(source[key])) {
-          destination[key] = getMergeFunction(key, options)(target[key], source[key], options);
-        } else {
-          destination[key] = cloneUnlessOtherwiseSpecified(source[key], options);
-        }
-      });
-      return destination;
-    }
-    function deepmerge2(target, source, options) {
-      options = options || {};
-      options.arrayMerge = options.arrayMerge || defaultArrayMerge;
-      options.isMergeableObject = options.isMergeableObject || isMergeableObject;
-      options.cloneUnlessOtherwiseSpecified = cloneUnlessOtherwiseSpecified;
-      var sourceIsArray = Array.isArray(source);
-      var targetIsArray = Array.isArray(target);
-      var sourceAndTargetTypesMatch = sourceIsArray === targetIsArray;
-      if (!sourceAndTargetTypesMatch) {
-        return cloneUnlessOtherwiseSpecified(source, options);
-      } else if (sourceIsArray) {
-        return options.arrayMerge(target, source, options);
-      } else {
-        return mergeObject(target, source, options);
-      }
-    }
-    deepmerge2.all = function deepmergeAll(array, options) {
-      if (!Array.isArray(array)) {
-        throw new Error("first argument should be an array");
-      }
-      return array.reduce(function(prev, next) {
-        return deepmerge2(prev, next, options);
-      }, {});
-    };
-    var deepmerge_1 = deepmerge2;
-    module2.exports = deepmerge_1;
   }
 });
 
@@ -4134,14 +4030,7 @@ var require_css_syntax_error = __commonJS({
 var require_stringifier = __commonJS({
   "node_modules/postcss/lib/stringifier.js"(exports2, module2) {
     "use strict";
-    var STYLE_TAG = /(<)(\/?style\b)/gi;
-    var COMMENT_OPEN = /(<)(!--)/g;
     var AT_NAME_END = /[\t\n\f\r "#'()/;[\\\]{}]/;
-    function escapeHTMLInCSS(str) {
-      if (typeof str !== "string") return str;
-      if (!str.includes("<")) return str;
-      return str.replace(STYLE_TAG, "\\3c $2").replace(COMMENT_OPEN, "\\3c $2");
-    }
     var DEFAULT_RAW = {
       after: "\n",
       beforeClose: "\n",
@@ -4170,6 +4059,11 @@ var require_stringifier = __commonJS({
       }
       return name + afterName + params;
     }
+    function isCustomProperty(node) {
+      if (!node.prop.startsWith("--")) return false;
+      let before = node.raws.before;
+      return typeof before === "undefined" || !/[^\s;]$/.test(before);
+    }
     function pushBody(str, stack, node) {
       let nodes = node.nodes;
       let last = nodes.length - 1;
@@ -4182,7 +4076,7 @@ var require_stringifier = __commonJS({
       for (let i = nodes.length - 1; i >= 0; i--) {
         let child = nodes[i];
         let childSemicolon = last !== i || semicolon;
-        if (!childSemicolon && i < nodes.length - 1 && (child.type === "atrule" && !child.nodes || child.type === "decl" && child.prop.startsWith("--"))) {
+        if (!childSemicolon && i < nodes.length - 1 && (child.type === "atrule" && !child.nodes || child.type === "decl" && isCustomProperty(child))) {
           childSemicolon = true;
         }
         stack.push({
@@ -4194,14 +4088,14 @@ var require_stringifier = __commonJS({
     }
     function pushBlock(str, stack, node, start) {
       let between = str.raw(node, "between", "beforeOpen");
-      str.builder(escapeHTMLInCSS(start + between) + "{", node, "start");
+      str.builder(start + between + "{", node, "start");
       let hasNodes = node.nodes && node.nodes.length;
       let close = () => {
         let after = hasNodes ? str.raw(node, "after") : str.raw(node, "after", "emptyBody");
-        if (after) str.builder(escapeHTMLInCSS(after));
+        if (after) str.builder(after);
         str.builder("}", node, "end");
         if (node.type === "rule" && node.raws.ownSemicolon) {
-          str.builder(escapeHTMLInCSS(node.raws.ownSemicolon), node, "end");
+          str.builder(node.raws.ownSemicolon, node, "end");
         }
       };
       if (hasNodes) {
@@ -4221,7 +4115,7 @@ var require_stringifier = __commonJS({
           this.block(node, start);
         } else {
           let end = (node.raws.between || "") + (semicolon ? ";" : "");
-          this.builder(escapeHTMLInCSS(start + end), node);
+          this.builder(start + end, node);
         }
       }
       beforeAfter(node, detect) {
@@ -4251,7 +4145,7 @@ var require_stringifier = __commonJS({
       }
       block(node, start) {
         let between = this.raw(node, "between", "beforeOpen");
-        this.builder(escapeHTMLInCSS(start + between) + "{", node, "start");
+        this.builder(start + between + "{", node, "start");
         let after;
         if (node.nodes && node.nodes.length) {
           this.body(node);
@@ -4259,7 +4153,7 @@ var require_stringifier = __commonJS({
         } else {
           after = this.raw(node, "after", "emptyBody");
         }
-        if (after) this.builder(escapeHTMLInCSS(after));
+        if (after) this.builder(after);
         this.builder("}", node, "end");
       }
       body(node) {
@@ -4278,7 +4172,7 @@ var require_stringifier = __commonJS({
           let child = entry.node;
           let before = this.raw(child, "before");
           if (before) {
-            this.builder(entry.document ? before : escapeHTMLInCSS(before));
+            this.builder(before);
           }
           if (expandable && child.type === "rule") {
             pushBlock(this, stack, child, this.rawValue(child, "selector"));
@@ -4292,7 +4186,7 @@ var require_stringifier = __commonJS({
       comment(node) {
         let left = this.raw(node, "left", "commentLeft");
         let right = this.raw(node, "right", "commentRight");
-        this.builder(escapeHTMLInCSS("/*" + left + node.text + right + "*/"), node);
+        this.builder("/*" + left + node.text + right + "*/", node);
       }
       decl(node, semicolon) {
         let raws = node.raws;
@@ -4302,7 +4196,7 @@ var require_stringifier = __commonJS({
           string += raws.important || " !important";
         }
         if (semicolon) string += ";";
-        this.builder(escapeHTMLInCSS(string), node);
+        this.builder(string, node);
       }
       document(node) {
         this.body(node);
@@ -4479,20 +4373,19 @@ var require_stringifier = __commonJS({
         return value;
       }
       root(node) {
-        if (node.source && node.source.input.hasBOM) {
+        let inDocument = node.parent && node.parent.type === "document";
+        if (!inDocument && node.source && node.source.input.hasBOM) {
           this.builder("\uFEFF", node, "start");
         }
         this.body(node);
         if (node.raws.after) {
-          let after = node.raws.after;
-          let isDocument2 = node.parent && node.parent.type === "document";
-          this.builder(isDocument2 ? after : escapeHTMLInCSS(after));
+          this.builder(node.raws.after);
         }
       }
       rule(node) {
         this.block(node, this.rawValue(node, "selector"));
         if (node.raws.ownSemicolon) {
-          this.builder(escapeHTMLInCSS(node.raws.ownSemicolon), node, "end");
+          this.builder(node.raws.ownSemicolon, node, "end");
         }
       }
       stringify(node, semicolon) {
@@ -4514,9 +4407,78 @@ var require_stringify = __commonJS({
   "node_modules/postcss/lib/stringify.js"(exports2, module2) {
     "use strict";
     var Stringifier = require_stringifier();
+    var STYLE_TAG = /(<)(\/?style\b)/gi;
+    var COMMENT_OPEN = /(<)(!--)/g;
+    function escapeHTMLInCSS(str) {
+      if (!str.includes("<")) return str;
+      return str.replace(STYLE_TAG, "\\3c $2").replace(COMMENT_OPEN, "\\3c $2");
+    }
+    function cutEscaped(chunks, css, escaped) {
+      let parts = [];
+      let at = 0;
+      let into = 0;
+      for (let i = 0; i < chunks.length; i += 3) {
+        let from = into;
+        let end = at + chunks[i].length;
+        while (at < end) {
+          if (css[at] === escaped[into]) {
+            at += 1;
+            into += 1;
+          } else {
+            at += 1;
+            into += 4;
+          }
+        }
+        parts.push(escaped.slice(from, into));
+      }
+      return parts;
+    }
+    var SafeStringifier = class extends Stringifier {
+      escapeHTML(print) {
+        let builder = this.builder;
+        let chunks, css;
+        this.builder = (str, child, type) => {
+          if (chunks) {
+            css += str;
+            chunks.push(str, child, type);
+          } else if (str.includes("<")) {
+            css = str;
+            chunks = [str, child, type];
+          } else {
+            builder(str, child, type);
+          }
+        };
+        print();
+        this.builder = builder;
+        if (!chunks) return;
+        let escaped = escapeHTMLInCSS(css);
+        if (escaped === css) {
+          for (let i = 0; i < chunks.length; i += 3) {
+            builder(chunks[i], chunks[i + 1], chunks[i + 2]);
+          }
+        } else {
+          let parts = cutEscaped(chunks, css, escaped);
+          for (let i = 0; i < chunks.length; i += 3) {
+            builder(parts[i / 3], chunks[i + 1], chunks[i + 2]);
+          }
+        }
+      }
+      root(node) {
+        if (node.parent && node.parent.type === "document") {
+          this.escapeHTML(() => this.body(node));
+          if (node.raws.after) this.builder(node.raws.after);
+        } else {
+          this.escapeHTML(() => super.root(node));
+        }
+      }
+    };
     function stringify(node, builder) {
-      let str = new Stringifier(builder);
-      str.stringify(node);
+      let str = new SafeStringifier(builder);
+      if (node.type === "root" || node.type === "document") {
+        str.stringify(node);
+      } else {
+        str.escapeHTML(() => str.stringify(node));
+      }
     }
     module2.exports = stringify;
     stringify.default = stringify;
@@ -6296,10 +6258,9 @@ var require_source_map_generator = __commonJS({
         next = "";
         if (mapping.generatedLine !== previousGeneratedLine) {
           previousGeneratedColumn = 0;
-          while (mapping.generatedLine !== previousGeneratedLine) {
-            next += ";";
-            previousGeneratedLine++;
-          }
+          var lineDelta = mapping.generatedLine - previousGeneratedLine;
+          next += lineDelta === 1 ? ";" : ";".repeat(lineDelta);
+          previousGeneratedLine = mapping.generatedLine;
         } else {
           if (i > 0) {
             if (!util.compareByGeneratedPositionsInflated(mapping, mappings[i - 1])) {
@@ -6458,9 +6419,17 @@ var require_quick_sort = __commonJS({
       let templateFn = new Function(`return ${template}`)();
       return templateFn(comparator);
     }
+    var isEvalAllowed = (function() {
+      try {
+        new Function("return 0")();
+        return true;
+      } catch {
+        return false;
+      }
+    })();
     var sortCache = /* @__PURE__ */ new WeakMap();
     exports2.quickSort = function(ary, comparator, start = 0) {
-      let doQuickSort = sortCache.get(comparator);
+      let doQuickSort = isEvalAllowed ? sortCache.get(comparator) : SortTemplate(comparator);
       if (doQuickSort === void 0) {
         doQuickSort = cloneSort(comparator);
         sortCache.set(comparator, doQuickSort);
@@ -6478,6 +6447,7 @@ var require_source_map_consumer = __commonJS({
     var ArraySet = require_array_set().ArraySet;
     var base64VLQ = require_base64_vlq();
     var quickSort = require_quick_sort().quickSort;
+    var MAX_SECTION_OFFSET_LINE = 1e7;
     function SourceMapConsumer(aSourceMap, aSourceMapURL) {
       var sourceMap = aSourceMap;
       if (typeof aSourceMap === "string") {
@@ -6970,6 +6940,7 @@ var require_source_map_consumer = __commonJS({
         line: -1,
         column: 0
       };
+      var maxOffsetLine = 0;
       this._sections = sections.map(function(s) {
         if (s.url) {
           throw new Error("Support for url field in sections not implemented.");
@@ -6977,10 +6948,24 @@ var require_source_map_consumer = __commonJS({
         var offset = util.getArg(s, "offset");
         var offsetLine = util.getArg(offset, "line");
         var offsetColumn = util.getArg(offset, "column");
+        if (!isValidOffset(offsetLine) || !isValidOffset(offsetColumn)) {
+          throw new Error("Section offset line and column must be non-negative integers.");
+        }
+        if (offsetLine > MAX_SECTION_OFFSET_LINE) {
+          throw new Error("Section offset line must not exceed " + MAX_SECTION_OFFSET_LINE + ".");
+        }
         if (offsetLine < lastOffset.line || offsetLine === lastOffset.line && offsetColumn < lastOffset.column) {
           throw new Error("Section offsets must be ordered and non-overlapping.");
         }
         lastOffset = offset;
+        var consumer = new SourceMapConsumer(util.getArg(s, "map"), aSourceMapURL);
+        var totalOffsetLine = offsetLine + (consumer._maxOffsetLine || 0);
+        if (totalOffsetLine > MAX_SECTION_OFFSET_LINE) {
+          throw new Error("Section offset line must not exceed " + MAX_SECTION_OFFSET_LINE + ", including offsets of nested sections.");
+        }
+        if (totalOffsetLine > maxOffsetLine) {
+          maxOffsetLine = totalOffsetLine;
+        }
         return {
           generatedOffset: {
             // The offset fields are 0-based, but we use 1-based indices when
@@ -6988,9 +6973,14 @@ var require_source_map_consumer = __commonJS({
             generatedLine: offsetLine + 1,
             generatedColumn: offsetColumn + 1
           },
-          consumer: new SourceMapConsumer(util.getArg(s, "map"), aSourceMapURL)
+          consumer
         };
       });
+      this._maxOffsetLine = maxOffsetLine;
+    }
+    function isValidOffset(aValue) {
+      return typeof aValue === "number" && aValue >= 0 && aValue <= 9007199254740991 && // Number.MAX_SAFE_INTEGER
+      Math.floor(aValue) === aValue;
     }
     IndexedSourceMapConsumer.prototype = Object.create(SourceMapConsumer.prototype);
     IndexedSourceMapConsumer.prototype.constructor = SourceMapConsumer;
@@ -6999,8 +6989,9 @@ var require_source_map_consumer = __commonJS({
       get: function() {
         var sources = [];
         for (var i = 0; i < this._sections.length; i++) {
-          for (var j = 0; j < this._sections[i].consumer.sources.length; j++) {
-            sources.push(this._sections[i].consumer.sources[j]);
+          var sectionSources = this._sections[i].consumer.sources;
+          for (var j = 0; j < sectionSources.length; j++) {
+            sources.push(sectionSources[j]);
           }
         }
         return sources;
@@ -7166,6 +7157,10 @@ var require_source_node = __commonJS({
           }
         }
         while (lastGeneratedLine < mapping.generatedLine) {
+          if (remainingLinesIndex >= remainingLines.length) {
+            lastGeneratedLine = mapping.generatedLine;
+            break;
+          }
           node.add(shiftNextLine());
           lastGeneratedLine++;
         }
@@ -7395,9 +7390,16 @@ var require_source_map = __commonJS({
 var require_previous_map = __commonJS({
   "node_modules/postcss/lib/previous-map.js"(exports2, module2) {
     "use strict";
-    var { existsSync, readFileSync } = require("fs");
+    var { existsSync, readFileSync, realpathSync } = require("fs");
     var { dirname, isAbsolute, join, relative, sep } = require("path");
     var { SourceMapConsumer, SourceMapGenerator } = require_source_map();
+    function realPath(path) {
+      try {
+        return realpathSync(path);
+      } catch {
+        return path;
+      }
+    }
     function fromBase64(str) {
       if (Buffer) {
         return Buffer.from(str, "base64").toString();
@@ -7462,7 +7464,7 @@ var require_previous_map = __commonJS({
         if (!trusted && !this.unsafeMap) {
           if (!/\.map$/i.test(path)) return void 0;
           if (!cssFile) return void 0;
-          let rel = relative(dirname(cssFile), path);
+          let rel = relative(realPath(dirname(cssFile)), realPath(path));
           if (rel === ".." || rel.startsWith(".." + sep) || isAbsolute(rel)) {
             return void 0;
           }
@@ -7838,6 +7840,7 @@ var require_list = __commonJS({
         return list.split(string, spaces);
       },
       split(string, separators, last) {
+        if (typeof string !== "string") return [];
         let array = [];
         let current = "";
         let split = false;
@@ -7845,7 +7848,18 @@ var require_list = __commonJS({
         let inQuote = false;
         let prevQuote = "";
         let escape2 = false;
-        for (let letter of string) {
+        let inComment = false;
+        for (let i = 0; i < string.length; i++) {
+          let letter = string[i];
+          if (inComment) {
+            current += letter;
+            if (letter === "*" && string[i + 1] === "/") {
+              current += "/";
+              i += 1;
+              inComment = false;
+            }
+            continue;
+          }
           if (escape2) {
             escape2 = false;
           } else if (letter === "\\") {
@@ -7857,6 +7871,11 @@ var require_list = __commonJS({
           } else if (letter === '"' || letter === "'") {
             inQuote = true;
             prevQuote = letter;
+          } else if (letter === "/" && string[i + 1] === "*") {
+            current += "/*";
+            i += 1;
+            inComment = true;
+            continue;
           } else if (letter === "(") {
             func += 1;
           } else if (letter === ")") {
@@ -7865,14 +7884,16 @@ var require_list = __commonJS({
             if (separators.includes(letter)) split = true;
           }
           if (split) {
-            if (current !== "") array.push(current.trim());
+            let value2 = current.trim();
+            if (last || value2 !== "") array.push(value2);
             current = "";
             split = false;
           } else {
             current += letter;
           }
         }
-        if (last || current !== "") array.push(current.trim());
+        let value = current.trim();
+        if (last || value !== "") array.push(value);
         return array;
       }
     };
@@ -8068,15 +8089,20 @@ var require_map_generator = __commonJS({
             }
           }
         } else if (this.css) {
+          let annotation = "/*# sourceMappingURL=";
+          let css = "";
+          let cursor = 0;
           let startIndex;
-          while ((startIndex = this.css.lastIndexOf("/*#")) !== -1) {
-            let endIndex = this.css.indexOf("*/", startIndex + 3);
+          while ((startIndex = this.css.indexOf(annotation, cursor)) !== -1) {
+            let endIndex = this.css.indexOf("*/", startIndex + annotation.length);
             if (endIndex === -1) break;
-            while (startIndex > 0 && this.css[startIndex - 1] === "\n") {
+            while (startIndex > cursor && this.css[startIndex - 1] === "\n") {
               startIndex--;
             }
-            this.css = this.css.slice(0, startIndex) + this.css.slice(endIndex + 2);
+            css += this.css.slice(cursor, startIndex);
+            cursor = endIndex + 2;
           }
+          if (cursor > 0) this.css = css + this.css.slice(cursor);
         }
       }
       generate() {
@@ -8638,7 +8664,7 @@ var require_parser = __commonJS({
             prev.raws.ownSemicolon = this.spaces;
             this.spaces = "";
             prev.source.end = this.getPosition(token[2]);
-            prev.source.end.offset += prev.raws.ownSemicolon.length;
+            prev.source.end.offset++;
           }
         }
       }
@@ -8754,6 +8780,7 @@ var require_parser = __commonJS({
         let token, type;
         let length = tokens.length;
         let value = "";
+        let last = "";
         let clean = true;
         let next, prev;
         for (let i = 0; i < length; i += 1) {
@@ -8765,16 +8792,18 @@ var require_parser = __commonJS({
             prev = tokens[i - 1] ? tokens[i - 1][0] : "empty";
             next = tokens[i + 1] ? tokens[i + 1][0] : "empty";
             if (!SAFE_COMMENT_NEIGHBOR[prev] && !SAFE_COMMENT_NEIGHBOR[next]) {
-              if (value.slice(-1) === ",") {
+              if (last === ",") {
                 clean = false;
               } else {
                 value += token[1];
+                last = token[1].slice(-1);
               }
             } else {
               clean = false;
             }
           } else {
             value += token[1];
+            last = token[1].slice(-1);
           }
         }
         if (!clean) {
@@ -9424,14 +9453,19 @@ var require_lazy_result = __commonJS({
         }
         if (visit.iterator !== 0) {
           let iterator = visit.iterator;
+          if (visit.descending) {
+            visit.descending = false;
+            node.indexes[iterator] += 1;
+          }
           let child;
           while (child = node.nodes[node.indexes[iterator]]) {
-            node.indexes[iterator] += 1;
             if (!child[isClean]) {
               child[isClean] = true;
+              visit.descending = true;
               stack.push(toStack(child));
               return;
             }
+            node.indexes[iterator] += 1;
           }
           visit.iterator = 0;
           delete node.indexes[iterator];
@@ -9461,12 +9495,16 @@ var require_lazy_result = __commonJS({
           let visitNode = visit.node;
           if (visit.iterator !== 0) {
             let iterator = visit.iterator;
+            if (visit.descending) {
+              visit.descending = false;
+              visitNode.indexes[iterator] += 1;
+            }
             let child;
             let descended = false;
             while (child = visitNode.nodes[visitNode.indexes[iterator]]) {
-              visitNode.indexes[iterator] += 1;
               if (!child[isClean]) {
                 child[isClean] = true;
+                visit.descending = true;
                 stack.push({
                   eventIndex: 0,
                   events: getEvents(child),
@@ -9476,6 +9514,7 @@ var require_lazy_result = __commonJS({
                 descended = true;
                 break;
               }
+              visitNode.indexes[iterator] += 1;
             }
             if (descended) continue;
             visit.iterator = 0;
@@ -9638,7 +9677,7 @@ var require_processor = __commonJS({
     var Root2 = require_root();
     var Processor = class {
       constructor(plugins = []) {
-        this.version = "8.5.24";
+        this.version = "8.5.31";
         this.plugins = this.normalize(plugins);
       }
       normalize(plugins) {
@@ -9722,7 +9761,7 @@ var require_postcss = __commonJS({
           console.warn(
             name + ": postcss.plugin was deprecated. Migration guide:\nhttps://evilmartians.com/chronicles/postcss-8-plugin-migration"
           );
-          if (process.env.LANG && process.env.LANG.startsWith("cn")) {
+          if (process.env.LANG && process.env.LANG.startsWith("zh")) {
             console.warn(
               name + ": \u91CC\u9762 postcss.plugin \u88AB\u5F03\u7528. \u8FC1\u79FB\u6307\u5357:\nhttps://www.w3ctech.com/topic/2226"
             );
@@ -10427,7 +10466,6 @@ var require_launder = __commonJS({
 var htmlparser = (init_dist6(), __toCommonJS(dist_exports3));
 var escapeStringRegexp = require_escape_string_regexp();
 var { isPlainObject } = require_is_plain_object();
-var deepmerge = require_cjs();
 var parseSrcset = require_parse_srcset();
 var { parse: postcssParse } = require_postcss();
 var { naughtyHref: launderNaughtyHref } = require_launder();
@@ -10451,6 +10489,15 @@ var svgAnimationTags = [
   "set"
 ];
 var alwaysUrlAttributes = ["href"];
+var severities = ["debug", "info", "warn", "error"];
+function loggerFor(options) {
+  const source = options && options.logger || console;
+  const logger = {};
+  for (const severity of severities) {
+    logger[severity] = typeof source[severity] === "function" ? (...args) => source[severity](...args) : (...args) => console[severity](...args);
+  }
+  return logger;
+}
 function each(obj, cb) {
   if (obj) {
     Object.keys(obj).forEach(function(key) {
@@ -10460,6 +10507,21 @@ function each(obj, cb) {
 }
 function has(obj, key) {
   return {}.hasOwnProperty.call(obj, key);
+}
+function mergeClasses(specific, wildcard) {
+  if (!Array.isArray(specific) || !Array.isArray(wildcard)) {
+    return wildcard;
+  }
+  return specific.concat(wildcard);
+}
+function mergeStyles(specific, wildcard) {
+  const merged = /* @__PURE__ */ Object.create(null);
+  for (const rules of [specific, wildcard]) {
+    for (const prop of Object.keys(rules)) {
+      merged[prop] = has(merged, prop) ? merged[prop].concat(rules[prop]) : rules[prop];
+    }
+  }
+  return merged;
 }
 function filter2(a, cb) {
   const n = [];
@@ -10488,10 +10550,13 @@ function stringifySrcset(parsedSrcset) {
 }
 module.exports = sanitizeHtml;
 var VALID_HTML_ATTRIBUTE_NAME = /^[^\0\t\n\f\r /<=>]+$/;
-function sanitizeHtml(html, options, _recursing) {
+var MAX_IFRAME_FALLBACK_DEPTH = 8;
+function sanitizeHtml(html, options, _fallback) {
   if (html == null) {
     return "";
   }
+  const baseDepth = _fallback && _fallback.depth || 0;
+  const iframeFallbackDepth = _fallback && _fallback.iframeFallbackDepth || 0;
   if (typeof html === "number") {
     html = html.toString();
   }
@@ -10520,19 +10585,15 @@ function sanitizeHtml(html, options, _recursing) {
   }
   options = Object.assign({}, sanitizeHtml.defaults, options);
   options.parser = Object.assign({}, htmlParserDefaults, options.parser);
+  const logger = loggerFor(options);
   const tagAllowed = function(name) {
     return options.allowedTags === false || (options.allowedTags || []).indexOf(name) > -1;
   };
   vulnerableTags.forEach(function(tag) {
     if (tagAllowed(tag) && !options.allowVulnerableTags) {
-      console.warn(`
-
-\u26A0\uFE0F Your \`allowedTags\` option includes, \`${tag}\`, which is inherently
-vulnerable to XSS attacks. Please remove it from \`allowedTags\`.
-Or, to disable this warning, add the \`allowVulnerableTags\` option
-and ensure you are accounting for this risk.
-
-`);
+      logger.warn(
+        `Your \`allowedTags\` option includes \`${tag}\`, which is inherently vulnerable to XSS attacks. Please remove it from \`allowedTags\`, or, to disable this warning, add the \`allowVulnerableTags\` option and ensure you are accounting for this risk.`
+      );
     }
   });
   const nonTextTagsArray = options.nonTextTags || [
@@ -10612,6 +10673,8 @@ and ensure you are accounting for this risk.
   let transformMap;
   let skipText;
   let skipTextDepth;
+  let rawTextEnd;
+  let skipRawText;
   let addedText = false;
   initializeState();
   const parser = new htmlparser.Parser({
@@ -10619,8 +10682,12 @@ and ensure you are accounting for this risk.
       if (options.onOpenTag) {
         options.onOpenTag(name, attribs);
       }
+      updateRawTextRegion();
       if (options.enforceHtmlBoundary && name === "html") {
         initializeState();
+      }
+      if (skipRawText) {
+        return;
       }
       if (skipText) {
         skipTextDepth++;
@@ -10657,6 +10724,9 @@ and ensure you are accounting for this risk.
           if (nonTextTagsArray.indexOf(name) !== -1) {
             skipText = true;
             skipTextDepth = 1;
+            if (frame.tag.toLowerCase() === "noscript") {
+              rawTextEnd = findRawTextEnd("noscript", parser.endIndex + 1);
+            }
           }
         }
       }
@@ -10732,6 +10802,10 @@ and ensure you are accounting for this risk.
                 return;
               }
             }
+            if (name === "meta" && a.toLowerCase() === "content" && isRefresh(attribs) && naughtyRefresh(value)) {
+              delete frame.attribs[a];
+              return;
+            }
             if (name === "script" && a === "src") {
               let allowed = true;
               try {
@@ -10780,7 +10854,7 @@ and ensure you are accounting for this risk.
               try {
                 let parsed = parseSrcset(value);
                 parsed.forEach(function(value2) {
-                  if (naughtyHref(a, value2.url)) {
+                  if (naughtyHref(name, value2.url)) {
                     value2.evil = true;
                   }
                 });
@@ -10817,7 +10891,7 @@ and ensure you are accounting for this risk.
               if (allowedSpecificClasses && allowedWildcardClasses) {
                 value = filterClasses(
                   value,
-                  deepmerge(allowedSpecificClasses, allowedWildcardClasses),
+                  mergeClasses(allowedSpecificClasses, allowedWildcardClasses),
                   allowedClassesGlobs
                 );
               } else {
@@ -10847,7 +10921,9 @@ and ensure you are accounting for this risk.
                   }
                 } catch (e) {
                   if (typeof window !== "undefined") {
-                    console.warn('Failed to parse "' + name + " {" + value + `}", If you're running this in a browser, we recommend to disable style parsing: options.parseStyleAttributes: false, since this only works in a node environment due to a postcss dependency, More info: https://github.com/apostrophecms/sanitize-html/issues/547`);
+                    logger.warn(
+                      `Failed to parse "${name} {${value}}". If you are running this in a browser, we recommend disabling style parsing with the parseStyleAttributes option, since it only works in a node environment due to a postcss dependency. More info: https://github.com/apostrophecms/sanitize-html/issues/547`
+                    );
                   }
                   delete frame.attribs[a];
                   return;
@@ -10888,7 +10964,8 @@ and ensure you are accounting for this risk.
       frame.openingTagLength = result.length - frame.tagPosition;
     },
     ontext: function(text) {
-      if (skipText) {
+      updateRawTextRegion();
+      if (skipText || skipRawText) {
         return;
       }
       const lastFrame = stack[stack.length - 1];
@@ -10907,6 +10984,19 @@ and ensure you are accounting for this risk.
         } else {
           result += escapeHtml(text, false);
         }
+      } else if (
+        // htmlparser2 treats <iframe> as a raw-text element, so markup inside
+        // (including after an unclosed <iframe>) arrives as a single text node.
+        // When the iframe is discarded, re-sanitize that fallback markup as HTML
+        // instead of escaping it as plain text (issue #5550).
+        // The nested call continues from the current depth so that
+        // `nestingLimit` applies to the whole output.
+        tag === "iframe" && !tagAllowed(tag) && options.disallowedTagsMode === "discard" && iframeFallbackDepth < MAX_IFRAME_FALLBACK_DEPTH
+      ) {
+        result += sanitizeHtml(text, options, {
+          depth,
+          iframeFallbackDepth: iframeFallbackDepth + 1
+        });
       } else if (!addedText) {
         const escaped = escapeHtml(text, false);
         if (options.textFilter) {
@@ -10924,10 +11014,19 @@ and ensure you are accounting for this risk.
       if (options.onCloseTag) {
         options.onCloseTag(name, isImplied);
       }
-      if (skipText) {
+      updateRawTextRegion();
+      if (skipRawText) {
+        const lastFrame = stack[stack.length - 1];
+        if (!lastFrame || lastFrame.tag !== name) {
+          return;
+        }
+      } else if (skipText) {
         skipTextDepth--;
         if (!skipTextDepth) {
           skipText = false;
+          if (rawTextEnd !== null) {
+            skipRawText = true;
+          }
         } else {
           return;
         }
@@ -11005,12 +11104,26 @@ and ensure you are accounting for this risk.
   return result;
   function initializeState() {
     result = "";
-    depth = 0;
+    depth = baseDepth;
     stack = [];
     skipMap = {};
     transformMap = {};
     skipText = false;
     skipTextDepth = 0;
+    rawTextEnd = null;
+    skipRawText = false;
+  }
+  function updateRawTextRegion() {
+    if (rawTextEnd !== null && parser.startIndex >= rawTextEnd) {
+      rawTextEnd = null;
+      skipRawText = false;
+    }
+  }
+  function findRawTextEnd(tagName, from) {
+    const re = new RegExp("</" + tagName + "[\\t\\n\\f\\r />]", "ig");
+    re.lastIndex = from;
+    const match = re.exec(html);
+    return match ? match.index : Infinity;
   }
   function escapeHtml(s, quote) {
     if (typeof s !== "string") {
@@ -11035,19 +11148,93 @@ and ensure you are accounting for this risk.
       allowProtocolRelative: options.allowProtocolRelative
     });
   }
+  function isRefresh(attribs) {
+    return Object.keys(attribs).some(function(a) {
+      return a.toLowerCase() === "http-equiv" && String(attribs[a]).trim().toLowerCase() === "refresh";
+    });
+  }
+  function naughtyRefresh(content) {
+    const input = String(content);
+    const isWhitespace2 = function(c) {
+      return c === " " || c === "	" || c === "\n" || c === "\f" || c === "\r";
+    };
+    let position = 0;
+    const skipWhitespace = function() {
+      while (position < input.length && isWhitespace2(input[position])) {
+        position++;
+      }
+    };
+    const lowerAt = function(i) {
+      return (input[i] || "").toLowerCase();
+    };
+    skipWhitespace();
+    const timeStart = position;
+    while (position < input.length && /[0-9.]/.test(input[position])) {
+      position++;
+    }
+    if (position === timeStart) {
+      return true;
+    }
+    if (position < input.length) {
+      const c = input[position];
+      if (c !== ";" && c !== "," && !isWhitespace2(c)) {
+        return true;
+      }
+      skipWhitespace();
+      if (input[position] === ";" || input[position] === ",") {
+        position++;
+      }
+      skipWhitespace();
+    }
+    if (position >= input.length) {
+      return false;
+    }
+    let url = input.slice(position);
+    let quoted = true;
+    if (lowerAt(position) === "u") {
+      quoted = false;
+      if (lowerAt(position + 1) === "r" && lowerAt(position + 2) === "l") {
+        position += 3;
+        skipWhitespace();
+        if (input[position] === "=") {
+          position++;
+          skipWhitespace();
+          quoted = true;
+        }
+      }
+    }
+    if (quoted) {
+      const quote = input[position];
+      if (quote === '"' || quote === "'") {
+        position++;
+      }
+      url = input.slice(position);
+      if (quote === '"' || quote === "'") {
+        const end = url.indexOf(quote);
+        if (end !== -1) {
+          url = url.slice(0, end);
+        }
+      }
+    }
+    return naughtyHref("meta", url);
+  }
   function animatesUrlAttribute(name, attribs) {
-    if (svgAnimationTags.indexOf(name.toLowerCase()) === -1) {
+    if (svgAnimationTags.indexOf(localPart(name)) === -1) {
       return false;
     }
     const schemeCheckedAttributes = options.allowedSchemesAppliedToAttributes || [];
     return Object.keys(attribs || {}).some(function(attributeName) {
-      if (attributeName.toLowerCase() !== "attributename") {
+      if (localPart(attributeName) !== "attributename") {
         return false;
       }
       const target = (attribs[attributeName] || "").trim().toLowerCase();
       const localName = target.slice(target.lastIndexOf(":") + 1);
       return alwaysUrlAttributes.indexOf(localName) !== -1 || schemeCheckedAttributes.indexOf(target) !== -1 || schemeCheckedAttributes.indexOf(localName) !== -1;
     });
+  }
+  function localPart(name) {
+    const lower = name.toLowerCase();
+    return lower.slice(lower.lastIndexOf(":") + 1);
   }
   function parseUrl(value) {
     value = value.replace(/^(\w+:)?\s*[\\/]\s*[\\/]/, "$1//");
@@ -11072,7 +11259,7 @@ and ensure you are accounting for this risk.
     const astRules = abstractSyntaxTree.nodes[0];
     let selectedRule;
     if (allowedStyles[astRules.selector] && allowedStyles["*"]) {
-      selectedRule = deepmerge(
+      selectedRule = mergeStyles(
         allowedStyles[astRules.selector],
         allowedStyles["*"]
       );
