@@ -59,13 +59,28 @@ test('what is not drawn is the page as the site serves it', async () => {
   assert.equal(none.headers['netlify-cdn-cache-control'], 'public, s-maxage=3600', 'the same for everyone, so kept');
 });
 
-test('only a forum\'s own views at its own host, and only to be read', async () => {
+test('a drawing not done in time is left to finish after the answer, where the host allows it', async () => {
+  let handed = null;
+  const late = async ({ keepGoing }) => { keepGoing?.(Promise.resolve('read')); return null; };
+  const out = await ask('https://bb.fedipod.net/forum/t/gardening/abc', ctxWith(late, { waitUntil: (p) => { handed = p; } }));
+  assert.equal(out.body, SHELL, 'the reader gets the page undrawn at once');
+  assert.equal(await handed, 'read', 'and the drawing is handed to the host to finish');
+  const none = await ask('https://bb.fedipod.net/forum/t/gardening/abc', ctxWith(late));
+  assert.equal(none.body, SHELL, 'a host with nothing to wait on sends the same page');
+});
+
+test('every address under a forum at its own host goes to the forum\'s code, and only to be read', async () => {
   drawnCalls.length = 0;
-  for (const url of ['https://bb.fedipod.net/api/', 'https://bb.fedipod.net/bb/', 'https://bb.fedipod.net/forum/t/x',
-    'https://fedipod.net/forum/', 'https://bb.fedipod.net/u/forum/ap/actor']) {
+  for (const url of ['https://bb.fedipod.net/api/', 'https://bb.fedipod.net/bb/', 'https://fedipod.net/forum/',
+    'https://bb.fedipod.net/u/forum/ap/actor', 'https://bb.fedipod.net/robots.txt']) {
     await ask(url, ctxWith(draws));
   }
-  assert.deepEqual(drawnCalls, [], 'nothing else is drawn');
+  assert.deepEqual(drawnCalls, [], 'nothing that is not a forum\'s is handed to it');
+  for (const url of ['https://bb.fedipod.net/forum/t/x', 'https://bb.fedipod.net/forum/someday/a/new/view']) await ask(url, ctxWith(draws));
+  assert.deepEqual(drawnCalls, ['https://bb.fedipod.net/forum/t/x', 'https://bb.fedipod.net/forum/someday/a/new/view'],
+    'whatever is under a forum is the forum\'s to draw or not');
+  const declined = await ask('https://bb.fedipod.net/forum/someday', ctxWith(async () => null));
+  assert.equal(declined.body, SHELL, 'what the forum does not draw is the page as the site serves it');
   const post = await ask('https://bb.fedipod.net/forum/', ctxWith(draws), { method: 'POST', body: 'x' });
   assert.equal(post.status, 405);
   const noShell = await ask('https://bb.elsewhere.example/forum/', { ...ctxWith(draws), siteFetch: async () => new Response('', { status: 500 }) });

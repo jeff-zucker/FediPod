@@ -67,6 +67,9 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const entry = args[args.indexOf('--entry') + 1] || path.join(root, 'web/app/agent.mjs');
   const out = args[args.indexOf('--out') + 1] || path.join(root, 'web/app/dist/agent.js');
   const format = args.includes('--format') ? args[args.indexOf('--format') + 1] : 'esm';
+  // The app's "make a forum" is built from the forum's own folder, as it is now.
+  const { bringForum } = await import('./forum-package.mjs');
+  bringForum();
   const { bytes } = await buildApp({ entry, out, format });
   console.log(`built ${path.relative(root, out)} — ${Math.round(bytes / 1024)} KB`);
 }

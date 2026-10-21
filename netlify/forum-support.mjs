@@ -6,8 +6,10 @@
 //   with forums     import * as forum from 'fedipod-bb/gateway'; export default forum;
 //   without forums  export default null;
 //
-// The forum is the fedipod-bb package from npm. It brings its own copy of
-// fedipod for its own imports, and the function carries that copy beside it.
+// The forum is taken from its own folder, not a version FediPod pins:
+// scripts/forum-package.mjs puts it in node_modules before the functions are
+// bundled. It brings its own copy of fedipod for its own imports, and the
+// function carries that copy beside it.
 
 import * as forum from 'fedipod-bb/gateway';
 export default forum;

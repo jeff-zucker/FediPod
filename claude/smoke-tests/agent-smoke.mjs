@@ -1821,14 +1821,36 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   // front page, categories and topics sent to be drawn, before the rule that
   // gives every other address the page as it is.
   const redirects = fs.readFileSync(path.join(site, '_redirects'), 'utf8');
-  check(fs.readFileSync(path.join(site, 'bb/robots.txt'), 'utf8') === 'User-agent: *\nDisallow: /\n'
+  // The forum's page is whatever the forum's own folder ships, every file of
+  // it, its robots.txt among them.
+  const { dependentDir } = await import('../../scripts/dependents.mjs');
+  const forumSite = path.join(dependentDir('fedipod-bb'), 'site');
+  const shipped = fs.readdirSync(forumSite).filter((f) => !/^[.#]|~$/u.test(f));
+  check(shipped.every((f) => fs.existsSync(path.join(site, 'bb', f))),
+    `every file the forum's page ships is staged (${shipped.filter((f) => !fs.existsSync(path.join(site, 'bb', f))).join(', ') || shipped.length + ' files'})`);
+  check(fs.readFileSync(path.join(site, 'bb/robots.txt'), 'utf8') === fs.readFileSync(path.join(forumSite, 'robots.txt'), 'utf8')
     && /^https:\/\/bb\.fedipod\.net\/robots\.txt +\/bb\/robots\.txt +200!$/mu.test(redirects),
-    'bb.fedipod.net asks every search engine to stay out');
+    'bb.fedipod.net answers /robots.txt with the forum\'s own');
+  const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
+  check(!JSON.stringify({ ...pkg.dependencies, ...pkg.devDependencies }).includes('fedipod-bb'),
+    'FediPod\'s package list names no forum version: the forum comes from its own folder');
   const bbRule = (from) => redirects.split('\n').findIndex(l => l.startsWith(`https://bb.fedipod.net/${from} `));
-  const drawnAt = [':forum/', ':forum/c/*', ':forum/t/*'].map(bbRule);
+  const drawnAt = [':forum/', ':forum/*'].map(bbRule);
   check(drawnAt.every(i => i >= 0 && /\/\.netlify\/functions\/front +200!$/u.test(redirects.split('\n')[i]))
     && drawnAt.every(i => i < bbRule('*')) && bbRule('api/*') < drawnAt[0] && bbRule('bb/*') < drawnAt[0],
-    'a forum\'s front page, categories and topics on bb.fedipod.net go to be drawn, after its scripts and before the rest');
+    'every address under a forum on bb.fedipod.net goes to the forum\'s code, after its scripts and before the rest');
+  // Every module the forum's page loads is staged beside it, under the
+  // stamped address the others name it by: a file missing from the staged
+  // list is a page that does not load at all.
+  const bbDir = path.join(site, 'bb');
+  const named = [];
+  for (const f of fs.readdirSync(bbDir).filter(n => /\.m?js$/u.test(n))) {
+    for (const m of fs.readFileSync(path.join(bbDir, f), 'utf8').matchAll(/from '(\.\/[^'?]+)(\?v=[0-9a-f]+)?'/gu)) named.push([f, m[1], !!m[2]]);
+  }
+  const unstaged = named.filter(([, to]) => !fs.existsSync(path.join(bbDir, to)));
+  const unstamped = named.filter(([, , stamped]) => !stamped);
+  check(named.length > 0 && !unstaged.length && !unstamped.length,
+    `every module the forum's page loads is staged and stamped (${named.length} imports${unstaged.length ? `; missing ${unstaged.map(([f, to]) => `${f} → ${to}`).join(', ')}` : ''}${unstamped.length ? `; unstamped ${unstamped.map(([f, to]) => `${f} → ${to}`).join(', ')}` : ''})`);
   const js = fs.readFileSync(path.join(root, 'web/app/update.js'), 'utf8');
   check(js.includes("'controllerchange'") && js.includes('/api/handle?handle=__probe__') && js.includes('textarea'),
     'the script reloads on a worker takeover, compares versions with the site, and guards a draft');

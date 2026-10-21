@@ -60,7 +60,7 @@ Six functions on Netlify, thin adapters around plain Node in `lib/gateway/`:
 | `push-background` | one account's held mail read into its copy (hold off: its pod inbox drained) and each notification pushed to its phones; or the notifications FediPod named while open (`/api/push`), pushed; or the alert FediPod raised when it could not read mail (`/api/alert`) |
 
 - **Forum support is a switch**: `netlify/forum-support.mjs` is the one file
-  that names the forum's gateway module (`fedipod-bb/gateway`, from npm)
+  that names the forum's gateway module (`fedipod-bb/gateway`, from the forum's own folder)
   or exports null; nothing in `lib/gateway/` or `netlify/functions/` imports
   the forum. With it, a forum row with `keeper` set is placed at the door as a
   post lands and run by `keeper-background`; without it, a forum delivery goes
@@ -182,8 +182,13 @@ workers, so those never run there.
   FediPod's). `npm test` runs the first three against this checkout through
   `scripts/test-dependents.mjs`; without a checkout beside FediPod (CI, a
   fresh clone) it clones each one's main branch into `.dependents/`. FediPod
-  itself installs `fedipod-bb` and `fediverse-session` from npm; the forum
-  brings its own copy of fedipod from npm, not this checkout.
+  installs `fediverse-session` from npm. The forum is in no FediPod package
+  list: `scripts/forum-package.mjs` packs it from `../fedipod-bb` (or that
+  clone) into node_modules, without saving, at the start of `stage-site.mjs`,
+  `check-netlify-bundles.mjs` and the app build, so fedipod.net runs whatever
+  the forum folder holds and a forum change needs no FediPod commit. Staging
+  copies every file the forum's `site/` ships and stamps every import between
+  them. The forum brings its own copy of fedipod from npm, not this checkout.
 - **Server** (`../fedipod-server/`): the agent and the Gateway's front
   inside a Community Solid Server, importing `fedipod` by name. Its own
   `skills.md` is there. A local one runs on this machine on port 443, started

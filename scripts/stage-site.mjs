@@ -14,8 +14,11 @@
 import fs from 'node:fs'; import path from 'node:path'; import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
 import { readyDependent } from './dependents.mjs';
+import { bringForum } from './forum-package.mjs';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const site = path.join(root, 'web/app/site');
+// The forum's page is copied from the forum's own folder, as it is now.
+bringForum({ log: () => {} });
 fs.rmSync(site, { recursive: true, force: true }); fs.mkdirSync(path.join(site, 'app'), { recursive: true });
 const cp = (from, to) => fs.copyFileSync(path.resolve(root, from), path.join(site, to));
 cp('web/app/index.html', 'index.html');
@@ -219,13 +222,12 @@ fs.writeFileSync(path.join(site, '_redirects'), [
     `https://${h}/update.js /update.js      200!`,
     `https://${h}/build.json /build.json     200!`,
     `https://${h}/api/*     /.netlify/functions/front  200!`,
-    // Search engines are asked to stay out of the forum's host.
+    // The forum's host answers /robots.txt with the forum's own.
     `https://${h}/robots.txt /bb/robots.txt  200!`,
-    // A forum's front page, its categories and its topics arrive drawn when
-    // this Gateway keeps forums (lib/gateway/forum-pages.mjs).
+    // Every address under a forum goes to the forum's code, which draws the
+    // ones it draws (lib/gateway/forum-pages.mjs); the rest get the page.
     `https://${h}/:forum/        /.netlify/functions/front  200!`,
-    `https://${h}/:forum/c/*     /.netlify/functions/front  200!`,
-    `https://${h}/:forum/t/*     /.netlify/functions/front  200!`,
+    `https://${h}/:forum/*       /.netlify/functions/front  200!`,
     `https://${h}/*         /bb/index.html  200!`,
   ]),
   '# the in-browser app, served static (these win over the project catch-all)',
@@ -274,9 +276,13 @@ fs.writeFileSync(path.join(site, '_redirects'), [
 // own /u/<handle>/ or a pod named outright. Its script is a module file of
 // its own, so it is served under the same `script-src 'self'` as the app.
 fs.mkdirSync(path.join(site, 'bb'), { recursive: true });
-// What the forum's host answers at /robots.txt: no search engine, anywhere on it.
-fs.writeFileSync(path.join(site, 'bb/robots.txt'), 'User-agent: *\nDisallow: /\n');
-for (const f of ['index.html', 'bb.js', 'read.mjs', 'masto.mjs', 'pod.mjs', 'markdown.mjs', 'seen.mjs', 'mine.mjs', 'private.mjs', 'oidc-session.mjs']) cp(`node_modules/fedipod-bb/site/${f}`, `bb/${f}`);
+// Every file the forum's page ships, whatever the forum names them (its
+// robots.txt among them): the forum decides what its page is made of.
+// Editor leftovers and hidden files are not part of it.
+for (const f of fs.readdirSync(path.join(root, 'node_modules/fedipod-bb/site'))) {
+  if (/^[.#]|~$/u.test(f)) continue;
+  cp(`node_modules/fedipod-bb/site/${f}`, `bb/${f}`);
+}
 cp('web/admin/tokens.css', 'bb/tokens.css');   // the site's shared palette, size and family
 cp('node_modules/fediverse-session/oidc-session.mjs', 'bb/solid-oidc-session.mjs');   // signing in to a pod: the library the forum's binding names
 // The account library's demo page, with the library beside it, under /demo/:
@@ -301,15 +307,22 @@ cp(path.join(sessionRepo, 'demo.html'), 'demo/index.html');
   const sub = (n, pairs) => { let t = fs.readFileSync(bb(n), 'utf8');
     for (const [a, b] of pairs) t = t.split(a).join(b); fs.writeFileSync(bb(n), t); };
   sub('oidc-session.mjs', [["'fediverse-session/oidc-session.mjs'", `'./solid-oidc-session.mjs?v=${stamp('solid-oidc-session.mjs')}'`]]);
-  sub('pod.mjs', [["'./oidc-session.mjs'", `'./oidc-session.mjs?v=${stamp('oidc-session.mjs')}'`],
-    ["'./markdown.mjs'", `'./markdown.mjs?v=${stamp('markdown.mjs')}'`],
-    ["'./private.mjs'", `'./private.mjs?v=${stamp('private.mjs')}'`],
-    ["'./mine.mjs'", `'./mine.mjs?v=${stamp('mine.mjs')}'`]]);
-  sub('bb.js', [["'./read.mjs'", `'./read.mjs?v=${stamp('read.mjs')}'`], ["'./masto.mjs'", `'./masto.mjs?v=${stamp('masto.mjs')}'`],
-    ["'./pod.mjs'", `'./pod.mjs?v=${stamp('pod.mjs')}'`], ["'./seen.mjs'", `'./seen.mjs?v=${stamp('seen.mjs')}'`],
-    ["'./markdown.mjs'", `'./markdown.mjs?v=${stamp('markdown.mjs')}'`],
-    ["'./mine.mjs'", `'./mine.mjs?v=${stamp('mine.mjs')}'`]]);
-  sub('index.html', [['"/bb/bb.js"', `"/bb/bb.js?v=${stamp('bb.js')}"`], ['"/bb/tokens.css"', `"/bb/tokens.css?v=${stamp('tokens.css')}"`]]);
+  // Every module names the others it loads by their stamped address, and each
+  // is stamped only after the ones it names, so one module is one address
+  // wherever it is loaded from.
+  const modules = fs.readdirSync(path.join(site, 'bb')).filter((n) => /\.m?js$/u.test(n));
+  const loads = (n) => [...fs.readFileSync(bb(n), 'utf8').matchAll(/from '\.\/([^'?]+)'/gu)].map((m) => m[1]).filter((m) => modules.includes(m));
+  const done = new Set();
+  while (done.size < modules.length) {
+    const ready = modules.filter((n) => !done.has(n) && loads(n).every((m) => done.has(m)));
+    if (!ready.length) throw new Error(`stage-site: the forum page's modules load each other in a circle (${modules.filter((n) => !done.has(n)).join(', ')})`);
+    for (const n of ready) {
+      sub(n, loads(n).map((m) => [`'./${m}'`, `'./${m}?v=${stamp(m)}'`]));
+      done.add(n);
+    }
+  }
+  sub('index.html', [...fs.readFileSync(bb('index.html'), 'utf8').matchAll(/"\/bb\/([^"?]+)"/gu)].map((m) => m[1])
+    .filter((n) => fs.existsSync(bb(n))).map((n) => [`"/bb/${n}"`, `"/bb/${n}?v=${stamp(n)}"`]));
 }
 injectUpdate(path.join(site, 'bb/index.html'));
 injectUpdate(path.join(site, 'index.html'));

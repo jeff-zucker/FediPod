@@ -155,10 +155,10 @@ const logRequest = (request, status, startedAt) => {
   console.log(`${request.method} ${path} ${status} ${Date.now() - startedAt}ms ${agent}`);
 };
 
-export default async function handler(request) {
+export default async function handler(request, context) {
   const startedAt = Date.now();
   let out;
-  try { out = await route(request); } catch (e) {
+  try { out = await route(request, context); } catch (e) {
     // The directory could not be read, or a route threw: a 503 the caller
     // retries, never a 404 the edge would hold.
     console.log(`front: ${e?.message || e}`);
@@ -169,8 +169,11 @@ export default async function handler(request) {
   return new Response(out.body ?? null, { status: out.status, headers: out.headers });
 }
 
-function route(request) {
-  return routeFront(request, gatewayCtx());
+// Work that may go on after the answer has gone: Netlify's waitUntil, where
+// the function was handed one.
+function route(request, context) {
+  const waitUntil = typeof context?.waitUntil === 'function' ? (p) => context.waitUntil(p) : null;
+  return routeFront(request, { ...gatewayCtx(), waitUntil });
 }
 
 // Everything the front reads and keeps, as the core asks for it. Exported so

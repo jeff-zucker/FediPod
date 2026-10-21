@@ -1,5 +1,26 @@
 # Changes
 
+## 2026-10-21 (the forum's pages arrive drawn — version 1.56.0)
+
+**At bb.fedipod.net, the forum's front page, each category and each topic
+arrive with their words already on them.** A reader no longer waits on
+"Loading…" while their browser fetches each post, and someone without
+JavaScript can read every public topic and follow its links. Topics and
+categories have addresses of their own, such as
+`https://bb.fedipod.net/forum/t/<category>/<topic>`; a link with `#/` in it
+still opens the same topic. A topic link pasted into Mastodon shows the
+topic's name and its opening words. A post of yours the forum never took in
+offers Send again once it has waited an hour. A topic pinned across the
+whole forum shows 📌 and one pinned in its category 📍, and renaming or moving
+the forum keeps what is pinned across it. This comes with fedipod-bb 0.5.0.
+
+**A Gateway built from this repository takes its forum from the `fedipod-bb`
+folder beside it** (or a copy of the forum's GitHub main), not from a version
+named in FediPod's package list. A forum change reaches the site with the next
+deploy, with no FediPod release first.
+
+**bb.fedipod.net asks search engines to stay out.**
+
 ## 2026-10-20 (sanitize-html 2.18.1 — version 1.55.2)
 
 **The library that cleans the HTML of posts is updated** to sanitize-html

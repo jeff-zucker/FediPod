@@ -18,6 +18,9 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'fn-bundles-'));
 let fails = 0;
 const check = (ok, msg) => { console.log(`${ok ? 'PASS' : 'FAIL'}  ${msg}`); if (!ok) fails++; };
 try {
+  // The functions carry the forum as it is in its own folder now.
+  const { bringForum } = await import('./forum-package.mjs');
+  bringForum();
   execFileSync('netlify', ['functions:build', '--src', path.join(root, 'netlify/functions'), '--functions', path.join(tmp, 'zips')],
     { cwd: root, stdio: 'ignore' });
   const manifest = JSON.parse(fs.readFileSync(path.join(tmp, 'zips/manifest.json'), 'utf8'));
