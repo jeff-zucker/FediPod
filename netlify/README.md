@@ -47,9 +47,10 @@ Whether this gateway keeps forums is one line in `netlify/forum-support.mjs`:
 it names the forum (FediPod-BB) or nothing. With it, a forum whose moderator
 turned keeping on is placed as each post lands and run here in the background;
 without it, a forum delivery is written to the forum's pod inbox and left for
-whatever runs the forum. The forum is the `fedipod-bb` package from npm and
-its `gateway` entry, shipped beside the function with its own copy of
-fedipod.
+whatever runs the forum. The forum is taken from the `fedipod-bb` folder
+beside this repository, or a copy of its GitHub main where there is none.
+Staging the site and the bundle check put it in place first, so a deploy
+carries the forum as that folder holds it. It brings its own copy of fedipod.
 
 The functions read these environment variables:
 
