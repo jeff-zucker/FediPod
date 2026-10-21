@@ -219,6 +219,13 @@ fs.writeFileSync(path.join(site, '_redirects'), [
     `https://${h}/update.js /update.js      200!`,
     `https://${h}/build.json /build.json     200!`,
     `https://${h}/api/*     /.netlify/functions/front  200!`,
+    // Search engines are asked to stay out of the forum's host.
+    `https://${h}/robots.txt /bb/robots.txt  200!`,
+    // A forum's front page, its categories and its topics arrive drawn when
+    // this Gateway keeps forums (lib/gateway/forum-pages.mjs).
+    `https://${h}/:forum/        /.netlify/functions/front  200!`,
+    `https://${h}/:forum/c/*     /.netlify/functions/front  200!`,
+    `https://${h}/:forum/t/*     /.netlify/functions/front  200!`,
     `https://${h}/*         /bb/index.html  200!`,
   ]),
   '# the in-browser app, served static (these win over the project catch-all)',
@@ -267,6 +274,8 @@ fs.writeFileSync(path.join(site, '_redirects'), [
 // own /u/<handle>/ or a pod named outright. Its script is a module file of
 // its own, so it is served under the same `script-src 'self'` as the app.
 fs.mkdirSync(path.join(site, 'bb'), { recursive: true });
+// What the forum's host answers at /robots.txt: no search engine, anywhere on it.
+fs.writeFileSync(path.join(site, 'bb/robots.txt'), 'User-agent: *\nDisallow: /\n');
 for (const f of ['index.html', 'bb.js', 'read.mjs', 'masto.mjs', 'pod.mjs', 'markdown.mjs', 'seen.mjs', 'mine.mjs', 'private.mjs', 'oidc-session.mjs']) cp(`node_modules/fedipod-bb/site/${f}`, `bb/${f}`);
 cp('web/admin/tokens.css', 'bb/tokens.css');   // the site's shared palette, size and family
 cp('node_modules/fediverse-session/oidc-session.mjs', 'bb/solid-oidc-session.mjs');   // signing in to a pod: the library the forum's binding names

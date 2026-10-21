@@ -1817,6 +1817,18 @@ check(note.content === '<p>a&lt;b&gt;&amp;</p><p>c</p>', `content HTML escaping 
   const headers = fs.readFileSync(path.join(site, '_headers'), 'utf8');
   check(/\/sw\.js\n  Cache-Control: no-cache/.test(headers) && /\/update\.js\n  Cache-Control: no-cache/.test(headers),
     'the worker and the update script are never cached');
+  // The forum's own host: search engines asked to stay out, and a forum's
+  // front page, categories and topics sent to be drawn, before the rule that
+  // gives every other address the page as it is.
+  const redirects = fs.readFileSync(path.join(site, '_redirects'), 'utf8');
+  check(fs.readFileSync(path.join(site, 'bb/robots.txt'), 'utf8') === 'User-agent: *\nDisallow: /\n'
+    && /^https:\/\/bb\.fedipod\.net\/robots\.txt +\/bb\/robots\.txt +200!$/mu.test(redirects),
+    'bb.fedipod.net asks every search engine to stay out');
+  const bbRule = (from) => redirects.split('\n').findIndex(l => l.startsWith(`https://bb.fedipod.net/${from} `));
+  const drawnAt = [':forum/', ':forum/c/*', ':forum/t/*'].map(bbRule);
+  check(drawnAt.every(i => i >= 0 && /\/\.netlify\/functions\/front +200!$/u.test(redirects.split('\n')[i]))
+    && drawnAt.every(i => i < bbRule('*')) && bbRule('api/*') < drawnAt[0] && bbRule('bb/*') < drawnAt[0],
+    'a forum\'s front page, categories and topics on bb.fedipod.net go to be drawn, after its scripts and before the rest');
   const js = fs.readFileSync(path.join(root, 'web/app/update.js'), 'utf8');
   check(js.includes("'controllerchange'") && js.includes('/api/handle?handle=__probe__') && js.includes('textarea'),
     'the script reloads on a worker takeover, compares versions with the site, and guards a draft');
