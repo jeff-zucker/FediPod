@@ -31,7 +31,7 @@ This README is about the `FediPod` as used with a Gateway. There are also a numb
 You can access your account by pointing any Mastodon API or C2S client at fedipod.net and signing in.  There are also two built-inclients, both served by fedipod.net: [Sengi](https://github.com/NicolasConstant/sengi) (MIT, by Nicolas Constant), which you get by default, and [Phanpy](https://github.com/cheeaun/phanpy)(MIT, by Chee Aun). The links at the top right of every page switch between
 them, at any time; whichever you opened last is the one that opens next time.
 
-You can follow and unfollow, post, reply, favourite, boost, attach media, edit and delete. Content warnings, polls with up to four options and one or several answers, all four visibility levels, a conversations view for direct messages, bookmarks, lists, keyword filters, pinned posts that other servers can see, blocking and muting, and the custom emojis other servers send.
+You can follow and unfollow, post, reply, favourite, boost, attach media, edit and delete. Content warnings, polls with up to four options and one or several answers, all four visibility levels, a conversations view for direct messages, bookmarks, lists<!-- CLAUDE 2026-11-03 — delete these markers when done --> (a list can keep its people out of your home timeline)<!-- /CLAUDE -->, keyword filters, pinned posts that other servers can see, blocking and muting, and the custom emojis other servers send.
 
 A post can quote another post. Quote is offered on posts whose author allows
 it; the quoted author's server is asked, and the quote shows as pending until

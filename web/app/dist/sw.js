@@ -69313,7 +69313,7 @@ async function handle3(api, ctx) {
   if (mAccLists && req.method === "GET") {
     const actorUrl = api.store.urlFor(mAccLists[1]);
     if (!actorUrl) return send(404, { error: "Record not found" });
-    return send(200, api.store.getLists().filter((l) => (l.members || []).includes(actorUrl)).map((l) => ({ id: l.id, title: l.title, replies_policy: l.repliesPolicy || "list", exclusive: false })));
+    return send(200, api.store.getLists().filter((l) => (l.members || []).includes(actorUrl)).map((l) => ({ id: l.id, title: l.title, replies_policy: l.repliesPolicy || "list", exclusive: !!l.exclusive })));
   }
   if (pathname === "/api/v1/mutes" && req.method === "GET") {
     return send(200, (api.store.getMuted().actors || []).map((a) => api.account(a)));
@@ -69382,9 +69382,10 @@ async function handle4(api, ctx) {
   if (pathname === "/api/v1/timelines/home" || pathname === "/api/v1/timelines/public" || pathname === "/api/v1/trends/statuses") {
     const localOnly = pathname === "/api/v1/timelines/public" && url.searchParams.get("local") === "true";
     const hideTags = pathname === "/api/v1/timelines/home" && api.store.getConfig?.()?.tagsInHome === false;
+    const hiddenBy = new Set(pathname === "/api/v1/timelines/home" ? (api.store.getLists?.() || []).filter((l) => l.exclusive).flatMap((l) => l.members || []) : []);
     const all = api.store.getStatuses();
     const muted = new Set(api.store.getMuted().actors);
-    let items = all.filter((s) => s.kind !== "remote" && s.kind !== "mention").filter((s) => !s.direct && s.visibility !== "direct").filter((s) => !muted.has(s.actor) && !muted.has(s.via)).filter((s) => !hideTags || s.kind !== "tag" || s.sourceAccts?.length).filter((s) => !localOnly || s.kind === "post" && s.visibility !== "private").sort((a, b) => String(b.published || "").localeCompare(String(a.published || "")));
+    let items = all.filter((s) => s.kind !== "remote" && s.kind !== "mention").filter((s) => !s.direct && s.visibility !== "direct").filter((s) => !muted.has(s.actor) && !muted.has(s.via)).filter((s) => !hideTags || s.kind !== "tag" || s.sourceAccts?.length).filter((s) => !hiddenBy.size || !(hiddenBy.has(s.actor) || hiddenBy.has(s.via))).filter((s) => !localOnly || s.kind === "post" && s.visibility !== "private").sort((a, b) => String(b.published || "").localeCompare(String(a.published || "")));
     const { items: page2, headers } = api.page(items, url);
     return send(200, page2.map((s) => api.statusOrBoost(s, { all })), headers);
   }
@@ -69452,7 +69453,8 @@ async function handle4(api, ctx) {
     const { items: page2, headers } = api.page(items, url);
     return send(200, page2.map((s) => api.statusOrBoost(s, { all })), headers);
   }
-  const listJson = (l) => ({ id: l.id, title: l.title, replies_policy: l.repliesPolicy || "list", exclusive: false });
+  const flag = (v) => v === true || v === "true" || v === "on" || v === "1";
+  const listJson = (l) => ({ id: l.id, title: l.title, replies_policy: l.repliesPolicy || "list", exclusive: !!l.exclusive });
   if (pathname === "/api/v1/lists" && req.method === "GET") {
     return send(200, api.store.getLists().map(listJson));
   }
@@ -69461,7 +69463,13 @@ async function handle4(api, ctx) {
     const title = String(body.title || "").trim();
     if (!title) return send(422, { error: "a title is required" });
     const lists = api.store.getLists();
-    const l = { id: node_crypto_default.randomBytes(8).toString("hex"), title, repliesPolicy: body.replies_policy || "list", members: [] };
+    const l = {
+      id: node_crypto_default.randomBytes(8).toString("hex"),
+      title,
+      repliesPolicy: body.replies_policy || "list",
+      exclusive: flag(body.exclusive),
+      members: []
+    };
     lists.push(l);
     api.store.setLists(lists);
     return send(200, listJson(l));
@@ -69479,6 +69487,7 @@ async function handle4(api, ctx) {
       const body = await readBody2(req);
       if (body.title) l.title = String(body.title);
       if (body.replies_policy) l.repliesPolicy = body.replies_policy;
+      if ("exclusive" in body) l.exclusive = flag(body.exclusive);
       api.store.setLists(lists);
     }
     return send(200, listJson(l));
@@ -71622,6 +71631,7 @@ var ImportWorker = class {
 // web/app/admin-facade.mjs
 var PERMANENT_CONFIG = ["handle", "remotePod", "issuer", "root", "kind"];
 var WIRE_CONFIG = ["name", "summary", "icon", "image", "fields", "aliases", "autoAcceptFollows"];
+var listRow = (l) => ({ id: l.id, title: l.title, exclusive: !!l.exclusive });
 var ADMIN_PATHS = /* @__PURE__ */ new Set([
   "/status",
   "/config",
@@ -71629,6 +71639,7 @@ var ADMIN_PATHS = /* @__PURE__ */ new Set([
   "/alias",
   "/rotate-key",
   "/import",
+  "/lists",
   "/deadletter",
   "/trouble",
   "/blocks",
@@ -71733,6 +71744,7 @@ var AdminFacade = class {
             aliases: cfg.aliases || [],
             autoAcceptFollows: cfg.autoAcceptFollows !== false,
             tagsInHome: cfg.tagsInHome !== false,
+            lists: a.store.getLists().map(listRow),
             quiescedAt: cfg.quiescedAt || null,
             movedTo: cfg.movedTo || null,
             mode: a.status().mode,
@@ -71875,6 +71887,18 @@ var AdminFacade = class {
           published: republish,
           ...pub?.unreachable?.length ? { unreachable: pub.unreachable } : {}
         });
+      }
+      // One list's Home switch, the same `exclusive` a Mastodon app sets.
+      case "/lists": {
+        if (typeof body.exclusive !== "boolean") return json2(400, { error: "exclusive (true or false) is the one thing to set here" });
+        await a.requestTakeover?.();
+        const lists = a.store.getLists();
+        const l = lists.find((x) => x.id === String(body.id || ""));
+        if (!l) return json2(404, { error: "no such list" });
+        l.exclusive = body.exclusive;
+        a.store.setLists(lists);
+        await a.store.flush();
+        return json2(200, { ok: true, lists: lists.map(listRow) });
       }
       case "/describe": {
         const cfg = { ...a.store.getConfig() };

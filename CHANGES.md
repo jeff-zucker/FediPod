@@ -1,5 +1,14 @@
 # Changes
 
+## 2026-11-03 (a list can hide its people from your home timeline — version 1.57.0)
+
+**A list can keep its people out of your home timeline.** In Phanpy, open a
+list and tick **Hide posts on this list from Home/Following**: the posts and
+boosts of everyone on that list leave your home timeline and show on the
+list's own timeline and on the public timeline. Untick and they return. Your
+manage page has a **lists** row with the same switch for each list, for an
+app with no switch of its own. Mastodon calls these lists custom feeds.
+
 ## 2026-10-21 (the forum's pages arrive drawn — version 1.56.0)
 
 **At bb.fedipod.net, the forum's front page, each category and each topic

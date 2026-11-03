@@ -108,6 +108,37 @@ document.getElementById('win').addEventListener('win:closed', () => {
 });
 
 
+// One row per list, indented under the lists row: its name, and one dropdown
+// whose two options are its states — the list's people shown in Home, or kept
+// to the list. Changing the word is the whole action.
+function listRows() {
+  const out = [];
+  for (const l of config.lists || []) {
+    const dt = document.createElement('dt');
+    dt.className = 'under';
+    dt.textContent = l.title;
+    const sel = document.createElement('select');
+    sel.setAttribute('aria-label', `Posts from ${l.title} in your home timeline`);
+    sel.title = '   Whether the posts and boosts of the people on this list appear in your home timeline; hidden, they show only on the list and on the public timeline';
+    for (const [v, t] of [['show', 'shown in home'], ['hide', 'hidden from home']]) {
+      const o = document.createElement('option');
+      o.value = v; o.textContent = t; o.selected = (v === 'hide') === !!l.exclusive;
+      sel.appendChild(o);
+    }
+    sel.addEventListener('change', async () => {
+      const hide = sel.value === 'hide';
+      sel.disabled = true;
+      const r = await write('/lists', { id: l.id, exclusive: hide },
+        hide ? `${l.title} is hidden from your home timeline` : `${l.title} is shown in your home timeline`);
+      if (r) await load(); else { sel.value = l.exclusive ? 'hide' : 'show'; sel.disabled = false; }
+    });
+    const dd = document.createElement('dd');
+    dd.append(sel);
+    out.push([dt, dd]);
+  }
+  return out;
+}
+
 // One row per identity connected elsewhere, indented under the row that adds
 // them. Each carries its own way out: disconnecting one has nothing to do with
 // the others.
@@ -254,7 +285,7 @@ function render() {
   if (config.movedTo) rows.push(['moved to', config.movedTo]);
   // A person gates followers here; a group's gate is the joins control on its
   // kind row, so the row would be a second switch for the same thing.
-  if (config.kind !== 'group') rows.splice(2, 0, ['new followers', 'ctl'], ['hashtag posts in home', 'ctl']);
+  if (config.kind !== 'group') rows.splice(2, 0, ['new followers', 'ctl'], ['hashtag posts in home', 'ctl'], ['lists', 'ctl']);
   // Rows that belong under the one being written, appended after it.
   let kids = null;
   for (const [k, v, link] of rows) {
@@ -300,6 +331,13 @@ function render() {
       dd.append(HOME_TAGS_CTL);
       HOME_TAGS_CTL.hidden = false;
       HOME_TAGS_PICK.value = config.tagsInHome !== false ? 'show' : 'hide';
+    }
+    // How many lists; each one is a row of its own underneath with its Home
+    // switch. Lists are made and filled in the client, so this row only counts.
+    if (k === 'lists') {
+      const n = (config.lists || []).length;
+      dd.textContent = n ? `${n} ${n === 1 ? 'list' : 'lists'}` : 'none — make one in Phanpy';
+      kids = listRows();
     }
     if (k === 'gateway') {
       dd.textContent = '';

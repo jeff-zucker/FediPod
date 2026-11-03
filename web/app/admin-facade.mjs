@@ -23,12 +23,15 @@ import { followActor, followHandle } from '../../lib/core/social.mjs';
 const PERMANENT_CONFIG = ['handle', 'remotePod', 'issuer', 'root', 'kind'];
 // Carried in the actor document, so a change is not live until republished.
 const WIRE_CONFIG = ['name', 'summary', 'icon', 'image', 'fields', 'aliases', 'autoAcceptFollows'];
+// A list as the page shows it: its name and whether its people are kept out
+// of Home. Lists are made and filled in the client; the page only switches.
+const listRow = (l) => ({ id: l.id, title: l.title, exclusive: !!l.exclusive });
 
 // The data endpoints this agent answers at the origin root (the page computes
 // its base as the origin, so it asks for /status, not /admin/status). Anything
 // not here falls through to the network as a static file or the gateway.
 export const ADMIN_PATHS = new Set([
-  '/status', '/config', '/gateway', '/alias', '/rotate-key', '/import',
+  '/status', '/config', '/gateway', '/alias', '/rotate-key', '/import', '/lists',
   '/deadletter', '/trouble', '/blocks', '/profiles', '/modqueue', '/log', '/fediacct', '/describe', '/follow',
   '/atproto', '/atproto/connect', '/atproto/disconnect',
   '/rebuild', '/move', '/retire', '/inbox/prune', '/park', '/revive', '/takeover',
@@ -121,6 +124,7 @@ export class AdminFacade {
             aliases: cfg.aliases || [],
             autoAcceptFollows: cfg.autoAcceptFollows !== false,
             tagsInHome: cfg.tagsInHome !== false,
+            lists: a.store.getLists().map(listRow),
             quiescedAt: cfg.quiescedAt || null, movedTo: cfg.movedTo || null,
             mode: a.status().mode,
             // Live from the credential's actual backend on THIS browser (a
@@ -240,6 +244,19 @@ export class AdminFacade {
           ok: true, published: republish,
           ...(pub?.unreachable?.length ? { unreachable: pub.unreachable } : {}),
         });
+      }
+
+      // One list's Home switch, the same `exclusive` a Mastodon app sets.
+      case '/lists': {
+        if (typeof body.exclusive !== 'boolean') return json(400, { error: 'exclusive (true or false) is the one thing to set here' });
+        await a.requestTakeover?.();
+        const lists = a.store.getLists();
+        const l = lists.find(x => x.id === String(body.id || ''));
+        if (!l) return json(404, { error: 'no such list' });
+        l.exclusive = body.exclusive;
+        a.store.setLists(lists);
+        await a.store.flush();
+        return json(200, { ok: true, lists: lists.map(listRow) });
       }
 
       case '/describe': {

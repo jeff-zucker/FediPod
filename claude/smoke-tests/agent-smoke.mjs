@@ -6007,9 +6007,32 @@ async function call(pathAndQuery, { method = 'GET', body = null, contentType = '
   // mirrored, which is the point of it, and is checked on its own below.
   check((await call('/api/v1/suggestions')).json?.length === 0,
     'suggestions are empty, not missing');
-  const lists0 = store2.getLists(); store2.setLists([...lists0, { id: 'abc123', title: 'pals', members: [ALICE] }]);
+  // A list set to hide its people from Home (`exclusive`, as a Mastodon app
+  // sends it): their posts and boosts leave Home and stay on the list and the
+  // public timeline; shown again, they are back.
+  const lists0 = store2.getLists();
+  const mk = await call('/api/v1/lists', { method: 'POST', body: JSON.stringify({ title: 'pals', exclusive: 'true' }) });
+  check(mk.status === 200 && mk.json.exclusive === true, 'a list can be made with its people hidden from Home');
+  const lid = mk.json.id;
+  await call(`/api/v1/lists/${lid}/accounts`, { method: 'POST', body: JSON.stringify({ account_ids: [store2.idFor(ALICE)] }) });
   const onLists = await call(`/api/v1/accounts/${store2.idFor(ALICE)}/lists`);
-  check(onLists.status === 200 && onLists.json.length === 1 && onLists.json[0].title === 'pals', 'an account\'s lists are the ones it is on');
+  check(onLists.status === 200 && onLists.json.length === 1 && onLists.json[0].title === 'pals' && onLists.json[0].exclusive === true,
+    'an account\'s lists are the ones it is on, each saying whether it hides');
+  const when = new Date().toISOString();
+  const ERIN = 'https://m.example/u/erin';
+  store2.addStatus({ noteId: 'https://m.example/n/pal-1', actor: ALICE, content: '<p>from a pal</p>', published: when, kind: 'timeline' });
+  store2.addStatus({ noteId: 'https://m.example/n/pal-2', actor: ERIN, via: ALICE, content: '<p>carried by a pal</p>', published: when, kind: 'timeline' });
+  store2.addStatus({ noteId: 'https://m.example/n/other-1', actor: ERIN, content: '<p>from somebody else</p>', published: when, kind: 'timeline' });
+  const texts = async (p) => JSON.stringify((await call(p)).json);
+  const homeHid = await texts('/api/v1/timelines/home?limit=40');
+  check(!/from a pal|carried by a pal/.test(homeHid) && /from somebody else/.test(homeHid),
+    'a hidden list\'s posts and boosts leave Home, and nobody else\'s do');
+  check(/from a pal/.test(await texts('/api/v1/timelines/public?limit=40')) && /from a pal/.test(await texts(`/api/v1/timelines/list/${lid}`)),
+    'and they stay on the public timeline and on the list');
+  const shown = await call(`/api/v1/lists/${lid}`, { method: 'PUT', body: JSON.stringify({ exclusive: false }) });
+  check(shown.json?.exclusive === false && /from a pal/.test(await texts('/api/v1/timelines/home?limit=40')),
+    'shown again, they are back in Home');
+  for (const n of ['pal-1', 'pal-2', 'other-1']) store2.removeStatus('https://m.example/n/' + n);
   store2.setLists(lists0);
   store2.setMuted({ actors: [DAN] });
   const mutes = await call('/api/v1/mutes');
@@ -8390,6 +8413,21 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
   check(partial.status === 200 && cstore.getConfig().issuer === 'https://example'
     && cstore.getConfig().handle === 'solo' && cstore.getConfig().summary === 'finches, actually',
     'an edit keeps every field it never mentions — a write is a merge');
+
+  // The lists row: each list with its Home switch, and the one write that flips it.
+  cstore.setLists([{ id: 'l1', title: 'pals', members: [] }]);
+  const withLists = await cjson('/config');
+  check(withLists.json.lists?.length === 1 && withLists.json.lists[0].title === 'pals' && withLists.json.lists[0].exclusive === false,
+    'GET /config lists the lists, each saying whether its people are hidden from Home');
+  const clists = (body) => cjson('/lists', {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
+  });
+  const hid = await clists({ id: 'l1', exclusive: true });
+  check(hid.status === 200 && hid.json.lists[0].exclusive === true && cstore.getLists()[0].exclusive === true,
+    'POST /lists hides a list\'s people from Home');
+  check((await clists({ id: 'nope', exclusive: true })).status === 404 && (await clists({ id: 'l1', exclusive: 'yes' })).status === 400,
+    'an unknown list, or a switch that is not true or false, is refused');
+  cstore.setLists([]);
 
   const before = JSON.stringify(cstore.getConfig());
   const fixed = await cpost({ handle: 'someone-else' });

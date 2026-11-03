@@ -175,6 +175,16 @@ try {
   check(/a hashtag post</.test(await words('/api/v1/timelines/public')) && /a hashtag post</.test(await words('/api/v1/timelines/tag/fediverse')),
     'and stay on the public timeline and the hashtag\'s page');
   await put('config.json', cfgNow);
+  // A list the app set to hide its people from Home: read with the switch,
+  // and its people's posts out of Home, on the public timeline.
+  await put('lists.json', [{ id: 'abc', title: 'far', exclusive: true, members: ['https://far.example/users/x'] }]);
+  await put('statuses.json', [...own, { noteId: 'https://far.example/notes/x1', kind: 'timeline',
+    actor: 'https://far.example/users/x', content: '<p>a post by x</p>', published, visibility: 'public' }]);
+  const lists = (await call('GET', '/api/v1/lists', { headers: bearer })).json;
+  check(lists.length === 1 && lists[0].exclusive === true, 'an app reads each list with its Home switch');
+  check(!/a post by x/.test(await words('/api/v1/timelines/home')) && /a post by x/.test(await words('/api/v1/timelines/public')),
+    'and a hidden list\'s people are out of Home and on the public timeline');
+  await put('lists.json', []);
   await put('statuses.json', own);
 
   // ---- using an app counts as being here, at most once an hour ----

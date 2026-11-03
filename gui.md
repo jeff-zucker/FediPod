@@ -104,6 +104,18 @@ that one of your connected accounts also brought in is from someone you follow
 there, and stays. An app already showing them keeps them on screen until it
 reloads.
 
+## Lists in your home timeline
+
+<!-- CLAUDE 2026-11-03 — the lists row; delete these markers when done -->
+The **lists** row counts your lists, and under it each list has a switch:
+*shown in home* or *hidden from home*. Hidden, the posts and boosts of the
+people on that list leave your home timeline and show on the list's own
+timeline and on the public timeline. Lists are made and filled in the app;
+an app can set the same switch (in Phanpy, **Hide posts on this list from
+Home/Following**). An app already showing the posts keeps them on screen
+until it reloads.
+<!-- /CLAUDE -->
+
 ## Handling follow requests
 
 New followers are accepted automatically. Set **new followers** to *wait for

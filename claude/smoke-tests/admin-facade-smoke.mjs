@@ -19,6 +19,8 @@ function mockAgent() {
     write: (n, o) => files.set(n, o),
     getConfig: () => files.get('config.json') || null,
     setConfig: (c) => files.set('config.json', c),
+    getLists: () => files.get('lists.json') || [],
+    setLists: (l) => files.set('lists.json', l),
     getContacts: () => ({ followers: [{}, {}], following: [{}] }),
     getQueue: () => [],
     getDeadLetters: () => [{ to: 'https://x/inbox', why: 'timeout' }],
@@ -146,6 +148,19 @@ assert.equal(published, beforeTags);
 r = await call(facade, 'POST', '/config', { tagsInHome: true });
 assert.equal(agent.store.getConfig().tagsInHome, true);
 ok('POST /config keeps hashtag posts out of Home, or shows them, without republishing the profile');
+
+// GET /config lists the lists with their Home switch; POST /lists flips one
+assert.deepEqual((await call(facade, 'GET', '/config')).json.lists, []);
+agent.store.setLists([{ id: 'l1', title: 'pals', members: [] }]);
+assert.equal((await call(facade, 'GET', '/config')).json.lists[0].exclusive, false);
+r = await call(facade, 'POST', '/lists', { id: 'l1', exclusive: true });
+assert.equal(r.status, 200); assert.equal(r.json.lists[0].exclusive, true);
+assert.equal(agent.store.getLists()[0].exclusive, true);
+assert.equal((await call(facade, 'GET', '/config')).json.lists[0].exclusive, true);
+assert.equal((await call(facade, 'POST', '/lists', { id: 'nope', exclusive: true })).status, 404);
+assert.equal((await call(facade, 'POST', '/lists', { id: 'l1', exclusive: 'yes' })).status, 400);
+agent.store.setLists([]);
+ok('POST /lists hides a list\'s people from Home, or shows them');
 
 // POST /config — the identity itself cannot be changed
 r = await call(facade, 'POST', '/config', { handle: 'someone-else' });
