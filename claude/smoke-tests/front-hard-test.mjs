@@ -846,39 +846,44 @@ try {
       `a placement clears the edge's copies of the category and the forum (${purged.join(',') || 'none'})`);
     check(keeperStarts.includes('forum'), `and starts the forum's run (${keeperStarts.join(',') || 'none'})`);
     // A notice that an account was deleted (Mastodon sends one to every inbox
-    // it knows, for every account it deletes): written into the inbox like
-    // any delivery, but neither placed nor given a run of its own. The forum
-    // is marked as having work, and the round's run reads it.
+    // it knows, for every account it deletes). The forum acts on none, so a
+    // kept forum's door answers it and keeps nothing: no item, no receipt, no
+    // run, and the forum is not marked as having work.
     {
       const AS = 'https://www.w3.org/ns/activitystreams';
       const send = (activity) => fetch(`${ORIGIN}/u/gardening/ap/inbox/`, {
         method: 'POST', headers: { 'content-type': 'application/activity+json' }, body: JSON.stringify({ '@context': AS, ...activity }) });
-      const written = () => inboxWrites.filter(w => w.url.includes('/fedipod-bb/ap/inbox/') && !w.url.endsWith('.receipt.json')).length;
+      const written = () => inboxWrites.filter(w => w.url.includes('/fedipod-bb/ap/inbox/')).length;
+      const accountGone = (who) => ({ id: `https://m.example/u/${who}#delete`, type: 'Delete', actor: `https://m.example/u/${who}`,
+        to: [AS + '#Public'], object: `https://m.example/u/${who}` });
       const noted = [];
       attached.gardening.forum = 'forum';
       doorExtras = { noteNext: async (h, at, o) => { noted.push({ h, at, earliest: !!o?.earliest }); } };
       placedAtDoor.length = 0; keeperStarts.length = 0;
       const had = written();
-      const gone = await send({ id: 'https://m.example/u/kwame#delete', type: 'Delete', actor: 'https://m.example/u/kwame',
-        to: [AS + '#Public'], object: 'https://m.example/u/kwame' });
-      check(gone.status === 202 && written() === had + 1,
-        `a notice that an account was deleted is written into the forum's inbox (${gone.status})`);
-      check(placedAtDoor.length === 0 && keeperStarts.length === 0,
-        `and is neither placed at the door nor given a run of its own (${placedAtDoor.length} placed, ${keeperStarts.length} started)`);
-      check(noted.length === 1 && noted[0].h === 'forum' && noted[0].earliest && Math.abs(Date.parse(noted[0].at) - Date.now()) < 5000,
-        `the forum is marked as having work now, for the round's run (${JSON.stringify(noted)})`);
+      const gone = await send(accountGone('kwame'));
+      check(gone.status === 202 && written() === had,
+        `a notice that an account was deleted is answered at a kept forum's door and written nowhere (${gone.status}, ${written() - had} written)`);
+      check(placedAtDoor.length === 0 && keeperStarts.length === 0 && noted.length === 0,
+        `it is not placed, starts no run and leaves the forum no work (${placedAtDoor.length} placed, ${keeperStarts.length} started, ${noted.length} noted)`);
+      // The same notice whose object is spelled out is the same notice.
+      const spelled = await send({ ...accountGone('ngozi'), object: { id: 'https://m.example/u/ngozi', type: 'Person' } });
+      check(spelled.status === 202 && written() === had && placedAtDoor.length === 0, 'the same with the account spelled out as an object');
       // A post taken down by its author is not such a notice.
       const postGone = await send({ id: 'https://m.example/u/kwame/notes/1#delete', type: 'Delete', actor: 'https://m.example/u/kwame',
         to: [AS + '#Public'], object: 'https://m.example/u/kwame/notes/1' });
-      check(postGone.status === 202 && placedAtDoor.length === 1 && keeperStarts.includes('forum') && noted.length === 1,
-        `a post taken down by its author is placed and starts the run, as any delivery (${placedAtDoor.length} placed, ${keeperStarts.length} started)`);
-      // Where the round cannot be told, nothing is left waiting on it.
-      doorExtras = {}; placedAtDoor.length = 0; keeperStarts.length = 0;
-      const unnoted = await send({ id: 'https://m.example/u/mei#delete', type: 'Delete', actor: 'https://m.example/u/mei',
-        to: [AS + '#Public'], object: 'https://m.example/u/mei' });
-      check(unnoted.status === 202 && placedAtDoor.length === 1 && keeperStarts.includes('forum'),
-        `with nowhere to note it, the notice is placed and starts the run (${placedAtDoor.length} placed, ${keeperStarts.length} started)`);
-      delete attached.gardening.forum; placedAtDoor.length = 0; keeperStarts.length = 0;
+      check(postGone.status === 202 && written() === had + 2 && placedAtDoor.length === 1 && keeperStarts.includes('forum'),
+        `a post taken down by its author is written, placed and starts the run, as any delivery (${placedAtDoor.length} placed, ${keeperStarts.length} started)`);
+      // Somebody deleting another account is not that account's own notice.
+      const byOther = await send({ ...accountGone('mei'), actor: 'https://m.example/u/kwame' });
+      check(byOther.status === 202 && written() === had + 4, 'a deletion sent by another account is written like any delivery');
+      // A forum the gateway does not keep: its inbox takes the notice as before.
+      delete attached.gardening.keeper; placedAtDoor.length = 0; keeperStarts.length = 0;
+      const unkept = await send(accountGone('tomas'));
+      check(unkept.status === 202 && written() === had + 6 && placedAtDoor.length === 0,
+        `a forum the gateway does not keep has the notice written into its inbox (${unkept.status})`);
+      attached.gardening.keeper = true;
+      doorExtras = {}; delete attached.gardening.forum; placedAtDoor.length = 0; keeperStarts.length = 0;
     }
     delete attached.gardening.keeper; purged.length = 0;
     // Switching the keeper on: a category's row starts nothing; the forum's
@@ -1199,6 +1204,16 @@ try {
       await book.noteKept('c', { skipped: 'failed: pod down', retry: 'later' }, Date.now() + 1);
       check(!(await book.keeperDue()).includes('c') && (await book.keeperDue(Date.now() + 3_700_000)).includes('c'),
         'and one that failed tries again in an hour, not every round');
+      // A forum's run hands its next time in as a number of milliseconds.
+      await book.noteKept('d', { nextAt: Date.now() + 60_000 }, Date.now());
+      check(typeof m.get('d').nextAt === 'string' && !(await book.keeperDue()).includes('d') && (await book.keeperDue(Date.now() + 61_000)).includes('d'),
+        `a next time handed in as a number is kept as a time, and is due when it comes (${m.get('d').nextAt})`);
+      m.set('e', { nextAt: Date.now() - 1000 });
+      check((await book.keeperDue()).includes('e'), 'one stored as a number by an earlier run is due all the same');
+      await book.noteNext('e', t(600_000), { earliest: true });
+      check((await book.keeperDue()).includes('e'), 'and stays the sooner of the two');
+      m.set('f', { nextAt: 'not a time' });
+      check(!(await book.keeperDue(Date.now() + 1e12)).includes('f'), 'what cannot be read as a time is never due');
     }
     holding = false;
 

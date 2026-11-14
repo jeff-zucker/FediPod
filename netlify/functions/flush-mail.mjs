@@ -12,17 +12,30 @@
 // before. And the test letter (lib/gateway/check-letter.mjs): one every six
 // hours to the admin's own account, and its owner told when FediPod has been
 // open an hour without taking it in.
+//
+// One round at a time: Netlify sends a round again while the first is still
+// running, and that one finds the round's lock held and stops. A pod that
+// refused an account's copy is asked again an hour later, not every round.
 import { gatewayCtx } from './front.mjs';
 import { signRun } from './keeper-background.mjs';
 import { flushAll, isPresent } from '../../lib/gateway/held-mail.mjs';
 import { closedState } from '../../lib/gateway/quiet.mjs';
-import { listCopies, copyMeta, flushCopy, dropCopy, holdOver, clearLeftover, lockCopy, renewPodLease, keptBefore, keptNow, isPersonal,
-  holdOn, heldByBrowser } from '../../lib/gateway/copy.mjs';
+import { listCopies, copyMeta, flushCopy, dropCopy, holdOver, clearLeftover, lockCopy, lockKey, renewPodLease, keptBefore, keptNow, isPersonal,
+  holdOn, heldByBrowser, refusedAt, afterTry } from '../../lib/gateway/copy.mjs';
 import { HttpStorage } from '../../lib/core/storage.mjs';
 import { roundChecks } from '../../lib/gateway/check-letter.mjs';
 
 export default async function handler() {
   const ctx = gatewayCtx();
+  const unlock = ctx.copyKv ? await lockKey(ctx.copyKv, '_round/lock', { waitMs: 0 }) : async () => {};
+  if (!unlock) { console.log('round: another round is running; this one stops'); return new Response(null, { status: 204 }); }
+  try { await round(ctx); } finally { await unlock().catch(() => {}); }
+  return new Response(null, { status: 204 });
+}
+
+// `copyRetryMs`: how long an account is left alone after its pod refused its
+// copy, where a test wants another time than copy.mjs's.
+export async function round(ctx, { copyRetryMs = undefined } = {}) {
   const secret = process.env.FEDIPOD_KEEPER_CLIENT_SECRET;
   const kept = (rec) => !!(keptNow(ctx, rec) && secret && process.env.URL);
   const start = async (handle) => {
@@ -73,6 +86,9 @@ export default async function handler() {
       // Kept under the gateway's former identity: this one cannot write it
       // back; the owner's FediPod hands it over on its next start.
       if (keptBefore(ctx, rec)) return;
+      // A pod that refused this copy is not asked again every round.
+      const wait = { waitMs: copyRetryMs };
+      if (await refusedAt(ctx.copyKv, handle, wait)) return;
       const leaving = !rec || rec.movedTo || !rec.keeper || (await closedState(ctx, handle, rec)).closed;
       if (leaving) {
         const unlock = await lockCopy(ctx.copyKv, handle, { waitMs: 2000 });
@@ -80,6 +96,7 @@ export default async function handler() {
         try {
           const left = await dropCopy(ctx.copyKv, handle, { pod, podFetch, stateUrl: meta.stateUrl, log: console.log });
           if (!left.ok) console.log(`copy @${handle}: not given up: ${left.why}`);
+          await afterTry(ctx.copyKv, handle, left.ok, wait);
         } finally { await unlock(); }
         return;
       }
@@ -99,6 +116,7 @@ export default async function handler() {
         try {
           const done = await holdOver(ctx.copyKv, handle, { pod, podFetch, stateUrl: meta.stateUrl, log: console.log });
           if (!done.ok) console.log(`copy @${handle}: not deleted: ${done.why}`);
+          await afterTry(ctx.copyKv, handle, done.ok, wait);
         } finally { await unlock(); }
         return;
       }
@@ -110,7 +128,6 @@ export default async function handler() {
         .catch((e) => console.log(`copy @${h}: not written to the pod: ${e?.message || e}`))));
     }
   }
-  return new Response(null, { status: 204 });
 }
 
 export const config = { schedule: '*/15 * * * *' };

@@ -2,7 +2,9 @@
 // a day its owner was last here, so its mail is held and it pauses and closes
 // like any other. And the fifteen-minute round finishes: work that is due
 // starts first, an account's mail goes one batch a round, a pod has ten
-// seconds to take a batch, and no account is always the one left out.
+// seconds to take a batch, and no account is always the one left out. Only
+// one round runs at a time, and a pod that refused an account's copy can be
+// left alone for a while.
 //   node --test claude/smoke-tests/round.test.mjs
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -13,6 +15,7 @@ import { fileURLToPath } from 'node:url';
 import { withOpened, FIRST_OPENED, closedState } from '../../lib/gateway/quiet.mjs';
 import { flushAll, flushHeld, holdsMail, mayBeAway, BATCH_MAX, ROUND_POD_MS } from '../../lib/gateway/held-mail.mjs';
 import { appendWithToken } from '../../lib/pod/inbox.mjs';
+import { memoryKv, lockKey, refusedAt, afterTry, copyMeta, COPY_RETRY_MS } from '../../lib/gateway/copy.mjs';
 
 const POD = 'https://pod.example/';
 const person = (h, more = {}) => ({ handle: h, kind: 'person', podHome: `${POD}${h}/fedipod/`, actorUrl: `${POD}${h}/fedipod/ap/actor`, ...more });
@@ -183,6 +186,103 @@ test('away from the round, an account\'s held mail is still written whole: every
   assert.equal(w.held.size, 0);
 });
 
+// ---- one round at a time --------------------------------------------------------
+
+test('the round\'s lock: a second taker is told no at once, the next one after it is let go gets it, and a holder that died loses it', async () => {
+  const kv = memoryKv();
+  const first = await lockKey(kv, '_round/lock', { waitMs: 0 });
+  assert.equal(typeof first, 'function', 'the first round holds the lock');
+  const started = Date.now();
+  assert.equal(await lockKey(kv, '_round/lock', { waitMs: 0 }), null, 'a second is told no');
+  assert.ok(Date.now() - started < 1000, 'without waiting for the first');
+  await first();
+  const next = await lockKey(kv, '_round/lock', { waitMs: 0 });
+  assert.equal(typeof next, 'function', 'let go, the lock is there for the next round');
+  await next();
+  // A round that was cut off never lets go: its lock runs out by itself.
+  await kv.set('_round/lock', JSON.stringify({ by: 'a round that was cut off', until: Date.now() - 1 }));
+  const after = await lockKey(kv, '_round/lock', { waitMs: 0 });
+  assert.equal(typeof after, 'function', 'a lock whose time is up is taken over');
+  await after();
+});
+
+// ---- a pod that refuses an account's copy ----------------------------------------
+
+test('a pod that refused a copy is left alone for an hour, then tried again; with no wait, it is asked every round', async () => {
+  const kv = memoryKv();
+  assert.equal(COPY_RETRY_MS, 3_600_000, 'the wait is one hour');
+  await afterTry(kv, 'heron', false, { waitMs: 0 });
+  assert.equal(await refusedAt(kv, 'heron', { waitMs: 0 }), 0, 'with no wait, a refusal is not noted and the account is tried every round');
+  assert.equal(kv.map.size, 0);
+  const HOUR = COPY_RETRY_MS; const t0 = Date.parse('2026-11-14T08:00:00Z');
+  const w = (now) => ({ now });
+  assert.equal(await refusedAt(kv, 'heron', w(t0)), 0, 'an account whose pod has refused nothing is tried');
+  await afterTry(kv, 'heron', false, w(t0));
+  assert.equal(await refusedAt(kv, 'heron', w(t0 + 15 * 60_000)), t0, 'the next round leaves it alone');
+  assert.equal(await refusedAt(kv, 'heron', w(t0 + 59 * 60_000)), t0, 'and the ones after');
+  assert.equal(await refusedAt(kv, 'heron', w(t0 + 61 * 60_000)), 0, 'once the wait has passed it is tried again');
+  await afterTry(kv, 'heron', false, w(t0 + 61 * 60_000));
+  assert.equal(await refusedAt(kv, 'heron', w(t0 + 75 * 60_000)), t0 + 61 * 60_000, 'refused again, the wait starts again');
+  await afterTry(kv, 'heron', true, w(t0 + 125 * 60_000));
+  assert.equal(kv.map.size, 0, 'a try that worked leaves no note');
+  assert.equal(await refusedAt(kv, 'siskin', w(t0)), 0, 'and one account\'s refusal says nothing about another');
+});
+
+test('in the round: a copy its pod refuses is tried, then left alone, then tried again, and handed back when the pod takes it', async () => {
+  const KEEPER = 'https://keeper.example/profile/card#me';
+  const STATE = `${POD}heron/fedipod/ap-state/`;
+  const kv = memoryKv();
+  await kv.set('_copies/heron', '1');
+  await kv.set('heron/meta', JSON.stringify({ stateUrl: STATE }));
+  await kv.set('heron/d/statuses.json', '["a post"]');
+  await kv.set('heron/d/liked.json', '[]');
+  let refuse = true; const asked = [];
+  const podFetch = async (input, init = {}) => {
+    const url = String(input?.url || input); const method = (init.method || input?.method || 'GET').toUpperCase();
+    asked.push(`${method} ${url.slice(STATE.length)}`);
+    if (method === 'PUT' && refuse && url.endsWith('statuses.json')) return new Response('no', { status: 500 });
+    return new Response(method === 'GET' ? '{}' : null, { status: method === 'GET' ? 404 : 201 });
+  };
+  const rec = person('heron', { keeper: { webId: KEEPER }, openedAt: new Date().toISOString() });
+  const ctx = { hold: true, keeperWebId: KEEPER, frontOrigin: 'https://fedipod.example', copyKv: kv, lookup: async (h) => (h === 'heron' ? rec : null),
+    keeperDue: async () => [], heldAccounts: async () => [], keeperFetch: async () => podFetch };
+  const said = []; const log = console.log; console.log = (m) => said.push(String(m));
+  try {
+    const { round } = await import('../../netlify/functions/flush-mail.mjs');
+    const HOUR = COPY_RETRY_MS;
+    await round(ctx);
+    const first = asked.filter((a) => a === 'PUT statuses.json').length;
+    assert.ok(first >= 1, `the round tries the copy (${asked.join(', ')})`);
+    assert.ok(asked.includes('PUT liked.json'), 'and what the pod takes is written');
+    assert.ok(said.some((m) => /^copy @heron: not deleted: 1 document/u.test(m)), said.join(' | '));
+    assert.ok(await copyMeta(kv, 'heron'), 'the copy stays at the Gateway');
+    asked.length = 0;
+    await round(ctx);
+    await round(ctx);
+    assert.deepEqual(asked, [], 'the next rounds ask that pod for nothing');
+    // Fifty-nine minutes on, still nothing; the hour passed, it is tried again.
+    await kv.set('heron/refused', JSON.stringify({ at: Date.now() - HOUR + 60_000 }));
+    await round(ctx);
+    assert.deepEqual(asked, [], 'nor a minute short of the hour');
+    await kv.set('heron/refused', JSON.stringify({ at: Date.now() - HOUR - 1000 }));
+    await round(ctx);
+    assert.ok(asked.includes('PUT statuses.json'), 'after the hour it is tried again');
+    asked.length = 0;
+    await kv.set('heron/refused', JSON.stringify({ at: Date.now() - HOUR - 1000 }));
+    refuse = false;
+    await round(ctx);
+    assert.ok(said.includes('copy @heron: written to the pod and deleted (the hold)'), said.join(' | '));
+    assert.equal(await copyMeta(kv, 'heron'), null, 'the pod took it: the copy is handed back');
+    assert.equal(await kv.get('heron/refused'), null, 'and nothing is noted against the account');
+    // With no wait, every round tries.
+    await kv.set('_copies/heron', '1'); await kv.set('heron/meta', JSON.stringify({ stateUrl: STATE })); await kv.set('heron/d/statuses.json', '["another"]');
+    refuse = true; asked.length = 0;
+    await round(ctx, { copyRetryMs: 0 }); await round(ctx, { copyRetryMs: 0 });
+    assert.ok(asked.filter((a) => a === 'PUT statuses.json').length >= 2 * first, `with no wait, each round asks again (${asked.length} requests)`);
+    assert.equal(await kv.get('heron/refused'), null, 'and nothing is noted');
+  } finally { console.log = log; }
+});
+
 // ---- as fedipod.net runs it: Netlify's stores, stood in for -------------------
 
 test('at the Gateway: an old account shows its date, a new row is stored with one, and the round starts due work before the mail', async (t) => {
@@ -249,4 +349,31 @@ test('at the Gateway: an old account shows its date, a new row is stored with on
   assert.equal((await mail.list({ prefix: 'heron/' })).blobs.length, 0, 'the old account\'s held mail reached its pod');
   assert.equal((await mail.list({ prefix: 'siskin/' })).blobs.length, 30, 'a hundred of the pile went; thirty wait');
   assert.equal(await ctx.roundMark(), 'siskin', 'and the round noted where it finished');
+  // Netlify sends a round again while the first is still running: the second
+  // stops at once and writes nothing; the round after the first has ended runs.
+  for (let i = 0; i < 3; i++) await mail.set(`heron/later-${i}`, '{"type":"Create"}');
+  let release; const gate = new Promise((r) => { release = r; });
+  const quick = globalThis.fetch;
+  globalThis.fetch = async (input, init = {}) => {
+    const url = String(input?.url || input);
+    if (!url.startsWith(`http://127.0.0.1:${port}`) && (init.method || '').toUpperCase() === 'PUT') await gate;
+    return quick(input, init);
+  };
+  const said = []; const log = console.log; console.log = (m) => said.push(String(m));
+  try {
+    calls.length = 0;
+    const first = round();
+    await new Promise((r) => setTimeout(r, 400));
+    const second = await round();
+    assert.equal(second.status, 204);
+    assert.ok(said.includes('round: another round is running; this one stops'), said.join(' | '));
+    const puts = () => calls.filter((c) => c.method === 'PUT').map((c) => c.url.split('/').slice(3, 4)[0]).sort();
+    release(); await first;
+    assert.deepEqual(puts(), ['heron', 'siskin'], 'each account got one batch, from the first round alone');
+    assert.equal((await mail.list({ prefix: 'heron/' })).blobs.length, 0);
+    calls.length = 0;
+    await round();
+    assert.equal(said.filter((m) => m.startsWith('round:')).length, 1, 'the round after it is not turned away');
+    assert.equal((await mail.list({ prefix: 'siskin/' })).blobs.length, 0, 'and takes what was left');
+  } finally { console.log = log; globalThis.fetch = quick; }
 });

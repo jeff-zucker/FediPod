@@ -150,3 +150,31 @@ test('an account with no door secret gets the item alone', async () => {
   const r = await handleDelivery(unsigned(), { ...ident(), hmacSecret: null }, { podPut: p.put, fetchImpl: fetch, origin: DOOR });
   assert.equal(r.status, 202); assert.equal(p.writes.length, 1);
 });
+
+// A sender's notice that its own account is gone: Mastodon sends one to every
+// inbox it knows. A person's inbox keeps it; an inbox whose reader acts on
+// none (a forum the gateway keeps) answers it and writes nothing.
+const gone = (object = ACTOR, actor = ACTOR) => new Request(DOOR + '/u/jeff/ap/inbox/', { method: 'POST', headers: { 'content-type': 'application/activity+json' },
+  body: JSON.stringify({ '@context': 'https://www.w3.org/ns/activitystreams', id: actor + '#delete', type: 'Delete', actor,
+    to: ['https://www.w3.org/ns/activitystreams#Public'], object }) });
+
+test('a notice that an account was deleted is kept for a person, and answered and written nowhere for an inbox that keeps none', async () => {
+  const p = pod();
+  const kept = await handleDelivery(gone(), ident(), { podPut: p.put, fetchImpl: fetch, origin: DOOR });
+  assert.equal(kept.status, 202); assert.equal(p.puts.length, 2, 'a person\'s inbox gets the item and its receipt');
+  const q = pod();
+  const dropped = await handleDelivery(gone(), ident(), { podPut: q.put, fetchImpl: fetch, origin: DOOR, dropAccountDeleted: true });
+  assert.equal(dropped.status, 202); assert.equal(dropped.reason, "an account's deletion, not kept");
+  assert.equal(q.puts.length, 0, 'nothing reaches the pod');
+  assert.equal(dropped.name, undefined, 'and the caller is handed nothing to place');
+  const spelled = await handleDelivery(gone({ id: ACTOR, type: 'Person' }), ident(), { podPut: q.put, fetchImpl: fetch, origin: DOOR, dropAccountDeleted: true });
+  assert.equal(spelled.reason, "an account's deletion, not kept"); assert.equal(q.puts.length, 0, 'the same with the account spelled out');
+});
+
+test('where notices of deleted accounts are not kept, a post taken down and a deletion sent by somebody else still are', async () => {
+  const p = pod();
+  const post = await handleDelivery(gone(ACTOR + '/s/1'), ident(), { podPut: p.put, fetchImpl: fetch, origin: DOOR, dropAccountDeleted: true });
+  assert.equal(post.status, 202); assert.equal(p.puts.length, 2, 'a post taken down by its author');
+  const other = await handleDelivery(gone(ORIGIN + '/users/kofi', ACTOR), ident(), { podPut: p.put, fetchImpl: fetch, origin: DOOR, dropAccountDeleted: true });
+  assert.equal(other.status, 202); assert.equal(p.puts.length, 4, 'an account deleting another');
+});

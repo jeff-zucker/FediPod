@@ -192,7 +192,8 @@ browser, the gateway and any app you use all work from one copy of your
 timeline, notifications, followers, settings and the rest of your FediPod
 state, made at fedipod.net from your pod, so they never disagree. Every
 fifteen minutes, whatever is happening, fedipod.net writes that copy to your
-pod and deletes it. The next time anything needs your account (FediPod, an
+pod and deletes it. If your pod will not take it, the copy stays at
+fedipod.net and is tried again an hour later. The next time anything needs your account (FediPod, an
 app, or the gateway's own work while you're away), the copy is made again from
 your pod. You don't notice, except that an app's first check after a deletion
 can take a few seconds longer. When your address moves or is closed, the copy
@@ -206,7 +207,8 @@ with one setting, `FEDIPOD_HOLD` ([netlify/README.md](netlify/README.md)).
 
 - **On**, the default and fedipod.net's choice: as above. Mail waits at the
   gateway for up to fifteen minutes, and each account's copy is written to its
-  pod and deleted every fifteen minutes.
+  pod and deleted every fifteen minutes. A pod that refuses its copy is asked
+  again an hour later.
 - **Off**: the gateway keeps no copy of anyone's account and holds no mail.
   Mail goes straight to the pod as it arrives, an app's every check reads the
   pod, and FediPod in the browser works on the pod, taking turns with the
