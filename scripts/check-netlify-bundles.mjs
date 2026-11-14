@@ -18,9 +18,14 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'fn-bundles-'));
 let fails = 0;
 const check = (ok, msg) => { console.log(`${ok ? 'PASS' : 'FAIL'}  ${msg}`); if (!ok) fails++; };
 try {
-  // The functions carry the forum as it is in its own folder now.
-  const { bringForum } = await import('./forum-package.mjs');
+  // The functions carry the forum as it is in its own folder now, running on
+  // this folder's FediPod: on an older copy the forum lacked the day's fixes
+  // while every test, which runs it on this folder, passed (1.57.3, 2026-11-14).
+  const { bringForum, forumCoreDiffers } = await import('./forum-package.mjs');
   bringForum();
+  const behind = forumCoreDiffers();
+  check(behind.length === 0, `the forum runs on this folder's FediPod${behind.length
+    ? ` (${behind.length} file(s) under lib/ differ: ${behind.slice(0, 5).join(', ')}${behind.length > 5 ? ', …' : ''})` : ''}`);
   execFileSync('netlify', ['functions:build', '--src', path.join(root, 'netlify/functions'), '--functions', path.join(tmp, 'zips')],
     { cwd: root, stdio: 'ignore' });
   const manifest = JSON.parse(fs.readFileSync(path.join(tmp, 'zips/manifest.json'), 'utf8'));
