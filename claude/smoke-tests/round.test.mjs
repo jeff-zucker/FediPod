@@ -118,7 +118,12 @@ test('a pod that refuses keeps its mail for another round, the others are served
 
 test('a write to a pod that does not answer in the time given is counted as not landed', async () => {
   let aborted = false;
-  const never = (url, init) => new Promise((resolve, reject) => { init.signal?.addEventListener('abort', () => { aborted = true; reject(new Error('aborted')); }); });
+  // A connection waiting on a pod keeps the process running, and so does this:
+  // the limit's own timer does not, on every Node this is tested with.
+  const never = (url, init) => new Promise((resolve, reject) => {
+    const open = setTimeout(resolve, 5000, new Response(null, { status: 201 }));
+    init.signal?.addEventListener('abort', () => { clearTimeout(open); aborted = true; reject(new Error('aborted')); });
+  });
   const statuses = [];
   const started = Date.now();
   const ok = await appendWithToken(`${POD}heron/fedipod/ap/inbox/x`, '{}', 'application/json', { fetchImpl: never, timeoutMs: 60, report: (s) => statuses.push(s) });
