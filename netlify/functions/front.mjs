@@ -34,6 +34,7 @@ import { routeFront } from '../../lib/gateway/front-core.mjs';
 import { keeperBook } from '../../lib/gateway/keeper-due.mjs';
 import { keeperSession } from '../../lib/gateway/keeper-session.mjs';
 import { holdFrom } from '../../lib/gateway/copy.mjs';
+import { withOpened } from '../../lib/gateway/quiet.mjs';
 import * as podInbox from '../../lib/pod/inbox.mjs';
 import grant from '../../vendor/idp-grant.cjs';
 // Forum support, when this Gateway keeps forums (netlify/forum-support.mjs).
@@ -95,7 +96,9 @@ const ROWS_MAX = 1000;
 async function rowFor(handle) {
   const hit = rows.get(handle);
   if (hit && Date.now() - hit.at < DIR_TTL_MS) return hit.rec;
-  const rec = (await getStore('directory').get(handle, { type: 'json' })) || (await seedRows())[handle] || null;
+  // Everyone here runs FediPod in a browser: a person's row is read with the
+  // day its owner was last here, whether or not it was stored with one.
+  const rec = withOpened((await getStore('directory').get(handle, { type: 'json' })) || (await seedRows())[handle] || null);
   if (rows.size >= ROWS_MAX) for (const [k, v] of rows) if (Date.now() - v.at >= DIR_TTL_MS) rows.delete(k);
   rows.set(handle, { rec, at: Date.now() });
   return rec;
@@ -106,8 +109,8 @@ async function rowFor(handle) {
 // it turns keeping on and asks for the account's copy in the same breath, and
 // a person signing an app in. Read once, it is what the minute holds too.
 async function freshRowFor(handle) {
-  const rec = (await getStore({ name: 'directory', consistency: 'strong' }).get(handle, { type: 'json' }))
-    || (await seedRows())[handle] || null;
+  const rec = withOpened((await getStore({ name: 'directory', consistency: 'strong' }).get(handle, { type: 'json' }))
+    || (await seedRows())[handle] || null);
   rows.set(handle, { rec, at: Date.now() });
   return rec;
 }
@@ -140,7 +143,7 @@ async function seedRows() {
 
 async function directory() {
   if (dir && Date.now() - dirAt < DIR_TTL_MS) return dir;
-  dir = { ...await seedRows(), ...await blobRows() };
+  dir = Object.fromEntries(Object.entries({ ...await seedRows(), ...await blobRows() }).map(([k, r]) => [k, withOpened(r)]));
   dirAt = Date.now();
   return dir;
 }
@@ -216,7 +219,7 @@ export function gatewayCtx() {
     // Attach writes its row here; the next directory() pass reads it back.
     putDirectory: async (handle, record) => {
       const store = getStore('directory');
-      await store.setJSON(handle, record);
+      await store.setJSON(handle, withOpened(record));
       rows.delete(handle);
       dir = null;
     },
@@ -241,19 +244,31 @@ export function gatewayCtx() {
     dropReceived: async (key) => getStore('received').delete(key),
     pauseItems: process.env.FEDIPOD_PAUSE_ITEMS,
     closeDays: process.env.FEDIPOD_CLOSE_DAYS,
-    podPut: async (handle, url, body, ct) => {
+    podPut: async (handle, url, body, ct, { timeoutMs = null } = {}) => {
       const rec = await rowFor(handle);
       if (!rec) return false;
-      return podInbox.appendWithToken(url, body, ct, { appendToken: rec.appendToken,
+      return podInbox.appendWithToken(url, body, ct, { appendToken: rec.appendToken, timeoutMs,
         report: (status) => { if (status >= 400 || status === 0) console.log(`door @${handle}: pod answered ${status || 'nothing'} to PUT ${url}${rec.appendToken ? ' (with token)' : ' (anonymous)'}`); } });
     },
     // A browser account's mail while its app is closed, and when the app last
     // said it was open (lib/gateway/held-mail.mjs).
     holdMail: async (handle, name, body, ct) => getStore('mail').set(`${handle}/${name}`, body, { metadata: { ct } }),
-    listHeld: async (handle) => (await getStore('mail').list({ prefix: `${handle}/` })).blobs.map((b) => b.key.slice(handle.length + 1)),
+    // `limit`: no more of a pile is listed than that many names, the first by name.
+    listHeld: async (handle, { limit = Infinity } = {}) => {
+      const names = [];
+      for await (const page of getStore('mail').list({ prefix: `${handle}/`, paginate: true })) {
+        names.push(...page.blobs.map((b) => b.key.slice(handle.length + 1)));
+        if (names.length >= limit) break;
+      }
+      return names.sort().slice(0, limit);
+    },
     readHeld: async (handle, name) => getStore('mail').get(`${handle}/${name}`),
     dropHeld: async (handle, name) => getStore('mail').delete(`${handle}/${name}`),
-    heldAccounts: async () => [...new Set((await getStore('mail').list()).blobs.map((b) => b.key.split('/')[0]))],
+    // The accounts with mail held: the store's folders, not every item in them.
+    heldAccounts: async () => (await getStore('mail').list({ directories: true })).directories.map((d) => d.replace(/\/$/u, '')),
+    // The account the last round finished with (held-mail.mjs: flushAll).
+    roundMark: async () => (await getStore('round').get('mail', { type: 'json' }))?.after || null,
+    setRoundMark: async (handle) => getStore('round').setJSON('mail', { after: handle }),
     markPresent: async (handle) => getStore('present').setJSON(handle, { at: Date.now() }),
     presentAt: async (handle) => (await getStore('present').get(handle, { type: 'json' }))?.at || 0,
     // The gateway's own pod identity, which an owner may let act for them while

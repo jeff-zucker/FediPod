@@ -845,6 +845,41 @@ try {
     check(purged.includes('u-gardening') && purged.includes('u-forum'),
       `a placement clears the edge's copies of the category and the forum (${purged.join(',') || 'none'})`);
     check(keeperStarts.includes('forum'), `and starts the forum's run (${keeperStarts.join(',') || 'none'})`);
+    // A notice that an account was deleted (Mastodon sends one to every inbox
+    // it knows, for every account it deletes): written into the inbox like
+    // any delivery, but neither placed nor given a run of its own. The forum
+    // is marked as having work, and the round's run reads it.
+    {
+      const AS = 'https://www.w3.org/ns/activitystreams';
+      const send = (activity) => fetch(`${ORIGIN}/u/gardening/ap/inbox/`, {
+        method: 'POST', headers: { 'content-type': 'application/activity+json' }, body: JSON.stringify({ '@context': AS, ...activity }) });
+      const written = () => inboxWrites.filter(w => w.url.includes('/fedipod-bb/ap/inbox/') && !w.url.endsWith('.receipt.json')).length;
+      const noted = [];
+      attached.gardening.forum = 'forum';
+      doorExtras = { noteNext: async (h, at, o) => { noted.push({ h, at, earliest: !!o?.earliest }); } };
+      placedAtDoor.length = 0; keeperStarts.length = 0;
+      const had = written();
+      const gone = await send({ id: 'https://m.example/u/kwame#delete', type: 'Delete', actor: 'https://m.example/u/kwame',
+        to: [AS + '#Public'], object: 'https://m.example/u/kwame' });
+      check(gone.status === 202 && written() === had + 1,
+        `a notice that an account was deleted is written into the forum's inbox (${gone.status})`);
+      check(placedAtDoor.length === 0 && keeperStarts.length === 0,
+        `and is neither placed at the door nor given a run of its own (${placedAtDoor.length} placed, ${keeperStarts.length} started)`);
+      check(noted.length === 1 && noted[0].h === 'forum' && noted[0].earliest && Math.abs(Date.parse(noted[0].at) - Date.now()) < 5000,
+        `the forum is marked as having work now, for the round's run (${JSON.stringify(noted)})`);
+      // A post taken down by its author is not such a notice.
+      const postGone = await send({ id: 'https://m.example/u/kwame/notes/1#delete', type: 'Delete', actor: 'https://m.example/u/kwame',
+        to: [AS + '#Public'], object: 'https://m.example/u/kwame/notes/1' });
+      check(postGone.status === 202 && placedAtDoor.length === 1 && keeperStarts.includes('forum') && noted.length === 1,
+        `a post taken down by its author is placed and starts the run, as any delivery (${placedAtDoor.length} placed, ${keeperStarts.length} started)`);
+      // Where the round cannot be told, nothing is left waiting on it.
+      doorExtras = {}; placedAtDoor.length = 0; keeperStarts.length = 0;
+      const unnoted = await send({ id: 'https://m.example/u/mei#delete', type: 'Delete', actor: 'https://m.example/u/mei',
+        to: [AS + '#Public'], object: 'https://m.example/u/mei' });
+      check(unnoted.status === 202 && placedAtDoor.length === 1 && keeperStarts.includes('forum'),
+        `with nowhere to note it, the notice is placed and starts the run (${placedAtDoor.length} placed, ${keeperStarts.length} started)`);
+      delete attached.gardening.forum; placedAtDoor.length = 0; keeperStarts.length = 0;
+    }
     delete attached.gardening.keeper; purged.length = 0;
     // Switching the keeper on: a category's row starts nothing; the forum's
     // own row, switched on last, starts the forum's first run.

@@ -32,16 +32,19 @@ export default async function handler() {
     }).catch((e) => ({ status: 0, error: e }));
     console.log(`keeper @${handle}: run started (${res.status})`);
   };
-  const due = new Set(await ctx.keeperDue());
+  // Work that is due starts first: the mail that follows can take the rest of
+  // the round, and a run must not wait on somebody else's pod.
   const started = new Set();
+  for (const handle of await ctx.keeperDue()) {
+    const rec = await ctx.lookup(handle);
+    if (!kept(rec) || await isPresent(ctx, handle)) continue;
+    await start(handle);
+    started.add(handle);
+  }
+  // An account whose run has started has its mail delivered and read by that run.
   await flushAll(ctx, {
     isGone: async (handle, rec) => (await closedState(ctx, handle, rec)).closed,
-    keep: async (handle, rec) => {
-      if (!due.has(handle) || !kept(rec) || await isPresent(ctx, handle)) return false;
-      await start(handle);
-      started.add(handle);
-      return true;
-    },
+    keep: async (handle) => started.has(handle),
   });
   // The test letter, sent through the account's own door as any server sends.
   await roundChecks(ctx, {
@@ -50,12 +53,6 @@ export default async function handler() {
     })).status,
     alert: async (handle, text) => { await ctx.startPush?.(handle, { alert: text }); },
   }).catch((e) => console.log(`check: ${e?.message || e}`));
-  // Work due where no mail was held this round.
-  for (const handle of due) {
-    if (started.has(handle)) continue;
-    const rec = await ctx.lookup(handle);
-    if (kept(rec) && !await isPresent(ctx, handle)) await start(handle);
-  }
   // The working copies of kept accounts, written to their pods (copy.mjs),
   // several at a time so a long list fits in the round.
   if (ctx.copyKv) {

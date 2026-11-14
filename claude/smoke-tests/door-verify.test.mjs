@@ -114,3 +114,39 @@ test('an inbox with no room for unchecked mail turns it away unwritten, and stil
   const signedOne = await handleDelivery(await signed(), ident(), { podPut: p.put, fetchImpl: fetch, origin: DOOR, admit: roomFor });
   assert.equal(signedOne.status, 202); assert.equal(signedOne.reason, 'verified'); assert.equal(p.puts.length, 2);
 });
+
+// A slow pod. One write after the other took longer than a sender waits, so
+// the sender sent the item again; the item and its receipt go together.
+const slowPod = (ms, { refuseItem = false } = {}) => {
+  const writes = [];
+  return { writes, put: async (u, b) => {
+    const w = { u, b, start: Date.now(), end: 0 }; writes.push(w);
+    await new Promise((r) => setTimeout(r, ms));
+    w.end = Date.now();
+    return !(refuseItem && !u.endsWith('.receipt.json'));
+  } };
+};
+const unsigned = () => new Request(DOOR + '/u/jeff/ap/inbox/', { method: 'POST', headers: { 'content-type': 'application/activity+json' }, body: body() });
+
+test('on a slow pod the item and its receipt are written at the same time', async () => {
+  const p = slowPod(300);
+  const r = await handleDelivery(unsigned(), ident(), { podPut: p.put, fetchImpl: fetch, origin: DOOR });
+  assert.equal(r.status, 202);
+  assert.equal(p.writes.length, 2, 'the item and its receipt reach the pod');
+  const item = p.writes.find((w) => !w.u.endsWith('.receipt.json'));
+  const rcpt = p.writes.find((w) => w.u.endsWith('.receipt.json'));
+  assert.ok(rcpt.start < item.end, `the receipt is on its way before the item has landed (it set off ${rcpt.start - item.start}ms after the item, which took ${item.end - item.start}ms)`);
+  assert.equal(verifyReceipt(JSON.parse(rcpt.b), 'secret'), true, 'and is the receipt for that item');
+});
+
+test('an item the pod refuses is answered as failed, whatever became of its receipt', async () => {
+  const p = slowPod(20, { refuseItem: true });
+  const r = await handleDelivery(unsigned(), ident(), { podPut: p.put, fetchImpl: fetch, origin: DOOR });
+  assert.equal(r.status, 502); assert.equal(r.reason, 'pod inbox write failed');
+});
+
+test('an account with no door secret gets the item alone', async () => {
+  const p = slowPod(5);
+  const r = await handleDelivery(unsigned(), { ...ident(), hmacSecret: null }, { podPut: p.put, fetchImpl: fetch, origin: DOOR });
+  assert.equal(r.status, 202); assert.equal(p.writes.length, 1);
+});
