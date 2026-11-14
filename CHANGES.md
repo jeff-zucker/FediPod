@@ -1,5 +1,58 @@
 # Changes
 
+## 2026-11-14 (a moderator's own post can be deleted; fedipod.net's forum runs on the code being deployed — version 1.57.5)
+
+**A moderator who deletes their own post has it deleted.** In a group or a
+forum category, a deletion sent by a listed moderator was held as a moderation
+request even when the post was the moderator's own. Nothing could confirm it,
+so the post stayed up. A deletion by the post's author is now the author's,
+whoever they are. A moderator's deletion of someone else's post still waits
+in the queue. With fedipod-bb 0.5.5 a forum also carries out the ones already
+waiting.
+
+**The forum at fedipod.net runs on the FediPod being deployed.** It ran on the
+FediPod last published to npm, so the 1.57.3 change that runs a kept forum
+again while mail is left in its inbox never reached it: once the last request
+from a moderator was an hour old, the round stopped starting the forum. A
+deploy now installs this folder's FediPod beside the forum, and the
+pre-deploy check fails when the two differ.
+
+## 2026-11-14 (a sign-in the pod has ended is not shown as signed in — version 1.57.4)
+
+**FediPod asks your pod before it says you are signed in.** A browser goes on
+holding a sign-in after the pod has stopped honouring it. Arriving at
+fedipod.net with one, you are taken straight to your pod's login, with nothing
+to press. Arriving in the app with one, you are taken to the sign-in page,
+where every request used to be answered "not signed in on this browser".
+
+**A pod that is down no longer signs you out.** A sign-in that could not be
+renewed because the pod's server gave no answer or an error is kept, and
+renews when the pod is back. This comes with fediverse-session 0.2.2, and with
+fedipod-bb 0.5.4 for the forum's page.
+
+## 2026-11-14 (a forum the Gateway keeps runs when it has work; one round at a time — version 1.57.3)
+
+**A forum the Gateway keeps is run when it has work, and not otherwise.** The
+fifteen-minute round now reads the time a forum asks to be run again, so a
+delivery the forum could not send is tried again without waiting for the next
+post. A run that leaves mail in the forum's inbox is run again the next round.
+This comes with fedipod-bb 0.5.3.
+
+**A notice that an account was deleted is not kept for a forum the Gateway
+keeps.** Mastodon sends one to every inbox it knows for every account it
+deletes, and a forum acts on none of them. Its door answers the notice and
+writes nothing. A post taken down by its author still reaches the forum, and a
+person's account still gets every notice.
+
+**Only one round runs at a time.** Netlify sometimes starts the fifteen-minute
+round again while it is still running, and the same held mail was then written
+to a pod two or three times. A round that finds another running now stops at
+once.
+
+**A pod that refuses an account's copy is asked again an hour later.** It was
+asked every fifteen minutes, and one pod that went on refusing took a quarter
+of every round. While a pod refuses, that account's copy stays at the Gateway.
+
 ## 2026-11-13 (every person's account is counted; the fifteen-minute round finishes — version 1.57.2)
 
 **Every person's account at a Gateway is counted from a day.** An account

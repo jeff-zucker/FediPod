@@ -46,6 +46,21 @@ the first two, which together are fedipod.net.
   posts, about once a minute; anything that runs at start must be cheap or
   remembered (`warm-start.mjs`, `copy-mode.mjs`).
 
+- **A stored sign-in is not believed until it is checked.** The sign-in
+  package (`fediverse-session`, `oidc-session.mjs`) answers `getSession()`
+  from the browser's database alone; `session.check()` asks the pod, and only
+  when the access token's time is up. The front page checks before it starts
+  the worker and goes to the pod's own login when the pod has ended the
+  sign-in (`web/app/boot.mjs` `fedipodOnLoad`). The worker checks before it
+  boots the agent, and with no sign-in (error code `signed-out`) sends the
+  top-level pages under `/app/` and `/admin/` to `/` (`web/app/sw-src.mjs`
+  `toSignIn`). A pod that cannot be asked ends nobody's sign-in. The forum's
+  page does its part in `fedipod-bb/site/bb.js` (`signInEnded`).
+- The site takes the sign-in package from `node_modules/fediverse-session`
+  (`stage-site.mjs` for the forum's page and `/app-signin/`, `build-app.mjs`
+  for the two bundles); only the `/demo/` page comes from the checkout beside
+  FediPod. A change to the package reaches the site through that folder.
+
 ## The Gateway (`netlify/functions/`, `lib/gateway/`, `web/front/`, `web/app-signin/`)
 
 Six functions on Netlify, thin adapters around plain Node in `lib/gateway/`:
@@ -103,10 +118,32 @@ Six functions on Netlify, thin adapters around plain Node in `lib/gateway/`:
   It lists the `mail` store's folders and at most 200 names an account, never
   a whole pile. `/api/here` and a keeper run write every batch. A pod slower
   than ten seconds gets the same items again next round as a new batch.
-- An account's deletion addressed to a kept forum is stored in the forum's
-  pod inbox and starts no run (`held-mail.mjs` `waitsForRound`); the forum is
-  noted due and the round starts it. Every other delivery to a kept forum is
-  placed at the door and starts a run.
+- A kept forum's door answers a notice that an account was deleted and
+  writes nothing (`gateway-core.mjs` `dropAccountDeleted`, set by
+  `front-core.mjs`): the forum acts on none. Every other delivery to a kept
+  forum is placed at the door and starts a run.
+- **When the round starts a kept forum**: when the time its last run asked
+  for has come (`keeper-due.mjs`; a run's `nextAt` may be an ISO string or a
+  number of milliseconds). The forum asks for now when a run left mail in its
+  inbox (`intake.moreWaiting`), for a delivery's next try, and for a minute
+  on while a listed moderator's own request is under an hour old (fedipod-bb
+  `triesAsk`, `asksToRetry`). A post held for review or a report asks for
+  nothing.
+- **A Delete by a post's own author is the author's**, a listed moderator's
+  of their own post included: `group.mjs` `isModerationAsk` compares the
+  status's `actor` with the sender. Queued as a moderator's ask it can never
+  be confirmed, because the forum's page gives it the id
+  `<note>#delete-<ms>`, which is the deleted post. A forum carries out one
+  already in its queue (fedipod-bb `authorsDelete`, from `applyVerifiedAsks`).
+- **One round at a time**: `flush-mail` takes `_round/lock` in the `state`
+  store (`copy.mjs` `lockKey`: 60 seconds, renewed while its holder runs) and
+  stops at once when another round holds it. Netlify sends a scheduled
+  function again when it has not answered in 15.5 seconds, and once more at
+  31, at some hours and not others.
+- **A pod that refused an account's copy** is asked again after
+  `COPY_RETRY_MS`, one hour, not every round: `<handle>/refused` in the
+  `state` store (`copy.mjs` `refusedAt`, `afterTry`). Until then nothing of
+  that account's is written to its pod.
 - A delivery written straight to a pod writes the item and its receipt at the
   same moment (`gateway-core.mjs` `handleDelivery`).
 - An app checking the home timeline or notifications also reads the owner's
@@ -207,7 +244,14 @@ workers, so those never run there.
   `check-netlify-bundles.mjs` and the app build, so fedipod.net runs whatever
   the forum folder holds and a forum change needs no FediPod commit. Staging
   copies every file the forum's `site/` ships and stamps every import between
-  them. The forum brings its own copy of fedipod from npm, not this checkout.
+  them. **The forum runs on this checkout**: `forum-package.mjs` packs FediPod
+  the same way and installs it beside the forum in the one `npm install`, and
+  `check-netlify-bundles.mjs` fails when the forum's `fedipod` and `lib/`
+  differ (`forumCoreDiffers`). Left to npm, the forum gets the fedipod last
+  published, and a change under `lib/` that the forum needs never reaches
+  fedipod.net while every test, which runs the forum on this checkout, passes.
+  The tell in the function log: the forum's own fetches name their version
+  (`fedipod/<version>`).
 - **Server** (`../fedipod-server/`): the agent and the Gateway's front
   inside a Community Solid Server, importing `fedipod` by name. Its own
   `skills.md` is there. A local one runs on this machine on port 443, started
