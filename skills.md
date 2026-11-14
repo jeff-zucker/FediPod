@@ -55,8 +55,8 @@ Six functions on Netlify, thin adapters around plain Node in `lib/gateway/`:
 | `front` | WebFinger, every fronted public face, sign-up and attach, the directory, notices, the outbox door, held mail, the keeper switch; a delivery to a browser account |
 | `inbox` | the one-person door (a DeviceAgent behind a gateway) |
 | `account` | the routes that act for an account: the browser reaching its copy (`/api/state/*`) and Mastodon apps (`/oauth/*`, `/api/v1/*`, `/api/v2/*`, `/api/authorize`); `front` leaves these paths to it |
-| `flush-mail` | every fifteen minutes: the admin's test letter every six hours and its alert (check-letter.mjs), held mail to pods in batches, kept accounts with work due handed to the keeper, each person's copy written to their pod and deleted (the hold), a forum's written to its pod |
-| `keeper-background` | one kept account's run, started only by `flush-mail` |
+| `flush-mail` | every fifteen minutes (the round), in this order: kept accounts with work due handed to the keeper, held mail to pods (one batch an account), the admin's test letter every six hours and its alert (check-letter.mjs), each person's copy written to their pod and deleted (the hold), a forum's written to its pod |
+| `keeper-background` | one kept account's run, started by `flush-mail`, or by `front` for a kept forum as a post lands |
 | `push-background` | one account's held mail read into its copy (hold off: its pod inbox drained) and each notification pushed to its phones; or the notifications FediPod named while open (`/api/push`), pushed; or the alert FediPod raised when it could not read mail (`/api/alert`) |
 
 - **Forum support is a switch**: `netlify/forum-support.mjs` is the one file
@@ -67,8 +67,14 @@ Six functions on Netlify, thin adapters around plain Node in `lib/gateway/`:
   to the forum's pod inbox and stops there.
 
 - An account is a row in the Netlify Blobs store `directory`, keyed by
-  handle (fronted) or `handle@podhost`. `openedAt` means it is a browser
-  account and when its owner was last there; `keeper` means fedipod.net
+  handle (fronted) or `handle@podhost`. `openedAt` is when its owner was
+  last there, and what gets an account its held mail, its pause at 5,000
+  waiting items and its close after 183 days. On Netlify every person's row
+  carries one: `netlify/functions/front.mjs` adds it on every read and write
+  of a row (`quiet.mjs` `withOpened`: its own, else `attachedAt`, else
+  23 September 2026); a forum's, a category's and a group's row has none.
+  `front-core.mjs` does not do this, because fedipod-server shares it and its
+  accounts never call `/api/open`, so they would close by time. `keeper` means fedipod.net
   keeps it running; `movedTo` and `closedAt` end it; `kind` is `person`,
   `group` or `application` (the forum). Read one with
   `netlify blobs:get directory <key>`.
@@ -89,7 +95,20 @@ Six functions on Netlify, thin adapters around plain Node in `lib/gateway/`:
   WebID, proved by the pod's own login); apps, codes and token hashes are in
   the store `masto`, with the one VAPID pair. Held mail is `mail`, presence
   `present`, the keeper's due-times `keeper`, deliveries counted for quiet
-  accounts `received`, notices `notices`.
+  accounts `received`, notices `notices`, the account the round's mail last
+  ended on `round`.
+- **The round's mail** (`held-mail.mjs` `flushAll`): accounts in name order,
+  starting after the one the last round ended on, four at a time, one batch
+  of up to 100 items each, ten seconds for a pod to take it (`ROUND_POD_MS`).
+  It lists the `mail` store's folders and at most 200 names an account, never
+  a whole pile. `/api/here` and a keeper run write every batch. A pod slower
+  than ten seconds gets the same items again next round as a new batch.
+- An account's deletion addressed to a kept forum is stored in the forum's
+  pod inbox and starts no run (`held-mail.mjs` `waitsForRound`); the forum is
+  noted due and the round starts it. Every other delivery to a kept forum is
+  placed at the door and starts a run.
+- A delivery written straight to a pod writes the item and its receipt at the
+  same moment (`gateway-core.mjs` `handleDelivery`).
 - An app checking the home timeline or notifications also reads the owner's
   connected Mastodon-API and Bluesky accounts into the copy
   (`connected-feeds.mjs`), when due (`<handle>/feeds-due` in `state`: five

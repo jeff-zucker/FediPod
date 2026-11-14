@@ -1,5 +1,40 @@
 # Changes
 
+## 2026-11-13 (every person's account is counted; the fifteen-minute round finishes — version 1.57.2)
+
+**Every person's account at a Gateway is counted from a day.** An account
+whose owner has not signed in is counted from the day it was set up, and one
+with no day on record from 23 September 2026. Its mail waits at the Gateway
+while FediPod is closed, and it is paused after about 5,000 items, like any
+other. **Its address closes for good six months after that day unless its
+owner opens FediPod first: on 25 March 2027 for an account counted from 23
+September.** A forum, its categories and a group are not counted.
+
+**The fifteen-minute round starts work that is due before it delivers mail.**
+A follow waiting for a kept account, a scheduled post and a forum's waiting
+notices are no longer held up by somebody else's slow pod. A notice that a
+forum member's account was deleted is dealt with within fifteen minutes.
+
+**Held mail reaches a pod one batch a round.** A batch is up to a hundred
+items, and a pod has ten seconds to take it; a pod that does not is sent the
+batch again the next round. An account with more waiting receives the rest
+over the rounds that follow, or all of it when its owner opens FediPod. Each
+round begins with a different account, so none is always last.
+
+## 2026-11-13 (a kept forum takes its mail in again — version 1.57.1)
+
+**A forum the Gateway keeps takes in everything sent to it again.** Posts,
+replies and follows sent to the forum appear; what was waiting is taken in,
+fifty items a run. This comes with fedipod-bb 0.5.2.
+
+**A notice that an account was deleted no longer starts a forum's run by
+itself.** Arriving for a forum the Gateway keeps, it waits in the forum's
+inbox for the forum's next run. A post, a reply or a follow is still placed as
+it lands.
+
+**Mail that goes straight into a pod is written in one step.** The Gateway
+writes each item and its receipt at the same moment.
+
 ## 2026-11-03 (a list can hide its people from your home timeline — version 1.57.0)
 
 **A list can keep its people out of your home timeline.** In Phanpy, open a

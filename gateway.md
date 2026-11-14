@@ -171,11 +171,10 @@ A browser account runs only while FediPod is open somewhere. While it is
 closed, fedipod.net does two things for it.
 
 **Your mail waits at the gateway.** Deliveries are kept there, not written to
-your pod one by one, and reach your pod in batches of up to a hundred: when you
-open FediPod, or every fifteen minutes otherwise. While FediPod is open, mail
-goes straight to your pod as before. A DeviceAgent's mail always goes straight
-to its pod. On a gateway whose admin has turned the hold off (below), mail
-always goes straight to your pod.
+your pod one by one, and reach your pod in batches of up to a hundred: all of
+them when you open FediPod, or one batch every fifteen minutes otherwise. While
+FediPod is open, mail goes straight to your pod as before. On a gateway whose
+admin has turned the hold off (below), mail always goes straight to your pod.
 
 **The gateway keeps your account running.** It accepts your follows, tries
 again what failed to go out, and publishes the posts you scheduled, all while FediPod is closed. Other mail waits on your
@@ -278,10 +277,10 @@ door answer 410 Gone, other servers drop the account the next time they look,
 and nobody can take the name. Nothing on your pod is touched. An address that
 had already moved to another gateway keeps answering as moved.
 
-Only accounts opened from a browser are counted. A DeviceAgent behind the
-gateway drains its own inbox as it runs, and is never paused or closed by
-time. Accounts from before this was built are counted from their next
-sign-in. A gateway operator sets the cap and the window with
+Every person's account is counted: from the last time its owner signed in or
+posted, or from the day it was set up if they never have. An account with no
+day on record is counted from 23 September 2026. A forum, its categories and a
+group are not counted. A gateway operator sets the cap and the window with
 `FEDIPOD_PAUSE_ITEMS` and `FEDIPOD_CLOSE_DAYS`.
 
 ## Notices
