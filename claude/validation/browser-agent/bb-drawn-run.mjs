@@ -2,7 +2,9 @@
 // a real browser: read with scripts off, read with scripts on without a single
 // document fetched again, a category chosen without a load, an old link taken
 // to its topic, and the category the browser draws the same as the one the
-// server drew. The forum is the checkout beside FediPod (scripts/dependents.mjs),
+// server drew. And a pod sign-in the browser has stored: the page asks the pod
+// before it says "signed in", and a reply that finds the sign-in ended keeps
+// the reader's words. The forum is the checkout beside FediPod (scripts/dependents.mjs),
 // written by its own publishing code; the site is served over https at
 // bb.fedipod.localhost, as bb.fedipod.net is, with the Gateway's own route
 // (lib/gateway/forum-pages.mjs). Screenshots land in tmp/bb-drawn/.
@@ -53,7 +55,7 @@ const s = site.category('seeds');
 const siteStore = memStore(); const gStore = memStore(); const sStore = memStore();
 const MEI = 'https://mei.pod.example/fedipod/ap/actor';
 docs.set(site.actor, fwire.siteActorDoc({ urls: site, handle: 'forum', name: 'Federated Solid Forum', publicKeyPem: 'x', summary: 'Growing things together.' }));
-docs.set(g.actor, { id: g.actor, type: 'Group', preferredUsername: 'gardening', name: 'Gardening' });
+docs.set(g.actor, { id: g.actor, type: 'Group', preferredUsername: 'gardening', name: 'Gardening', inbox: POD + 'fedipod-bb/ap/inbox/' });
 docs.set(s.actor, { id: s.actor, type: 'Group', preferredUsername: 'seeds', name: 'Seed swap' });
 await publish.publishCategories({ remote, store: siteStore, urls: site }, [g.actor, s.actor]);
 const A = 'https://mei.pod.example/fedipod/ap/notes/blight';
@@ -106,10 +108,19 @@ const key = path.join(tmp, 'key.pem'); const cert = path.join(tmp, 'cert.pem');
 spawnSync('openssl', ['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-keyout', key, '-out', cert, '-days', '1',
   '-subj', '/CN=fedipod.localhost', '-addext', 'subjectAltName=DNS:fedipod.localhost,DNS:bb.fedipod.localhost'], { stdio: 'ignore' });
 const asked = [];
+// A pod's token endpoint, stood in for: it renews, refuses or is down, as told.
+let tokenMode = 'refuse'; let renewals = 0;
 const server = https.createServer({ key: fs.readFileSync(key), cert: fs.readFileSync(cert) }, async (req, res) => {
   const url = `https://${req.headers.host}${req.url}`;
   asked.push(url);
   const u = new URL(url);
+  if (u.pathname === '/test/token') {
+    if (tokenMode === 'down') { res.writeHead(502, { 'content-type': 'text/html' }); return res.end('<html><body>502 Bad Gateway</body></html>'); }
+    if (tokenMode === 'refuse') { res.writeHead(400, { 'content-type': 'application/json' }); return res.end(JSON.stringify({ error: 'invalid_grant' })); }
+    renewals++;
+    res.writeHead(200, { 'content-type': 'application/json' });
+    return res.end(JSON.stringify({ access_token: `a${renewals + 1}`, refresh_token: `r${renewals + 1}`, expires_in: 600 }));
+  }
   if (u.hostname === 'fedipod.localhost') {
     const d = docAt(url);
     res.writeHead(d.status, { 'content-type': 'application/activity+json', 'access-control-allow-origin': '*' });
@@ -209,6 +220,79 @@ try {
   check(old?.path === `/forum/t/gardening/${tid}` && /Copper spray/u.test(old?.text || ''),
     `an old link opens its topic at the new address (${old?.path}${old?.hash})`);
   check(old?.hash === `#p-${await cacheKey(R)}`, 'still pointing at the post it named');
+
+  // --- a pod sign-in the browser has stored --------------------------------------
+  // Planted as the page's own sign-in leaves it: the session in the browser's
+  // database, with a real key, and the account the page keeps beside it.
+  const HANDLE = '@mei@fedipod.localhost';
+  const idb = `new Promise((ok, no) => { const r = indexedDB.open('fedipod-oidc', 1); r.onupgradeneeded = () => r.result.createObjectStore('session'); r.onsuccess = () => ok(r.result); r.onerror = () => no(r.error); })`;
+  const plant = (ranOut) => evaluate(`(async () => {
+    const pair = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, false, ['sign']);
+    const db = await ${idb};
+    await new Promise((ok, no) => { const t = db.transaction('session', 'readwrite').objectStore('session').put({ issuer: '${BB}/', client_id: 'c',
+      tokenEndpoint: '${BB}/test/token', pair, revocationEndpoint: null, refreshToken: 'r1', accessToken: 'a1',
+      expiresAt: Date.now() + (${ranOut} ? -60000 : 600000), webId: 'https://mei.pod.example/profile/card#me' }, 'session'); t.onsuccess = ok; t.onerror = () => no(t.error); });
+    localStorage.setItem('bb:acct', JSON.stringify({ handle: '${HANDLE}', actor: '${MEI}', podHome: 'https://mei.pod.example/fedipod/' }));
+    return true; })()`);
+  const runOut = () => evaluate(`(async () => { const db = await ${idb};
+    const row = await new Promise((ok) => { const t = db.transaction('session').objectStore('session').get('session'); t.onsuccess = () => ok(t.result); });
+    await new Promise((ok) => { const t = db.transaction('session', 'readwrite').objectStore('session').put({ ...row, expiresAt: Date.now() - 60000 }, 'session'); t.onsuccess = ok; });
+    return true; })()`);
+  const stored = () => evaluate(`(async () => { const db = await ${idb};
+    return await new Promise((ok) => { const t = db.transaction('session').objectStore('session').get('session'); t.onsuccess = () => ok(!!t.result); }); })()`);
+  const who = () => evaluate(`({ name: document.getElementById('who-name').textContent, act: document.getElementById('who-act').textContent,
+    handle: document.getElementById('signin-handle').value, kept: localStorage.getItem('bb:acct') !== null })`);
+
+  // The pod has ended it: the page does not say "signed in".
+  tokenMode = 'refuse';
+  await plant(true);
+  await open(topic, 2500);
+  let w = await who();
+  check(w?.name === '' && w.act === 'Sign in', `a stored sign-in the pod has ended: the page does not say "signed in" (${JSON.stringify(w)})`);
+  check(w?.handle === HANDLE && w.kept === false && await stored() === false,
+    `the handle is there to sign in again with, and the ended sign-in is not kept (${w?.handle}, stored ${await stored()})`);
+  await shot('sign-in-ended-on-arrival.png');
+
+  // The pod is down: nothing is known against the sign-in, and it is kept.
+  tokenMode = 'down';
+  await plant(true);
+  await open(topic, 2500);
+  w = await who();
+  check(w?.name === `signed in as ${HANDLE}` && await stored() === true, `a pod that is down does not sign the reader out (${w?.name}, stored ${await stored()})`);
+
+  // The pod renews it: signed in, and then the pod ends it while a reply is being written.
+  tokenMode = 'renew';
+  await open(topic, 2500);
+  w = await who();
+  check(w?.name === `signed in as ${HANDLE}` && renewals === 1, `a sign-in whose time ran out is renewed on arrival (${w?.name}, ${renewals} renewal)`);
+  tokenMode = 'refuse';
+  await runOut();
+  const WORDS = 'Bordeaux mixture, every ten days, from the first warm rain.';
+  await evaluate(`document.querySelector('main [data-act="reply"]').click()`);
+  await sleep(500);
+  await evaluate(`(document.getElementById('reply-text').value = ${JSON.stringify(WORDS)}, document.getElementById('reply-send').click())`);
+  await sleep(2500);
+  const after = await evaluate(`({ err: document.getElementById('reply-err').textContent, act: document.getElementById('who-act').textContent,
+    name: document.getElementById('who-name').textContent, text: document.getElementById('reply-text').value,
+    open: document.getElementById('reply-dlg').open, wayIn: !document.getElementById('reply-signed-out').hidden,
+    handle: document.getElementById('fedi-handle').value, draft: sessionStorage.getItem('bb:draft') })`);
+  check(after?.err === 'Your sign-in has ended. Sign in again; what you wrote is kept.' && after.open,
+    `a reply that finds the sign-in ended says so in the reply box (${after?.err})`);
+  check(after?.name === '' && after.act === 'Sign in' && after.wayIn && after.handle === HANDLE,
+    `the page stops saying "signed in" and offers the way back in, with the handle filled in (${after?.act}, ${after?.handle})`);
+  check(after?.text === WORDS && (after.draft || '').includes(WORDS), 'and the words are still there, and put aside for after the sign-in');
+  await shot('sign-in-ended-while-replying.png');
+
+  // Back from the pod's login: the words are in the reply box again.
+  tokenMode = 'renew';
+  await plant(false);
+  await open(topic, 2500);
+  await evaluate(`document.querySelector('main [data-act="reply"]').click()`);
+  await sleep(500);
+  const back = await evaluate(`({ text: document.getElementById('reply-text').value, draft: sessionStorage.getItem('bb:draft'),
+    name: document.getElementById('who-name').textContent })`);
+  check(back?.name === `signed in as ${HANDLE}` && back.text === WORDS && back.draft === null,
+    `signed in again, the reply box opens with the words in it (${JSON.stringify(back?.text)})`);
 } catch (e) { console.log('ERROR', e.message); fails++; }
 finally {
   ws.close(); chrome.kill('SIGKILL'); server.close(); await sleep(300);

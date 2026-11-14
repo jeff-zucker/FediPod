@@ -11996,6 +11996,28 @@ const { admitRequest, refuseRequest } = await import(path.join(root, 'lib/core/s
     && intake26.isModerationAsk({ type: 'Add', object: MOD, target: urls26.featured }) === false,
     'Add is an ask only when it names the moderators collection');
 
+  // A moderator deleting a post they wrote is its author deleting it. Queued,
+  // it waited for a confirmation nothing could give, and the post stayed up.
+  const THEIRS26 = 'https://m.example/n/a-members';
+  const OWN26 = 'https://m.example/n/the-moderators-own';
+  q.st.write('statuses.json', [{ noteId: THEIRS26, actor: MEMBER, kind: 'remote' }, { noteId: OWN26, actor: MOD, kind: 'remote' }]);
+  check(intake26.isModerationAsk({ type: 'Delete', actor: MOD, object: THEIRS26 }) === true,
+    "a moderator's Delete of a member's carried post is moderation");
+  check(intake26.isModerationAsk({ type: 'Delete', actor: MOD, object: OWN26 }) === false
+    && intake26.isModerationAsk({ type: 'Delete', actor: { id: MOD }, object: { id: OWN26 } }) === false,
+    "a moderator's Delete of their own carried post is its author's Delete");
+  intake26.isGone = async () => true;
+  intake26.forget = async (s) => { q.st.write('statuses.json', q.st.getStatuses().filter(x => x.noteId !== s.noteId)); };
+  await intake26.handle({ type: 'Delete', actor: MOD, object: OWN26 });
+  check(q.st.read('modqueue.json', []).length === 1 && !q.st.getStatuses().some(x => x.noteId === OWN26),
+    'so it is carried out when it arrives, and nothing joins the queue');
+  await intake26.handle({ type: 'Delete', actor: MOD, object: THEIRS26 });
+  check(q.st.read('modqueue.json', []).some(e => e.type === 'Delete' && e.moderator === MOD)
+    && q.st.getStatuses().some(x => x.noteId === THEIRS26),
+    "while their Delete of a member's post still waits in the queue");
+  q.st.write('modqueue.json', q.st.read('modqueue.json', []).filter(e => e.type !== 'Delete'));
+  q.st.write('statuses.json', []);
+
   // Applying the queued Block ejects the member and broadcasts the ban.
   queue = q.st.read('modqueue.json', []);
   await social26.applyModeration(q.agent, queue[0]);

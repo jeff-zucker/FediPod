@@ -124,9 +124,16 @@ self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()));
 // browsers kill an idle service worker and restart it fresh, and the client at
 // /app/ never posts 'boot' — so without on-demand boot every request after a
 // restart 503s. On a boot failure `booting` is cleared so the next request retries.
+// With no sign-in to boot from, the error says so by its code ('signed-out'):
+// nothing stored, or a stored sign-in the pod has ended. The pod is asked
+// before the agent starts on it (the session's check), and only when the
+// sign-in's time is up; a pod that cannot be asked is left for the agent's
+// own start to report.
+const signedOut = (message) => Object.assign(new Error(message), { code: 'signed-out' });
 async function bootFromSession(frontOrigin, restart) {
   const oidc = await getSession();
-  if (!oidc) throw new Error('no session — sign in first');
+  if (!oidc) throw signedOut('no session — sign in first');
+  if (await oidc.check().catch(() => true) === false) throw signedOut('the sign-in this browser was holding has ended — sign in again');
   const a = new BrowserAgent({ log: agentLog });
   a.recentLog = recentLog;
   await a.boot({ oidc, frontOrigin: frontOrigin || self.location.origin, restart });
@@ -195,6 +202,20 @@ function stillWorking(first) {
   return Promise.race([work, cap]).finally(() => clearTimeout(timer));
 }
 
+// The app's pages cannot sign anybody in, and with no sign-in every request
+// of theirs is refused: they are taken to the front page, which can. Once in
+// a while at most, however many requests find the same thing.
+let sentToSignIn = 0;
+async function toSignIn() {
+  if (Date.now() - sentToSignIn < 10_000) return;
+  sentToSignIn = Date.now();
+  const pages = await self.clients.matchAll({ type: 'window' }).catch(() => []);
+  for (const c of pages) {
+    const at = new URL(c.url).pathname;
+    if (c.frameType === 'top-level' && (at.startsWith('/app/') || at.startsWith('/admin/'))) c.navigate('/').catch(() => {});
+  }
+}
+
 async function serve(request, url) {
   // Before anything is booted or read: is this caller allowed to be here at all?
   const refuse = notAllowed(request, url);
@@ -204,7 +225,7 @@ async function serve(request, url) {
   }
   // Boot on demand from the stored session, so the client works even when the
   // worker was restarted (idle-killed) and nobody posted 'boot' this time.
-  if (!agent) { try { await ensureBooting(undefined, { restart: true }); } catch { /* no session → 503 below */ } }
+  if (!agent) { try { await ensureBooting(undefined, { restart: true }); } catch (e) { if (e.code === 'signed-out') await toSignIn(); } }
   if (!agent) return json(503, { error: 'not signed in on this browser — sign in at the front page' });
   const { req, res, bodyText, response } = await bridge(request, url, {
     // notAllowed() above let this through, so it came from this origin.

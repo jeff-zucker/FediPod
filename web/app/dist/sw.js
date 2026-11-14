@@ -59641,7 +59641,8 @@ function isModerationAsk(intake, activity) {
   if (activity.type === "Delete") {
     const id = typeof activity.object === "string" ? activity.object : activity.object?.id;
     const s = id && intake.store.getStatuses().find((x) => x.noteId === id);
-    return !!s && s.kind !== "post";
+    const by = typeof activity.actor === "string" ? activity.actor : activity.actor?.id;
+    return !!s && s.kind !== "post" && s.actor !== by;
   }
   if (activity.type === "Add" || activity.type === "Remove") {
     const target = typeof activity.target === "string" ? activity.target : activity.target?.id;
@@ -65864,6 +65865,7 @@ var Intake = class {
     }
   }
   async _drainOnce() {
+    this.moreWaiting = false;
     this._sweepGen = this.store.generation;
     const cooling = this.drainCooldownUntil - Date.now();
     if (cooling > 0) {
@@ -65919,10 +65921,11 @@ var Intake = class {
       return true;
     };
     let spent = 0;
+    let cut = false;
     for (const { url, size, receipt: hasReceipt } of items) {
       if (url.endsWith(".keep")) continue;
       if (spent >= MAX_ITEMS_PER_DRAIN) {
-        this._drainAgain = handled > 0 || pending.length > 0;
+        cut = this._drainAgain = handled > 0 || pending.length > 0;
         break;
       }
       if (isBatch(url)) {
@@ -65971,7 +65974,9 @@ var Intake = class {
       if (!await dropStrayReceipt(this.remote, stray)) break;
       await new Promise((r) => setTimeout(r, DELETE_GAP_MS));
     }
-    if (handled > 0 && all.length > items.length && !this.stopped) this._drainAgain = true;
+    const more = handled > 0 && all.length > items.length;
+    this.moreWaiting = more || cut;
+    if (more && !this.stopped) this._drainAgain = true;
   }
   // One delivery, alone in the inbox or in a batch: read as JSON-LD, checked
   // against its receipt, handled, and dead-lettered if refused. Throws when it
@@ -74794,49 +74799,89 @@ function solidOidcSession({ dbName = "solid-oidc-session", clientName = "Solid a
     await idbDel("session");
     await idbDel("pending");
   }
-  function sessionHandle(s) {
-    let { accessToken, expiresAt, refreshToken } = s;
-    const jwkP = publicJwk(s.pair);
-    const refresh = async () => {
-      if (!refreshToken) throw new Error("session expired and there is no refresh token \u2014 sign in again");
+  const ended = (message) => Object.assign(new Error(message), { signedOut: true });
+  const stillGood = (row) => Date.now() < row.expiresAt - 3e4;
+  const locks = () => globalThis.navigator?.locks;
+  const oneAtATime = (fn) => locks()?.request ? locks().request(`${dbName}:renew`, fn) : fn();
+  const RACE_WAIT_MS = 1500;
+  function sessionHandle(first) {
+    let s = first;
+    let jwkP = publicJwk(s.pair);
+    const host = () => new URL(s.tokenEndpoint).host;
+    const takeUp2 = (row) => {
+      s = row;
+      jwkP = publicJwk(row.pair);
+    };
+    const reread = async () => {
+      const row = await idbGet("session");
+      if (!row) throw ended("signed out \u2014 sign in again");
+      if (row.webId !== s.webId) throw new Error("signed in as somebody else since this session was read");
+      takeUp2(row);
+    };
+    const refresh = () => oneAtATime(async () => {
+      const mine = s.accessToken;
+      await reread();
+      if (s.accessToken !== mine && stillGood(s)) return;
+      if (!s.refreshToken) {
+        await idbDel("session");
+        throw ended("session expired and there is no refresh token \u2014 sign in again");
+      }
+      const sent = s;
       const jwk = await jwkP;
       let res;
       try {
-        res = await fetch(s.tokenEndpoint, {
+        res = await fetch(sent.tokenEndpoint, {
           method: "POST",
-          headers: { "content-type": "application/x-www-form-urlencoded", dpop: await dpopProof(s.pair, jwk, "POST", s.tokenEndpoint) },
-          body: new URLSearchParams({ grant_type: "refresh_token", refresh_token: refreshToken, client_id: s.client_id, scope: "openid webid offline_access" })
+          headers: { "content-type": "application/x-www-form-urlencoded", dpop: await dpopProof(sent.pair, jwk, "POST", sent.tokenEndpoint) },
+          body: new URLSearchParams({ grant_type: "refresh_token", refresh_token: sent.refreshToken, client_id: sent.client_id, scope: "openid webid offline_access" })
         });
       } catch (e) {
-        throw new Error(`${e.message} \u2014 renewing your sign-in at ${new URL(s.tokenEndpoint).host}`);
+        throw new Error(`${e.message} \u2014 renewing your sign-in at ${host()}`);
       }
       const tok = await res.json().catch(() => ({}));
-      if (res.status === 429) {
-        throw new Error(`${new URL(s.tokenEndpoint).host} is asking us to slow down \u2014 your sign-in could not be renewed just now`);
-      }
-      if (!res.ok || !tok.access_token) {
-        await idbDel("session");
-        throw new Error("refresh failed \u2014 sign in again");
-      }
-      accessToken = tok.access_token;
-      expiresAt = Date.now() + Math.max(30, tok.expires_in || 300) * 1e3;
-      if (tok.refresh_token) refreshToken = tok.refresh_token;
       const now = await idbGet("session");
-      if (now && now.webId !== s.webId) {
-        throw new Error("signed in as somebody else while this session was refreshing");
+      if (now && now.webId !== sent.webId) throw new Error("signed in as somebody else while this session was refreshing");
+      if (res.ok && tok.access_token) {
+        if (!now) throw ended("signed out while this sign-in was being renewed");
+        takeUp2({
+          ...sent,
+          accessToken: tok.access_token,
+          refreshToken: tok.refresh_token || sent.refreshToken,
+          expiresAt: Date.now() + Math.max(30, tok.expires_in || 300) * 1e3
+        });
+        await idbPut("session", s);
+        return;
       }
-      await idbPut("session", { ...s, accessToken, expiresAt, refreshToken });
-    };
+      if (res.status === 429) {
+        throw new Error(`${host()} is asking us to slow down \u2014 your sign-in could not be renewed just now`);
+      }
+      if (res.status >= 400 && res.status < 500 && typeof tok.error === "string") {
+        let row = now;
+        if (row && row.accessToken === sent.accessToken && !locks()?.request) {
+          await new Promise((r) => setTimeout(r, RACE_WAIT_MS));
+          row = await idbGet("session");
+        }
+        if (row && row.webId === sent.webId && row.accessToken !== sent.accessToken && stillGood(row)) {
+          takeUp2(row);
+          return;
+        }
+        if (!row) throw ended("signed out \u2014 sign in again");
+        await idbDel("session");
+        throw ended("refresh failed \u2014 sign in again");
+      }
+      throw new Error(`${host()} could not renew your sign-in just now (HTTP ${res.status})`);
+    });
     const send = async (url, init) => {
+      const { accessToken, pair } = s;
       const jwk = await jwkP;
       const ath = b64u3(await sha2564(accessToken));
-      const headers = { ...init.headers || {}, authorization: `DPoP ${accessToken}`, dpop: await dpopProof(s.pair, jwk, init.method || "GET", url, ath) };
+      const headers = { ...init.headers || {}, authorization: `DPoP ${accessToken}`, dpop: await dpopProof(pair, jwk, init.method || "GET", url, ath) };
       return fetch(url, { ...init, headers });
     };
     const authFetch = async (url, init = {}) => {
-      if (Date.now() > expiresAt - 3e4) await refresh();
+      if (!stillGood(s)) await refresh();
       const res = await send(url, init);
-      if (res.status === 401 && refreshToken) {
+      if (res.status === 401 && s.refreshToken) {
         try {
           await refresh();
         } catch {
@@ -74846,7 +74891,17 @@ function solidOidcSession({ dbName = "solid-oidc-session", clientName = "Solid a
       }
       return res;
     };
-    return { webId: s.webId, issuer: s.issuer, fetch: authFetch, refresh, signOut: signOut2 };
+    const check = async () => {
+      try {
+        await reread();
+        if (!stillGood(s)) await refresh();
+        return true;
+      } catch (e) {
+        if (e.signedOut) return false;
+        throw e;
+      }
+    };
+    return { webId: first.webId, issuer: first.issuer, fetch: authFetch, refresh, check, signOut: signOut2 };
   }
   return { beginLogin: beginLogin2, completeLogin: completeLogin2, getSession: getSession2, signOut: signOut2 };
 }
@@ -74983,9 +75038,11 @@ function notAllowed(request, url) {
 }
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", (e) => e.waitUntil(self.clients.claim()));
+var signedOut = (message) => Object.assign(new Error(message), { code: "signed-out" });
 async function bootFromSession(frontOrigin, restart) {
   const oidc = await getSession();
-  if (!oidc) throw new Error("no session \u2014 sign in first");
+  if (!oidc) throw signedOut("no session \u2014 sign in first");
+  if (await oidc.check().catch(() => true) === false) throw signedOut("the sign-in this browser was holding has ended \u2014 sign in again");
   const a = new BrowserAgent({ log: agentLog });
   a.recentLog = recentLog;
   await a.boot({ oidc, frontOrigin: frontOrigin || self.location.origin, restart });
@@ -75044,6 +75101,17 @@ function stillWorking(first) {
   });
   return Promise.race([work, cap]).finally(() => clearTimeout(timer));
 }
+var sentToSignIn = 0;
+async function toSignIn() {
+  if (Date.now() - sentToSignIn < 1e4) return;
+  sentToSignIn = Date.now();
+  const pages = await self.clients.matchAll({ type: "window" }).catch(() => []);
+  for (const c of pages) {
+    const at = new URL(c.url).pathname;
+    if (c.frameType === "top-level" && (at.startsWith("/app/") || at.startsWith("/admin/"))) c.navigate("/").catch(() => {
+    });
+  }
+}
 async function serve(request, url) {
   const refuse = notAllowed(request, url);
   if (refuse) {
@@ -75053,7 +75121,8 @@ async function serve(request, url) {
   if (!agent) {
     try {
       await ensureBooting(void 0, { restart: true });
-    } catch {
+    } catch (e) {
+      if (e.code === "signed-out") await toSignIn();
     }
   }
   if (!agent) return json(503, { error: "not signed in on this browser \u2014 sign in at the front page" });

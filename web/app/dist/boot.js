@@ -34591,49 +34591,89 @@ function solidOidcSession({ dbName = "solid-oidc-session", clientName = "Solid a
     await idbDel("session");
     await idbDel("pending");
   }
-  function sessionHandle(s) {
-    let { accessToken, expiresAt, refreshToken } = s;
-    const jwkP = publicJwk(s.pair);
-    const refresh = async () => {
-      if (!refreshToken) throw new Error("session expired and there is no refresh token \u2014 sign in again");
+  const ended = (message) => Object.assign(new Error(message), { signedOut: true });
+  const stillGood = (row) => Date.now() < row.expiresAt - 3e4;
+  const locks = () => globalThis.navigator?.locks;
+  const oneAtATime = (fn) => locks()?.request ? locks().request(`${dbName}:renew`, fn) : fn();
+  const RACE_WAIT_MS = 1500;
+  function sessionHandle(first) {
+    let s = first;
+    let jwkP = publicJwk(s.pair);
+    const host = () => new URL(s.tokenEndpoint).host;
+    const takeUp = (row) => {
+      s = row;
+      jwkP = publicJwk(row.pair);
+    };
+    const reread = async () => {
+      const row = await idbGet("session");
+      if (!row) throw ended("signed out \u2014 sign in again");
+      if (row.webId !== s.webId) throw new Error("signed in as somebody else since this session was read");
+      takeUp(row);
+    };
+    const refresh = () => oneAtATime(async () => {
+      const mine = s.accessToken;
+      await reread();
+      if (s.accessToken !== mine && stillGood(s)) return;
+      if (!s.refreshToken) {
+        await idbDel("session");
+        throw ended("session expired and there is no refresh token \u2014 sign in again");
+      }
+      const sent = s;
       const jwk = await jwkP;
       let res;
       try {
-        res = await fetch(s.tokenEndpoint, {
+        res = await fetch(sent.tokenEndpoint, {
           method: "POST",
-          headers: { "content-type": "application/x-www-form-urlencoded", dpop: await dpopProof(s.pair, jwk, "POST", s.tokenEndpoint) },
-          body: new URLSearchParams({ grant_type: "refresh_token", refresh_token: refreshToken, client_id: s.client_id, scope: "openid webid offline_access" })
+          headers: { "content-type": "application/x-www-form-urlencoded", dpop: await dpopProof(sent.pair, jwk, "POST", sent.tokenEndpoint) },
+          body: new URLSearchParams({ grant_type: "refresh_token", refresh_token: sent.refreshToken, client_id: sent.client_id, scope: "openid webid offline_access" })
         });
       } catch (e) {
-        throw new Error(`${e.message} \u2014 renewing your sign-in at ${new URL(s.tokenEndpoint).host}`);
+        throw new Error(`${e.message} \u2014 renewing your sign-in at ${host()}`);
       }
       const tok = await res.json().catch(() => ({}));
-      if (res.status === 429) {
-        throw new Error(`${new URL(s.tokenEndpoint).host} is asking us to slow down \u2014 your sign-in could not be renewed just now`);
-      }
-      if (!res.ok || !tok.access_token) {
-        await idbDel("session");
-        throw new Error("refresh failed \u2014 sign in again");
-      }
-      accessToken = tok.access_token;
-      expiresAt = Date.now() + Math.max(30, tok.expires_in || 300) * 1e3;
-      if (tok.refresh_token) refreshToken = tok.refresh_token;
       const now = await idbGet("session");
-      if (now && now.webId !== s.webId) {
-        throw new Error("signed in as somebody else while this session was refreshing");
+      if (now && now.webId !== sent.webId) throw new Error("signed in as somebody else while this session was refreshing");
+      if (res.ok && tok.access_token) {
+        if (!now) throw ended("signed out while this sign-in was being renewed");
+        takeUp({
+          ...sent,
+          accessToken: tok.access_token,
+          refreshToken: tok.refresh_token || sent.refreshToken,
+          expiresAt: Date.now() + Math.max(30, tok.expires_in || 300) * 1e3
+        });
+        await idbPut("session", s);
+        return;
       }
-      await idbPut("session", { ...s, accessToken, expiresAt, refreshToken });
-    };
+      if (res.status === 429) {
+        throw new Error(`${host()} is asking us to slow down \u2014 your sign-in could not be renewed just now`);
+      }
+      if (res.status >= 400 && res.status < 500 && typeof tok.error === "string") {
+        let row = now;
+        if (row && row.accessToken === sent.accessToken && !locks()?.request) {
+          await new Promise((r) => setTimeout(r, RACE_WAIT_MS));
+          row = await idbGet("session");
+        }
+        if (row && row.webId === sent.webId && row.accessToken !== sent.accessToken && stillGood(row)) {
+          takeUp(row);
+          return;
+        }
+        if (!row) throw ended("signed out \u2014 sign in again");
+        await idbDel("session");
+        throw ended("refresh failed \u2014 sign in again");
+      }
+      throw new Error(`${host()} could not renew your sign-in just now (HTTP ${res.status})`);
+    });
     const send = async (url, init) => {
+      const { accessToken, pair } = s;
       const jwk = await jwkP;
       const ath = b64u(await sha2562(accessToken));
-      const headers = { ...init.headers || {}, authorization: `DPoP ${accessToken}`, dpop: await dpopProof(s.pair, jwk, init.method || "GET", url, ath) };
+      const headers = { ...init.headers || {}, authorization: `DPoP ${accessToken}`, dpop: await dpopProof(pair, jwk, init.method || "GET", url, ath) };
       return fetch(url, { ...init, headers });
     };
     const authFetch = async (url, init = {}) => {
-      if (Date.now() > expiresAt - 3e4) await refresh();
+      if (!stillGood(s)) await refresh();
       const res = await send(url, init);
-      if (res.status === 401 && refreshToken) {
+      if (res.status === 401 && s.refreshToken) {
         try {
           await refresh();
         } catch {
@@ -34643,7 +34683,17 @@ function solidOidcSession({ dbName = "solid-oidc-session", clientName = "Solid a
       }
       return res;
     };
-    return { webId: s.webId, issuer: s.issuer, fetch: authFetch, refresh, signOut: signOut2 };
+    const check = async () => {
+      try {
+        await reread();
+        if (!stillGood(s)) await refresh();
+        return true;
+      } catch (e) {
+        if (e.signedOut) return false;
+        throw e;
+      }
+    };
+    return { webId: first.webId, issuer: first.issuer, fetch: authFetch, refresh, check, signOut: signOut2 };
   }
   return { beginLogin: beginLogin2, completeLogin: completeLogin2, getSession: getSession2, signOut: signOut2 };
 }
@@ -34836,11 +34886,18 @@ window.fedipodOnLoad = async () => {
     await bootWorker({ reset: true });
     return "signed-in";
   }
-  if (await getSession()) {
-    await bootWorker();
-    return "restored";
+  const kept = await getSession();
+  if (!kept) return "anonymous";
+  if (await kept.check().catch(() => true) === false) {
+    try {
+      location.href = (await beginLogin({ issuer: kept.issuer, redirectUri: REDIRECT })).authorizationUrl;
+      return "leaving";
+    } catch {
+      return "anonymous";
+    }
   }
-  return "anonymous";
+  await bootWorker();
+  return "restored";
 };
 window.fedipodSignOut = async () => {
   await signOut();
@@ -34943,6 +35000,7 @@ if (typeof document !== "undefined") (async () => {
       };
       const known = {
         "sign-in-refused": { title: "Your pod refused this sign-in", retry: "Sign in again", go: signIn },
+        "signed-out": { title: "Your sign-in has ended", retry: "Sign in again", go: signIn },
         "pod-busy": { title: "Your pod is asking for a pause", retry: "Reload", go: reload, wait: 45 },
         "pod-error": { title: "Your pod had an error", retry: "Reload", go: reload, wait: 20 },
         "pod-unreachable": { title: "Your pod could not be reached", retry: "Reload", go: reload, wait: 20 },
@@ -35018,6 +35076,7 @@ ${e.detail}` : "");
       });
       return;
     }
+    if (state === "leaving") return;
     if (state === "signed-in" || state === "restored") {
       location.href = "/admin/client/";
       return;

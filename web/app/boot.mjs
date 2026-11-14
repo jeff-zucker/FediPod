@@ -222,9 +222,10 @@ window.fedipodSignin = async ({ address }) => {
 };
 
 // Called on every page load. Returns 'signed-in' | 'restored' | 'anonymous' |
-// 'signup' | 'move-in' — the last two being a return from the pod's login
-// in the middle of creating an account: with no account on the pod yet, or
-// with one whose address lives at another gateway.
+// 'signup' | 'move-in' | 'leaving' — 'signup' and 'move-in' being a return
+// from the pod's login in the middle of creating an account: with no account
+// on the pod yet, or with one whose address lives at another gateway.
+// 'leaving': the page is on its way to the pod's login.
 window.fedipodOnLoad = async () => {
   if (new URLSearchParams(location.search).get('code')) {
     const done = await completeLogin({ currentUrl: location.href });
@@ -240,8 +241,21 @@ window.fedipodOnLoad = async () => {
     await bootWorker({ reset: true });        // this may be a different account
     return 'signed-in';
   }
-  if (await getSession()) { await bootWorker(); return 'restored'; }
-  return 'anonymous';
+  const kept = await getSession();
+  if (!kept) return 'anonymous';
+  // What the browser has stored says a sign-in was made, not that the pod
+  // still honours it. The pod is asked before anything is started on it, and
+  // only when the sign-in's time is up. One the pod has ended goes to the
+  // pod's own login, which the stored sign-in names: nobody is asked to press
+  // a button for it. A pod that cannot be asked is left to the start below.
+  if (await kept.check().catch(() => true) === false) {
+    try {
+      location.href = (await beginLogin({ issuer: kept.issuer, redirectUri: REDIRECT })).authorizationUrl;
+      return 'leaving';
+    } catch { return 'anonymous'; }   // its login cannot be reached: the sign-in page, as for anybody
+  }
+  await bootWorker();
+  return 'restored';
 };
 
 window.fedipodSignOut = async () => {
@@ -366,6 +380,7 @@ if (typeof document !== 'undefined') (async () => {
       const signIn = () => { location.href = '/?add'; };
       const known = {
         'sign-in-refused': { title: 'Your pod refused this sign-in', retry: 'Sign in again', go: signIn },
+        'signed-out': { title: 'Your sign-in has ended', retry: 'Sign in again', go: signIn },
         'pod-busy': { title: 'Your pod is asking for a pause', retry: 'Reload', go: reload, wait: 45 },
         'pod-error': { title: 'Your pod had an error', retry: 'Reload', go: reload, wait: 20 },
         'pod-unreachable': { title: 'Your pod could not be reached', retry: 'Reload', go: reload, wait: 20 },
@@ -440,6 +455,7 @@ if (typeof document !== 'undefined') (async () => {
     // web/admin surface as local). Its own script signs the framed client in on
     // a fresh session and forwards deep links on a returning one, so both a
     // fresh sign-in and a restored session land in the same place.
+    if (state === 'leaving') return;
     if (state === 'signed-in' || state === 'restored') { location.href = '/admin/client/'; return; }
     // Back from the pod's login with no account there yet, or with one to
     // move here: the identity screen, once the form below is wired.

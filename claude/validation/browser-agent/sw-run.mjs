@@ -7,6 +7,8 @@
 // worker intercepts and the agent answers. If a full sign-in and a post work
 // through the worker with no server behind it, the client story holds. (Phanpy
 // itself rendering from such a worker is proven separately in sw-facade-spike/.)
+// Last, a sign-in the pod has ended: the worker takes the app's page to the
+// sign-in page, and the front page takes its owner to the pod's own login.
 //
 //   node claude/validation/browser-agent/sw-run.mjs
 import fs from 'node:fs'; import os from 'node:os'; import path from 'node:path';
@@ -271,6 +273,44 @@ try {
     `and honours the page size it was asked for (${(paged.pages || []).join(', ')})`);
   check((paged.hosts || []).length > 0 && paged.hosts.every((h) => h === paged.origin),
     `and every link it hands out names this origin (${[...new Set(paged.hosts || [])].join(', ')})`);
+
+  // --- a sign-in the pod has ended ------------------------------------------
+  //
+  // The browser goes on holding a sign-in after the pod has stopped honouring
+  // it. Made here by giving the stored one a refresh token the pod never
+  // issued and an access token whose time is up: the pod's own token endpoint
+  // then refuses the renewal, as it does for one that ran out.
+  const idb = `new Promise((ok, no) => { const r = indexedDB.open('fedipod-oidc', 1); r.onsuccess = () => ok(r.result); r.onerror = () => no(r.error); })`;
+  const rowOps = `const get = (db, k) => new Promise((ok) => { const t = db.transaction('session').objectStore('session').get(k); t.onsuccess = () => ok(t.result); });
+    const put = (db, k, v) => new Promise((ok) => { const t = db.transaction('session', 'readwrite').objectStore('session').put(v, k); t.onsuccess = () => ok(); });`;
+  const endAtPod = (from) => evaluate(`(async () => { ${rowOps} const db = await ${idb};
+    const row = await get(db, '${from}'); if (!row) return false;
+    await put(db, 'kept-for-the-test', row);
+    await put(db, 'session', { ...row, refreshToken: 'a-refresh-token-the-pod-never-issued', expiresAt: Date.now() - 60000 });
+    return true; })()`);
+  const stored = () => evaluate(`(async () => { ${rowOps} const db = await ${idb}; return !!(await get(db, 'session')); })()`);
+  const where = () => evaluate('location.origin + location.pathname');
+  const settle = async (want) => { let at = ''; for (let i = 0; i < 60; i++) { at = await where(); if (typeof at === 'string' && want(at)) break; await sleep(500); } return at; };
+
+  // The app's page, the worker restarted with nothing in hand (as a browser
+  // restarts an idle one), and the first request it is sent.
+  await send('Page.navigate', { url: `http://localhost:${APP_PORT}/admin/client/` });
+  await settle((at) => at.endsWith('/admin/client/'));
+  await sleep(1500);
+  check(await endAtPod('session') === true, 'the stored sign-in is made one the pod will not renew');
+  const refusedAt = await evaluate(`(async () => {
+    await new Promise((res) => { const on = (e) => { if (e.data?.type === 'reset-done') { navigator.serviceWorker.removeEventListener('message', on); res(); } };
+      navigator.serviceWorker.addEventListener('message', on); navigator.serviceWorker.controller.postMessage({ type: 'reset' }); setTimeout(res, 3000); });
+    const r = await fetch('/api/v1/instance').catch(() => null); return r ? r.status : 0; })()`);
+  const sentTo = await settle((at) => at === `http://localhost:${APP_PORT}/`);
+  check(sentTo === `http://localhost:${APP_PORT}/`, `with the sign-in ended, the worker takes the app's page to the sign-in page (request answered ${refusedAt?.__error ? 'while the page left' : refusedAt}, page at ${sentTo})`);
+  check(await stored() === false, 'and the ended sign-in is no longer stored');
+
+  // The front page, arriving with such a sign-in stored: straight to the pod's login.
+  check(await endAtPod('kept-for-the-test') === true, 'the same sign-in, stored again as the pod left it');
+  await send('Page.navigate', { url: `http://localhost:${APP_PORT}/` });
+  const login = await settle((at) => at.startsWith(ISSUER));
+  check(typeof login === 'string' && login.startsWith(ISSUER), `the front page takes its owner to the pod's own login (${login})`);
 } catch (e) { console.log('ERROR', e.message); fails++; }
 finally {
   // The agent lives in the worker, so its console is the only account of what it
