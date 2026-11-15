@@ -76,7 +76,7 @@
     "@rdfjs/term-set": "^2.0.3",
     "@solid/access-token-verifier": "^2.1.1",
     "clownface": "^2.0.3",
-    "fediverse-session": "^0.2.1",
+    "fediverse-session": "^0.2.2",
     "jose": "^6.2.8",
     "json-canon": "^1.0.1",
     "jsonld": "^9.0.0",
